@@ -24,23 +24,18 @@
 //! - Control Flow Analysis: Detecting unreachable code, uninitialized variables.
 //! - Data Flow Analysis: Tracking data propagation and potential hazards.
 
-use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeAnnotation};
-use crate::tokens::Span; // For error reporting
-use crate::compiler_types::{Type, SymbolTable, Scope, SemanticError}; // Conceptual types
+use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeExpr, Parameter, MatchCase};
+use crate::tokens::{Span, TokenType}; // Import TokenType for specific checks
+use crate::compiler_types::{Type, SymbolTable, Scope, SemanticError};
 use std::collections::HashMap;
 
 // --- Semantic Analyzer Structure ---
 pub struct SemanticAnalyzer<'a> {
-    // Reference to the program's source code or file for error reporting
     source_name: &'a str,
-    // Accumulate semantic errors
     errors: Vec<SemanticError>,
-    // Manages scopes and symbols
     symbol_table: SymbolTable,
-    // Type system definitions and rules
-    type_system_rules: HashMap<String, Type>, // Conceptual: e.g., "int" -> Type::Int, "Qubit" -> Type::Quantum
-    // Other state needed for analysis (e.g., current function, loop depth)
-    current_function_return_type: Option<Type>,
+    type_system_rules: HashMap<String, Type>, // Maps base type names to canonical Type representations
+    current_function_return_type: Option<Type>, // Expected return type for current function
 }
 
 impl<'a> SemanticAnalyzer<'a> {
@@ -62,19 +57,142 @@ impl<'a> SemanticAnalyzer<'a> {
         map.insert("bool".to_string(), Type::Boolean);
         map.insert("string".to_string(), Type::String);
         map.insert("char".to_string(), Type::Char);
+        map.insert("unit".to_string(), Type::Unit); // Add unit type for void-like returns
         // Quantum types
         map.insert("Qubit".to_string(), Type::QuantumQubit);
-        map.insert("QReg".to_string(), Type::QuantumQReg(0)); // Placeholder
+        map.insert("QReg".to_string(), Type::QuantumQReg(0)); // Placeholder, size handled in TypeExpr
         map.insert("Superposition".to_string(), Type::QuantumSuperposition(Box::new(Type::Unknown)));
+        map.insert("Entangled".to_string(), Type::QuantumEntangled(Box::new(Type::Unknown), Box::new(Type::Unknown)));
+        map.insert("QMeasured".to_string(), Type::QuantumMeasured(Box::new(Type::Unknown)));
         // Nano types
         map.insert("Atom".to_string(), Type::NanoAtom(Box::new(Type::Unknown)));
         map.insert("Molecule".to_string(), Type::NanoMolecule(Box::new(Type::Unknown)));
+        map.insert("NanoAgent".to_string(), Type::NanoAgent);
+        // MTS types
+        map.insert("MTSValue".to_string(), Type::MTSValue); // Placeholder for MtsSlice
+        // Universe types
+        map.insert("Type".to_string(), Type::UniverseType(0)); // Type_0
+        map.insert("Kind".to_string(), Type::Kind);
+        map.insert("Sort".to_string(), Type::Sort);
+        map.insert("Prop".to_string(), Type::Prop);
         // Sankofa types
         map.insert("History".to_string(), Type::SankofaHistory(Box::new(Type::Unknown)));
-        map.insert("ConsensusTrue".to_string(), Type::SankofaConsensus(Box::new(Type::Unknown)));
+        map.insert("Consensus".to_string(), Type::SankofaConsensus(Box::new(Type::Unknown)));
+        map.insert("Wisdom".to_string(), Type::SankofaWisdom);
+        map.insert("InterMemory".to_string(), Type::SankofaInterMemory("".to_string(), Box::new(Type::Unknown)));
         // ... many more types from ZENITH Universal Trinity Type System v2.0
         map
     }
+
+    // Converts an AST TypeExpr to an internal compiler Type
+    fn resolve_type_expr(&mut self, type_expr: &TypeExpr) -> Type {
+        match type_expr {
+            TypeExpr::Base(Identifier(name, span)) => {
+                if let Some(typ) = self.type_system_rules.get(name) {
+                    typ.clone()
+                } else {
+                    self.errors.push(SemanticError::new(
+                        format!("Unknown type '{}'.", name),
+                        span.clone(),
+                    ));
+                    Type::Error
+                }
+            }
+            TypeExpr::Generic(base_type_expr, args) => {
+                let base_type = self.resolve_type_expr(base_type_expr);
+                let resolved_args: Vec<Type> = args.iter().map(|arg| self.resolve_type_expr(arg)).collect();
+                // Conceptual: Implement complex generic type resolution and instantiation
+                // For now, simplify to a generic wrapper
+                match base_type {
+                    Type::Array(_) => Type::Array(Box::new(resolved_args.get(0).cloned().unwrap_or(Type::Unknown))),
+                    Type::QuantumSuperposition(_) => Type::QuantumSuperposition(Box::new(resolved_args.get(0).cloned().unwrap_or(Type::Unknown))),
+                    Type::QuantumEntangled(_, _) => Type::QuantumEntangled(Box::new(resolved_args.get(0).cloned().unwrap_or(Type::Unknown)), Box::new(resolved_args.get(1).cloned().unwrap_or(Type::Unknown))),
+                    Type::NanoAtom(_) => Type::NanoAtom(Box::new(resolved_args.get(0).cloned().unwrap_or(Type::Unknown))),
+                    Type::NanoMolecule(_) => Type::NanoMolecule(Box::new(resolved_args.get(0).cloned().unwrap_or(Type::Unknown))),
+                    Type::SankofaHistory(_) => Type::SankofaHistory(Box::new(resolved_args.get(0).cloned().unwrap_or(Type::Unknown))),
+                    Type::SankofaConsensus(_) => Type::SankofaConsensus(Box::new(resolved_args.get(0).cloned().unwrap_or(Type::Unknown))),
+                    _ => {
+                        self.errors.push(SemanticError::new(
+                            format!("Type '{:?}' does not support generic arguments.", base_type_expr),
+                            base_type_expr.span().clone(), // Needs span from TypeExpr
+                        ));
+                        Type::Error
+                    }
+                }
+            }
+            TypeExpr::Array(element_type_expr, size_opt) => {
+                let element_type = self.resolve_type_expr(element_type_expr);
+                Type::Array(Box::new(element_type)) // Size information might be used later
+            }
+            TypeExpr::FunctionType(param_type_exprs, return_type_expr) => {
+                let param_types: Vec<Type> = param_type_exprs.iter().map(|t| self.resolve_type_expr(t)).collect();
+                let return_type = self.resolve_type_expr(return_type_expr);
+                Type::Function(param_types, Box::new(return_type))
+            }
+            TypeExpr::DependentPi(param_name, param_type_expr, return_type_expr) => {
+                let param_type = self.resolve_type_expr(param_type_expr);
+                // Conceptual: Resolve the return_type_expr in a context where param_name is bound.
+                let return_type = self.resolve_type_expr(return_type_expr); // Simplified
+                Type::DependentPi(Box::new(param_type), Box::new(return_type))
+            }
+            TypeExpr::DependentSigma(param_name, param_type_expr, return_type_expr) => {
+                let param_type = self.resolve_type_expr(param_type_expr);
+                let return_type = self.resolve_type_expr(return_type_expr); // Simplified
+                Type::DependentSigma(Box::new(param_type), Box::new(return_type))
+            }
+            TypeExpr::Linear(inner_type_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                Type::Linear(Box::new(inner_type))
+            }
+            TypeExpr::Affine(inner_type_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                Type::Affine(Box::new(inner_type))
+            }
+            TypeExpr::Effectful(base_type_expr, effects) => {
+                let base_type = self.resolve_type_expr(base_type_expr);
+                let resolved_effects: Vec<Type> = effects.iter().map(|id| {
+                    // Conceptual: Resolve effect identifier to canonical effect type
+                    self.type_system_rules.get(&id.0).cloned().unwrap_or_else(|| {
+                        self.errors.push(SemanticError::new(
+                            format!("Unknown effect '{}'.", id.0),
+                            id.1.clone(),
+                        ));
+                        Type::Error
+                    })
+                }).collect();
+                Type::Effectful(Box::new(base_type), resolved_effects)
+            }
+            TypeExpr::Universe(level) => Type::UniverseType(*level),
+            TypeExpr::SankofaHistory(base_type_expr, years_expr) => {
+                let base_type = self.resolve_type_expr(base_type_expr);
+                let years_type = self.analyze_expression(years_expr);
+                if years_type != Type::Int {
+                    self.errors.push(SemanticError::new(
+                        "Sankofa History 'years' expression must be an integer.".to_string(),
+                        years_expr.span().clone(), // Needs span from Expression
+                    ));
+                }
+                Type::SankofaHistory(Box::new(base_type))
+            }
+            TypeExpr::SankofaConsensus(base_type_expr) => {
+                let base_type = self.resolve_type_expr(base_type_expr);
+                Type::SankofaConsensus(Box::new(base_type))
+            }
+            TypeExpr::SankofaInterMemory(lang_id, base_type_expr) => {
+                let base_type = self.resolve_type_expr(base_type_expr);
+                Type::SankofaInterMemory(lang_id.0.clone(), Box::new(base_type))
+            }
+            // Add more TypeExpr variants here
+            _ => { // Fallback for any unhandled TypeExpr
+                self.errors.push(SemanticError::new(
+                    format!("Unhandled TypeExpr variant during resolution: {:?}", type_expr),
+                    type_expr.span().clone(), // Needs span from TypeExpr
+                ));
+                Type::Error
+            }
+        }
+    }
+
 
     pub fn analyze(&mut self, program: &Program) -> bool {
         println!("Performing semantic analysis on program...");
@@ -90,11 +208,21 @@ impl<'a> SemanticAnalyzer<'a> {
 
     fn analyze_statement(&mut self, stmt: &Statement) {
         match stmt {
-            Statement::Let(span, name, expr) => {
+            Statement::Let(span, name, type_expr_opt, expr) => {
                 let expr_type = self.analyze_expression(expr);
-                // Conceptual: Perform type inference or check against explicit type annotation
-                // If 'let x: Type = expr;' check expr_type against Type
-                self.symbol_table.define_symbol(name.clone(), expr_type.clone(), span.clone());
+                let declared_type = type_expr_opt.as_ref().map(|te| self.resolve_type_expr(te));
+
+                if let Some(d_type) = declared_type {
+                    if !self.is_assignable(&expr_type, &d_type) {
+                        self.errors.push(SemanticError::new(
+                            format!("Type mismatch in 'let' statement: expected {:?}, found {:?}.", d_type, expr_type),
+                            span.clone(),
+                        ));
+                    }
+                    self.symbol_table.define_symbol(name.clone(), d_type, span.clone());
+                } else {
+                    self.symbol_table.define_symbol(name.clone(), expr_type.clone(), span.clone());
+                }
                 println!("  Defined symbol '{}' with type {:?}", name, expr_type);
             }
             Statement::Return(span, expr) => {
@@ -116,30 +244,38 @@ impl<'a> SemanticAnalyzer<'a> {
             Statement::Expression(expr) => {
                 self.analyze_expression(expr);
             }
-            Statement::Function(span, name, params, body) => {
-                // Conceptual: Define function symbol
-                // Store original function return type (e.g., from a signature)
-                let original_return_type = Type::Unknown; // Placeholder
-                self.current_function_return_type = Some(original_return_type.clone());
-                self.symbol_table.define_symbol(name.clone(), Type::Function(Box::new(Type::Unknown), Box::new(original_return_type.clone())), span.clone());
+            Statement::Function(span, name, params, return_type_expr_opt, body) => {
+                // Conceptual: Resolve function's full type including parameters and return type
+                let resolved_param_types: Vec<Type> = params.iter().map(|p| p.typ.as_ref().map_or(Type::Unknown, |te| self.resolve_type_expr(te))).collect();
+                let resolved_return_type = return_type_expr_opt.as_ref().map_or(Type::Unit, |te| self.resolve_type_expr(te));
+                let func_type = Type::Function(resolved_param_types.clone(), Box::new(resolved_return_type.clone()));
+
+                self.symbol_table.define_symbol(name.clone(), func_type.clone(), span.clone());
+                
+                let old_current_function_return_type = self.current_function_return_type.clone();
+                self.current_function_return_type = Some(resolved_return_type);
 
                 self.symbol_table.enter_scope(); // Function scope
-                // Conceptual: Define parameters in scope
+                for param in params {
+                    // Define parameters in the new scope
+                    let param_type = param.typ.as_ref().map_or(Type::Unknown, |te| self.resolve_type_expr(te));
+                    self.symbol_table.define_symbol(param.name.0.clone(), param_type, param.name.1.clone());
+                }
                 self.analyze_expression(body); // Analyze function body (which is a block expression)
                 self.symbol_table.exit_scope(); // Exit function scope
-                self.current_function_return_type = None;
+                self.current_function_return_type = old_current_function_return_type; // Restore
             }
             Statement::QuantumCircuit(span, name, body) => {
                 self.symbol_table.define_symbol(name.clone(), Type::QuantumCircuit, span.clone());
                 self.symbol_table.enter_scope(); // Quantum circuit scope
-                // Conceptual: Validate quantum operations, qubit allocations, etc.
+                // Conceptual: Validate quantum operations, qubit allocations, coherence, etc.
                 self.analyze_expression(body); // Analyze circuit body
                 self.symbol_table.exit_scope();
             }
             Statement::NanoAgent(span, name, body) => {
                 self.symbol_table.define_symbol(name.clone(), Type::NanoAgent, span.clone());
                 self.symbol_table.enter_scope(); // Nano-agent scope
-                // Conceptual: Validate nano-agent behaviors, communication protocols
+                // Conceptual: Validate nano-agent behaviors, communication protocols, resource usage
                 self.analyze_expression(body); // Analyze agent body
                 self.symbol_table.exit_scope();
             }
@@ -147,6 +283,80 @@ impl<'a> SemanticAnalyzer<'a> {
                 let expr_type = self.analyze_expression(expr);
                 self.symbol_table.define_symbol(name.clone(), Type::SankofaMemory(Box::new(expr_type.clone())), span.clone());
                 // Conceptual: Additional Sankofa-specific checks for memory consistency, temporal validity
+            }
+            Statement::TypeDeclaration(span, name, type_expr) => {
+                let resolved_type = self.resolve_type_expr(type_expr);
+                self.symbol_table.define_symbol(name.clone(), resolved_type, span.clone());
+            }
+            Statement::EffectDeclaration(span, name) => {
+                // Conceptual: Effects are like capabilities/interfaces. Define them.
+                self.symbol_table.define_symbol(name.clone(), Type::Effect(name.clone()), span.clone());
+            }
+            Statement::LanguageDeclaration(span, name, grammar_expr) => {
+                // Conceptual: This might involve loading/parsing a grammar for sub-language
+                self.analyze_expression(grammar_expr);
+                self.symbol_table.define_symbol(name.clone(), Type::Language(name.clone()), span.clone());
+            }
+            Statement::While(span, cond, body) => {
+                let cond_type = self.analyze_expression(cond);
+                if cond_type != Type::Boolean {
+                    self.errors.push(SemanticError::new(
+                        "While condition must be of type Boolean.".to_string(),
+                        span.clone(),
+                    ));
+                }
+                self.symbol_table.enter_scope(); // Loop scope
+                self.analyze_expression(body);
+                self.symbol_table.exit_scope();
+            }
+            Statement::For(span, iterator_var, iterable_expr, body) => {
+                let iterable_type = self.analyze_expression(iterable_expr);
+                // Conceptual: Check if iterable_type implements an Iterable trait
+                match iterable_type {
+                    Type::Array(element_type) => {
+                        self.symbol_table.enter_scope(); // Loop scope
+                        self.symbol_table.define_symbol(iterator_var.0.clone(), *element_type, iterator_var.1.clone());
+                        self.analyze_expression(body);
+                        self.symbol_table.exit_scope();
+                    }
+                    _ => {
+                        self.errors.push(SemanticError::new(
+                            format!("'for' loop iterable must be an array type, found {:?}.", iterable_type),
+                            span.clone(),
+                        ));
+                    }
+                }
+            }
+            Statement::Break(span) => { /* Conceptual: Check if inside a loop */ }
+            Statement::Continue(span) => { /* Conceptual: Check if inside a loop */ }
+            Statement::Match(span, matched_expr, cases) => {
+                let matched_type = self.analyze_expression(matched_expr);
+                let mut common_case_type: Option<Type> = None;
+
+                for case in cases {
+                    self.symbol_table.enter_scope(); // Case scope
+                    // Conceptual: Pattern matching would bind new variables. For simplicity, just check pattern type.
+                    let pattern_type = self.analyze_expression(&case.pattern);
+                    if !self.is_assignable(&pattern_type, &matched_type) {
+                        self.errors.push(SemanticError::new(
+                            format!("Match case pattern type {:?} is not assignable to matched expression type {:?}.", pattern_type, matched_type),
+                            case.span.clone(),
+                        ));
+                    }
+                    let body_type = self.analyze_expression(&case.body);
+                    if common_case_type.is_none() {
+                        common_case_type = Some(body_type);
+                    } else if let Some(ref c_type) = common_case_type {
+                        if !self.is_assignable(&body_type, c_type) {
+                            self.errors.push(SemanticError::new(
+                                format!("Match case body type {:?} is not compatible with previous case type {:?}.", body_type, c_type),
+                                case.body.span().clone(),
+                            ));
+                        }
+                    }
+                    self.symbol_table.exit_scope();
+                }
+                // Conceptual: Ensure all cases are covered (exhaustive matching)
             }
         }
     }
@@ -271,6 +481,7 @@ impl<'a> SemanticAnalyzer<'a> {
                 }
                 let then_type = self.analyze_expression(then_block);
                 let else_type = else_block.as_ref().map(|b| self.analyze_expression(b)).unwrap_or(Type::Unit); // else branch is optional, defaults to Unit
+                
                 // Conceptual: Ensure then_type and else_type are compatible
                 if then_type != else_type && then_type != Type::Unit && else_type != Type::Unit && then_type != Type::Error && else_type != Type::Error {
                      self.errors.push(SemanticError::new(
@@ -286,28 +497,44 @@ impl<'a> SemanticAnalyzer<'a> {
             }
             Expression::Block(span, statements) => {
                 self.symbol_table.enter_scope();
+                let mut last_expr_type = Type::Unit;
                 for stmt in statements {
-                    self.analyze_statement(stmt);
+                    // A block's type is the type of its last expression statement, if any.
+                    if let Statement::Expression(expr) = stmt {
+                        last_expr_type = self.analyze_expression(expr);
+                    } else {
+                        self.analyze_statement(stmt);
+                        last_expr_type = Type::Unit; // Statements other than expressions return Unit
+                    }
                 }
                 self.symbol_table.exit_scope();
-                // Conceptual: The type of a block is the type of its last expression, or Unit if no expressions.
-                Type::Unit // Simplified for now
+                last_expr_type
             }
             Expression::Call(span, func_expr, args) => {
                 let func_type = self.analyze_expression(func_expr);
                 let arg_types: Vec<Type> = args.iter().map(|arg| self.analyze_expression(arg)).collect();
 
-                // Conceptual: Perform function overload resolution and type checking for arguments
-                if let Type::Function(param_types, return_type) = func_type {
-                    // Simplified: Assuming `param_types` is a single type representing all params for conceptual purpose
-                    // In real implementation, `param_types` would be `Vec<Type>` or similar
-                    // if arg_types.len() != param_types.len() { /* error */ }
-                    // for i in 0..arg_types.len() { /* check arg_types[i] against param_types[i] */ }
+                if let Type::Function(expected_param_types, return_type) = func_type {
+                    if arg_types.len() != expected_param_types.len() {
+                        self.errors.push(SemanticError::new(
+                            format!("Function call argument count mismatch: expected {}, found {}.", expected_param_types.len(), arg_types.len()),
+                            span.clone(),
+                        ));
+                        return Type::Error;
+                    }
+                    for (idx, (arg_type, expected_type)) in arg_types.iter().zip(expected_param_types.iter()).enumerate() {
+                        if !self.is_assignable(arg_type, expected_type) {
+                            self.errors.push(SemanticError::new(
+                                format!("Function call argument {} type mismatch: expected {:?}, found {:?}.", idx, expected_type, arg_type),
+                                args[idx].span().clone(), // Get span from argument expression
+                            ));
+                        }
+                    }
                     *return_type
                 } else {
                     self.errors.push(SemanticError::new(
                         format!("Cannot call non-function type {:?}.", func_type),
-                        span.clone(),
+                        func_expr.span().clone(), // Needs span from func_expr
                     ));
                     Type::Error
                 }
@@ -319,16 +546,40 @@ impl<'a> SemanticAnalyzer<'a> {
                 if index_type != Type::Int {
                     self.errors.push(SemanticError::new(
                         format!("Array index must be an integer, found {:?}.", index_type),
-                        span.clone(),
+                        index_expr.span().clone(), // Get span from index_expr
                     ));
                 }
-                // Conceptual: Check if array_type is indeed an array/list/vector type
                 match array_type {
                     Type::Array(element_type) => *element_type,
                     _ => {
                         self.errors.push(SemanticError::new(
                             format!("Cannot index non-array type {:?}.", array_type),
-                            span.clone(),
+                            array_expr.span().clone(), // Get span from array_expr
+                        ));
+                        Type::Error
+                    }
+                }
+            }
+            Expression::MemberAccess(span, object_expr, member_id) => {
+                let object_type = self.analyze_expression(object_expr);
+                // Conceptual: Lookup member_id in object_type's fields/properties
+                // For now, return Unknown but log an error if not a struct/object type
+                match object_type {
+                    Type::Struct(name, fields) => {
+                        if let Some(field_type) = fields.get(&member_id.0) {
+                            field_type.clone()
+                        } else {
+                            self.errors.push(SemanticError::new(
+                                format!("Member '{}' not found in struct '{}'.", member_id.0, name),
+                                member_id.1.clone(),
+                            ));
+                            Type::Error
+                        }
+                    }
+                    _ => {
+                        self.errors.push(SemanticError::new(
+                            format!("Cannot access member '{}' on non-struct/object type {:?}.", member_id.0, object_type),
+                            object_expr.span().clone(),
                         ));
                         Type::Error
                     }
@@ -340,8 +591,15 @@ impl<'a> SemanticAnalyzer<'a> {
     // Conceptual type assignability check (simplified)
     fn is_assignable(&self, from: &Type, to: &Type) -> bool {
         from == to || *from == Type::Error || *to == Type::Error ||
-        (from == &Type::Int && to == &Type::Float) // Implicit integer to float conversion
-        // Add more complex assignability rules here for Zenith's rich type system
+        (from == &Type::Int && to == &Type::Float) || // Implicit integer to float conversion
+        // Conceptual: Add more complex assignability rules for Zenith's rich type system
+        // e.g., Linear<T> can be assigned to T if consumed, Affine<T> to T etc.
+        // e.g., QuantumQubit to Superposition<Qubit>
+        // e.g., T to Option<T>
+        // e.g., checking subtyping for generic types
+        // e.g., dependent type compatibility
+        // e.g., effect compatibility
+        false // Default to not assignable if no explicit rule matches
     }
 
 
@@ -354,6 +612,7 @@ impl<'a> SemanticAnalyzer<'a> {
 pub mod compiler_types {
     use std::collections::HashMap;
     use crate::tokens::Span;
+    use crate::ast::{Identifier, TypeExpr, Expression}; // Use AST components here
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum Type {
@@ -370,7 +629,8 @@ pub mod compiler_types {
 
         // Composite types
         Array(Box<Type>), // e.g., Array<Int>
-        Function(Box<Type>, Box<Type>), // (param_types, return_type) - Simplified
+        Function(Vec<Type>, Box<Type>), // (param_types, return_type)
+        Struct(String, HashMap<String, Type>), // For member access checking
 
         // Zenith-specific types
         QuantumQubit,
@@ -387,9 +647,9 @@ pub mod compiler_types {
 
         // Type system types (from universe hierarchy)
         UniverseType(usize), // Type_N
-        Kind,
-        Sort,
-        Prop,
+        Kind, // Type_1
+        Sort, // Type_2
+        Prop, // Type_omega
 
         // Linear/Affine types
         Linear(Box<Type>),
@@ -397,20 +657,35 @@ pub mod compiler_types {
 
         // Effect system types
         Effect(String), // Effect("DivByZero")
-        Effectful(Box<Type>, Vec<Type>), // T with effects
+        Effectful(Box<Type>, Vec<Type>), // T with effects {E1, E2} (resolved effects)
 
         // Sankofa-specific types
         SankofaMemory(Box<Type>), // A memory structure holding a value of Type
-        SankofaHistory(Box<Type>), // History<Type, Span>
+        SankofaHistory(Box<Type>), // History<Type, Span> (simplified, duration in AST)
         SankofaConsensus(Box<Type>), // ConsensusTrue<Type>
         SankofaWisdom, // Wisdom<T, Source>
         SankofaInterMemory(String, Box<Type>), // InterMemory<Lang, Type>
+
+        // Language-specific (meta-compilation)
+        Language(String), // Represents a declared sub-language
     }
 
     impl Type {
         pub fn is_comparable(&self) -> bool {
             matches!(self, Type::Int | Type::Float | Type::Boolean | Type::String | Type::Char)
             // Can be extended for quantum/nano types later
+        }
+
+        // Helper to get span for TypeExpr in semantic error reporting
+        // NOTE: This is a simplification. In a real compiler, every AST node and Type node would carry its Span.
+        // Here, we provide a placeholder that attempts to get a relevant span from TypeExpr for error messages.
+        pub fn span(&self) -> &Span {
+            // This is a placeholder. In a full implementation, Type would carry its Span.
+            // For now, we'll return a a static dummy span or panic if called on certain types.
+            // This function is problematic as `Type` doesn't inherently carry a span.
+            // Errors should ideally be generated with spans from the AST nodes.
+            // For demonstration, returning a dummy span.
+            &Span::new(0,0,0) // Dummy span
         }
     }
 
