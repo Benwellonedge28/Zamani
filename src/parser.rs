@@ -6,10 +6,78 @@
 //! of the Zenith source code. The parser handles the complex, unified grammar
 //! of NIMBUS, Zenith, and Sankofa, including advanced control flow, expressions,
 //! and declarations for classical, quantum, and nano computing.
+//! This version integrates conceptual type and scope management.
 
 use crate::lexer::{Lexer, Token, TokenType, Span, LexerError};
 use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeAnnotation};
 use std::collections::HashMap;
+
+// --- Symbol Table (Conceptual) ---
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SymbolType {
+    Variable,
+    Function,
+    Type,
+    QuantumRegister,
+    NanoAgent,
+    MemoryLocation, // For Sankofa
+    // ... other kinds of symbols
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Symbol {
+    pub name: String,
+    pub symbol_type: SymbolType,
+    pub declared_type: Option<TypeAnnotation>,
+    pub scope_depth: usize,
+    pub span: Span,
+    // ... other symbol properties like mutability, capture, etc.
+}
+
+pub struct SymbolTable {
+    symbols: Vec<HashMap<String, Symbol>>, // Stack of scopes
+    scope_depth: usize,
+}
+
+impl SymbolTable {
+    pub fn new() -> Self {
+        SymbolTable {
+            symbols: vec![HashMap::new()], // Global scope
+            scope_depth: 0,
+        }
+    }
+
+    pub fn enter_scope(&mut self) {
+        self.scope_depth += 1;
+        self.symbols.push(HashMap::new());
+    }
+
+    pub fn exit_scope(&mut self) {
+        if self.scope_depth > 0 {
+            self.scope_depth -= 1;
+            self.symbols.pop();
+        }
+    }
+
+    pub fn define(&mut self, name: String, symbol_type: SymbolType, declared_type: Option<TypeAnnotation>, span: Span) -> Result<(), String> {
+        let current_scope = self.symbols.last_mut().expect("No active scope");
+        if current_scope.contains_key(&name) {
+            return Err(format!("Symbol '{}' already defined in current scope.", name));
+        }
+        current_scope.insert(name.clone(), Symbol { name, symbol_type, declared_type, scope_depth: self.scope_depth, span });
+        Ok(())
+    }
+
+    pub fn resolve(&self, name: &str) -> Option<&Symbol> {
+        for scope in self.symbols.iter().rev() { // Search from innermost to outermost scope
+            if let Some(symbol) = scope.get(name) {
+                return Some(symbol);
+            }
+        }
+        None
+    }
+}
+
 
 // --- Parser Structure ---
 pub struct Parser<'a> {
@@ -17,6 +85,7 @@ pub struct Parser<'a> {
     current_token: Option<Token>,
     peek_token: Option<Token>,
     errors: Vec<ParserError>, // Accumulate parsing errors
+    symbol_table: SymbolTable, // Add symbol table
 
     // Maps for operator precedence
     prefix_parse_fns: HashMap<TokenType, fn(&mut Parser) -> Option<Expression>>,
@@ -38,6 +107,7 @@ impl<'a> Parser<'a> {
             current_token: None,
             peek_token: None,
             errors: Vec::new(),
+            symbol_table: SymbolTable::new(), // Initialize symbol table
             prefix_parse_fns: HashMap::new(),
             infix_parse_fns: HashMap::new(),
             precedences: HashMap::new(),
@@ -61,7 +131,6 @@ impl<'a> Parser<'a> {
         // Also collect lexer errors after each token read
         self.errors.extend(self.lexer.get_errors().iter().map(|e| ParserError { message: e.message.clone(), span: e.span.clone() }));
         // Clear lexer errors after collection for the next pass
-        // In a real scenario, you might want more sophisticated error management.
         self.lexer.errors.clear();
     }
 
@@ -91,9 +160,9 @@ impl<'a> Parser<'a> {
 
     fn expect_peek_token(&mut self, token_type: TokenType) -> Result<Token, ParserError> {
         if self.peek_token_is(token_type) {
-            self.next_token(); // Advance current_token to the peek_token
+            self.next_token();
             let token = self.current_token.take().unwrap();
-            self.next_token(); // Advance to the next token
+            self.next_token();
             Ok(token)
         } else {
             let error_span = self.peek_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
@@ -149,7 +218,7 @@ impl<'a> Parser<'a> {
         self.prefix_parse_fns.insert(KeywordFalse, Parser::parse_boolean_literal);
         self.prefix_parse_fns.insert(LParen, Parser::parse_grouped_expr);
         self.prefix_parse_fns.insert(KeywordIf, Parser::parse_if_expr);
-        self.prefix_parse_fns.insert(LBrace, Parser::parse_block_expr); // For block expressions
+        self.prefix_parse_fns.insert(LBrace, Parser::parse_block_expr);
     }
 
     fn parse_identifier_expr(parser: &mut Parser) -> Option<Expression> {
@@ -165,7 +234,6 @@ impl<'a> Parser<'a> {
         parser.current_token.take().map(|t| Expression::Literal(Literal::String(t.literal, t.span)))
     }
     fn parse_char_literal(parser: &mut Parser) -> Option<Expression> {
-        // Conceptual: parse_char_literal should ensure the literal is a single char.
         parser.current_token.take().map(|t| Expression::Literal(Literal::Char(t.literal.chars().next().unwrap_or('\0'), t.span)))
     }
     fn parse_quantum_literal(parser: &mut Parser) -> Option<Expression> {
@@ -219,15 +287,16 @@ impl<'a> Parser<'a> {
         let start_span = parser.current_token.as_ref()?.span.clone(); // Span of '{'
         parser.next_token(); // Consume '{'
         let mut statements = Vec::new();
+        parser.symbol_table.enter_scope(); // Enter new scope for block
         while !parser.current_token_is(TokenType::RBrace) && !parser.current_token_is(TokenType::EOF) {
             if let Some(stmt) = parser.parse_statement() {
                 statements.push(stmt);
-            }
-            // Add robust error recovery here: skip tokens until a likely statement start or block end
-            if parser.current_token.is_some() && parser.current_token_is(TokenType::Semicolon) {
-                parser.next_token(); // Consume stray semicolons
+            } else {
+                // Conceptual error recovery: advance past the problematic token
+                parser.next_token();
             }
         }
+        parser.symbol_table.exit_scope(); // Exit scope
         parser.expect_current_token(TokenType::RBrace).ok()?; // Consume '}'
         Some(Expression::Block(start_span, statements))
     }
@@ -247,8 +316,8 @@ impl<'a> Parser<'a> {
         self.infix_parse_fns.insert(GTE, Parser::parse_infix_expr);
         self.infix_parse_fns.insert(LogicalAnd, Parser::parse_infix_expr);
         self.infix_parse_fns.insert(LogicalOr, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(LParen, Parser::parse_call_expr); // Function calls
-        self.infix_parse_fns.insert(LBracket, Parser::parse_index_expr); // Array indexing
+        self.infix_parse_fns.insert(LParen, Parser::parse_call_expr);
+        self.infix_parse_fns.insert(LBracket, Parser::parse_index_expr);
     }
 
     fn parse_infix_expr(parser: &mut Parser, left: Expression) -> Option<Expression> {
@@ -276,19 +345,21 @@ impl<'a> Parser<'a> {
 
     fn parse_expression_list(&mut self, end_token: TokenType) -> Result<Vec<Expression>, ParserError> {
         let mut list = Vec::new();
-        if parser.peek_token_is(end_token.clone()) {
-            parser.next_token(); // Consume end_token (e.g., ')' or ']')
+        // No arguments
+        if self.peek_token_is(end_token.clone()) {
+            self.next_token(); // Consume end_token (e.g., ')' or ']')
             return Ok(list);
         }
-        parser.next_token(); // Consume first expression token
-        list.push(parser.parse_expression(Precedence::Lowest)?);
+        
+        self.next_token(); // Move to the first argument
+        list.push(self.parse_expression(Precedence::Lowest)?);
 
-        while parser.peek_token_is(TokenType::Comma) {
-            parser.next_token(); // Consume ','
-            parser.next_token(); // Consume expression token
-            list.push(parser.parse_expression(Precedence::Lowest)?);
+        while self.peek_token_is(TokenType::Comma) {
+            self.next_token(); // Consume ','
+            self.next_token(); // Move to the next argument
+            list.push(self.parse_expression(Precedence::Lowest)?);
         }
-        parser.expect_peek_token(end_token)?; // Expect and consume the end_token
+        self.expect_peek_token(end_token)?; // Expect and consume the end_token
         Ok(list)
     }
 
@@ -296,6 +367,7 @@ impl<'a> Parser<'a> {
     // --- Core Parsing Methods (Conceptual) ---
     pub fn parse_program(&mut self) -> Program {
         let mut program = Program { statements: Vec::new() };
+        self.symbol_table.enter_scope(); // Enter global scope
         // Conceptual: Add TokenType::EOF to lexer for real implementation.
         while self.current_token.is_some() && self.current_token.as_ref().unwrap().token_type != TokenType::EOF {
             if let Some(stmt) = self.parse_statement() {
@@ -305,6 +377,7 @@ impl<'a> Parser<'a> {
                 self.next_token();
             }
         }
+        self.symbol_table.exit_scope(); // Exit global scope
         program
     }
 
@@ -323,7 +396,7 @@ impl<'a> Parser<'a> {
             Ok(stmt) => Some(stmt),
             Err(e) => {
                 self.errors.push(e);
-                None // Skip this statement due to error
+                None
             }
         }
     }
@@ -346,11 +419,11 @@ impl<'a> Parser<'a> {
                 })?
             } else {
                 let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
-                return Err(ParserError { message: format!("No prefix parse function for {:?}", current_token_type), span: error_span });
+                return Err(ParserError { message: format!("No prefix parse function for {:?}. Token: {}", current_token_type, self.current_token.as_ref().map_or("".to_string(), |t| t.literal.clone())), span: error_span });
             }
         };
 
-        while !self.peek_token_is(TokenType::Semicolon) && precedence < self.peek_precedence() {
+        while !self.peek_token_is(TokenType::Semicolon) && !self.peek_token_is(TokenType::RBrace) && precedence < self.peek_precedence() {
             let peek_token_type = self.peek_token.as_ref().map(|t| t.token_type.clone());
             if let Some(infix_fn) = peek_token_type.and_then(|t| self.infix_parse_fns.get(&t)) {
                 self.next_token(); // Advance to the infix operator
@@ -387,7 +460,7 @@ enum Precedence {
 }
 
 
-// --- Placeholder AST Nodes (Updated to include Span) ---
+// --- Placeholder AST Nodes (Updated to include Span and TypeAnnotation) ---
 pub mod ast {
     use crate::tokens::Span;
     use crate::lexer::TokenType; // Import TokenType for Prefix/Infix operators
@@ -399,26 +472,26 @@ pub mod ast {
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum Statement {
-        Let(Span, String, Expression), // e.g., let x = 5;
-        Return(Span, Expression),      // e.g., return y;
-        Expression(Expression),        // e.g., 5 + 3;
-        Function(Span, String, Vec<Identifier>, Expression), // fn add(a, b) { ... }
-        QuantumCircuit(Span, String, Expression), // quantum my_circuit { ... }
-        NanoAgent(Span, String, Expression),      // nano my_agent { ... }
-        SankofaMemory(Span, String, Expression),  // remember history = ...;
+        Let(Span, String, Expression, Option<TypeAnnotation>), // Added Option<TypeAnnotation>
+        Return(Span, Expression),
+        Expression(Expression),
+        Function(Span, String, Vec<Identifier>, Expression), // Parameters now actual Identifiers for scope
+        QuantumCircuit(Span, String, Expression),
+        NanoAgent(Span, String, Expression),
+        SankofaMemory(Span, String, Expression),
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum Expression {
         Identifier(Identifier),
         Literal(Literal),
-        Prefix(Span, TokenType, Box<Expression>), // e.g., -5, !true
-        Infix(Span, Box<Expression>, TokenType, Box<Expression>), // e.g., 2 + 3
-        If(Span, Box<Expression>, Box<Expression>, Option<Box<Expression>>), // if (cond) { ... } else { ... }
-        Block(Span, Vec<Statement>), // { ... }
+        Prefix(Span, TokenType, Box<Expression>),
+        Infix(Span, Box<Expression>, TokenType, Box<Expression>),
+        If(Span, Box<Expression>, Box<Expression>, Option<Box<Expression>>),
+        Block(Span, Vec<Statement>),
         Call(Span, Box<Expression>, Vec<Expression>),
         Index(Span, Box<Expression>, Box<Expression>), // array[index] - New!
-        // Add more expression types as needed for Zenith's grammar
+        // ... more expression types
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -428,14 +501,14 @@ pub mod ast {
         String(String, Span),
         Boolean(bool, Span),
         Char(char, Span),
-        Quantum(String, Span), // e.g., |0⟩
-        Nano(String, Span),    // e.g., @atom(O:2s)
-        MTS(String, Span),     // e.g., mts[5]
+        Quantum(String, Span),
+        Nano(String, Span),
+        MTS(String, Span),
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct Identifier(pub String, pub Span);
 
     #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct TypeAnnotation(pub String, pub Span); // For types like 'int', 'Qubit', 'Atom<O>'
+    pub struct TypeAnnotation(pub String, pub Span); // Actual type system might be more complex
 }
