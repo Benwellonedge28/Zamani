@@ -9,8 +9,8 @@
 //! The optimizer includes both general-purpose and highly specialized passes tailored
 //! to Zenith's unique computational paradigms.
 
-use crate::ir_gen::{IrInstruction, IrValue, IrRegister, IrType, IrGenError};
-use crate::tokens::Span;
+use crate::ir_gen::{IrInstruction, IrValue, IrRegister, IrType}; // Removed IrGenError import
+use crate::source_map::Span; // Corrected Span import
 use std::collections::{HashMap, HashSet};
 
 // --- Optimizer Structure ---
