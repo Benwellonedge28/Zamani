@@ -57,6 +57,20 @@ pub enum Statement {
     Match(Span, Box<Expression>, Vec<MatchCase>),
     /// unsafe!(evas: "proof") { ... } (an unsafe block that requires an EVAS proof)
     Unsafe(Span, Option<String>, Box<Expression>), // Option<String> for the proof string
+
+    // --- Nimbus-specific AST nodes ---
+    /// blueprint <name> { components: [...], behaviors: [...] }
+    NanoBlueprint(Span, Identifier, Vec<NanoComponent>, Vec<NanoBehavior>),
+    /// Deploy a nano-agent instance
+    DeployNanoAgent(Span, Identifier, Identifier, Vec<Expression>), // Agent type, instance name, initial config args
+
+    // --- Sankofa-specific AST nodes ---
+    /// consensus on [<timeline_ids>] { ... } (for reconciling divergent histories)
+    ConsensusBlock(Span, Vec<Expression>, Box<Expression>), // List of timeline IDs/expressions, block for consensus logic
+    /// branch_timeline <new_id> from <source_id> at <point_in_time>
+    BranchTimeline(Span, Identifier, Identifier, Expression),
+    /// merge_timelines <target_id> with <source_id> using <strategy_expr>
+    MergeTimelines(Span, Identifier, Identifier, Expression), // strategy_expr could be a function call
 }
 
 /// Represents a parameter in a function definition.
@@ -75,6 +89,23 @@ pub struct MatchCase {
     pub span: Span,
     pub pattern: Expression, // The pattern to match against
     pub body: Expression,    // The expression to execute if the pattern matches
+}
+
+// --- Nimbus-specific helper structs ---
+#[derive(Debug, Clone, PartialEq)]
+pub struct NanoComponent {
+    pub span: Span,
+    pub name: Identifier,
+    pub component_type: TypeExpr, // e.g., Sensor, Actuator, Processor
+    pub initial_config: Option<Expression>, // e.g., Sensor(range: 100)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NanoBehavior {
+    pub span: Span,
+    pub name: Identifier,
+    pub parameters: Vec<Parameter>,
+    pub body: Expression, // Block expression defining the behavior
 }
 
 /// Represents an expression in the Zenith language.
@@ -106,6 +137,24 @@ pub enum Expression {
     MtsOperation(Span, String, Vec<Expression>),
     /// Used for performing algebraic effects (e.g., perform Read(addr))
     PerformEffect(Span, String, Vec<Expression>),
+
+    // --- Nimbus-specific Expression nodes ---
+    /// sense <agent_instance>.<sensor_name>
+    NanoSense(Span, Box<Expression>, Identifier),
+    /// actuate <agent_instance>.<actuator_name> with <value>
+    NanoActuate(Span, Box<Expression>, Identifier, Box<Expression>),
+    /// communicate <agent_instance> to <target_agent> message <msg_expr>
+    NanoCommunicate(Span, Box<Expression>, Box<Expression>, Box<Expression>),
+
+    // --- Sankofa-specific Expression nodes ---
+    /// recall <memory_key> at <timestamp_expr>
+    TemporalRecall(Span, Identifier, Box<Expression>),
+    /// get fact <fact_id> from <timeline_id_expr>
+    FactAccess(Span, Identifier, Option<Box<Expression>>), // Optional timeline
+    /// get wisdom <wisdom_id>
+    WisdomAccess(Span, Identifier),
+    /// consensus_check(<proposals>) -> bool
+    ConsensusCheck(Span, Vec<Expression>),
 }
 
 /// Represents a literal value in the Zenith language.
@@ -118,6 +167,7 @@ pub enum Literal {
     Boolean(bool, Span),
     Quantum(String, Span), // e.g., |0>, |+>
     MTS(String, Span),     // e.g., mts[5]
+    // Add more specialized literals if Nimbus/Sankofa introduce them
 }
 
 /// Represents an identifier in the Zenith language.
@@ -159,6 +209,17 @@ pub enum TypeExpr {
     HistoryType(Box<TypeExpr>, Option<String>), // History<Data, years>
     ConsensusTrueType(Box<TypeExpr>), // ConsensusTrue<Proposal>
     InterMemoryType(Box<TypeExpr>, Box<TypeExpr>), // InterMemory<LangId, Data>
+
+    // --- Nimbus-specific TypeExpr nodes ---
+    NanoComponentType(Identifier), // Type for a nano-agent component, e.g., Sensor, Actuator
+    NanoBehaviorType(Identifier), // Type for a nano-agent behavior, e.g., OnDetect, MoveBehavior
+    NanoBlueprintType(Identifier), // Type for a nano-agent blueprint, e.g., HealingBotBlueprint
+    EnvContextType(Identifier), // Type for environmental context data, e.g., ChemGradientSensorData
+
+    // --- Sankofa-specific TypeExpr nodes ---
+    TimelineIdType, // Type for a timeline identifier
+    TemporalPointType, // Type for a point in time (timestamp, historical event reference)
+    ConsensusStrategyType(Identifier), // Type for a consensus strategy, e.g., MajorityVote, QuantumSuperpositionMerge
 
     // Placeholders for error recovery or unparsed types
     Error(Span),
