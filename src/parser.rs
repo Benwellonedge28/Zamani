@@ -8,7 +8,7 @@
 //! and declarations for classical, quantum, and nano computing.
 
 use crate::lexer::{Lexer, Token, TokenType, Span, LexerError};
-use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeAnnotation, Parameter, TypeExpr}; // Added TypeExpr, Parameter
+use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeAnnotation, Parameter, TypeExpr, MatchCase}; // Added MatchCase
 use std::collections::HashMap;
 
 // --- Parser Structure ---
@@ -60,7 +60,6 @@ impl<'a> Parser<'a> {
         // Also collect lexer errors after each token read
         self.errors.extend(self.lexer.get_errors().iter().map(|e| ParserError { message: e.message.clone(), span: e.span.clone() }));
         // Clear lexer errors after collection for the next pass
-        // In a real scenario, you might want more sophisticated error management.
         self.lexer.errors.clear();
     }
 
@@ -126,6 +125,14 @@ impl<'a> Parser<'a> {
             TokenType::KeywordEffect => "effect".to_string(),
             TokenType::KeywordLanguage => "language".to_string(),
             TokenType::Integer => "integer".to_string(),
+            TokenType::KeywordWhile => "while".to_string(),
+            TokenType::KeywordFor => "for".to_string(),
+            TokenType::KeywordMatch => "match".to_string(),
+            TokenType::KeywordCase => "case".to_string(),
+            TokenType::KeywordPi => "Pi".to_string(),
+            TokenType::KeywordSigma => "Sigma".to_string(),
+            TokenType::KeywordLinear => "linear".to_string(),
+            TokenType::KeywordAffine => "affine".to_string(),
             // ... add more as needed
             _ => format!("{:?}", token_type),
         }
@@ -251,7 +258,7 @@ impl<'a> Parser<'a> {
                 statements.push(stmt);
             }
             // Add robust error recovery here: skip tokens until a likely statement start or block end
-            if parser.current_token.is_some() && parser.current_token_is(TokenType::Semicolon) {
+            if parser.current_token.is_some() && parser.current_token_is(TokenType::Semicolon) { 
                 parser.next_token(); // Consume stray semicolons
             }
         }
@@ -329,30 +336,71 @@ impl<'a> Parser<'a> {
 
     // --- Type Parsing (Conceptual for Zenith's rich type system) ---
     fn parse_type_expression(&mut self) -> Result<TypeExpr, ParserError> {
-        let type_name_token = self.expect_current_token(TokenType::Identifier)?; // e.g., 'int', 'Qubit', 'Atom'
-        let mut type_expr = TypeExpr::Base(Identifier(type_name_token.literal, type_name_token.span));
+        let current_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
+        let mut type_expr = TypeExpr::Base(Identifier("".to_string(), current_span.clone())); // Placeholder, will be replaced
 
-        if self.peek_token_is(TokenType::LT) { // Generic parameters like List<int>, Atom<O>
+        match self.current_token.as_ref()?.token_type {
+            TokenType::Identifier => {
+                let type_name_token = self.current_token.take().unwrap();
+                type_expr = TypeExpr::Base(Identifier(type_name_token.literal, type_name_token.span));
+            },
+            TokenType::KeywordLinear => {
+                self.next_token(); // Consume 'linear'
+                let inner_type = self.parse_type_expression()?;
+                type_expr = TypeExpr::Linear(Box::new(inner_type));
+            },
+            TokenType::KeywordAffine => {
+                self.next_token(); // Consume 'affine'
+                let inner_type = self.parse_type_expression()?;
+                type_expr = TypeExpr::Affine(Box::new(inner_type));
+            },
+            TokenType::KeywordPi | TokenType::KeywordSigma => {
+                let current_type_token = self.current_token.take().unwrap();
+                let is_pi = current_type_token.token_type == TokenType::KeywordPi;
+
+                self.expect_current_token(TokenType::LParen)?; // Consumes '('
+                let param_name_token = self.expect_current_token(TokenType::Identifier)?; // x
+                self.expect_current_token(TokenType::Colon)?; // :
+                let param_type = self.parse_type_expression()?; // T
+                self.expect_current_token(TokenType::RParen)?; // )
+                let return_type = self.parse_type_expression()?; // T (second T)
+
+                if is_pi {
+                    type_expr = TypeExpr::DependentPi(Identifier(param_name_token.literal, param_name_token.span), Box::new(param_type), Box::new(return_type));
+                } else {
+                    type_expr = TypeExpr::DependentSigma(Identifier(param_name_token.literal, param_name_token.span), Box::new(param_type), Box::new(return_type));
+                }
+            },
+            // Add parsing for Universe types (Type_N, Kind, Sort, Prop) if they have keywords
+            _ => {
+                let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
+                return Err(ParserError {
+                    message: format!("Expected a type expression starting with Identifier, 'linear', 'affine', 'Pi', or 'Sigma', found {:?}", self.current_token.as_ref().unwrap().token_type),
+                    span: error_span,
+                });
+            }
+        }
+        
+        // Handle generic parameters like List<int>, Atom<O>
+        if self.peek_token_is(TokenType::LT) { // '<'
             self.next_token(); // Consume '<'
-            let lt_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
             let mut generic_args = Vec::new();
-            // Conceptual: parse a list of TypeExprs
-            // For now, simplify to expect at least one type expression
-            self.next_token(); // Consume first generic arg token
+            // Expect at least one type expression
+            self.next_token(); // Advance to first generic arg token
             generic_args.push(self.parse_type_expression()?);
             while self.peek_token_is(TokenType::Comma) {
                 self.next_token(); // Consume ','
-                self.next_token(); // Consume next generic arg token
+                self.next_token(); // Advance to next generic arg token
                 generic_args.push(self.parse_type_expression()?);
             }
             self.expect_peek_token(TokenType::GT)?; // Consume '>'
             type_expr = TypeExpr::Generic(Box::new(type_expr), generic_args);
         }
 
-        if self.peek_token_is(TokenType::LBracket) { // Array or QReg<N> types
+        // Handle Array or QReg[N] types
+        if self.peek_token_is(TokenType::LBracket) { // '['
             self.next_token(); // Consume '['
-            let lbracket_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
-            if self.peek_token_is(TokenType::Integer) { // QReg[N]
+            if self.peek_token_is(TokenType::Integer) { // QReg[N] or array with fixed size
                 let size_token = self.expect_peek_token(TokenType::Integer)?; // Expect and consume integer literal for size
                 self.expect_peek_token(TokenType::RBracket)?; // Consume ']'
                 type_expr = TypeExpr::Array(Box::new(type_expr), Some(size_token.literal));
@@ -362,29 +410,23 @@ impl<'a> Parser<'a> {
             }
         }
         
-        // Conceptual for Pi/Sigma types: Π(x:T)T | Σ(x:T)T
-        if self.peek_token_is(TokenType::KeywordPi) { // Assuming a KeywordPi token
-            let pi_token_span = self.current_token.as_ref()?.span.clone();
-            self.next_token(); // Consume KeywordPi
-            self.expect_current_token(TokenType::LParen)?; // Consume '('
-            let param_name_token = self.expect_current_token(TokenType::Identifier)?; // x
-            self.expect_current_token(TokenType::Colon)?; // :
-            let param_type = self.parse_type_expression()?; // T
-            self.expect_current_token(TokenType::RParen)?; // )
-            let return_type = self.parse_type_expression()?; // T (second T)
-            type_expr = TypeExpr::DependentPi(Identifier(param_name_token.literal, param_name_token.span), Box::new(param_type), Box::new(return_type));
-        }
-
-        if self.peek_token_is(TokenType::KeywordSigma) { // Assuming a KeywordSigma token
-            let sigma_token_span = self.current_token.as_ref()?.span.clone();
-            self.next_token(); // Consume KeywordSigma
-            self.expect_current_token(TokenType::LParen)?; // Consume '('
-            let param_name_token = self.expect_current_token(TokenType::Identifier)?; // x
-            self.expect_current_token(TokenType::Colon)?; // :
-            let param_type = self.parse_type_expression()?; // T
-            self.expect_current_token(TokenType::RParen)?; // )
-            let return_type = self.parse_type_expression()?; // T (second T)
-            type_expr = TypeExpr::DependentSigma(Identifier(param_name_token.literal, param_name_token.span), Box::new(param_type), Box::new(return_type));
+        // Handle `with effects {E1, E2}`
+        if self.peek_token_is(TokenType::KeywordWith) { // 'with'
+            self.next_token(); // Consume 'with'
+            self.expect_peek_token(TokenType::KeywordEffect)?; // Consume 'effect'
+            self.expect_peek_token(TokenType::LBrace)?; // Consume '{'
+            let mut effects = Vec::new();
+            if !self.peek_token_is(TokenType::RBrace) { // Check if there are effects defined
+                self.next_token(); // Advance to first effect name
+                effects.push(Identifier(self.current_token.as_ref().unwrap().literal.clone(), self.current_token.as_ref().unwrap().span.clone()));
+                while self.peek_token_is(TokenType::Comma) {
+                    self.next_token(); // Consume ','
+                    self.next_token(); // Advance to next effect name
+                    effects.push(Identifier(self.current_token.as_ref().unwrap().literal.clone(), self.current_token.as_ref().unwrap().span.clone()));
+                }
+            }
+            self.expect_peek_token(TokenType::RBrace)?; // Consume '}'
+            type_expr = TypeExpr::Effectful(Box::new(type_expr), effects);
         }
 
         Ok(type_expr)
@@ -421,6 +463,71 @@ impl<'a> Parser<'a> {
         Ok(parameters)
     }
 
+    // --- Control Flow & Loop Parsing (New) ---
+    fn parse_while_statement(&mut self) -> Result<Statement, ParserError> {
+        let while_token_span = self.current_token.as_ref()?.span.clone();
+        self.expect_current_token(TokenType::KeywordWhile)?; // Consume 'while'
+        self.expect_current_token(TokenType::LParen)?; // Consume '('
+        let condition = self.parse_expression(Precedence::Lowest)?; // Parse condition
+        self.expect_peek_token(TokenType::RParen)?; // Consume ')'
+        self.expect_peek_token(TokenType::LBrace)?; // Consume '{'
+        let body = self.parse_block_expr(self.current_token.as_ref()?.span.clone())?; // Parse loop body
+        Ok(Statement::While(while_token_span, Box::new(condition), Box::new(body)))
+    }
+
+    fn parse_for_statement(&mut self) -> Result<Statement, ParserError> {
+        let for_token_span = self.current_token.as_ref()?.span.clone();
+        self.expect_current_token(TokenType::KeywordFor)?; // Consume 'for'
+        self.expect_current_token(TokenType::LParen)?; // Consume '('
+        let iterator_var_token = self.expect_current_token(TokenType::Identifier)?; // Loop variable
+        let iterator_var = Identifier(iterator_var_token.literal, iterator_var_token.span);
+        self.expect_peek_token(TokenType::KeywordIn)?; // Consume 'in'
+        self.next_token(); // Consume 'in'
+        let iterable_expr = self.parse_expression(Precedence::Lowest)?; // The iterable
+        self.expect_peek_token(TokenType::RParen)?; // Consume ')'
+        self.expect_peek_token(TokenType::LBrace)?; // Consume '{'
+        let body = self.parse_block_expr(self.current_token.as_ref()?.span.clone())?; // Parse loop body
+        Ok(Statement::For(for_token_span, iterator_var, Box::new(iterable_expr), Box::new(body)))
+    }
+
+    fn parse_break_statement(&mut self) -> Result<Statement, ParserError> {
+        let break_token = self.expect_current_token(TokenType::KeywordBreak)?; // Consume 'break'
+        self.expect_current_token(TokenType::Semicolon)?; // Consumes ';'
+        Ok(Statement::Break(break_token.span))
+    }
+
+    fn parse_continue_statement(&mut self) -> Result<Statement, ParserError> {
+        let continue_token = self.expect_current_token(TokenType::KeywordContinue)?; // Consume 'continue'
+        self.expect_current_token(TokenType::Semicolon)?; // Consumes ';'
+        Ok(Statement::Continue(continue_token.span))
+    }
+
+    fn parse_match_statement(&mut self) -> Result<Statement, ParserError> {
+        let match_token_span = self.current_token.as_ref()?.span.clone();
+        self.expect_current_token(TokenType::KeywordMatch)?; // Consume 'match'
+        let matched_expr = self.parse_expression(Precedence::Lowest)?; // Expression to match against
+        self.expect_current_token(TokenType::LBrace)?; // Consume '{' for match cases
+        let mut cases = Vec::new();
+        while !self.peek_token_is(TokenType::RBrace) && !self.peek_token_is(TokenType::EOF) {
+            self.next_token(); // Advance to 'case' or pattern
+            cases.push(self.parse_match_case()?);
+        }
+        self.expect_peek_token(TokenType::RBrace)?; // Consume '}'
+        Ok(Statement::Match(match_token_span, Box::new(matched_expr), cases))
+    }
+
+    fn parse_match_case(&mut self) -> Result<MatchCase, ParserError> {
+        let case_token_span = self.current_token.as_ref()?.span.clone();
+        self.expect_current_token(TokenType::KeywordCase)?; // Consume 'case'
+        let pattern = self.parse_expression(Precedence::Lowest)?; // Conceptual: simple expression as pattern
+        self.expect_current_token(TokenType::Arrow)?; // Consumes '->'
+        self.expect_current_token(TokenType::LBrace)?; // Consumes '{'
+        let body = self.parse_block_expr(self.current_token.as_ref()?.span.clone())?; // Body of the case
+        self.expect_current_token(TokenType::RBrace)?; // Consumes '}'
+        Ok(MatchCase { span: case_token_span, pattern, body: Box::new(body) })
+    }
+
+
     // --- Core Parsing Methods (Conceptual) ---
     pub fn parse_program(&mut self) -> Program {
         let mut program = Program { statements: Vec::new() };
@@ -443,9 +550,14 @@ impl<'a> Parser<'a> {
             TokenType::KeywordQuantum => self.parse_quantum_declaration(),
             TokenType::KeywordNano => self.parse_nano_declaration(),
             TokenType::KeywordRemember => self.parse_sankofa_memory_declaration(),
-            TokenType::KeywordType => self.parse_type_declaration(), // New: type alias/struct/enum
-            TokenType::KeywordEffect => self.parse_effect_declaration(), // New: effect system declaration
-            TokenType::KeywordLanguage => self.parse_language_declaration(), // New: meta-compilation
+            TokenType::KeywordType => self.parse_type_declaration(),
+            TokenType::KeywordEffect => self.parse_effect_declaration(),
+            TokenType::KeywordLanguage => self.parse_language_declaration(),
+            TokenType::KeywordWhile => self.parse_while_statement(),
+            TokenType::KeywordFor => self.parse_for_statement(),
+            TokenType::KeywordBreak => self.parse_break_statement(),
+            TokenType::KeywordContinue => self.parse_continue_statement(),
+            TokenType::KeywordMatch => self.parse_match_statement(),
             _ => self.parse_expression_statement(),
         };
 
@@ -531,29 +643,34 @@ pub mod ast {
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum Statement {
-        Let(Span, String, Option<TypeExpr>, Expression), // e.g., let x: Type = 5; (added Option<TypeExpr>)
-        Return(Span, Expression),      // e.g., return y;
-        Expression(Expression),        // e.g., 5 + 3;
-        Function(Span, String, Vec<Parameter>, Option<TypeExpr>, Box<Expression>), // fn add(a, b): Type { ... } (added params, return_type)
-        QuantumCircuit(Span, String, Box<Expression>), // quantum my_circuit { ... }
-        NanoAgent(Span, String, Box<Expression>),      // nano my_agent { ... }
-        SankofaMemory(Span, String, Expression),  // remember history = ...;
-        TypeDeclaration(Span, String, TypeExpr), // New: type Alias = SomeType;
-        EffectDeclaration(Span, String),         // New: effect MyEffect { ... }
-        LanguageDeclaration(Span, String, Expression), // New: language MyLang = "grammar" ;
+        Let(Span, String, Option<TypeExpr>, Expression),
+        Return(Span, Expression),
+        Expression(Expression),
+        Function(Span, String, Vec<Parameter>, Option<TypeExpr>, Box<Expression>),
+        QuantumCircuit(Span, String, Box<Expression>),
+        NanoAgent(Span, String, Box<Expression>),
+        SankofaMemory(Span, String, Expression),
+        TypeDeclaration(Span, String, TypeExpr),
+        EffectDeclaration(Span, String),
+        LanguageDeclaration(Span, String, Expression),
+        While(Span, Box<Expression>, Box<Expression>), // New: while (cond) { ... }
+        For(Span, Identifier, Box<Expression>, Box<Expression>), // New: for item in iterable { ... }
+        Break(Span), // New
+        Continue(Span), // New
+        Match(Span, Box<Expression>, Vec<MatchCase>), // New: match expr { case pat -> { ... } ... }
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum Expression {
         Identifier(Identifier),
         Literal(Literal),
-        Prefix(Span, TokenType, Box<Expression>), // e.g., -5, !true
-        Infix(Span, Box<Expression>, TokenType, Box<Expression>), // e.g., 2 + 3
-        If(Span, Box<Expression>, Box<Expression>, Option<Box<Expression>>), // if (cond) { ... } else { ... }
-        Block(Span, Vec<Statement>), // { ... }
+        Prefix(Span, TokenType, Box<Expression>),
+        Infix(Span, Box<Expression>, TokenType, Box<Expression>),
+        If(Span, Box<Expression>, Box<Expression>, Option<Box<Expression>>),
+        Block(Span, Vec<Statement>),
         Call(Span, Box<Expression>, Vec<Expression>),
-        Index(Span, Box<Expression>, Box<Expression>), // array[index]
-        MemberAccess(Span, Box<Expression>, Identifier), // object.member - New!
+        Index(Span, Box<Expression>, Box<Expression>),
+        MemberAccess(Span, Box<Expression>, Identifier),
         // Add more expression types as needed for Zenith's grammar
     }
 
@@ -564,33 +681,30 @@ pub mod ast {
         String(String, Span),
         Boolean(bool, Span),
         Char(char, Span),
-        Quantum(String, Span), // e.g., |0⟩
-        Nano(String, Span),    // e.g., @atom(O:2s)
-        MTS(String, Span),     // e.g., mts[5]
+        Quantum(String, Span),
+        Nano(String, Span),
+        MTS(String, Span),
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct Identifier(pub String, pub Span);
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct TypeAnnotation(pub String, pub Span); // DEPRECATED: Use TypeExpr instead
-
     // New: Represents a type expression in the AST
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum TypeExpr {
-        Base(Identifier), // e.g., 'int', 'Qubit', 'Atom'
-        Generic(Box<TypeExpr>, Vec<TypeExpr>), // e.g., 'List<int>', 'Atom<O>'
-        Array(Box<TypeExpr>, Option<String>), // e.g., 'int[]', 'QReg[N]'
+        Base(Identifier),
+        Generic(Box<TypeExpr>, Vec<TypeExpr>),
+        Array(Box<TypeExpr>, Option<String>),
         FunctionType(Vec<TypeExpr>, Box<TypeExpr>), // (A, B) -> C
-        DependentPi(Identifier, Box<TypeExpr>, Box<TypeExpr>), // Π(x:T)U
-        DependentSigma(Identifier, Box<TypeExpr>, Box<TypeExpr>), // Σ(x:T)U
-        Linear(Box<TypeExpr>), // linear T
-        Affine(Box<TypeExpr>), // affine T
-        Effectful(Box<TypeExpr>, Vec<Identifier>), // T with effects {E1, E2}
+        DependentPi(Identifier, Box<TypeExpr>, Box<TypeExpr>),
+        DependentSigma(Identifier, Box<TypeExpr>, Box<TypeExpr>),
+        Linear(Box<TypeExpr>),
+        Affine(Box<TypeExpr>),
+        Effectful(Box<TypeExpr>, Vec<Identifier>),
         Universe(usize), // Type_N, Kind, Sort, Prop (represented as Type(0), Kind(1) etc.)
-        SankofaHistory(Box<TypeExpr>, Expression), // History<Type, years_expr>
-        SankofaConsensus(Box<TypeExpr>), // ConsensusTrue<Type>
-        SankofaInterMemory(Identifier, Box<TypeExpr>), // InterMemory<Lang, Type>
+        SankofaHistory(Box<TypeExpr>, Box<Expression>), // History<Type, years_expr> - years_expr added as Expression
+        SankofaConsensus(Box<TypeExpr>),
+        SankofaInterMemory(Identifier, Box<TypeExpr>),
         // ... more specific types from Zenith's complex type system
     }
 
@@ -599,5 +713,13 @@ pub mod ast {
     pub struct Parameter {
         pub name: Identifier,
         pub typ: Option<TypeExpr>,
+    }
+
+    // New: Represents a single case in a match statement
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct MatchCase {
+        pub span: Span,
+        pub pattern: Expression, // Conceptual: Pattern can be an expression for now
+        pub body: Box<Expression>, // Block expression for the case body
     }
 }
