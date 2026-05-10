@@ -7,15 +7,21 @@
 //! of NIMBUS, Zenith, and Sankofa, including advanced control flow, expressions,
 //! and declarations for classical, quantum, and nano computing.
 
-use crate::lexer::{Lexer, Token, TokenType, Span, LexerError}; // Import Lexer and its components
-use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeAnnotation}; // Placeholder AST nodes
+use crate::lexer::{Lexer, Token, TokenType, Span, LexerError};
+use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeAnnotation};
+use std::collections::HashMap;
 
 // --- Parser Structure ---
 pub struct Parser<'a> {
-    lexer: Lexer<'a>,
+    lexer: Lexer<'a>, // The lexer providing tokens
     current_token: Option<Token>,
     peek_token: Option<Token>,
     errors: Vec<ParserError>, // Accumulate parsing errors
+
+    // Maps for operator precedence
+    prefix_parse_fns: HashMap<TokenType, fn(&mut Parser) -> Option<Expression>>,
+    infix_parse_fns: HashMap<TokenType, fn(&mut Parser, Expression) -> Option<Expression>>,
+    precedences: HashMap<TokenType, Precedence>,
 }
 
 // --- ParserError Structure ---
@@ -32,32 +38,41 @@ impl<'a> Parser<'a> {
             current_token: None,
             peek_token: None,
             errors: Vec::new(),
+            prefix_parse_fns: HashMap::new(),
+            infix_parse_fns: HashMap::new(),
+            precedences: HashMap::new(),
         };
+
+        parser.register_precedences();
+        parser.register_prefix_parse_fns();
+        parser.register_infix_parse_fns();
+
         // Read two tokens, so current_token and peek_token are both set
         parser.next_token();
         parser.next_token();
         parser
     }
 
-    // Advances the parser's token stream
+    // --- Token Management Helpers ---
     fn next_token(&mut self) {
         self.current_token = self.peek_token.take();
         // The lexer.next() call actually invokes the Iterator trait method
         self.peek_token = self.lexer.next();
+        // Also collect lexer errors after each token read
+        self.errors.extend(self.lexer.get_errors().iter().map(|e| ParserError { message: e.message.clone(), span: e.span.clone() }));
+        // Clear lexer errors after collection for the next pass
+        // In a real scenario, you might want more sophisticated error management.
+        self.lexer.errors.clear();
     }
 
-    // Helper to check if the current token is of a specific type
     fn current_token_is(&self, token_type: TokenType) -> bool {
         self.current_token.as_ref().map_or(false, |t| t.token_type == token_type)
     }
 
-    // Helper to check if the peek token is of a specific type
     fn peek_token_is(&self, token_type: TokenType) -> bool {
         self.peek_token.as_ref().map_or(false, |t| t.token_type == token_type)
     }
 
-    // Expects the current token to be of a certain type, advances if so,
-    // otherwise adds an error.
     fn expect_current_token(&mut self, token_type: TokenType) -> Result<Token, ParserError> {
         if self.current_token_is(token_type) {
             let token = self.current_token.take().unwrap();
@@ -74,13 +89,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Expects the peek token to be of a certain type, advances current token if so,
-    // otherwise adds an error.
     fn expect_peek_token(&mut self, token_type: TokenType) -> Result<Token, ParserError> {
         if self.peek_token_is(token_type) {
-            self.next_token();
+            self.next_token(); // Advance current_token to the peek_token
             let token = self.current_token.take().unwrap();
-            self.next_token();
+            self.next_token(); // Advance to the next token
             Ok(token)
         } else {
             let error_span = self.peek_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
@@ -93,100 +106,265 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // --- Precedence Management ---
+    fn register_precedences(&mut self) {
+        use TokenType::*;
+        use Precedence::*;
+        self.precedences.insert(Equals, Equals);
+        self.precedences.insert(NotEquals, Equals);
+        self.precedences.insert(LT, LessGreater);
+        self.precedences.insert(GT, LessGreater);
+        self.precedences.insert(LTE, LessGreater);
+        self.precedences.insert(GTE, LessGreater);
+        self.precedences.insert(Plus, Sum);
+        self.precedences.insert(Minus, Sum);
+        self.precedences.insert(Star, Product);
+        self.precedences.insert(Slash, Product);
+        self.precedences.insert(LParen, Call); // For function calls
+        self.precedences.insert(LBracket, Index); // For array indexing
+    }
+
+    fn peek_precedence(&self) -> Precedence {
+        self.peek_token.as_ref().and_then(|t| self.precedences.get(&t.token_type)).cloned().unwrap_or(Precedence::Lowest)
+    }
+
+    fn current_precedence(&self) -> Precedence {
+        self.current_token.as_ref().and_then(|t| self.precedences.get(&t.token_type)).cloned().unwrap_or(Precedence::Lowest)
+    }
+
+    // --- Prefix Parse Functions ---
+    fn register_prefix_parse_fns(&mut self) {
+        use TokenType::*;
+        self.prefix_parse_fns.insert(Identifier, Parser::parse_identifier_expr);
+        self.prefix_parse_fns.insert(Integer, Parser::parse_integer_literal);
+        self.prefix_parse_fns.insert(Float, Parser::parse_float_literal);
+        self.prefix_parse_fns.insert(String, Parser::parse_string_literal);
+        self.prefix_parse_fns.insert(Char, Parser::parse_char_literal);
+        self.prefix_parse_fns.insert(QuantumLiteral, Parser::parse_quantum_literal);
+        self.prefix_parse_fns.insert(NanoAnnotation, Parser::parse_nano_literal);
+        self.prefix_parse_fns.insert(MTSLiteral, Parser::parse_mts_literal);
+        self.prefix_parse_fns.insert(Bang, Parser::parse_prefix_expr);
+        self.prefix_parse_fns.insert(Minus, Parser::parse_prefix_expr);
+        self.prefix_parse_fns.insert(KeywordTrue, Parser::parse_boolean_literal);
+        self.prefix_parse_fns.insert(KeywordFalse, Parser::parse_boolean_literal);
+        self.prefix_parse_fns.insert(LParen, Parser::parse_grouped_expr);
+        self.prefix_parse_fns.insert(KeywordIf, Parser::parse_if_expr);
+        self.prefix_parse_fns.insert(LBrace, Parser::parse_block_expr); // For block expressions
+    }
+
+    fn parse_identifier_expr(parser: &mut Parser) -> Option<Expression> {
+        parser.current_token.take().map(|t| Expression::Identifier(Identifier(t.literal, t.span)))
+    }
+    fn parse_integer_literal(parser: &mut Parser) -> Option<Expression> {
+        parser.current_token.take().map(|t| Expression::Literal(Literal::Integer(t.literal, t.span)))
+    }
+    fn parse_float_literal(parser: &mut Parser) -> Option<Expression> {
+        parser.current_token.take().map(|t| Expression::Literal(Literal::Float(t.literal, t.span)))
+    }
+    fn parse_string_literal(parser: &mut Parser) -> Option<Expression> {
+        parser.current_token.take().map(|t| Expression::Literal(Literal::String(t.literal, t.span)))
+    }
+    fn parse_char_literal(parser: &mut Parser) -> Option<Expression> {
+        // Conceptual: parse_char_literal should ensure the literal is a single char.
+        parser.current_token.take().map(|t| Expression::Literal(Literal::Char(t.literal.chars().next().unwrap_or('\0'), t.span)))
+    }
+    fn parse_quantum_literal(parser: &mut Parser) -> Option<Expression> {
+        parser.current_token.take().map(|t| Expression::Literal(Literal::Quantum(t.literal, t.span)))
+    }
+    fn parse_nano_literal(parser: &mut Parser) -> Option<Expression> {
+        parser.current_token.take().map(|t| Expression::Literal(Literal::Nano(t.literal, t.span)))
+    }
+    fn parse_mts_literal(parser: &mut Parser) -> Option<Expression> {
+        parser.current_token.take().map(|t| Expression::Literal(Literal::MTS(t.literal, t.span)))
+    }
+    fn parse_boolean_literal(parser: &mut Parser) -> Option<Expression> {
+        parser.current_token.take().map(|t| Expression::Literal(Literal::Boolean(t.token_type == TokenType::KeywordTrue, t.span)))
+    }
+
+    fn parse_prefix_expr(parser: &mut Parser) -> Option<Expression> {
+        let current_token = parser.current_token.take()?;
+        parser.next_token();
+        let right = parser.parse_expression(Precedence::Prefix).ok()?;
+        Some(Expression::Prefix(current_token.span, current_token.token_type, Box::new(right)))
+    }
+
+    fn parse_grouped_expr(parser: &mut Parser) -> Option<Expression> {
+        parser.next_token(); // Consume '('
+        let expr = parser.parse_expression(Precedence::Lowest).ok()?;
+        if parser.expect_peek_token(TokenType::RParen).is_err() {
+            return None; // Error already logged
+        }
+        Some(expr)
+    }
+
+    fn parse_if_expr(parser: &mut Parser) -> Option<Expression> {
+        let if_token_span = parser.current_token.as_ref()?.span.clone();
+        parser.next_token(); // Consume 'if'
+        parser.expect_current_token(TokenType::LParen).ok()?; // Consume '('
+        let condition = parser.parse_expression(Precedence::Lowest).ok()?;
+        parser.expect_peek_token(TokenType::RParen).ok()?; // Consume ')'
+        parser.expect_peek_token(TokenType::LBrace).ok()?; // Consume '{'
+        let consequence = parser.parse_block_expr(parser.current_token.as_ref()?.span.clone()).ok()?; // Parse then-block
+        let alternative = if parser.peek_token_is(TokenType::KeywordElse) {
+            parser.next_token(); // Consume 'else'
+            parser.expect_peek_token(TokenType::LBrace).ok()?; // Consume '{'
+            parser.parse_block_expr(parser.current_token.as_ref()?.span.clone()).ok().map(Box::new)
+        } else {
+            None
+        };
+        Some(Expression::If(if_token_span, Box::new(condition), Box::new(consequence), alternative))
+    }
+
+    fn parse_block_expr(parser: &mut Parser) -> Option<Expression> {
+        let start_span = parser.current_token.as_ref()?.span.clone(); // Span of '{'
+        parser.next_token(); // Consume '{'
+        let mut statements = Vec::new();
+        while !parser.current_token_is(TokenType::RBrace) && !parser.current_token_is(TokenType::EOF) {
+            if let Some(stmt) = parser.parse_statement() {
+                statements.push(stmt);
+            }
+            // Add robust error recovery here: skip tokens until a likely statement start or block end
+            if parser.current_token.is_some() && parser.current_token_is(TokenType::Semicolon) {
+                parser.next_token(); // Consume stray semicolons
+            }
+        }
+        parser.expect_current_token(TokenType::RBrace).ok()?; // Consume '}'
+        Some(Expression::Block(start_span, statements))
+    }
+
+    // --- Infix Parse Functions ---
+    fn register_infix_parse_fns(&mut self) {
+        use TokenType::*;
+        self.infix_parse_fns.insert(Plus, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(Minus, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(Star, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(Slash, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(Equals, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(NotEquals, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(LT, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(GT, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(LTE, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(GTE, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(LogicalAnd, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(LogicalOr, Parser::parse_infix_expr);
+        self.infix_parse_fns.insert(LParen, Parser::parse_call_expr); // Function calls
+        self.infix_parse_fns.insert(LBracket, Parser::parse_index_expr); // Array indexing
+    }
+
+    fn parse_infix_expr(parser: &mut Parser, left: Expression) -> Option<Expression> {
+        let operator_token = parser.current_token.take()?;
+        let precedence = parser.current_precedence();
+        parser.next_token();
+        let right = parser.parse_expression(precedence).ok()?;
+        Some(Expression::Infix(operator_token.span, Box::new(left), operator_token.token_type, Box::new(right)))
+    }
+
+    fn parse_call_expr(parser: &mut Parser, function: Expression) -> Option<Expression> {
+        let lparen_span = parser.current_token.as_ref()?.span.clone();
+        parser.next_token(); // Consume '('
+        let arguments = parser.parse_expression_list(TokenType::RParen).ok()?;
+        Some(Expression::Call(lparen_span, Box::new(function), arguments))
+    }
+
+    fn parse_index_expr(parser: &mut Parser, left: Expression) -> Option<Expression> {
+        let lbracket_span = parser.current_token.as_ref()?.span.clone();
+        parser.next_token(); // Consume '['
+        let index = parser.parse_expression(Precedence::Lowest).ok()?;
+        parser.expect_peek_token(TokenType::RBracket).ok()?; // Consume ']'
+        Some(Expression::Index(lbracket_span, Box::new(left), Box::new(index)))
+    }
+
+    fn parse_expression_list(&mut self, end_token: TokenType) -> Result<Vec<Expression>, ParserError> {
+        let mut list = Vec::new();
+        if parser.peek_token_is(end_token.clone()) {
+            parser.next_token(); // Consume end_token (e.g., ')' or ']')
+            return Ok(list);
+        }
+        parser.next_token(); // Consume first expression token
+        list.push(parser.parse_expression(Precedence::Lowest)?);
+
+        while parser.peek_token_is(TokenType::Comma) {
+            parser.next_token(); // Consume ','
+            parser.next_token(); // Consume expression token
+            list.push(parser.parse_expression(Precedence::Lowest)?);
+        }
+        parser.expect_peek_token(end_token)?; // Expect and consume the end_token
+        Ok(list)
+    }
+
+
     // --- Core Parsing Methods (Conceptual) ---
     pub fn parse_program(&mut self) -> Program {
         let mut program = Program { statements: Vec::new() };
-        // Conceptual: End of File (EOF) token handling. Add TokenType::EOF to lexer for real implementation.
+        // Conceptual: Add TokenType::EOF to lexer for real implementation.
         while self.current_token.is_some() && self.current_token.as_ref().unwrap().token_type != TokenType::EOF {
             if let Some(stmt) = self.parse_statement() {
                 program.statements.push(stmt);
+            } else {
+                // Conceptual error recovery: advance past the problematic token
+                self.next_token();
             }
-            // Add error recovery mechanism here to skip to next statement
         }
         program
     }
 
     fn parse_statement(&mut self) -> Option<Statement> {
-        match self.current_token.as_ref()?.token_type {
-            TokenType::KeywordLet => self.parse_let_statement().ok(),
-            TokenType::KeywordReturn => self.parse_return_statement().ok(),
-            TokenType::KeywordFn => self.parse_function_declaration().ok(),
-            TokenType::KeywordQuantum => self.parse_quantum_declaration().ok(), // Zenith-specific
-            TokenType::KeywordNano => self.parse_nano_declaration().ok(),       // Zenith-specific
-            TokenType::KeywordRemember => self.parse_sankofa_memory_declaration().ok(), // Sankofa-specific
-            _ => self.parse_expression_statement().ok(),
+        let stmt_result = match self.current_token.as_ref()?.token_type {
+            TokenType::KeywordLet => self.parse_let_statement(),
+            TokenType::KeywordReturn => self.parse_return_statement(),
+            TokenType::KeywordFn => self.parse_function_declaration(),
+            TokenType::KeywordQuantum => self.parse_quantum_declaration(),
+            TokenType::KeywordNano => self.parse_nano_declaration(),
+            TokenType::KeywordRemember => self.parse_sankofa_memory_declaration(),
+            _ => self.parse_expression_statement(),
+        };
+
+        match stmt_result {
+            Ok(stmt) => Some(stmt),
+            Err(e) => {
+                self.errors.push(e);
+                None // Skip this statement due to error
+            }
         }
-    }
-
-    fn parse_let_statement(&mut self) -> Result<Statement, ParserError> {
-        let let_token = self.expect_current_token(TokenType::KeywordLet)?; // Consumes 'let'
-        let identifier = self.expect_current_token(TokenType::Identifier)?; // Consumes identifier
-        self.expect_current_token(TokenType::Assign)?; // Consumes '='
-        let expression = self.parse_expression(Precedence::Lowest)?; // Parses expression
-        self.expect_current_token(TokenType::Semicolon)?; // Consumes ';'
-        Ok(Statement::Let(let_token.span, identifier.literal, expression))
-    }
-
-    fn parse_return_statement(&mut self) -> Result<Statement, ParserError> {
-        let return_token = self.expect_current_token(TokenType::KeywordReturn)?; // Consumes 'return'
-        let expression = self.parse_expression(Precedence::Lowest)?; // Parses expression
-        self.expect_current_token(TokenType::Semicolon)?; // Consumes ';'
-        Ok(Statement::Return(return_token.span, expression))
-    }
-
-    fn parse_function_declaration(&mut self) -> Result<Statement, ParserError> {
-        let fn_token = self.expect_current_token(TokenType::KeywordFn)?; // Consumes 'fn'
-        let func_name = self.expect_current_token(TokenType::Identifier)?; // Function name
-        self.expect_current_token(TokenType::LParen)?; // Consumes '('
-        // Conceptual: parse function parameters
-        self.expect_current_token(TokenType::RParen)?; // Consumes ')'
-        self.expect_current_token(TokenType::LBrace)?; // Consumes '{'
-        // Conceptual: parse function body (list of statements)
-        self.expect_current_token(TokenType::RBrace)?; // Consumes '}'
-        Ok(Statement::Function(fn_token.span, func_name.literal, Vec::new(), Expression::Block(fn_token.span, Vec::new())))
-    }
-
-    fn parse_quantum_declaration(&mut self) -> Result<Statement, ParserError> {
-        let quantum_token = self.expect_current_token(TokenType::KeywordQuantum)?; // Consumes 'quantum'
-        let q_name = self.expect_current_token(TokenType::Identifier)?; // Quantum circuit name
-        self.expect_current_token(TokenType::LBrace)?; // Consumes '{'
-        // Conceptual: parse quantum gate operations, measurements, etc.
-        self.expect_current_token(TokenType::RBrace)?; // Consumes '}'
-        Ok(Statement::QuantumCircuit(quantum_token.span, q_name.literal, Expression::Block(quantum_token.span, Vec::new())))
-    }
-
-    fn parse_nano_declaration(&mut self) -> Result<Statement, ParserError> {
-        let nano_token = self.expect_current_token(TokenType::KeywordNano)?; // Consumes 'nano'
-        let nano_name = self.expect_current_token(TokenType::Identifier)?; // Nano-agent name
-        self.expect_current_token(TokenType::LBrace)?; // Consumes '{'
-        // Conceptual: parse nano-agent behavior, communication protocols
-        self.expect_current_token(TokenType::RBrace)?; // Consumes '}'
-        Ok(Statement::NanoAgent(nano_token.span, nano_name.literal, Expression::Block(nano_token.span, Vec::new())))
-    }
-
-    fn parse_sankofa_memory_declaration(&mut self) -> Result<Statement, ParserError> {
-        let remember_token = self.expect_current_token(TokenType::KeywordRemember)?; // Consumes 'remember'
-        let memory_name = self.expect_current_token(TokenType::Identifier)?; // Memory identifier
-        self.expect_current_token(TokenType::Assign)?; // Consumes '='
-        let value_expression = self.parse_expression(Precedence::Lowest)?; // Memory content
-        self.expect_current_token(TokenType::Semicolon)?; // Consumes ';'
-        Ok(Statement::SankofaMemory(remember_token.span, memory_name.literal, value_expression)))
     }
 
     fn parse_expression_statement(&mut self) -> Result<Statement, ParserError> {
-        let expression = self.parse_expression(Precedence::Lowest)?;
+        let expr = self.parse_expression(Precedence::Lowest)?; // Parse the expression first
         if self.peek_token_is(TokenType::Semicolon) {
             self.next_token(); // Consume ';'
         }
-        Ok(Statement::Expression(expression))
+        Ok(Statement::Expression(expr))
     }
 
     fn parse_expression(&mut self, precedence: Precedence) -> Result<Expression, ParserError> {
-        // Conceptual: This is where expression parsing (e.g., infix, prefix, grouping) would happen
-        // For now, let's just parse a basic literal or identifier.
-        let token = self.expect_current_token(TokenType::Identifier)?; // Or Integer, String, etc.
-        Ok(Expression::Identifier(Identifier(token.literal, token.span)))
+        let mut left_expr = {
+            let current_token_type = self.current_token.as_ref().map(|t| t.token_type.clone());
+            if let Some(prefix_fn) = current_token_type.and_then(|t| self.prefix_parse_fns.get(&t)) {
+                (prefix_fn)(self).ok_or_else(|| {
+                    let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
+                    ParserError { message: format!("Unexpected token for prefix expression: {:?}", current_token_type), span: error_span }
+                })?
+            } else {
+                let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
+                return Err(ParserError { message: format!("No prefix parse function for {:?}", current_token_type), span: error_span });
+            }
+        };
+
+        while !self.peek_token_is(TokenType::Semicolon) && precedence < self.peek_precedence() {
+            let peek_token_type = self.peek_token.as_ref().map(|t| t.token_type.clone());
+            if let Some(infix_fn) = peek_token_type.and_then(|t| self.infix_parse_fns.get(&t)) {
+                self.next_token(); // Advance to the infix operator
+                left_expr = (infix_fn)(self, left_expr).ok_or_else(|| {
+                    let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
+                    ParserError { message: format!("Error parsing infix expression after {:?}", peek_token_type), span: error_span }
+                })?;
+            } else {
+                return Ok(left_expr);
+            }
+        }
+        Ok(left_expr)
     }
+
 
     // Error retrieval
     pub fn get_errors(&self) -> &[ParserError] {
@@ -196,13 +374,13 @@ impl<'a> Parser<'a> {
 
 // --- Precedence for Expression Parsing (Conceptual) ---
 #[allow(dead_code)]
-#[derive(PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 enum Precedence {
     Lowest,
-    Equals,         // ==
-    LessGreater,    // > or <
-    Sum,            // +
-    Product,        // *
+    Equals,         // ==, !=
+    LessGreater,    // >, <, >=, <=
+    Sum,            // +, -
+    Product,        // *, /
     Prefix,         // -X or !X
     Call,           // myFunction(X)
     Index,          // myArray[index]
@@ -212,6 +390,7 @@ enum Precedence {
 // --- Placeholder AST Nodes (Updated to include Span) ---
 pub mod ast {
     use crate::tokens::Span;
+    use crate::lexer::TokenType; // Import TokenType for Prefix/Infix operators
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct Program {
@@ -237,7 +416,8 @@ pub mod ast {
         Infix(Span, Box<Expression>, TokenType, Box<Expression>), // e.g., 2 + 3
         If(Span, Box<Expression>, Box<Expression>, Option<Box<Expression>>), // if (cond) { ... } else { ... }
         Block(Span, Vec<Statement>), // { ... }
-        Call(Span, Box<Expression>, Vec<Expression>), // func(arg1, arg2)
+        Call(Span, Box<Expression>, Vec<Expression>),
+        Index(Span, Box<Expression>, Box<Expression>), // array[index] - New!
         // Add more expression types as needed for Zenith's grammar
     }
 
