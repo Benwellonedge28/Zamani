@@ -5,7 +5,8 @@
 //! NIMBUS Grammar v2.0 Trinity Edition rules. This lexer handles the unified
 //! grammar across NIMBUS, Zenith, and Sankofa, including advanced literals
 //! for quantum, nano, and multi-timeline systems, and tokens for algebraic effects.
-//! This version incorporates detailed position tracking and a conceptual error reporting mechanism.
+//! This version incorporates detailed position tracking, conceptual error reporting,
+//! and initial conceptual support for Unicode identifiers and string/char escape sequences.
 
 use crate::tokens::{Token, TokenType, Span};
 use crate::source::SourceCode;
@@ -15,7 +16,7 @@ use std::collections::HashMap;
 pub struct Lexer {
     source: SourceCode,
     chars: std::iter::Peekable<std::str::Chars<'static>>,
-    current_char_offset: usize,
+    current_char_offset: usize, // Byte offset of current character
     current_line: usize,
     current_column: usize,
     keywords: HashMap<&'static str, TokenType>,
@@ -90,7 +91,6 @@ impl Lexer {
     }
 
     // --- Character & Cursor Management ---
-    // This `read_char` now advances the actual character iterator
     fn read_char_and_advance_pos(&mut self) -> Option<char> {
         let c = self.chars.next();
         if let Some(ch) = c {
@@ -145,8 +145,7 @@ impl Lexer {
                 }
                 self.read_char_and_advance_pos();
             }
-            // If EOF reached in single-line comment, it's not an error, just ends.
-            return;
+            return; // Reached EOF in single-line comment
         }
         // Multi-line comments: /* ... */
         if self.peek_char() == Some(&'/') && self.chars.clone().nth(1) == Some('*') {
@@ -175,7 +174,8 @@ impl Lexer {
     fn read_identifier_or_keyword(&mut self, first_char: char) -> String {
         let mut ident = String::from(first_char);
         while let Some(&c) = self.peek_char() {
-            if c.is_alphanumeric() || c == '_' {
+            // Allow Unicode characters that are valid in identifiers (e.g., in Rust)
+            if c.is_alphanumeric() || c == '_' || c.is_xid_continue() { // is_xid_continue for Unicode
                 ident.push(self.read_char_and_advance_pos().unwrap());
             } else {
                 break;
@@ -203,7 +203,7 @@ impl Lexer {
 
     fn read_string_literal_content(&mut self, start_span: Span) -> String {
         let start_offset = self.current_char_offset; // After opening quote
-        // Conceptual: handle escape sequences here, e.g., '\n', '\"'
+        let mut literal_content = String::new();
         while let Some(&c) = self.peek_char() {
             if c == '"' {
                 break; // Found closing quote
@@ -215,28 +215,92 @@ impl Lexer {
                 });
                 break;
             }
-            self.read_char_and_advance_pos();
+            if c == '\' { // Handle escape sequences
+                self.read_char_and_advance_pos(); // Consume '\'
+                if let Some(escaped_char) = self.read_char_and_advance_pos() {
+                    match escaped_char {
+                        'n' => literal_content.push('\n'),
+                        't' => literal_content.push('\t'),
+                        'r' => literal_content.push('\r'),
+                        '\' => literal_content.push('\\'),
+                        '"' => literal_content.push('"'),
+                        ''' => literal_content.push('''),
+                        '0' => literal_content.push('\0'),
+                        'u' => { // Unicode escape sequence, e.g., \u{XXXX}
+                            // Conceptual: read {XXXX} and convert to char
+                            // For simplicity, just push 'u'
+                            literal_content.push('u');
+                            self.errors.push(LexerError {
+                                message: "Conceptual: Unicode escape sequence \\u{XXXX} parsing needed.".to_string(),
+                                span: Span { end: self.current_char_offset, ..start_span },
+                            });
+                        }
+                        _ => {
+                            self.errors.push(LexerError {
+                                message: format!("Invalid escape sequence '\\{}'.", escaped_char),
+                                span: Span { end: self.current_char_offset, ..start_span },
+                            });
+                            literal_content.push('\'); // Push back to avoid data loss in literal
+                            literal_content.push(escaped_char);
+                        }
+                    }
+                } else {
+                    self.errors.push(LexerError {
+                        message: "Incomplete escape sequence at end of string.".to_string(),
+                        span: Span { end: self.current_char_offset, ..start_span },
+                    });
+                    literal_content.push('\');
+                }
+            } else {
+                literal_content.push(self.read_char_and_advance_pos().unwrap());
+            }
         }
-        self.source.content[start_offset..self.current_char_offset].to_string()
+        literal_content
     }
 
     fn read_char_literal_content(&mut self, start_span: Span) -> String {
         let start_offset = self.current_char_offset; // After opening single quote
+        let mut literal_content = String::new();
         // Conceptual: handle escape sequences
-        while let Some(&c) = self.peek_char() {
-            if c == ''' {
-                break; // Found closing quote
+        if let Some(&c) = self.peek_char() {
+            if c == '\' { // Handle escape sequences
+                self.read_char_and_advance_pos(); // Consume '\'
+                if let Some(escaped_char) = self.read_char_and_advance_pos() {
+                    match escaped_char {
+                        'n' => literal_content.push('\n'),
+                        't' => literal_content.push('\t'),
+                        'r' => literal_content.push('\r'),
+                        '\' => literal_content.push('\\'),
+                        '"' => literal_content.push('"'),
+                        ''' => literal_content.push('''),
+                        _ => {
+                            self.errors.push(LexerError {
+                                message: format!("Invalid escape sequence '\\{}'.", escaped_char),
+                                span: Span { end: self.current_char_offset, ..start_span },
+                            });
+                            literal_content.push('\');
+                            literal_content.push(escaped_char);
+                        }
+                    }
+                } else {
+                    self.errors.push(LexerError {
+                        message: "Incomplete escape sequence at end of char.".to_string(),
+                        span: Span { end: self.current_char_offset, ..start_span },
+                    });
+                    literal_content.push('\');
+                }
+            } else if c != ''' { // Not an escape sequence and not the closing quote
+                literal_content.push(self.read_char_and_advance_pos().unwrap());
             }
-            if c == '\n' { // Unterminated char on new line
-                self.errors.push(LexerError {
-                    message: "Unterminated character literal.".to_string(),
-                    span: Span { end: self.current_char_offset, ..start_span },
-                });
-                break;
-            }
-            self.read_char_and_advance_pos();
         }
-        self.source.content[start_offset..self.current_char_offset].to_string()
+        if literal_content.len() != 1 {
+            self.errors.push(LexerError {
+                message: "Character literal must contain exactly one character.".to_string(),
+                span: Span { end: self.current_char_offset, ..start_span },
+            });
+        }
+
+        literal_content
     }
 
     fn peek_char_n(&mut self, n: usize) -> Option<char> {
@@ -248,7 +312,7 @@ impl Lexer {
         self.read_char_and_advance_pos(); // Consume space after '|'
         let state_start_offset = self.current_char_offset;
         while let Some(&c) = self.peek_char() {
-            if c.is_alphanumeric() || c == '_' || c == '+' || c == '-' {
+            if c.is_alphanumeric() || c == '_' || c == '+' || c == '-' { // Allow for |+⟩ or |-⟩ states
                 self.read_char_and_advance_pos();
             } else {
                 break;
@@ -270,7 +334,7 @@ impl Lexer {
     fn handle_nano_annotation(&mut self, start_span: Span) -> Option<Token> {
         let annotation_start_offset = self.current_char_offset;
         while let Some(&c) = self.peek_char() {
-            if c.is_alphabetic() {
+            if c.is_alphabetic() { // read "atom" or "molecule"
                 self.read_char_and_advance_pos();
             } else {
                 break;
@@ -345,7 +409,6 @@ impl Lexer {
         Some(Token::new(TokenType::Directive, format!("#{}", directive_name), Span { end: self.current_char_offset, ..start_span }))
     }
 
-    // New method to retrieve collected errors
     pub fn get_errors(&self) -> &[LexerError] {
         &self.errors
     }
@@ -439,8 +502,7 @@ impl Iterator for Lexer {
                          self.read_char_and_advance_pos(); // Consume the closing quote
                          (TokenType::String, literal_content)
                     } else {
-                        // Error already logged by read_string_literal_content
-                        (TokenType::Illegal, literal_content)
+                        (TokenType::Illegal, literal_content) // Error already logged by read_string_literal_content
                     }
                 }
                 ''' => {
@@ -449,11 +511,10 @@ impl Iterator for Lexer {
                         self.read_char_and_advance_pos(); // Consume the closing quote
                         (TokenType::Char, literal_content)
                     } else {
-                        // Error already logged
-                        (TokenType::Illegal, literal_content)
+                        (TokenType::Illegal, literal_content) // Error already logged
                     }
                 }
-                c if c.is_alphabetic() || c == '_' => {
+                c if c.is_xid_start() || c == '_' => { // is_xid_start for Unicode identifiers
                     let literal = self.read_identifier_or_keyword(c);
                     let token_type = self.keywords.get(literal.as_str()).cloned().unwrap_or(TokenType::Identifier);
                     (token_type, literal)
@@ -529,6 +590,7 @@ pub mod tokens {
 
         // --- Special ---
         Illegal,    // Represents an unrecognized token
+        EOF,        // End Of File
     }
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
