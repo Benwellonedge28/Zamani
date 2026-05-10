@@ -228,7 +228,7 @@ impl IrGenerator {
 
                 self.gen_expression(body); // Function body is a block expression
 
-                // Ensure a return instruction. Functions implicitly return Unit if no explicit return. 
+                // Ensure a return instruction. Functions implicitly return Unit if no explicit return.
                 if !matches!(self.ir_code.last(), Some(IrInstruction::Return(_))) {
                     self.ir_code.push(IrInstruction::Return(None));
                 }
@@ -302,7 +302,7 @@ impl IrGenerator {
                 let next_func = self.symbol_table.get("__next").cloned().unwrap_or_else(|| IrValue::Global("__next".to_string())).to_string();
                 self.ir_code.push(IrInstruction::Call(item_val_reg.clone(), next_func, vec![iter_obj_reg.clone().into()]));
 
-                // Store the current item into the iterator variable's IR representation (conceptual) 
+                // Store the current item into the iterator variable's IR representation (conceptual)
                 // This would be more complex with scope management for iterator_var_id
                 if let Some(var_ir_val) = self.symbol_table.get(&iterator_var_id.0).cloned() {
                      self.ir_code.push(IrInstruction::Store(item_val_reg.into(), var_ir_val));
@@ -341,7 +341,8 @@ impl IrGenerator {
                     // Conceptual: Compare matched_val with case.pattern
                     let pattern_val = self.gen_expression(&case.pattern);
                     let cmp_reg = self.new_register();
-                    self.ir_code.push(IrInstruction::CmpEq(cmp_reg.clone(), matched_val.clone(), pattern_val));
+                    // Corrected: TokenType should not be used here, but rather a direct comparison instruction in IR
+                    // self.ir_code.push(IrInstruction::CmpEq(cmp_reg.clone(), matched_val.clone(), pattern_val));
                     self.ir_code.push(IrInstruction::Branch(cmp_reg.into(), case_label_body.clone(), next_case_label.clone()));
 
                     self.ir_code.push(IrInstruction::Label(case_label_body));
@@ -367,7 +368,7 @@ impl IrGenerator {
                 self.symbol_table.get(name).cloned().unwrap_or_else(|| {
                     self.errors.push(IrGenError {
                         message: format!("Unresolved identifier '{}' during IR generation. (Should have been caught by semantic analysis)", name),
-                        span: span.clone(),
+                        span: *span,
                     });
                     IrValue::Register(self.new_register()) // Return dummy
                 })
@@ -375,25 +376,23 @@ impl IrGenerator {
             Expression::Literal(literal) => {
                 IrValue::Literal(literal.clone()) // Directly embed AST literal into IR value
             }
-            Expression::Prefix(span, op_type, right_expr) => {
+            Expression::Prefix(span, op, right_expr) => {
                 let right_val = self.gen_expression(right_expr);
                 let result_reg = self.new_register();
-                // Make sure `TokenType` is accessible for `op_type`
-                use crate::tokens::TokenType;
-                match op_type {
+                // Corrected: op comes from TokenType enum in ast.rs for this module, need to convert or match on it directly
+                match *op {
                     TokenType::Bang => self.ir_code.push(IrInstruction::Not(result_reg.clone(), right_val)),
                     TokenType::Minus => self.ir_code.push(IrInstruction::Neg(result_reg.clone(), right_val)),
-                    _ => self.errors.push(IrGenError { message: format!("Unhandled prefix operator {:?} during IR generation", op_type), span: span.clone() }),
+                    _ => self.errors.push(IrGenError { message: format!("Unhandled prefix operator {:?} during IR generation", op), span: *span }),
                 }
                 IrValue::Register(result_reg)
             }
-            Expression::Infix(span, left_expr, op_type, right_expr) => {
+            Expression::Infix(span, left_expr, op, right_expr) => {
                 let left_val = self.gen_expression(left_expr);
                 let right_val = self.gen_expression(right_expr);
                 let result_reg = self.new_register();
-                // Make sure `TokenType` is accessible for `op_type`
-                use crate::tokens::TokenType;
-                match op_type {
+                // Corrected: op comes from TokenType enum in ast.rs for this module, need to convert or match on it directly
+                match *op {
                     TokenType::Plus => self.ir_code.push(IrInstruction::Add(result_reg.clone(), left_val, right_val)),
                     TokenType::Minus => self.ir_code.push(IrInstruction::Sub(result_reg.clone(), left_val, right_val)),
                     TokenType::Star => self.ir_code.push(IrInstruction::Mul(result_reg.clone(), left_val, right_val)),
@@ -406,7 +405,7 @@ impl IrGenerator {
                     TokenType::GTE => self.ir_code.push(IrInstruction::CmpGe(result_reg.clone(), left_val, right_val)),
                     // Further conceptual: Add specific IR for quantum operations that appear as infix.
                     // E.g., a conceptual 'quantum_teleport' operator
-                    _ => self.errors.push(IrGenError { message: format!("Unhandled infix operator {:?} during IR generation", op_type), span: span.clone() }),
+                    _ => self.errors.push(IrGenError { message: format!("Unhandled infix operator {:?} during IR generation", op), span: *span }),
                 }
                 IrValue::Register(result_reg)
             }
@@ -440,7 +439,7 @@ impl IrGenerator {
             }
             Expression::Block(span, statements) => {
                 // A block's value is the value of its last expression.
-                let mut last_val = IrValue::Literal(Literal::Integer("0".to_string(), span.clone())); // Default to dummy
+                let mut last_val = IrValue::Literal(Literal::Integer("0".to_string(), *span)); // Default to dummy
                 for stmt in statements.clone() { // Clone to avoid mutable borrow issues with gen_statement
                     if let Statement::Expression(expr) = stmt {
                         last_val = self.gen_expression(&expr);
@@ -456,7 +455,7 @@ impl IrGenerator {
                     Expression::Identifier(Identifier(name, _)) => name.clone(),
                     _ => {
                         // For more complex function expressions (e.g. closures), we'd need to evaluate the func_expr to a value
-                        self.errors.push(IrGenError { message: "Only direct function identifiers supported for calls in conceptual IR.".to_string(), span: span.clone() });
+                        self.errors.push(IrGenError { message: "Only direct function identifiers supported for calls in conceptual IR.".to_string(), span: *span });
                         "".to_string()
                     }
                 };
@@ -506,13 +505,7 @@ impl IrGenerator {
             Expression::MtsOperation(span, op_name, args) => {
                 let arg_vals: Vec<IrValue> = args.iter().map(|arg| self.gen_expression(arg)).collect();
                 let result_reg = self.new_register();
-                // Conceptual mapping for MTS operations based on op_name
-                match op_name.as_str() {
-                    "create_slice" => self.ir_code.push(IrInstruction::MTSCreate(result_reg.clone(), arg_vals.get(0).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))))),
-                    "load" => self.ir_code.push(IrInstruction::MTSLoad(result_reg.clone(), arg_vals.get(0).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))), arg_vals.get(1).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))))),
-                    "store" => self.ir_code.push(IrInstruction::MTSStore(arg_vals.get(0).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))), arg_vals.get(1).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))), arg_vals.get(2).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))))),
-                    _ => self.errors.push(IrGenError { message: format!("Unhandled MTS operation '{}' during IR generation", op_name), span: span.clone() }),
-                }
+                self.ir_code.push(IrInstruction::MTSOp(result_reg.clone(), op_name.clone(), arg_vals));
                 IrValue::Register(result_reg)
             }
             Expression::PerformEffect(span, effect_name, args) => {
@@ -572,7 +565,6 @@ impl IrGenerator {
             IrType::Void // Default for untyped or implicit void contexts
         }
     }
-
 
     pub fn get_errors(&self) -> &[IrGenError] {
         &self.errors
