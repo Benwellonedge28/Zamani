@@ -1,450 +1,784 @@
-//! Zenith Universal Meta-Compiler (UMC) Intermediate Representation (IR) Generator
+//! Zenith Semantic Analyzer
 //!
-//! This module implements the IR generation phase of the Zenith compiler.
-//! It translates the semantically-validated Abstract Syntax Tree (AST) into
-//! a high-level, machine-agnostic Universal Meta-Compiler Intermediate Representation (UMC IR).
-//! The UMC IR is designed to support the diverse computational paradigms of Zenith,
-//! including classical, quantum, nano, and multi-timeline systems, while facilitating
-//! advanced optimizations and targeting various backends.
-//!
-//! Key responsibilities include:
-//! - Traversing the AST: Visiting each node of the AST to generate corresponding IR instructions.
-//! - Symbol to IR mapping: Translating high-level AST symbols (variables, functions, types)
-//!   into low-level IR constructs (registers, memory locations, IR types).
-//! - Control Flow Graph (CFG) generation: Representing program control flow using basic blocks
-//!   and jump/branch instructions.
-//! - Type translation: Mapping Zenith's rich type system (classical, quantum, nano, dependent, linear, etc.)
-//!   into the UMC IR's unified type system.
-//! - Handling special constructs: Generating specific IR for quantum operations (gates, measurements),
-//!   nano-agent interactions, Sankofa memory operations, and effect handlers.
-//! - Error reporting: Catching any inconsistencies or unhandled scenarios during IR generation.
+//! This module implements the semantic analysis phase of the Zenith compiler.
+//! It takes the Abstract Syntax Tree (AST) from the parser and performs checks
+//! that go beyond the grammatical structure. This includes type checking, scope
+//! resolution, and enforcing language-specific semantic rules, including Zenith's
+//! unique paradigms like quantum entanglement, linear types, nano-agent constraints,
+//! and Sankofa temporal memory rules.
 
 use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeExpr, Parameter, MatchCase};
-use crate::compiler_types::{Type, Symbol}; // From semantic analysis
-use crate::tokens::Span; // For error reporting
+use crate::compiler_types::{Type, Symbol, Environment, EvasPolicy, Constraint, SymbolKind};
+use crate::source_map::Span; // Corrected Span import
 use std::collections::{HashMap, VecDeque};
 
-// --- UMC IR Instruction Set (Conceptual) ---
+/// Represents a semantic error.
 #[derive(Debug, Clone, PartialEq)]
-pub enum IrInstruction {
-    // Control Flow
-    Label(String),
-    Jump(String),
-    Branch(IrValue, String, String), // condition, true_label, false_label
-    Call(IrValue, String, Vec<IrValue>), // result_reg, function_name, args
-    Return(Option<IrValue>),
-    Yield(IrValue), // For async/generators
-    Await(IrValue, IrValue), // result_reg = await future_val
-
-    // Memory Operations
-    Alloc(IrRegister, IrType), // reg = allocate type
-    Load(IrRegister, IrValue), // reg = load from address_val
-    Store(IrValue, IrValue), // store value to address_val
-    Global(IrRegister, String, IrType), // reg = global_var_name of type
-
-    // Arithmetic / Logical Operations
-    Add(IrRegister, IrValue, IrValue), // reg = op1 + op2
-    Sub(IrRegister, IrValue, IrValue),
-    Mul(IrRegister, IrValue, IrValue),
-    Div(IrRegister, IrValue, IrValue),
-    Mod(IrRegister, IrValue, IrValue),
-    And(IrRegister, IrValue, IrValue),
-    Or(IrRegister, IrValue, IrValue),
-    Xor(IrRegister, IrValue, IrValue),
-    Not(IrRegister, IrValue),
-    Neg(IrRegister, IrValue),
-
-    // Comparison Operations
-    CmpEq(IrRegister, IrValue, IrValue), // reg = op1 == op2
-    CmpNe(IrRegister, IrValue, IrValue),
-    CmpLt(IrRegister, IrValue, IrValue),
-    CmpLe(IrRegister, IrValue, IrValue),
-    CmpGt(IrRegister, IrValue, IrValue),
-    CmpGe(IrRegister, IrValue, IrValue),
-
-    // Type Conversion
-    Cast(IrRegister, IrValue, IrType), // reg = cast value to type
-
-    // Special Zenith UMC IR
-    QGate(IrRegister, String, Vec<IrValue>), // reg = gate_name(qubit_regs)
-    QMeasure(IrRegister, IrValue), // classic_reg = measure qubit_reg
-    QEntangle(IrValue, IrValue), // entangle q1, q2 (conceptual)
-    QTeleport(IrValue, IrValue, IrValue), // teleport q_source, q_dest, classic_key (conceptual, might require proof)
-
-    NanoOp(IrRegister, String, Vec<IrValue>), // reg = nano_instruction(args)
-    MTSOp(IrRegister, String, Vec<IrValue>), // reg = mts_instruction(args)
-
-    EffectOp(IrRegister, String, Vec<IrValue>), // reg = perform_effect(args)
-    HandleEffect(String, String), // handle effect_name with handler_label
-
-    NoOp, // Placeholder
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum IrValue {
-    Register(IrRegister),
-    Literal(Literal),
-    Global(String), // Reference to a global variable/function
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct IrRegister(usize); // Virtual register ID
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum IrType {
-    I32, F64, Bool, StringPtr, Char,
-    Qubit, QubitArray(usize),
-    NanoParticle, NanoArray(usize),
-    Pointer(Box<IrType>),
-    Function(Vec<IrType>, Box<IrType>),
-    Struct(String, HashMap<String, IrType>),
-    Unknown,
-    Error,
-}
-
-// --- IR Generator Structure ---
-pub struct IrGenerator {
-    ir_code: Vec<IrInstruction>,
-    symbol_table: HashMap<String, IrValue>, // Maps resolved AST symbols to IR values (registers/globals)
-    next_reg: usize,
-    next_label: usize,
-    errors: Vec<IrGenError>,
-}
-
-// --- IR Generation Error Structure ---
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IrGenError {
+pub struct SemanticError {
     pub message: String,
-    pub span: Span, // Reference to the original source location
+    pub span: Span,
 }
 
-impl IrGenerator {
+/// The main semantic analyzer structure.
+pub struct SemanticAnalyzer {
+    /// The global environment, including built-in types and functions.
+    pub global_env: Environment,
+    /// A stack of local environments for scope management.
+    pub scope_stack: VecDeque<Environment>,
+    /// Collected semantic errors.
+    errors: Vec<SemanticError>,
+    /// The active EVAS policy for the current compilation unit.
+    evas_policy: EvasPolicy,
+}
+
+impl SemanticAnalyzer {
+    /// Creates a new SemanticAnalyzer instance.
     pub fn new() -> Self {
-        IrGenerator {
-            ir_code: Vec::new(),
-            symbol_table: HashMap::new(), // Populated by semantic analysis
-            next_reg: 0,
-            next_label: 0,
+        let mut analyzer = SemanticAnalyzer {
+            global_env: Environment::new_global(),
+            scope_stack: VecDeque::new(),
             errors: Vec::new(),
+            evas_policy: EvasPolicy::default(),
+        };
+        analyzer.enter_scope(); // Enter global scope
+        analyzer.define_builtins();
+        analyzer
+    }
+
+    /// Defines built-in types, functions, and effects.
+    fn define_builtins(&mut self) {
+        // Built-in types
+        self.define_type("int".to_string(), Type::Int, Span::dummy());
+        self.define_type("float".to_string(), Type::Float, Span::dummy());
+        self.define_type("bool".to_string(), Type::Bool, Span::dummy());
+        self.define_type("char".to_string(), Type::Char, Span::dummy());
+        self.define_type("string".to_string(), Type::String, Span::dummy());
+        self.define_type("unit".to_string(), Type::Unit, Span::dummy());
+        self.define_type("Qubit".to_string(), Type::Qubit, Span::dummy());
+        self.define_type("NanoParticle".to_string(), Type::NanoParticle, Span::dummy());
+
+        // Built-in effects (conceptual)
+        self.define_effect("Read".to_string(), Span::dummy());
+        self.define_effect("Write".to_string(), Span::dummy());
+
+        // Built-in functions (conceptual)
+        self.define_function(
+            "print".to_string(),
+            vec![Type::String], // Takes a string
+            Type::Unit, // Returns Unit
+            Span::dummy(),
+        );
+        self.define_function(
+            "Hadamard".to_string(),
+            vec![Type::Qubit], // Takes a Qubit
+            Type::Qubit, // Returns a Qubit
+            Span::dummy(),
+        );
+    }
+
+    /// Enters a new scope by pushing a new environment onto the stack.
+    fn enter_scope(&mut self) {
+        self.scope_stack.push_back(Environment::new_local(self.current_scope().map(|e| e.id)));
+    }
+
+    /// Exits the current scope by popping an environment from the stack.
+    fn exit_scope(&mut self) {
+        self.scope_stack.pop_back();
+    }
+
+    /// Gets a mutable reference to the current (innermost) scope's environment.
+    fn current_scope(&mut self) -> Option<&mut Environment> {
+        self.scope_stack.back_mut()
+    }
+
+    /// Looks up a symbol in the current and enclosing scopes.
+    fn lookup_symbol(&self, name: &str) -> Option<&Symbol> {
+        for scope in self.scope_stack.iter().rev() {
+            if let Some(symbol) = scope.symbols.get(name) {
+                return Some(symbol);
+            }
+        }
+        self.global_env.symbols.get(name)
+    }
+
+    /// Defines a variable in the current scope.
+    fn define_variable(&mut self, name: String, symbol_type: Type, is_mutable: bool, span: Span) {
+        if let Some(env) = self.scope_stack.back_mut() {
+            if env.symbols.contains_key(&name) {
+                self.add_error(format!("Redefinition of variable '{}'.", name), span);
+            } else {
+                env.symbols.insert(
+                    name.clone(),
+                    Symbol { name, symbol_type, is_mutable, span, kind: SymbolKind::Variable },
+                );
+            }
+        } else {
+            self.add_error("Cannot define variable outside any scope.".to_string(), span);
         }
     }
 
-    fn new_register(&mut self) -> IrRegister {
-        let reg = IrRegister(self.next_reg);
-        self.next_reg += 1;
-        reg
-    }
-
-    fn new_label(&mut self, prefix: &str) -> String {
-        let label = format!("{}{}", prefix, self.next_label);
-        self.next_label += 1;
-        label
-    }
-
-    pub fn generate_ir(&mut self, program: &Program, semantic_symbols: HashMap<String, Symbol>) -> Result<Vec<IrInstruction>, Vec<IrGenError>> {
-        println!("Generating UMC IR from AST...");
-
-        // Populate initial symbol table from semantic analysis results
-        for (name, symbol) in semantic_symbols {
-            // Conceptual: Allocate a global register or memory location for global symbols
-            let ir_val = IrValue::Global(name.clone()); // Simplified
-            self.symbol_table.insert(name, ir_val);
+    /// Defines a function in the current scope.
+    fn define_function(&mut self, name: String, param_types: Vec<Type>, return_type: Type, span: Span) {
+        let func_type = Type::Function(param_types, Box::new(return_type));
+        if let Some(env) = self.scope_stack.back_mut() {
+            if env.symbols.contains_key(&name) {
+                self.add_error(format!("Redefinition of function '{}'.", name), span);
+            } else {
+                env.symbols.insert(
+                    name.clone(),
+                    Symbol { name, symbol_type: func_type, is_mutable: false, span, kind: SymbolKind::Function },
+                );
+            }
+        } else {
+            self.add_error("Cannot define function outside any scope.".to_string(), span);
         }
+    }
+
+    /// Defines a type alias in the current scope.
+    fn define_type(&mut self, name: String, aliased_type: Type, span: Span) {
+        if let Some(env) = self.scope_stack.back_mut() {
+            if env.symbols.contains_key(&name) {
+                self.add_error(format!("Redefinition of type '{}'.", name), span);
+            } else {
+                env.symbols.insert(
+                    name.clone(),
+                    Symbol { name, symbol_type: aliased_type, is_mutable: false, span, kind: SymbolKind::TypeAlias },
+                );
+            }
+        } else {
+            self.add_error("Cannot define type outside any scope.".to_string(), span);
+        }
+    }
+
+    /// Defines an effect in the current scope.
+    fn define_effect(&mut self, name: String, span: Span) {
+        if let Some(env) = self.scope_stack.back_mut() {
+            if env.symbols.contains_key(&name) {
+                self.add_error(format!("Redefinition of effect '{}'.", name), span);
+            } else {
+                env.symbols.insert(
+                    name.clone(),
+                    Symbol { name, symbol_type: Type::Unit, is_mutable: false, span, kind: SymbolKind::Effect }, // Effects don't have a 'type' in the traditional sense, use Unit as placeholder
+                );
+            }
+        } else {
+            self.add_error("Cannot define effect outside any scope.".to_string(), span);
+        }
+    }
+
+    /// Adds a semantic error.
+    fn add_error(&mut self, message: String, span: Span) {
+        self.errors.push(SemanticError { message, span });
+    }
+
+    /// Main entry point for semantic analysis.
+    pub fn analyze(&mut self, program: &ast::Program) -> Result<HashMap<String, Symbol>, Vec<SemanticError>> {
+        println!("Starting semantic analysis...");
 
         for stmt in &program.statements {
-            self.gen_statement(stmt);
+            self.analyze_statement(stmt);
         }
 
         if !self.errors.is_empty() {
             Err(self.errors.clone())
         } else {
-            Ok(self.ir_code.clone())
+            // Return the global symbol table at the end of successful analysis
+            Ok(self.global_env.symbols.clone())
         }
     }
 
-    fn gen_statement(&mut self, stmt: &Statement) {
+    /// Analyzes a single statement.
+    fn analyze_statement(&mut self, stmt: &ast::Statement) {
         match stmt {
-            Statement::Let(span, name, type_expr_opt, expr) => {
-                let expr_reg = self.gen_expression(expr);
-                // Conceptual: Allocate local register/stack slot for 'name'
-                let target_reg = self.new_register(); // For now, just generate a new reg
-                self.ir_code.push(IrInstruction::Alloc(target_reg.clone(), self.map_type_to_ir_type(type_expr_opt.as_ref().map(|te| te.clone()))));
-                self.ir_code.push(IrInstruction::Store(expr_reg.into(), target_reg.into()));
-                // Update symbol table for local scope (conceptual for now)
-                self.symbol_table.insert(name.clone(), IrValue::Register(target_reg));
-            }
-            Statement::Return(span, expr) => {
-                let expr_val = self.gen_expression(expr);
-                self.ir_code.push(IrInstruction::Return(Some(expr_val)));
-            }
-            Statement::Expression(expr) => {
-                self.gen_expression(expr);
-                // Discard result if it's not assigned
-            }
-            Statement::Function(span, name, params, return_type_expr_opt, body) => {
-                // Conceptual: Function entry point
-                self.ir_code.push(IrInstruction::Label(format!("fn_{}", name)));
-                // Conceptual: map parameters to incoming registers/stack slots
-                // Push body
-                self.gen_expression(body); // Function body is a block expression
-                // Implicit return Unit if no explicit return
-                self.ir_code.push(IrInstruction::Return(None));
-            }
-            Statement::QuantumCircuit(span, name, body) => {
-                self.ir_code.push(IrInstruction::Label(format!("qcirc_{}", name)));
-                self.gen_expression(body);
-                // Conceptual: A quantum circuit might not 'return' in the classical sense
-                self.ir_code.push(IrInstruction::NoOp); // Or a specific quantum-end IR instruction
-            }
-            Statement::NanoAgent(span, name, body) => {
-                self.ir_code.push(IrInstruction::Label(format!("nano_{}", name)));
-                self.gen_expression(body);
-                self.ir_code.push(IrInstruction::NoOp);
-            }
-            Statement::SankofaMemory(span, name, expr) => {
-                let expr_val = self.gen_expression(expr);
-                // Conceptual: Store in special Sankofa memory block
-                let target_reg = self.new_register();
-                self.ir_code.push(IrInstruction::Store(expr_val, IrValue::Global(format!("sankofa_{}", name))));
-            }
-            Statement::TypeDeclaration(span, name, type_expr) => {
-                // Type declarations often don't generate runtime IR directly,
-                // but inform the IR type system or code generation process.
-                self.ir_code.push(IrInstruction::NoOp);
-            }
-            Statement::EffectDeclaration(span, name) => {
-                // Effect declarations define effects, actual handling is done via `handle` or special runtime calls.
-                self.ir_code.push(IrInstruction::NoOp);
-            }
-            Statement::LanguageDeclaration(span, name, grammar_expr) => {
-                // Meta-compilation directives would be handled at a higher level, possibly
-                // by invoking another compiler or runtime code generation during bootstrapping.
-                self.ir_code.push(IrInstruction::NoOp);
-            }
-            Statement::While(span, cond_expr, body_expr) => {
-                let loop_label = self.new_label("loop");
-                let end_label = self.new_label("loop_end");
-                self.ir_code.push(IrInstruction::Label(loop_label.clone()));
+            ast::Statement::Let(span, name, type_expr_opt, expr) => {
+                let expr_type = self.analyze_expression(expr);
+                let declared_type = type_expr_opt.as_ref().map_or(Type::Unknown, |te| self.resolve_type_expr(te));
 
-                let cond_reg = self.gen_expression(cond_expr);
-                self.ir_code.push(IrInstruction::Branch(cond_reg, self.new_label(""), end_label.clone())); // Simplified branch
-                
-                self.gen_expression(body_expr);
-                self.ir_code.push(IrInstruction::Jump(loop_label));
-                self.ir_code.push(IrInstruction::Label(end_label));
+                if declared_type != Type::Unknown && declared_type != expr_type {
+                    self.add_error(format!("Type mismatch: expected {:?}, got {:?}.", declared_type, expr_type), *span);
+                }
+                self.define_variable(name.clone(), expr_type, false, *span); // For simplicity, let vars are not mutable by default
             }
-            Statement::For(span, iterator_var_id, iterable_expr, body_expr) => {
-                // Conceptual: This would involve iterating over the iterable.
-                // Highly simplified for conceptual purposes.
-                let iterable_val = self.gen_expression(iterable_expr);
-                let loop_label = self.new_label("for_loop");
-                let end_label = self.new_label("for_end");
+            ast::Statement::Return(span, expr) => {
+                let _expr_type = self.analyze_expression(expr);
+                // TODO: Check against function's declared return type
+            }
+            ast::Statement::Expression(expr) => {
+                self.analyze_expression(expr);
+            }
+            ast::Statement::Function(span, name, params, return_type_expr_opt, body) => {
+                let return_type = return_type_expr_opt.as_ref().map_or(Type::Unit, |te| self.resolve_type_expr(te));
+                let param_types: Vec<Type> = params.iter().map(|p| self.resolve_type_expr(&p.param_type)).collect();
+                self.define_function(name.clone(), param_types.clone(), return_type.clone(), *span);
 
-                // Conceptual: For iter = get_iterator(iterable_val)
-                // Conceptual: For loop body:
-                // self.ir_code.push(IrInstruction::Call(self.new_register(), "get_next_item".to_string(), vec![iterator_val]));
-                // self.ir_code.push(IrInstruction::Branch(cond_reg, loop_label.clone(), end_label.clone()));
-                self.ir_code.push(IrInstruction::Label(loop_label.clone()));
-                self.gen_expression(body_expr);
-                self.ir_code.push(IrInstruction::Jump(loop_label));
-                self.ir_code.push(IrInstruction::Label(end_label));
+                // Analyze function body in a new scope
+                self.enter_scope();
+                for p in params {
+                    self.define_variable(p.name.clone(), self.resolve_type_expr(&p.param_type), false, p.span);
+                }
+                self.analyze_expression(body);
+                self.exit_scope();
             }
-            Statement::Break(span) => {
-                // Conceptual: Find nearest enclosing loop and jump to its end_label
-                self.ir_code.push(IrInstruction::Jump(self.new_label("break_target"))); // Placeholder
+            ast::Statement::QuantumCircuit(span, name, body) => {
+                // Conceptual: Special semantic checks for quantum circuits
+                // e.g., ensure qubit allocation/deallocation, no classical operations on qubits
+                self.enter_scope();
+                self.analyze_expression(body);
+                self.exit_scope();
             }
-            Statement::Continue(span) => {
-                // Conceptual: Find nearest enclosing loop and jump to its loop_label
-                self.ir_code.push(IrInstruction::Jump(self.new_label("continue_target"))); // Placeholder
+            ast::Statement::NanoAgent(span, name, body) => {
+                // Conceptual: Special semantic checks for nano-agents
+                // e.g., resource usage, valid nano-actions
+                self.enter_scope();
+                self.analyze_expression(body);
+                self.exit_scope();
             }
-            Statement::Match(span, matched_expr, cases) => {
-                let matched_val = self.gen_expression(matched_expr);
-                let end_label = self.new_label("match_end");
-
+            ast::Statement::SankofaMemory(span, name, expr) => {
+                // Conceptual: Semantic checks for Sankofa memory
+                // e.g., ensure memory key is valid, check temporal consistency
+                let _expr_type = self.analyze_expression(expr);
+                // `remember` defines a new temporal memory key
+                self.define_variable(name.clone(), Type::History(Box::new(_expr_type)), false, *span);
+            }
+            ast::Statement::TypeDeclaration(span, name, type_expr) => {
+                let resolved_type = self.resolve_type_expr(type_expr);
+                self.define_type(name.clone(), resolved_type, *span);
+            }
+            ast::Statement::EffectDeclaration(span, name) => {
+                self.define_effect(name.clone(), *span);
+            }
+            ast::Statement::LanguageDeclaration(span, name, grammar_expr) => {
+                // Conceptual: Semantic checks for language extensions
+                // e.g., grammar validity, ensure no conflicts
+                self.analyze_expression(grammar_expr);
+            }
+            ast::Statement::While(span, cond, body) => {
+                let cond_type = self.analyze_expression(cond);
+                if cond_type != Type::Bool {
+                    self.add_error("While condition must be of type bool.".to_string(), *span);
+                }
+                self.enter_scope();
+                self.analyze_expression(body);
+                self.exit_scope();
+            }
+            ast::Statement::For(span, iterator_var, iterable, body) => {
+                let iterable_type = self.analyze_expression(iterable);
+                // Conceptual: Check if iterable_type implements an iterator trait
+                // For simplicity, assume `iterable` produces `int` for `iterator_var`
+                self.enter_scope();
+                self.define_variable(iterator_var.0.clone(), Type::Int, false, iterator_var.1);
+                self.analyze_expression(body);
+                self.exit_scope();
+            }
+            ast::Statement::Break(_) | ast::Statement::Continue(_) => {
+                // TODO: Ensure these are within a loop context
+            }
+            ast::Statement::Match(span, matched_expr, cases) => {
+                let matched_type = self.analyze_expression(matched_expr);
+                // TODO: Ensure all cases are exhaustive and patterns are of compatible type
                 for case in cases {
-                    let case_label = self.new_label("case");
-                    let next_case_label = self.new_label("next_case"); // For fall-through or next pattern
-
-                    // Conceptual: Compare matched_val with case.pattern
-                    let pattern_val = self.gen_expression(&case.pattern);
-                    let cmp_reg = self.new_register();
-                    self.ir_code.push(IrInstruction::CmpEq(cmp_reg.clone(), matched_val.clone(), pattern_val));
-                    self.ir_code.push(IrInstruction::Branch(IrValue::Register(cmp_reg), case_label.clone(), next_case_label.clone()));
-
-                    self.ir_code.push(IrInstruction::Label(case_label));
-                    self.gen_expression(&case.body);
-                    self.ir_code.push(IrInstruction::Jump(end_label.clone()));
-                    self.ir_code.push(IrInstruction::Label(next_case_label));
+                    // Conceptual: Analyze pattern (if it's a literal or simple identifier)
+                    // let pattern_type = self.analyze_expression(&case.pattern);
+                    // if pattern_type != matched_type {
+                    //     self.add_error(format!("Match pattern type mismatch: expected {:?}, got {:?}.", matched_type, pattern_type), case.span);
+                    // }
+                    self.enter_scope(); // Each case body has its own scope
+                    self.analyze_expression(&case.body);
+                    self.exit_scope();
                 }
-                self.ir_code.push(IrInstruction::Label(end_label));
             }
-            Statement::Unsafe(span, proof_opt, inner_block_expr) => {
-                // The semantic analyzer has already validated the proof.
-                // Here, we just generate IR for the inner block.
-                // This block might contain operations that are otherwise forbidden.
-                self.gen_expression(inner_block_expr);
+            ast::Statement::Unsafe(span, proof_opt, body) => {
+                if self.evas_policy.strict_resource_management {
+                    if proof_opt.is_none() || !self.evas_policy.approved_proofs.get(proof_opt.as_ref().unwrap_or(&"unknown".to_string())).map_or(false, |&b| b) {
+                         self.add_error("Unsafe block requires a valid EVAS proof under current policy.".to_string(), *span);
+                    }
+                }
+                // Analyze body, possibly with relaxed semantic rules for `unsafe`
+                self.enter_scope();
+                self.analyze_expression(body);
+                self.exit_scope();
             }
         }
     }
 
-    fn gen_expression(&mut self, expr: &Expression) -> IrValue {
+    /// Analyzes an expression and returns its resolved type.
+    fn analyze_expression(&mut self, expr: &ast::Expression) -> Type {
         match expr {
-            Expression::Identifier(Identifier(name, span)) => {
-                // Conceptual: Load value from symbol table entry (which might be a register or global)
-                self.symbol_table.get(name).cloned().unwrap_or_else(|| {
-                    self.errors.push(IrGenError {
-                        message: format!("Unresolved identifier '{}' during IR generation.", name),
-                        span: span.clone(),
-                    });
-                    IrValue::Register(self.new_register()) // Return dummy
-                })
+            ast::Expression::Literal(literal) => self.analyze_literal(literal),
+            ast::Expression::Identifier(ident) => self.analyze_identifier(ident),
+            ast::Expression::Prefix(span, op, right) => {
+                let right_type = self.analyze_expression(right);
+                self.check_prefix_operation(*op, right_type, *span)
             }
-            Expression::Literal(literal) => {
-                IrValue::Literal(literal.clone()) // Directly use AST literal
+            ast::Expression::Infix(span, left, op, right) => {
+                let left_type = self.analyze_expression(left);
+                let right_type = self.analyze_expression(right);
+                self.check_infix_operation(left_type, *op, right_type, *span)
             }
-            Expression::Prefix(span, op_type, right_expr) => {
-                let right_val = self.gen_expression(right_expr);
-                let result_reg = self.new_register();
-                match op_type {
-                    TokenType::Bang => self.ir_code.push(IrInstruction::Not(result_reg.clone(), right_val)),
-                    TokenType::Minus => self.ir_code.push(IrInstruction::Neg(result_reg.clone(), right_val)),
-                    _ => self.errors.push(IrGenError { message: format!("Unhandled prefix operator {:?}", op_type), span: span.clone() }),
+            ast::Expression::If(span, cond, then_block, else_block_opt) => {
+                let cond_type = self.analyze_expression(cond);
+                if cond_type != Type::Bool {
+                    self.add_error("If condition must be of type bool.".to_string(), *span);
                 }
-                IrValue::Register(result_reg)
-            }
-            Expression::Infix(span, left_expr, op_type, right_expr) => {
-                let left_val = self.gen_expression(left_expr);
-                let right_val = self.gen_expression(right_expr);
-                let result_reg = self.new_register();
-                match op_type {
-                    TokenType::Plus => self.ir_code.push(IrInstruction::Add(result_reg.clone(), left_val, right_val)),
-                    TokenType::Minus => self.ir_code.push(IrInstruction::Sub(result_reg.clone(), left_val, right_val)),
-                    TokenType::Star => self.ir_code.push(IrInstruction::Mul(result_reg.clone(), left_val, right_val)),
-                    TokenType::Slash => self.ir_code.push(IrInstruction::Div(result_reg.clone(), left_val, right_val)),
-                    TokenType::Equals => self.ir_code.push(IrInstruction::CmpEq(result_reg.clone(), left_val, right_val)),
-                    TokenType::NotEquals => self.ir_code.push(IrInstruction::CmpNe(result_reg.clone(), left_val, right_val)),
-                    TokenType::LT => self.ir_code.push(IrInstruction::CmpLt(result_reg.clone(), left_val, right_val)),
-                    TokenType::GT => self.ir_code.push(IrInstruction::CmpGt(result_reg.clone(), left_val, right_val)),
-                    // ... other infix operators
-                    _ => self.errors.push(IrGenError { message: format!("Unhandled infix operator {:?}", op_type), span: span.clone() }),
-                }
-                IrValue::Register(result_reg)
-            }
-            Expression::If(span, cond_expr, then_block, else_block_opt) => {
-                let cond_val = self.gen_expression(cond_expr);
-                let then_label = self.new_label("if_then");
-                let else_label = self.new_label("if_else");
-                let end_label = self.new_label("if_end");
-                
-                self.ir_code.push(IrInstruction::Branch(cond_val, then_label.clone(), else_label.clone()));
-                
-                self.ir_code.push(IrInstruction::Label(then_label));
-                let then_result_val = self.gen_expression(then_block); // Get result of then-block
-                // Conceptual: If if-expression has a return value, store it
-                // self.ir_code.push(IrInstruction::Store(then_result_val, result_reg));
-                self.ir_code.push(IrInstruction::Jump(end_label.clone()));
-
-                self.ir_code.push(IrInstruction::Label(else_label));
+                let then_type = self.analyze_expression(then_block);
                 if let Some(else_block) = else_block_opt {
-                    let else_result_val = self.gen_expression(else_block);
-                    // Conceptual: If if-expression has a return value, store it
-                    // self.ir_code.push(IrInstruction::Store(else_result_val, result_reg));
-                }
-                self.ir_code.push(IrInstruction::Jump(end_label.clone())); // Ensure control flow merges
-                self.ir_code.push(IrInstruction::Label(end_label));
-
-                IrValue::Register(self.new_register()) // Return placeholder
-            }
-            Expression::Block(span, statements) => {
-                // Blocks create a new scope for local variables implicitly.
-                // IR Generation typically flattens this, managing register allocation.
-                // The value of a block is the value of its last expression.
-                let mut last_val = IrValue::Literal(Literal::Integer("0".to_string(), span.clone())); // Default to dummy
-                for stmt in statements {
-                    if let Statement::Expression(expr) = stmt {
-                        last_val = self.gen_expression(expr);
+                    let else_type = self.analyze_expression(else_block);
+                    if then_type != else_type {
+                        self.add_error(format!("If-else branches must return compatible types: {:?} vs {:?}.", then_type, else_type), *span);
+                        Type::Error
                     } else {
-                        self.gen_statement(stmt);
+                        then_type
+                    }
+                } else {
+                    then_type
+                }
+            }
+            ast::Expression::Block(span, statements) => {
+                self.enter_scope();
+                let mut last_type = Type::Unit;
+                for stmt in statements {
+                    self.analyze_statement(stmt);
+                    // The type of a block is the type of its last expression
+                    if let ast::Statement::Expression(last_expr) = stmt {
+                        last_type = self.analyze_expression(last_expr);
                     }
                 }
-                last_val
+                self.exit_scope();
+                last_type
             }
-            Expression::Call(span, func_expr, args) => {
-                let func_name_or_ptr = match self.gen_expression(func_expr) {
-                    IrValue::Global(name) => name,
-                    IrValue::Register(reg) => format!("reg_{}", reg.0), // Conceptual: function pointer in register
-                    _ => {
-                        self.errors.push(IrGenError { message: "Cannot call non-function IR value.".to_string(), span: span.clone() });
-                        "".to_string()
+            ast::Expression::Call(span, func_expr, args) => {
+                let func_type = self.analyze_expression(func_expr);
+                let arg_types: Vec<Type> = args.iter().map(|arg| self.analyze_expression(arg)).collect();
+                self.check_function_call(func_type, arg_types, *span)
+            }
+            ast::Expression::Index(span, array_expr, index_expr) => {
+                let array_type = self.analyze_expression(array_expr);
+                let index_type = self.analyze_expression(index_expr);
+                self.check_index_operation(array_type, index_type, *span)
+            }
+            ast::Expression::MemberAccess(span, object_expr, member_id) => {
+                let object_type = self.analyze_expression(object_expr);
+                self.check_member_access(object_type, member_id, *span)
+            }
+            ast::Expression::QuantumGateApplication(span, gate_name, args) => {
+                let arg_types: Vec<Type> = args.iter().map(|arg| self.analyze_expression(arg)).collect();
+                self.check_quantum_gate_application(gate_name, arg_types, *span)
+            }
+            ast::Expression::NanoAction(span, action_name, args) => {
+                let arg_types: Vec<Type> = args.iter().map(|arg| self.analyze_expression(arg)).collect();
+                self.check_nano_action(action_name, arg_types, *span)
+            }
+            ast::Expression::MtsOperation(span, op_name, args) => {
+                let arg_types: Vec<Type> = args.iter().map(|arg| self.analyze_expression(arg)).collect();
+                self.check_mts_operation(op_name, arg_types, *span)
+            }
+            ast::Expression::PerformEffect(span, effect_name, args) => {
+                // Conceptual: check if effect is declared, and if the current context allows performing it
+                if self.lookup_symbol(effect_name).map_or(false, |s| s.kind == SymbolKind::Effect) {
+                    // Proceed with type checking args for the effect if needed
+                    for arg in args {
+                        self.analyze_expression(arg);
                     }
-                };
-                let arg_vals: Vec<IrValue> = args.iter().map(|arg| self.gen_expression(arg)).collect();
-                let result_reg = self.new_register();
-                self.ir_code.push(IrInstruction::Call(IrValue::Register(result_reg.clone()), func_name_or_ptr, arg_vals));
-                IrValue::Register(result_reg)
-            }
-            Expression::Index(span, array_expr, index_expr) => {
-                let array_ptr_val = self.gen_expression(array_expr);
-                let index_val = self.gen_expression(index_expr);
-                let result_reg = self.new_register();
-                // Conceptual: Generate load instruction for array element
-                self.ir_code.push(IrInstruction::Load(result_reg.clone(), array_ptr_val)); // Simplified: assumes array_ptr_val can be indexed
-                // In reality: this would be a series of instructions to calculate element address: 
-                // `elem_addr = base_addr + index * elem_size` then `load elem_addr`
-                IrValue::Register(result_reg)
-            }
-            Expression::MemberAccess(span, object_expr, member_id) => {
-                let object_val = self.gen_expression(object_expr);
-                let result_reg = self.new_register();
-                // Conceptual: Generate instruction to access a member of a struct/object
-                // This would typically involve an offset from the object's base address.
-                self.ir_code.push(IrInstruction::Load(result_reg.clone(), object_val)); // Simplified
-                IrValue::Register(result_reg)
+                    Type::Unit // Effects generally don't return a value to the caller's type system
+                } else {
+                    self.add_error(format!("Undeclared effect '{}'.", effect_name), *span);
+                    Type::Error
+                }
             }
         }
     }
 
-    // New: Map AST TypeExpr to UMC IR Type
-    fn map_type_to_ir_type(&self, ast_type_expr_opt: Option<TypeExpr>) -> IrType {
-        let ast_type = ast_type_expr_opt.unwrap_or_else(|| {
-            // Default to a base type if no type expression is provided (e.g., implicit type in 'let')
-            TypeExpr::Base(Identifier("Unknown".to_string(), Span::new(0,0,0)))
-        });
-
-        match ast_type {
-            TypeExpr::Base(Identifier(name, _)) => match name.as_str() {
-                "int" => IrType::I32,
-                "float" => IrType::F64,
-                "bool" => IrType::Bool,
-                "string" => IrType::StringPtr,
-                "char" => IrType::Char,
-                "Qubit" => IrType::Qubit,
-                "NanoAgent" => IrType::NanoParticle, // Simplified
-                _ => IrType::Unknown,
-            },
-            TypeExpr::Array(element_type_expr, size_opt) => {
-                let ir_elem_type = self.map_type_to_ir_type(Some(*element_type_expr));
-                if let Some(size_str) = size_opt {
-                    // Conceptual: parse size_str to usize if it's a QReg[N]
-                    if ir_elem_type == IrType::Qubit {
-                        if let Ok(size) = size_str.parse::<usize>() {
-                            return IrType::QubitArray(size);
+    /// Resolves an AST TypeExpr into a compiler internal Type.
+    fn resolve_type_expr(&mut self, type_expr: &TypeExpr) -> Type {
+        match type_expr {
+            TypeExpr::Base(Identifier(name, span)) => match name.as_str() {
+                "int" => Type::Int,
+                "float" => Type::Float,
+                "bool" => Type::Bool,
+                "char" => Type::Char,
+                "string" => Type::String,
+                "unit" => Type::Unit,
+                "Qubit" => Type::Qubit,
+                "NanoParticle" => Type::NanoParticle,
+                _ => {
+                    // Look up user-defined types
+                    if let Some(symbol) = self.lookup_symbol(name) {
+                        if symbol.kind == SymbolKind::TypeAlias {
+                            symbol.symbol_type.clone()
+                        } else {
+                            self.add_error(format!("Identifier '{}' is not a type.", name), *span);
+                            Type::Error
                         }
+                    } else {
+                        self.add_error(format!("Undefined type '{}'.", name), *span);
+                        Type::Error
                     }
                 }
-                IrType::Pointer(Box::new(ir_elem_type)) // General array as pointer to first element
+            },
+            TypeExpr::Array(element_type_expr, _size_opt) => {
+                let element_type = self.resolve_type_expr(element_type_expr);
+                Type::QubitArray(0) // Placeholder: actual size check would happen here
             }
             TypeExpr::FunctionType(param_type_exprs, return_type_expr) => {
-                let ir_param_types: Vec<IrType> = param_type_exprs.into_iter().map(|te| self.map_type_to_ir_type(Some(te))).collect();
-                let ir_return_type = self.map_type_to_ir_type(Some(*return_type_expr));
-                IrType::Function(ir_param_types, Box::new(ir_return_type))
+                let param_types: Vec<Type> = param_type_exprs.iter().map(|te| self.resolve_type_expr(te)).collect();
+                let return_type = self.resolve_type_expr(return_type_expr);
+                Type::Function(param_types, Box::new(return_type))
             }
-            // Add more mappings for Linear, Affine, Effectful, Dependent, etc.
-            _ => IrType::Unknown, // Fallback for complex types not yet mapped to IR
+            TypeExpr::Tuple(member_type_exprs) => {
+                let member_types: Vec<Type> = member_type_exprs.iter().map(|te| self.resolve_type_expr(te)).collect();
+                Type::Tuple(member_types)
+            }
+            TypeExpr::Generic(base_ident, generic_arg_type_exprs) => {
+                let base_type = self.resolve_type_expr(&TypeExpr::Base(base_ident.clone()));
+                let generic_arg_types: Vec<Type> = generic_arg_type_exprs.iter().map(|te| self.resolve_type_expr(te)).collect();
+
+                match base_ident.0.as_str() {
+                    "Superposition" if generic_arg_types.len() == 1 && generic_arg_types[0] == Type::Qubit => {
+                        Type::Superposition(Box::new(Type::Qubit))
+                    }
+                    "Entangled" if generic_arg_types.len() >= 2 && generic_arg_types.iter().all(|t| *t == Type::Qubit) => {
+                        Type::Entangled(generic_arg_types)
+                    }
+                    // ... more specific generic type resolution for Zenith types
+                    _ => {
+                        // For user-defined generics, check if base_type is a valid generic type constructor
+                        self.add_error(format!("Unresolved generic type '{}'.", base_ident.0), base_ident.1);
+                        Type::Error
+                    }
+                }
+            }
+            TypeExpr::Linear(inner_type_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                Type::Linear(Box::new(inner_type))
+            }
+            TypeExpr::Affine(inner_type_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                Type::Affine(Box::new(inner_type))
+            }
+            TypeExpr::Effectful(inner_type_expr, effects) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                // Conceptual: Verify if all effects are declared
+                for effect_id in effects {
+                    if self.lookup_symbol(&effect_id.0).map_or(false, |s| s.kind == SymbolKind::Effect) {
+                        // Effect is valid
+                    } else {
+                        self.add_error(format!("Undeclared effect '{}'.", effect_id.0), effect_id.1);
+                    }
+                }
+                Type::Effectful(Box::new(inner_type), effects.clone())
+            }
+            TypeExpr::Dependent(base_type_expr, _proof_expr) => {
+                let base_type = self.resolve_type_expr(base_type_expr);
+                // Conceptual: analyze _proof_expr for validity in dependent type context
+                base_type // Return base type for now
+            }
+            TypeExpr::PiType(_name, binder_type_expr, return_type_expr) => {
+                let binder_type = self.resolve_type_expr(binder_type_expr);
+                let return_type = self.resolve_type_expr(return_type_expr);
+                Type::Pi(_name.clone(), Box::new(binder_type), Box::new(return_type))
+            }
+            TypeExpr::SigmaType(_name, first_type_expr, second_type_expr) => {
+                let first_type = self.resolve_type_expr(first_type_expr);
+                let second_type = self.resolve_type_expr(second_type_expr);
+                Type::Sigma(_name.clone(), Box::new(first_type), Box::new(second_type))
+            }
+            TypeExpr::Proof(inner_type_expr, _proof_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                Type::Proof(Box::new(inner_type))
+            }
+            TypeExpr::TypeFamily(name, args) => {
+                let resolved_args: Vec<Type> = args.iter().map(|arg| self.resolve_type_expr(arg)).collect();
+                Type::TypeFamily(name.0.clone(), resolved_args)
+            }
+            TypeExpr::QuantumReg(element_type_expr, size_str) => {
+                let element_type = self.resolve_type_expr(element_type_expr);
+                if element_type == Type::Qubit {
+                    if let Ok(size) = size_str.parse::<usize>() {
+                        Type::QubitArray(size)
+                    } else {
+                        self.add_error(format!("Invalid quantum register size '{}'.", size_str), element_type_expr.get_span());
+                        Type::Error
+                    }
+                } else {
+                    self.add_error("Quantum register must be composed of Qubits.".to_string(), element_type_expr.get_span());
+                    Type::Error
+                }
+            }
+            TypeExpr::Superposition(inner_type_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                if inner_type == Type::Qubit {
+                    Type::Superposition(Box::new(inner_type))
+                } else {
+                    self.add_error("Superposition can only apply to Qubit types.".to_string(), inner_type_expr.get_span());
+                    Type::Error
+                }
+            }
+            TypeExpr::Entangled(type1_expr, type2_expr) => {
+                let type1 = self.resolve_type_expr(type1_expr);
+                let type2 = self.resolve_type_expr(type2_expr);
+                if type1 == Type::Qubit && type2 == Type::Qubit {
+                    Type::Entangled(vec![type1, type2])
+                } else {
+                    self.add_error("Entanglement can only occur between Qubit types.".to_string(), type1_expr.get_span());
+                    Type::Error
+                }
+            }
+            TypeExpr::QMeasured(inner_type_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                // QMeasured typically resolves to a classical type (bool or int)
+                Type::QMeasured(Box::new(inner_type))
+            }
+            TypeExpr::NanoAgentType(inner_type_expr) => {
+                let _inner_type = self.resolve_type_expr(inner_type_expr); // Can be a blueprint type
+                Type::NanoParticle
+            }
+            TypeExpr::ArchaeveType(inner_type_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                Type::Sasa // Conceptual: Archaeve data might resolve to Sasa knowledge
+            }
+            TypeExpr::MtsSlice(inner_type_expr, _size_opt) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                Type::MtsSlice(Box::new(inner_type))
+            }
+            TypeExpr::HistoryType(inner_type_expr, _duration_opt) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                Type::History(Box::new(inner_type))
+            }
+            TypeExpr::ConsensusTrueType(inner_type_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                Type::Bool // Conceptual: ConsensusTrue typically evaluates to a boolean assertion
+            }
+            TypeExpr::InterMemoryType(_lang_id, inner_type_expr) => {
+                let inner_type = self.resolve_type_expr(inner_type_expr);
+                inner_type // InterMemory just provides access to the inner type across languages
+            }
+            TypeExpr::Error(span) => {
+                self.add_error("Error type encountered during resolution.".to_string(), *span);
+                Type::Error
+            }
         }
     }
 
-    pub fn get_errors(&self) -> &[IrGenError] {
+    /// Analyzes a literal and returns its type.
+    fn analyze_literal(&mut self, literal: &ast::Literal) -> Type {
+        match literal {
+            ast::Literal::Integer(_, _) => Type::Int,
+            ast::Literal::Float(_, _) => Type::Float,
+            ast::Literal::String(_, _) => Type::String,
+            ast::Literal::Char(_, _) => Type::Char,
+            ast::Literal::Boolean(_, _) => Type::Bool,
+            ast::Literal::Quantum(_, span) => {
+                // Conceptual: Validate quantum literal format
+                Type::Qubit
+            }
+            ast::Literal::MTS(_, span) => {
+                // Conceptual: Validate MTS literal format/value
+                Type::MtsSlice(Box::new(Type::Unknown)) // MTS literal might denote a specific timeline or slice config
+            }
+        }
+    }
+
+    /// Analyzes an identifier and returns its type.
+    fn analyze_identifier(&mut self, ident: &ast::Identifier) -> Type {
+        if let Some(symbol) = self.lookup_symbol(&ident.0) {
+            symbol.symbol_type.clone()
+        } else {
+            self.add_error(format!("Undeclared identifier '{}'.", ident.0), ident.1);
+            Type::Error
+        }
+    }
+
+    /// Checks a prefix operation and returns the result type.
+    fn check_prefix_operation(&mut self, op: TokenType, right_type: Type, span: Span) -> Type {
+        match op {
+            TokenType::Bang => {
+                if right_type == Type::Bool {
+                    Type::Bool
+                } else {
+                    self.add_error("Operator '!' can only be applied to boolean types.".to_string(), span);
+                    Type::Error
+                }
+            }
+            TokenType::Minus => {
+                if right_type == Type::Int || right_type == Type::Float {
+                    right_type
+                } else {
+                    self.add_error("Operator '-' can only be applied to numeric types.".to_string(), span);
+                    Type::Error
+                }
+            }
+            _ => {
+                self.add_error(format!("Unsupported prefix operator {:?}.", op), span);
+                Type::Error
+            }
+        }
+    }
+
+    /// Checks an infix operation and returns the result type.
+    fn check_infix_operation(&mut self, left_type: Type, op: TokenType, right_type: Type, span: Span) -> Type {
+        match op {
+            TokenType::Plus | TokenType::Minus | TokenType::Star | TokenType::Slash => {
+                if left_type == Type::Int && right_type == Type::Int {
+                    Type::Int
+                } else if left_type == Type::Float && right_type == Type::Float {
+                    Type::Float
+                } else {
+                    self.add_error(format!("Type mismatch for arithmetic operation {:?}: {:?} and {:?}.", op, left_type, right_type), span);
+                    Type::Error
+                }
+            }
+            TokenType::Equals | TokenType::NotEquals => {
+                if left_type == right_type {
+                    Type::Bool
+                } else {
+                    self.add_error(format!("Type mismatch for comparison operation {:?}: {:?} and {:?}.", op, left_type, right_type), span);
+                    Type::Error
+                }
+            }
+            // TODO: Add support for quantum infix operations, e.g., entanglement operator
+            _ => {
+                self.add_error(format!("Unsupported infix operator {:?}.", op), span);
+                Type::Error
+            }
+        }
+    }
+
+    /// Checks a function call and returns its result type.
+    fn check_function_call(&mut self, func_type: Type, arg_types: Vec<Type>, span: Span) -> Type {
+        if let Type::Function(param_types, return_type) = func_type {
+            if param_types.len() != arg_types.len() {
+                self.add_error("Incorrect number of arguments in function call.".to_string(), span);
+                return Type::Error;
+            }
+            for (i, (param_t, arg_t)) in param_types.iter().zip(arg_types.iter()).enumerate() {
+                if param_t != arg_t {
+                    self.add_error(format!("Argument {} type mismatch: expected {:?}, got {:?}.", i, param_t, arg_t), span);
+                    return Type::Error;
+                }
+            }
+            *return_type
+        } else {
+            self.add_error("Called expression is not a function.".to_string(), span);
+            Type::Error
+        }
+    }
+
+    /// Checks an index operation and returns the element type.
+    fn check_index_operation(&mut self, array_type: Type, index_type: Type, span: Span) -> Type {
+        if index_type != Type::Int {
+            self.add_error("Array index must be of type int.".to_string(), span);
+            return Type::Error;
+        }
+        match array_type {
+            Type::QubitArray(_) => Type::Qubit,
+            _ => {
+                self.add_error("Indexing is only supported for QubitArray types conceptually.".to_string(), span);
+                Type::Error
+            }
+        }
+    }
+
+    /// Checks a member access operation and returns the member's type.
+    fn check_member_access(&mut self, object_type: Type, member_id: &Identifier, span: Span) -> Type {
+        match object_type {
+            Type::Struct(_, fields) => {
+                if let Some(member_type) = fields.get(&member_id.0) {
+                    member_type.clone()
+                } else {
+                    self.add_error(format!("Struct has no member named '{}'.", member_id.0), span);
+                    Type::Error
+                }
+            }
+            _ => {
+                self.add_error("Member access is only supported for struct types conceptually.".to_string(), span);
+                Type::Error
+            }
+        }
+    }
+
+    /// Checks a quantum gate application and returns its result type.
+    fn check_quantum_gate_application(&mut self, gate_name: &str, arg_types: Vec<Type>, span: Span) -> Type {
+        // Conceptual: Validate gate_name, number of args, and arg types (must be Qubit/QubitArray)
+        if arg_types.iter().all(|t| *t == Type::Qubit || matches!(t, Type::QubitArray(_))) {
+            // Example: Hadamard operates on a single qubit
+            if gate_name == "Hadamard" && arg_types.len() == 1 && arg_types[0] == Type::Qubit {
+                Type::Qubit
+            } else if gate_name == "CNOT" && arg_types.len() == 2 && arg_types[0] == Type::Qubit && arg_types[1] == Type::Qubit {
+                Type::Tuple(vec![Type::Qubit, Type::Qubit]) // CNOT returns two qubits
+            }
+            // ... more gates
+            else {
+                self.add_error(format!("Invalid arguments for quantum gate '{}'.", gate_name), span);
+                Type::Error
+            }
+        } else {
+            self.add_error("Quantum gate arguments must be Qubit or QubitArray types.".to_string(), span);
+            Type::Error
+        }
+    }
+
+    /// Checks a nano-action and returns its result type.
+    fn check_nano_action(&mut self, action_name: &str, arg_types: Vec<Type>, span: Span) -> Type {
+        // Conceptual: Validate nano-action against nano-agent capabilities/context
+        // Example: 'move_to' action
+        if action_name == "move_to" && arg_types.len() == 2 && arg_types[0] == Type::NanoParticle {
+            // Assume second arg is target_coords, could be a custom struct/tuple
+            Type::Unit
+        } else {
+            self.add_error(format!("Invalid arguments for nano-action '{}'.", action_name), span);
+            Type::Error
+        }
+    }
+
+    /// Checks an MTS operation and returns its result type.
+    fn check_mts_operation(&mut self, op_name: &str, arg_types: Vec<Type>, span: Span) -> Type {
+        // Conceptual: Validate MTS operation against multi-timeline rules
+        // Example: 'load' operation on an MtsSlice
+        if op_name == "load" && arg_types.len() == 2 && matches!(arg_types[0], Type::MtsSlice(_)) && arg_types[1] == Type::Int {
+            // Returns the inner type of the MtsSlice
+            if let Type::MtsSlice(inner_type) = &arg_types[0] {
+                *(inner_type.clone())
+            } else { Type::Error }
+        } else {
+            self.add_error(format!("Invalid arguments for MTS operation '{}'.", op_name), span);
+            Type::Error
+        }
+    }
+
+    pub fn get_errors(&self) -> &[SemanticError] {
         &self.errors
     }
+}
+
+
+/// Represents a scope in the program (e.g., function body, block).
+#[derive(Debug, Clone, Default)]
+pub struct Environment {
+    pub id: usize, // Unique ID for this environment
+    pub parent_id: Option<usize>, // ID of the parent environment
+    pub symbols: HashMap<String, Symbol>,
+    next_id: usize,
+}
+
+impl Environment {
+    pub fn new_global() -> Self {
+        Environment {
+            id: 0, // Global scope ID
+            parent_id: None,
+            symbols: HashMap::new(),
+            next_id: 1,
+        }
+    }
+
+    pub fn new_local(parent_id: Option<usize>) -> Self {
+        Environment {
+            id: 0, // Will be set by a manager, or could auto-increment from a global counter
+            parent_id,
+            symbols: HashMap::new(),
+            next_id: 0,
+        }
+    }
+
+    // Conceptual: In a real compiler, Environment would be managed by a ScopeManager
+    // that assigns unique IDs and handles nesting.
 }
