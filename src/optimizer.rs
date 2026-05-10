@@ -9,7 +9,7 @@
 //! The optimizer includes both general-purpose and highly specialized passes tailored
 //! to Zenith's unique computational paradigms.
 
-use crate::ir_gen::{IrInstruction, IrValue, IrRegister, IrType}; // Removed IrGenError import
+use crate::ir_gen::{IrInstruction, IrValue, IrRegister, IrType}; // Removed IrGenError
 use crate::source_map::Span; // Corrected Span import
 use std::collections::{HashMap, HashSet};
 
@@ -96,8 +96,8 @@ impl OptimizationContext {
 pub struct BasicBlock {
     pub name: String,
     pub instructions: Vec<IrInstruction>,
-    pub predecessors: Vec<String>, // Labels of predecessor blocks
-    pub successors: Vec<String>, // Labels of successor blocks
+    pub predecessors: Vec<String>,
+    pub successors: Vec<String>,
 }
 
 
