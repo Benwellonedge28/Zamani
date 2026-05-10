@@ -31,16 +31,17 @@ pub enum IrInstruction {
     Label(String),
     Jump(String),
     Branch(IrValue, String, String), // condition, true_label, false_label
-    Call(IrValue, String, Vec<IrValue>), // result_reg, function_name, args
+    Call(IrRegister, String, Vec<IrValue>), // result_reg, function_name, args
     Return(Option<IrValue>),
     Yield(IrValue), // For async/generators
-    Await(IrValue, IrValue), // result_reg = await future_val
+    Await(IrRegister, IrValue), // result_reg = await future_val
 
     // Memory Operations
     Alloc(IrRegister, IrType), // reg = allocate type
     Load(IrRegister, IrValue), // reg = load from address_val
-    Store(IrValue, IrValue), // store value to address_val
-    Global(IrRegister, String, IrType), // reg = global_var_name of type
+    Store(IrValue, IrValue), // store value to address_val (val to target_addr)
+    GlobalAddr(IrRegister, String, IrType), // reg = address of global_var_name of type
+    Deref(IrRegister, IrValue), // reg = dereference pointer_val
 
     // Arithmetic / Logical Operations
     Add(IrRegister, IrValue, IrValue), // reg = op1 + op2
@@ -65,17 +66,27 @@ pub enum IrInstruction {
     // Type Conversion
     Cast(IrRegister, IrValue, IrType), // reg = cast value to type
 
-    // Special Zenith UMC IR
-    QGate(IrRegister, String, Vec<IrValue>), // reg = gate_name(qubit_regs)
+    // Special Zenith UMC IR - Expanded
+    QGate(IrRegister, String, Vec<IrValue>), // result_qreg_or_qubit = gate_name(input_qregs_or_qubits)
     QMeasure(IrRegister, IrValue), // classic_reg = measure qubit_reg
-    QEntangle(IrValue, IrValue), // entangle q1, q2 (conceptual)
-    QTeleport(IrValue, IrValue, IrValue), // teleport q_source, q_dest, classic_key (conceptual, might require proof)
+    QEntangle(IrValue, IrValue), // entangle q1, q2
+    QTeleport(IrValue, IrValue, IrValue), // teleport q_source, q_dest, classical_key_reg
 
-    NanoOp(IrRegister, String, Vec<IrValue>), // reg = nano_instruction(args)
-    MTSOp(IrRegister, String, Vec<IrValue>), // reg = mts_instruction(args)
+    NanoOp(IrRegister, String, Vec<IrValue>), // result = nano_instruction(args)
+    MTSOp(IrRegister, String, Vec<IrValue>), // result = mts_instruction(args)
 
-    EffectOp(IrRegister, String, Vec<IrValue>), // reg = perform_effect(args)
-    HandleEffect(String, String), // handle effect_name with handler_label
+    EffectOp(IrRegister, String, Vec<IrValue>), // result = perform_effect(args)
+    HandleEffect(String, String, String), // handle effect_name with handler_label (for effect_value_reg)
+
+    // Linear/Affine specific operations
+    Consume(IrValue), // Marks a linear resource as consumed
+    Drop(IrValue), // Marks an affine resource as dropped (optional consumption)
+
+    // Sankofa memory operations
+    ReadHistory(IrRegister, String, IrValue), // reg = read_history(key, timestamp_expr)
+    WriteHistory(String, IrValue, IrValue), // write_history(key, value, timestamp_expr)
+    AccessZamani(IrRegister, String), // reg = access_zamani_fact(fact_id)
+    AccessSasa(IrRegister, String), // reg = access_sasa_knowledge(knowledge_id)
 
     NoOp, // Placeholder
 }
@@ -84,7 +95,14 @@ pub enum IrInstruction {
 pub enum IrValue {
     Register(IrRegister),
     Literal(Literal),
-    Global(String), // Reference to a global variable/function
+    Global(String), // Reference to a global variable/function/memory location
+}
+
+// Convert IrRegister to IrValue
+impl From<IrRegister> for IrValue {
+    fn from(reg: IrRegister) -> Self {
+        IrValue::Register(reg)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -92,8 +110,9 @@ pub struct IrRegister(usize); // Virtual register ID
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IrType {
+    Void, // For Unit type or functions returning nothing
     I32, F64, Bool, StringPtr, Char,
-    Qubit, QubitArray(usize),
+    Qubit, QubitArray(usize), // Qubit array with explicit size
     NanoParticle, NanoArray(usize),
     Pointer(Box<IrType>),
     Function(Vec<IrType>, Box<IrType>),
@@ -105,10 +124,13 @@ pub enum IrType {
 // --- IR Generator Structure ---
 pub struct IrGenerator {
     ir_code: Vec<IrInstruction>,
-    symbol_table: HashMap<String, IrValue>, // Maps resolved AST symbols to IR values (registers/globals)
+    // Mapping from AST-resolved symbol names to their IR representation
+    symbol_table: HashMap<String, IrValue>,
     next_reg: usize,
     next_label: usize,
     errors: Vec<IrGenError>,
+    // New: Stack to manage loop labels for break/continue
+    loop_labels: Vec<(String, String)>, // (loop_start_label, loop_end_label)
 }
 
 // --- IR Generation Error Structure ---
@@ -122,10 +144,11 @@ impl IrGenerator {
     pub fn new() -> Self {
         IrGenerator {
             ir_code: Vec::new(),
-            symbol_table: HashMap::new(), // Populated by semantic analysis
+            symbol_table: HashMap::new(),
             next_reg: 0,
             next_label: 0,
             errors: Vec::new(),
+            loop_labels: Vec::new(),
         }
     }
 
@@ -136,19 +159,18 @@ impl IrGenerator {
     }
 
     fn new_label(&mut self, prefix: &str) -> String {
-        let label = format!("{}{}", prefix, self.next_label);
+        let label = format!("L{}{}", prefix, self.next_label);
         self.next_label += 1;
         label
     }
 
-    pub fn generate_ir(&mut self, program: &Program, semantic_symbols: HashMap<String, Symbol>) -> Result<Vec<IrInstruction>, Vec<IrGenError>> {
+    pub fn generate_ir(&mut self, program: &Program, semantic_symbols: &HashMap<String, Symbol>) -> Result<Vec<IrInstruction>, Vec<IrGenError>> {
         println!("Generating UMC IR from AST...");
 
-        // Populate initial symbol table from semantic analysis results
+        // Populate initial global symbol table from semantic analysis results
         for (name, symbol) in semantic_symbols {
-            // Conceptual: Allocate a global register or memory location for global symbols
-            let ir_val = IrValue::Global(name.clone()); // Simplified
-            self.symbol_table.insert(name, ir_val);
+            // For globals, assume they live in a global memory region and map to their address
+            self.symbol_table.insert(name.clone(), IrValue::Global(name.clone()));
         }
 
         for stmt in &program.statements {
@@ -165,12 +187,15 @@ impl IrGenerator {
     fn gen_statement(&mut self, stmt: &Statement) {
         match stmt {
             Statement::Let(span, name, type_expr_opt, expr) => {
-                let expr_reg = self.gen_expression(expr);
-                // Conceptual: Allocate local register/stack slot for 'name'
-                let target_reg = self.new_register(); // For now, just generate a new reg
-                self.ir_code.push(IrInstruction::Alloc(target_reg.clone(), self.map_type_to_ir_type(type_expr_opt.as_ref().map(|te| te.clone()))));
-                self.ir_code.push(IrInstruction::Store(expr_reg.into(), target_reg.into()));
-                // Update symbol table for local scope (conceptual for now)
+                let expr_val = self.gen_expression(expr);
+                let target_reg = self.new_register();
+                let ir_type = self.map_type_expr_to_ir_type(type_expr_opt);
+                
+                // Allocate space for the variable
+                self.ir_code.push(IrInstruction::Alloc(target_reg.clone(), ir_type));
+                // Store the evaluated expression into the allocated space
+                self.ir_code.push(IrInstruction::Store(expr_val, target_reg.into()));
+                // Add to current scope's symbol table (simplified as global here)
                 self.symbol_table.insert(name.clone(), IrValue::Register(target_reg));
             }
             Statement::Return(span, expr) => {
@@ -179,109 +204,145 @@ impl IrGenerator {
             }
             Statement::Expression(expr) => {
                 self.gen_expression(expr);
-                // Discard result if it's not assigned
+                // Result of expression statements might be discarded if not assigned
             }
             Statement::Function(span, name, params, return_type_expr_opt, body) => {
-                // Conceptual: Function entry point
-                self.ir_code.push(IrInstruction::Label(format!("fn_{}", name)));
-                // Conceptual: map parameters to incoming registers/stack slots
-                // Push body
+                let func_label = self.new_label(&format!("func_{}", name));
+                self.ir_code.push(IrInstruction::Label(func_label.clone()));
+
+                // Conceptual: Map parameters to function's local registers/stack.
+                // For simplicity, skip explicit parameter handling in IR generation for now.
+
                 self.gen_expression(body); // Function body is a block expression
-                // Implicit return Unit if no explicit return
-                self.ir_code.push(IrInstruction::Return(None));
+
+                // Ensure a return instruction. Functions implicitly return Unit if no explicit return. 
+                if !matches!(self.ir_code.last(), Some(IrInstruction::Return(_))) {
+                    self.ir_code.push(IrInstruction::Return(None));
+                }
             }
             Statement::QuantumCircuit(span, name, body) => {
-                self.ir_code.push(IrInstruction::Label(format!("qcirc_{}", name)));
+                let qcirc_label = self.new_label(&format!("qcirc_{}", name));
+                self.ir_code.push(IrInstruction::Label(qcirc_label.clone()));
+                // The body contains quantum operations
                 self.gen_expression(body);
-                // Conceptual: A quantum circuit might not 'return' in the classical sense
-                self.ir_code.push(IrInstruction::NoOp); // Or a specific quantum-end IR instruction
+                self.ir_code.push(IrInstruction::NoOp); // End of quantum circuit block
             }
             Statement::NanoAgent(span, name, body) => {
-                self.ir_code.push(IrInstruction::Label(format!("nano_{}", name)));
+                let nano_label = self.new_label(&format!("nano_{}", name));
+                self.ir_code.push(IrInstruction::Label(nano_label.clone()));
+                // The body defines nano-agent behaviors
                 self.gen_expression(body);
-                self.ir_code.push(IrInstruction::NoOp);
+                self.ir_code.push(IrInstruction::NoOp); // End of nano-agent block
             }
             Statement::SankofaMemory(span, name, expr) => {
                 let expr_val = self.gen_expression(expr);
-                // Conceptual: Store in special Sankofa memory block
-                let target_reg = self.new_register();
-                self.ir_code.push(IrInstruction::Store(expr_val, IrValue::Global(format!("sankofa_{}", name))));
+                // Conceptual: Write to a specific Sankofa historical memory key
+                self.ir_code.push(IrInstruction::WriteHistory(name.clone(), expr_val, IrValue::Literal(Literal::Integer("0".to_string(), span.clone())))); // Timestamp 0 for simplicity
             }
-            Statement::TypeDeclaration(span, name, type_expr) => {
-                // Type declarations often don't generate runtime IR directly,
+            Statement::TypeDeclaration(_, _, _) | Statement::EffectDeclaration(_, _) | Statement::LanguageDeclaration(_, _, _) => {
+                // These statements are typically handled by semantic analysis and don't generate runtime IR directly,
                 // but inform the IR type system or code generation process.
                 self.ir_code.push(IrInstruction::NoOp);
             }
-            Statement::EffectDeclaration(span, name) => {
-                // Effect declarations define effects, actual handling is done via `handle` or special runtime calls.
-                self.ir_code.push(IrInstruction::NoOp);
-            }
-            Statement::LanguageDeclaration(span, name, grammar_expr) => {
-                // Meta-compilation directives would be handled at a higher level, possibly
-                // by invoking another compiler or runtime code generation during bootstrapping.
-                self.ir_code.push(IrInstruction::NoOp);
-            }
             Statement::While(span, cond_expr, body_expr) => {
-                let loop_label = self.new_label("loop");
-                let end_label = self.new_label("loop_end");
-                self.ir_code.push(IrInstruction::Label(loop_label.clone()));
+                let loop_start_label = self.new_label("while_loop_start");
+                let loop_end_label = self.new_label("while_loop_end");
+                self.loop_labels.push((loop_start_label.clone(), loop_end_label.clone()));
 
-                let cond_reg = self.gen_expression(cond_expr);
-                self.ir_code.push(IrInstruction::Branch(cond_reg, self.new_label(""), end_label.clone())); // Simplified branch
+                self.ir_code.push(IrInstruction::Label(loop_start_label.clone()));
+                let cond_val = self.gen_expression(cond_expr);
+                let cond_reg = self.new_register();
+                self.ir_code.push(IrInstruction::Store(cond_val, cond_reg.clone().into())); // Store condition result in a register
+                // Branch to end if condition is false
+                self.ir_code.push(IrInstruction::Branch(cond_reg.into(), self.new_label("while_cond_true"), loop_end_label.clone())); // The true label is implicitly the next instruction
                 
-                self.gen_expression(body_expr);
-                self.ir_code.push(IrInstruction::Jump(loop_label));
-                self.ir_code.push(IrInstruction::Label(end_label));
+                self.gen_expression(body_expr); // Generate IR for loop body
+                self.ir_code.push(IrInstruction::Jump(loop_start_label.clone())); // Jump back to start of loop
+                self.ir_code.push(IrInstruction::Label(loop_end_label));
+
+                self.loop_labels.pop(); // Exit loop scope
             }
             Statement::For(span, iterator_var_id, iterable_expr, body_expr) => {
-                // Conceptual: This would involve iterating over the iterable.
-                // Highly simplified for conceptual purposes.
-                let iterable_val = self.gen_expression(iterable_expr);
-                let loop_label = self.new_label("for_loop");
-                let end_label = self.new_label("for_end");
+                // Conceptual: A 'for' loop often translates to a 'while' loop internally
+                // For simplified IR:
+                let iterable_val = self.gen_expression(iterable_expr); // Get the iterable
+                let loop_start_label = self.new_label("for_loop_start");
+                let loop_end_label = self.new_label("for_loop_end");
+                self.loop_labels.push((loop_start_label.clone(), loop_end_label.clone()));
 
-                // Conceptual: For iter = get_iterator(iterable_val)
-                // Conceptual: For loop body:
-                // self.ir_code.push(IrInstruction::Call(self.new_register(), "get_next_item".to_string(), vec![iterator_val]));
-                // self.ir_code.push(IrInstruction::Branch(cond_reg, loop_label.clone(), end_label.clone()));
-                self.ir_code.push(IrInstruction::Label(loop_label.clone()));
-                self.gen_expression(body_expr);
-                self.ir_code.push(IrInstruction::Jump(loop_label));
-                self.ir_code.push(IrInstruction::Label(end_label));
+                // Conceptual IR to setup iteration:
+                // iter_obj_reg = call __get_iterator(iterable_val)
+                // iter_var_storage_reg = new_register() // Storage for the current item in iteration
+                let iter_obj_reg = self.new_register();
+                let get_iterator_func = self.symbol_table.get("__get_iterator").cloned().unwrap_or_else(|| IrValue::Global("__get_iterator")).to_string();
+                self.ir_code.push(IrInstruction::Call(iter_obj_reg.clone(), get_iterator_func, vec![iterable_val]));
+
+                self.ir_code.push(IrInstruction::Label(loop_start_label.clone()));
+
+                // Conceptual: item_present_reg = call __has_next(iter_obj_reg)
+                let has_next_reg = self.new_register();
+                let has_next_func = self.symbol_table.get("__has_next").cloned().unwrap_or_else(|| IrValue::Global("__has_next")).to_string();
+                self.ir_code.push(IrInstruction::Call(has_next_reg.clone(), has_next_func, vec![iter_obj_reg.clone().into()]));
+                self.ir_code.push(IrInstruction::Branch(has_next_reg.into(), self.new_label("for_loop_body"), loop_end_label.clone()));
+                
+                // Conceptual: item_val_reg = call __next(iter_obj_reg)
+                let item_val_reg = self.new_register();
+                let next_func = self.symbol_table.get("__next").cloned().unwrap_or_else(|| IrValue::Global("__next")).to_string();
+                self.ir_code.push(IrInstruction::Call(item_val_reg.clone(), next_func, vec![iter_obj_reg.clone().into()]));
+
+                // Store the current item into the iterator variable's IR representation (conceptual) 
+                // This would be more complex with scope management for iterator_var_id
+                if let Some(var_ir_val) = self.symbol_table.get(&iterator_var_id.0).cloned() {
+                     self.ir_code.push(IrInstruction::Store(item_val_reg.into(), var_ir_val));
+                } else {
+                    self.errors.push(IrGenError { message: format!("For loop iterator variable '{}' not found in symbol table.", iterator_var_id.0), span: iterator_var_id.1.clone() });
+                }
+
+                self.gen_expression(body_expr); // Generate IR for body
+                self.ir_code.push(IrInstruction::Jump(loop_start_label.clone()));
+                self.ir_code.push(IrInstruction::Label(loop_end_label));
+
+                self.loop_labels.pop(); // Exit loop scope
             }
             Statement::Break(span) => {
-                // Conceptual: Find nearest enclosing loop and jump to its end_label
-                self.ir_code.push(IrInstruction::Jump(self.new_label("break_target"))); // Placeholder
+                if let Some((_, end_label)) = self.loop_labels.last() {
+                    self.ir_code.push(IrInstruction::Jump(end_label.clone()));
+                } else {
+                    self.errors.push(IrGenError { message: "Break statement outside of loop.".to_string(), span: span.clone() });
+                }
             }
             Statement::Continue(span) => {
-                // Conceptual: Find nearest enclosing loop and jump to its loop_label
-                self.ir_code.push(IrInstruction::Jump(self.new_label("continue_target"))); // Placeholder
+                if let Some((start_label, _)) = self.loop_labels.last() {
+                    self.ir_code.push(IrInstruction::Jump(start_label.clone()));
+                } else {
+                    self.errors.push(IrGenError { message: "Continue statement outside of loop.".to_string(), span: span.clone() });
+                }
             }
             Statement::Match(span, matched_expr, cases) => {
                 let matched_val = self.gen_expression(matched_expr);
                 let end_label = self.new_label("match_end");
 
-                for case in cases {
-                    let case_label = self.new_label("case");
-                    let next_case_label = self.new_label("next_case"); // For fall-through or next pattern
+                for (i, case) in cases.iter().enumerate() {
+                    let case_label_body = self.new_label(&format!("match_case_{}_body", i));
+                    let next_case_label = self.new_label(&format!("match_case_{}_next", i));
 
                     // Conceptual: Compare matched_val with case.pattern
                     let pattern_val = self.gen_expression(&case.pattern);
                     let cmp_reg = self.new_register();
                     self.ir_code.push(IrInstruction::CmpEq(cmp_reg.clone(), matched_val.clone(), pattern_val));
-                    self.ir_code.push(IrInstruction::Branch(IrValue::Register(cmp_reg), case_label.clone(), next_case_label.clone()));
+                    self.ir_code.push(IrInstruction::Branch(cmp_reg.into(), case_label_body.clone(), next_case_label.clone()));
 
-                    self.ir_code.push(IrInstruction::Label(case_label));
+                    self.ir_code.push(IrInstruction::Label(case_label_body));
                     self.gen_expression(&case.body);
-                    self.ir_code.push(IrInstruction::Jump(end_label.clone()));
+                    self.ir_code.push(IrInstruction::Jump(end_label.clone())); // Jump to end after executing case body
+                    
                     self.ir_code.push(IrInstruction::Label(next_case_label));
                 }
                 self.ir_code.push(IrInstruction::Label(end_label));
             }
             Statement::Unsafe(span, proof_opt, inner_block_expr) => {
-                // The semantic analyzer has already validated the proof.
-                // Here, we just generate IR for the inner block.
-                // This block might contain operations that are otherwise forbidden.
+                // The IR generator simply generates code for the inner block.
+                // Semantic analysis ensured proper EVAS proof if required.
                 self.gen_expression(inner_block_expr);
             }
         }
@@ -290,17 +351,17 @@ impl IrGenerator {
     fn gen_expression(&mut self, expr: &Expression) -> IrValue {
         match expr {
             Expression::Identifier(Identifier(name, span)) => {
-                // Conceptual: Load value from symbol table entry (which might be a register or global)
+                // Conceptual: Resolve identifier to its IRValue (register, global, etc.)
                 self.symbol_table.get(name).cloned().unwrap_or_else(|| {
                     self.errors.push(IrGenError {
-                        message: format!("Unresolved identifier '{}' during IR generation.", name),
+                        message: format!("Unresolved identifier '{}' during IR generation. (Should have been caught by semantic analysis)", name),
                         span: span.clone(),
                     });
                     IrValue::Register(self.new_register()) // Return dummy
                 })
             }
             Expression::Literal(literal) => {
-                IrValue::Literal(literal.clone()) // Directly use AST literal
+                IrValue::Literal(literal.clone()) // Directly embed AST literal into IR value
             }
             Expression::Prefix(span, op_type, right_expr) => {
                 let right_val = self.gen_expression(right_expr);
@@ -308,7 +369,7 @@ impl IrGenerator {
                 match op_type {
                     TokenType::Bang => self.ir_code.push(IrInstruction::Not(result_reg.clone(), right_val)),
                     TokenType::Minus => self.ir_code.push(IrInstruction::Neg(result_reg.clone(), right_val)),
-                    _ => self.errors.push(IrGenError { message: format!("Unhandled prefix operator {:?}", op_type), span: span.clone() }),
+                    _ => self.errors.push(IrGenError { message: format!("Unhandled prefix operator {:?} during IR generation", op_type), span: span.clone() }),
                 }
                 IrValue::Register(result_reg)
             }
@@ -325,8 +386,11 @@ impl IrGenerator {
                     TokenType::NotEquals => self.ir_code.push(IrInstruction::CmpNe(result_reg.clone(), left_val, right_val)),
                     TokenType::LT => self.ir_code.push(IrInstruction::CmpLt(result_reg.clone(), left_val, right_val)),
                     TokenType::GT => self.ir_code.push(IrInstruction::CmpGt(result_reg.clone(), left_val, right_val)),
-                    // ... other infix operators
-                    _ => self.errors.push(IrGenError { message: format!("Unhandled infix operator {:?}", op_type), span: span.clone() }),
+                    TokenType::LTE => self.ir_code.push(IrInstruction::CmpLe(result_reg.clone(), left_val, right_val)),
+                    TokenType::GTE => self.ir_code.push(IrInstruction::CmpGe(result_reg.clone(), left_val, right_val)),
+                    // Further conceptual: Add specific IR for quantum operations that appear as infix.
+                    // E.g., a conceptual 'quantum_teleport' operator
+                    _ => self.errors.push(IrGenError { message: format!("Unhandled infix operator {:?} during IR generation", op_type), span: span.clone() }),
                 }
                 IrValue::Register(result_reg)
             }
@@ -336,29 +400,30 @@ impl IrGenerator {
                 let else_label = self.new_label("if_else");
                 let end_label = self.new_label("if_end");
                 
+                let result_reg = self.new_register(); // Register to hold result of the if-expression
+
                 self.ir_code.push(IrInstruction::Branch(cond_val, then_label.clone(), else_label.clone()));
                 
                 self.ir_code.push(IrInstruction::Label(then_label));
-                let then_result_val = self.gen_expression(then_block); // Get result of then-block
-                // Conceptual: If if-expression has a return value, store it
-                // self.ir_code.push(IrInstruction::Store(then_result_val, result_reg));
+                let then_result_val = self.gen_expression(then_block); 
+                self.ir_code.push(IrInstruction::Store(then_result_val, result_reg.clone().into())); // Store then-branch result
                 self.ir_code.push(IrInstruction::Jump(end_label.clone()));
 
                 self.ir_code.push(IrInstruction::Label(else_label));
                 if let Some(else_block) = else_block_opt {
                     let else_result_val = self.gen_expression(else_block);
-                    // Conceptual: If if-expression has a return value, store it
-                    // self.ir_code.push(IrInstruction::Store(else_result_val, result_reg));
+                    self.ir_code.push(IrInstruction::Store(else_result_val, result_reg.clone().into())); // Store else-branch result
+                } else {
+                    // If no else branch, and if is an expression, default to Unit/Void
+                    // self.ir_code.push(IrInstruction::Store(IrValue::VoidLiteral, result_reg.clone().into()));
                 }
                 self.ir_code.push(IrInstruction::Jump(end_label.clone())); // Ensure control flow merges
                 self.ir_code.push(IrInstruction::Label(end_label));
 
-                IrValue::Register(self.new_register()) // Return placeholder
+                IrValue::Register(result_reg)
             }
             Expression::Block(span, statements) => {
-                // Blocks create a new scope for local variables implicitly.
-                // IR Generation typically flattens this, managing register allocation.
-                // The value of a block is the value of its last expression.
+                // A block's value is the value of its last expression.
                 let mut last_val = IrValue::Literal(Literal::Integer("0".to_string(), span.clone())); // Default to dummy
                 for stmt in statements {
                     if let Statement::Expression(expr) = stmt {
@@ -370,79 +435,98 @@ impl IrGenerator {
                 last_val
             }
             Expression::Call(span, func_expr, args) => {
-                let func_name_or_ptr = match self.gen_expression(func_expr) {
-                    IrValue::Global(name) => name,
-                    IrValue::Register(reg) => format!("reg_{}", reg.0), // Conceptual: function pointer in register
+                // Assume func_expr evaluates to a function pointer or a global function name
+                let func_target = match func_expr.as_ref() {
+                    Expression::Identifier(Identifier(name, _)) => name.clone(),
                     _ => {
-                        self.errors.push(IrGenError { message: "Cannot call non-function IR value.".to_string(), span: span.clone() });
+                        // For more complex function expressions (e.g. closures), we'd need to evaluate the func_expr to a value
+                        self.errors.push(IrGenError { message: "Only direct function identifiers supported for calls in conceptual IR.".to_string(), span: span.clone() });
                         "".to_string()
                     }
                 };
+
                 let arg_vals: Vec<IrValue> = args.iter().map(|arg| self.gen_expression(arg)).collect();
                 let result_reg = self.new_register();
-                self.ir_code.push(IrInstruction::Call(IrValue::Register(result_reg.clone()), func_name_or_ptr, arg_vals));
+                self.ir_code.push(IrInstruction::Call(result_reg.clone(), func_target, arg_vals));
                 IrValue::Register(result_reg)
             }
             Expression::Index(span, array_expr, index_expr) => {
                 let array_ptr_val = self.gen_expression(array_expr);
                 let index_val = self.gen_expression(index_expr);
                 let result_reg = self.new_register();
-                // Conceptual: Generate load instruction for array element
-                self.ir_code.push(IrInstruction::Load(result_reg.clone(), array_ptr_val)); // Simplified: assumes array_ptr_val can be indexed
-                // In reality: this would be a series of instructions to calculate element address: 
-                // `elem_addr = base_addr + index * elem_size` then `load elem_addr`
+                
+                // Conceptual: Generate address calculation and then load.
+                // Assuming array_ptr_val is a base address (e.g., a pointer to the first element).
+                // Requires type information from semantic analysis to know element size.
+                self.ir_code.push(IrInstruction::Load(result_reg.clone(), array_ptr_val)); // Simplified: needs offset calculation
+                // Example of more detailed IR:
+                // `elem_size_reg = LoadConstant(size_of(element_type))`
+                // `offset_reg = Mul(new_reg, index_val, elem_size_reg)`
+                // `addr_reg = Add(new_reg, array_ptr_val, offset_reg)`
+                // `Load(result_reg, addr_reg)`
                 IrValue::Register(result_reg)
             }
             Expression::MemberAccess(span, object_expr, member_id) => {
-                let object_val = self.gen_expression(object_expr);
+                let object_val = self.gen_expression(object_expr); // This would be the object's base address
                 let result_reg = self.new_register();
-                // Conceptual: Generate instruction to access a member of a struct/object
-                // This would typically involve an offset from the object's base address.
-                self.ir_code.push(IrInstruction::Load(result_reg.clone(), object_val)); // Simplified
+                
+                // Conceptual: Access a member by calculating its offset from the object's base address.
+                // This requires semantic information about the object's struct definition.
+                self.ir_code.push(IrInstruction::Load(result_reg.clone(), object_val)); // Simplified. Needs offset calculation.
                 IrValue::Register(result_reg)
             }
         }
     }
 
     // New: Map AST TypeExpr to UMC IR Type
-    fn map_type_to_ir_type(&self, ast_type_expr_opt: Option<TypeExpr>) -> IrType {
-        let ast_type = ast_type_expr_opt.unwrap_or_else(|| {
-            // Default to a base type if no type expression is provided (e.g., implicit type in 'let')
-            TypeExpr::Base(Identifier("Unknown".to_string(), Span::new(0,0,0)))
-        });
-
-        match ast_type {
-            TypeExpr::Base(Identifier(name, _)) => match name.as_str() {
-                "int" => IrType::I32,
-                "float" => IrType::F64,
-                "bool" => IrType::Bool,
-                "string" => IrType::StringPtr,
-                "char" => IrType::Char,
-                "Qubit" => IrType::Qubit,
-                "NanoAgent" => IrType::NanoParticle, // Simplified
-                _ => IrType::Unknown,
-            },
-            TypeExpr::Array(element_type_expr, size_opt) => {
-                let ir_elem_type = self.map_type_to_ir_type(Some(*element_type_expr));
-                if let Some(size_str) = size_opt {
-                    // Conceptual: parse size_str to usize if it's a QReg[N]
-                    if ir_elem_type == IrType::Qubit {
-                        if let Ok(size) = size_str.parse::<usize>() {
-                            return IrType::QubitArray(size);
+    fn map_type_expr_to_ir_type(&self, ast_type_expr_opt: Option<&TypeExpr>) -> IrType {
+        if let Some(ast_type_expr) = ast_type_expr_opt {
+            match ast_type_expr {
+                TypeExpr::Base(Identifier(name, _)) => match name.as_str() {
+                    "int" => IrType::I32,
+                    "float" => IrType::F64,
+                    "bool" => IrType::Bool,
+                    "string" => IrType::StringPtr,
+                    "char" => IrType::Char,
+                    "Qubit" => IrType::Qubit,
+                    "NanoAgent" => IrType::NanoParticle, // Simplified
+                    "unit" => IrType::Void, // Map Unit to Void in IR
+                    _ => IrType::Unknown,
+                },
+                TypeExpr::Array(element_type_expr, size_opt) => {
+                    let ir_elem_type = self.map_type_expr_to_ir_type(Some(element_type_expr));
+                    if let Some(size_str) = size_opt {
+                        // Conceptual: parse size_str to usize if it's a QReg[N]
+                        if ir_elem_type == IrType::Qubit {
+                            if let Ok(size) = size_str.parse::<usize>() {
+                                return IrType::QubitArray(size);
+                            }
                         }
                     }
+                    IrType::Pointer(Box::new(ir_elem_type)) // General array as pointer to first element
                 }
-                IrType::Pointer(Box::new(ir_elem_type)) // General array as pointer to first element
+                TypeExpr::FunctionType(param_type_exprs, return_type_expr) => {
+                    let ir_param_types: Vec<IrType> = param_type_exprs.iter().map(|te| self.map_type_expr_to_ir_type(Some(te))).collect();
+                    let ir_return_type = self.map_type_expr_to_ir_type(Some(return_type_expr));
+                    IrType::Function(ir_param_types, Box::new(ir_return_type))
+                }
+                TypeExpr::Linear(inner_type_expr) | TypeExpr::Affine(inner_type_expr) => {
+                    // For linear/affine, the underlying IR type is the same,
+                    // but the IR generator might emit additional `Consume`/`Drop` instructions.
+                    self.map_type_expr_to_ir_type(Some(inner_type_expr))
+                }
+                TypeExpr::Effectful(base_type_expr, _) => {
+                    // Effectful types mostly inform semantic analysis; IR type is the base type.
+                    self.map_type_expr_to_ir_type(Some(base_type_expr))
+                }
+                // Add more mappings for other complex TypeExpr variants
+                _ => IrType::Unknown, // Fallback for complex types not yet mapped to IR
             }
-            TypeExpr::FunctionType(param_type_exprs, return_type_expr) => {
-                let ir_param_types: Vec<IrType> = param_type_exprs.into_iter().map(|te| self.map_type_to_ir_type(Some(te))).collect();
-                let ir_return_type = self.map_type_to_ir_type(Some(*return_type_expr));
-                IrType::Function(ir_param_types, Box::new(ir_return_type))
-            }
-            // Add more mappings for Linear, Affine, Effectful, Dependent, etc.
-            _ => IrType::Unknown, // Fallback for complex types not yet mapped to IR
+        } else {
+            IrType::Void // Default for untyped or implicit void contexts
         }
     }
+
 
     pub fn get_errors(&self) -> &[IrGenError] {
         &self.errors
