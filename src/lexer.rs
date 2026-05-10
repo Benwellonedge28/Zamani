@@ -181,7 +181,7 @@ impl<'a> Lexer<'a> {
         while let Some(&c) = self.peek_char() {
             if c.is_digit(10) {
                 num.push(self.read_char_and_advance_pos().unwrap());
-            } else if c == '.' &&!has_decimal && self.peek_char_n(2).map_or(false, |n| n.is_digit(10)) {
+            } else if c == '.' && !has_decimal && self.peek_char_n(2).map_or(false, |n| n.is_digit(10)) {
                 num.push(self.read_char_and_advance_pos().unwrap());
                 has_decimal = true;
             } else {
@@ -212,7 +212,7 @@ impl<'a> Lexer<'a> {
                     Some('r') => literal_content.push('\r'),
                     Some('\\') => literal_content.push('\\'),
                     Some('"') => literal_content.push('"'),
-                    Some('\'') => literal_content.push('\''),
+                    Some(''') => literal_content.push('''),
                     Some('0') => literal_content.push('\0'),
                     Some('u') => {
                         self.errors.push(LexerError {
@@ -245,9 +245,9 @@ impl<'a> Lexer<'a> {
                         'n' => literal_content.push('\n'),
                         't' => literal_content.push('\t'),
                         'r' => literal_content.push('\r'),
-                        '\\' => literal_content.push('\\'),
-                        '"' => literal_content.push('"'),
-                        '\'' => literal_content.push('\''),
+                        '\\') => literal_content.push('\\'),
+                        '"') => literal_content.push('"'),
+                        ''' => literal_content.push('''),
                         other => {
                             self.errors.push(LexerError {
                                 message: format!("Invalid escape sequence '\\{}'.", other),
@@ -256,11 +256,11 @@ impl<'a> Lexer<'a> {
                         }
                     }
                 }
-            } else if c!= '\'' {
+            } else if c != ''' {
                 literal_content.push(self.read_char_and_advance_pos().unwrap());
             }
         }
-        if literal_content.len()!= 1 {
+        if literal_content.len() != 1 {
             self.errors.push(LexerError {
                 message: "Character literal must contain exactly one character.".to_string(),
                 span: start_span,
@@ -518,9 +518,9 @@ impl<'a> Iterator for Lexer<'a> {
                     (TokenType::Illegal, content)
                 }
             }
-            '\'' => {
+            ''' => {
                 let content = self.read_char_literal_content(initial_span);
-                if self.peek_char() == Some(&'\'') {
+                if self.peek_char() == Some(&''') {
                     self.read_char_and_advance_pos();
                     (TokenType::Char, content)
                 } else {
@@ -604,7 +604,7 @@ pub mod tokens {
     impl Token {
         pub fn new(token_type: TokenType, literal: impl Into<String>, span: Span) -> Self {
             Token {
-                token_type,
+                token_type, 
                 literal: literal.into(),
                 span,
             }
