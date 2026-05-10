@@ -1,7 +1,7 @@
 //! Zenith Lexical Analyzer (Lexer)
 //! Lifetime-correct: borrows source from SourceMap, zero leaks, zero runtime keyword cost.
 
-use crate::source_map::{FileId, BytePos, Span};
+use crate::source_map::{FileId, BytePos, Span}; // Correctly import Span from source_map
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use unicode_xid::UnicodeXID;
@@ -450,7 +450,7 @@ impl<'a> Lexer<'a> {
                 if let Some(escaped_char) = self.read_char_and_advance_pos() {
                     match escaped_char {
                         'n' => literal_content.push('\n'),
-                        't' => literal_content.push('\t'),
+                        't') => literal_content.push('\t'),
                         'r' => literal_content.push('\r'),
                         '\\') => literal_content.push('\\'),
                         '"') => literal_content.push('"'),
@@ -594,201 +594,10 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.eof_emitted {
-            return None;
-        }
-
-        self.skip_whitespace_and_comments();
-
-        let start_offset = self.current_char_offset;
-        let start_line = self.current_line;
-        let start_column = self.current_column;
-
-        let c = match self.read_char_and_advance_pos() {
-            Some(ch) => ch,
-            None => {
-                self.eof_emitted = true;
-                return Some(Token::new(
-                    TokenType::EOF,
-                    "".to_string(),
-                    Span {
-                        file: self.file,
-                        start: BytePos(start_offset as u32),
-                        end: BytePos(start_offset as u32),
-                        line: start_line,
-                        column: start_column,
-                    },
-                ));
-            }
-        };
-
-        let initial_span = self.make_span(start_offset, start_line, start_column);
-
-        if c == '#' {
-            return self.handle_directive(initial_span);
-        }
-        if c == '@' {
-            return self.handle_nano_annotation(initial_span);
-        }
-        if c == 'm'
-            && self.peek_char() == Some(&'t')
-            && self.peek_char_n(2) == Some('s')
-            && self.peek_char_n(3) == Some('[')
-        {
-            return self.handle_mts_literal(initial_span);
-        }
-        if c == '|' {
-            if self.peek_char() == Some(&' ') {
-                return self.handle_quantum_literal(initial_span);
-            } else if self.peek_char() == Some(&'|') {
-                self.read_char_and_advance_pos();
-                return Some(Token::new(
-                    TokenType::LogicalOr,
-                    "||".to_string(),
-                    self.make_span(start_offset, start_line, start_column),
-                ));
-            } else {
-                return Some(Token::new(
-                    TokenType::Pipe,
-                    "|".to_string(),
-                    initial_span,
-                ));
-            }
-        }
-
-        let (token_type, literal) = match c {
-            '=' => {
-                if self.peek_char() == Some(&'=') {
-                    self.read_char_and_advance_pos();
-                    (TokenType::Equals, "==".to_string())
-                } else {
-                    (TokenType::Assign, "=".to_string())
-                }
-            }
-            '!' => {
-                if self.peek_char() == Some(&'=') {
-                    self.read_char_and_advance_pos();
-                    (TokenType::NotEquals, "!=".to_string())
-                } else {
-                    (TokenType::Bang, "!".to_string())
-                }
-            }
-            '<' => {
-                if self.peek_char() == Some(&'=') {
-                    self.read_char_and_advance_pos();
-                    (TokenType::LTE, "<=".to_string())
-                } else {
-                    (TokenType::LT, "<".to_string())
-                }
-            }
-            '>' => {
-                if self.peek_char() == Some(&'=') {
-                    self.read_char_and_advance_pos();
-                    (TokenType::GTE, ">=".to_string())
-                } else {
-                    (TokenType::GT, ">".to_string())
-                }
-            }
-            '&' => {
-                if self.peek_char() == Some(&'&') {
-                    self.read_char_and_advance_pos();
-                    (TokenType::LogicalAnd, "&&".to_string())
-                } else {
-                    (TokenType::BitwiseAnd, "&".to_string())
-                }
-            }
-            '+' => (TokenType::Plus, "+".to_string()),
-            '-' => (TokenType::Minus, "-".to_string()),
-            '*' => (TokenType::Star, "*".to_string()),
-            '/' => (TokenType::Slash, "/".to_string()),
-            '(' => (TokenType::LParen, "(".to_string()),
-            ')' => (TokenType::RParen, ")".to_string()),
-            '{' => (TokenType::LBrace, "{".to_string()),
-            '}' => (TokenType::RBrace, "}".to_string()),
-            '[' => (TokenType::LBracket, "[".to_string()),
-            ']' => (TokenType::RBracket, "]".to_string()),
-            ';' => (TokenType::Semicolon, ";".to_string()),
-            ':' => (TokenType::Colon, ":".to_string()),
-            ',' => (TokenType::Comma, ",".to_string()),
-            '.' => (TokenType::Dot, ".".to_string()),
-            '^' => (TokenType::Caret, "^".to_string()),
-            'π' => (TokenType::PiSymbol, "π".to_string()), // Unicode Pi
-            'Σ' => (TokenType::SigmaSymbol, "Σ".to_string()), // Unicode Sigma
-            '"' => {
-                let content = self.read_string_literal_content(initial_span);
-                if self.peek_char() == Some(&'"') {
-                    self.read_char_and_advance_pos();
-                    (TokenType::String, content)
-                } else {
-                    self.errors.push(LexerError {
-                        message: "Unterminated string literal.".to_string(),
-                        span: self.make_span(start_offset, start_line, start_column),
-                    });
-                    (TokenType::Illegal, content)
-                }
-            }
-            ''' => {
-                let content = self.read_char_literal_content(initial_span);
-                if self.peek_char() == Some(&''') {
-                    self.read_char_and_advance_pos();
-                    (TokenType::Char, content)
-                } else {
-                    self.errors.push(LexerError {
-                        message: "Unterminated character literal.".to_string(),
-                        span: self.make_span(start_offset, start_line, start_column),
-                    });
-                    (TokenType::Illegal, content)
-                }
-            }
-            c if UnicodeXID::is_xid_start(c) || c == '_' => {
-                let ident = self.read_identifier_or_keyword(c);
-                let tt = self.keywords.get(ident.as_str())
-                   .cloned()
-                   .unwrap_or(TokenType::Identifier);
-                (tt, ident)
-            }
-            c if c.is_digit(10) => {
-                let num = self.read_number(c);
-                let tt = if num.contains('.') {
-                    TokenType::Float
-                } else {
-                    TokenType::Integer
-                };
-                (tt, num)
-            }
-            _ => {
-                self.errors.push(LexerError {
-                    message: format!("Unexpected character '{}'.", c),
-                    span: self.make_span(start_offset, start_line, start_column),
-                });
-                (TokenType::Illegal, c.to_string())
-            }
-        };
-
-        Some(Token::new(
-            token_type,
-            literal,
-            self.make_span(start_offset, start_line, start_column),
-        ))
-    }
-}
-
 // --- Token & TokenType Definitions ---
 pub mod tokens {
+    // Use Span from source_map directly
     use crate::source_map::{FileId, BytePos, Span};
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct Span {
-        pub file: FileId,
-        pub start: BytePos,
-        pub end: BytePos,
-        pub line: usize,
-        pub column: usize,
-    }
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum TokenType {
@@ -859,7 +668,7 @@ pub mod tokens {
         KeywordDealloc, KeywordMemoryMap, KeywordRegion, KeywordSlab, KeywordArena,
         KeywordGarbageCollect, KeywordReferenceCount, KeywordArcPtr, KeywordRcPtr,
         KeywordWeakPtr, KeywordMoveVal, KeywordCopyVal, KeywordCloneVal,
-        KeywordPtrAdd, KeywordPtrSub, KeywordAtomicLoad, KeywordAtomicStore,
+        KeywordPtrAdd, KeywordPtrSub, KeywordAtomicLoad, TokenType::KeywordAtomicStore,
         KeywordAtomicCas, KeywordFence, KeywordAcquireRelease, KeywordRelaxed,
         KeywordSeqCst, KeywordUnordered, KeywordOrdered, KeywordReadOnly,
         KeywordWriteOnly, KeywordReadWrite, KeywordExclusive, KeywordShared,
@@ -882,7 +691,7 @@ pub mod tokens {
     impl Token {
         pub fn new(token_type: TokenType, literal: impl Into<String>, span: Span) -> Self {
             Token {
-                token_type, 
+                token_type,
                 literal: literal.into(),
                 span,
             }
