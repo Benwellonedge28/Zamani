@@ -1,811 +1,1115 @@
 //! Zenith Parser
 //!
-//! This module implements the lexical analysis phase of the Zenith compiler.
-//! It converts the input source code into a stream of tokens based on the
-//! NIMBUS Grammar v2.0 Trinity Edition rules. This lexer handles the unified
-//! grammar across NIMBUS, Zenith, and Sankofa, including advanced literals
-//! for quantum, nano, and multi-timeline systems, and tokens for algebraic effects.
-//! This version incorporates detailed position tracking, conceptual error reporting,
-//! and initial conceptual support for Unicode identifiers and string/char escape sequences.
+//! This module implements the parser for the Zenith programming language.
+//! It takes a stream of tokens from the lexer and constructs an Abstract Syntax Tree (AST).
+//! The parser is responsible for enforcing the grammatical rules of the language.
 
-use crate::lexer::{Lexer, Token, TokenType, Span, LexerError};
-use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeAnnotation, Parameter, TypeExpr, MatchCase};
-use std::collections::HashMap;
+use crate::lexer::{Lexer, LexerError};
+use crate::tokens::{Token, TokenType}; // Keep TokenType for pattern matching within parser
+use crate::source_map::Span; // Corrected Span import
+use crate::ast;
 
-// --- Parser Structure ---
-pub struct Parser<'a> {
-    lexer: Lexer<'a>, // The lexer providing tokens
-    current_token: Option<Token>,
-    peek_token: Option<Token>,
-    errors: Vec<ParserError>, // Accumulate parsing errors
-
-    // Maps for operator precedence
-    prefix_parse_fns: HashMap<TokenType, fn(&mut Parser) -> Option<Expression>>,
-    infix_parse_fns: HashMap<TokenType, fn(&mut Parser, Expression) -> Option<Expression>>,
-    precedences: HashMap<TokenType, Precedence>,
-}
-
-// --- ParserError Structure ---
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Represents a parsing error.
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParserError {
     pub message: String,
     pub span: Span,
 }
 
+/// The main parser structure.
+pub struct Parser<'a> {
+    lexer: Lexer<'a>,
+    current_token: Option<Token>,
+    peek_token: Option<Token>,
+    errors: Vec<ParserError>,
+}
+
 impl<'a> Parser<'a> {
+    /// Creates a new Parser instance.
     pub fn new(lexer: Lexer<'a>) -> Self {
         let mut parser = Parser {
             lexer,
             current_token: None,
             peek_token: None,
             errors: Vec::new(),
-            prefix_parse_fns: HashMap::new(),
-            infix_parse_fns: HashMap::new(),
-            precedences: HashMap::new(),
         };
-
-        parser.register_precedences();
-        parser.register_prefix_parse_fns();
-        parser.register_infix_parse_fns();
-
-        // Read two tokens, so current_token and peek_token are both set
+        // Initialize current and peek tokens
         parser.next_token();
         parser.next_token();
         parser
     }
 
-    // --- Token Management Helpers ---
+    /// Advances the parser's token stream, setting the peek_token as current_token.
     fn next_token(&mut self) {
         self.current_token = self.peek_token.take();
         self.peek_token = self.lexer.next();
-        // Also collect lexer errors after each token read
-        self.errors.extend(self.lexer.get_errors().iter().map(|e| ParserError { message: e.message.clone(), span: e.span.clone() }));
-        // Clear lexer errors after collection for the next pass
-        self.lexer.errors.clear();
     }
 
+    /// Consumes the current token if its type matches the expected type, otherwise records an error.
+    fn expect_peek(&mut self, token_type: TokenType) -> bool {
+        if self.peek_token_is(token_type) {
+            self.next_token();
+            true
+        } else {
+            self.peek_error(token_type);
+            false
+        }
+    }
+
+    /// Checks if the current token's type matches the given type.
     fn current_token_is(&self, token_type: TokenType) -> bool {
         self.current_token.as_ref().map_or(false, |t| t.token_type == token_type)
     }
 
+    /// Checks if the peek token's type matches the given type.
     fn peek_token_is(&self, token_type: TokenType) -> bool {
         self.peek_token.as_ref().map_or(false, |t| t.token_type == token_type)
     }
 
-    fn expect_current_token(&mut self, token_type: TokenType) -> Result<Token, ParserError> {
-        if self.current_token_is(token_type) {
-            let token = self.current_token.take().unwrap();
-            self.next_token();
-            Ok(token)
-        } else {
-            let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
-            let expected_literal = format!("{:?}: {:?}", token_type, self.token_literal_for_error(&token_type));
-            let found_literal = self.current_token.as_ref().map_or("EOF".to_string(), |t| format!("{:?}: {:?}", t.token_type, t.literal));
-            let err_msg = format!("Expected token {}, found {}", expected_literal, found_literal);
-            self.errors.push(error.clone());
-            Err(error)
-        }
+    /// Records a parsing error for an unexpected peek token.
+    fn peek_error(&mut self, expected_type: TokenType) {
+        let msg = format!(
+            "Expected next token to be {:?}, got {:?} instead",
+            expected_type,
+            self.peek_token.as_ref().map(|t| t.token_type)
+        );
+        let span = self.peek_token.as_ref().map_or(Span::dummy(), |t| t.span);
+        self.errors.push(ParserError { message: msg, span });
     }
 
-    fn expect_peek_token(&mut self, token_type: TokenType) -> Result<Token, ParserError> {
-        if self.peek_token_is(token_type) {
-            self.next_token(); // Advance current_token to the peek_token
-            let token = self.current_token.take().unwrap();
-            self.next_token(); // Advance to the next token
-            Ok(token)
-        } else {
-            let error_span = self.peek_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
-            let expected_literal = format!("{:?}: {:?}", token_type, self.token_literal_for_error(&token_type));
-            let found_literal = self.peek_token.as_ref().map_or("EOF".to_string(), |t| format!("{:?}: {:?}", t.token_type, t.literal));
-            let err_msg = format!("Expected next token {}, found {}", expected_literal, found_literal);
-            let error = ParserError { message: err_msg, span: error_span };
-            self.errors.push(error.clone());
-            Err(error)
-        }
+    /// Records a parsing error for an unexpected current token.
+    fn current_error(&mut self, expected_type: TokenType) {
+        let msg = format!(
+            "Expected current token to be {:?}, got {:?} instead",
+            expected_type,
+            self.current_token.as_ref().map(|t| t.token_type)
+        );
+        let span = self.current_token.as_ref().map_or(Span::dummy(), |t| t.span);
+        self.errors.push(ParserError { message: msg, span });
     }
 
-    fn token_literal_for_error(&self, token_type: &TokenType) -> String {
-        match token_type {
-            TokenType::KeywordLet => "let".to_string(),
-            TokenType::KeywordFn => "fn".to_string(),
-            TokenType::Identifier => "identifier".to_string(),
-            TokenType::Assign => "=".to_string(),
-            TokenType::Semicolon => ";".to_string(),
-            TokenType::LParen => "(".to_string(),
-            TokenType::RParen => ")".to_string(),
-            TokenType::LBrace => "{".to_string(),
-            TokenType::RBrace => "}".to_string(),
-            TokenType::LT => "<".to_string(),
-            TokenType::GT => ">".to_string(),
-            TokenType::LBracket => "[".to_string(),
-            TokenType::RBracket => "]".to_string(),
-            TokenType::Colon => ":".to_string(),
-            TokenType::Comma => ",".to_string(),
-            TokenType::Arrow => "->".to_string(),
-            TokenType::KeywordType => "type".to_string(),
-            TokenType::KeywordEffect => "effect".to_string(),
-            TokenType::KeywordLanguage => "language".to_string(),
-            TokenType::Integer => "integer".to_string(),
-            TokenType::KeywordWhile => "while".to_string(),
-            TokenType::KeywordFor => "for".to_string(),
-            TokenType::KeywordMatch => "match".to_string(),
-            TokenType::KeywordCase => "case".to_string(),
-            TokenType::KeywordPi => "Pi".to_string(),
-            TokenType::KeywordSigma => "Sigma".to_string(),
-            TokenType::KeywordLinear => "linear".to_string(),
-            TokenType::KeywordAffine => "affine".to_string(),
-            TokenType::KeywordUnsafe => "unsafe".to_string(),
-            // ... add more as needed
-            _ => format!("{:?}", token_type),
-        }
-    }
-
-    // --- Precedence Management ---
-    fn register_precedences(&mut self) {
-        use TokenType::*;
-        use Precedence::*;
-        self.precedences.insert(Equals, Equals);
-        self.precedences.insert(NotEquals, Equals);
-        self.precedences.insert(LT, LessGreater);
-        self.precedences.insert(GT, LessGreater);
-        self.precedences.insert(LTE, LessGreater);
-        self.precedences.insert(GTE, LessGreater);
-        self.precedences.insert(Plus, Sum);
-        self.precedences.insert(Minus, Sum);
-        self.precedences.insert(Star, Product);
-        self.precedences.insert(Slash, Product);
-        self.precedences.insert(LParen, Call); // For function calls
-        self.precedences.insert(LBracket, Index); // For array indexing
-        self.precedences.insert(Dot, MemberAccess); // For struct/object member access
-        self.precedences.insert(Colon, TypeAnnotationPrec); // For type annotations
-    }
-
-    fn peek_precedence(&self) -> Precedence {
-        self.peek_token.as_ref().and_then(|t| self.precedences.get(&t.token_type)).cloned().unwrap_or(Precedence::Lowest)
-    }
-
-    fn current_precedence(&self) -> Precedence {
-        self.current_token.as_ref().and_then(|t| self.precedences.get(&t.token_type)).cloned().unwrap_or(Precedence::Lowest)
-    }
-
-    // --- Prefix Parse Functions ---
-    fn register_prefix_parse_fns(&mut self) {
-        use TokenType::*;
-        self.prefix_parse_fns.insert(Identifier, Parser::parse_identifier_expr);
-        self.prefix_parse_fns.insert(Integer, Parser::parse_integer_literal);
-        self.prefix_parse_fns.insert(Float, Parser::parse_float_literal);
-        self.prefix_parse_fns.insert(String, Parser::parse_string_literal);
-        self.prefix_parse_fns.insert(Char, Parser::parse_char_literal);
-        self.prefix_parse_fns.insert(QuantumLiteral, Parser::parse_quantum_literal);
-        self.prefix_parse_fns.insert(NanoAnnotation, Parser::parse_nano_literal);
-        self.prefix_parse_fns.insert(MTSLiteral, Parser::parse_mts_literal);
-        self.prefix_parse_fns.insert(Bang, Parser::parse_prefix_expr);
-        self.prefix_parse_fns.insert(Minus, Parser::parse_prefix_expr);
-        self.prefix_parse_fns.insert(KeywordTrue, Parser::parse_boolean_literal);
-        self.prefix_parse_fns.insert(KeywordFalse, Parser::parse_boolean_literal);
-        self.prefix_parse_fns.insert(LParen, Parser::parse_grouped_expr);
-        self.prefix_parse_fns.insert(KeywordIf, Parser::parse_if_expr);
-        self.prefix_parse_fns.insert(LBrace, Parser::parse_block_expr); // For block expressions
-    }
-
-    fn parse_identifier_expr(parser: &mut Parser) -> Option<Expression> {
-        parser.current_token.take().map(|t| Expression::Identifier(Identifier(t.literal, t.span)))
-    }
-    fn parse_integer_literal(parser: &mut Parser) -> Option<Expression> {
-        parser.current_token.take().map(|t| Expression::Literal(Literal::Integer(t.literal, t.span)))
-    }
-    fn parse_float_literal(parser: &mut Parser) -> Option<Expression> {
-        parser.current_token.take().map(|t| Expression::Literal(Literal::Float(t.literal, t.span)))
-    }
-    fn parse_string_literal(parser: &mut Parser) -> Option<Expression> {
-        parser.current_token.take().map(|t| Expression::Literal(Literal::String(t.literal, t.span)))
-    }
-    fn parse_char_literal(parser: &mut Parser) -> Option<Expression> {
-        // Conceptual: parse_char_literal should ensure the literal is a single char.
-        parser.current_token.take().map(|t| Expression::Literal(Literal::Char(t.literal.chars().next().unwrap_or('\0'), t.span)))
-    }
-    fn parse_quantum_literal(parser: &mut Parser) -> Option<Expression> {
-        parser.current_token.take().map(|t| Expression::Literal(Literal::Quantum(t.literal, t.span)))
-    }
-    fn parse_nano_literal(parser: &mut Parser) -> Option<Expression> {
-        parser.current_token.take().map(|t| Expression::Literal(Literal::Nano(t.literal, t.span)))
-    }
-    fn parse_mts_literal(parser: &mut Parser) -> Option<Expression> {
-        parser.current_token.take().map(|t| Expression::Literal(Literal::MTS(t.literal, t.span)))
-    }
-    fn parse_boolean_literal(parser: &mut Parser) -> Option<Expression> {
-        parser.current_token.take().map(|t| Expression::Literal(Literal::Boolean(t.token_type == TokenType::KeywordTrue, t.span)))
-    }
-
-    fn parse_prefix_expr(parser: &mut Parser) -> Option<Expression> {
-        let current_token = parser.current_token.take()?;
-        parser.next_token();
-        let right = parser.parse_expression(Precedence::Prefix).ok()?;
-        Some(Expression::Prefix(current_token.span, current_token.token_type, Box::new(right)))
-    }
-
-    fn parse_grouped_expr(parser: &mut Parser) -> Option<Expression> {
-        parser.next_token(); // Consume '('
-        let expr = parser.parse_expression(Precedence::Lowest).ok()?;
-        if parser.expect_peek_token(TokenType::RParen).is_err() {
-            return None; // Error already logged
-        }
-        Some(expr)
-    }
-
-    fn parse_if_expr(parser: &mut Parser) -> Option<Expression> {
-        let if_token_span = parser.current_token.as_ref()?.span.clone();
-        parser.next_token(); // Consume 'if'
-        parser.expect_current_token(TokenType::LParen).ok()?; // Consume '('
-        let condition = parser.parse_expression(Precedence::Lowest).ok()?;
-        parser.expect_peek_token(TokenType::RParen).ok()?; // Consume ')'
-        parser.expect_peek_token(TokenType::LBrace).ok()?; // Consume '{'
-        let consequence = parser.parse_block_expr(parser.current_token.as_ref()?.span.clone())?; // Parse then-block
-        let alternative = if parser.peek_token_is(TokenType::KeywordElse) {
-            parser.next_token(); // Consume 'else'
-            parser.expect_peek_token(TokenType::LBrace).ok()?; // Consume '{'
-            parser.parse_block_expr(parser.current_token.as_ref()?.span.clone()).ok().map(Box::new)
-        } else {
-            None
-        };
-        Some(Expression::If(if_token_span, Box::new(condition), Box::new(consequence), alternative))
-    }
-
-    fn parse_block_expr(parser: &mut Parser) -> Option<Expression> {
-        let start_span = parser.current_token.as_ref()?.span.clone(); // Span of '{'
-        parser.next_token(); // Consume '{'
+    /// Main parsing entry point.
+    pub fn parse_program(&mut self) -> Result<ast::Program, Vec<ParserError>> {
         let mut statements = Vec::new();
-        while !parser.current_token_is(TokenType::RBrace) && !parser.current_token_is(TokenType::EOF) {
-            if let Some(stmt) = parser.parse_statement() {
-                statements.push(stmt);
-            }
-            // Add robust error recovery here: skip tokens until a likely statement start or block end
-            if parser.current_token.is_some() && parser.current_token_is(TokenType::Semicolon) {
-                parser.next_token(); // Consume stray semicolons
-            }
-        }
-        parser.expect_current_token(TokenType::RBrace).ok()?; // Consume '}'
-        Some(Expression::Block(start_span, statements))
-    }
+        let program_start_span = self.current_token.as_ref().map_or(Span::dummy(), |t| t.span);
 
-    // --- Infix Parse Functions ---
-    fn register_infix_parse_fns(&mut self) {
-        use TokenType::*;
-        self.infix_parse_fns.insert(Plus, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(Minus, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(Star, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(Slash, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(Equals, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(NotEquals, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(LT, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(GT, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(LTE, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(GTE, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(LogicalAnd, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(LogicalOr, Parser::parse_infix_expr);
-        self.infix_parse_fns.insert(LParen, Parser::parse_call_expr); // Function calls
-        self.infix_parse_fns.insert(LBracket, Parser::parse_index_expr); // Array indexing
-        self.infix_parse_fns.insert(Dot, Parser::parse_member_access_expr); // Object/struct member access
-    }
-
-    fn parse_infix_expr(parser: &mut Parser, left: Expression) -> Option<Expression> {
-        let operator_token = parser.current_token.take()?;
-        let precedence = parser.current_precedence();
-        parser.next_token();
-        let right = parser.parse_expression(precedence).ok()?;
-        Some(Expression::Infix(operator_token.span, Box::new(left), operator_token.token_type, Box::new(right)))
-    }
-
-    fn parse_call_expr(parser: &mut Parser, function: Expression) -> Option<Expression> {
-        let lparen_span = parser.current_token.as_ref()?.span.clone();
-        parser.next_token(); // Consume '('
-        let arguments = parser.parse_expression_list(TokenType::RParen).ok()?;
-        Some(Expression::Call(lparen_span, Box::new(function), arguments))
-    }
-
-    fn parse_index_expr(parser: &mut Parser, left: Expression) -> Option<Expression> {
-        let lbracket_span = parser.current_token.as_ref()?.span.clone();
-        parser.next_token(); // Consume '['
-        let index = parser.parse_expression(Precedence::Lowest).ok()?;
-        parser.expect_peek_token(TokenType::RBracket).ok()?; // Consume ']'
-        Some(Expression::Index(lbracket_span, Box::new(left), Box::new(index)))
-    }
-
-    fn parse_member_access_expr(parser: &mut Parser, left: Expression) -> Option<Expression> {
-        let dot_span = parser.current_token.as_ref()?.span.clone();
-        parser.next_token(); // Consume '.'
-        let member = parser.expect_current_token(TokenType::Identifier).ok()?;
-        Some(Expression::MemberAccess(dot_span, Box::new(left), Identifier(member.literal, member.span)))
-    }
-
-    fn parse_expression_list(&mut self, end_token: TokenType) -> Result<Vec<Expression>, ParserError> {
-        let mut list = Vec::new();
-        if self.peek_token_is(end_token.clone()) {
-            self.next_token(); // Consume end_token (e.g., ')' or ']')
-            return Ok(list);
-        }
-        self.next_token(); // Advance to the first expression's token
-        list.push(self.parse_expression(Precedence::Lowest)?);
-
-        while self.peek_token_is(TokenType::Comma) {
-            self.next_token(); // Consume ','
-            self.next_token(); // Advance to the next expression's token
-            list.push(self.parse_expression(Precedence::Lowest)?);
-        }
-        self.expect_peek_token(end_token)?; // Expect and consume the end_token
-        Ok(list)
-    }
-
-    // --- Type Parsing (Conceptual for Zenith's rich type system) ---
-    fn parse_type_expression(&mut self) -> Result<TypeExpr, ParserError> {
-        let current_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
-        let mut type_expr = TypeExpr::Base(Identifier("".to_string(), current_span.clone())); // Placeholder, will be replaced
-
-        match self.current_token.as_ref()?.token_type {
-            TokenType::Identifier => {
-                let type_name_token = self.current_token.take().unwrap();
-                type_expr = TypeExpr::Base(Identifier(type_name_token.literal, type_name_token.span));
-            },
-            TokenType::KeywordLinear => {
-                self.next_token(); // Consume 'linear'
-                let inner_type = self.parse_type_expression()?;
-                type_expr = TypeExpr::Linear(Box::new(inner_type));
-            },
-            TokenType::KeywordAffine => {
-                self.next_token(); // Consume 'affine'
-                let inner_type = self.parse_type_expression()?;
-                type_expr = TypeExpr::Affine(Box::new(inner_type));
-            },
-            TokenType::KeywordPi | TokenType::KeywordSigma => {
-                let current_type_token = self.current_token.take().unwrap();
-                let is_pi = current_type_token.token_type == TokenType::KeywordPi;
-
-                self.expect_current_token(TokenType::LParen)?; // Consumes '('
-                let param_name_token = self.expect_current_token(TokenType::Identifier)?; // x
-                self.expect_current_token(TokenType::Colon)?; // :
-                let param_type = self.parse_type_expression()?; // T
-                self.expect_current_token(TokenType::RParen)?; // )
-                let return_type = self.parse_type_expression()?; // T (second T)
-
-                if is_pi {
-                    type_expr = TypeExpr::DependentPi(Identifier(param_name_token.literal, param_name_token.span), Box::new(param_type), Box::new(return_type));
-                } else {
-                    type_expr = TypeExpr::DependentSigma(Identifier(param_name_token.literal, param_name_token.span), Box::new(param_type), Box::new(return_type));
-                }
-            },
-            // Add parsing for Universe types (Type_N, Kind, Sort, Prop) if they have keywords
-            _ => {
-                let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
-                return Err(ParserError {
-                    message: format!("Expected a type expression starting with Identifier, 'linear', 'affine', 'Pi', or 'Sigma', found {:?}", self.current_token.as_ref().unwrap().token_type),
-                    span: error_span,
-                });
-            }
-        }
-        
-        // Handle generic parameters like List<int>, Atom<O>
-        if self.peek_token_is(TokenType::LT) { // '<'
-            self.next_token(); // Consume '<'
-            let mut generic_args = Vec::new();
-            // Expect at least one type expression
-            self.next_token(); // Advance to first generic arg token
-            generic_args.push(self.parse_type_expression()?);
-            while self.peek_token_is(TokenType::Comma) {
-                self.next_token(); // Consume ','
-                self.next_token(); // Advance to next generic arg token
-                generic_args.push(self.parse_type_expression()?);
-            }
-            self.expect_peek_token(TokenType::GT)?; // Consume '>'
-            type_expr = TypeExpr::Generic(Box::new(type_expr), generic_args);
-        }
-
-        // Handle Array or QReg[N] types
-        if self.peek_token_is(TokenType::LBracket) { // '['
-            self.next_token(); // Consume '['
-            if self.peek_token_is(TokenType::Integer) { // QReg[N] or array with fixed size
-                let size_token = self.expect_peek_token(TokenType::Integer)?; // Expect and consume integer literal for size
-                self.expect_peek_token(TokenType::RBracket)?; // Consume ']'
-                type_expr = TypeExpr::Array(Box::new(type_expr), Some(size_token.literal));
-            } else {
-                self.expect_peek_token(TokenType::RBracket)?; // Consume ']'
-                type_expr = TypeExpr::Array(Box::new(type_expr), None);
-            }
-        }
-        
-        // Handle `with effects {E1, E2}`
-        if self.peek_token_is(TokenType::KeywordWith) { // 'with'
-            self.next_token(); // Consume 'with'
-            self.expect_peek_token(TokenType::KeywordEffect)?; // Consume 'effect'
-            self.expect_peek_token(TokenType::LBrace)?; // Consume '{'
-            let mut effects = Vec::new();
-            if !self.peek_token_is(TokenType::RBrace) { // Check if there are effects defined
-                self.next_token(); // Advance to first effect name
-                effects.push(Identifier(self.current_token.as_ref().unwrap().literal.clone(), self.current_token.as_ref().unwrap().span.clone()));
-                while self.peek_token_is(TokenType::Comma) {
-                    self.next_token(); // Consume ','
-                    self.next_token(); // Advance to next effect name
-                    effects.push(Identifier(self.current_token.as_ref().unwrap().literal.clone(), self.current_token.as_ref().unwrap().span.clone()));
-                }
-            }
-            self.expect_peek_token(TokenType::RBrace)?; // Consume '}'
-            type_expr = TypeExpr::Effectful(Box::new(type_expr), effects);
-        }
-
-        Ok(type_expr)
-    }
-
-    fn parse_function_parameters(&mut self) -> Result<Vec<Parameter>, ParserError> {
-        let mut parameters = Vec::new();
-        // If next token is ')' then no parameters
-        if self.peek_token_is(TokenType::RParen) {
-            self.next_token(); // Consume ')'
-            return Ok(parameters);
-        }
-        self.next_token(); // Advance to first parameter's identifier
-
-        loop {
-            let param_name_token = self.expect_current_token(TokenType::Identifier)?; // Parameter name
-            let param_name = Identifier(param_name_token.literal, param_name_token.span);
-            let mut param_type = None;
-
-            if self.peek_token_is(TokenType::Colon) { // e.g., param: Type
-                self.next_token(); // Consume ':'
-                self.next_token(); // Advance to type expression
-                param_type = Some(self.parse_type_expression()?);
-            }
-            parameters.push(Parameter { name: param_name, typ: param_type });
-
-            if !self.peek_token_is(TokenType::Comma) {
-                break;
-            }
-            self.next_token(); // Consume ','
-            self.next_token(); // Advance to next parameter's identifier
-        }
-        self.expect_current_token(TokenType::RParen)?; // Consume ')'
-        Ok(parameters)
-    }
-
-    // --- Control Flow & Loop Parsing (New) ---
-    fn parse_while_statement(&mut self) -> Result<Statement, ParserError> {
-        let while_token_span = self.current_token.as_ref()?.span.clone();
-        self.expect_current_token(TokenType::KeywordWhile)?; // Consume 'while'
-        self.expect_current_token(TokenType::LParen)?; // Consume '('
-        let condition = self.parse_expression(Precedence::Lowest)?; // Parse condition
-        self.expect_peek_token(TokenType::RParen)?; // Consume ')'
-        self.expect_peek_token(TokenType::LBrace)?; // Consume '{'
-        let body = self.parse_block_expr(self.current_token.as_ref()?.span.clone())?; // Parse loop body
-        Ok(Statement::While(while_token_span, Box::new(condition), Box::new(body)))
-    }
-
-    fn parse_for_statement(&mut self) -> Result<Statement, ParserError> {
-        let for_token_span = self.current_token.as_ref()?.span.clone();
-        self.expect_current_token(TokenType::KeywordFor)?; // Consume 'for'
-        self.expect_current_token(TokenType::LParen)?; // Consume '('
-        let iterator_var_token = self.expect_current_token(TokenType::Identifier)?; // Loop variable
-        let iterator_var = Identifier(iterator_var_token.literal, iterator_var_token.span);
-        self.expect_peek_token(TokenType::KeywordIn)?; // Consume 'in'
-        self.next_token(); // Consume 'in'
-        let iterable_expr = self.parse_expression(Precedence::Lowest)?; // The iterable
-        self.expect_peek_token(TokenType::RParen)?; // Consume ')'
-        self.expect_peek_token(TokenType::LBrace)?; // Consume '{'
-        let body = self.parse_block_expr(self.current_token.as_ref()?.span.clone())?; // Parse loop body
-        Ok(Statement::For(for_token_span, iterator_var, Box::new(iterable_expr), Box::new(body)))
-    }
-
-    fn parse_break_statement(&mut self) -> Result<Statement, ParserError> {
-        let break_token = self.expect_current_token(TokenType::KeywordBreak)?; // Consume 'break'
-        self.expect_current_token(TokenType::Semicolon)?; // Consumes ';'
-        Ok(Statement::Break(break_token.span))
-    }
-
-    fn parse_continue_statement(&mut self) -> Result<Statement, ParserError> {
-        let continue_token = self.expect_current_token(TokenType::KeywordContinue)?; // Consume 'continue'
-        self.expect_current_token(TokenType::Semicolon)?; // Consumes ';'
-        Ok(Statement::Continue(continue_token.span))
-    }
-
-    fn parse_match_statement(&mut self) -> Result<Statement, ParserError> {
-        let match_token_span = self.current_token.as_ref()?.span.clone();
-        self.expect_current_token(TokenType::KeywordMatch)?; // Consume 'match'
-        let matched_expr = self.parse_expression(Precedence::Lowest)?; // Expression to match against
-        self.expect_current_token(TokenType::LBrace)?; // Consume '{' for match cases
-        let mut cases = Vec::new();
-        while !self.peek_token_is(TokenType::RBrace) && !self.peek_token_is(TokenType::EOF) {
-            self.next_token(); // Advance to 'case' or pattern
-            cases.push(self.parse_match_case()?);
-        }
-        self.expect_peek_token(TokenType::RBrace)?; // Consume '}'
-        Ok(Statement::Match(match_token_span, Box::new(matched_expr), cases)))
-    }
-
-    fn parse_match_case(&mut self) -> Result<MatchCase, ParserError> {
-        let case_token_span = self.current_token.as_ref()?.span.clone();
-        self.expect_current_token(TokenType::KeywordCase)?; // Consume 'case'
-        let pattern = self.parse_expression(Precedence::Lowest)?; // Conceptual: simple expression as pattern
-        self.expect_current_token(TokenType::Arrow)?; // Consumes '->'
-        self.expect_current_token(TokenType::LBrace)?; // Consumes '{'
-        let body = self.parse_block_expr(self.current_token.as_ref()?.span.clone())?; // Body of the case
-        self.expect_current_token(TokenType::RBrace)?; // Consumes '}'
-        Ok(MatchCase { span: case_token_span, pattern, body: Box::new(body) })
-    }
-
-    // New: Parsing for 'unsafe' blocks
-    fn parse_unsafe_statement(&mut self) -> Result<Statement, ParserError> {
-        let unsafe_token_span = self.current_token.as_ref()?.span.clone();
-        self.expect_current_token(TokenType::KeywordUnsafe)?; // Consume 'unsafe'
-
-        let mut proof_id: Option<Identifier> = None;
-        if self.peek_token_is(TokenType::Bang) { // Check for '!' e.g., unsafe!
-            self.next_token(); // Consume '!'
-            if self.peek_token_is(TokenType::LParen) { // Check for '(' e.g., unsafe!(...
-                self.next_token(); // Consume '('
-                // Conceptual: Expect a keyword or identifier like "evas"
-                if self.peek_token_is(TokenType::Identifier) && self.peek_token.as_ref().unwrap().literal == "evas" {
-                    self.next_token(); // Consume "evas"
-                    self.expect_peek_token(TokenType::Colon)?; // Expect ":"
-                    self.next_token(); // Consume ":"
-                    let proof_name = self.expect_current_token(TokenType::Identifier)?; // Actual proof ID
-                    proof_id = Some(Identifier(proof_name.literal, proof_name.span));
-                } else {
-                    self.errors.push(ParserError{
-                        message: "Expected 'evas:' after 'unsafe!(' for EVAS proof.".to_string(),
-                        span: self.peek_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone()),
-                    });
-                    // Attempt to skip to ')' to continue parsing
-                    while !self.peek_token_is(TokenType::RParen) && !self.peek_token_is(TokenType::EOF) {
-                        self.next_token();
-                    }
-                }
-                self.expect_peek_token(TokenType::RParen)?; // Consume ')'
-            }
-        }
-        
-        self.expect_current_token(TokenType::LBrace)?; // Expect '{' for the block
-        let block_expr = self.parse_block_expr(self.current_token.as_ref()?.span.clone())?; // Parse the unsafe block
-        
-        Ok(Statement::Unsafe(unsafe_token_span, proof_id, Box::new(block_expr)))
-    }
-
-    // --- Core Parsing Methods (Conceptual) ---
-    pub fn parse_program(&mut self) -> Program {
-        let mut program = Program { statements: Vec::new() };
-        while self.current_token.is_some() && self.current_token.as_ref().unwrap().token_type != TokenType::EOF {
+        while !self.current_token_is(TokenType::EOF) {
             if let Some(stmt) = self.parse_statement() {
-                program.statements.push(stmt);
+                statements.push(stmt);
             } else {
-                // Conceptual error recovery: advance past the problematic token
+                // If parse_statement returns None, it means an error occurred and was recorded.
+                // We need to advance to prevent infinite loops, but carefully.
+                // For now, simple token advance.
                 self.next_token();
             }
         }
-        program
+
+        if !self.errors.is_empty() || !self.lexer.get_errors().is_empty() {
+            let mut all_errors = self.errors.clone();
+            for lex_err in self.lexer.get_errors() {
+                all_errors.push(ParserError { message: lex_err.message.clone(), span: lex_err.span });
+            }
+            Err(all_errors)
+        } else {
+            let program_end_span = self.current_token.as_ref().map_or(program_start_span, |t| t.span);
+            Ok(ast::Program {
+                statements,
+                span: Span::new(program_start_span.file, program_start_span.start, program_end_span.end, program_start_span.line, program_start_span.column),
+            })
+        }
     }
 
-    fn parse_statement(&mut self) -> Option<Statement> {
-        let stmt_result = match self.current_token.as_ref()?.token_type {
+    /// Parses a single statement.
+    fn parse_statement(&mut self) -> Option<ast::Statement> {
+        match self.current_token.as_ref()?.token_type {
             TokenType::KeywordLet => self.parse_let_statement(),
-            TokenType::KeywordFn => self.parse_function_declaration(),
-            TokenType::KeywordQuantum => self.parse_quantum_declaration(),
-            TokenType::KeywordNano => self.parse_nano_declaration(),
-            TokenType::KeywordRemember => self.parse_sankofa_memory_declaration(),
-            TokenType::KeywordType => self.parse_type_declaration(),
-            TokenType::KeywordEffect => self.parse_effect_declaration(),
-            TokenType::KeywordLanguage => self.parse_language_declaration(),
+            TokenType::KeywordReturn => self.parse_return_statement(),
+            TokenType::KeywordFn => self.parse_function_statement(),
+            TokenType::KeywordQuantum => self.parse_quantum_circuit_statement(),
+            TokenType::KeywordNano => self.parse_nano_agent_statement(),
+            TokenType::KeywordRemember => self.parse_sankofa_memory_statement(),
+            TokenType::KeywordType => self.parse_type_declaration_statement(),
+            TokenType::KeywordEffect => self.parse_effect_declaration_statement(),
+            TokenType::KeywordLanguage => self.parse_language_declaration_statement(),
             TokenType::KeywordWhile => self.parse_while_statement(),
             TokenType::KeywordFor => self.parse_for_statement(),
             TokenType::KeywordBreak => self.parse_break_statement(),
             TokenType::KeywordContinue => self.parse_continue_statement(),
             TokenType::KeywordMatch => self.parse_match_statement(),
-            TokenType::KeywordUnsafe => self.parse_unsafe_statement(), // New: Unsafe statement
+            TokenType::KeywordUnsafe => self.parse_unsafe_statement(),
             _ => self.parse_expression_statement(),
-        };
-
-        match stmt_result {
-            Ok(stmt) => Some(stmt),
-            Err(e) => {
-                self.errors.push(e);
-                None // Skip this statement due to error
-            }
         }
     }
 
-    fn parse_expression_statement(&mut self) -> Result<Statement, ParserError> {
-        let expr = self.parse_expression(Precedence::Lowest)?; // Parse the expression first
+    /// Parses a `let` statement.
+    fn parse_let_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'let'
+
+        let name = self.current_token.as_ref()?.literal.clone();
+        let name_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::Identifier)?; // Expect identifier
+        self.next_token();
+
+        let mut type_expr = None;
+        if self.current_token_is(TokenType::Colon) {
+            self.next_token(); // Consume ':'
+            type_expr = Some(self.parse_type_expression()?);
+        }
+
+        self.expect_peek(TokenType::Assign)?; // Expect '='
+        self.next_token();
+
+        let expr = self.parse_expression(Precedence::Lowest)?;
+
+        let end_span = expr.get_span(); // Assuming get_span() method on Expression
+        self.expect_peek(TokenType::Semicolon)?; // Expect ';'
+        self.next_token();
+
+        Some(ast::Statement::Let(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            name,
+            type_expr,
+            expr,
+        ))
+    }
+
+    /// Parses a `return` statement.
+    fn parse_return_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'return'
+
+        let expr = self.parse_expression(Precedence::Lowest)?;
+
+        let end_span = expr.get_span();
+        self.expect_peek(TokenType::Semicolon)?; // Expect ';'
+        self.next_token();
+
+        Some(ast::Statement::Return(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            expr,
+        ))
+    }
+
+    /// Parses a function declaration.
+    fn parse_function_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'fn'
+
+        let name = self.current_token.as_ref()?.literal.clone();
+        self.expect_peek(TokenType::Identifier)?; // Function name
+        self.next_token();
+
+        let params = self.parse_function_parameters()?;
+
+        let mut return_type_expr = None;
+        if self.peek_token_is(TokenType::Colon) {
+            self.next_token(); // Consume ':'
+            self.next_token(); // Consume return type token
+            return_type_expr = Some(self.parse_type_expression()?);
+        }
+
+        let body = self.parse_block_expression()?;
+        let end_span = body.get_span();
+
+        Some(ast::Statement::Function(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            name,
+            params,
+            return_type_expr,
+            Box::new(body),
+        ))
+    }
+
+    fn parse_function_parameters(&mut self) -> Option<Vec<ast::Parameter>> {
+        let mut parameters = Vec::new();
+        self.expect_peek(TokenType::LParen)?; // Expect '('
+        self.next_token();
+
+        if !self.current_token_is(TokenType::RParen) {
+            loop {
+                let param_span_start = self.current_token.as_ref()?.span;
+                let name = self.current_token.as_ref()?.literal.clone();
+                self.expect_peek(TokenType::Identifier)?; // Parameter name
+                self.next_token();
+
+                self.expect_peek(TokenType::Colon)?; // Expect ':'
+                self.next_token();
+
+                let param_type = self.parse_type_expression()?;
+                let param_span_end = self.current_token.as_ref().map_or(param_span_start, |t| t.span);
+
+                // For now, linear/affine are handled at the TypeExpr level, not directly on Parameter
+                parameters.push(ast::Parameter {
+                    span: Span::new(param_span_start.file, param_span_start.start, param_span_end.end, param_span_start.line, param_span_start.column),
+                    name,
+                    param_type,
+                    is_linear: false,
+                    is_affine: false,
+                });
+
+                if self.peek_token_is(TokenType::Comma) {
+                    self.next_token(); // Consume ','
+                    self.next_token();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        self.expect_peek(TokenType::RParen)?; // Expect ')'
+        self.next_token();
+
+        Some(parameters)
+    }
+
+    /// Parses a quantum circuit declaration.
+    fn parse_quantum_circuit_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'quantum'
+
+        self.expect_peek(TokenType::KeywordCircuit)?; // Expect 'circuit'
+        self.next_token();
+
+        let name = self.current_token.as_ref()?.literal.clone();
+        self.expect_peek(TokenType::Identifier)?; // Circuit name
+        self.next_token();
+
+        let body = self.parse_block_expression()?;
+        let end_span = body.get_span();
+
+        Some(ast::Statement::QuantumCircuit(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            name,
+            Box::new(body),
+        ))
+    }
+
+    /// Parses a nano-agent declaration.
+    fn parse_nano_agent_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'nano'
+
+        self.expect_peek(TokenType::KeywordAgent)?; // Expect 'agent'
+        self.next_token();
+
+        let name = self.current_token.as_ref()?.literal.clone();
+        self.expect_peek(TokenType::Identifier)?; // Agent name
+        self.next_token();
+
+        let body = self.parse_block_expression()?;
+        let end_span = body.get_span();
+
+        Some(ast::Statement::NanoAgent(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            name,
+            Box::new(body),
+        ))
+    }
+
+    /// Parses a Sankofa memory declaration.
+    fn parse_sankofa_memory_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'remember'
+
+        let name = self.current_token.as_ref()?.literal.clone();
+        self.expect_peek(TokenType::Identifier)?; // Memory key name
+        self.next_token();
+
+        self.expect_peek(TokenType::Assign)?; // Expect '='
+        self.next_token();
+
+        let expr = self.parse_expression(Precedence::Lowest)?;
+
+        let end_span = expr.get_span();
+        self.expect_peek(TokenType::Semicolon)?; // Expect ';'
+        self.next_token();
+
+        Some(ast::Statement::SankofaMemory(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            name,
+            expr,
+        ))
+    }
+
+    /// Parses a type declaration.
+    fn parse_type_declaration_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'type'
+
+        let name = self.current_token.as_ref()?.literal.clone();
+        self.expect_peek(TokenType::Identifier)?; // Type name
+        self.next_token();
+
+        self.expect_peek(TokenType::Assign)?; // Expect '='
+        self.next_token();
+
+        let type_expr = self.parse_type_expression()?;
+        let end_span = type_expr.get_span(); // Assuming get_span() on TypeExpr
+
+        self.expect_peek(TokenType::Semicolon)?; // Expect ';'
+        self.next_token();
+
+        Some(ast::Statement::TypeDeclaration(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            name,
+            type_expr,
+        ))
+    }
+
+    /// Parses an effect declaration.
+    fn parse_effect_declaration_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'effect'
+
+        let name = self.current_token.as_ref()?.literal.clone();
+        let end_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::Identifier)?; // Effect name
+        self.next_token();
+
+        self.expect_peek(TokenType::Semicolon)?; // Expect ';'
+        self.next_token();
+
+        Some(ast::Statement::EffectDeclaration(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, end_span.column),
+            name,
+        ))
+    }
+
+    /// Parses a language declaration.
+    fn parse_language_declaration_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'language'
+
+        let name = self.current_token.as_ref()?.literal.clone();
+        self.expect_peek(TokenType::Identifier)?; // Language name
+        self.next_token();
+
+        self.expect_peek(TokenType::KeywordGrammar)?; // Expect 'grammar'
+        self.next_token();
+
+        let grammar_expr = self.parse_expression(Precedence::Lowest)?;
+        let end_span = grammar_expr.get_span();
+
+        self.expect_peek(TokenType::Semicolon)?; // Expect ';'
+        self.next_token();
+
+        Some(ast::Statement::LanguageDeclaration(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            name,
+            grammar_expr,
+        ))
+    }
+
+    /// Parses a `while` statement.
+    fn parse_while_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'while'
+
+        let condition = self.parse_expression(Precedence::Lowest)?;
+        let body = self.parse_block_expression()?;
+        let end_span = body.get_span();
+
+        Some(ast::Statement::While(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            Box::new(condition),
+            Box::new(body),
+        ))
+    }
+
+    /// Parses a `for` statement.
+    fn parse_for_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'for'
+
+        let iterator_name = self.current_token.as_ref()?.literal.clone();
+        let iterator_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::Identifier)?; // Iterator variable name
+        self.next_token();
+
+        self.expect_peek(TokenType::KeywordIn)?; // Expect 'in'
+        self.next_token();
+
+        let iterable = self.parse_expression(Precedence::Lowest)?;
+        let body = self.parse_block_expression()?;
+        let end_span = body.get_span();
+
+        Some(ast::Statement::For(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            ast::Identifier(iterator_name, iterator_span),
+            Box::new(iterable),
+            Box::new(body),
+        ))
+    }
+
+    /// Parses a `break` statement.
+    fn parse_break_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        let end_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'break'
+
+        self.expect_peek(TokenType::Semicolon)?; // Expect ';'
+        self.next_token();
+
+        Some(ast::Statement::Break(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column)
+        ))
+    }
+
+    /// Parses a `continue` statement.
+    fn parse_continue_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        let end_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'continue'
+
+        self.expect_peek(TokenType::Semicolon)?; // Expect ';'
+        self.next_token();
+
+        Some(ast::Statement::Continue(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column)
+        ))
+    }
+
+    /// Parses a `match` statement.
+    fn parse_match_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'match'
+
+        let matched_expr = self.parse_expression(Precedence::Lowest)?;
+
+        self.expect_peek(TokenType::LBrace)?; // Expect '{'
+        self.next_token();
+
+        let mut cases = Vec::new();
+        while !self.current_token_is(TokenType::RBrace) && !self.current_token_is(TokenType::EOF) {
+            if let Some(case) = self.parse_match_case() {
+                cases.push(case);
+            } else {
+                // Error recovery: skip until next '}' or EOF
+                while !self.current_token_is(TokenType::RBrace) && !self.current_token_is(TokenType::EOF) {
+                    self.next_token();
+                }
+                break;
+            }
+        }
+
+        let end_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::RBrace)?; // Expect '}'
+        self.next_token();
+
+        Some(ast::Statement::Match(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            Box::new(matched_expr),
+            cases,
+        ))
+    }
+
+    fn parse_match_case(&mut self) -> Option<ast::MatchCase> {
+        let start_span = self.current_token.as_ref()?.span;
+        let pattern = self.parse_expression(Precedence::Lowest)?; // Pattern can be an expression or a literal
+
+        self.expect_peek(TokenType::DoubleArrow)?; // Expect '=>'
+        self.next_token();
+
+        let body = self.parse_expression(Precedence::Lowest)?;
+        let end_span = body.get_span();
+
+        // Optional comma separator for match cases
+        if self.peek_token_is(TokenType::Comma) {
+            self.next_token();
+            self.next_token();
+        }
+
+        Some(ast::MatchCase {
+            span: Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            pattern,
+            body,
+        })
+    }
+
+    /// Parses an `unsafe` statement.
+    fn parse_unsafe_statement(&mut self) -> Option<ast::Statement> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'unsafe'
+
+        let mut proof_string: Option<String> = None;
+        if self.current_token_is(TokenType::Bang) {
+            self.next_token(); // Consume '!'
+            if self.current_token_is(TokenType::LParen) {
+                self.next_token(); // Consume '('
+                // Expect 'evas' identifier
+                if self.current_token_is(TokenType::Identifier) && self.current_token.as_ref()?.literal == "evas" {
+                    self.next_token(); // Consume 'evas'
+                    self.expect_peek(TokenType::Colon)?; // Expect ':'
+                    self.next_token();
+                    if self.current_token_is(TokenType::LBrace) {
+                        self.next_token(); // Consume '{'
+                        if self.current_token_is(TokenType::String) {
+                            proof_string = Some(self.current_token.as_ref()?.literal.clone());
+                            self.next_token(); // Consume string literal
+                        }
+                        self.expect_peek(TokenType::RBrace)?; // Expect '}'
+                        self.next_token();
+                    } else {
+                        self.errors.push(ParserError { message: "Expected '{' after 'evas:' in unsafe proof.".to_string(), span: self.current_token.as_ref()?.span });
+                    }
+                } else {
+                    self.errors.push(ParserError { message: "Expected 'evas' identifier in unsafe proof.".to_string(), span: self.current_token.as_ref()?.span });
+                }
+                self.expect_peek(TokenType::RParen)?; // Expect ')'
+                self.next_token();
+            }
+        }
+
+        let body = self.parse_block_expression()?;
+        let end_span = body.get_span();
+
+        Some(ast::Statement::Unsafe(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            proof_string,
+            Box::new(body),
+        ))
+    }
+
+    /// Parses an expression used as a statement (e.g., function call).
+    fn parse_expression_statement(&mut self) -> Option<ast::Statement> {
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        let end_span = expr.get_span();
+
         if self.peek_token_is(TokenType::Semicolon) {
             self.next_token(); // Consume ';'
+            self.next_token();
         }
-        Ok(Statement::Expression(expr))
+
+        Some(ast::Statement::Expression(expr))
     }
 
-    fn parse_expression(&mut self, precedence: Precedence) -> Result<Expression, ParserError> {
-        let mut left_expr = {
-            let current_token_type = self.current_token.as_ref().map(|t| t.token_type.clone());
-            if let Some(prefix_fn) = current_token_type.and_then(|t| self.prefix_parse_fns.get(&t)) {
-                (prefix_fn)(self).ok_or_else(|| {
-                    let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
-                    ParserError { message: format!("Unexpected token for prefix expression: {:?}:{}", current_token_type, self.current_token.as_ref().map_or("".to_string(), |t| t.literal.clone())), span: error_span }
-                })?
+    /// Parses a block expression (e.g., `{ let x = 5; x + 1 }`).
+    fn parse_block_expression(&mut self) -> Option<ast::Expression> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::LBrace)?; // Expect '{'
+        self.next_token();
+
+        let mut statements = Vec::new();
+        while !self.current_token_is(TokenType::RBrace) && !self.current_token_is(TokenType::EOF) {
+            if let Some(stmt) = self.parse_statement() {
+                statements.push(stmt);
             } else {
-                let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
-                return Err(ParserError { message: format!("No prefix parse function for {:?}:{}", current_token_type, self.current_token.as_ref().map_or("".to_string(), |t| t.literal.clone())), span: error_span });
+                // Error recovery: skip tokens until next '}' or EOF
+                while !self.current_token_is(TokenType::RBrace) && !self.current_token_is(TokenType::EOF) {
+                    self.next_token();
+                }
+                break;
             }
-        };
+        }
+
+        let end_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::RBrace)?; // Expect '}'
+        self.next_token();
+
+        Some(ast::Expression::Block(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            statements,
+        ))
+    }
+
+    /// Parses any expression based on precedence climbing.
+    fn parse_expression(&mut self, precedence: Precedence) -> Option<ast::Expression> {
+        let mut left_expr = self.parse_prefix_expression()?;
 
         while !self.peek_token_is(TokenType::Semicolon) && precedence < self.peek_precedence() {
-            let peek_token_type = self.peek_token.as_ref().map(|t| t.token_type.clone());
-            if let Some(infix_fn) = peek_token_type.and_then(|t| self.infix_parse_fns.get(&t)) {
-                self.next_token(); // Advance to the infix operator
-                left_expr = (infix_fn)(self, left_expr).ok_or_else(|| {
-                    let error_span = self.current_token.as_ref().map_or(Span::new(0,1,1), |t| t.span.clone());
-                    ParserError { message: format!("Error parsing infix expression after {:?}:{}", peek_token_type, self.current_token.as_ref().map_or("".to_string(), |t| t.literal.clone())), span: error_span }
-                })?;
-            } else {
-                return Ok(left_expr);
-            }
+            self.next_token(); // Advance to infix operator
+            left_expr = self.parse_infix_expression(left_expr)?;
         }
-        Ok(left_expr)
+
+        Some(left_expr)
     }
 
+    /// Parses a prefix expression (e.g., `-5`, `!true`).
+    fn parse_prefix_expression(&mut self) -> Option<ast::Expression> {
+        let start_span = self.current_token.as_ref()?.span;
+        let current_token_type = self.current_token.as_ref()?.token_type;
 
-    // Error retrieval
+        match current_token_type {
+            TokenType::Identifier => self.parse_identifier_expression(),
+            TokenType::Integer | TokenType::Float | TokenType::String | TokenType::Char | TokenType::QuantumLiteral | TokenType::MTSLiteral => self.parse_literal_expression(),
+            TokenType::KeywordTrue | TokenType::KeywordFalse => self.parse_boolean_literal(),
+            TokenType::Bang | TokenType::Minus => {
+                self.next_token(); // Consume operator
+                let right = self.parse_expression(Precedence::Prefix)?; // Parse operand with higher precedence
+                let end_span = right.get_span();
+                Some(ast::Expression::Prefix(
+                    Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+                    current_token_type,
+                    Box::new(right),
+                ))
+            }
+            TokenType::LParen => self.parse_grouped_expression(),
+            TokenType::LBrace => self.parse_block_expression(), // Blocks can also be expressions
+            _ => {
+                self.errors.push(ParserError { message: format!("Unexpected token {:?} for prefix expression.", current_token_type), span: start_span });
+                None
+            }
+        }
+    }
+
+    /// Parses an infix expression (e.g., `a + b`, `x == y`).
+    fn parse_infix_expression(&mut self, left: ast::Expression) -> Option<ast::Expression> {
+        let current_token = self.current_token.clone()?;
+        let current_token_type = current_token.token_type;
+        let precedence = self.current_precedence();
+        self.next_token(); // Consume operator
+
+        let right = self.parse_expression(precedence)?;
+        let end_span = right.get_span();
+
+        Some(ast::Expression::Infix(
+            Span::new(left.get_span().file, left.get_span().start, end_span.end, left.get_span().line, left.get_span().column),
+            Box::new(left),
+            current_token_type,
+            Box::new(right),
+        ))
+    }
+
+    /// Parses an identifier expression.
+    fn parse_identifier_expression(&mut self) -> Option<ast::Expression> {
+        let ident = ast::Identifier(
+            self.current_token.as_ref()?.literal.clone(),
+            self.current_token.as_ref()?.span,
+        );
+        self.next_token();
+
+        // Handle function calls if next token is '('
+        if self.current_token_is(TokenType::LParen) {
+            return self.parse_call_expression(ast::Expression::Identifier(ident));
+        }
+        // Handle indexing if next token is '['
+        if self.current_token_is(TokenType::LBracket) {
+            return self.parse_index_expression(ast::Expression::Identifier(ident));
+        }
+        // Handle member access if next token is '.'
+        if self.current_token_is(TokenType::Dot) {
+            return self.parse_member_access_expression(ast::Expression::Identifier(ident));
+        }
+
+        Some(ast::Expression::Identifier(ident))
+    }
+
+    /// Parses a literal expression.
+    fn parse_literal_expression(&mut self) -> Option<ast::Expression> {
+        let token = self.current_token.clone()?;
+        let span = token.span;
+        let literal_val = match token.token_type {
+            TokenType::Integer => ast::Literal::Integer(token.literal, span),
+            TokenType::Float => ast::Literal::Float(token.literal, span),
+            TokenType::String => ast::Literal::String(token.literal, span),
+            TokenType::Char => ast::Literal::Char(token.literal, span),
+            TokenType::QuantumLiteral => ast::Literal::Quantum(token.literal, span),
+            TokenType::MTSLiteral => ast::Literal::MTS(token.literal, span),
+            _ => {
+                self.errors.push(ParserError { message: format!("Unexpected token {:?} for literal expression.", token.token_type), span });
+                return None;
+            }
+        };
+        self.next_token();
+        Some(ast::Expression::Literal(literal_val))
+    }
+
+    /// Parses a boolean literal (true/false).
+    fn parse_boolean_literal(&mut self) -> Option<ast::Expression> {
+        let token = self.current_token.clone()?;
+        let span = token.span;
+        let value = token.token_type == TokenType::KeywordTrue;
+        self.next_token();
+        Some(ast::Expression::Literal(ast::Literal::Boolean(value, span)))
+    }
+
+    /// Parses a grouped expression (e.g., `(1 + 2)`).
+    fn parse_grouped_expression(&mut self) -> Option<ast::Expression> {
+        self.next_token(); // Consume '('
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(TokenType::RParen)?; // Expect ')'
+        self.next_token();
+        Some(expr)
+    }
+
+    /// Parses a function call expression.
+    fn parse_call_expression(&mut self, function: ast::Expression) -> Option<ast::Expression> {
+        let start_span = function.get_span();
+        self.next_token(); // Consume '('
+
+        let mut args = Vec::new();
+        if !self.current_token_is(TokenType::RParen) {
+            loop {
+                args.push(self.parse_expression(Precedence::Lowest)?);
+                if self.peek_token_is(TokenType::Comma) {
+                    self.next_token(); // Consume ','
+                    self.next_token();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let end_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::RParen)?; // Expect ')'
+        self.next_token();
+
+        Some(ast::Expression::Call(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            Box::new(function),
+            args,
+        ))
+    }
+
+    /// Parses an index expression (e.g., `array[index]`).
+    fn parse_index_expression(&mut self, left: ast::Expression) -> Option<ast::Expression> {
+        let start_span = left.get_span();
+        self.next_token(); // Consume '['
+
+        let index_expr = self.parse_expression(Precedence::Lowest)?;
+
+        let end_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::RBracket)?; // Expect ']'
+        self.next_token();
+
+        Some(ast::Expression::Index(
+            Span::new(start_span.file, start_span.start, end_span.end, start_span.line, start_span.column),
+            Box::new(left),
+            Box::new(index_expr),
+        ))
+    }
+
+    /// Parses a member access expression (e.g., `object.member`).
+    fn parse_member_access_expression(&mut self, left: ast::Expression) -> Option<ast::Expression> {
+        let start_span = left.get_span();
+        self.next_token(); // Consume '.'
+
+        let member_name = self.current_token.as_ref()?.literal.clone();
+        let member_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::Identifier)?; // Member name
+        self.next_token();
+
+        Some(ast::Expression::MemberAccess(
+            Span::new(start_span.file, start_span.start, member_span.end, start_span.line, start_span.column),
+            Box::new(left),
+            ast::Identifier(member_name, member_span),
+        ))
+    }
+
+    /// Parses a type expression.
+    fn parse_type_expression(&mut self) -> Option<ast::TypeExpr> {
+        let start_span = self.current_token.as_ref()?.span;
+        let current_token_type = self.current_token.as_ref()?.token_type;
+        let current_token_literal = self.current_token.as_ref()?.literal.clone();
+
+        match current_token_type {
+            TokenType::Identifier | TokenType::KeywordInt | TokenType::KeywordFloat | TokenType::KeywordBool | TokenType::KeywordChar | TokenType::KeywordString | TokenType::KeywordQubit | TokenType::KeywordNanoAgent | TokenType::KeywordHistory | TokenType::KeywordConsensusTrue | TokenType::KeywordInterMemory | TokenType::KeywordSuperposition | TokenType::KeywordEntangled | TokenType::KeywordQMeasured | TokenType::KeywordArchaeve => {
+                let ident = ast::Identifier(current_token_literal, start_span);
+                self.next_token(); // Consume identifier/keyword
+
+                // Handle generics: Type<Arg1, Arg2>
+                if self.current_token_is(TokenType::LT) {
+                    // NOTE: This will consume '<', which might be a problem if it's actually a comparison operator.
+                    // Proper parsing would require lookahead or a more sophisticated precedence check.
+                    self.next_token(); // Consume '<'
+                    let mut generic_args = Vec::new();
+                    while !self.current_token_is(TokenType::GT) && !self.current_token_is(TokenType::EOF) {
+                        generic_args.push(self.parse_type_expression()?);
+                        if self.peek_token_is(TokenType::Comma) {
+                            self.next_token(); // Consume ','
+                            self.next_token();
+                        } else {
+                            break;
+                        }
+                    }
+                    self.expect_peek(TokenType::GT)?; // Expect '>'
+                    self.next_token();
+                    return Some(ast::TypeExpr::Generic(ident, generic_args));
+                }
+
+                // Handle Array/QReg: Type[size]
+                if self.current_token_is(TokenType::LBracket) {
+                    self.next_token(); // Consume '['
+                    let size_literal = self.current_token.as_ref()?.literal.clone(); // Expect integer literal for size
+                    self.expect_peek(TokenType::Integer)?; 
+                    self.next_token(); // Consume integer
+                    self.expect_peek(TokenType::RBracket)?; // Expect ']'
+                    self.next_token();
+                    // Differentiate between generic array and specific QReg
+                    if ident.0 == "QReg" || ident.0 == "Qubit" { // 'QReg' is not in keywords yet, but if it were an alias for Qubit[]
+                        return Some(ast::TypeExpr::QuantumReg(Box::new(ast::TypeExpr::Base(ast::Identifier("Qubit".to_string(), Span::dummy()))), size_literal));
+                    } else if ident.0 == "MtsSlice" {
+                         return Some(ast::TypeExpr::MtsSlice(Box::new(ast::TypeExpr::Base(ast::Identifier("Any".to_string(), Span::dummy()))), Some(size_literal)));
+                    } else if ident.0 == "History" {
+                        return Some(ast::TypeExpr::HistoryType(Box::new(ast::TypeExpr::Base(ast::Identifier("Any".to_string(), Span::dummy()))), Some(size_literal))); // Size for years
+                    }
+                    return Some(ast::TypeExpr::Array(Box::new(ast::TypeExpr::Base(ident)), Some(size_literal)));
+                }
+
+                // Handle Linear/Affine/Effectful prefixes (if they were part of type expression parsing, currently keywords)
+                // For now, these are keywords that would modify the *subsequent* type, rather than being part of the base type name.
+                // The AST's `TypeExpr::Linear` etc. would be constructed by the parser if it saw `linear` then a type. 
+                // This match arm handles the BASE type itself.
+                Some(ast::TypeExpr::Base(ident))
+            }
+            TokenType::KeywordFn => self.parse_function_type_expression(),
+            TokenType::LParen => self.parse_tuple_type_expression(),
+            TokenType::KeywordLinear => {
+                let linear_span = start_span;
+                self.next_token(); // Consume 'linear'
+                let inner_type = self.parse_type_expression()?;
+                let end_span = inner_type.get_span();
+                Some(ast::TypeExpr::Linear(Box::new(inner_type)))
+            }
+            TokenType::KeywordAffine => {
+                let affine_span = start_span;
+                self.next_token(); // Consume 'affine'
+                let inner_type = self.parse_type_expression()?;
+                let end_span = inner_type.get_span();
+                Some(ast::TypeExpr::Affine(Box::new(inner_type)))
+            }
+            TokenType::PiSymbol => self.parse_pi_type_expression(),
+            TokenType::SigmaSymbol => self.parse_sigma_type_expression(),
+            _ => {
+                self.errors.push(ParserError { message: format!("Unexpected token {:?} for type expression.", current_token_type), span: start_span });
+                None
+            }
+        }
+    }
+
+    /// Parses a function type expression (e.g., `fn(int, bool) -> float`).
+    fn parse_function_type_expression(&mut self) -> Option<ast::TypeExpr> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'fn'
+
+        self.expect_peek(TokenType::LParen)?; // Expect '('
+        self.next_token();
+
+        let mut param_types = Vec::new();
+        if !self.current_token_is(TokenType::RParen) {
+            loop {
+                param_types.push(self.parse_type_expression()?);
+                if self.peek_token_is(TokenType::Comma) {
+                    self.next_token(); // Consume ','
+                    self.next_token();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        self.expect_peek(TokenType::RParen)?; // Expect ')'
+        self.next_token();
+
+        self.expect_peek(TokenType::Arrow)?; // Expect '->' (assuming a new TokenType::Arrow)
+        self.next_token();
+
+        let return_type = self.parse_type_expression()?;
+        let end_span = return_type.get_span();
+
+        Some(ast::TypeExpr::FunctionType(param_types, Box::new(return_type)))
+    }
+
+    /// Parses a tuple type expression (e.g., `(int, bool)`).
+    fn parse_tuple_type_expression(&mut self) -> Option<ast::TypeExpr> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume '('
+
+        let mut types = Vec::new();
+        if !self.current_token_is(TokenType::RParen) {
+            loop {
+                types.push(self.parse_type_expression()?);
+                if self.peek_token_is(TokenType::Comma) {
+                    self.next_token(); // Consume ','
+                    self.next_token();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let end_span = self.current_token.as_ref()?.span;
+        self.expect_peek(TokenType::RParen)?; // Expect ')'
+        self.next_token();
+
+        Some(ast::TypeExpr::Tuple(types))
+    }
+
+    /// Parses a Pi-type expression (e.g., `Π(x: int) -> bool`).
+    fn parse_pi_type_expression(&mut self) -> Option<ast::TypeExpr> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'Π'
+
+        self.expect_peek(TokenType::LParen)?; // Expect '('
+        self.next_token();
+
+        let binder_name = self.current_token.as_ref()?.literal.clone();
+        self.expect_peek(TokenType::Identifier)?; // Binder name
+        self.next_token();
+
+        self.expect_peek(TokenType::Colon)?; // Expect ':'
+        self.next_token();
+
+        let binder_type = self.parse_type_expression()?;
+
+        self.expect_peek(TokenType::RParen)?; // Expect ')'
+        self.next_token();
+
+        self.expect_peek(TokenType::Arrow)?; // Expect '->'
+        self.next_token();
+
+        let return_type = self.parse_type_expression()?;
+        let end_span = return_type.get_span();
+
+        Some(ast::TypeExpr::PiType(
+            binder_name,
+            Box::new(binder_type),
+            Box::new(return_type),
+        ))
+    }
+
+    /// Parses a Sigma-type expression (e.g., `Σ(x: int) x bool`).
+    fn parse_sigma_type_expression(&mut self) -> Option<ast::TypeExpr> {
+        let start_span = self.current_token.as_ref()?.span;
+        self.next_token(); // Consume 'Σ'
+
+        self.expect_peek(TokenType::LParen)?; // Expect '('
+        self.next_token();
+
+        let binder_name = self.current_token.as_ref()?.literal.clone();
+        self.expect_peek(TokenType::Identifier)?; // Binder name
+        self.next_token();
+
+        self.expect_peek(TokenType::Colon)?; // Expect ':'
+        self.next_token();
+
+        let first_type = self.parse_type_expression()?;
+
+        self.expect_peek(TokenType::RParen)?; // Expect ')'
+        self.next_token();
+
+        // Expect 'x' or similar separator for dependent pair
+        self.expect_peek(TokenType::Star)?; // Using Star for 'x'
+        self.next_token();
+
+        let second_type = self.parse_type_expression()?;
+        let end_span = second_type.get_span();
+
+        Some(ast::TypeExpr::SigmaType(
+            binder_name,
+            Box::new(first_type),
+            Box::new(second_type),
+        ))
+    }
+
+    // --- Helper functions for precedence parsing ---
+
+    /// Defines operator precedence levels.
+    fn current_precedence(&self) -> Precedence {
+        self.current_token.as_ref().map_or(Precedence::Lowest, |t| t.token_type.into())
+    }
+
+    fn peek_precedence(&self) -> Precedence {
+        self.peek_token.as_ref().map_or(Precedence::Lowest, |t| t.token_type.into())
+    }
+
     pub fn get_errors(&self) -> &[ParserError] {
         &self.errors
     }
 }
 
-// --- Precedence for Expression Parsing (Conceptual) ---
-#[allow(dead_code)]
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
+/// Operator precedence levels.
+#[derive(PartialEq, PartialOrd, Debug)]
 enum Precedence {
     Lowest,
-    TypeAnnotationPrec, // : Type
-    Equals,         // ==, !=
-    LessGreater,    // >, <, >=, <=
-    Sum,            // +, -
-    Product,        // *, /
-    Prefix,         // -X or !X
-    Call,           // myFunction(X)
-    Index,          // myArray[index]
-    MemberAccess,   // object.member
+    Equals,      // ==
+    LessGreater, // < or >
+    Sum,         // + or -
+    Product,     // * or /
+    Prefix,      // -X or !X
+    Call,        // myFunction(X)
+    Index,       // myArray[X]
+    Member,      // myObject.myMember
 }
 
-
-// --- Placeholder AST Nodes (Updated to include Span) ---
-pub mod ast {
-    use crate::tokens::Span;
-    use crate::lexer::TokenType; // Import TokenType for Prefix/Infix operators
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct Program {
-        pub statements: Vec<Statement>,
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum Statement {
-        Let(Span, String, Option<TypeExpr>, Expression),
-        Return(Span, Expression),
-        Expression(Expression),
-        Function(Span, String, Vec<Parameter>, Option<TypeExpr>, Box<Expression>),
-        QuantumCircuit(Span, String, Box<Expression>),
-        NanoAgent(Span, String, Box<Expression>),
-        SankofaMemory(Span, String, Expression),
-        TypeDeclaration(Span, String, TypeExpr),
-        EffectDeclaration(Span, String),
-        LanguageDeclaration(Span, String, Expression),
-        While(Span, Box<Expression>, Box<Expression>),
-        For(Span, Identifier, Box<Expression>, Box<Expression>),
-        Break(Span),
-        Continue(Span),
-        Match(Span, Box<Expression>, Vec<MatchCase>),
-        Unsafe(Span, Option<Identifier>, Box<Expression>), // New: unsafe!(evas:proof_id) { ... }
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum Expression {
-        Identifier(Identifier),
-        Literal(Literal),
-        Prefix(Span, TokenType, Box<Expression>),
-        Infix(Span, Box<Expression>, TokenType, Box<Expression>),
-        If(Span, Box<Expression>, Box<Expression>, Option<Box<Expression>>),
-        Block(Span, Vec<Statement>),
-        Call(Span, Box<Expression>, Vec<Expression>),
-        Index(Span, Box<Expression>, Box<Expression>),
-        MemberAccess(Span, Box<Expression>, Identifier),
-        // Add more expression types as needed for Zenith's grammar
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum Literal {
-        Integer(String, Span),
-        Float(String, Span),
-        String(String, Span),
-        Boolean(bool, Span),
-        Char(char, Span),
-        Quantum(String, Span),
-        Nano(String, Span),
-        MTS(String, Span),
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct Identifier(pub String, pub Span);
-
-    // New: Represents a type expression in the AST
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum TypeExpr {
-        Base(Identifier),
-        Generic(Box<TypeExpr>, Vec<TypeExpr>),
-        Array(Box<TypeExpr>, Option<String>),
-        FunctionType(Vec<TypeExpr>, Box<TypeExpr>),
-        DependentPi(Identifier, Box<TypeExpr>, Box<TypeExpr>),
-        DependentSigma(Identifier, Box<TypeExpr>, Box<TypeExpr>),
-        Linear(Box<TypeExpr>),
-        Affine(Box<TypeExpr>),
-        Effectful(Box<TypeExpr>, Vec<Identifier>),
-        Universe(usize),
-        SankofaHistory(Box<TypeExpr>, Box<Expression>),
-        SankofaConsensus(Box<TypeExpr>),
-        SankofaInterMemory(Identifier, Box<TypeExpr>),
-        // ... more specific types from Zenith's complex type system
-    }
-
-    // New: Represents a function parameter
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct Parameter {
-        pub name: Identifier,
-        pub typ: Option<TypeExpr>,
-    }
-
-    // New: Represents a single case in a match statement
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct MatchCase {
-        pub span: Span,
-        pub pattern: Expression,
-        pub body: Box<Expression>,
-    }
-
-    // Helper to get the span of any expression
-    impl Expression {
-        pub fn span(&self) -> &Span {
-            match self {
-                Expression::Identifier(id) => &id.1,
-                Expression::Literal(lit) => match lit {
-                    Literal::Integer(_, span) => span,
-                    Literal::Float(_, span) => span,
-                    Literal::String(_, span) => span,
-                    Literal::Boolean(_, span) => span,
-                    Literal::Char(_, span) => span,
-                    Literal::Quantum(_, span) => span,
-                    Literal::Nano(_, span) => span,
-                    Literal::MTS(_, span) => span,
-                },
-                Expression::Prefix(span, _, _) => span,
-                Expression::Infix(span, _, _, _) => span,
-                Expression::If(span, _, _, _) => span,
-                Expression::Block(span, _) => span,
-                Expression::Call(span, _, _) => span,
-                Expression::Index(span, _, _) => span,
-                Expression::MemberAccess(span, _, _) => span,
-            }
+impl From<TokenType> for Precedence {
+    fn from(token_type: TokenType) -> Self {
+        match token_type {
+            TokenType::Equals | TokenType::NotEquals => Precedence::Equals,
+            TokenType::LT | TokenType::GT | TokenType::LTE | TokenType::GTE => Precedence::LessGreater,
+            TokenType::Plus | TokenType::Minus => Precedence::Sum,
+            TokenType::Star | TokenType::Slash => Precedence::Product,
+            TokenType::LParen => Precedence::Call,
+            TokenType::LBracket => Precedence::Index,
+            TokenType::Dot => Precedence::Member,
+            _ => Precedence::Lowest,
         }
     }
+}
 
-    // Helper to get the span of any TypeExpr
-    impl TypeExpr {
-        pub fn span(&self) -> &Span {
-            match self {
-                TypeExpr::Base(id) => &id.1,
-                TypeExpr::Generic(base, _) => base.span(),
-                TypeExpr::Array(base, _) => base.span(),
-                TypeExpr::FunctionType(_, ret) => ret.span(), // Simplified, should cover all
-                TypeExpr::DependentPi(_, _, ret) => ret.span(),
-                TypeExpr::DependentSigma(_, _, ret) => ret.span(),
-                TypeExpr::Linear(base) => base.span(),
-                TypeExpr::Affine(base) => base.span(),
-                TypeExpr::Effectful(base, _) => base.span(),
-                TypeExpr::Universe(_) => &Span::new(0,0,0), // Placeholder
-                TypeExpr::SankofaHistory(base, _) => base.span(),
-                TypeExpr::SankofaConsensus(base) => base.span(),
-                TypeExpr::SankofaInterMemory(_, base) => base.span(),
+// --- Trait to help get span from Expressions/TypeExprs ---
+// This is a common utility that might live in a separate `util` or `ast_utils` module
+pub trait GetSpan {
+    fn get_span(&self) -> Span;
+}
+
+impl GetSpan for ast::Expression {
+    fn get_span(&self) -> Span {
+        match self {
+            ast::Expression::Literal(_, span) => *span,
+            ast::Expression::Identifier(ident) => ident.1,
+            ast::Expression::Prefix(span, _, _) => *span,
+            ast::Expression::Infix(span, _, _, _) => *span,
+            ast::Expression::If(span, _, _, _) => *span,
+            ast::Expression::Block(span, _) => *span,
+            ast::Expression::Call(span, _, _) => *span,
+            ast::Expression::Index(span, _, _) => *span,
+            ast::Expression::MemberAccess(span, _, _) => *span,
+            ast::Expression::QuantumGateApplication(span, _, _) => *span,
+            ast::Expression::NanoAction(span, _, _) => *span,
+            ast::Expression::MtsOperation(span, _, _) => *span,
+            ast::Expression::PerformEffect(span, _, _) => *span,
+        }
+    }
+}
+
+impl GetSpan for ast::TypeExpr {
+    fn get_span(&self) -> Span {
+        match self {
+            ast::TypeExpr::Base(ident) => ident.1,
+            ast::TypeExpr::Array(inner, _) => inner.get_span(),
+            ast::TypeExpr::FunctionType(params, ret) => {
+                // Span from first param to return type
+                let start = params.first().map_or(Span::dummy(), |t| t.get_span()).start;
+                let end = ret.get_span().end;
+                Span::new(ret.get_span().file, start, end, ret.get_span().line, ret.get_span().column)
             }
+            ast::TypeExpr::Tuple(types) => {
+                let start = types.first().map_or(Span::dummy(), |t| t.get_span()).start;
+                let end = types.last().map_or(Span::dummy(), |t| t.get_span()).end;
+                Span::new(types.first().map_or(Span::dummy(), |t| t.get_span()).file, start, end, types.first().map_or(Span::dummy(), |t| t.get_span()).line, types.first().map_or(Span::dummy(), |t| t.get_span()).column)
+            }
+            ast::TypeExpr::Generic(ident, _) => ident.1,
+            ast::TypeExpr::Linear(inner) => inner.get_span(),
+            ast::TypeExpr::Affine(inner) => inner.get_span(),
+            ast::TypeExpr::Effectful(inner, _) => inner.get_span(),
+            ast::TypeExpr::Dependent(inner, _) => inner.get_span(),
+            ast::TypeExpr::PiType(_, _, ret) => ret.get_span(),
+            ast::TypeExpr::SigmaType(_, _, second) => second.get_span(),
+            ast::TypeExpr::Proof(inner, _) => inner.get_span(),
+            ast::TypeExpr::TypeFamily(ident, _) => ident.1,
+            ast::TypeExpr::QuantumReg(base, _) => base.get_span(),
+            ast::TypeExpr::Superposition(inner) => inner.get_span(),
+            ast::TypeExpr::Entangled(types) => types.first().map_or(Span::dummy(), |t| t.get_span()),
+            ast::TypeExpr::QMeasured(inner) => inner.get_span(),
+            ast::TypeExpr::NanoAgentType(inner) => inner.get_span(),
+            ast::TypeExpr::ArchaeveType(inner) => inner.get_span(),
+            ast::TypeExpr::MtsSlice(inner, _) => inner.get_span(),
+            ast::TypeExpr::HistoryType(inner, _) => inner.get_span(),
+            ast::TypeExpr::ConsensusTrueType(inner) => inner.get_span(),
+            ast::TypeExpr::InterMemoryType(_, inner) => inner.get_span(),
+            ast::TypeExpr::Error(span) => *span,
         }
     }
 }
