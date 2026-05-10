@@ -21,7 +21,7 @@
 
 use crate::ast::{Program, Statement, Expression, Literal, Identifier, TypeExpr, Parameter, MatchCase};
 use crate::compiler_types::{Type, Symbol}; // From semantic analysis
-use crate::tokens::Span; // For error reporting
+use crate::source_map::Span; // Corrected Span import
 use std::collections::{HashMap, VecDeque};
 
 // --- UMC IR Instruction Set (Conceptual) ---
@@ -66,27 +66,40 @@ pub enum IrInstruction {
     // Type Conversion
     Cast(IrRegister, IrValue, IrType), // reg = cast value to type
 
-    // Special Zenith UMC IR - Expanded
+    // Special Zenith UMC IR - Expanded Quantum
+    QInit(IrRegister, IrValue), // reg = init_qubit(state: Literal<"0"|"1"|"+">)
+    QAlloc(IrRegister, IrValue), // reg = alloc_qreg(size: Literal<usize>)
     QGate(IrRegister, String, Vec<IrValue>), // result_qreg_or_qubit = gate_name(input_qregs_or_qubits)
-    QMeasure(IrRegister, IrValue), // classic_reg = measure qubit_reg
+    QMeasure(IrRegister, IrValue), // classic_reg = measure qubit_reg (or qreg, gives bit string)
     QEntangle(IrValue, IrValue), // entangle q1, q2
     QTeleport(IrValue, IrValue, IrValue), // teleport q_source, q_dest, classical_key_reg
 
-    NanoOp(IrRegister, String, Vec<IrValue>), // result = nano_instruction(args)
-    MTSOp(IrRegister, String, Vec<IrValue>), // result = mts_instruction(args)
+    // Special Zenith UMC IR - Expanded Nano
+    NanoAssemble(IrRegister, IrValue, Vec<IrValue>), // reg = assemble_nano_agent(blueprint_id, components...)
+    NanoCommunicate(IrValue, IrValue, IrValue), // nano_agent.communicate(target, message)
+    NanoReplicate(IrRegister, IrValue), // new_agent = nano_agent.replicate()
 
-    EffectOp(IrRegister, String, Vec<IrValue>), // result = perform_effect(args)
-    HandleEffect(String, String, String), // handle effect_name with handler_label (for effect_value_reg)
+    // Special Zenith UMC IR - Expanded MTS (Multi-Timeline System)
+    MTSCreate(IrRegister, IrValue), // reg = create_mts_slice(initial_value)
+    MTSLoad(IrRegister, IrValue, IrValue), // reg = mts_slice.load(timestamp)
+    MTSStore(IrValue, IrValue, IrValue), // mts_slice.store(value, timestamp)
 
-    // Linear/Affine specific operations
+    // Special Zenith UMC IR - Expanded Effects
+    EffectOp(IrRegister, String, Vec<IrValue>), // result = perform_effect_op(effect_name, args)
+    HandleEffect(String, String, String), // handle effect_name from effect_value_reg with handler_label
+
+    // Linear/Affine specific operations - Expanded
     Consume(IrValue), // Marks a linear resource as consumed
     Drop(IrValue), // Marks an affine resource as dropped (optional consumption)
+    Borrow(IrRegister, IrValue, String), // reg = borrow(original_resource_val, mutability_mode)
+    Clone(IrRegister, IrValue), // reg = clone(resource_val) - only for clonable types
 
-    // Sankofa memory operations
-    ReadHistory(IrRegister, String, IrValue), // reg = read_history(key, timestamp_expr)
-    WriteHistory(String, IrValue, IrValue), // write_history(key, value, timestamp_expr)
-    AccessZamani(IrRegister, String), // reg = access_zamani_fact(fact_id)
-    AccessSasa(IrRegister, String), // reg = access_sasa_knowledge(knowledge_id)
+    // Sankofa memory operations - Expanded
+    ReadHistory(IrRegister, String, IrValue), // reg = read_history(key_id, timestamp_expr)
+    WriteHistory(String, IrValue, IrValue), // write_history(key_id, value, timestamp_expr)
+    AccessZamani(IrRegister, String), // reg = access_zamani_fact(fact_id) - read immutable past
+    AccessSasa(IrRegister, String), // reg = access_sasa_knowledge(knowledge_id) - read evolving present
+    TemporalLearn(String, IrValue, IrValue), // temporal_learn(key_id, knowledge_value, timestamp_range)
 
     NoOp, // Placeholder
 }
@@ -236,8 +249,8 @@ impl IrGenerator {
             }
             Statement::SankofaMemory(span, name, expr) => {
                 let expr_val = self.gen_expression(expr);
-                // Conceptual: Write to a specific Sankofa historical memory key
-                self.ir_code.push(IrInstruction::WriteHistory(name.clone(), expr_val, IrValue::Literal(Literal::Integer("0".to_string(), span.clone())))); // Timestamp 0 for simplicity
+                // Conceptual: Write to a specific Sankofa historical memory key, assuming "current" timestamp.
+                self.ir_code.push(IrInstruction::WriteHistory(name.clone(), expr_val, IrValue::Literal(Literal::String("current".to_string(), span.clone()))));
             }
             Statement::TypeDeclaration(_, _, _) | Statement::EffectDeclaration(_, _) | Statement::LanguageDeclaration(_, _, _) => {
                 // These statements are typically handled by semantic analysis and don't generate runtime IR directly,
@@ -272,22 +285,21 @@ impl IrGenerator {
 
                 // Conceptual IR to setup iteration:
                 // iter_obj_reg = call __get_iterator(iterable_val)
-                // iter_var_storage_reg = new_register() // Storage for the current item in iteration
                 let iter_obj_reg = self.new_register();
-                let get_iterator_func = self.symbol_table.get("__get_iterator").cloned().unwrap_or_else(|| IrValue::Global("__get_iterator")).to_string();
+                let get_iterator_func = self.symbol_table.get("__get_iterator").cloned().unwrap_or_else(|| IrValue::Global("__get_iterator".to_string())).to_string();
                 self.ir_code.push(IrInstruction::Call(iter_obj_reg.clone(), get_iterator_func, vec![iterable_val]));
 
                 self.ir_code.push(IrInstruction::Label(loop_start_label.clone()));
 
                 // Conceptual: item_present_reg = call __has_next(iter_obj_reg)
                 let has_next_reg = self.new_register();
-                let has_next_func = self.symbol_table.get("__has_next").cloned().unwrap_or_else(|| IrValue::Global("__has_next")).to_string();
+                let has_next_func = self.symbol_table.get("__has_next").cloned().unwrap_or_else(|| IrValue::Global("__has_next".to_string())).to_string();
                 self.ir_code.push(IrInstruction::Call(has_next_reg.clone(), has_next_func, vec![iter_obj_reg.clone().into()]));
                 self.ir_code.push(IrInstruction::Branch(has_next_reg.into(), self.new_label("for_loop_body"), loop_end_label.clone()));
                 
                 // Conceptual: item_val_reg = call __next(iter_obj_reg)
                 let item_val_reg = self.new_register();
-                let next_func = self.symbol_table.get("__next").cloned().unwrap_or_else(|| IrValue::Global("__next")).to_string();
+                let next_func = self.symbol_table.get("__next").cloned().unwrap_or_else(|| IrValue::Global("__next".to_string())).to_string();
                 self.ir_code.push(IrInstruction::Call(item_val_reg.clone(), next_func, vec![iter_obj_reg.clone().into()]));
 
                 // Store the current item into the iterator variable's IR representation (conceptual) 
@@ -351,7 +363,7 @@ impl IrGenerator {
     fn gen_expression(&mut self, expr: &Expression) -> IrValue {
         match expr {
             Expression::Identifier(Identifier(name, span)) => {
-                // Conceptual: Resolve identifier to its IRValue (register, global, etc.)
+                // Conceptual: Load value from symbol table entry (which might be a register or global)
                 self.symbol_table.get(name).cloned().unwrap_or_else(|| {
                     self.errors.push(IrGenError {
                         message: format!("Unresolved identifier '{}' during IR generation. (Should have been caught by semantic analysis)", name),
@@ -366,6 +378,8 @@ impl IrGenerator {
             Expression::Prefix(span, op_type, right_expr) => {
                 let right_val = self.gen_expression(right_expr);
                 let result_reg = self.new_register();
+                // Make sure `TokenType` is accessible for `op_type`
+                use crate::tokens::TokenType;
                 match op_type {
                     TokenType::Bang => self.ir_code.push(IrInstruction::Not(result_reg.clone(), right_val)),
                     TokenType::Minus => self.ir_code.push(IrInstruction::Neg(result_reg.clone(), right_val)),
@@ -377,6 +391,8 @@ impl IrGenerator {
                 let left_val = self.gen_expression(left_expr);
                 let right_val = self.gen_expression(right_expr);
                 let result_reg = self.new_register();
+                // Make sure `TokenType` is accessible for `op_type`
+                use crate::tokens::TokenType;
                 match op_type {
                     TokenType::Plus => self.ir_code.push(IrInstruction::Add(result_reg.clone(), left_val, right_val)),
                     TokenType::Minus => self.ir_code.push(IrInstruction::Sub(result_reg.clone(), left_val, right_val)),
@@ -425,11 +441,11 @@ impl IrGenerator {
             Expression::Block(span, statements) => {
                 // A block's value is the value of its last expression.
                 let mut last_val = IrValue::Literal(Literal::Integer("0".to_string(), span.clone())); // Default to dummy
-                for stmt in statements {
+                for stmt in statements.clone() { // Clone to avoid mutable borrow issues with gen_statement
                     if let Statement::Expression(expr) = stmt {
-                        last_val = self.gen_expression(expr);
+                        last_val = self.gen_expression(&expr);
                     } else {
-                        self.gen_statement(stmt);
+                        self.gen_statement(&stmt);
                     }
                 }
                 last_val
@@ -473,6 +489,36 @@ impl IrGenerator {
                 // Conceptual: Access a member by calculating its offset from the object's base address.
                 // This requires semantic information about the object's struct definition.
                 self.ir_code.push(IrInstruction::Load(result_reg.clone(), object_val)); // Simplified. Needs offset calculation.
+                IrValue::Register(result_reg)
+            }
+            Expression::QuantumGateApplication(span, gate_name, args) => {
+                let arg_vals: Vec<IrValue> = args.iter().map(|arg| self.gen_expression(arg)).collect();
+                let result_reg = self.new_register();
+                self.ir_code.push(IrInstruction::QGate(result_reg.clone(), gate_name.clone(), arg_vals));
+                IrValue::Register(result_reg)
+            }
+            Expression::NanoAction(span, action_name, args) => {
+                let arg_vals: Vec<IrValue> = args.iter().map(|arg| self.gen_expression(arg)).collect();
+                let result_reg = self.new_register();
+                self.ir_code.push(IrInstruction::NanoOp(result_reg.clone(), action_name.clone(), arg_vals));
+                IrValue::Register(result_reg)
+            }
+            Expression::MtsOperation(span, op_name, args) => {
+                let arg_vals: Vec<IrValue> = args.iter().map(|arg| self.gen_expression(arg)).collect();
+                let result_reg = self.new_register();
+                // Conceptual mapping for MTS operations based on op_name
+                match op_name.as_str() {
+                    "create_slice" => self.ir_code.push(IrInstruction::MTSCreate(result_reg.clone(), arg_vals.get(0).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))))),
+                    "load" => self.ir_code.push(IrInstruction::MTSLoad(result_reg.clone(), arg_vals.get(0).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))), arg_vals.get(1).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))))),
+                    "store" => self.ir_code.push(IrInstruction::MTSStore(arg_vals.get(0).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))), arg_vals.get(1).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))), arg_vals.get(2).cloned().unwrap_or(IrValue::Literal(Literal::Integer("0".to_string(), span.clone()))))),
+                    _ => self.errors.push(IrGenError { message: format!("Unhandled MTS operation '{}' during IR generation", op_name), span: span.clone() }),
+                }
+                IrValue::Register(result_reg)
+            }
+            Expression::PerformEffect(span, effect_name, args) => {
+                let arg_vals: Vec<IrValue> = args.iter().map(|arg| self.gen_expression(arg)).collect();
+                let result_reg = self.new_register();
+                self.ir_code.push(IrInstruction::EffectOp(result_reg.clone(), effect_name.clone(), arg_vals));
                 IrValue::Register(result_reg)
             }
         }
