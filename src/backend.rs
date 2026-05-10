@@ -8,7 +8,7 @@
 //! The backend is designed to be modular, allowing different target backends to be
 //! plugged in to generate code for a wide range of hardware and conceptual platforms.
 
-use crate::ir_gen::{IrInstruction, IrValue, IrRegister, IrType}; // Reuse IR structures
+use crate::ir_gen::{IrInstruction, IrValue, IrRegister, IrType}; // Removed IrGenError
 use crate::source_map::Span; // Corrected Span import
 use std::collections::HashMap;
 
@@ -63,7 +63,7 @@ impl BackendGenerator {
     }
 
     pub fn generate(&mut self, ir_code: &[IrInstruction]) -> Result<TargetCode, Vec<BackendError>> {
-        println!("Starting backend code generation for target: {}...", self.target_backend.name());
+        println!("Starting backend code generation for target: {}", self.target_backend.name());
 
         match self.target_backend.generate_code(ir_code) {
             Ok(code) => Ok(code),
@@ -254,7 +254,7 @@ impl TargetBackend for MultiTimelineBackend {
                 _ => mts_script.push_str(&format!("  ; UMC IR instruction {:?} not yet implemented for MTS runtime\n", inst)),
             }
         }
-        Ok(TargetCode::MultiTimelineScript(mts_script)))
+        Ok(TargetCode::MultiTimelineScript(mts_script))
     }
     fn capabilities(&self) -> HashMap<String, String> {
         let mut caps = HashMap::new();
