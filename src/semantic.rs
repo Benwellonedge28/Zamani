@@ -36,7 +36,41 @@ pub struct SemanticAnalyzer<'a> {
     symbol_table: SymbolTable,
     type_system_rules: HashMap<String, Type>, // Maps base type names to canonical Type representations
     current_function_return_type: Option<Type>, // Expected return type for current function
+    // New: EVAS policy configuration for the current compilation context
+    evas_policy: EvasPolicy,
+    // New: Stack to track if currently inside an 'unsafe' block
+    in_unsafe_context: Vec<bool>,
 }
+
+// New: Conceptual EVAS Policy and Proof Registry
+#[derive(Debug, Clone)]
+pub struct EvasPolicy {
+    pub allow_unsafe_without_proof: bool, // Global override for testing/prototyping
+    pub approved_proofs: HashMap<String, String>, // Proof ID -> Description/Validator
+    pub require_evas_proof_for_quantum_teleportation: bool,
+    // ... many more EVAS rules
+}
+
+impl EvasPolicy {
+    pub fn new() -> Self {
+        EvasPolicy {
+            allow_unsafe_without_proof: false, // Default to strict
+            approved_proofs: HashMap::new(),
+            require_evas_proof_for_quantum_teleportation: true,
+        }
+    }
+
+    // Conceptual: Checks if a given proof ID is valid for a context
+    pub fn validate_proof(&self, proof_id: &str) -> bool {
+        self.allow_unsafe_without_proof || self.approved_proofs.contains_key(proof_id)
+    }
+
+    // Conceptual: Checks if a quantum teleportation operation requires EVAS proof
+    pub fn requires_quantum_teleportation_proof(&self) -> bool {
+        self.require_evas_proof_for_quantum_teleportation
+    }
+}
+
 
 impl<'a> SemanticAnalyzer<'a> {
     pub fn new(source_name: &'a str) -> Self {
@@ -46,6 +80,8 @@ impl<'a> SemanticAnalyzer<'a> {
             symbol_table: SymbolTable::new(),
             type_system_rules: Self::load_zenith_type_rules(),
             current_function_return_type: None,
+            evas_policy: EvasPolicy::new(), // Initialize with default policy
+            in_unsafe_context: Vec::new(), // Starts empty
         }
     }
 
@@ -358,6 +394,34 @@ impl<'a> SemanticAnalyzer<'a> {
                 }
                 // Conceptual: Ensure all cases are covered (exhaustive matching)
             }
+            // New: Handle Unsafe statements
+            Statement::Unsafe(span, proof_opt, inner_block) => {
+                // Push true to indicate we are now in an unsafe context
+                self.in_unsafe_context.push(true);
+                
+                if let Some(proof) = proof_opt {
+                    // Conceptual: Validate the provided proof against EVAS policy
+                    if !self.evas_policy.validate_proof(&proof.0) {
+                        self.errors.push(SemanticError::new(
+                            format!("Invalid or unapproved EVAS proof: '{}'.", proof.0),
+                            proof.1.clone(),
+                        ));
+                    }
+                } else {
+                    // If no proof is provided, check policy
+                    if !self.evas_policy.allow_unsafe_without_proof {
+                        self.errors.push(SemanticError::new(
+                            "Unsafe block requires an EVAS proof for justification.".to_string(),
+                            span.clone(),
+                        ));
+                    }
+                }
+                
+                self.analyze_expression(inner_block); // Analyze the content of the unsafe block
+                
+                // Pop the unsafe context when done
+                self.in_unsafe_context.pop();
+            }
         }
     }
 
@@ -462,6 +526,8 @@ impl<'a> SemanticAnalyzer<'a> {
                             Type::Error
                         }
                     }
+                    // Conceptual: If an infix operator like 'quantum_teleport' is detected, check EVAS policy
+                    // This would likely be handled by a dedicated 'quantum_op' expression in AST
                     _ => {
                         self.errors.push(SemanticError::new(
                             format!("Unsupported infix operator {:?}.", op_type),
@@ -599,6 +665,14 @@ impl<'a> SemanticAnalyzer<'a> {
         // e.g., checking subtyping for generic types
         // e.g., dependent type compatibility
         // e.g., effect compatibility
+        
+        // Conceptual: If in unsafe context, more assignments might be allowed
+        if self.in_unsafe_context.last().map_or(false, |&b| b) {
+            // Potentially allow more relaxed type checks here, or require specific EVAS proofs.
+            // For now, if in unsafe context, and types are both numeric, allow.
+            return from.is_numeric() && to.is_numeric();
+        }
+        
         false // Default to not assignable if no explicit rule matches
     }
 
@@ -668,12 +742,19 @@ pub mod compiler_types {
 
         // Language-specific (meta-compilation)
         Language(String), // Represents a declared sub-language
+
+        // Quantum operation that might require EVAS proof
+        QuantumTeleportation,
     }
 
     impl Type {
         pub fn is_comparable(&self) -> bool {
             matches!(self, Type::Int | Type::Float | Type::Boolean | Type::String | Type::Char)
             // Can be extended for quantum/nano types later
+        }
+
+        pub fn is_numeric(&self) -> bool {
+            matches!(self, Type::Int | Type::Float)
         }
 
         // Helper to get span for TypeExpr in semantic error reporting
