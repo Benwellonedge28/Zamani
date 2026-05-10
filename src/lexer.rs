@@ -1,9 +1,18 @@
 //! Zenith Lexical Analyzer (Lexer)
-//! Lifetime-correct: borrows source from SourceMap, zero leaks, zero runtime keyword cost.
+//!
+//! This module implements the lexical analysis phase of the Zenith compiler.
+//! It converts Zenith source code into a stream of tokens based on the
+//! NIMBUS Grammar v2.0 Trinity Edition rules.
+//!
+//! Features:
+//! - Handles unified grammar for NIMBUS, Zenith, and Sankofa paradigms.
+//! - Specialized literals for Quantum (| state ⟩), Nano (@atom, @molecule), and MTS (mts[N]).
+//! - Robust Unicode identifier support (UnicodeXID).
+//! - Zero-runtime-cost keyword lookup using perfect hashing (phf).
+//! - Accurate source tracking with FileId and Span (from SourceMap).
+//! - Conceptual support for algebraic effects and dependent types.
 
-use crate::source_map::{FileId, BytePos, Span}; // Correctly import Span from source_map
-use std::collections::HashMap;
-use std::sync::LazyLock;
+use crate::source_map::{FileId, BytePos, Span};
 use unicode_xid::UnicodeXID;
 
 pub struct Lexer<'a> {
@@ -13,7 +22,6 @@ pub struct Lexer<'a> {
     current_char_offset: usize,
     current_line: usize,
     current_column: usize,
-    keywords: &'static phf::Map<&'static str, TokenType>,
     errors: Vec<LexerError>,
     eof_emitted: bool,
 }
@@ -33,37 +41,15 @@ impl<'a> Lexer<'a> {
             current_char_offset: 0,
             current_line: 1,
             current_column: 1,
-            keywords: &KEYWORDS,
             errors: Vec::new(),
             eof_emitted: false,
         }
     }
 
-    // Perfect hash map for keywords. Zero runtime cost.
+    // Perfect hash map for all 140+ Zenith/NIMBUS/Sankofa keywords.
+    // This allows for O(1) keyword identification from identifiers.
     static KEYWORDS: phf::Map<&'static str, TokenType> = phf::phf_map! {
-        "quantum" => TokenType::KeywordQuantum,
-        "nano" => TokenType::KeywordNano,
-        "effect" => TokenType::KeywordEffect,
-        "handle" => TokenType::KeywordHandle,
-        "language" => TokenType::KeywordLanguage,
-        "type" => TokenType::KeywordType,
-        "kind" => TokenType::KeywordKind,
-        "sort" => TokenType::KeywordSort,
-        "prop" => TokenType::KeywordProp,
-        "linear" => TokenType::KeywordLinear,
-        "affine" => TokenType::KeywordAffine,
-        "unsafe" => TokenType::KeywordUnsafe,
-        "remember" => TokenType::KeywordRemember,
-        "recall" => TokenType::KeywordRecall,
-        "learn" => TokenType::KeywordLearn,
-        "wisdom" => TokenType::KeywordWisdom,
-        "zamani" => TokenType::KeywordZamani,
-        "sasa" => TokenType::KeywordSasa,
-        "ancestral" => TokenType::KeywordAncestral,
-        "consensus" => TokenType::KeywordConsensus,
-        "observe" => TokenType::KeywordObserve,
-        "living_doc" => TokenType::KeywordLivingDoc,
-        "temporal_learn" => TokenType::KeywordTemporalLearn,
+        // --- Core / Original NIMBUS Keywords ---
         "fn" => TokenType::KeywordFn,
         "let" => TokenType::KeywordLet,
         "if" => TokenType::KeywordIf,
@@ -71,18 +57,13 @@ impl<'a> Lexer<'a> {
         "return" => TokenType::KeywordReturn,
         "true" => TokenType::KeywordTrue,
         "false" => TokenType::KeywordFalse,
-        "mts" => TokenType::KeywordMts,
-        // --- Added from feedback ---
-        "quantum_circuit" => TokenType::KeywordQuantumCircuit,
-        "nano_agent" => TokenType::KeywordNanoAgent,
-        "History" => TokenType::KeywordHistory, // Type name
-        "ConsensusTrue" => TokenType::KeywordConsensusTrue, // Type name
-        "InterMemory" => TokenType::KeywordInterMemory, // Type name
-        "Superposition" => TokenType::KeywordSuperposition, // Type name
-        "Entangled" => TokenType::KeywordEntangled, // Type name
-        "QMeasured" => TokenType::KeywordQMeasured, // Type name
-        "Archaeve" => TokenType::KeywordArchaeve, // Type name or concept
-        "with" => TokenType::KeywordWith, // For "with effects {E1, E2}"
+        "for" => TokenType::KeywordFor,
+        "while" => TokenType::KeywordWhile,
+        "break" => TokenType::KeywordBreak,
+        "continue" => TokenType::KeywordContinue,
+        "match" => TokenType::KeywordMatch,
+        "case" => TokenType::KeywordCase,
+        "default" => TokenType::KeywordDefault,
         "module" => TokenType::KeywordModule,
         "import" => TokenType::KeywordImport,
         "export" => TokenType::KeywordExport,
@@ -90,9 +71,6 @@ impl<'a> Lexer<'a> {
         "enum" => TokenType::KeywordEnum,
         "trait" => TokenType::KeywordTrait,
         "impl" => TokenType::KeywordImpl,
-        "match" => TokenType::KeywordMatch,
-        "case" => TokenType::KeywordCase,
-        "default" => TokenType::KeywordDefault,
         "as" => TokenType::KeywordAs,
         "is" => TokenType::KeywordIs,
         "mut" => TokenType::KeywordMut,
@@ -129,6 +107,7 @@ impl<'a> Lexer<'a> {
         "alias" => TokenType::KeywordAlias,
         "operator" => TokenType::KeywordOperator,
         "where" => TokenType::KeywordWhere,
+        "with" => TokenType::KeywordWith,
         "catch" => TokenType::KeywordCatch,
         "try" => TokenType::KeywordTry,
         "throw" => TokenType::KeywordThrow,
@@ -140,6 +119,7 @@ impl<'a> Lexer<'a> {
         "benchmark" => TokenType::KeywordBenchmark,
         "profile" => TokenType::KeywordProfile,
         "extern" => TokenType::KeywordExtern,
+        "extern_c" => TokenType::KeywordExternC,
         "inline" => TokenType::KeywordInline,
         "no_mangle" => TokenType::KeywordNoMangle,
         "thread_local" => TokenType::KeywordThreadLocal,
@@ -165,120 +145,56 @@ impl<'a> Lexer<'a> {
         "slot" => TokenType::KeywordSlot,
         "attribute" => TokenType::KeywordAttribute,
         "pragma" => TokenType::KeywordPragma,
-        "aspect" => TokenType::KeywordAspect,
-        "advice" => TokenType::KeywordAdvice,
-        "pointcut" => TokenType::KeywordPointcut,
-        "around" => TokenType::KeywordAround,
-        "before" => TokenType::KeywordBefore,
-        "after" => TokenType::KeywordAfter,
-        "abstract" => TokenType::KeywordAbstract,
-        "final" => TokenType::KeywordFinal,
-        "override" => TokenType::KeywordOverride,
-        "virtual" => TokenType::KeywordVirtual,
-        "sealed" => TokenType::KeywordSealed,
-        "dynamic" => TokenType::KeywordDynamic,
-        "static_if" => TokenType::KeywordStaticIf,
-        "static_for" => TokenType::KeywordStaticFor,
-        "union" => TokenType::KeywordUnion,
-        "alias_type" => TokenType::KeywordAliasType,
-        "type_family" => TokenType::KeywordTypeFamily,
-        "dependent_type" => TokenType::KeywordDependentType,
-        "proof" => TokenType::KeywordProof,
-        "theorem" => TokenType::KeywordTheorem,
-        "axiom" => TokenType::KeywordAxiom,
-        "assume" => TokenType::KeywordAssume,
-        "guarantee" => TokenType::KeywordGuarantee,
-        "invariant" => TokenType::KeywordInvariant,
-        "precondition" => TokenType::KeywordPrecondition,
-        "postcondition" => TokenType::KeywordPostcondition,
-        "forall" => TokenType::KeywordForall,
-        "exists" => TokenType::KeywordExists,
-        "lambda" => TokenType::KeywordLambda,
-        "mu" => TokenType::KeywordMu,
-        "sigma_type" => TokenType::KeywordSigmaType,
-        "pi_type" => TokenType::KeywordPiType,
-        "universe" => TokenType::KeywordUniverse,
-        "coercion" => TokenType::KeywordCoercion,
-        "subsume" => TokenType::KeywordSubsume,
-        "delegate_to" => TokenType::KeywordDelegateTo,
-        "transmute" => TokenType::KeywordTransmute,
-        "inline_asm" => TokenType::KeywordInlineAsm,
-        "raw_ptr" => TokenType::KeywordRawPtr,
-        "native" => TokenType::KeywordNative,
-        "host" => TokenType::KeywordHost,
-        "device" => TokenType::KeywordDevice,
-        "parallel" => TokenType::KeywordParallel,
-        "distributed" => TokenType::KeywordDistributed,
-        "actor" => TokenType::KeywordActor,
-        "message" => TokenType::KeywordMessage,
-        "spawn_task" => TokenType::KeywordSpawnTask,
-        "await_task" => TokenType::KeywordAwaitTask,
-        "future" => TokenType::KeywordFuture,
-        "promise" => TokenType::KeywordPromise,
-        "result" => TokenType::KeywordResult,
-        "option" => TokenType::KeywordOption,
-        "error_type" => TokenType::KeywordErrorType,
-        "exception" => TokenType::KeywordException,
-        "raise" => TokenType::KeywordRaise,
-        "catch_all" => TokenType::KeywordCatchAll,
-        "finally_catch" => TokenType::KeywordFinallyCatch,
-        "debugger" => TokenType::KeywordDebugger,
-        "instrument" => TokenType::KeywordInstrument,
-        "telemetry" => TokenType::KeywordTelemetry,
-        "log" => TokenType::KeywordLog,
-        "trace" => TokenType::KeywordTrace,
-        "collect" => TokenType::KeywordCollect,
-        "dispose" => TokenType::KeywordDispose,
-        "finalize" => TokenType::KeywordFinalize,
-        "drop_resource" => TokenType::KeywordDropResource,
-        "free" => TokenType::KeywordFree,
-        "alloc_global" => TokenType::KeywordAllocGlobal,
-        "alloc_local" => TokenType::KeywordAllocLocal,
-        "dealloc" => TokenType::KeywordDealloc,
-        "memory_map" => TokenType::KeywordMemoryMap,
-        "region" => TokenType::KeywordRegion,
-        "slab" => TokenType::KeywordSlab,
-        "arena" => TokenType::KeywordArena,
-        "garbage_collect" => TokenType::KeywordGarbageCollect,
-        "reference_count" => TokenType::KeywordReferenceCount,
-        "arc_ptr" => TokenType::KeywordArcPtr,
-        "rc_ptr" => TokenType::KeywordRcPtr,
-        "weak_ptr" => TokenType::KeywordWeakPtr,
-        "move_val" => TokenType::KeywordMoveVal,
-        "copy_val" => TokenType::KeywordCopyVal,
-        "clone_val" => TokenType::KeywordCloneVal,
-        "ptr_add" => TokenType::KeywordPtrAdd,
-        "ptr_sub" => TokenType::KeywordPtrSub,
-        "atomic_load" => TokenType::KeywordAtomicLoad,
-        "atomic_store" => TokenType::KeywordAtomicStore,
-        "atomic_cas" => TokenType::KeywordAtomicCas,
-        "fence" => TokenType::KeywordFence,
-        "acquire_release" => TokenType::KeywordAcquireRelease,
-        "relaxed" => TokenType::KeywordRelaxed,
-        "seq_cst" => TokenType::KeywordSeqCst,
-        "unordered" => TokenType::KeywordUnordered,
-        "ordered" => TokenType::KeywordOrdered,
-        "read_only" => TokenType::KeywordReadOnly,
-        "write_only" => TokenType::KeywordWriteOnly,
-        "read_write" => TokenType::KeywordReadWrite,
-        "exclusive" => TokenType::KeywordExclusive,
-        "shared" => TokenType::KeywordShared,
-        "volatile_read" => TokenType::KeywordVolatileRead,
-        "volatile_write" => TokenType::KeywordVolatileWrite,
-        "barrier" => TokenType::KeywordBarrier,
-        "memory_barrier" => TokenType::KeywordMemoryBarrier,
-        "full_barrier" => TokenType::KeywordFullBarrier,
-        "read_barrier" => TokenType::KeywordReadBarrier,
-        "write_barrier" => TokenType::KeywordWriteBarrier,
-        "data_barrier" => TokenType::KeywordDataBarrier,
-        "isa" => TokenType::KeywordIsa,
-        "extension" => TokenType::KeywordExtension,
-        "builtin" => TokenType::KeywordBuiltin,
-        "intrinsic" => TokenType::KeywordIntrinsic,
-        "compiler_fence" => TokenType::KeywordCompilerFence,
-        "unreachable_unchecked" => TokenType::KeywordUnreachableUnchecked,
-        "likely" => TokenType::KeywordLikely,
-        "unlikely" => TokenType::KeywordUnlikely,
+
+        // --- Zenith Specific Keywords ---
+        "quantum" => TokenType::KeywordQuantum,
+        "nano" => TokenType::KeywordNano,
+        "effect" => TokenType::KeywordEffect,
+        "handle" => TokenType::KeywordHandle,
+        "language" => TokenType::KeywordLanguage,
+        "type" => TokenType::KeywordType,
+        "kind" => TokenType::KeywordKind,
+        "sort" => TokenType::KeywordSort,
+        "prop" => TokenType::KeywordProp,
+        "linear" => TokenType::KeywordLinear,
+        "affine" => TokenType::KeywordAffine,
+        "unsafe" => TokenType::KeywordUnsafe,
+        "quantum_circuit" => TokenType::KeywordQuantumCircuit,
+        "nano_agent" => TokenType::KeywordNanoAgent,
+        "Qubit" => TokenType::KeywordQubit,
+        "QReg" => TokenType::KeywordQReg,
+        "Superposition" => TokenType::KeywordSuperposition,
+        "Entangled" => TokenType::KeywordEntangled,
+        "QMeasured" => TokenType::KeywordQMeasured,
+        "Atom" => TokenType::KeywordAtom,
+        "Molecule" => TokenType::KeywordMolecule,
+        "NanoAgent" => TokenType::KeywordNanoAgentType,
+        "Archaeve" => TokenType::KeywordArchaeve,
+        "MtsSlice" => TokenType::KeywordMtsSlice,
+        "mts" => TokenType::KeywordMts,
+        "evas" => TokenType::KeywordEvas,
+
+        // --- Sankofa Specific Keywords ---
+        "remember" => TokenType::KeywordRemember,
+        "recall" => TokenType::KeywordRecall,
+        "learn" => TokenType::KeywordLearn,
+        "wisdom" => TokenType::KeywordWisdom,
+        "zamani" => TokenType::KeywordZamani,
+        "sasa" => TokenType::KeywordSasa,
+        "ancestral" => TokenType::KeywordAncestral,
+        "consensus" => TokenType::KeywordConsensus,
+        "observe" => TokenType::KeywordObserve,
+        "living_doc" => TokenType::KeywordLivingDoc,
+        "temporal_learn" => TokenType::KeywordTemporalLearn,
+        "History" => TokenType::KeywordHistory,
+        "ConsensusTrue" => TokenType::KeywordConsensusTrue,
+        "InterMemory" => TokenType::KeywordInterMemory,
+        "temporal" => TokenType::KeywordTemporal,
+        "ancestor" => TokenType::KeywordAncestor,
+        "lineage" => TokenType::KeywordLineage,
+        "memory" => TokenType::KeywordMemory,
+        "collective" => TokenType::KeywordCollective,
+        "wisdom_well" => TokenType::KeywordWisdomWell,
     };
 
     fn make_span(&self, start_offset: usize, start_line: usize, start_column: usize) -> Span {
@@ -337,9 +253,8 @@ impl<'a> Lexer<'a> {
 
     fn skip_comments(&mut self) {
         if self.peek_char() == Some(&'/') && self.peek_char_n(2) == Some('/') {
-            let start_span = self.make_span(self.current_char_offset, self.current_line, self.current_column);
-            self.read_char_and_advance_pos(); // /
-            self.read_char_and_advance_pos(); // /
+            let _ = self.read_char_and_advance_pos(); // /
+            let _ = self.read_char_and_advance_pos(); // /
             while let Some(&c) = self.peek_char() {
                 if c == '\n' {
                     self.read_char_and_advance_pos();
@@ -349,8 +264,8 @@ impl<'a> Lexer<'a> {
             }
         } else if self.peek_char() == Some(&'/') && self.peek_char_n(2) == Some('*') {
             let start_span = self.make_span(self.current_char_offset, self.current_line, self.current_column);
-            self.read_char_and_advance_pos(); // /
-            self.read_char_and_advance_pos(); // *
+            let _ = self.read_char_and_advance_pos(); // /
+            let _ = self.read_char_and_advance_pos(); // *
             loop {
                 match self.read_char_and_advance_pos() {
                     Some('*') if self.peek_char() == Some(&'/') => {
@@ -361,7 +276,7 @@ impl<'a> Lexer<'a> {
                     None => {
                         self.errors.push(LexerError {
                             message: "Unterminated multi-line comment.".to_string(),
-                            span: self.make_span(start_span.start.0 as usize, start_span.line, start_span.column),
+                            span: start_span,
                         });
                         return;
                     }
@@ -419,7 +334,7 @@ impl<'a> Lexer<'a> {
                     Some('r') => literal_content.push('\r'),
                     Some('\\') => literal_content.push('\\'),
                     Some('"') => literal_content.push('"'),
-                    Some(''') => literal_content.push('''),
+                    Some('\'') => literal_content.push('\''),
                     Some('0') => literal_content.push('\0'),
                     Some('u') => {
                         self.errors.push(LexerError {
@@ -450,11 +365,11 @@ impl<'a> Lexer<'a> {
                 if let Some(escaped_char) = self.read_char_and_advance_pos() {
                     match escaped_char {
                         'n' => literal_content.push('\n'),
-                        't') => literal_content.push('\t'),
+                        't' => literal_content.push('\t'),
                         'r' => literal_content.push('\r'),
-                        '\\') => literal_content.push('\\'),
-                        '"') => literal_content.push('"'),
-                        ''' => literal_content.push('''),
+                        '\\' => literal_content.push('\\'),
+                        '"' => literal_content.push('"'),
+                        '\'' => literal_content.push('\''),
                         other => {
                             self.errors.push(LexerError {
                                 message: format!("Invalid escape sequence '\\{}'.", other),
@@ -463,7 +378,7 @@ impl<'a> Lexer<'a> {
                         }
                     }
                 }
-            } else if c != ''' {
+            } else if c != '\'' {
                 literal_content.push(self.read_char_and_advance_pos().unwrap());
             }
         }
@@ -518,7 +433,7 @@ impl<'a> Lexer<'a> {
             let mut nesting = 1;
             while nesting > 0 {
                 match self.read_char_and_advance_pos() {
-                    Some('(') => nesting += 1, // fixed: was ')'
+                    Some('(') => nesting += 1,
                     Some(')') => nesting -= 1,
                     Some(_) => {}
                     None => {
@@ -585,7 +500,7 @@ impl<'a> Lexer<'a> {
         Some(Token::new(
             TokenType::Directive,
             format!("#{}", name),
-            self.make_span(start_span.start.0 as usize, start_span.line, start_span.column),
+            self.make_span(start_span.start.0 as usize, start_span.line, start_column),
         ))
     }
 
@@ -594,90 +509,253 @@ impl<'a> Lexer<'a> {
     }
 }
 
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.eof_emitted {
+            return None;
+        }
+
+        self.skip_whitespace_and_comments();
+
+        let start_offset = self.current_char_offset;
+        let start_line = self.current_line;
+        let start_column = self.current_column;
+
+        let c = match self.read_char_and_advance_pos() {
+            Some(ch) => ch,
+            None => {
+                self.eof_emitted = true;
+                return Some(Token::new(
+                    TokenType::EOF,
+                    "".to_string(),
+                    Span {
+                        file: self.file,
+                        start: BytePos(start_offset as u32),
+                        end: BytePos(start_offset as u32),
+                        line: start_line,
+                        column: start_column,
+                    },
+                ));
+            }
+        };
+
+        let initial_span = self.make_span(start_offset, start_line, start_column);
+
+        if c == '#' {
+            return self.handle_directive(initial_span);
+        }
+        if c == '@' {
+            return self.handle_nano_annotation(initial_span);
+        }
+        if c == 'm'
+            && self.peek_char() == Some(&'t')
+            && self.peek_char_n(2) == Some('s')
+            && self.peek_char_n(3) == Some('[')
+        {
+            return self.handle_mts_literal(initial_span);
+        }
+        if c == '|' {
+            if self.peek_char() == Some(&' ') {
+                return self.handle_quantum_literal(initial_span);
+            } else if self.peek_char() == Some(&'|') {
+                self.read_char_and_advance_pos();
+                return Some(Token::new(
+                    TokenType::LogicalOr,
+                    "||".to_string(),
+                    self.make_span(start_offset, start_line, start_column),
+                ));
+            } else {
+                return Some(Token::new(
+                    TokenType::Pipe,
+                    "|".to_string(),
+                    initial_span,
+                ));
+            }
+        }
+        if c == 'Π' {
+             return Some(Token::new(
+                TokenType::PiSymbol,
+                "Π".to_string(),
+                initial_span,
+            ));
+        }
+        if c == 'Σ' {
+             return Some(Token::new(
+                TokenType::SigmaSymbol,
+                "Σ".to_string(),
+                initial_span,
+            ));
+        }
+
+        let (token_type, literal) = match c {
+            '=' => {
+                if self.peek_char() == Some(&'=') {
+                    self.read_char_and_advance_pos();
+                    (TokenType::Equals, "==".to_string())
+                } else {
+                    (TokenType::Assign, "=".to_string())
+                }
+            }
+            '!' => {
+                if self.peek_char() == Some(&'=') {
+                    self.read_char_and_advance_pos();
+                    (TokenType::NotEquals, "!=".to_string())
+                } else {
+                    (TokenType::Bang, "!".to_string())
+                }
+            }
+            '<' => {
+                if self.peek_char() == Some(&'=') {
+                    self.read_char_and_advance_pos();
+                    (TokenType::LTE, "<=".to_string())
+                } else {
+                    (TokenType::LT, "<".to_string())
+                }
+            }
+            '>' => {
+                if self.peek_char() == Some(&'=') {
+                    self.read_char_and_advance_pos();
+                    (TokenType::GTE, ">=".to_string())
+                } else {
+                    (TokenType::GT, ">".to_string())
+                }
+            }
+            '&' => {
+                if self.peek_char() == Some(&'&') {
+                    self.read_char_and_advance_pos();
+                    (TokenType::LogicalAnd, "&&".to_string())
+                } else {
+                    (TokenType::BitwiseAnd, "&".to_string())
+                }
+            }
+            '+' => (TokenType::Plus, "+".to_string()),
+            '-' => (TokenType::Minus, "-".to_string()),
+            '*' => (TokenType::Star, "*".to_string()),
+            '/' => (TokenType::Slash, "/".to_string()),
+            '(' => (TokenType::LParen, "(".to_string()),
+            ')' => (TokenType::RParen, ")".to_string()),
+            '{' => (TokenType::LBrace, "{".to_string()),
+            '}' => (TokenType::RBrace, "}".to_string()),
+            '[' => (TokenType::LBracket, "[".to_string()),
+            ']' => (TokenType::RBracket, "]".to_string()),
+            ';' => (TokenType::Semicolon, ";".to_string()),
+            ':' => (TokenType::Colon, ":".to_string()),
+            ',' => (TokenType::Comma, ",".to_string()),
+            '.' => (TokenType::Dot, ".".to_string()),
+            '^' => (TokenType::Caret, "^".to_string()),
+            '"' => {
+                let content = self.read_string_literal_content(initial_span);
+                if self.peek_char() == Some(&'"') {
+                    self.read_char_and_advance_pos();
+                    (TokenType::String, content)
+                } else {
+                    (TokenType::Illegal, content)
+                }
+            }
+            '\'' => {
+                let content = self.read_char_literal_content(initial_span);
+                if self.peek_char() == Some(&'\'') {
+                    self.read_char_and_advance_pos();
+                    (TokenType::Char, content)
+                } else {
+                    (TokenType::Illegal, content)
+                }
+            }
+            c if UnicodeXID::is_xid_start(c) || c == '_' => {
+                let ident = self.read_identifier_or_keyword(c);
+                let tt = Self::KEYWORDS.get(ident.as_str())
+                   .cloned()
+                   .unwrap_or(TokenType::Identifier);
+                (tt, ident)
+            }
+            c if c.is_digit(10) => {
+                let num = self.read_number(c);
+                let tt = if num.contains('.') {
+                    TokenType::Float
+                } else {
+                    TokenType::Integer
+                };
+                (tt, num)
+            }
+            _ => {
+                self.errors.push(LexerError {
+                    message: format!("Unexpected character '{}'.", c),
+                    span: self.make_span(start_offset, start_line, start_column),
+                });
+                (TokenType::Illegal, c.to_string())
+            }
+        };
+
+        Some(Token::new(
+            token_type,
+            literal,
+            self.make_span(start_offset, start_line, start_column),
+        ))
+    }
+}
+
 // --- Token & TokenType Definitions ---
 pub mod tokens {
-    // Use Span from source_map directly
-    use crate::source_map::{FileId, BytePos, Span};
+    use crate::source_map::Span;
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum TokenType {
+        // Punctuators / Operators
         Assign, Plus, Minus, Star, Slash,
         LParen, RParen, LBrace, RBrace, LBracket, RBracket,
         Semicolon, Colon, Comma, Dot, Pipe, Caret,
         Equals, NotEquals, LT, GT, LTE, GTE, Bang,
         BitwiseAnd, LogicalAnd, LogicalOr,
+        PiSymbol, SigmaSymbol, // Unicode Π, Σ
+
+        // Literals / Identifiers
         Identifier, Integer, Float, String, Char,
         QuantumLiteral, NanoAnnotation, MTSLiteral,
+
+        // Keywords - NIMBUS Core
         KeywordFn, KeywordLet, KeywordIf, KeywordElse, KeywordReturn,
-        KeywordTrue, KeywordFalse,
+        KeywordTrue, KeywordFalse, KeywordFor, KeywordWhile, KeywordBreak,
+        KeywordContinue, KeywordMatch, KeywordCase, KeywordDefault,
+        KeywordModule, KeywordImport, KeywordExport, KeywordStruct,
+        KeywordEnum, KeywordTrait, KeywordImpl, KeywordAs, KeywordIs,
+        KeywordMut, KeywordRef, KeywordVal, KeywordVar, KeywordStatic,
+        KeywordConst, KeywordAwait, KeywordAsync, KeywordYield, KeywordGo,
+        KeywordDefer, KeywordPackage, KeywordPrivate, KeywordPublic,
+        KeywordProtected, KeywordInterface, KeywordExtends, KeywordImplements,
+        KeywordNew, KeywordThis, KeywordSuper, KeywordNull, KeywordSelf,
+        KeywordVoid, KeywordUnit, KeywordAny, KeywordNever, KeywordSizeof,
+        KeywordTypeof, KeywordAlignof, KeywordMacro, KeywordAlias,
+        KeywordOperator, KeywordWhere, KeywordWith, KeywordCatch,
+        KeywordTry, KeywordThrow, KeywordFinally, KeywordPanic,
+        KeywordAssert, KeywordDebug, KeywordTest, KeywordBenchmark,
+        KeywordProfile, KeywordExtern, KeywordExternC, KeywordInline,
+        KeywordNoMangle, KeywordThreadLocal, KeywordVolatile, KeywordAtomic,
+        KeywordSync, KeywordSend, KeywordRecv, KeywordChannel,
+        KeywordSelect, KeywordSpawn, KeywordJoin, KeywordGuard,
+        KeywordResource, KeywordAcquire, KeywordRelease,
+        KeywordHandleError, KeywordResume, KeywordSuspend,
+        KeywordEvent, KeywordDelegate, KeywordSignal, KeywordSlot,
+        KeywordAttribute, KeywordPragma,
+
+        // Keywords - Zenith Specialized
         KeywordQuantum, KeywordNano, KeywordEffect, KeywordHandle,
         KeywordLanguage, KeywordType, KeywordKind, KeywordSort, KeywordProp,
         KeywordLinear, KeywordAffine, KeywordUnsafe,
+        KeywordQuantumCircuit, KeywordNanoAgent, KeywordQubit, KeywordQReg,
+        KeywordSuperposition, KeywordEntangled, KeywordQMeasured,
+        KeywordAtom, KeywordMolecule, KeywordNanoAgentType,
+        KeywordArchaeve, KeywordMtsSlice, KeywordMts, KeywordEvas,
+
+        // Keywords - Sankofa Specialized
         KeywordRemember, KeywordRecall, KeywordLearn, KeywordWisdom,
         KeywordZamani, KeywordSasa, KeywordAncestral, KeywordConsensus,
         KeywordObserve, KeywordLivingDoc, KeywordTemporalLearn,
-        KeywordMts,
-        // --- Added from feedback ---
-        KeywordQuantumCircuit,
-        KeywordNanoAgent,
-        KeywordHistory,
-        KeywordConsensusTrue,
-        KeywordInterMemory,
-        KeywordSuperposition,
-        KeywordEntangled,
-        KeywordQMeasured,
-        KeywordArchaeve,
-        KeywordWith,
-        KeywordModule, KeywordImport, KeywordExport,
-        KeywordStruct, KeywordEnum, KeywordTrait, KeywordImpl,
-        KeywordMatch, KeywordCase, KeywordDefault,
-        KeywordAs, KeywordIs, KeywordMut, KeywordRef, KeywordVal, KeywordVar,
-        KeywordStatic, KeywordConst, KeywordAwait, KeywordAsync, KeywordYield,
-        KeywordGo, KeywordDefer, KeywordPackage,
-        KeywordPrivate, KeywordPublic, KeywordProtected,
-        KeywordInterface, KeywordExtends, KeywordImplements,
-        KeywordNew, KeywordThis, KeywordSuper, KeywordNull, KeywordSelf,
-        KeywordVoid, KeywordUnit, KeywordAny, KeywordNever,
-        KeywordSizeof, KeywordTypeof, KeywordAlignof, KeywordMacro, KeywordAlias,
-        KeywordOperator, KeywordWhere, KeywordCatch, KeywordTry, KeywordThrow,
-        KeywordFinally, KeywordPanic, KeywordAssert, KeywordDebug, KeywordTest,
-        KeywordBenchmark, KeywordProfile, KeywordExtern, KeywordInline,
-        KeywordNoMangle, KeywordThreadLocal, KeywordVolatile, KeywordAtomic,
-        KeywordSync, KeywordSend, KeywordRecv, KeywordChannel, KeywordSelect,
-        KeywordSpawn, KeywordJoin, KeywordGuard, KeywordResource,
-        KeywordAcquire, KeywordRelease, KeywordHandleError,
-        KeywordResume, KeywordSuspend, KeywordEvent, KeywordDelegate,
-        KeywordSignal, KeywordSlot, KeywordAttribute, KeywordPragma,
-        KeywordAspect, KeywordAdvice, KeywordPointcut, KeywordAround,
-        KeywordBefore, KeywordAfter, KeywordAbstract, KeywordFinal,
-        KeywordOverride, KeywordVirtual, KeywordSealed, KeywordDynamic,
-        KeywordStaticIf, KeywordStaticFor, KeywordUnion, KeywordAliasType,
-        KeywordTypeFamily, KeywordDependentType, KeywordProof, KeywordTheorem,
-        KeywordAxiom, KeywordAssume, KeywordGuarantee, KeywordInvariant,
-        KeywordPrecondition, KeywordPostcondition, KeywordForall, KeywordExists,
-        KeywordLambda, KeywordMu, KeywordSigmaType, KeywordPiType,
-        KeywordUniverse, KeywordCoercion, KeywordSubsume, KeywordDelegateTo,
-        KeywordTransmute, KeywordInlineAsm, KeywordRawPtr, KeywordNative,
-        KeywordHost, KeywordDevice, KeywordParallel, KeywordDistributed,
-        KeywordActor, KeywordMessage, KeywordSpawnTask, KeywordAwaitTask,
-        KeywordFuture, KeywordPromise, KeywordResult, KeywordOption,
-        KeywordErrorType, KeywordException, KeywordRaise, KeywordCatchAll,
-        KeywordFinallyCatch, KeywordDebugger, KeywordInstrument, KeywordTelemetry,
-        KeywordLog, KeywordTrace, KeywordCollect, KeywordDispose, KeywordFinalize,
-        KeywordDropResource, KeywordFree, KeywordAllocGlobal, KeywordAllocLocal,
-        KeywordDealloc, KeywordMemoryMap, KeywordRegion, KeywordSlab, KeywordArena,
-        KeywordGarbageCollect, KeywordReferenceCount, KeywordArcPtr, KeywordRcPtr,
-        KeywordWeakPtr, KeywordMoveVal, KeywordCopyVal, KeywordCloneVal,
-        KeywordPtrAdd, KeywordPtrSub, KeywordAtomicLoad, TokenType::KeywordAtomicStore,
-        KeywordAtomicCas, KeywordFence, KeywordAcquireRelease, KeywordRelaxed,
-        KeywordSeqCst, KeywordUnordered, KeywordOrdered, KeywordReadOnly,
-        KeywordWriteOnly, KeywordReadWrite, KeywordExclusive, KeywordShared,
-        KeywordVolatileRead, KeywordVolatileWrite, KeywordBarrier,
-        KeywordMemoryBarrier, KeywordFullBarrier, KeywordReadBarrier,
-        KeywordWriteBarrier, KeywordDataBarrier, KeywordIsa, KeywordExtension,
-        KeywordBuiltin, KeywordIntrinsic, KeywordCompilerFence,
-        KeywordUnreachableUnchecked, KeywordLikely, KeywordUnlikely,
-        PiSymbol, SigmaSymbol, // Unicode Pi and Sigma
+        KeywordHistory, KeywordConsensusTrue, KeywordInterMemory,
+        KeywordTemporal, KeywordAncestor, KeywordLineage, KeywordMemory,
+        KeywordCollective, KeywordWisdomWell,
+
         Directive, Illegal, EOF,
     }
 
