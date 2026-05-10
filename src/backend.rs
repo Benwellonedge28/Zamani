@@ -1,279 +1,253 @@
 //! Zenith Universal Meta-Compiler (UMC) Backend Code Generation
 //!
 //! This module implements the backend code generation phase of the Zenith compiler.
-//! It translates the optimized Universal Meta-Compiler Intermediate Representation (UMC IR)
-//! into target-specific executable code for various computational paradigms, including
-//! classical, quantum, nano, and multi-timeline systems.
-//! 
-//! The backend is designed to be modular, allowing different target backends to be
-//! plugged in to generate code for a wide range of hardware and conceptual platforms.
+//! It takes the optimized Universal Meta-Compiler Intermediate Representation (UMC IR)
+//! and translates it into target-specific executable code or bytecode.
+//!
+//! The backend is designed to support the diverse computational paradigms and
+//! target environments of Zenith, including classical, quantum, nano, and
+//! multi-timeline systems.
+//!
+//! Key responsibilities include:
+//! - **Target-Specific Instruction Selection:** Mapping UMC IR instructions to native instructions.
+//! - **Register Allocation:** Managing hardware registers for optimal performance.
+//! - **ABI Compliance:** Adhering to Application Binary Interfaces for various platforms.
+//! - **Output Format Generation:** Producing executables, libraries, bytecode, or specialized hardware configurations.
+//! - **Debugging Information:** Emitting metadata for debugging and profiling tools.
+//!
+//! Supported Target Architectures (Conceptual):
+//! - Classical: x86_64, ARM, WebAssembly (WASM), LLVM IR
+//! - Quantum: QASM, Quil, specific gate sequences for various quantum processing units (QPUs)
+//! - Nano: Molecular assembly instructions, nanobot control sequences, chemical reaction blueprints
+//! - Multi-Timeline System (MTS): Specialized MTS bytecode or runtime configurations
 
-use crate::ir_gen::{IrInstruction, IrValue, IrRegister, IrType}; // Removed IrGenError
-use crate::source_map::Span; // Corrected Span import
-use std::collections::HashMap;
+use crate::ir_gen::{IrInstruction, IrValue, IrRegister, IrType};
+use crate::ast::Span; // For error reporting in backend
+use std::collections::{HashMap, HashSet};
+use crate::ast::Literal; // Need Literal for QASM_Generator
 
-// --- Backend Generator Structure ---
-pub struct BackendGenerator {
-    target_backend: Box<dyn TargetBackend>,
+/// Defines the interface for a code generation backend.
+pub trait CodeGenerator {
+    /// The name of the target architecture/platform this backend supports.
+    fn target_name(&self) -> &'static str;
+    /// Generates code for the given UMC IR. Returns the generated code as a string/byte array.
+    fn generate_code(&self, ir: &[IrInstruction]) -> Result<Vec<u8>, BackendError>;
+}
+
+// --- UMC Backend Structure ---
+pub struct UMC_Backend {
+    target_generators: HashMap<String, Box<dyn CodeGenerator>>,
     errors: Vec<BackendError>,
 }
 
-// --- Target Backend Trait ---
-// Each specific backend will implement this trait.
-pub trait TargetBackend {
-    fn name(&self) -> &str;
-    /// Translates the optimized UMC IR into target-specific code.
-    fn generate_code(&self, ir_code: &[IrInstruction]) -> Result<TargetCode, BackendError>;
-    /// Provides specific information or capabilities of this backend (e.g., supported quantum gates).
-    fn capabilities(&self) -> HashMap<String, String>;
-}
-
-// --- Target Code Representation ---
-// This enum conceptually represents the output of various backends.
-#[derive(Debug, Clone, PartialEq)]
-pub enum TargetCode {
-    /// Classical machine code (e.g., assembly for x86_64, ARM)
-    ClassicalAssembly(String),
-    /// Quantum circuit description (e.g., OpenQASM, Qiskit, Cirq, specific hardware instruction set)
-    QuantumCircuit(String),
-    /// Nano-assembly instructions (e.g., molecular arrangements, chemical reactions)
-    NanoAssembly(String),
-    /// Multi-Timeline System control script (e.g., temporal synchronization, state management)
-    MultiTimelineScript(String),
-    /// Binary executable for a specific platform (e.g., WASM, JVM bytecode)
-    Executable(Vec<u8>),
-    /// Human-readable debug output
-    Debug(String),
-}
-
-// --- Backend Error Structure ---
+// --- BackendError Structure ---
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackendError {
     pub message: String,
-    pub span: Span, // Reference to the original source location
+    pub span: Span, // Reference to the conceptual IR instruction's span
+    pub target: String,
 }
 
-
-impl BackendGenerator {
-    pub fn new(target_backend: Box<dyn TargetBackend>) -> Self {
-        BackendGenerator {
-            target_backend,
+impl UMC_Backend {
+    pub fn new() -> Self {
+        UMC_Backend {
+            target_generators: HashMap::new(),
             errors: Vec::new(),
         }
     }
 
-    pub fn generate(&mut self, ir_code: &[IrInstruction]) -> Result<TargetCode, Vec<BackendError>> {
-        println!("Starting backend code generation for target: {}", self.target_backend.name());
-
-        match self.target_backend.generate_code(ir_code) {
-            Ok(code) => Ok(code),
-            Err(e) => {
-                self.errors.push(e);
-                Err(self.errors.clone())
-            }
-        }
+    /// Registers a code generator for a specific target.
+    pub fn register_generator<G: CodeGenerator + 'static>(&mut self, generator: G) {
+        self.target_generators.insert(generator.target_name().to_string(), Box::new(generator));
     }
 
-    pub fn get_errors(&self) -> &[BackendError] {
-        &self.errors
+    /// Generates code for a specified target.
+    pub fn generate(&self, ir: &[IrInstruction], target: &str) -> Result<Vec<u8>, Vec<BackendError>> {
+        if let Some(generator) = self.target_generators.get(target) {
+            match generator.generate_code(ir) {
+                Ok(code) => Ok(code),
+                Err(e) => Err(vec![e]),
+            }
+        } else {
+            Err(vec![BackendError {
+                message: format!("No code generator registered for target: {}", target),
+                span: Span::dummy(),
+                target: target.to_string(),
+            }])
+        }
     }
 }
 
-// --- Concrete Target Backend Implementations (Conceptual Examples) ---
+// --- Conceptual Code Generators (Examples) ---
 
-/// Classical Backend: Generates x86-64 assembly.
-pub struct ClassicalX86_64Backend;
-impl TargetBackend for ClassicalX86_64Backend {
-    fn name(&self) -> &str { "x86-64 Classical Assembly" }
-    fn generate_code(&self, ir_code: &[IrInstruction]) -> Result<TargetCode, BackendError> {
-        println!("  (Conceptual) Generating x86-64 assembly...");
-        let mut assembly = String::new();
-        assembly.push_str(".section .text\n");
-        assembly.push_str(".global _start\n"); // Entry point
-
-        for inst in ir_code {
-            match inst {
-                IrInstruction::Label(name) => assembly.push_str(&format!("{}:\n", name)),
-                IrInstruction::Add(dest, op1, op2) => assembly.push_str(&format!("  mov {}, {}\n  add {}, {}\n", Self::ir_value_to_x86(op1), Self::ir_reg_to_x86(dest), Self::ir_value_to_x86(op2), Self::ir_reg_to_x86(dest))),
-                IrInstruction::Return(val_opt) => {
-                    if let Some(val) = val_opt {
-                        assembly.push_str(&format!("  mov rax, {}\n", Self::ir_value_to_x86(val)));
-                    } else {
-                        assembly.push_str("  xor rax, rax\n"); // Return 0 by default
-                    }
-                    assembly.push_str("  ret\n");
+/// Generates conceptual x86_64 assembly code.
+pub struct X86_64_Generator;
+impl CodeGenerator for X86_64_Generator {
+    fn target_name(&self) -> &'static str { "x86_64" }
+    fn generate_code(&self, ir: &[IrInstruction]) -> Result<Vec<u8>, BackendError> {
+        let mut assembly_code = String::new();
+        assembly_code.push_str(".section .text\n");
+        assembly_code.push_str(".globl _start\n");
+        assembly_code.push_str("_start:\n"); // Entry point
+        
+        for instr in ir {
+            match instr {
+                IrInstruction::Add(dest, op1, op2) => {
+                    // Conceptual mapping to assembly
+                    assembly_code.push_str(&format!("  ; Add instruction: {:?} = {:?} + {:?}\n", dest, op1, op2));
+                    assembly_code.push_str("  mov rax, 0\n"); // Placeholder
+                    assembly_code.push_str("  add rax, 0\n"); // Placeholder
                 }
-                // ... more detailed x86-64 mapping for other IR instructions
-                _ => assembly.push_str(&format!("  ; UMC IR instruction {:?} not yet implemented for x86-64\n", inst)),
+                IrInstruction::Call(result, func_name, args) => {
+                    assembly_code.push_str(&format!("  ; Call instruction: {:?} = {}({:?})\n", result, func_name, args));
+                    assembly_code.push_str(&format!("  call {}\n", func_name)); // Placeholder
+                }
+                // ... more mappings for other IrInstructions
+                _ => assembly_code.push_str(&format!("  ; UMC IR: {:?}\n", instr)),
             }
         }
-        Ok(TargetCode::ClassicalAssembly(assembly))
-    }
-
-    fn capabilities(&self) -> HashMap<String, String> {
-        let mut caps = HashMap::new();
-        caps.insert("architecture".to_string(), "x86-64".to_string());
-        caps.insert("output_format".to_string(), "assembly".to_string());
-        caps
+        assembly_code.push_str("  mov rax, 60\n"); // syscall number for exit
+        assembly_code.push_str("  xor rdi, rdi\n"); // exit code 0
+        assembly_code.push_str("  syscall\n");
+        
+        println!("Generated x86_64 code (conceptual):\n{}", assembly_code);
+        Ok(assembly_code.into_bytes())
     }
 }
 
-impl ClassicalX86_64Backend {
-    // Helper to map IR values/registers to x86 assembly operands
-    fn ir_value_to_x86(val: &IrValue) -> String {
-        match val {
-            IrValue::Register(reg) => format!("r{}", reg.0), // Simplified to use generic r0, r1 etc.
-            IrValue::Literal(Literal::Integer(val_str, _)) => val_str.clone(),
-            _ => "unknown".to_string(),
-        }
-    }
-    fn ir_reg_to_x86(reg: &IrRegister) -> String {
-        format!("r{}", reg.0) // Simplified
-    }
-}
-
-/// Quantum Backend: Generates OpenQASM for a generic quantum computer.
-pub struct QuantumOpenQASMBackend;
-impl TargetBackend for QuantumOpenQASMBackend {
-    fn name(&self) -> &str { "OpenQASM Quantum Circuit" }
-    fn generate_code(&self, ir_code: &[IrInstruction]) -> Result<TargetCode, BackendError> {
-        println!("  (Conceptual) Generating OpenQASM circuit...");
+/// Generates conceptual QASM (Quantum Assembly Language) code.
+pub struct QASM_Generator;
+impl CodeGenerator for QASM_Generator {
+    fn target_name(&self) -> &'static str { "QASM" }
+    fn generate_code(&self, ir: &[IrInstruction]) -> Result<Vec<u8>, BackendError> {
         let mut qasm_code = String::new();
         qasm_code.push_str("OPENQASM 2.0;\n");
         qasm_code.push_str("include \"qelib1.inc\";\n");
-        // Conceptual: Declare qubits/qregs based on IR allocs
-        qasm_code.push_str("qreg q[8];\n"); // Assume 8 qubits for now
-        qasm_code.push_str("creg c[8];\n"); // Assume 8 classical bits
+        
+        let mut q_allocs = 0;
+        let mut c_allocs = 0;
+        let mut qreg_map: HashMap<IrRegister, usize> = HashMap::new();
+        let mut creg_map: HashMap<IrRegister, usize> = HashMap::new();
 
-        for inst in ir_code {
-            match inst {
-                IrInstruction::QInit(reg, init_state) => {
-                    let qubit_idx = reg.0; // Map IR reg to qubit index
-                    match init_state {
-                        IrValue::Literal(Literal::String(s, _)) if s == "0" => qasm_code.push_str(&format!("  x q[{}];\n", qubit_idx)), // init 0
-                        IrValue::Literal(Literal::String(s, _)) if s == "1" => qasm_code.push_str(&format!("  x q[{}];\n", qubit_idx)), // init 1
-                        _ => qasm_code.push_str(&format!("  ; QInit with state {:?} for q[{}] (default to |0⟩)\n", init_state, qubit_idx)),
+        // First pass: identify q/c register needs
+        for instr in ir {
+            if let IrInstruction::QAlloc(reg, size_val) = instr {
+                if let IrValue::Literal(Literal::Integer(s, _)) = size_val {
+                    if let Ok(size) = s.parse::<usize>() {
+                        q_allocs += size;
+                        // Conceptual: map ir_reg to starting index in qreg
                     }
                 }
-                IrInstruction::QGate(dest_reg, gate_name, args) => {
-                    let qubit_indices: Vec<String> = args.iter().filter_map(|val| match val {
-                        IrValue::Register(r) => Some(format!("q[{}]", r.0)), // Simplified mapping
-                        _ => None,
+            } else if let IrInstruction::QMeasure(c_reg, _) = instr {
+                // Conceptual: determine size needed for c_reg based on q_reg being measured
+                c_allocs += 1; // Simplistic: one classical bit per measurement
+            }
+            // Other quantum instructions imply qubits/cregs are defined.
+        }
+        if q_allocs > 0 { qasm_code.push_str(&format!("qreg q[{}]\n;", q_allocs)); }
+        if c_allocs > 0 { qasm_code.push_str(&format!("creg c[{}]\n;", c_allocs)); }
+
+
+        // Second pass: generate instructions
+        let mut current_q_idx = 0;
+        let mut current_c_idx = 0;
+        for instr in ir {
+            match instr {
+                IrInstruction::QAlloc(ir_qreg, size_val) => {
+                    // Actual QASM qreg/creg declarations happen once at top.
+                    // This is more about mapping IR_Register to QASM qubit indices.
+                    if let IrValue::Literal(Literal::Integer(s, _)) = size_val {
+                        if let Ok(size) = s.parse::<usize>() {
+                            qreg_map.insert(ir_qreg.clone(), current_q_idx);
+                            current_q_idx += size;
+                        }
+                    }
+                }
+                IrInstruction::QInit(ir_qreg, init_state) => {
+                    // Assuming Ir_qreg points to a single qubit for now
+                    let q_idx = qreg_map.get(ir_qreg).unwrap_or(&0); // Placeholder
+                    qasm_code.push_str(&format!("  // QInit qubit q[{}]\n", q_idx));
+                }
+                IrInstruction::QGate(ir_qreg_out, gate_name, args) => {
+                    let arg_q_indices: Vec<usize> = args.iter().filter_map(|arg_val| {
+                        if let IrValue::Register(r) = arg_val { qreg_map.get(r).copied() } else { None }
                     }).collect();
-                    qasm_code.push_str(&format!("  {} {};\n", gate_name, qubit_indices.join(",")));
-                }
-                IrInstruction::QMeasure(classic_reg, qubit_val) => {
-                    if let IrValue::Register(q_reg) = qubit_val {
-                        qasm_code.push_str(&format!("  measure q[{}] -> c[{}];\n", q_reg.0, classic_reg.0));
+                    if !arg_q_indices.is_empty() {
+                         qasm_code.push_str(&format!("  {}_gate q[{}]\n; // Conceptual UMC IR QGate: {:?}\n", gate_name.to_lowercase(), arg_q_indices[0], args));
                     }
                 }
-                // ... more detailed OpenQASM mapping for other quantum IR instructions
-                _ => qasm_code.push_str(&format!("  ; UMC IR instruction {:?} not yet implemented for OpenQASM\n", inst)),
+                IrInstruction::QMeasure(ir_creg, ir_qreg) => {
+                    let q_idx = qreg_map.get(ir_qreg).unwrap_or(&0); // Placeholder
+                    let c_idx = creg_map.entry(ir_creg.clone()).or_insert_with(|| { current_c_idx += 1; current_c_idx - 1 });
+                    qasm_code.push_str(&format!("  measure q[{}] -> c[{}]\n;", q_idx, c_idx));
+                }
+                // ... other quantum instructions
+                _ => {} // Ignore non-quantum for this generator
             }
         }
-        Ok(TargetCode::QuantumCircuit(qasm_code))
-    }
-    fn capabilities(&self) -> HashMap<String, String> {
-        let mut caps = HashMap::new();
-        caps.insert("language".to_string(), "OpenQASM 2.0".to_string());
-        caps.insert("supported_gates".to_string(), "H, X, Y, Z, CNOT, T, S".to_string());
-        caps
+        
+        println!("Generated QASM code (conceptual):\n{}", qasm_code);
+        Ok(qasm_code.into_bytes())
     }
 }
 
-/// Nano Backend: Generates instructions for a conceptual molecular assembler.
-pub struct NanoAssemblerBackend;
-impl TargetBackend for NanoAssemblerBackend {
-    fn name(&self) -> &str { "Molecular Nano-Assembler Instructions" }
-    fn generate_code(&self, ir_code: &[IrInstruction]) -> Result<TargetCode, BackendError> {
-        println!("  (Conceptual) Generating nano-assembler instructions...");
-        let mut nano_assembly = String::new();
-        nano_assembly.push_str("INIT_SUBSTRATE\n");
 
-        for inst in ir_code {
-            match inst {
-                IrInstruction::NanoAssemble(reg, blueprint_id, components) => {
-                    if let IrValue::Literal(Literal::String(bp_name, _)) = blueprint_id {
-                        let component_ids: Vec<String> = components.iter().map(|val| match val {
-                            IrValue::Literal(Literal::String(c_name, _)) => c_name.clone(),
-                            _ => "unknown_component".to_string(),
-                        }).collect();
-                        nano_assembly.push_str(&format!("  ASSEMBLE_AGENT {} ({}).\n", bp_name, component_ids.join(", ")));
-                    } else {
-                        nano_assembly.push_str(&format!("  ; NanoAssemble with unknown blueprint {:?}\n", blueprint_id));
-                    }
+/// Generates conceptual Nano-Agent Control Sequences.
+pub struct NanoControlGenerator;
+impl CodeGenerator for NanoControlGenerator {
+    fn target_name(&self) -> &'static str { "NanoControl" }
+    fn generate_code(&self, ir: &[IrInstruction]) -> Result<Vec<u8>, BackendError> {
+        let mut nano_code = String::new();
+        nano_code.push_str("// Conceptual Nano-Agent Control Sequence\n");
+        nano_code.push_str("START_NANO_AGENT_PROGRAM\n");
+
+        for instr in ir {
+            match instr {
+                IrInstruction::NanoAssemble(result_reg, blueprint, components) => {
+                    nano_code.push_str(&format!("  ASSEMBLE_AGENT {:?} FROM {:?} WITH {:?}\n", result_reg, blueprint, components));
                 }
                 IrInstruction::NanoCommunicate(agent, target, message) => {
-                    nano_assembly.push_str(&format!("  COMMUNICATE_AGENT {} TO {} MSG {};\n", Self::ir_value_to_nano(agent), Self::ir_value_to_nano(target), Self::ir_value_to_nano(message)));
+                    nano_code.push_str(&format!("  AGENT_COMMUNICATE {:?} TO {:?} MSG {:?}\n", agent, target, message));
                 }
-                // ... more detailed nano-assembler mapping
-                _ => nano_assembly.push_str(&format!("  ; UMC IR instruction {:?} not yet implemented for Nano Assembler\n", inst)),
+                IrInstruction::NanoReplicate(new_agent_reg, original_agent) => {
+                    nano_code.push_str(&format!("  REPLICATE_AGENT {:?} AS {:?}\n", original_agent, new_agent_reg));
+                }
+                _ => {} // Ignore non-nano for this generator
             }
         }
-        Ok(TargetCode::NanoAssembly(nano_assembly))
-    }
-    fn capabilities(&self) -> HashMap<String, String> {
-        let mut caps = HashMap::new();
-        caps.insert("target_machine".to_string(), "conceptual molecular assembler".to_string());
-        caps.insert("output_lang".to_string(), "nano-assembly".to_string());
-        caps
+        nano_code.push_str("END_NANO_AGENT_PROGRAM\n");
+
+        println!("Generated Nano-Agent Control (conceptual):\n{}", nano_code);
+        Ok(nano_code.into_bytes())
     }
 }
 
-impl NanoAssemblerBackend {
-    fn ir_value_to_nano(val: &IrValue) -> String {
-        match val {
-            IrValue::Register(reg) => format!("NanoReg{}", reg.0),
-            IrValue::Literal(Literal::String(s, _)) => format!("\"{}\"", s),
-            _ => "UNKNOWN_NANO_VAL".to_string(),
-        }
-    }
-}
+/// Generates conceptual MTS Runtime Bytecode.
+pub struct MTS_RuntimeBytecode_Generator;
+impl CodeGenerator for MTS_RuntimeBytecode_Generator {
+    fn target_name(&self) -> &'static str { "MTS_Bytecode" }
+    fn generate_code(&self, ir: &[IrInstruction]) -> Result<Vec<u8>, BackendError> {
+        let mut bytecode_ops: Vec<String> = Vec::new();
+        bytecode_ops.push("MTS_PROGRAM_START".to_string());
 
-
-/// Multi-Timeline System Backend: Generates a script for a temporal runtime.
-pub struct MultiTimelineBackend;
-impl TargetBackend for MultiTimelineBackend {
-    fn name(&self) -> &str { "Multi-Timeline System Runtime Script" }
-    fn generate_code(&self, ir_code: &[IrInstruction]) -> Result<TargetCode, BackendError> {
-        println!("  (Conceptual) Generating MTS runtime script...");
-        let mut mts_script = String::new();
-        mts_script.push_str("BEGIN_MTS_EXECUTION\n");
-
-        for inst in ir_code {
-            match inst {
-                IrInstruction::MTSCreate(reg, initial_val) => {
-                    mts_script.push_str(&format!("  CREATE_TIMELINE_SLICE {} WITH INITIAL {};\n", Self::ir_reg_to_mts(reg), Self::ir_value_to_mts(initial_val)));
+        for instr in ir {
+            match instr {
+                IrInstruction::MTSCreate(slice_reg, initial_val) => {
+                    bytecode_ops.push(format!("  CREATE_TIMELINE_SLICE {:?} WITH_INITIAL_VALUE {:?}", slice_reg, initial_val));
                 }
-                IrInstruction::MTSLoad(dest_reg, slice_val, timestamp_val) => {
-                    mts_script.push_str(&format!("  LOAD_FROM_TIMELINE {} AT {} INTO {};\n", Self::ir_value_to_mts(slice_val), Self::ir_value_to_mts(timestamp_val), Self::ir_reg_to_mts(dest_reg)));
+                IrInstruction::MTSLoad(result_reg, slice, timestamp) => {
+                    bytecode_ops.push(format!("  LOAD_TIMELINE_STATE {:?} FROM_SLICE {:?} AT_TIMESTAMP {:?}", result_reg, slice, timestamp));
                 }
-                IrInstruction::MTSStore(slice_val, value_val, timestamp_val) => {
-                    mts_script.push_str(&format!("  STORE_TO_TIMELINE {} VALUE {} AT {};\n", Self::ir_value_to_mts(slice_val), Self::ir_value_to_mts(value_val), Self::ir_value_to_mts(timestamp_val)));
+                IrInstruction::MTSStore(slice, value, timestamp) => {
+                    bytecode_ops.push(format!("  STORE_TIMELINE_STATE {:?} TO_SLICE {:?} AT_TIMESTAMP {:?}", value, slice, timestamp));
                 }
-                _ => mts_script.push_str(&format!("  ; UMC IR instruction {:?} not yet implemented for MTS runtime\n", inst)),
+                _ => {} // Ignore non-MTS for this generator
             }
         }
-        Ok(TargetCode::MultiTimelineScript(mts_script))
-    }
-    fn capabilities(&self) -> HashMap<String, String> {
-        let mut caps = HashMap::new();
-        caps.insert("runtime_model".to_string(), "temporal state machine".to_string());
-        caps.insert("temporal_precision".to_string(), "nanosecond".to_string());
-        caps
-    }
-}
+        bytecode_ops.push("MTS_PROGRAM_END".to_string());
 
-impl MultiTimelineBackend {
-    fn ir_value_to_mts(val: &IrValue) -> String {
-        match val {
-            IrValue::Register(reg) => Self::ir_reg_to_mts(reg),
-            IrValue::Literal(Literal::Integer(s, _)) => s.clone(),
-            IrValue::Literal(Literal::String(s, _)) => format!("\"{}\"", s),
-            _ => "UNKNOWN_MTS_VAL".to_string(),
-        }
-    }
-    fn ir_reg_to_mts(reg: &IrRegister) -> String {
-        format!("MTS_VAR_{}", reg.0)
+        let bytecode_string = bytecode_ops.join("\n");
+        println!("Generated MTS Bytecode (conceptual):\n{}", bytecode_string);
+        Ok(bytecode_string.into_bytes())
     }
 }
