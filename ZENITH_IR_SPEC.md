@@ -1,1 +1,1 @@
-NIMBUS compiles to: Zenith UMC IR v1.0 (primary target) + LLVM IR (fallback for classical-only targets). The UMC IR handles all targets: classical CPU, GPU, FPGA, QPU, nano, neuromorphic, USSD.
+IR Spec: NIMBUS compiles to: Zenith UMC IR v1.0 (primary target) + LLVM IR (fallback for classical-only targets). The UMC IR handles all targets: classical CPU, GPU, FPGA, QPU, nano, neuromorphic, USSD.
