@@ -9,9 +9,9 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use crate::core_lang_primitives::{
-    Size, MemoryRegion, HeapAlloc, StackAlloc, LinearAllocator, AffineAllocator, NimbusSystemCall,
-};
-use crate::runtime::nimbus_os::NimbusContextId; // Import NimbusContextId
+    Size, MemoryRegion, HeapAlloc, StackAlloc, LinearAllocator, AffineAllocator,
+}; // Remove NimbusSystemCall from here
+use crate::runtime::nimbus_os::{NimbusContextId, NimbusSystemCall}; // Import NimbusContextId and NimbusSystemCall
 
 /// Represents a conceptual allocation block in memory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -147,7 +147,7 @@ impl MemoryManager {
                 }
                 MemoryRegion::SecureRegion(_) => {
                     // Conceptual: NimbusSystemCall for deallocating secure regions.
-                    // NimbusSystemCall::secure_dealloc(ptr, block.size, block.region.policy_id)
+                    // NimbusSystemCall::secure_dealloc(ptr, block.size, block.region.policy_id) // Add secure_dealloc to NimbusSystemCall
                 }
                 _ => { /* other regions handled conceptually */ }
             }

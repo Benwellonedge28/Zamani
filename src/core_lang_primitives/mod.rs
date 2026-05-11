@@ -10,6 +10,7 @@
 use std::collections::HashMap; // For conceptual use in NimbusSystemCall
 use std::ptr; // For raw pointers
 use crate::ast::Identifier; // For Identifier
+use crate::runtime::nimbus_os::NimbusContextId; // Import NimbusContextId
 
 // -----------------------------------------------------------------------------
 // Core Traits/Interfaces (Implicitly implemented by types)
@@ -204,8 +205,9 @@ impl<T> Mutex<T> {
 // Nimbus OS Interaction (Conceptual System Calls)
 // -----------------------------------------------------------------------------
 
-// Re-using Identifier for blueprint_id, etc.
-type NimbusContextId = u64; // From runtime/nimbus_os.rs
+// Moved NimbusContextId to runtime/nimbus_os.rs
+use crate::runtime::nimbus_os::NimbusContextId;
+use crate::runtime::nimbus_os::SandboxPolicy; // For new create_isolated_context
 
 /// Conceptual interface for low-level Nimbus OS system calls.
 /// This would be exposed to Zenith's runtime for direct interaction.
@@ -218,6 +220,12 @@ impl NimbusSystemCall {
         println!("[Core::Nimbus] Conceptual SystemCall: SecureAlloc {} bytes in region {:?} with policy {}.".to_string(), size.0, region, policy_id);
         // Actual call to Nimbus OS kernel
         ptr::null_mut() // Dummy pointer
+    }
+
+    /// Conceptual: Deallocates a secure memory region via Nimbus microkernel.
+    pub fn secure_dealloc(ptr: *mut u8, size: Size, region: MemoryRegion) {
+        println!("[Core::Nimbus] Conceptual SystemCall: SecureDealloc {} bytes in region {:?} at {:p}.".to_string(), size.0, region, ptr);
+        // Actual call to Nimbus OS kernel
     }
 
     /// Conceptual: Allocates a shared memory region between specified contexts.
@@ -233,17 +241,23 @@ impl NimbusSystemCall {
     }
 
     /// Conceptual: Creates a new isolated execution context (process/thread/timeline).
-    pub fn create_isolated_context(blueprint_id: Identifier, security_policy: String) -> u64 {
-        println!("[Core::Nimbus] Conceptual SystemCall: CreateIsolatedContext with blueprint {:?}.".to_string(), blueprint_id);
+    pub fn create_isolated_context(blueprint_id: Identifier, sandbox_policy: SandboxPolicy) -> NimbusContextId {
+        println!("[Core::Nimbus] Conceptual SystemCall: CreateIsolatedContext with blueprint {:?} and policy {:?}.".to_string(), blueprint_id, sandbox_policy);
         // Actual call to Nimbus OS kernel
         0 // Dummy context ID
     }
 
-    /// Conceptual: Sends a message via Nimbus's secure IPC.
+    /// Conceptual: Sends a message via Nimbus's secure IPC channel.
     pub fn send_secure_message(target_context_id: NimbusContextId, message: &[u8]) -> Result<(), String> {
         println!("[Core::Nimbus] Conceptual SystemCall: SendSecureMessage to context {} ({} bytes).".to_string(), target_context_id, message.len());
         // Actual call to Nimbus OS kernel
         Ok(())
+    }
+
+    /// Conceptual: Receives a message via Nimbus's secure IPC channel.
+    pub fn receive_secure_message(context_id: NimbusContextId) -> Result<Option<Vec<u8>>, String> {
+        println!("[Core::Nimbus] Conceptual SystemCall: Receiving secure message for context {}.".to_string(), context_id);
+        Ok(Some(vec![0xAA, 0xBB])) // Dummy message
     }
 
     /// Conceptual: Accesses Nimbus's hardware abstraction layer for specific device.

@@ -1,5 +1,5 @@
 
-//! Zenith Universal Meta-Compiler (UMC) Runtime System
+//! Zenith UMC Runtime System
 //!
 //! This module defines the conceptual runtime environment for executing Zenith programs.
 //! It orchestrates the various specialized runtimes (classical, quantum, nano, MTS, Sankofa)
@@ -39,10 +39,10 @@ pub fn init_runtime() {
     // Initialize core language primitives (memory, concurrency, Nimbus syscalls)
     core_lang_primitives::init_core_lang_primitives(); // Call the new core primitives init
 
-    // Initialize specialized runtimes
+    // Initialize specialized runtimes. Order matters for dependencies.
     unsafe {
-        NIMBUS_MICROKERNEL_HANDLE = Some(nimbus_os::init_nimbus_os_interface()); // Nimbus OS first, others may depend
-        MEMORY_MANAGER_HANDLE = Some(memory_manager::init_memory_manager()); // Memory Manager next
+        NIMBUS_MICROKERNEL_HANDLE = Some(nimbus_os::init_nimbus_os_interface()); // Nimbus OS first, others may depend on its services
+        MEMORY_MANAGER_HANDLE = Some(memory_manager::init_memory_manager()); // Memory Manager next, depends on core primitives and potentially Nimbus OS for secure alloc
         QUANTUM_PROCESSOR_HANDLE = Some(quantum::init_quantum_runtime()); 
         NANO_ORCHESTRATOR_HANDLE = Some(nano::init_nano_runtime());
         MTS_ORCHESTRATOR_HANDLE = Some(mts::init_mts_runtime());
