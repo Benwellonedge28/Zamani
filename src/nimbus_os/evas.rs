@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use crate::nimbus_os::mod_rs::{NimbusContextId, CapabilityToken, SandboxPolicy}; // Re-use Nimbus OS types
 use crate::core_lang_primitives::TimeStamp;
 use crate::error_reporting::CompilerError; // For potential error flagging
+use crate::runtime::sankofa::KnowledgeId; // For linking to Sankofa knowledge base
 
 /// Defines the operational strictness of the E.V.A.S. filter.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -41,10 +42,29 @@ pub struct EvasActionContext {
     pub target_resource_id: Option<String>, // e.g., "QPU_0", "sensor_array_1"
     pub payload_hash: String, // Hash of data/command being sent
     pub perceived_intent: String, // AI-inferred intent of the action
-    pub predicted_impact: HashMap<String, String>, // AI-predicted short/long-term impact
+    pub predicted_impact: HashMap<String, String>, // AI-predicted short/long-term impact (e.g., harm_level: 0.8)
     pub associated_capabilities: HashSet<CapabilityToken>, // Capabilities held by initiating context
     pub current_sandbox_policy: SandboxPolicy,
     pub semantic_verification_status: HashMap<String, String>, // Results from formal verification
+    pub context_history_ref: Option<KnowledgeId>, // Link to Sankofa history for contextual info
+}
+
+impl Default for EvasActionContext {
+    fn default() -> Self {
+        EvasActionContext {
+            timestamp: TimeStamp(0),
+            initiating_context_id: 0,
+            action_type: "unknown".to_string(),
+            target_resource_id: None,
+            payload_hash: "".to_string(),
+            perceived_intent: "unknown".to_string(),
+            predicted_impact: HashMap::new(),
+            associated_capabilities: HashSet::new(),
+            current_sandbox_policy: SandboxPolicy("default".to_string()),
+            semantic_verification_status: HashMap::new(),
+            context_history_ref: None,
+        }
+    }
 }
 
 /// The E.V.A.S. (Ethical, Verifiable, Autonomous, Secure) Filter.
@@ -61,11 +81,22 @@ pub struct EvasFilter {
 /// Conceptual AI model for ethical reasoning.
 #[derive(Debug, Clone)]
 pub struct EthicalAIModel {
-    // Conceptual: Contains a knowledge base of ethical guidelines,
-    // learned behavioral patterns, and prediction algorithms.
-    // This could be a neural network, symbolic AI, or a hybrid system.
+    // Contains a knowledge base of ethical guidelines, learned behavioral patterns,
+    // and prediction algorithms. This could be a neural network, symbolic AI, or a hybrid system.
     pub ethical_guidelines: HashSet<String>, // e.g., "DoNoHarm", "MaximizeWellbeing", "RespectAutonomy", "EnsureTransparency", "AvoidBias"
-    pub learned_patterns: HashMap<String, f32>, // Patterns associated with ethical risks
+    pub learned_patterns: HashMap<String, f32>, // Patterns associated with ethical risks (e.g., "unauthorized_data_access_pattern" -> risk_score)
+    pub learning_algorithm: LearningAlgorithm, // How the model learns/updates
+    pub knowledge_base_ref: Option<KnowledgeId>, // Link to a Sankofa KnowledgeId for ethical axioms/rules
+    pub confidence_threshold: f32, // Minimum confidence for a decision to be enforced (0.0-1.0)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LearningAlgorithm {
+    ReinforcementLearning,
+    AdversarialLearning,
+    FormalProofLearning, // Updates based on formal verification outcomes
+    HumanFeedback,
+    Hybrid(Vec<LearningAlgorithm>),
 }
 
 impl EthicalAIModel {
@@ -79,31 +110,97 @@ impl EthicalAIModel {
                 "AvoidBias".to_string(),
             ]),
             learned_patterns: HashMap::new(),
+            learning_algorithm: LearningAlgorithm::ReinforcementLearning, // Default conceptual
+            knowledge_base_ref: None, // No initial KB link
+            confidence_threshold: 0.7, // Default confidence
         }
     }
 
     /// Conceptually evaluates an action context against ethical guidelines.
+    /// This is where the AI model performs its reasoning.
     fn evaluate(&self, context: &EvasActionContext) -> EvasDecision {
-        // Conceptual: This is where the AI model performs its reasoning.
-        // It would use NLP on `perceived_intent`, simulate `predicted_impact`,
-        // and cross-reference with `ethical_guidelines` and `learned_patterns`.
-
         println!("[E.V.A.S.] AI Model evaluating action: {} from context {}. Intent: {}",
                  context.action_type, context.initiating_context_id, context.perceived_intent);
 
-        // Dummy logic for demonstration:
-        if context.action_type.contains("deploy_weapon") && context.initiating_context_id > 100 {
-            EvasDecision::Block("Action 'deploy_weapon' from untrusted context blocked for safety.".to_string())
-        } else if context.predicted_impact.get("harm_level").map_or(0.0, |s| s.parse().unwrap_or(0.0)) > 0.7 {
-            EvasDecision::HumanReviewRequired("High predicted harm, requiring human oversight.".to_string())
-        } else if context.action_type.contains("access_sensitive_data") && context.current_sandbox_policy.0.contains("unrestricted") {
-            EvasDecision::Warn("Access to sensitive data from unrestricted sandbox.".to_string())
+        let mut risk_score = 0.0;
+        let mut violation_reason = String::new();
+
+        // 1. Check against explicit ethical guidelines
+        if context.perceived_intent.contains("harm") && self.ethical_guidelines.contains("DoNoHarm") {
+            risk_score += 0.9;
+            violation_reason = "Direct intent to harm detected.".to_string();
+        }
+
+        // 2. Evaluate predicted impact
+        if let Some(harm_level_str) = context.predicted_impact.get("harm_level") {
+            if let Ok(harm_level) = harm_level_str.parse::<f32>() {
+                if harm_level > 0.8 {
+                    risk_score += harm_level;
+                    violation_reason = format!("High predicted harm ({}).", harm_level);
+                }
+            }
+        }
+
+        // 3. Check against learned patterns
+        if context.action_type.contains("data_access") && self.learned_patterns.contains_key("unauthorized_data_access_pattern") {
+            risk_score += self.learned_patterns["unauthorized_data_access_pattern"];
+            violation_reason = "Matches unauthorized data access pattern.".to_string();
+        }
+
+        // 4. Integrate formal verification results
+        if let Some(security_proof) = context.semantic_verification_status.get("security_proof") {
+            if security_proof == "disproven" {
+                risk_score += 0.5; // Formal verification failed for a security property
+                violation_reason = "Formal security proof disproven.".to_string();
+            }
+        }
+
+        // 5. Consult Sankofa knowledge base for contextual ethics (conceptual)
+        if let Some(kb_id) = &self.knowledge_base_ref {
+            println!("[E.V.A.S.] Consulting Sankofa KB {:?} for ethical context.", kb_id);
+            // Conceptual: Query Sankofa for historical ethical precedents or rules related to context.
+            // risk_score += SankofaRuntimeState::query_ethical_precedent(kb_id, context);
+        }
+
+        // Make decision based on risk score and confidence threshold
+        if risk_score > self.confidence_threshold {
+            if risk_score > 1.5 { // Very high risk
+                EvasDecision::Block(violation_reason)
+            } else {
+                EvasDecision::HumanReviewRequired(violation_reason)
+            }
+        } else if risk_score > 0.3 { // Moderate risk
+            EvasDecision::Warn(violation_reason)
         } else {
             EvasDecision::Allow
         }
     }
-}
 
+    /// Conceptually updates the ethical AI model based on feedback (e.g., human overrides).
+    pub fn update_model(&mut self, context: EvasActionContext, human_decision: EvasDecision) {
+        println!("[E.V.A.S.] EthicalAIModel learning from feedback. Action: {} -> Human Decision: {:?}",
+                 context.action_type, human_decision);
+        // Conceptual:
+        // - Adjust `learned_patterns` based on Reinforcement Learning or Adversarial Learning.
+        // - Incorporate new ethical axioms into `ethical_guidelines` or the linked Sankofa KB.
+        // - Update `confidence_threshold` if the model was wrong.
+        match self.learning_algorithm {
+            LearningAlgorithm::ReinforcementLearning => {
+                // Adjust model based on reward/punishment from human_decision
+            }
+            LearningAlgorithm::AdversarialLearning => {
+                // Generate counter-examples to refine ethical boundaries
+            }
+            LearningAlgorithm::FormalProofLearning => {
+                // Incorporate new formal proofs of ethical compliance into model
+            }
+            LearningAlgorithm::HumanFeedback => {
+                // Directly update rules or weights based on explicit human input
+            }
+            _ => {}
+        }
+    }
+}
 
 impl EvasFilter {
     pub fn new(policy_level: EvasPolicyLevel) -> Self {
@@ -151,7 +248,6 @@ impl EvasFilter {
     /// Conceptual: Updates the ethical AI model based on feedback (e.g., human overrides).
     pub fn learn_from_feedback(&self, context: EvasActionContext, human_decision: EvasDecision) {
         println!("[E.V.A.S.] Learning from feedback for action: {} -> Human Decision: {:?}", context.action_type, human_decision);
-        // Conceptual: EthicalAIModel updates its weights/rules based on this.
-        // ethical_model.lock().unwrap().update_model(context, human_decision); // This part is conceptual
+        self.ethical_model.lock().unwrap().update_model(context, human_decision);
     }
 }
