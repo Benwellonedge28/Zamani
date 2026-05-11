@@ -1,105 +1,86 @@
 
 //! Zenith Universal Meta-Compiler (UMC) Compiler Types
 //!
-//! This module defines fundamental data structures used throughout the Zenith compiler
-//! pipeline, particularly for semantic analysis and IR generation. These types
-//! represent the core concepts of Zenith's unified type system and symbol management.
+//! This module defines the internal type system used by the Zenith compiler.
+//! It represents all data types, function signatures, and other type-related
+//! information gathered during semantic analysis. Zenith's type system is rich
+//! and includes traditional classical types, quantum types, nano-agent types,
+//! multi-timeline system (MTS) types, and Sankofa memory types.
 
-use crate::ast::{TypeExpr, Identifier};
-use crate::tokens::Span;
 use std::collections::HashMap;
+use crate::ast::Identifier; // For type names
+use crate::ast::AccessModifier; // For OOP
 
-/// Represents a compiled type in Zenith's unified type system.
-/// This encompasses classical, quantum, nano, dependent, linear, affine, and effectful types.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
-    // --- Primitive & Core Types ---
-    Unit,         // The void/unit type
-    Bool,         // Boolean type
-    Int(IntWidth), // Integer with specified bit-width (e.g., I8, I16, I32, I64, I128)
-    Float(FloatWidth), // Floating-point with specified precision (e.g., F32, F64)
-    Char,         // Unicode scalar value
-    String,       // Immutable string slice
-    Pointer(Box<Type>), // Raw pointer type
+    // Primitive types
+    Unit,
+    Bool,
+    Char,
+    Int(IntWidth),
+    Float(FloatWidth),
+    String,
 
-    // --- Compound Types ---
-    Array(Box<Type>, Option<usize>), // Array of elements with optional fixed size
-    Tuple(Vec<Type>), // Fixed-size ordered collection of types
-    Struct(Identifier, HashMap<String, Type>), // User-defined composite type
-    Enum(Identifier, HashMap<String, Option<Type>>), // User-defined discriminated union
-    Function(Vec<Type>, Box<Type>), // Function type: (param_types) -> return_type
+    // Compound types
+    Array(Box<Type>, Option<usize>),
+    Tuple(Vec<Type>),
+    Function(Vec<Type>, Box<Type>), // Parameters, Return Type
+    Struct(Identifier, HashMap<String, Type>), // Name, Fields
 
-    // --- Zenith-Specific Types ---
-    // Quantum
-    Qubit,        // Fundamental quantum bit
-    QReg(usize),  // Quantum register (array of qubits) with size
-    Superposition(Box<Type>), // Type representing a superposition state of another type
-    Entangled(Box<Type>, Box<Type>), // Type representing two entangled types
-    QMeasured(Box<Type>), // Type representing a classical value obtained from a quantum measurement
+    // Multi-paradigm types
+    Qubit,
+    QReg(usize), // Quantum Register (size)
+    Superposition(Box<Type>), // e.g., Superposition<Qubit>
+    Entangled(Box<Type>, Box<Type>), // e.g., Entangled<Qubit, Qubit>
+    NanoAgent(Option<Identifier>), // Nano Agent (optional blueprint/class name)
+    MtsSlice(Box<Type>), // Multi-Timeline Slice, parameterized by content type
+    ZamaniFact(Box<Type>), // Sankofa Immutable Fact, parameterized by content type
+    SasaKnowledge(Box<Type>), // Sankofa Evolving Knowledge, parameterized by content type
+    History(Box<Type>, Box<crate::ast::Expression>), // Sankofa History type, param by content and timestamp expr
+    ConsensusTrue(Box<Type>), // Sankofa type for provably true facts
+    InterMemory(String, Box<Type>), // Inter-language memory access, param by language and content type
 
-    // Nano-Agent
-    NanoAgent(Option<Identifier>), // A nano-agent, optionally with a blueprint ID
-    Atom(Box<Type>),      // A type viewed at the atomic level
-    Molecule(Box<Type>),  // A type viewed at the molecular level
+    // Dependent Types (conceptual)
+    DependentPi(Identifier, Box<Type>, Box<Type>), // Π (binder : bindee_type) -> body_type
+    DependentSigma(Identifier, Box<Type>, Box<Type>), // Σ (binder : bindee_type) x body_type
+    Prop, // Type of propositions (for proofs)
+    TypeUniverse(usize), // Type of types (e.g., Type@0, Type@1)
 
-    // Multi-Timeline System (MTS)
-    MtsSlice(Box<Type>), // A slice of state within an MTS timeline
-    MtsTimeline(Box<Type>), // A full timeline
-
-    // Linear/Affine Types
-    Linear(Box<Type>),
-    Affine(Box<Type>),
-
-    // Dependent Types (Conceptual)
-    DependentPi(Identifier, Box<Type>, Box<Type>), // (x: A) -> B(x)
-    DependentSigma(Identifier, Box<Type>, Box<Type>), // Sigma(x: A) B(x)
+    // Linear & Affine Types
+    Linear(Box<Type>), // Must be used exactly once
+    Affine(Box<Type>), // Must be used at most once
 
     // Algebraic Effects
-    Effect(Identifier),
-    Effectful(Box<Type>, Vec<Identifier>),
+    Effect(Identifier), // Effect type (e.g., MyEffect)
+    Effectful(Box<Type>, Vec<Identifier>), // Type that can perform certain effects
 
-    // Universe Types (for Metaprogramming/Type Theory)
-    TypeUniverse(usize),
-    Kind,
-    Prop,
+    // --- OOP Additions ---
+    Class(Identifier, HashMap<String, Type>, HashMap<String, MethodType>, Option<Box<Type>>), // Name, Fields, Methods, Parent Class
+    Interface(Identifier, HashMap<String, MethodType>), // Name, Method Signatures
+    Method(Vec<Type>, Box<Type>, AccessModifier), // Parameters, Return Type, Access Modifier
 
-    // Sankofa Temporal Memory
-    ZamaniFact(Box<Type>),
-    SasaKnowledge(Box<Type>),
-    History(Box<Type>, Box<Expression>), // History of a type over a temporal expression (e.g., years)
-    ConsensusTrue(Box<Type>),
-    InterMemory(Identifier, Box<Type>),
-
-    // Error Type
-    Error,
+    // Special types for compiler internals/errors
     Unknown,
+    Error,
 }
 
-/// Integer bit-widths.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IntWidth {
     I8, I16, I32, I64, I128,
     U8, U16, U32, U64, U128,
 }
 
-/// Floating-point precisions.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FloatWidth {
     F32, F64,
 }
 
-/// Represents a symbol (variable, function, type, effect) in the compiler's symbol table.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Symbol {
-    pub name: String,
-    pub typ: Type,
-    pub span: Span,
-    pub is_mutable: bool,
-    // Additional fields for context, e.g., scope, function parameters, global/local
-}
-
-impl Symbol {
-    pub fn new(name: String, typ: Type, span: Span, is_mutable: bool) -> Self {
-        Symbol { name, typ, span, is_mutable }
-    }
+// New struct for MethodType details for classes/interfaces
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MethodType {
+    pub params: Vec<Type>,
+    pub return_type: Box<Type>,
+    pub access_modifier: AccessModifier,
+    pub is_virtual: bool, // For polymorphism
+    pub effects: Vec<Identifier>, // Effects that this method might perform
 }
