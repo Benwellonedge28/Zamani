@@ -9,32 +9,35 @@
 //! areas (e.g., core utilities, collections, specific paradigm APIs).
 
 pub mod core;
-pub mod collections; // For List, Map, etc.
+pub mod collections;
 pub mod quantum;
 pub mod nano;
 pub mod mts;
 pub mod sankofa;
+pub mod reflection; // New module for reflection
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
     println!("Initializing Zenith UMC Standard Library...");
     core::init_core_lib();
-    collections::init_collections_lib(); // New module init
+    collections::init_collections_lib();
     quantum::init_quantum_lib();
     nano::init_nano_lib();
     mts::init_mts_lib();
     sankofa::init_sankofa_lib();
+    reflection::init_reflection_lib(); // Initialize reflection
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
+    reflection::shutdown_reflection_lib(); // Shutdown reflection
     sankofa::shutdown_sankofa_lib();
     mts::shutdown_mts_lib();
     nano::shutdown_nano_lib();
     quantum::shutdown_quantum_lib();
-    collections::shutdown_collections_lib(); // New module shutdown
+    collections::shutdown_collections_lib();
     core::shutdown_core_lib();
     println!("Zenith UMC Standard Library shut down.");
 }
