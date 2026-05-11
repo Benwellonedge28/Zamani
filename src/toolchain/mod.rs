@@ -1,51 +1,32 @@
 
 //! Zenith Universal Meta-Compiler (UMC) Toolchain Integration
 //!
-//! This module defines the conceptual interfaces and components for integrating
-//! the Zenith UMC with external development tools and systems. It encompasses
-//! aspects like build management, package resolution, IDE support, and debugging.
-//!
-//! Key responsibilities include:
-//! - **Build System Integration:** Defining how Zenith projects are built, compiled,
-//!   and linked using tools like `cargo` (for Rust host) or a custom Zenith builder.
-//! - **Package Management:** Conceptual support for `zenith-pkg` for dependency
-//!   resolution and library management across paradigms.
-//! - **IDE Integration:** Protocols and APIs for language servers (LSP), debugging (DAP),
-//!   and other features within Integrated Development Environments.
-//! - **Debugging Support:** Generating and consuming debug information.
-//! - **Cross-Language Interoperability:** Mechanisms for interfacing Zenith code with
-//!   components written in other languages, especially within the Nimbus ecosystem.
+//! This module orchestrates the integration of various toolchain components
+//! with the UMC. It provides interfaces for debugging, IDE support,
+//! static analysis, and formal verification, ensuring a comprehensive
+//! development experience for Zenith programmers.
 
-pub mod build;
-pub mod package_manager;
-pub mod ide_support;
 pub mod debug_info;
-pub mod interoperability;
-pub mod zenith_project_config;
-pub mod formal_verification; // New module for formal verification
+pub mod ide_support;
+pub mod formal_verification;
+pub mod hdl; // New module for HDL
 
-/// Initializes the conceptual Zenith Toolchain Integration components.
+/// Initializes all toolchain components.
 pub fn init_toolchain_integration() {
     println!("Initializing Zenith UMC Toolchain Integration...");
-    build::init_build_system();
-    package_manager::init_package_manager();
+    debug_info::init_debug_info();
     ide_support::init_ide_support();
-    debug_info::init_debug_info_gen();
-    interoperability::init_interoperability_layer();
-    formal_verification::init_formal_verification(); // Initialize formal verification
-    // zenith_project_config::init_config_system(); // No-op for now
+    formal_verification::init_formal_verification();
+    hdl::init_hdl(); // Initialize HDL module
     println!("Zenith UMC Toolchain Integration initialized.");
 }
 
-/// Shuts down the conceptual Zenith Toolchain Integration components.
+/// Shuts down all toolchain components.
 pub fn shutdown_toolchain_integration() {
     println!("Shutting down Zenith UMC Toolchain Integration...");
-    formal_verification::shutdown_formal_verification(); // Shutdown formal verification
-    // zenith_project_config::shutdown_config_system(); // No-op for now
-    interoperability::shutdown_interoperability_layer();
-    debug_info::shutdown_debug_info_gen();
+    hdl::shutdown_hdl(); // Shutdown HDL module
+    formal_verification::shutdown_formal_verification();
     ide_support::shutdown_ide_support();
-    package_manager::shutdown_package_manager();
-    build::shutdown_build_system();
+    debug_info::shutdown_debug_info();
     println!("Zenith UMC Toolchain Integration shut down.");
 }
