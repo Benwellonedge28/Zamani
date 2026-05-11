@@ -24,7 +24,8 @@ pub mod serialize;
 pub mod gui;
 pub mod db;
 pub mod time;
-pub mod numeric; // New module for Numerical Analysis and Scientific Computing
+pub mod numeric;
+pub mod web; // New module for Web and Browser Integration
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -45,7 +46,8 @@ pub fn initialize_stdlib() {
     gui::init_gui_lib();
     db::init_db_lib();
     time::init_time_lib();
-    numeric::init_numeric_lib(); // Initialize Numerical Analysis module
+    numeric::init_numeric_lib();
+    web::init_web_lib(); // Initialize Web and Browser Integration module
     println!("Zenith UMC Standard Library initialized.");
 }
 
@@ -53,7 +55,8 @@ pub fn initialize_stdlib() {
 
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    numeric::shutdown_numeric_lib(); // Shutdown Numerical Analysis module
+    web::shutdown_web_lib(); // Shutdown Web and Browser Integration module
+    numeric::shutdown_numeric_lib(); 
     time::shutdown_time_lib(); 
     db::shutdown_db_lib(); 
     gui::shutdown_gui_lib(); 
