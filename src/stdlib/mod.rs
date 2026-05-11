@@ -33,7 +33,8 @@ pub mod human_agi_interaction;
 pub mod reality;
 pub mod distributed_ledger;
 pub mod iot;
-pub mod human_interface_devices; // New: For GUI, CLI, VCI, Gestures, BCI, Eye-tracking, Touch screen, etc.
+pub mod human_interface_devices;
+pub mod chat_architect_agent; // New: For Conversational Code Synthesis from NL prompts
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -68,14 +69,16 @@ pub fn initialize_stdlib() {
     reality::init_reality_lib();
     distributed_ledger::init_ledger_lib();
     iot::init_iot_lib();
-    human_interface_devices::init_hid_lib(); // Initialize Human Interface Devices module
+    human_interface_devices::init_hid_lib();
+    chat_architect_agent::init_chat_architect_agent(); // Initialize Chat Architect Agent module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    human_interface_devices::shutdown_hid_lib(); // Shutdown Human Interface Devices module
+    chat_architect_agent::shutdown_chat_architect_agent(); // Shutdown Chat Architect Agent module
+    human_interface_devices::shutdown_hid_lib();
     iot::shutdown_iot_lib();
     distributed_ledger::shutdown_ledger_lib();
     reality::shutdown_reality_lib();
