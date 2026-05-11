@@ -10,16 +10,22 @@
 //! Crucially, Zenith's HDL also supports integration with *existing* hardware description
 //! languages (Verilog, VHDL, Chisel, etc.) or alternatives (e.g., custom DSLs), allowing
 //! for a hybrid design approach and leveraging existing IP.
+//!
+//! This expanded vision aims for Zenith HDL to cover *any and all* hardware paradigms,
+//! including Neuromorphic, AI chips, Analog, Optical, and custom co-processors, enabling
+//! developers to target diverse silicon architectures within a single codebase.
 
 use crate::ast::Identifier; // For unit names, register names
 use crate::core_lang_primitives::{Size, TimeStamp}; // For timing, resource allocation
 use crate::ir_gen::{IrInstruction, IrValue}; // To show how it generates specialized IR
 use std::collections::HashMap; // For state maps
 use crate::source_map::Span; // For Span in conceptual AST
+use crate::stdlib::collections::List; // For lists of expressions, components
+
 
 /// Initializes the HDL module.
 pub fn init_hdl() {
-    println!("  - Initializing Zenith HDL Module (for Z-MMP low-level programming and existing HDL integration)...");
+    println!("  - Initializing Zenith HDL Module (for universal hardware targeting)...");
 }
 
 /// Shuts down the HDL module.
@@ -28,16 +34,17 @@ pub fn shutdown_hdl() {
 }
 
 // -----------------------------------------------------------------------------
-// Conceptual HDL AST Nodes (Directly in this module for clarity, not src/ast/mod.rs)
+// Conceptual HDL AST Nodes (Directly in this module for clarity)
 // -----------------------------------------------------------------------------
 // These would typically be integrated into `src/ast/mod.rs` as new Statement/Expression variants.
-// For conceptual purposes, we define them here to illustrate the HDL syntax.
 
 /// A conceptual HDL statement or component declaration.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HdlStatement {
     HdlUnit(Span, Identifier, Vec<HdlPort>, Vec<HdlComponent>), // Name, Ports, Components
     HdlImport(Span, HdlImportType, String), // Import existing HDL module
+    HdlConnect(Span, HdlExpression, HdlExpression), // e.g., `output = input_a + input_b;`
+    HdlAssign(Span, Identifier, HdlExpression), // e.g., `reg_a := value;` (sequential assignment)
 }
 
 /// Defines the type of external HDL to import.
@@ -55,7 +62,7 @@ pub enum HdlImportType {
 pub struct HdlPort {
     pub name: Identifier,
     pub direction: HdlPortDirection, // In, Out, InOut
-    pub typ: HdlPortType, // Wire, Register, Qubit, NanoChannel
+    pub typ: HdlPortType, // Wire, Register, Qubit, NanoChannel, etc.
     pub width: Option<usize>, // Bit width or number of elements
 }
 
@@ -63,53 +70,97 @@ pub struct HdlPort {
 pub enum HdlPortDirection { In, Out, InOut }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum HdlPortType { Wire, Register, Qubit, NanoChannel, Clock, Reset, Power, Signal }
+pub enum HdlPortType { Wire, Register, Qubit, NanoChannel, Clock, Reset, Power, Signal, Analog, Neuron }
 
 
 /// Conceptual HDL Component (inside a `hdl unit`).
 /// This represents actual hardware elements or operations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HdlComponent {
-    // Classical Hardware Elements
+    // === Classical Hardware Elements ===
     ClassicalRegister(Span, Identifier, usize), // `reg MyRegister[32];`
     Wire(Span, Identifier, usize), // `wire MyWire[8];`
-    LogicGate(Span, HdlLogicGateType, Vec<Identifier>, Identifier), // `@logic(and, in1, in2, out)`
+    LogicGate(Span, HdlLogicGateType, List<HdlExpression>, Identifier), // `@logic(and, in1, in2, out)`
     MemoryBlock(Span, Identifier, Size, usize), // `mem MyRam(size: 1KB, width: 8);`
     ClockDeclaration(Span, Identifier, f32), // `@clock(main_clk, 500MHz)`
     TimingConstraint(Span, Identifier, Identifier, TimeStamp), // `@constrain(clk, operation, delay)`
-    
-    // Quantum Hardware Elements
+    Interconnect(Span, Identifier, InterconnectType, List<Identifier>), // `interconnect NoC_Router (endpoints: P1, P2)`
+
+    // === Quantum Hardware Elements ===
     QuantumRegister(Span, Identifier, usize), // `qbit MyQReg[5];`
-    QuantumGate(Span, QuantumGateType, Vec<Identifier>, Vec<f32>), // `@gate(H, q[0])`, `@gate(Rx, q[1], 0.5)`
+    QuantumGate(Span, QuantumGateType, List<HdlExpression>, List<f32>), // `@gate(H, q[0])`, `@gate(Rx, q[1], 0.5)`
     QubitMeasurement(Span, Identifier, Identifier), // `measure_reset(q[0], c[0])`
     QWire(Span, Identifier, usize), // For entangled connections `q_wire EntangledLink[2];`
+    QPUController(Span, Identifier), // Specific controller for a QPU block
 
-    // Nano-Agent Hardware Elements/Interfaces
+    // === Nano-Agent Hardware Elements/Interfaces ===
     NanoUnitReference(Span, Identifier), // `nano_unit MyNanoAgent;`
-    NanoActuation(Span, Identifier, String, Vec<IrValue>), // `@actuate(MyNanoAgent, "move_xyz", 1.0, 2.0, 3.0)`
+    NanoActuation(Span, Identifier, String, List<HdlExpression>), // `@actuate(MyNanoAgent, "move_xyz", 1.0, 2.0, 3.0)`
     NanoSensorRead(Span, Identifier, String, Identifier), // `@sense(MyNanoAgent, "bio_marker", result_reg)`
     NanoChannel(Span, Identifier), // `nano_channel SwarmComm;`
+    NACUController(Span, Identifier), // Specific controller for a NACU block
 
-    // Conceptual Connection/Assignment (e.g., `out = in1 and in2;`)
-    Connection(Span, Identifier, HdlExpression),
+    // === Neuromorphic/AI Chip Elements ===
+    NeuronLayer(Span, Identifier, NeuronType, usize, List<HdlExpression>), // `@neuron_layer InputLayer(type: Spiking, size: 1024, inputs: SensorData)`
+    SynapseArray(Span, Identifier, Identifier, Identifier), // `@synapse_array L1_L2(from: InputLayer, to: HiddenLayer)`
+    AxiomProcessor(Span, Identifier, AxiomProcessorType), // `@axiom_proc TensorCore(type: FP_Accel)`
+    MemoryHierarchy(Span, Identifier, MemoryHierarchyType, List<HdlExpression>), // `@mem_hierarchy CacheBlock(level: L1, size: 32KB)`
+
+    // === Analog/Mixed-Signal Elements ===
+    AnalogCircuit(Span, Identifier, AnalogCircuitType, List<HdlExpression>), // `@analog_circuit RF_FrontEnd(type: LNA, gain: 20dB)`
+    ADC(Span, Identifier, usize, usize), // `adc Input(bits: 12, rate: 1MSPS)`
+    DAC(Span, Identifier, usize, usize), // `dac Output(bits: 12, rate: 1MSPS)`
+
+    // === Optical Computing Elements ===
+    OpticalWaveguide(Span, Identifier, usize), // `@opt_waveguide MainBus(width: 16)`
+    PhotonicSwitch(Span, Identifier, usize, usize), // `@photonic_switch Router(inputs: 4, outputs: 4)`
+    OpticalModulator(Span, Identifier, String), // `@opt_modulator PhaseMod(type: MZI)`
+
+    // === Power Management ===
+    PowerDomain(Span, Identifier, List<Identifier>), // `@power_domain Core(units: CPU_Core_0, QPU_1)`
+    VoltageRegulator(Span, Identifier, f32), // `@vreg VCore(voltage: 1.0)`
+    ThermalSensor(Span, Identifier), // `@thermal_sensor ChipTemp`
 
     // Imported HDL Instance
-    ImportedHdlInstance(Span, Identifier, Identifier, HashMap<String, Identifier>), // Module Name, Instance Name, Port Mappings
+    ImportedHdlInstance(Span, Identifier, Identifier, HashMap<String, HdlExpression>), // Module Name, Instance Name, Port Mappings
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HdlLogicGateType { And, Or, Not, Xor, Nand, Nor, Xnor, Buf }
 #[derive(Debug, Clone, PartialEq)]
-pub enum QuantumGateType { H, CX, Rx, Ry, Rz, Measure, Reset, Swap, CPhase }
+pub enum QuantumGateType { H, CX, Rx, Ry, Rz, Measure, Reset, Swap, CPhase, Toffoli }
+#[derive(Debug, Clone, PartialEq)]
+pub enum InterconnectType { NoC, Crossbar, OpticalBus, Wireless, Custom(String) }
+#[derive(Debug, Clone, PartialEq)]
+pub enum NeuronType { Spiking, Artificial, Analog, Custom(String) }
+#[derive(Debug, Clone, PartialEq)]
+pub enum AxiomProcessorType { TensorCore, DSP, FP_Accel, Custom(String) }
+#[derive(Debug, Clone, PartialEq)]
+pub enum MemoryHierarchyType { Cache, TLB, Scratchpad, MainMemoryController, Custom(String) }
+#[derive(Debug, Clone, PartialEq)]
+pub enum AnalogCircuitType { LNA, Mixer, Filter, Custom(String) }
 
-/// Conceptual HDL expressions for connections and logic.
+
+/// Conceptual HDL expressions for connections, logic, and bit manipulation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HdlExpression {
     Identifier(Identifier),
-    Literal(String), // "1", "0", "true", "false"
+    Literal(String), // "1", "0", "true", "false", "0b101", "0xAF"
+    Integer(i64),
+    Float(f64),
     BinaryOp(Span, HdlLogicGateType, Box<HdlExpression>, Box<HdlExpression>),
-    // ... more complex HDL expressions
+    BitwiseOp(Span, BitwiseOpType, Box<HdlExpression>, Box<HdlExpression>),
+    Slice(Span, Box<HdlExpression>, usize, usize), // `reg[3:0]`
+    Concatenation(Span, List<HdlExpression>), // `{a, b, c}`
+    FunctionCall(Span, Identifier, List<HdlExpression>), // `@synth_macro(param1, param2)`
+    Conditional(Span, Box<HdlExpression>, Box<HdlExpression>, Box<HdlExpression>), // `(condition ? true_expr : false_expr)`
+    Case(Span, Box<HdlExpression>, List<(HdlExpression, HdlExpression)>), // `case(sel) { 0: a, 1: b }`
+    // ... more complex HDL expressions for state machines, always blocks, etc.
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BitwiseOpType { And, Or, Xor, Not, LeftShift, RightShift, ArithmeticRightShift }
+
 
 // -----------------------------------------------------------------------------
 // Conceptual HDL Compiler Backend (part of src/backend/mod.rs) - This would interact with the HDL module
@@ -121,12 +172,18 @@ pub struct ZMMP_HDL_Generator;
 
 impl ZMMP_HDL_Generator {
     pub fn generate(&self, hdl_ir: &[IrInstruction]) -> Result<Vec<u8>, String> {
-        println!("[HDL Backend] Generating Z-MMP Microcode from HDL IR...");
+        println!("[HDL Backend] Generating Z-MMP Microcode/Bitstream from HDL IR for Universal Hardware Targets...");
         // This is where a highly specialized backend would translate HDL-specific IR
-        // into direct Z-MMP hardware microcode or configuration.
-        // This involves mapping logical registers/qubits to physical hardware,
-        // precise timing control, and direct instruction emission.
-        Ok(vec![0xDE, 0xAD, 0xBE, 0xEF]) // Dummy microcode
+        // into direct Z-MMP hardware microcode or configuration for various targets:
+        // - Classical (FPGA bitstream, ASIC layout)
+        // - Quantum (QPU pulse sequences)
+        // - Nano (NACU control patterns)
+        // - Neuromorphic (synaptic weight configurations, neuron spiking patterns)
+        // - AI Accelerators (tensor core microcode, custom instruction sets)
+        // - Analog/Optical (device specific configurations)
+        // This involves sophisticated multi-paradigm synthesis, mapping logical
+        // components to physical hardware, precise timing, and direct instruction emission.
+        Ok(vec![0xAA, 0xBB, 0xCC, 0xDD]) // Dummy universal hardware bitstream
     }
 }
 
@@ -138,10 +195,10 @@ impl ZMMP_HDL_Generator {
 /// A trait representing a compiled hardware unit, managed by Nimbus OS.
 pub trait CompiledHdlUnit {
     fn get_id(&self) -> Identifier;
-    fn get_type(&self) -> String; // e.g., "QPU_Block", "NanoControlChip"
+    fn get_type(&self) -> String; // e.g., "QPU_Block", "NanoControlChip", "Neuromorphic_Array"
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String>;
     fn execute(&self) -> Result<(), String>;
-    fn get_state(&self) -> HashMap<String, IrValue>; // Read registers, qubit states, etc.
+    fn get_state(&self) -> HashMap<String, IrValue>; // Read registers, qubit states, neuron states, etc.
 }
 
 /// Conceptual representation of a Z-MMP QPU hardware block.
@@ -151,16 +208,14 @@ pub struct ZMMP_QpuBlock {
 }
 
 impl ZMMP_QpuBlock {
-    pub fn new(id: Identifier) -> Self {
-        ZMMP_QpuBlock { id }
-    }
+    pub fn new(id: Identifier) -> Self { ZMMP_QpuBlock { id } }
 }
 
 impl CompiledHdlUnit for ZMMP_QpuBlock {
     fn get_id(&self) -> Identifier { self.id.clone() }
     fn get_type(&self) -> String { "Z-MMP_QPU_Block".to_string() }
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
-        println!("[HDL] Z-MMP QPU: Loading microcode ({} bytes).", microcode.len());
+        println!("[HDL] Z-MMP QPU: Loading microcode ({} bytes).".to_string(), microcode.len());
         // Conceptual: Nimbus OS HAL call to QPU firmware loader.
         Ok(()) 
     }
@@ -182,16 +237,14 @@ pub struct ZMMP_NacuBlock {
 }
 
 impl ZMMP_NacuBlock {
-    pub fn new(id: Identifier) -> Self {
-        ZMMP_NacuBlock { id }
-    }
+    pub fn new(id: Identifier) -> Self { ZMMP_NacuBlock { id } }
 }
 
 impl CompiledHdlUnit for ZMMP_NacuBlock {
     fn get_id(&self) -> Identifier { self.id.clone() }
     fn get_type(&self) -> String { "Z-MMP_NACU_Block".to_string() }
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
-        println!("[HDL] Z-MMP NACU: Loading control program ({} bytes).", microcode.len());
+        println!("[HDL] Z-MMP NACU: Loading control program ({} bytes).".to_string(), microcode.len());
         // Conceptual: Nimbus OS HAL call to NACU firmware loader.
         Ok(()) 
     }
@@ -205,6 +258,88 @@ impl CompiledHdlUnit for ZMMP_NacuBlock {
         HashMap::new() // Dummy state
     }
 }
+
+/// Conceptual representation of a Z-MMP Neuromorphic Processing Unit.
+pub struct ZMMP_NPUBlock {
+    id: Identifier,
+    // Direct hardware interface via Nimbus OS HAL.
+}
+
+impl ZMMP_NPUBlock {
+    pub fn new(id: Identifier) -> Self { ZMMP_NPUBlock { id } }
+}
+
+impl CompiledHdlUnit for ZMMP_NPUBlock {
+    fn get_id(&self) -> Identifier { self.id.clone() }
+    fn get_type(&self) -> String { "Z-MMP_NPU_Block".to_string() }
+    fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
+        println!("[HDL] Z-MMP NPU: Loading neuron configurations ({} bytes).".to_string(), microcode.len());
+        Ok(()) 
+    }
+    fn execute(&self) -> Result<(), String> {
+        println!("[HDL] Z-MMP NPU: Activating neuromorphic array.");
+        Ok(()) 
+    }
+    fn get_state(&self) -> HashMap<String, IrValue> {
+        println!("[HDL] Z-MMP NPU: Reading neuron states/synaptic weights.");
+        HashMap::new() // Dummy state
+    }
+}
+
+/// Conceptual representation of a Z-MMP AI Accelerator Unit.
+pub struct ZMMP_AIAccelBlock {
+    id: Identifier,
+    // Direct hardware interface via Nimbus OS HAL.
+}
+
+impl ZMMP_AIAccelBlock {
+    pub fn new(id: Identifier) -> Self { ZMMP_AIAccelBlock { id } }
+}
+
+impl CompiledHdlUnit for ZMMP_AIAccelBlock {
+    fn get_id(&self) -> Identifier { self.id.clone() }
+    fn get_type(&self) -> String { "Z-MMP_AIAccel_Block".to_string() }
+    fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
+        println!("[HDL] Z-MMP AI Accel: Loading tensor operations ({} bytes).".to_string(), microcode.len());
+        Ok(()) 
+    }
+    fn execute(&self) -> Result<(), String> {
+        println!("[HDL] Z-MMP AI Accel: Starting accelerated computation.");
+        Ok(()) 
+    }
+    fn get_state(&self) -> HashMap<String, IrValue> {
+        println!("[HDL] Z-MMP AI Accel: Reading accelerator state.");
+        HashMap::new() // Dummy state
+    }
+}
+
+/// Conceptual representation of a Z-MMP Analog/Optical Processor.
+pub struct ZMMP_AnalogOpticalBlock {
+    id: Identifier,
+    // Direct hardware interface via Nimbus OS HAL.
+}
+
+impl ZMMP_AnalogOpticalBlock {
+    pub fn new(id: Identifier) -> Self { ZMMP_AnalogOpticalBlock { id } }
+}
+
+impl CompiledHdlUnit for ZMMP_AnalogOpticalBlock {
+    fn get_id(&self) -> Identifier { self.id.clone() }
+    fn get_type(&self) -> String { "Z-MMP_AnalogOptical_Block".to_string() }
+    fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
+        println!("[HDL] Z-MMP Analog/Optical: Loading configuration ({} bytes).".to_string(), microcode.len());
+        Ok(()) 
+    }
+    fn execute(&self) -> Result<(), String> {
+        println!("[HDL] Z-MMP Analog/Optical: Activating processing unit.");
+        Ok(()) 
+    }
+    fn get_state(&self) -> HashMap<String, IrValue> {
+        println!("[HDL] Z-MMP Analog/Optical: Reading component states.");
+        HashMap::new() // Dummy state
+    }
+}
+
 
 // -----------------------------------------------------------------------------
 // Conceptual HDL to HDL Transpiler/Linker for existing HDLs

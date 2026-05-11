@@ -83,12 +83,18 @@ pub struct ZMMP_HDL_Generator;
 impl CodeGenerator for ZMMP_HDL_Generator {
     fn target_name(&self) -> &'static str { "Z_MMP_HDL" }
     fn generate(&self, hdl_ir: &[IrInstruction]) -> Result<Vec<u8>, String> {
-        println!("[Backend] Generating Z-MMP Microcode from HDL IR...");
+        println!("[Backend] Generating Z-MMP Microcode/Bitstream from HDL IR for Universal Hardware Targets...");
         // This is where a highly specialized backend would translate HDL-specific IR
-        // into direct Z-MMP hardware microcode or configuration.
-        // This involves mapping logical registers/qubits to physical hardware,
-        // precise timing control, and direct instruction emission.
-        Ok(vec![0x10, 0x11, 0x12, 0x13]) // Dummy microcode
+        // into direct Z-MMP hardware microcode or configuration for various targets:
+        // - Classical (FPGA bitstream, ASIC layout)
+        // - Quantum (QPU pulse sequences)
+        // - Nano (NACU control patterns)
+        // - Neuromorphic (synaptic weight configurations, neuron spiking patterns)
+        // - AI Accelerators (tensor core microcode, custom instruction sets)
+        // - Analog/Optical (device specific configurations)
+        // This involves sophisticated multi-paradigm synthesis, mapping logical
+        // components to physical hardware, precise timing, and direct instruction emission.
+        Ok(vec![0xAA, 0xBB, 0xCC, 0xDD]) // Dummy universal hardware bitstream
     }
 }
 
