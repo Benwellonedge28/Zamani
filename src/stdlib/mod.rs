@@ -2,11 +2,6 @@
 //! Zenith Universal Meta-Compiler (UMC) Standard Library
 //!
 //! This module aggregates and manages all standard library components for Zenith.
-//! It provides foundational services and high-level abstractions that are common
-//! across different programming paradigms supported by Zenith.
-//!
-//! The standard library is structured into modules corresponding to functional
-//! areas (e.g., core utilities, collections, specific paradigm APIs).
 
 pub mod core;
 pub mod collections;
@@ -32,7 +27,9 @@ pub mod vision;
 pub mod robotics;
 pub mod agents;
 pub mod meta_ops;
-pub mod external_services; // New module for External Services Integration
+pub mod external_services;
+pub mod agi_governance; // New: For safety, ethics, and legal compliance
+pub mod human_agi_interaction; // New: For admin, feedback, and economic interaction
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -61,15 +58,18 @@ pub fn initialize_stdlib() {
     robotics::init_robotics_lib();
     agents::init_agents_lib();
     meta_ops::init_meta_ops_lib();
-    external_services::init_external_services_lib(); // Initialize External Services Integration module
+    external_services::init_external_services_lib();
+    agi_governance::init_agi_governance_lib(); // Initialize Governance module
+    human_agi_interaction::init_human_agi_lib(); // Initialize Human-AGI Interaction module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
-
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    external_services::shutdown_external_services_lib(); // Shutdown External Services Integration module
+    human_agi_interaction::shutdown_human_agi_lib(); 
+    agi_governance::shutdown_agi_governance_lib();
+    external_services::shutdown_external_services_lib();
     meta_ops::shutdown_meta_ops_lib(); 
     agents::shutdown_agents_lib(); 
     robotics::shutdown_robotics_lib(); 
