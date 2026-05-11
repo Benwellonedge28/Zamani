@@ -34,7 +34,8 @@ pub mod reality;
 pub mod distributed_ledger;
 pub mod iot;
 pub mod human_interface_devices;
-pub mod chat_architect_agent; // New: For Conversational Code Synthesis from NL prompts
+pub mod chat_architect_agent;
+pub mod documentation; // New: Exhaustive Omni-Documentation & Multi-Modal Engine
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -70,14 +71,16 @@ pub fn initialize_stdlib() {
     distributed_ledger::init_ledger_lib();
     iot::init_iot_lib();
     human_interface_devices::init_hid_lib();
-    chat_architect_agent::init_chat_architect_agent(); // Initialize Chat Architect Agent module
+    chat_architect_agent::init_chat_architect_agent();
+    documentation::init_documentation_lib(); // Initialize Documentation engine
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    chat_architect_agent::shutdown_chat_architect_agent(); // Shutdown Chat Architect Agent module
+    documentation::shutdown_documentation_lib(); // Shutdown Documentation engine
+    chat_architect_agent::shutdown_chat_architect_agent();
     human_interface_devices::shutdown_hid_lib();
     iot::shutdown_iot_lib();
     distributed_ledger::shutdown_ledger_lib();
