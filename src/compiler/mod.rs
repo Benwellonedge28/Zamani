@@ -10,7 +10,8 @@ pub mod frontend; // Lexer, Parser, AST, Semantic Analysis
 pub mod ir_gen;   // Intermediate Representation Generation
 pub mod optimizer; // Code Optimization
 pub mod backend;  // Target-specific Code Generation
-pub mod oop_advanced; // New module for Advanced OOP Features
+pub mod oop_advanced; // Advanced OOP Features
+pub mod language_spec; // New: Zenith Language Specification modules
 
 /// Initializes the entire Zenith UMC compiler pipeline.
 pub fn initialize_compiler() {
@@ -19,14 +20,16 @@ pub fn initialize_compiler() {
     ir_gen::init_ir_gen();
     optimizer::init_optimizer();
     backend::init_backend();
-    oop_advanced::init_oop_advanced(); // Initialize Advanced OOP module
+    oop_advanced::init_oop_advanced();
+    language_spec::init_language_spec(); // Initialize language specification modules
     println!("Zenith UMC Compiler initialized.");
 }
 
 /// Shuts down the entire Zenith UMC compiler pipeline.
 pub fn shutdown_compiler() {
     println!("Shutting down Zenith UMC Compiler...");
-    oop_advanced::shutdown_oop_advanced(); // Shutdown Advanced OOP module
+    language_spec::shutdown_language_spec(); // Shutdown language specification modules
+    oop_advanced::shutdown_oop_advanced();
     backend::shutdown_backend();
     optimizer::shutdown_optimizer();
     ir_gen::shutdown_ir_gen();
@@ -38,9 +41,9 @@ pub fn shutdown_compiler() {
 pub fn compile(source_file_path: &str) -> Result<Vec<u8>, String> {
     println!("Compiling '{}' using Zenith UMC.", source_file_path);
     // Conceptual full pipeline:
-    // 1. Lexing & Parsing (frontend)
-    // 2. Semantic Analysis (frontend)
-    // 3. IR Generation (ir_gen)
+    // 1. Lexing & Parsing (frontend) - will now recognize new keywords
+    // 2. Semantic Analysis (frontend) - will use AiCognitionSemanticAnalyzer
+    // 3. IR Generation (ir_gen) - will use AiCognitionIrGenerator
     // 4. Optimization (optimizer)
     // 5. Backend Code Generation (backend)
     Ok(vec![0xDE, 0xAD, 0xBE, 0xEF]) // Dummy compiled output
