@@ -21,7 +21,8 @@ pub mod package_manager;
 pub mod ide_support;
 pub mod debug_info;
 pub mod interoperability;
-pub mod zenith_project_config; // Expose the project config module
+pub mod zenith_project_config;
+pub mod formal_verification; // New module for formal verification
 
 /// Initializes the conceptual Zenith Toolchain Integration components.
 pub fn init_toolchain_integration() {
@@ -31,6 +32,7 @@ pub fn init_toolchain_integration() {
     ide_support::init_ide_support();
     debug_info::init_debug_info_gen();
     interoperability::init_interoperability_layer();
+    formal_verification::init_formal_verification(); // Initialize formal verification
     // zenith_project_config::init_config_system(); // No-op for now
     println!("Zenith UMC Toolchain Integration initialized.");
 }
@@ -38,6 +40,7 @@ pub fn init_toolchain_integration() {
 /// Shuts down the conceptual Zenith Toolchain Integration components.
 pub fn shutdown_toolchain_integration() {
     println!("Shutting down Zenith UMC Toolchain Integration...");
+    formal_verification::shutdown_formal_verification(); // Shutdown formal verification
     // zenith_project_config::shutdown_config_system(); // No-op for now
     interoperability::shutdown_interoperability_layer();
     debug_info::shutdown_debug_info_gen();

@@ -20,6 +20,7 @@ use crate::stdlib;
 use crate::toolchain;
 use crate::source_map::{FileId, SourceMap};
 use crate::error_reporting::{CompilerError, Severity};
+use crate::toolchain::formal_verification::{ZenithFormalVerifier, VerificationProperty, VerificationResult}; // Import for formal verification
 
 fn main() -> Result<(), String> {
     println!("-----------------------------------------------------");
@@ -37,48 +38,135 @@ fn main() -> Result<(), String> {
     let mut compiler_errors: Vec<CompilerError> = Vec::new();
     let mut source_map = SourceMap::new(); // Create SourceMap
 
-    // 2. Conceptual Zenith Source Code
+    // 2. Conceptual Zenith Source Code (using the complex example)
     let source_code_str = r#"
         // A simple Zenith program demonstrating unified paradigms.
-        fn add(a: int, b: int) -> int {
-            let result = a + b;
-            return result;
+        type PatientId = string;
+        type HealthMetric = float;
+        type TherapeuticAgent = string;
+
+        struct PatientRecord {
+            id: PatientId,
+            initial_metrics: List<HealthMetric>,
+            treatment_history: List<string>,
+            current_status: string,
         }
 
-        quantum circuit MyQuantumAlgorithm {
-            let q = QReg[2];
-            q.get_mut(0).h();
-            q.get_mut(0).cnot(q.get_mut(1));
-            let classical_result = q.get_mut(0).measure();
+        effect QuantumDecoherence;
+        effect NanoAgentMalfunction;
+        effect TimelineDivergence;
+
+        quantum circuit QuantumDiagnosticSensor(patient_id: PatientId) -> QReg[4] with effects { QuantumDecoherence } {
+            let qreg_size = 4;
+            let sensor_q = QReg[qreg_size];
+            for i in 0..qreg_size-1 {
+                sensor_q.get_mut(i).h();
+                sensor_q.get_mut(i).cnot(sensor_q.get_mut(i+1));
+            }
+            let calibration_data = stdlib::sankofa::ZamaniFact::access("Q_Sensor_Calibration").get_content::<stdlib::collections::List<float>>();
+            if patient_id.len() > 10 {
+                perform QuantumDecoherence("High noise environment detected!");
+            }
+            return sensor_q;
         }
 
-        nano agent BasicHarvester {
-            let my_agent = NanoAgent::assemble("blueprint", ["sensor"]);
-            my_agent.perform_action("harvest");
+        nano agent TherapeuticSwarm(patient: PatientId, agent: TherapeuticAgent) with effects { NanoAgentMalfunction } {
+            let swarm_size = 100;
+            let blueprint = "therapy_delivery_unit";
+            let components = ["propulsor", "payload_release", "bio_scanner"];
+            let mut deployed_agents = stdlib::collections::List::<stdlib::nano::NanoAgent>::new();
+            for i in 0..swarm_size {
+                let new_agent = stdlib::nano::NanoAgent::assemble(blueprint, components);
+                new_agent.communicate(&new_agent, "init_protocol");
+                deployed_agents.push(new_agent);
+            }
+            for agent in deployed_agents {
+                agent.perform_action("locate_target_cells");
+                agent.perform_action("deliver_payload:" + agent.to_string()); // to_string on NanoAgent
+                if stdlib::core::rand() < 0.01 {
+                    perform NanoAgentMalfunction("Agent " + agent.to_string() + " reported payload delivery failure!");
+                }
+            }
+            stdlib::core::println("Therapeutic swarm deployed and completed initial mission for " + patient);
         }
 
-        remember my_fact = "Zenith is universal";
-        
-        fn main() -> int {
-            let x = add(5, 3);
-            MyQuantumAlgorithm();
-            BasicHarvester();
+        fn simulate_treatment_outcomes(initial_health_metrics: stdlib::collections::List<HealthMetric>, proposed_therapy: TherapeuticAgent) -> (HealthMetric, string) with effects { TimelineDivergence } {
+            let speculative_timeline_A = stdlib::mts::MtsSlice::new(initial_health_metrics);
+            let speculative_timeline_B = stdlib::mts::MtsSlice::new(initial_health_metrics);
+
+            speculative_timeline_A.store("therapy_A_applied", 10);
+            let outcome_A: HealthMetric = speculative_timeline_A.load(100);
+
+            speculative_timeline_B.store("therapy_B_applied", 10);
+            let outcome_B: HealthMetric = speculative_timeline_B.load(100);
+
+            let final_outcome = if outcome_A > outcome_B { outcome_A } else { outcome_B };
+            
+            handle TimelineDivergence {
+                speculative_timeline_A.synchronize(&speculative_timeline_B);
+            } with { |msg: string| {
+                stdlib::core::println("Timeline merging failed: " + msg + ". Proceeding with fallback.");
+                return (final_outcome, "fallback_strategy");
+            }}
+            return (final_outcome, "optimal_strategy");
+        }
+
+        fn main(patient_id: PatientId) -> int with effects { QuantumDecoherence, NanoAgentMalfunction, TimelineDivergence } {
+            let patient_record = stdlib::sankofa::SasaKnowledge::access(patient_id, None);
+            if patient_record.is_none() {
+                stdlib::core::println("Error: Patient record not found for " + patient_id);
+                return -1;
+            }
+            let mut current_patient_data = patient_record.unwrap().get_content::<PatientRecord>();
+
+            stdlib::core::println("Initiating therapeutic protocol for " + current_patient_data.id);
+
+            handle QuantumDecoherence {
+                let prepared_sensor_state = QuantumDiagnosticSensor(patient_id);
+                stdlib::core::println("Quantum diagnostics completed.");
+            } with { |err_msg: string| {
+                stdlib::core::println("Quantum diagnostics failed: " + err_msg + ". Proceeding with classical fallback.");
+            }}
+
+            let (predicted_outcome, strategy) = simulate_treatment_outcomes(
+                current_patient_data.initial_metrics,
+                "generic_therapy_X"
+            );
+            stdlib::core::println("Simulated optimal outcome: " + predicted_outcome.to_string() + " with strategy: " + strategy);
+            
+            let selected_therapy = if predicted_outcome > 0.8 { "advanced_therapy_Y" } else { "basic_therapy_Z" };
+            handle NanoAgentMalfunction {
+                TherapeuticSwarm(patient_id, selected_therapy);
+                stdlib::core::println("Therapeutic delivery completed.");
+            } with { |err_msg: string| {
+                stdlib::core::println("Nano-agent therapy delivery encountered issues: " + err_msg + ". Initiating recovery protocol.");
+                stdlib::sankofa::TemporalLearner::learn("nano_malfunction_recovery", 0, chrono::Utc::now().timestamp_millis() as u64);
+            }}
+
+            current_patient_data.current_status = "therapy_completed".to_string();
+            stdlib::sankofa::SasaKnowledge::update(patient_id, current_patient_data, &[patient_record.unwrap().get_version_id()]);
+            
+            let efficacy_consensus = stdlib::sankofa::ConsensusTrue::verify(predicted_outcome, "treatment_efficacy", chrono::Utc::now().timestamp_millis() as u64);
+            if efficacy_consensus.is_ok() {
+                stdlib::core::println("Treatment efficacy verified with consensus.");
+            }
+
             return 0;
         }
     "#;
-    let (file_id, source_file_arc) = source_map.add_file("example.zn".to_string(), source_code_str.to_string()); // Add source to SourceMap
+    let (file_id, source_file_arc) = source_map.add_file("complex_zenith_example.zn".to_string(), source_code_str.to_string());
 
     // 3. Lexical Analysis
     println!("Lexing source code...");
     let lexer_for_tokens = Lexer::new(file_id, Arc::clone(&source_file_arc));
-    let tokens: Vec<_> = lexer_for_tokens.clone().collect(); 
+    let _tokens: Vec<_> = lexer_for_tokens.clone().collect(); 
     if !lexer_for_tokens.get_errors().is_empty() {
         compiler_errors.extend(lexer_for_tokens.get_errors().iter().cloned().map(CompilerError::Lexer));
     }
 
     // 4. Parsing
     println!("Parsing tokens into AST...");
-    let mut parser = Parser::new(Lexer::new(file_id, Arc::clone(&source_file_arc))); // Pass Arc<SourceFile>
+    let mut parser = Parser::new(Lexer::new(file_id, Arc::clone(&source_file_arc)));
     let program_ast = parser.parse_program();
     if !parser.get_errors().is_empty() {
         compiler_errors.extend(parser.get_errors().iter().cloned().map(CompilerError::Parser));
@@ -98,7 +186,7 @@ fn main() -> Result<(), String> {
 Compilation failed with {} errors:
 ", compiler_errors.len());
         for err in compiler_errors {
-            eprintln!("{}", err.report(&source_map)); // Pass source_map
+            eprintln!("{}", err.report(&source_map));
         }
         return Err("Compiler pipeline failed due to earlier errors.".to_string());
     }
@@ -121,7 +209,50 @@ Compilation failed with {} errors:
         }
     };
 
-    // 7. Optimization
+    // 7. Formal Verification (Conceptual Pass)
+    println!("Running Conceptual Formal Verification...");
+    let verification_properties = vec![
+        VerificationProperty::CausalConsistency,
+        VerificationProperty::EntanglementPurity,
+        VerificationProperty::NanoResourceGuarantee,
+        // Add other properties relevant to the complex example
+    ];
+    let verification_results = ZenithFormalVerifier::run_as_compiler_pass(&program_ast, &ir_code, &verification_properties);
+    for result in verification_results {
+        match result {
+            VerificationResult::Proven(report) => println!("  -> PROVEN: {:?} in {}ms.", report.property, report.duration_ms),
+            VerificationResult::Disproven(report, counter_example) => {
+                println!("  -> DISPROVEN: {:?} in {}ms. Counter-example: {:?}", report.property, report.duration_ms, counter_example);
+                compiler_errors.push(CompilerError::Generic(
+                    format!("Formal verification failed for property {:?}: {}", report.property, report.insights.join(", ")),
+                    report.related_span.unwrap_or(Span::dummy()),
+                    Severity::Error,
+                ));
+            }
+            VerificationResult::Unproven(report) => println!("  -> UNPROVEN: {:?} in {}ms. Insights: {:?}", report.property, report.duration_ms, report.insights),
+            VerificationResult::Error(report) => {
+                println!("  -> VERIFICATION TOOL ERROR: {:?} in {}ms. Output: {}", report.property, report.duration_ms, report.tool_output);
+                 compiler_errors.push(CompilerError::Generic(
+                    format!("Formal verification tool encountered an error for property {:?}: {}", report.property, report.tool_output),
+                    report.related_span.unwrap_or(Span::dummy()),
+                    Severity::Error,
+                ));
+            }
+        }
+    }
+
+    // --- Critical Error Check After Formal Verification ---
+    if !compiler_errors.is_empty() {
+        eprintln!("
+Compilation failed with {} errors:
+", compiler_errors.len());
+        for err in compiler_errors {
+            eprintln!("{}", err.report(&source_map));
+        }
+        return Err("Compiler pipeline failed after formal verification.".to_string());
+    }
+
+    // 8. Optimization
     println!("Optimizing UMC IR...");
     let mut optimizer = UMC_Optimizer::new();
     optimizer.add_pass(CSE_Pass);
@@ -139,7 +270,7 @@ Compilation failed with {} errors:
         })?;
     println!("Optimization complete. Changes: {}, Instructions (before/after): {}/{}", metrics.total_changes_made, metrics.instruction_count_before, metrics.instruction_count_after);
 
-    // 8. Backend Code Generation
+    // 9. Backend Code Generation
     println!("Generating target-specific code...");
     let mut backend = UMC_Backend::new();
     backend.register_generator(X86_64_Generator);
@@ -161,7 +292,7 @@ Compilation failed with {} errors:
 --- Compiler Pipeline End ---
 ");
 
-    // 9. Shutdown Runtime, Standard Library, and Toolchain (Conceptual)
+    // 10. Shutdown Runtime, Standard Library, and Toolchain (Conceptual)
     runtime::shutdown_runtime();
     stdlib::shutdown_stdlib();
     toolchain::shutdown_toolchain_integration();
