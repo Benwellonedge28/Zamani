@@ -15,7 +15,8 @@ pub mod nano;
 pub mod mts;
 pub mod sankofa;
 pub mod reflection;
-pub mod ml; // New module for Machine Learning
+pub mod ml;
+pub mod net; // New module for Networking
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -27,14 +28,17 @@ pub fn initialize_stdlib() {
     mts::init_mts_lib();
     sankofa::init_sankofa_lib();
     reflection::init_reflection_lib();
-    ml::init_ml_lib(); // Initialize Machine Learning module
+    ml::init_ml_lib();
+    net::init_net_lib(); // Initialize Networking module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
+
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    ml::shutdown_ml_lib(); // Shutdown Machine Learning module
+    net::shutdown_net_lib(); // Shutdown Networking module
+    ml::shutdown_ml_lib(); 
     reflection::shutdown_reflection_lib(); 
     sankofa::shutdown_sankofa_lib();
     mts::shutdown_mts_lib();
