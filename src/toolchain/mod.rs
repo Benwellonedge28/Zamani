@@ -11,7 +11,8 @@ pub mod ide_support;
 pub mod formal_verification;
 pub mod hdl;
 pub mod self_evolution;
-pub mod lang_integration; // New module for Language Integration
+pub mod lang_integration;
+pub mod meta_programming; // New module for Meta-Programming and Macros
 
 /// Initializes all toolchain components.
 pub fn init_toolchain_integration() {
@@ -21,14 +22,16 @@ pub fn init_toolchain_integration() {
     formal_verification::init_formal_verification();
     hdl::init_hdl();
     self_evolution::init_self_evolution();
-    lang_integration::init_lang_integration(); // Initialize Language Integration module
+    lang_integration::init_lang_integration();
+    meta_programming::init_meta_programming(); // Initialize Meta-Programming module
     println!("Zenith UMC Toolchain Integration initialized.");
 }
 
 /// Shuts down all toolchain components.
 pub fn shutdown_toolchain_integration() {
     println!("Shutting down Zenith UMC Toolchain Integration...");
-    lang_integration::fn_shutdown_lang_integration(); // Shutdown Language Integration module
+    meta_programming::shutdown_meta_programming(); // Shutdown Meta-Programming module
+    lang_integration::shutdown_lang_integration(); 
     self_evolution::shutdown_self_evolution(); 
     hdl::shutdown_hdl(); 
     formal_verification::shutdown_formal_verification();
