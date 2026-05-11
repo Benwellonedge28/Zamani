@@ -6,13 +6,14 @@
 //! core Nimbus types and functions, acting as the bridge for Zenith programs.
 
 use std::sync::{Arc, Mutex};
-use crate::nimbus_os::mod_rs::{NimbusMicrokernel, NimbusContextId, SandboxPolicy, CapabilityToken, ChannelId, NimbusContext, NimbusContextState}; // Import from new location
+// Updated import to reflect changes in mod.rs for ThreadId, ThreadState, GlobalScheduler
+use crate::nimbus_os::mod_rs::{NimbusMicrokernel, NimbusContextId, SandboxPolicy, CapabilityToken, ChannelId, NimbusContext, NimbusContextState, ThreadId, ThreadState, GlobalScheduler};
 use crate::ast::Identifier;
 use crate::core_lang_primitives::{Size, MemoryRegion, TimeStamp}; // Use core primitives for types
 use crate::runtime::mts::TimelineId; // Import TimelineId
 
 // Re-export core Nimbus types for convenience for other runtime modules
-pub use crate::nimbus_os::mod_rs::{NimbusContext, NimbusContextState, CapabilityToken, ChannelId, SandboxPolicy, NimbusContextId};
+pub use crate::nimbus_os::mod_rs::{NimbusContext, NimbusContextState, CapabilityToken, ChannelId, SandboxPolicy, NimbusContextId, ThreadId, ThreadState, GlobalScheduler};
 
 // Global conceptual Nimbus Microkernel instance.
 static mut NIMBUS_MICROKERNEL_INSTANCE: Option<Arc<Mutex<NimbusMicrokernel>>> = None;
@@ -39,18 +40,55 @@ pub fn get_nimbus_microkernel() -> Option<Arc<Mutex<NimbusMicrokernel>>> {
 }
 
 // --- Wrapper functions for Nimbus System Calls, now interacting with the global microkernel instance ---
-// These would typically be part of `core_lang_primitives::NimbusSystemCall` or directly exposed by the runtime.
-// For this conceptual refactoring, we'll keep them here for clarity in the interface layer.
 
-// Example of how a "system call" might be invoked by Zenith runtime components:
+// Example: create_isolated_context_via_interface now needs SandboxPolicy
 pub fn create_isolated_context_via_interface(blueprint_id: Identifier, sandbox_policy: SandboxPolicy) -> NimbusContextId {
     if let Some(microkernel_arc) = get_nimbus_microkernel() {
         let mut microkernel = microkernel_arc.lock().unwrap();
-        // Assume default parent_id for now
         microkernel.create_context(blueprint_id.0, None, sandbox_policy).unwrap_or(0)
     } else {
         println!("Error: Nimbus Microkernel not initialized.");
         0
+    }
+}
+
+// New wrapper function for creating a thread
+pub fn create_thread_via_interface(context_id: NimbusContextId, entry_point_fn_ptr: u64, stack_size: Size) -> Result<ThreadId, String> {
+    if let Some(microkernel_arc) = get_nimbus_microkernel() {
+        let mut microkernel = microkernel_arc.lock().unwrap();
+        microkernel.create_thread(context_id, entry_point_fn_ptr, stack_size)
+    } else {
+        Err("Nimbus Microkernel not initialized.".to_string())
+    }
+}
+
+// New wrapper function for starting a thread
+pub fn start_thread_via_interface(context_id: NimbusContextId, thread_id: ThreadId) -> Result<(), String> {
+    if let Some(microkernel_arc) = get_nimbus_microkernel() {
+        let mut microkernel = microkernel_arc.lock().unwrap();
+        microkernel.start_thread(context_id, thread_id)
+    } else {
+        Err("Nimbus Microkernel not initialized.".to_string())
+    }
+}
+
+// New wrapper function for suspending a thread
+pub fn suspend_thread_via_interface(context_id: NimbusContextId, thread_id: ThreadId) -> Result<(), String> {
+    if let Some(microkernel_arc) = get_nimbus_microkernel() {
+        let mut microkernel = microkernel_arc.lock().unwrap();
+        microkernel.suspend_thread(context_id, thread_id)
+    } else {
+        Err("Nimbus Microkernel not initialized.".to_string())
+    }
+}
+
+// New wrapper function for terminating a thread
+pub fn terminate_thread_via_interface(context_id: NimbusContextId, thread_id: ThreadId) -> Result<(), String> {
+    if let Some(microkernel_arc) = get_nimbus_microkernel() {
+        let mut microkernel = microkernel_arc.lock().unwrap();
+        microkernel.terminate_thread(context_id, thread_id)
+    } else {
+        Err("Nimbus Microkernel not initialized.".to_string())
     }
 }
 

@@ -35,6 +35,15 @@ pub enum NimbusContextState {
     Error(String),
 }
 
+// --- Process/Thread Management ---
+/// Represents a conceptual thread/process ID within a context.
+pub type ThreadId = u64;
+/// States for a microkernel-managed thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ThreadState {
+    Ready, Running, Blocked, Terminated
+}
+
 /// Conceptual representation of an isolated execution environment in Nimbus.
 #[derive(Debug, Clone)]
 pub struct NimbusContext {
@@ -47,6 +56,36 @@ pub struct NimbusContext {
     pub current_state: NimbusContextState,
     pub execution_timeline_id: Option<TimelineId>, // Link to MTS timeline
     pub message_queue: Arc<Mutex<VecDeque<Vec<u8>>>>, // Conceptual IPC message queue
+    pub threads: HashMap<ThreadId, ThreadState>, // Threads within this context
+    pub next_thread_id: ThreadId,
+}
+
+/// Conceptual global scheduler for the Nimbus Microkernel.
+#[derive(Debug, Clone)]
+pub struct GlobalScheduler {
+    run_queue: VecDeque<NimbusContextId>, // Contexts ready to run
+    // Conceptual: Advanced scheduling policies (priority, real-time, fair-share)
+    // Mapping of NimbusContextId to active ThreadId within that context
+}
+
+impl GlobalScheduler {
+    pub fn new() -> Self {
+        GlobalScheduler { run_queue: VecDeque::new() }
+    }
+
+    pub fn schedule_next_context(&mut self) -> Option<NimbusContextId> {
+        self.run_queue.pop_front() // Simple round-robin for conceptual
+    }
+
+    pub fn add_to_run_queue(&mut self, context_id: NimbusContextId) {
+        if !self.run_queue.contains(&context_id) {
+            self.run_queue.push_back(context_id);
+        }
+    }
+
+    pub fn remove_from_run_queue(&mut self, context_id: NimbusContextId) {
+        self.run_queue.retain(|&id| id != context_id);
+    }
 }
 
 /// A conceptual Nimbus OS Microkernel responsible for system-level operations.
@@ -58,9 +97,7 @@ pub struct NimbusMicrokernel {
     next_channel_id: ChannelId,
     channels: HashMap<ChannelId, Arc<Mutex<VecDeque<Vec<u8>>>>>, // Map channel ID to message queue
     registered_devices: HashMap<u64, String>, // Device ID -> Driver Name (conceptual)
-    // Global capability registry (conceptual)
-    // Hardware Abstraction Layer (HAL) interface (conceptual)
-    // Security policy enforcement engine (conceptual)
+    global_scheduler: Arc<Mutex<GlobalScheduler>>,
 }
 
 impl NimbusMicrokernel {
@@ -71,6 +108,7 @@ impl NimbusMicrokernel {
             next_channel_id: 1,
             channels: HashMap::new(),
             registered_devices: HashMap::new(),
+            global_scheduler: Arc::new(Mutex::new(GlobalScheduler::new())),
         }
     }
 
@@ -88,8 +126,11 @@ impl NimbusMicrokernel {
             current_state: NimbusContextState::Running,
             execution_timeline_id: None,
             message_queue: Arc::new(Mutex::new(VecDeque::new())),
+            threads: HashMap::new(),
+            next_thread_id: 1,
         };
-        self.contexts.insert(id, context);
+        self.contexts.insert(id, context.clone());
+        self.global_scheduler.lock().unwrap().add_to_run_queue(id); // Add to scheduler
         println!("    -> Nimbus OS: Created isolated context {} for blueprint '{}' with policy '{:?}'.".to_string(), id, blueprint_id, sandbox_policy);
         Ok(id)
     }
@@ -97,6 +138,7 @@ impl NimbusMicrokernel {
     /// Destroys an existing execution context, reclaiming its resources.
     pub fn destroy_context(&mut self, id: NimbusContextId) -> Result<(), String> {
         if self.contexts.remove(&id).is_some() {
+            self.global_scheduler.lock().unwrap().remove_from_run_queue(id); // Remove from scheduler
             println!("    -> Nimbus OS: Destroyed context {}.".to_string(), id);
             Ok(())
         } else {
@@ -179,9 +221,69 @@ impl NimbusMicrokernel {
         if let Some(context) = self.contexts.get_mut(&context_id) {
             if context.active_capabilities.remove(&capability) {
                 println!("    -> Nimbus OS: Revoked capability '{:?}' from context {}.".to_string(), capability, context_id);
-                Ok(())
+                Ok(()) 
             } else {
                 Err(format!("Capability '{:?}' not active for context {}.".to_string(), capability, context_id))
+            }
+        } else {
+            Err(format!("Context {} not found.", context_id))
+        }
+    }
+
+    // --- Thread/Process Management within a Context ---
+
+    /// Creates a new thread within a specific context.
+    pub fn create_thread(&mut self, context_id: NimbusContextId, entry_point_fn_ptr: u64, stack_size: Size) -> Result<ThreadId, String> {
+        if let Some(context) = self.contexts.get_mut(&context_id) {
+            let thread_id = context.next_thread_id;
+            context.next_thread_id += 1;
+            context.threads.insert(thread_id, ThreadState::Ready);
+            println!("    -> Nimbus OS: Created thread {} in context {}. Entry: {:x}, Stack: {}.".to_string(), thread_id, context_id, entry_point_fn_ptr, stack_size.0);
+            // Conceptual: Allocate stack memory, register with hardware for execution
+            Ok(thread_id)
+        } else {
+            Err(format!("Context {} not found for thread creation.", context_id))
+        }
+    }
+
+    /// Starts execution of a thread.
+    pub fn start_thread(&mut self, context_id: NimbusContextId, thread_id: ThreadId) -> Result<(), String> {
+        if let Some(context) = self.contexts.get_mut(&context_id) {
+            if let Some(state) = context.threads.get_mut(&thread_id) {
+                *state = ThreadState::Running;
+                println!("    -> Nimbus OS: Started thread {} in context {}.".to_string(), thread_id, context_id);
+                Ok(()) 
+            } else {
+                Err(format!("Thread {} not found in context {}.".to_string(), thread_id, context_id))
+            }
+        } else {
+            Err(format!("Context {} not found.", context_id))
+        }
+    }
+
+    /// Suspends a running thread.
+    pub fn suspend_thread(&mut self, context_id: NimbusContextId, thread_id: ThreadId) -> Result<(), String> {
+        if let Some(context) = self.contexts.get_mut(&context_id) {
+            if let Some(state) = context.threads.get_mut(&thread_id) {
+                *state = ThreadState::Blocked; // Or Paused
+                println!("    -> Nimbus OS: Suspended thread {} in context {}.".to_string(), thread_id, context_id);
+                Ok(()) 
+            } else {
+                Err(format!("Thread {} not found in context {}.".to_string(), thread_id, context_id))
+            }
+        } else {
+            Err(format!("Context {} not found.", context_id))
+        }
+    }
+
+    /// Terminates a thread.
+    pub fn terminate_thread(&mut self, context_id: NimbusContextId, thread_id: ThreadId) -> Result<(), String> {
+        if let Some(context) = self.contexts.get_mut(&context_id) {
+            if context.threads.remove(&thread_id).is_some() {
+                println!("    -> Nimbus OS: Terminated thread {} in context {}.".to_string(), thread_id, context_id);
+                Ok(()) 
+            } else {
+                Err(format!("Thread {} not found in context {}.".to_string(), thread_id, context_id))
             }
         } else {
             Err(format!("Context {} not found.", context_id))
@@ -192,16 +294,16 @@ impl NimbusMicrokernel {
     pub fn register_device_driver(&mut self, device_id: u64, driver_name: String) -> Result<(), String> {
         self.registered_devices.insert(device_id, driver_name.clone());
         println!("    -> Nimbus OS: Registered device {} with driver '{}'.".to_string(), device_id, driver_name);
-        Ok(())
+        Ok(()) 
     }
 
     /// Deregisters a hardware device driver.
     pub fn deregister_device_driver(&mut self, device_id: u64) -> Result<(), String> {
         if self.registered_devices.remove(&device_id).is_some() {
             println!("    -> Nimbus OS: Deregistered device {}.".to_string(), device_id);
-            Ok(())
+            Ok(()) 
         } else {
-            Err(format!("Device {} not found.", device_id))
+            Err(format!("Device {} not found.".to_string(), device_id))
         }
     }
 
@@ -227,7 +329,7 @@ impl NimbusMicrokernel {
         if let Some(context) = self.contexts.get_mut(&context_id) {
             context.execution_timeline_id = Some(timeline_id);
             println!("    -> Nimbus OS: Linked Context {} to MTS Timeline {}.".to_string(), context_id, timeline_id);
-            Ok(())
+            Ok(()) 
         } else {
             Err(format!("Context {} not found.", context_id))
         }
@@ -239,12 +341,12 @@ impl NimbusMicrokernel {
             if let Some(timeline_id) = context.execution_timeline_id {
                 println!("    -> Nimbus OS: Context {} synchronizing to Timeline {} at timestamp {}.".to_string(), context_id, timeline_id, timestamp.0);
                 // Conceptual: The microkernel could pause/resume context execution based on global MTS clock.
-                Ok(())
+                Ok(()) 
             } else {
-                Err(format!("Context {} is not linked to an MTS timeline.", context_id))
+                Err(format!("Context {} is not linked to an MTS timeline.".to_string(), context_id))
             }
         } else {
-            Err(format!("Context {} not found.", context_id))
+            Err(format!("Context {} not found.".to_string(), context_id))
         }
     }
 }
