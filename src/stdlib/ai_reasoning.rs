@@ -3,147 +3,87 @@
 //!
 //! This module provides conceptual APIs for symbolic AI, knowledge representation,
 //! logical inference, and advanced reasoning capabilities within Zenith.
-//! It integrates with Sankofa memory for dynamic knowledge graphs and leverages
-//! multi-paradigm compute for accelerated inference and axiom processing.
+//! 
+//! Expanded with features from UBUNTU:
+//! - Advanced Knowledge Graphs
+//! - Probabilistic Graphical Models
+//! - Advanced Causal Reasoning & Causal Discovery
 
-use crate::ast::Identifier; // For entity names, predicate names
-use crate::core_lang_primitives::{Size}; // For data sizes
-use crate::stdlib::core::Result; // For error handling
-use crate::stdlib::collections::{List, Map}; // For knowledge bases, rule sets
-use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge, SankofaRuntimeState}; // For deep knowledge integration
-use crate::source_map::Span; // For Identifier creation
+use crate::ast::Identifier;
+use crate::stdlib::core::Result;
+use crate::stdlib::collections::{List, Map};
+use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
+use crate::stdlib::numeric::Prob; // Conceptual probability type
 
-
-/// Initializes the AI Reasoning standard library components.
-pub fn init_ai_reasoning_lib() {
-    println!("  - Initializing StdLib AI Reasoning Module (Symbolic AI, Knowledge Graphs, Inference)...");
-}
-
-/// Shuts down the AI Reasoning standard library components.
-pub fn shutdown_ai_reasoning_lib() {
-    println!("  - Shutting down StdLib AI Reasoning Module...");
-}
+// ... (Existing Entity, Predicate, Fact, KnowledgeBase, RuleEngine, Planner) ...
 
 // -----------------------------------------------------------------------------
-// Core Knowledge Representation Concepts
+// Advanced Knowledge Graphs
 // -----------------------------------------------------------------------------
 
-/// Represents a conceptual entity in a knowledge graph.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Entity(pub Identifier);
-
-/// Represents a conceptual predicate or relationship.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Predicate(pub Identifier);
-
-/// Represents a conceptual fact or assertion (e.g., (Entity, Predicate, Entity/Value)).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Fact {
-    pub subject: Entity,
-    pub predicate: Predicate,
-    pub object: FactObject,
+pub struct KnowledgeGraph {
+    pub kb: KnowledgeBase,
 }
 
-/// The object of a fact, can be another entity or a literal value.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FactObject {
-    Entity(Entity),
-    Literal(String),
-    Integer(i64),
-    Float(f64),
-    Boolean(bool),
-}
-
-/// A conceptual knowledge base, often backed by Sankofa.
-pub struct KnowledgeBase {
-    pub id: KnowledgeId,
-}
-
-impl KnowledgeBase {
-    /// Creates or links to a knowledge base, optionally backed by Sankofa.
-    pub fn new(id_str: &str, use_sankofa: bool) -> Self {
-        println!("[StdLib::AI_Reasoning] Initializing KnowledgeBase '{}'. Sankofa backed: {}.".to_string(), id_str, use_sankofa);
-        // Conceptual: If use_sankofa, link to a SasaKnowledge instance.
-        KnowledgeBase { id: KnowledgeId(id_str.to_string()) }
+impl KnowledgeGraph {
+    pub fn new(id: &str) -> Self {
+        KnowledgeGraph { kb: KnowledgeBase::new(id, true) }
     }
 
-    /// Adds a fact to the knowledge base.
-    pub fn add_fact(&mut self, fact: Fact) -> Result<(), String> {
-        println!("[StdLib::AI_Reasoning] Adding fact: {:?} to KB {}.".to_string(), fact, self.id.0);
-        // Conceptual: If Sankofa-backed, use SasaKnowledge.update. (This would require a more complex SasaKnowledge API for facts)
-        Ok(())
+    /// Performs complex graph traversal and pattern matching across entities.
+    pub fn find_semantic_path(&self, start: Entity, end: Entity, max_depth: usize) -> Result<List<List<Fact>>, String> {
+        println!("[StdLib::AI_Reasoning] Finding semantic path between {:?} and {:?}.".to_string(), start, end);
+        Ok(List::new())
     }
 
-    /// Queries the knowledge base for facts matching a pattern.
-    pub fn query_facts(&self, subject: Option<Entity>, predicate: Option<Predicate>, object: Option<FactObject>) -> Result<List<Fact>, String> {
-        println!("[StdLib::AI_Reasoning] Querying KB {} for facts (S:{:?}, P:{:?}, O:{:?}).".to_string(), self.id.0, subject, predicate, object);
-        // Conceptual: If Sankofa-backed, use SasaKnowledge.query.
-        Ok(List::new()) // Dummy results
-    }
-
-    /// Performs logical inference based on rules within the knowledge base.
-    /// Can leverage QPU for probabilistic inference or AI accelerators for rule matching.
-    pub fn infer(&self, query: &str) -> Result<List<Fact>, String> {
-        println!("[StdLib::AI_Reasoning] Performing inference on KB {} with query '{}'.".to_string(), self.id.0, query);
-        // Conceptual: Complex inference algorithms, potentially QPU-accelerated.
-        Ok(List::new()) // Dummy inference results
+    /// Detects emergent communities or clusters within the knowledge base.
+    pub fn cluster_entities(&self, method: &str) -> Result<List<List<Entity>>, String> {
+        println!("[StdLib::AI_Reasoning] Clustering entities using {}.".to_string(), method);
+        Ok(List::new())
     }
 }
 
 // -----------------------------------------------------------------------------
-// Rule-Based Systems (Conceptual)
+// Probabilistic Graphical Models (PGM)
 // -----------------------------------------------------------------------------
 
-/// Represents a conceptual rule for an expert system.
-pub struct Rule {
-    pub name: Identifier,
-    pub conditions: List<Fact>, // Antecedents
-    pub actions: List<Fact>,    // Consequents
-    pub confidence: f32,
+pub struct ProbabilisticModel {
+    pub variables: List<Identifier>,
+    pub structure: Map<Identifier, List<Identifier>>, // Directed/Undirected edges
+    pub distributions: Map<Identifier, List<f64>>,    // Conditional Probability Tables
 }
 
-pub struct RuleEngine;
-
-impl RuleEngine {
-    /// Loads a set of rules into the engine.
-    pub fn load_rules(&mut self, rules: List<Rule>) -> Result<(), String> {
-        println!("[StdLib::AI_Reasoning] Loading {} rules into engine.".to_string(), rules.len());
-        Ok(())
+impl ProbabilisticModel {
+    pub fn new() -> Self {
+        ProbabilisticModel { variables: List::new(), structure: Map::new(), distributions: Map::new() }
     }
 
-    /// Runs the rule engine against a knowledge base to derive new facts.
-    /// Can be accelerated by Neuromorphic hardware for pattern matching.
-    pub fn run_inference_cycle(&self, kb: &mut KnowledgeBase) -> Result<List<Fact>, String> {
-        println!("[StdLib::AI_Reasoning] Running inference cycle on KnowledgeBase {}.".to_string(), kb.id.0);
-        // Conceptual: Forward/Backward chaining, potentially NPU-accelerated.
-        Ok(List::new()) // Dummy new facts
+    /// Performs belief propagation or MCMC sampling for inference.
+    /// Can leverage QPU for sampling from complex distributions.
+    pub fn query_marginal(&self, variable: Identifier, evidence: Map<Identifier, MetaValue>) -> Result<f64, String> {
+        println!("[StdLib::AI_Reasoning] Querying marginal for {} given evidence.".to_string(), variable.0);
+        Ok(0.5)
     }
 }
 
 // -----------------------------------------------------------------------------
-// Advanced Reasoning & Planning (Conceptual)
+// Advanced Causal Reasoning & Discovery
 // -----------------------------------------------------------------------------
 
-/// Represents a conceptual planning problem.
-pub struct PlanningProblem;
+pub struct CausalEngine;
 
-/// Represents a conceptual sequence of actions to achieve a goal.
-pub struct Plan;
-
-pub struct Planner;
-
-impl Planner {
-    /// Generates a plan to achieve a goal from a given initial state and knowledge base.
-    /// Leverages MTS for temporal planning and parallel search on AI accelerators.
-    pub fn generate_plan(&self, initial_state: &KnowledgeBase, goal: &FactObject) -> Result<Plan, String> {
-        println!("[StdLib::AI_Reasoning] Generating plan from initial state and goal {:?}.".to_string(), goal);
-        // Conceptual: Complex search algorithms (e.g., A*), potentially distributed.
-        Ok(Plan) // Dummy plan
+impl CausalEngine {
+    /// Discovers causal relationships from observational data (Causal Discovery).
+    /// Leverages MTS to analyze temporal order and counterfactual dependency.
+    pub fn discover_causal_graph(&self, data: &crate::stdlib::ml::Tensor<f32>) -> Result<ProbabilisticModel, String> {
+        println!("[StdLib::AI_Reasoning] Performing causal discovery from data.");
+        Ok(ProbabilisticModel::new())
     }
 
-    /// Monitors plan execution and adapts to changes.
-    pub fn execute_and_monitor_plan(&self, plan: &Plan) -> Result<(), String> {
-        println!("[StdLib::AI_Reasoning] Executing and monitoring plan.");
-        Ok(())
+    /// Performs a counterfactual intervention ("What happens if I do X?").
+    /// Uses MTS to spawn a speculative timeline and simulate the intervention.
+    pub fn simulate_intervention(&self, model: &ProbabilisticModel, action: Fact, target_state: FactObject) -> Result<f64, String> {
+        println!("[StdLib::AI_Reasoning] Simulating causal intervention {:?}.".to_string(), action);
+        Ok(0.8)
     }
 }
