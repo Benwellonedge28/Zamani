@@ -40,12 +40,12 @@ impl CodeGenerator for QASM_Generator {
         let mut qasm_code = String::from("OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[5];\ncreg c[5];\n");
         // Conceptual: Translate quantum IR instructions into QASM statements.
         for instr in ir_code {
-            if let IrInstruction::QGate(_, gate_name, qubits) = instr {
-                qasm_code.push_str(&format!("{} q[{}];\n", gate_name.0, 0)); // Dummy
-            }
-            if let IrInstruction::QMeasure(_, qubit, cbit) = instr {
-                 qasm_code.push_str(&format!("measure q[{}] -> c[{}];\n", 0, 0)); // Dummy
-            }
+            // if let IrInstruction::QGate(_, gate_name, qubits) = instr {
+            //     qasm_code.push_str(&format!("{} q[{}];\n", gate_name.0, 0)); // Dummy
+            // }
+            // if let IrInstruction::QMeasure(_, qubit, cbit) = instr {
+            //      qasm_code.push_str(&format!("measure q[{}] -> c[{}];\n", 0, 0)); // Dummy
+            // }
         }
         Ok(qasm_code.as_bytes().to_vec()) // Dummy QASM
     }

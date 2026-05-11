@@ -6,16 +6,20 @@
 //! units, particularly the Z-MMP's Classical, Quantum, and Nano-Agent components, using
 //! Zenith's unified syntax. This provides maximum control for hardware engineers and system
 //! architects to craft highly optimized and specialized hardware designs.
+//!
+//! Crucially, Zenith's HDL also supports integration with *existing* hardware description
+//! languages (Verilog, VHDL, Chisel, etc.) or alternatives (e.g., custom DSLs), allowing
+//! for a hybrid design approach and leveraging existing IP.
 
 use crate::ast::Identifier; // For unit names, register names
 use crate::core_lang_primitives::{Size, TimeStamp}; // For timing, resource allocation
 use crate::ir_gen::{IrInstruction, IrValue}; // To show how it generates specialized IR
 use std::collections::HashMap; // For state maps
-
+use crate::source_map::Span; // For Span in conceptual AST
 
 /// Initializes the HDL module.
 pub fn init_hdl() {
-    println!("  - Initializing Zenith HDL Module (for Z-MMP low-level programming)...");
+    println!("  - Initializing Zenith HDL Module (for Z-MMP low-level programming and existing HDL integration)...");
 }
 
 /// Shuts down the HDL module.
@@ -24,16 +28,30 @@ pub fn shutdown_hdl() {
 }
 
 // -----------------------------------------------------------------------------
-// Conceptual HDL AST Nodes (would be part of src/ast/mod.rs)
+// Conceptual HDL AST Nodes (Directly in this module for clarity, not src/ast/mod.rs)
 // -----------------------------------------------------------------------------
-/*
-// New Statement::HdlUnit
-pub enum Statement {
-    // ... existing statements ...
+// These would typically be integrated into `src/ast/mod.rs` as new Statement/Expression variants.
+// For conceptual purposes, we define them here to illustrate the HDL syntax.
+
+/// A conceptual HDL statement or component declaration.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HdlStatement {
     HdlUnit(Span, Identifier, Vec<HdlPort>, Vec<HdlComponent>), // Name, Ports, Components
+    HdlImport(Span, HdlImportType, String), // Import existing HDL module
 }
 
-// Conceptual HdlPort
+/// Defines the type of external HDL to import.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HdlImportType {
+    Verilog,
+    VHDL,
+    Chisel,
+    // Add other relevant HDLs
+    Custom(String), // For custom DSLs or other formats
+}
+
+/// Conceptual HDL Port definition for an `hdl unit`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct HdlPort {
     pub name: Identifier,
     pub direction: HdlPortDirection, // In, Out, InOut
@@ -41,33 +59,77 @@ pub struct HdlPort {
     pub width: Option<usize>, // Bit width or number of elements
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum HdlPortDirection { In, Out, InOut }
-pub enum HdlPortType { Wire, Register, Qubit, NanoChannel, Clock, Reset }
 
-// Conceptual HdlComponent (inside a HdlUnit)
+#[derive(Debug, Clone, PartialEq)]
+pub enum HdlPortType { Wire, Register, Qubit, NanoChannel, Clock, Reset, Power, Signal }
+
+
+/// Conceptual HDL Component (inside a `hdl unit`).
+/// This represents actual hardware elements or operations.
+#[derive(Debug, Clone, PartialEq)]
 pub enum HdlComponent {
-    ClassicalRegister(Span, Identifier, usize), // reg[N]
-    QuantumRegister(Span, Identifier, usize), // qbit[N]
-    NanoUnit(Span, Identifier), // nano_unit(id)
-    Wire(Span, Identifier, usize), // wire[N] (classical)
-    LogicGate(Span, HdlLogicGateType, Vec<Identifier>, Identifier), // e.g., @logic(and, in1, in2, out)
-    QuantumGate(Span, QuantumGateType, Vec<Identifier>, Vec<f32>), // e.g., @gate(H, q[0])
-    NanoActuation(Span, Identifier, String, Vec<IrValue>), // e.g., @actuate(nano_unit[0], "move", x, y)
-    SensorRead(Span, Identifier, String, Identifier), // e.g., @sense(nano_unit[0], "bio_marker", result_reg)
-    ClockDeclaration(Span, Identifier, f32), // @clock(main_clk, 500MHz)
-    TimingConstraint(Span, Identifier, Identifier, TimeStamp), // @constrain(clk, operation, delay)
-    // ... more
+    // Classical Hardware Elements
+    ClassicalRegister(Span, Identifier, usize), // `reg MyRegister[32];`
+    Wire(Span, Identifier, usize), // `wire MyWire[8];`
+    LogicGate(Span, HdlLogicGateType, Vec<Identifier>, Identifier), // `@logic(and, in1, in2, out)`
+    MemoryBlock(Span, Identifier, Size, usize), // `mem MyRam(size: 1KB, width: 8);`
+    ClockDeclaration(Span, Identifier, f32), // `@clock(main_clk, 500MHz)`
+    TimingConstraint(Span, Identifier, Identifier, TimeStamp), // `@constrain(clk, operation, delay)`
+    
+    // Quantum Hardware Elements
+    QuantumRegister(Span, Identifier, usize), // `qbit MyQReg[5];`
+    QuantumGate(Span, QuantumGateType, Vec<Identifier>, Vec<f32>), // `@gate(H, q[0])`, `@gate(Rx, q[1], 0.5)`
+    QubitMeasurement(Span, Identifier, Identifier), // `measure_reset(q[0], c[0])`
+    QWire(Span, Identifier, usize), // For entangled connections `q_wire EntangledLink[2];`
+
+    // Nano-Agent Hardware Elements/Interfaces
+    NanoUnitReference(Span, Identifier), // `nano_unit MyNanoAgent;`
+    NanoActuation(Span, Identifier, String, Vec<IrValue>), // `@actuate(MyNanoAgent, "move_xyz", 1.0, 2.0, 3.0)`
+    NanoSensorRead(Span, Identifier, String, Identifier), // `@sense(MyNanoAgent, "bio_marker", result_reg)`
+    NanoChannel(Span, Identifier), // `nano_channel SwarmComm;`
+
+    // Conceptual Connection/Assignment (e.g., `out = in1 and in2;`)
+    Connection(Span, Identifier, HdlExpression),
+
+    // Imported HDL Instance
+    ImportedHdlInstance(Span, Identifier, Identifier, HashMap<String, Identifier>), // Module Name, Instance Name, Port Mappings
 }
 
-pub enum HdlLogicGateType { And, Or, Not, Xor }
-pub enum QuantumGateType { H, CX, Rx, Ry, Rz, Measure, Reset }
-*/
+#[derive(Debug, Clone, PartialEq)]
+pub enum HdlLogicGateType { And, Or, Not, Xor, Nand, Nor, Xnor, Buf }
+#[derive(Debug, Clone, PartialEq)]
+pub enum QuantumGateType { H, CX, Rx, Ry, Rz, Measure, Reset, Swap, CPhase }
+
+/// Conceptual HDL expressions for connections and logic.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HdlExpression {
+    Identifier(Identifier),
+    Literal(String), // "1", "0", "true", "false"
+    BinaryOp(Span, HdlLogicGateType, Box<HdlExpression>, Box<HdlExpression>),
+    // ... more complex HDL expressions
+}
 
 // -----------------------------------------------------------------------------
 // Conceptual HDL Compiler Backend (part of src/backend/mod.rs) - This would interact with the HDL module
 // -----------------------------------------------------------------------------
 
-// ZMMP_HDL_Generator would be integrated into `src/backend/mod.rs` to handle HDL-specific IR.
+/// Conceptual Generator for Z-MMP Microcode from HDL AST/IR.
+/// This would be part of the `src/backend` module.
+pub struct ZMMP_HDL_Generator;
+
+impl ZMMP_HDL_Generator {
+    pub fn generate(&self, hdl_ir: &[IrInstruction]) -> Result<Vec<u8>, String> {
+        println!("[HDL Backend] Generating Z-MMP Microcode from HDL IR...");
+        // This is where a highly specialized backend would translate HDL-specific IR
+        // into direct Z-MMP hardware microcode or configuration.
+        // This involves mapping logical registers/qubits to physical hardware,
+        // precise timing control, and direct instruction emission.
+        Ok(vec![0xDE, 0xAD, 0xBE, 0xEF]) // Dummy microcode
+    }
+}
+
 
 // -----------------------------------------------------------------------------
 // Conceptual HDL Unit Abstraction (Managed by Nimbus OS)
@@ -100,12 +162,12 @@ impl CompiledHdlUnit for ZMMP_QpuBlock {
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
         println!("[HDL] Z-MMP QPU: Loading microcode ({} bytes).", microcode.len());
         // Conceptual: Nimbus OS HAL call to QPU firmware loader.
-        Ok(())
+        Ok(()) 
     }
     fn execute(&self) -> Result<(), String> {
         println!("[HDL] Z-MMP QPU: Executing microcode.");
         // Conceptual: Nimbus OS HAL call to start QPU.
-        Ok(())
+        Ok(()) 
     }
     fn get_state(&self) -> HashMap<String, IrValue> {
         println!("[HDL] Z-MMP QPU: Reading state.");
@@ -131,15 +193,65 @@ impl CompiledHdlUnit for ZMMP_NacuBlock {
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
         println!("[HDL] Z-MMP NACU: Loading control program ({} bytes).", microcode.len());
         // Conceptual: Nimbus OS HAL call to NACU firmware loader.
-        Ok(())
+        Ok(()) 
     }
     fn execute(&self) -> Result<(), String> {
         println!("[HDL] Z-MMP NACU: Starting control program.");
         // Conceptual: Nimbus OS HAL call to start NACU.
-        Ok(())
+        Ok(()) 
     }
     fn get_state(&self) -> HashMap<String, IrValue> {
         println!("[HDL] Z-MMP NACU: Reading state.");
         HashMap::new() // Dummy state
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Conceptual HDL to HDL Transpiler/Linker for existing HDLs
+// -----------------------------------------------------------------------------
+
+/// Conceptual module for integrating external HDL (Verilog, VHDL, etc.)
+pub mod external_hdl_linker {
+    use super::{
+        *,
+        HdlStatement::HdlUnit
+    };
+
+    /// Represents a conceptual external HDL module.
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct ExternalHdlModule {
+        pub name: String,
+        pub hdl_type: HdlImportType,
+        pub source_code: String, // The actual Verilog/VHDL code
+        pub ports: Vec<HdlPort>, // Parsed ports for type checking
+        pub parameters: HashMap<String, String>, // Generics/parameters
+    }
+
+    /// Conceptually imports and translates an external HDL module into Zenith's internal representation.
+    pub fn import_hdl(hdl_type: HdlImportType, source_code: String) -> Result<ExternalHdlModule, String> {
+        println!("[HDL] Importing {:?} module from external source...".to_string(), hdl_type);
+        // Conceptual: This would involve:
+        // 1. Parsing the external HDL source (e.g., Verilog parser).
+        // 2. Performing semantic analysis on the external HDL.
+        // 3. Translating its components (wires, registers, modules) into Zenith HDL's conceptual IR.
+        // 4. Extracting port definitions and parameters.
+        Ok(ExternalHdlModule {
+            name: "ExternalModule".to_string(),
+            hdl_type,
+            source_code,
+            ports: Vec::new(),
+            parameters: HashMap::new(),
+        })
+    }
+
+    /// Conceptually links Zenith HDL with an imported external HDL module.
+    pub fn link_hdl_modules(zenith_hdl_unit: &HdlStatement, external_modules: &[ExternalHdlModule]) -> Result<Vec<IrInstruction>, String> {
+        println!("[HDL] Linking Zenith HDL unit with external HDL modules...");
+        // Conceptual:
+        // 1. Resolve connections between Zenith HDL ports and external HDL module ports.
+        // 2. Generate a combined IR that represents the complete hardware design.
+        // 3. Perform cross-HDL optimization passes.
+        // This output IR would then be fed to the ZMMP_HDL_Generator.
+        Ok(Vec::new()) // Dummy IR
     }
 }
