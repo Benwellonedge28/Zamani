@@ -20,7 +20,8 @@ pub mod build;
 pub mod package_manager;
 pub mod ide_support;
 pub mod debug_info;
-pub mod interoperability; // For cross-language interoperability
+pub mod interoperability;
+pub mod zenith_project_config; // Expose the project config module
 
 /// Initializes the conceptual Zenith Toolchain Integration components.
 pub fn init_toolchain_integration() {
@@ -30,12 +31,14 @@ pub fn init_toolchain_integration() {
     ide_support::init_ide_support();
     debug_info::init_debug_info_gen();
     interoperability::init_interoperability_layer();
+    // zenith_project_config::init_config_system(); // No-op for now
     println!("Zenith UMC Toolchain Integration initialized.");
 }
 
 /// Shuts down the conceptual Zenith Toolchain Integration components.
 pub fn shutdown_toolchain_integration() {
     println!("Shutting down Zenith UMC Toolchain Integration...");
+    // zenith_project_config::shutdown_config_system(); // No-op for now
     interoperability::shutdown_interoperability_layer();
     debug_info::shutdown_debug_info_gen();
     ide_support::shutdown_ide_support();
