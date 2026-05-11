@@ -7,6 +7,7 @@
 //! IR generation, optimization, and backend code generation.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::lexer::{Lexer, TokenType};
 use crate::parser::Parser;
@@ -17,7 +18,7 @@ use crate::backend::{UMC_Backend, X86_64_Generator, QASM_Generator, NanoControlG
 use crate::runtime;
 use crate::stdlib;
 use crate::toolchain;
-use crate::source_map::FileId;
+use crate::source_map::{FileId, SourceMap};
 use crate::error_reporting::{CompilerError, Severity};
 
 fn main() -> Result<(), String> {
@@ -33,8 +34,11 @@ fn main() -> Result<(), String> {
 --- Compiler Pipeline Start ---
 ");
 
+    let mut compiler_errors: Vec<CompilerError> = Vec::new();
+    let mut source_map = SourceMap::new(); // Create SourceMap
+
     // 2. Conceptual Zenith Source Code
-    let source_code = r#"
+    let source_code_str = r#"
         // A simple Zenith program demonstrating unified paradigms.
         fn add(a: int, b: int) -> int {
             let result = a + b;
@@ -62,21 +66,19 @@ fn main() -> Result<(), String> {
             return 0;
         }
     "#;
-
-    let mut compiler_errors: Vec<CompilerError> = Vec::new();
-    let file_id = FileId::new(1);
+    let (file_id, source_file_arc) = source_map.add_file("example.zn".to_string(), source_code_str.to_string()); // Add source to SourceMap
 
     // 3. Lexical Analysis
     println!("Lexing source code...");
-    let lexer = Lexer::new(file_id, source_code);
-    let _tokens: Vec<_> = lexer.clone().collect(); // Consume copy to check for errors
-    if !lexer.get_errors().is_empty() {
-        compiler_errors.extend(lexer.get_errors().iter().cloned().map(CompilerError::Lexer));
+    let lexer_for_tokens = Lexer::new(file_id, Arc::clone(&source_file_arc));
+    let tokens: Vec<_> = lexer_for_tokens.clone().collect(); 
+    if !lexer_for_tokens.get_errors().is_empty() {
+        compiler_errors.extend(lexer_for_tokens.get_errors().iter().cloned().map(CompilerError::Lexer));
     }
 
     // 4. Parsing
     println!("Parsing tokens into AST...");
-    let mut parser = Parser::new(Lexer::new(file_id, source_code));
+    let mut parser = Parser::new(Lexer::new(file_id, Arc::clone(&source_file_arc))); // Pass Arc<SourceFile>
     let program_ast = parser.parse_program();
     if !parser.get_errors().is_empty() {
         compiler_errors.extend(parser.get_errors().iter().cloned().map(CompilerError::Parser));
@@ -90,6 +92,17 @@ fn main() -> Result<(), String> {
         compiler_errors.extend(errors.into_iter().map(CompilerError::Semantic));
     }
 
+    // --- Critical Error Check Before IR Generation and later stages ---
+    if !compiler_errors.is_empty() {
+        eprintln!("
+Compilation failed with {} errors:
+", compiler_errors.len());
+        for err in compiler_errors {
+            eprintln!("{}", err.report(&source_map)); // Pass source_map
+        }
+        return Err("Compiler pipeline failed due to earlier errors.".to_string());
+    }
+
     // 6. IR Generation
     println!("Generating Universal Meta-Compiler IR...");
     let mut ir_generator = IrGenerator::new();
@@ -98,20 +111,15 @@ fn main() -> Result<(), String> {
         Ok(code) => code,
         Err(errors) => {
             compiler_errors.extend(errors.into_iter().map(CompilerError::IrGen));
-            Vec::new() // Placeholder, won't be used if errors exist
-        }
-    };
-
-    // --- Critical Error Check Before Optimization ---
-    if !compiler_errors.is_empty() {
-        eprintln!("
+            eprintln!("
 Compilation failed with {} errors:
 ", compiler_errors.len());
-        for err in compiler_errors {
-            eprintln!("{}", err.report(source_code));
+            for err in compiler_errors {
+                eprintln!("{}", err.report(&source_map));
+            }
+            return Err("IR generation failed, unable to proceed.".to_string());
         }
-        return Err("Compiler pipeline failed due to semantic or earlier errors.".to_string());
-    }
+    };
 
     // 7. Optimization
     println!("Optimizing UMC IR...");
@@ -126,7 +134,7 @@ Compilation failed with {} errors:
     
     let metrics = optimizer.optimize(&mut ir_code)
         .map_err(|e| {
-            for err in e { eprintln!("{}", CompilerError::Optimizer(err).report(source_code)); }
+            for err in e { eprintln!("{}", CompilerError::Optimizer(err).report(&source_map)); }
             "Optimization failed.".to_string()
         })?;
     println!("Optimization complete. Changes: {}, Instructions (before/after): {}/{}", metrics.total_changes_made, metrics.instruction_count_before, metrics.instruction_count_after);
@@ -144,7 +152,7 @@ Compilation failed with {} errors:
         match backend.generate(&ir_code, target) {
             Ok(code) => println!("  Generated {} bytes of {} code.", code.len(), target),
             Err(errors) => {
-                for err in errors { eprintln!("{}", CompilerError::Backend(err).report(source_code)); }
+                for err in errors { eprintln!("{}", CompilerError::Backend(err).report(&source_map)); }
             }
         }
     }

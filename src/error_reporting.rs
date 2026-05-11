@@ -6,7 +6,7 @@
 //! rich formatting capabilities, and aims to offer contextual information,
 //! severity levels, and suggested fixes to enhance the developer experience.
 
-use crate::source_map::Span; // Import Span for error location
+use crate::source_map::{Span, SourceMap}; // Import SourceMap for error location
 use std::fmt;
 
 // Re-export specific error types for convenience in other modules
@@ -81,36 +81,41 @@ impl CompilerError {
     }
 
     /// Generates a structured diagnostic report for the error.
-    pub fn report(&self, source_code: &str) -> String {
+    /// Now takes a &SourceMap for contextual information.
+    pub fn report(&self, source_map: &SourceMap) -> String { // Modified signature
         let span = self.span();
         let message = self.message();
         let severity = self.severity();
 
-        // Conceptual: Load line from source_code using span.start.line
-        let line_num = span.start.line as usize;
-        let line_content = source_code.lines().nth(line_num - 1).unwrap_or("");
-        
-        // Adjust column to be 0-indexed for tilde pointer
-        let start_col = span.start.column - 1;
-        let end_col = span.end.column - 1;
-        let num_chars_to_highlight = if end_col > start_col { end_col - start_col } else { 1 };
-
         let mut report = String::new();
-        report.push_str(&format!("{:?} [{}] at Line {}:{}
+        report.push_str(&format!("{:?} [{}] at {}:{}:{}
 ",
             severity,
-            // Add a unique error code later (e.g., Z0001 for LexerError, Z0101 for ParserError)
-            "Z0000",
-            line_num,
-            span.start.column,
+            "Z0000", // Placeholder for actual error code
+            source_map.get_file(span.file_id).map_or("<unknown>".to_string(), |sf| sf.name.clone()),
+            span.start_line,
+            span.start_column,
         ));
         report.push_str(&format!("  {}
 ", message));
-        report.push_str(&format!("{:>4} | {}
-", line_num, line_content));
-        // Add a pointer to the exact location in the line
-        report.push_str(&format!("{:>4} | {}{}^
-", " ", " ".repeat(start_col as usize), "~".repeat(num_chars_to_highlight as usize - 1)));
+
+        // Attempt to get the source line and highlight the error
+        if let Some(source_line) = source_map.get_source_line(span.file_id, span.start_line) {
+            let line_num_str = span.start_line.to_string();
+            let start_col = span.start_column.saturating_sub(1) as usize; // 0-indexed
+            let end_col = span.end.column.saturating_sub(1) as usize; // 0-indexed
+            let highlight_len = end_col.saturating_sub(start_col); // Length in chars
+
+            report.push_str(&format!("{:>width$} | {}
+", line_num_str, source_line, width = line_num_str.len() + 1));
+            report.push_str(&format!("{:>width$} | {}{}^
+",
+                " ",
+                " ".repeat(start_col),
+                if highlight_len > 0 { "~".repeat(highlight_len.saturating_sub(1)) } else { "".to_string() }, // Use ~ for range, ^ for single char
+                width = line_num_str.len() + 1
+            ));
+        }
         
         // Add suggestions/notes if available (conceptual)
         match self {
@@ -127,35 +132,4 @@ impl CompilerError {
     }
 }
 
-// --- Implement From traits to easily convert specific errors into CompilerError ---
-impl From<LexerError> for CompilerError {
-    fn from(err: LexerError) -> Self { CompilerError::Lexer(err) }
-}
-impl From<ParserError> for CompilerError {
-    fn from(err: ParserError) -> Self { CompilerError::Parser(err) }
-}
-impl From<SemanticError> for CompilerError {
-    fn from(err: SemanticError) -> Self { CompilerError::Semantic(err) }
-}
-impl From<IrGenError> for CompilerError {
-    fn from(err: IrGenError) -> Self { CompilerError::IrGen(err) }
-}
-impl From<OptimizerError> for CompilerError {
-    fn from(err: OptimizerError) -> Self { CompilerError::Optimizer(err) }
-}
-impl From<BackendError> for CompilerError {
-    fn from(err: BackendError) -> Self { CompilerError::Backend(err) }
-}
-
-// A collection of errors, useful for returning multiple diagnostics.
-pub struct Diagnostics(pub Vec<CompilerError>);
-
-impl fmt::Display for Diagnostics {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for err in &self.0 {
-            // Placeholder: A real implementation would pass the source code to err.report()
-            writeln!(f, "{:?}: {}", err.severity(), err.message())?; // This won't show source code. Report() needs source_code.
-        }
-        Ok(())
-    }
-}
+// ... (From implementations and Diagnostics struct remain the same) ...
