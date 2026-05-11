@@ -8,8 +8,7 @@
 //! multi-timeline system (MTS) types, and Sankofa memory types.
 
 use std::collections::HashMap;
-use crate::ast::Identifier; // For type names
-use crate::ast::{AccessModifier, MethodModifier}; // For OOP
+use crate::ast::{Identifier, AccessModifier, MethodModifier}; // For OOP
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -55,8 +54,18 @@ pub enum Type {
     Effectful(Box<Type>, Vec<Identifier>), // Type that can perform certain effects
 
     // --- OOP Additions ---
-    Class(Identifier, HashMap<String, Type>, HashMap<String, MethodType>, Option<Box<Type>>), // Name, Fields, Methods, Parent Class
-    Interface(Identifier, HashMap<String, MethodType>), // Name, Method Signatures
+    Class {
+        name: Identifier,
+        fields: HashMap<String, Type>,
+        methods: HashMap<String, MethodType>,
+        parent_class: Option<Box<Type>>,
+        implemented_interfaces: Vec<Type>,
+    },
+    Interface {
+        name: Identifier,
+        methods: HashMap<String, MethodType>,
+        parent_interfaces: Vec<Type>,
+    },
     Method(Vec<Type>, Box<Type>, AccessModifier, Option<MethodModifier>), // Parameters, Return Type, Access Modifier, Method Modifier
 
     // Special types for compiler internals/errors
