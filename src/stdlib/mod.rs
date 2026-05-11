@@ -30,9 +30,10 @@ pub mod meta_ops;
 pub mod external_services;
 pub mod agi_governance;
 pub mod human_agi_interaction;
-pub mod reality; // New: VR/AR/XR
-pub mod distributed_ledger; // New: Blockchain
-pub mod iot; // New: Internet of Things
+pub mod reality;
+pub mod distributed_ledger;
+pub mod iot;
+pub mod human_interface_devices; // New: For GUI, CLI, VCI, Gestures, BCI, Eye-tracking, Touch screen, etc.
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -64,15 +65,17 @@ pub fn initialize_stdlib() {
     external_services::init_external_services_lib();
     agi_governance::init_agi_governance_lib();
     human_agi_interaction::init_human_agi_lib();
-    reality::init_reality_lib(); // Initialize XR module
-    distributed_ledger::init_ledger_lib(); // Initialize Ledger module
-    iot::init_iot_lib(); // Initialize IoT module
+    reality::init_reality_lib();
+    distributed_ledger::init_ledger_lib();
+    iot::init_iot_lib();
+    human_interface_devices::init_hid_lib(); // Initialize Human Interface Devices module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
+    human_interface_devices::shutdown_hid_lib(); // Shutdown Human Interface Devices module
     iot::shutdown_iot_lib();
     distributed_ledger::shutdown_ledger_lib();
     reality::shutdown_reality_lib();
