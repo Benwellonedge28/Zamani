@@ -19,7 +19,8 @@ pub mod ml;
 pub mod net;
 pub mod fs;
 pub mod sync;
-pub mod crypto; // New module for Cryptography
+pub mod crypto;
+pub mod serialize; // New module for Data Serialization
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -35,7 +36,8 @@ pub fn initialize_stdlib() {
     net::init_net_lib();
     fs::init_fs_lib();
     sync::init_sync_lib();
-    crypto::init_crypto_lib(); // Initialize Cryptography module
+    crypto::init_crypto_lib();
+    serialize::init_serialize_lib(); // Initialize Serialization module
     println!("Zenith UMC Standard Library initialized.");
 }
 
@@ -43,7 +45,8 @@ pub fn initialize_stdlib() {
 
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    crypto::shutdown_crypto_lib(); // Shutdown Cryptography module
+    serialize::shutdown_serialize_lib(); // Shutdown Serialization module
+    crypto::shutdown_crypto_lib(); 
     sync::shutdown_sync_lib(); 
     fs::shutdown_fs_lib(); 
     net::shutdown_net_lib(); 
