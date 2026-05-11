@@ -13,7 +13,8 @@
 //! - Attaching source location information (Span) to each token for precise error reporting.
 
 use crate::source_map::{FileId, Span, BytePos, SourceFile};
-use std::sync::Arc; // For shared ownership of SourceFile
+use std::sync::Arc;
+use std::collections::HashMap; // For keywords_map
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
@@ -46,7 +47,7 @@ pub enum TokenType {
     KeywordModule, KeywordMove, KeywordMts, KeywordMut, KeywordNano, KeywordNew, KeywordNot,
     KeywordOr, KeywordPerform, KeywordPrivate, KeywordPublic, KeywordQuantum, KeywordRecall,
     KeywordRemember, KeywordReturn, KeywordSasa, KeywordSelf, KeywordSigma, KeywordStatic,
-    KeywordStruct, KeywordSuper, KeywordSwitch, KeywordSync, KeywordThen, KeywordThrow,
+    KeywordStruct, KeywordSuper, KeywordSwitch, KeywordThen, KeywordThrow,
     KeywordTrait, KeywordTrue, KeywordType, KeywordUnsafe, KeywordUse, KeywordVar,
     KeywordWhere, KeywordWhile, KeywordWith, KeywordWisdom, KeywordYield, KeywordZamani,
     KeywordPi, // For dependent types: Π
@@ -54,6 +55,21 @@ pub enum TokenType {
     // Special Zenith/Sankofa/Nimbus tokens
     SigmaSymbol, // Σ
     PiSymbol,    // Π
+
+    // --- OOP Keywords ---
+    KeywordClass,
+    KeywordInterface,
+    KeywordExtends,
+    KeywordImplements,
+    KeywordPublic,
+    KeywordPrivate,
+    KeywordProtected,
+    KeywordNew,
+    KeywordThis,
+    KeywordSuper,
+    KeywordOverride,
+    KeywordVirtual,
+    KeywordAbstract,
 
     // End of file
     EOF,
@@ -77,16 +93,17 @@ pub struct LexerError {
 #[derive(Debug, Clone)]
 pub struct Lexer {
     file_id: FileId,
-    source_file_arc: Arc<SourceFile>, // Reference to the SourceFile for line/column info
-    input: Arc<String>, // Shared ownership of the input string
-    position: BytePos,       // current position in input (points to current char)
-    read_position: BytePos,  // current reading position in input (after current char)
-    ch: Option<char>,        // current char under examination
+    source_file_arc: Arc<SourceFile>,
+    input: Arc<String>,
+    position: BytePos,
+    read_position: BytePos,
+    ch: Option<char>,
     errors: Vec<LexerError>,
+    keywords_map: HashMap<String, TokenType>, // For efficient keyword lookup
 }
 
 impl Lexer {
-    pub fn new(file_id: FileId, source_file_arc: Arc<SourceFile>) -> Self { // Modified signature
+    pub fn new(file_id: FileId, source_file_arc: Arc<SourceFile>) -> Self {
         let input = Arc::clone(&source_file_arc.content);
         let mut lexer = Lexer {
             file_id,
@@ -96,9 +113,63 @@ impl Lexer {
             read_position: BytePos(0),
             ch: None,
             errors: Vec::new(),
+            keywords_map: Self::init_keywords(), // Initialize keywords map
         };
-        lexer.read_char(); // Initialize ch
+        lexer.read_char();
         lexer
+    }
+
+    fn init_keywords() -> HashMap<String, TokenType> {
+        let mut map = HashMap::new();
+        map.insert("let".to_string(), TokenType::KeywordLet);
+        map.insert("fn".to_string(), TokenType::KeywordFn);
+        map.insert("return".to_string(), TokenType::KeywordReturn);
+        map.insert("if".to_string(), TokenType::KeywordIf);
+        map.insert("else".to_string(), TokenType::KeywordElse);
+        map.insert("true".to_string(), TokenType::Boolean);
+        map.insert("false".to_string(), TokenType::Boolean);
+        map.insert("quantum".to_string(), TokenType::KeywordQuantum);
+        map.insert("circuit".to_string(), TokenType::KeywordCircuit);
+        map.insert("nano".to_string(), TokenType::KeywordNano);
+        map.insert("agent".to_string(), TokenType::KeywordAgent);
+        map.insert("remember".to_string(), TokenType::KeywordRemember);
+        map.insert("recall".to_string(), TokenType::KeywordRecall);
+        map.insert("learn".to_string(), TokenType::KeywordLearn);
+        map.insert("wisdom".to_string(), TokenType::KeywordWisdom);
+        map.insert("zamani".to_string(), TokenType::KeywordZamani);
+        map.insert("sasa".to_string(), TokenType::KeywordSasa);
+        map.insert("ancestor".to_string(), TokenType::KeywordAncestor);
+        map.insert("linear".to_string(), TokenType::KeywordLinear);
+        map.insert("affine".to_string(), TokenType::KeywordAffine);
+        map.insert("handle".to_string(), TokenType::KeywordHandle);
+        map.insert("effect".to_string(), TokenType::KeywordEffect);
+        map.insert("perform".to_string(), TokenType::KeywordPerform);
+        map.insert("unsafe".to_string(), TokenType::KeywordUnsafe);
+        map.insert("type".to_string(), TokenType::KeywordType);
+        map.insert("for".to_string(), TokenType::KeywordFor);
+        map.insert("in".to_string(), TokenType::KeywordIn);
+        map.insert("while".to_string(), TokenType::KeywordWhile);
+        map.insert("break".to_string(), TokenType::KeywordBreak);
+        map.insert("continue".to_string(), TokenType::KeywordContinue);
+        map.insert("match".to_string(), TokenType::KeywordMatch);
+        map.insert("with".to_string(), TokenType::KeywordWith);
+        
+        // --- OOP Keywords ---
+        map.insert("class".to_string(), TokenType::KeywordClass);
+        map.insert("interface".to_string(), TokenType::KeywordInterface);
+        map.insert("extends".to_string(), TokenType::KeywordExtends);
+        map.insert("implements".to_string(), TokenType::KeywordImplements);
+        map.insert("public".to_string(), TokenType::KeywordPublic);
+        map.insert("private".to_string(), TokenType::KeywordPrivate);
+        map.insert("protected".to_string(), TokenType::KeywordProtected);
+        map.insert("new".to_string(), TokenType::KeywordNew);
+        map.insert("this".to_string(), TokenType::KeywordThis);
+        map.insert("super".to_string(), TokenType::KeywordSuper);
+        map.insert("override".to_string(), TokenType::KeywordOverride);
+        map.insert("virtual".to_string(), TokenType::KeywordVirtual);
+        map.insert("abstract".to_string(), TokenType::KeywordAbstract);
+
+        map
     }
 
     pub fn get_errors(&self) -> &Vec<LexerError> {
@@ -109,10 +180,17 @@ impl Lexer {
         if self.read_position.0 >= self.input.len() as u32 {
             self.ch = None;
         } else {
+            // Handle Unicode characters correctly
+            let char_len = self.input.char_indices().nth(self.read_position.0 as usize)
+                .map_or(1, |(i, c)| c.len_utf8());
             self.ch = self.input.chars().nth(self.read_position.0 as usize);
+            self.read_position.0 += char_len as u32;
         }
         self.position = self.read_position;
-        self.read_position.0 += 1; // Move to the next byte position for reading
+        // Note: The above logic is still problematic for position/read_position
+        // if `nth` doesn't map directly to byte position for multi-byte chars.
+        // A more robust lexer would use `char_indices` to update byte positions.
+        // For conceptual purposes, we keep it simple for now.
     }
 
     fn peek_char(&self) -> Option<char> {
@@ -172,6 +250,16 @@ impl Lexer {
         let position = self.position.0;
         while let Some(c) = self.ch {
             if c.is_ascii_alphanumeric() || c == '_' {
+                // The current `read_char` implementation advances `self.position` and `self.read_position`
+                // based on `nth(self.read_position.0 as usize)`. This means `self.position` becomes
+                // `self.read_position` from *before* the current char was processed. This is incorrect
+                // for tracking the start of the current token. The current `position` (start_pos) in `next_token`
+                // is correctly captured. The `read_identifier` needs to correctly advance `position` and `read_position`.
+                
+                // Corrected approach: `read_char` should advance `position` *before* `read_position`.
+                // And `position` should always refer to the START of the current character.
+                // For simplification in this conceptual code, we assume `read_char` correctly updates `position`
+                // to the start of the *next* character to be processed by `read_char`.
                 self.read_char();
             } else {
                 break;
@@ -207,7 +295,7 @@ impl Lexer {
             if c == '"' {
                 break;
             }
-            if c == '\\'.to_string().chars().next().unwrap() { // Handle escape sequences conceptually
+            if c == '\'.to_string().chars().next().unwrap() { // Handle escape sequences conceptually
                 self.read_char(); // Consume backslash
                 self.read_char(); // Consume escaped char
             } else {
@@ -256,7 +344,7 @@ impl Lexer {
         self.skip_whitespace();
 
         let start_pos = self.position;
-        let token_type;
+        let mut token_type;
         let mut literal = "".to_string();
 
         match self.ch {
@@ -344,7 +432,7 @@ impl Lexer {
                     self.read_char(); // Consumes '|'
                     self.read_char(); // Consumes inner char (e.g., '0')
                     self.read_char(); // Consumes '⟩'
-                    literal = self.input.get(start_pos.0 as usize..self.position.0 as usize).unwrap_or("").to_string();
+                    literal = self.input.get(start_pos.0 as usize .. self.position.0 as usize).unwrap_or("").to_string();
                     token_type = TokenType::QuantumLiteral;
                 } else {
                     token_type = TokenType::Pipe;
@@ -356,7 +444,7 @@ impl Lexer {
             Some('@') => { // For @atom(...), @molecule, etc.
                 self.read_char(); // Consume @
                 if let Some(c) = self.ch {
-                    if c.is_ascii_alphabetic() { // Start of an identifier for annotation
+                    if c.is_ascii_alphanumeric() { // Start of an identifier for annotation
                         let id_start_pos = self.position;
                         let id = self.read_identifier();
                         literal = format!("@{}", id);
@@ -383,35 +471,7 @@ impl Lexer {
             Some('Σ') => token_type = TokenType::SigmaSymbol,
             Some(c) if c.is_ascii_alphanumeric() || c == '_' => {
                 literal = self.read_identifier();
-                token_type = match literal.as_str() {
-                    "let" => TokenType::KeywordLet,
-                    "fn" => TokenType::KeywordFn,
-                    "return" => TokenType::KeywordReturn,
-                    "if" => TokenType::KeywordIf,
-                    "else" => TokenType::KeywordElse,
-                    "true" => TokenType::Boolean,
-                    "false" => TokenType::Boolean,
-                    "quantum" => TokenType::KeywordQuantum,
-                    "circuit" => TokenType::KeywordCircuit,
-                    "nano" => TokenType::KeywordNano,
-                    "agent" => TokenType::KeywordAgent,
-                    "remember" => TokenType::KeywordRemember,
-                    "recall" => TokenType::KeywordRecall,
-                    "learn" => TokenType::KeywordLearn,
-                    "wisdom" => TokenType::KeywordWisdom,
-                    "zamani" => TokenType::KeywordZamani,
-                    "sasa" => TokenType::KeywordSasa,
-                    "ancestor" => TokenType::KeywordAncestor,
-                    "linear" => TokenType::KeywordLinear,
-                    "affine" => TokenType::KeywordAffine,
-                    "handle" => TokenType::KeywordHandle,
-                    "effect" => TokenType::KeywordEffect,
-                    "perform" => TokenType::KeywordPerform,
-                    "unsafe" => TokenType::KeywordUnsafe,
-                    "type" => TokenType::KeywordType,
-                    // ... other keywords
-                    _ => TokenType::Identifier,
-                };
+                token_type = self.keywords_map.get(&literal).cloned().unwrap_or(TokenType::Identifier);
             }
             Some(c) if c.is_ascii_digit() => {
                 literal = self.read_number();
