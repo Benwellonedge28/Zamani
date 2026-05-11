@@ -13,7 +13,7 @@ use crate::lexer::{Lexer, TokenType};
 use crate::parser::Parser;
 use crate::semantic::SemanticAnalyzer;
 use crate::ir_gen::{IrGenerator, IrInstruction};
-use crate::optimizer::{UMC_Optimizer, CSE_Pass, DCE_Pass, QGateCancellationPass, NanoResourceOptimizer, MTSTimelineFusionPass, SankofaAccessOptimizer, ResourceManagementOptimizer};
+use crate::optimizer::{UMC_Optimizer, CSE_Pass, DCE_Pass, QGateCancellationPass, NanoResourceOptimizer, MTSTimelineFusionPass, SankofaAccessOptimizer, ResourceManagementOptimizer, CrossParadigmFusionPass, SecurityPolicyEnforcementPass, ReflectionMetadataStrippingPass, LinearAffineUsageVerificationPass};
 use crate::backend::{UMC_Backend, X86_64_Generator, QASM_Generator, NanoControlGenerator, MTS_RuntimeBytecode_Generator};
 use crate::runtime;
 use crate::stdlib;
@@ -52,7 +52,7 @@ fn main() -> Result<(), String> {
             private q_device_id: int = 123;
 
             public fn new() -> Self {
-                stdlib::core::println("Initializing QuantumDiagnostics.");
+                stdlib::core.println("Initializing QuantumDiagnostics.");
                 // Assume 'this' is implicitly available and initialized
                 this.q_device_id = 456; 
                 return this;
@@ -64,7 +64,7 @@ fn main() -> Result<(), String> {
 
             public fn run_diagnostic_suite(patient_id: string) -> float with effects { QuantumDecoherence } {
                 let prepared_sensor_state = quantum_circuit QuantumDiagnosticSensor(patient_id);
-                stdlib::core::println("Quantum diagnostics completed on device " + this.q_device_id.to_string());
+                stdlib::core.println("Quantum diagnostics completed on device " + this.q_device_id.to_string());
                 return 0.95;
             }
         }
@@ -78,7 +78,7 @@ fn main() -> Result<(), String> {
 
             public fn deploy_therapy(patient_id: string, therapy: string) {
                 nano agent TherapeuticSwarm(patient_id, therapy);
-                stdlib::core::println("Therapy '" + therapy + "' deployed by fleet " + this.nano_fleet_id.to_string());
+                stdlib::core.println("Therapy '" + therapy + "' deployed by fleet " + this.nano_fleet_id.to_string());
             }
         }
 
@@ -146,7 +146,7 @@ fn main() -> Result<(), String> {
             handle TimelineDivergence {
                 speculative_timeline_A.synchronize(&speculative_timeline_B);
             } with { |msg: string| {
-                stdlib::core::println("Timeline merging failed: " + msg + ". Proceeding with fallback.");
+                stdlib::core.println("Timeline merging failed: " + msg + ". Proceeding with fallback.");
                 return (final_outcome, "fallback_strategy");
             }}
             return (final_outcome, "optimal_strategy");
@@ -156,13 +156,13 @@ fn main() -> Result<(), String> {
             let patient_id_val = "patient_XYZ";
             let mut diagnostics_tool = new NanoTherapeutics(); // Instantiate a class!
             
-            stdlib::core::println("Getting status: " + diagnostics_tool.get_patient_status(patient_id_val));
+            stdlib::core.println("Getting status: " + diagnostics_tool.get_patient_status(patient_id_val));
 
             handle QuantumDecoherence {
                 let diagnostic_result = diagnostics_tool.run_diagnostic_suite(patient_id_val);
-                stdlib::core::println("Diagnostic suite run, result: " + diagnostic_result.to_string());
+                stdlib::core.println("Diagnostic suite run, result: " + diagnostic_result.to_string());
             } with { |err_msg: string| {
-                stdlib::core::println("Diagnostic suite failed: " + err_msg + ". Fallback to classical.");
+                stdlib::core.println("Diagnostic suite failed: " + err_msg + ". Fallback to classical.");
             }}
             
             diagnostics_tool.deploy_therapy(patient_id_val, "gene_editing_sequence");
@@ -170,18 +170,18 @@ fn main() -> Result<(), String> {
             let patient_record = stdlib::sankofa::SasaKnowledge::access(patient_id, None);
             // ... rest of the original complex example main logic ...
             if patient_record.is_none() {
-                stdlib::core::println("Error: Patient record not found for " + patient_id);
+                stdlib::core.println("Error: Patient record not found for " + patient_id);
                 return -1;
             }
             let mut current_patient_data = patient_record.unwrap().get_content::<PatientRecord>();
 
-            stdlib::core::println("Initiating therapeutic protocol for " + current_patient_data.id);
+            stdlib::core.println("Initiating therapeutic protocol for " + current_patient_data.id);
 
             handle QuantumDecoherence {
                 let prepared_sensor_state = quantum_circuit QuantumDiagnosticSensor(patient_id);
-                stdlib::core::println("Quantum diagnostics completed.");
+                stdlib::core.println("Quantum diagnostics completed.");
             } with { |err_msg: string| {
-                stdlib::core::println("Quantum diagnostics failed: " + err_msg + ". Proceeding with classical fallback.");
+                stdlib::core.println("Quantum diagnostics failed: " + err_msg + ". Proceeding with classical fallback.");
             }}
 
             let (predicted_outcome, strategy) = simulate_treatment_outcomes(
@@ -193,9 +193,9 @@ fn main() -> Result<(), String> {
             let selected_therapy = if predicted_outcome > 0.8 { "advanced_therapy_Y" } else { "basic_therapy_Z" };
             handle NanoAgentMalfunction {
                 TherapeuticSwarm(patient_id, selected_therapy);
-                stdlib::core::println("Therapeutic delivery completed.");
+                stdlib::core.println("Therapeutic delivery completed.");
             } with { |err_msg: string| {
-                stdlib::core::println("Nano-agent therapy delivery encountered issues: " + err_msg + ". Initiating recovery protocol.");
+                stdlib::core.println("Nano-agent therapy delivery encountered issues: " + err_msg + ". Initiating recovery protocol.");
                 stdlib::sankofa::TemporalLearner::learn("nano_malfunction_recovery", 0, chrono::Utc::now().timestamp_millis() as u64);
             }}
 
@@ -318,6 +318,10 @@ Compilation failed with {} errors:
     optimizer.add_pass(MTSTimelineFusionPass);
     optimizer.add_pass(SankofaAccessOptimizer);
     optimizer.add_pass(ResourceManagementOptimizer);
+    optimizer.add_pass(CrossParadigmFusionPass); // New optimization pass
+    optimizer.add_pass(SecurityPolicyEnforcementPass); // New optimization pass
+    optimizer.add_pass(ReflectionMetadataStrippingPass); // New optimization pass
+    optimizer.add_pass(LinearAffineUsageVerificationPass); // New optimization pass
     
     let metrics = optimizer.optimize(&mut ir_code)
         .map_err(|e| {
