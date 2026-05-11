@@ -10,7 +10,8 @@ pub mod debug_info;
 pub mod ide_support;
 pub mod formal_verification;
 pub mod hdl;
-pub mod self_evolution; // New module for Self-Evolution
+pub mod self_evolution;
+pub mod lang_integration; // New module for Language Integration
 
 /// Initializes all toolchain components.
 pub fn init_toolchain_integration() {
@@ -19,14 +20,16 @@ pub fn init_toolchain_integration() {
     ide_support::init_ide_support();
     formal_verification::init_formal_verification();
     hdl::init_hdl();
-    self_evolution::init_self_evolution(); // Initialize Self-Evolution module
+    self_evolution::init_self_evolution();
+    lang_integration::init_lang_integration(); // Initialize Language Integration module
     println!("Zenith UMC Toolchain Integration initialized.");
 }
 
 /// Shuts down all toolchain components.
 pub fn shutdown_toolchain_integration() {
     println!("Shutting down Zenith UMC Toolchain Integration...");
-    self_evolution::shutdown_self_evolution(); // Shutdown Self-Evolution module
+    lang_integration::fn_shutdown_lang_integration(); // Shutdown Language Integration module
+    self_evolution::shutdown_self_evolution(); 
     hdl::shutdown_hdl(); 
     formal_verification::shutdown_formal_verification();
     ide_support::shutdown_ide_support();
