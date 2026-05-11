@@ -18,7 +18,8 @@ pub mod reflection;
 pub mod ml;
 pub mod net;
 pub mod fs;
-pub mod sync; // New module for Concurrency Utilities
+pub mod sync;
+pub mod crypto; // New module for Cryptography
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -33,7 +34,8 @@ pub fn initialize_stdlib() {
     ml::init_ml_lib();
     net::init_net_lib();
     fs::init_fs_lib();
-    sync::init_sync_lib(); // Initialize Concurrency Utilities module
+    sync::init_sync_lib();
+    crypto::init_crypto_lib(); // Initialize Cryptography module
     println!("Zenith UMC Standard Library initialized.");
 }
 
@@ -41,7 +43,8 @@ pub fn initialize_stdlib() {
 
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    sync::shutdown_sync_lib(); // Shutdown Concurrency Utilities module
+    crypto::shutdown_crypto_lib(); // Shutdown Cryptography module
+    sync::shutdown_sync_lib(); 
     fs::shutdown_fs_lib(); 
     net::shutdown_net_lib(); 
     ml::shutdown_ml_lib(); 
