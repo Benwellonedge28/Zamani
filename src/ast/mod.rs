@@ -7,11 +7,18 @@
 //! and optimization.
 
 use crate::source_map::Span;
-use crate::compiler_types::Type; // For TypeExpr
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub statements: Vec<Statement>,
+}
+
+// Represents a type as it appears in the source code (before semantic resolution)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypeExpr {
+    Identifier(Identifier), // e.g., "int", "MyClass", "List"
+    Array(Box<TypeExpr>),   // e.g., "List<int>" (simplified for now)
+    // Extend for generic types (e.g., List<T>) later
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,6 +74,8 @@ pub enum Expression {
     NewInstance(Span, Identifier, Vec<Expression>), // Class Name, Constructor Arguments
     MethodCall(Span, Box<Expression>, Identifier, Vec<Expression>), // Object, Method Name, Arguments
     FieldAccess(Span, Box<Expression>, Identifier), // Object, Field Name
+    This(Span), // 'this' keyword
+    Super(Span), // 'super' keyword
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,7 +97,7 @@ pub enum Literal {
 }
 
 // --- OOP Additions ---
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AccessModifier {
     Public,
     Private,
@@ -98,12 +107,19 @@ pub enum AccessModifier {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClassMember {
     Field(Span, AccessModifier, Identifier, TypeExpr, Option<Expression>), // Modifier, Name, Type, Initializer
-    Method(Span, AccessModifier, Identifier, Vec<Parameter>, Option<TypeExpr>, Expression, Vec<Identifier>), // Modifier, Name, Params, Return Type, Body, Effects
+    Method(Span, AccessModifier, Option<MethodModifier>, Identifier, Vec<Parameter>, Option<TypeExpr>, Expression, Vec<Identifier>), // Modifier, Name, Params, Return Type, Body, Effects
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InterfaceMember {
     MethodSignature(Span, Identifier, Vec<Parameter>, Option<TypeExpr>, Vec<Identifier>), // Name, Params, Return Type, Effects (no body)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MethodModifier {
+    Override,
+    Virtual,
+    Abstract,
 }
 
 impl Expression {
@@ -130,6 +146,8 @@ impl Expression {
             Expression::NewInstance(s, _, _) => s.clone(),
             Expression::MethodCall(s, _, _, _) => s.clone(),
             Expression::FieldAccess(s, _, _) => s.clone(),
+            Expression::This(s) => s.clone(),
+            Expression::Super(s) => s.clone(),
         }
     }
 }

@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 use crate::ast::Identifier; // For type names
-use crate::ast::AccessModifier; // For OOP
+use crate::ast::{AccessModifier, MethodModifier}; // For OOP
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -57,7 +57,7 @@ pub enum Type {
     // --- OOP Additions ---
     Class(Identifier, HashMap<String, Type>, HashMap<String, MethodType>, Option<Box<Type>>), // Name, Fields, Methods, Parent Class
     Interface(Identifier, HashMap<String, MethodType>), // Name, Method Signatures
-    Method(Vec<Type>, Box<Type>, AccessModifier), // Parameters, Return Type, Access Modifier
+    Method(Vec<Type>, Box<Type>, AccessModifier, Option<MethodModifier>), // Parameters, Return Type, Access Modifier, Method Modifier
 
     // Special types for compiler internals/errors
     Unknown,
@@ -81,6 +81,6 @@ pub struct MethodType {
     pub params: Vec<Type>,
     pub return_type: Box<Type>,
     pub access_modifier: AccessModifier,
-    pub is_virtual: bool, // For polymorphism
+    pub method_modifier: Option<MethodModifier>, // Virtual, Abstract, Override
     pub effects: Vec<Identifier>, // Effects that this method might perform
 }
