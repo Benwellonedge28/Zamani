@@ -28,8 +28,11 @@ pub mod robotics;
 pub mod agents;
 pub mod meta_ops;
 pub mod external_services;
-pub mod agi_governance; // New: For safety, ethics, and legal compliance
-pub mod human_agi_interaction; // New: For admin, feedback, and economic interaction
+pub mod agi_governance;
+pub mod human_agi_interaction;
+pub mod reality; // New: VR/AR/XR
+pub mod distributed_ledger; // New: Blockchain
+pub mod iot; // New: Internet of Things
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -59,14 +62,20 @@ pub fn initialize_stdlib() {
     agents::init_agents_lib();
     meta_ops::init_meta_ops_lib();
     external_services::init_external_services_lib();
-    agi_governance::init_agi_governance_lib(); // Initialize Governance module
-    human_agi_interaction::init_human_agi_lib(); // Initialize Human-AGI Interaction module
+    agi_governance::init_agi_governance_lib();
+    human_agi_interaction::init_human_agi_lib();
+    reality::init_reality_lib(); // Initialize XR module
+    distributed_ledger::init_ledger_lib(); // Initialize Ledger module
+    iot::init_iot_lib(); // Initialize IoT module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
+    iot::shutdown_iot_lib();
+    distributed_ledger::shutdown_ledger_lib();
+    reality::shutdown_reality_lib();
     human_agi_interaction::shutdown_human_agi_lib(); 
     agi_governance::shutdown_agi_governance_lib();
     external_services::shutdown_external_services_lib();
