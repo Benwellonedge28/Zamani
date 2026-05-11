@@ -1,41 +1,25 @@
 
 //! Zenith Universal Meta-Compiler (UMC) Standard Library
 //!
-//! This module defines the conceptual standard library for Zenith programs.
-//! The UMC Standard Library provides a collection of core functionalities,
-//! data structures, and APIs that are commonly used across various Zenith
-//! programming paradigms.
+//! This module aggregates and manages all standard library components for Zenith.
+//! It provides foundational services and high-level abstractions that are common
+//! across different programming paradigms supported by Zenith.
 //!
-//! Key responsibilities include:
-//! - **Core Utilities:** Basic types, mathematical operations, common functions.
-//! - **Data Structures:** Collections like lists, maps, sets, queues, etc.
-//! - **I/O Operations:** Input/output functionalities for various sources/sinks.
-//! - **Concurrency Primitives:** Tools for parallel and concurrent programming.
-//! - **Networking:** APIs for network communication.
-//! - **Quantum APIs:** High-level abstractions for quantum operations.
-//! - **Nano-Agent APIs:** Utilities for designing, deploying, and interacting with nano-agents.
-//! - **MTS APIs:** Functions for managing and interacting with multi-timeline systems.
-//! - **Sankofa APIs:** Abstractions for temporal memory access, learning, and query.
-//! - **Error Handling:** Standardized error types and mechanisms.
+//! The standard library is structured into modules corresponding to functional
+//! areas (e.g., core utilities, collections, specific paradigm APIs).
 
 pub mod core;
-pub mod collections;
-pub mod io;
-pub mod concurrent;
-pub mod network;
+pub mod collections; // For List, Map, etc.
 pub mod quantum;
 pub mod nano;
 pub mod mts;
 pub mod sankofa;
 
-// The main entry point for using the Zenith UMC Standard Library.
+/// Initializes all standard library components.
 pub fn initialize_stdlib() {
     println!("Initializing Zenith UMC Standard Library...");
     core::init_core_lib();
-    collections::init_collections_lib();
-    io::init_io_lib();
-    concurrent::init_concurrent_lib();
-    network::init_network_lib();
+    collections::init_collections_lib(); // New module init
     quantum::init_quantum_lib();
     nano::init_nano_lib();
     mts::init_mts_lib();
@@ -43,22 +27,14 @@ pub fn initialize_stdlib() {
     println!("Zenith UMC Standard Library initialized.");
 }
 
-// Function to shut down the standard library gracefully.
+/// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    sankofa::shutdown_sankofa_lib(); 
+    sankofa::shutdown_sankofa_lib();
     mts::shutdown_mts_lib();
     nano::shutdown_nano_lib();
     quantum::shutdown_quantum_lib();
-    network::shutdown_network_lib();
-    concurrent::shutdown_concurrent_lib();
-    io::shutdown_io_lib();
-    collections::shutdown_collections_lib();
+    collections::shutdown_collections_lib(); // New module shutdown
     core::shutdown_core_lib();
     println!("Zenith UMC Standard Library shut down.");
-}
-
-// Example of a core utility function from the standard library
-pub fn print_message(message: &str) {
-    println!("[StdLib] {}", message);
 }
