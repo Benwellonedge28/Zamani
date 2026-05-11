@@ -11,7 +11,9 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use crate::core_lang_primitives::{Size, TimeStamp}; // Use core primitives for types
+use crate::ast::Identifier;
+use crate::core_lang_primitives::{Size, TimeStamp, MemoryRegion}; // Use core primitives for types
+use crate::runtime::mts::TimelineId; // Import TimelineId
 
 /// Unique identifier for an isolated Nimbus execution context.
 pub type NimbusContextId = u64;
@@ -132,7 +134,7 @@ impl NimbusMicrokernel {
             if !context.active_capabilities.contains(&CapabilityToken("hardware_access".to_string())) {
                 return Err(format!("Context {} lacks 'hardware_access' capability.", context_id));
             }
-            println!("    -> Nimbus OS: Context {} accessing hardware device {} ({} bytes).".to_string(), context_id, device_id, command.len());
+            println!("    -> Nimbus OS: Context {} accessing hardware device {} with command.".to_string(), context_id, device_id);
             // Conceptual: Interact with HAL
             Ok(vec![0xDE, 0xAD, 0xBE, 0xEF]) // Dummy response
         } else {

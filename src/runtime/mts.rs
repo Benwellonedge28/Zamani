@@ -161,7 +161,7 @@ impl MultiTimelineOrchestrator {
         }
 
         self.timelines.insert(t1.id, t1.clone()); // Re-insert the updated t1
-        Ok(t1.id) // Return the ID of the merged timeline (t1)
+        Ok(t1.id) // Return the ID of the merged timeline (t1) (conceptual: return new ID for merged timeline)
     }
 
     /// Gets a mutable reference to a timeline.
@@ -227,7 +227,7 @@ pub fn store_timeline_state(slice_id: TimelineId, content: Vec<u8>, timestamp: T
         let mut orchestrator = orchestrator_arc.lock().unwrap();
         if let Some(timeline) = orchestrator.get_timeline_mut(slice_id) {
             timeline.store_state(content, timestamp, causal_parents);
-            Ok(())
+            Ok(()) // conceptual
         } else {
             Err(format!("Timeline {} not found.", slice_id))
         }
@@ -240,7 +240,7 @@ pub fn store_timeline_state(slice_id: TimelineId, content: Vec<u8>, timestamp: T
 pub fn synchronize_timelines(slice1_id: TimelineId, slice2_id: TimelineId, merge_point: Timestamp) -> Result<TimelineId, String> {
     if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR.as_ref() } {
         let mut orchestrator = orchestrator_arc.lock().unwrap();
-        orchestrator.merge_timelines(slice1_id, slice2_id, merge_point)
+        orchestrator.merge_timelines(slice1_id, slice2_id, merge_point) 
     } else {
         Err("MTS Runtime not initialized.".to_string())
     }
