@@ -38,17 +38,58 @@ fn main() -> Result<(), String> {
     let mut compiler_errors: Vec<CompilerError> = Vec::new();
     let mut source_map = SourceMap::new(); // Create SourceMap
 
-    // 2. Conceptual Zenith Source Code (using the complex example)
+    // 2. Conceptual Zenith Source Code (using the complex example, modified for OOP concepts)
     let source_code_str = r#"
         // A simple Zenith program demonstrating unified paradigms.
+        // Now with OOP classes and interfaces!
+
+        interface DiagnosticsProvider {
+            fn get_patient_status(patient_id: string) -> string;
+            fn run_diagnostic_suite(patient_id: string) -> float with effects { QuantumDecoherence };
+        }
+
+        class QuantumDiagnostics implements DiagnosticsProvider {
+            private q_device_id: int = 123;
+
+            public fn new() -> Self {
+                stdlib::core::println("Initializing QuantumDiagnostics.");
+                // Assume 'this' is implicitly available and initialized
+                this.q_device_id = 456; 
+                return this;
+            }
+
+            public fn get_patient_status(patient_id: string) -> string {
+                return "Status from QuantumDiagnostics for " + patient_id;
+            }
+
+            public fn run_diagnostic_suite(patient_id: string) -> float with effects { QuantumDecoherence } {
+                let prepared_sensor_state = quantum_circuit QuantumDiagnosticSensor(patient_id);
+                stdlib::core::println("Quantum diagnostics completed on device " + this.q_device_id.to_string());
+                return 0.95;
+            }
+        }
+
+        class NanoTherapeutics extends QuantumDiagnostics {
+            private nano_fleet_id: int = 789;
+
+            override public fn get_patient_status(patient_id: string) -> string {
+                return super.get_patient_status(patient_id) + ", Nano-System ready.";
+            }
+
+            public fn deploy_therapy(patient_id: string, therapy: string) {
+                nano agent TherapeuticSwarm(patient_id, therapy);
+                stdlib::core::println("Therapy '" + therapy + "' deployed by fleet " + this.nano_fleet_id.to_string());
+            }
+        }
+
         type PatientId = string;
         type HealthMetric = float;
         type TherapeuticAgent = string;
 
         struct PatientRecord {
             id: PatientId,
-            initial_metrics: List<HealthMetric>,
-            treatment_history: List<string>,
+            initial_metrics: stdlib::collections::List<HealthMetric>,
+            treatment_history: stdlib::collections::List<string>,
             current_status: string,
         }
 
@@ -82,7 +123,7 @@ fn main() -> Result<(), String> {
             }
             for agent in deployed_agents {
                 agent.perform_action("locate_target_cells");
-                agent.perform_action("deliver_payload:" + agent.to_string()); // to_string on NanoAgent
+                agent.perform_action("deliver_payload:" + agent.to_string());
                 if stdlib::core::rand() < 0.01 {
                     perform NanoAgentMalfunction("Agent " + agent.to_string() + " reported payload delivery failure!");
                 }
@@ -112,7 +153,22 @@ fn main() -> Result<(), String> {
         }
 
         fn main(patient_id: PatientId) -> int with effects { QuantumDecoherence, NanoAgentMalfunction, TimelineDivergence } {
+            let patient_id_val = "patient_XYZ";
+            let mut diagnostics_tool = new NanoTherapeutics(); // Instantiate a class!
+            
+            stdlib::core::println("Getting status: " + diagnostics_tool.get_patient_status(patient_id_val));
+
+            handle QuantumDecoherence {
+                let diagnostic_result = diagnostics_tool.run_diagnostic_suite(patient_id_val);
+                stdlib::core::println("Diagnostic suite run, result: " + diagnostic_result.to_string());
+            } with { |err_msg: string| {
+                stdlib::core::println("Diagnostic suite failed: " + err_msg + ". Fallback to classical.");
+            }}
+            
+            diagnostics_tool.deploy_therapy(patient_id_val, "gene_editing_sequence");
+
             let patient_record = stdlib::sankofa::SasaKnowledge::access(patient_id, None);
+            // ... rest of the original complex example main logic ...
             if patient_record.is_none() {
                 stdlib::core::println("Error: Patient record not found for " + patient_id);
                 return -1;
@@ -122,7 +178,7 @@ fn main() -> Result<(), String> {
             stdlib::core::println("Initiating therapeutic protocol for " + current_patient_data.id);
 
             handle QuantumDecoherence {
-                let prepared_sensor_state = QuantumDiagnosticSensor(patient_id);
+                let prepared_sensor_state = quantum_circuit QuantumDiagnosticSensor(patient_id);
                 stdlib::core::println("Quantum diagnostics completed.");
             } with { |err_msg: string| {
                 stdlib::core::println("Quantum diagnostics failed: " + err_msg + ". Proceeding with classical fallback.");
@@ -166,7 +222,7 @@ fn main() -> Result<(), String> {
 
     // 4. Parsing
     println!("Parsing tokens into AST...");
-    let mut parser = Parser::new(Lexer::new(file_id, Arc::clone(&source_file_arc)));
+    let mut parser = Parser::new(Lexer::new(file_id, Arc::clone(&source_file_arc))); // Pass Arc<SourceFile>
     let program_ast = parser.parse_program();
     if !parser.get_errors().is_empty() {
         compiler_errors.extend(parser.get_errors().iter().cloned().map(CompilerError::Parser));
@@ -177,7 +233,7 @@ fn main() -> Result<(), String> {
     let mut semantic_analyzer = SemanticAnalyzer::new();
     let semantic_result = semantic_analyzer.analyze(&program_ast);
     if let Err(errors) = semantic_result {
-        compiler_errors.extend(errors.into_iter().map(CompilerError::Semantic));
+        compiler_errors.extend(errors);
     }
 
     // --- Critical Error Check Before IR Generation and later stages ---
@@ -193,12 +249,12 @@ Compilation failed with {} errors:
 
     // 6. IR Generation
     println!("Generating Universal Meta-Compiler IR...");
-    let mut ir_generator = IrGenerator::new();
-    let symbol_table_snapshot = semantic_analyzer.get_global_symbols().clone();
-    let mut ir_code = match ir_generator.generate_ir(&program_ast, &symbol_table_snapshot) {
+    // Pass the fully resolved symbol table from semantic analysis to IR Generator
+    let mut ir_generator = IrGenerator::new(Arc::new(semantic_analyzer.get_global_symbols().clone()));
+    let mut ir_code = match ir_generator.generate_ir(&program_ast, semantic_analyzer.get_global_symbols()) {
         Ok(code) => code,
         Err(errors) => {
-            compiler_errors.extend(errors.into_iter().map(CompilerError::IrGen));
+            compiler_errors.extend(errors);
             eprintln!("
 Compilation failed with {} errors:
 ", compiler_errors.len());
