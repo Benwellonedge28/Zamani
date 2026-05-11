@@ -60,17 +60,28 @@ pub enum Type {
         methods: HashMap<String, MethodType>,
         parent_class: Option<Box<Type>>,
         implemented_interfaces: Vec<Type>,
+        is_abstract: bool, // Added for semantic analysis
     },
     Interface {
         name: Identifier,
         methods: HashMap<String, MethodType>,
-        parent_interfaces: Vec<Type>,
+        parent_interfaces: Vec<Type>, // Added for semantic analysis
     },
     Method(Vec<Type>, Box<Type>, AccessModifier, Option<MethodModifier>), // Parameters, Return Type, Access Modifier, Method Modifier
 
     // Special types for compiler internals/errors
     Unknown,
     Error,
+}
+
+impl Type {
+    pub fn get_name(&self) -> Identifier { // Helper to get name for symbols
+        match self {
+            Type::Class { name, .. } => name.clone(),
+            Type::Interface { name, .. } => name.clone(),
+            _ => Identifier("Unknown".to_string(), Span::dummy()), // Placeholder
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
