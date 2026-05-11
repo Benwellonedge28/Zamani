@@ -9,6 +9,11 @@ pub fn init_mts_lib() {
     println!("  - Initializing StdLib MTS APIs...");
 }
 
+/// Shuts down the MTS standard library components.
+pub fn shutdown_mts_lib() {
+    println!("  - Shutting down StdLib MTS APIs...");
+}
+
 /// A conceptual handle to a Multi-Timeline System (MTS) slice.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)] // Added Default
 pub struct MtsSlice(usize); // Represents an ID from the MTS runtime

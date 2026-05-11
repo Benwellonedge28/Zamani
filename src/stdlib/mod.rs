@@ -43,6 +43,21 @@ pub fn initialize_stdlib() {
     println!("Zenith UMC Standard Library initialized.");
 }
 
+// Function to shut down the standard library gracefully.
+pub fn shutdown_stdlib() {
+    println!("Shutting down Zenith UMC Standard Library...");
+    sankofa::shutdown_sankofa_lib(); 
+    mts::shutdown_mts_lib();
+    nano::shutdown_nano_lib();
+    quantum::shutdown_quantum_lib();
+    network::shutdown_network_lib();
+    concurrent::shutdown_concurrent_lib();
+    io::shutdown_io_lib();
+    collections::shutdown_collections_lib();
+    core::shutdown_core_lib();
+    println!("Zenith UMC Standard Library shut down.");
+}
+
 // Example of a core utility function from the standard library
 pub fn print_message(message: &str) {
     println!("[StdLib] {}", message);

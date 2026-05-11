@@ -9,6 +9,11 @@ pub fn init_io_lib() {
     println!("  - Initializing StdLib I/O...");
 }
 
+/// Shuts down the I/O standard library components.
+pub fn shutdown_io_lib() {
+    println!("  - Shutting down StdLib I/O...");
+}
+
 /// Reads a line from standard input.
 pub fn read_line() -> String {
     println!("[StdLib::io] Reading line from stdin (conceptual)...");

@@ -9,6 +9,11 @@ pub fn init_nano_lib() {
     println!("  - Initializing StdLib Nano-Agent APIs...");
 }
 
+/// Shuts down the nano-agent standard library components.
+pub fn shutdown_nano_lib() {
+    println!("  - Shutting down StdLib Nano-Agent APIs...");
+}
+
 /// A conceptual Nano-Agent instance.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)] // Added Default
 pub struct NanoAgent(usize); // Represents an ID from the nano-agent runtime

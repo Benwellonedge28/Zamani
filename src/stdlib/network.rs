@@ -9,6 +9,11 @@ pub fn init_network_lib() {
     println!("  - Initializing StdLib Networking...");
 }
 
+/// Shuts down the networking standard library components.
+pub fn shutdown_network_lib() {
+    println!("  - Shutting down StdLib Networking...");
+}
+
 /// A conceptual TCP stream for client-server communication.
 pub struct TcpStream;
 

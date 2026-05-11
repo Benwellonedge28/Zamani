@@ -1,12 +1,17 @@
 
 //! Zenith Standard Library: Collections
 //!
-//! This module provides common data structures such as lists, maps, and sets,
+//! This module provides common data structures suchs as lists, maps, and sets,
 //! designed for efficiency and ease of use within Zenith programs.
 
 /// Initializes the collections standard library components.
 pub fn init_collections_lib() {
     println!("  - Initializing StdLib Collections...");
+}
+
+/// Shuts down the collections standard library components.
+pub fn shutdown_collections_lib() {
+    println!("  - Shutting down StdLib Collections...");
 }
 
 /// A conceptual dynamically-sized list (vector).

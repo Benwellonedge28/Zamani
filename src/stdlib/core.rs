@@ -9,6 +9,11 @@ pub fn init_core_lib() {
     println!("  - Initializing StdLib Core Utilities...");
 }
 
+/// Shuts down the core standard library components.
+pub fn shutdown_core_lib() {
+    println!("  - Shutting down StdLib Core Utilities...");
+}
+
 /// A basic numeric type, conceptually representing an integer.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Int(i64);

@@ -10,6 +10,11 @@ pub fn init_quantum_lib() {
     println!("  - Initializing StdLib Quantum APIs...");
 }
 
+/// Shuts down the quantum standard library components.
+pub fn shutdown_quantum_lib() {
+    println!("  - Shutting down StdLib Quantum APIs...");
+}
+
 /// A conceptual qubit.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)] // Added Default
 pub struct Qubit(usize); // Represents an ID from the quantum runtime

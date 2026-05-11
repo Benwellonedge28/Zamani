@@ -9,6 +9,11 @@ pub fn init_sankofa_lib() {
     println!("  - Initializing StdLib Sankofa Memory APIs...");
 }
 
+/// Shuts down the Sankofa standard library components.
+pub fn shutdown_sankofa_lib() {
+    println!("  - Shutting down StdLib Sankofa Memory APIs...");
+}
+
 /// A conceptual handle to a piece of Zamani (immutable past) fact.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)] // Added Default
 pub struct ZamaniFact(usize);
