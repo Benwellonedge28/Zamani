@@ -14,7 +14,8 @@ pub mod quantum;
 pub mod nano;
 pub mod mts;
 pub mod sankofa;
-pub mod reflection; // New module for reflection
+pub mod reflection;
+pub mod ml; // New module for Machine Learning
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -25,14 +26,16 @@ pub fn initialize_stdlib() {
     nano::init_nano_lib();
     mts::init_mts_lib();
     sankofa::init_sankofa_lib();
-    reflection::init_reflection_lib(); // Initialize reflection
+    reflection::init_reflection_lib();
+    ml::init_ml_lib(); // Initialize Machine Learning module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    reflection::shutdown_reflection_lib(); // Shutdown reflection
+    ml::shutdown_ml_lib(); // Shutdown Machine Learning module
+    reflection::shutdown_reflection_lib(); 
     sankofa::shutdown_sankofa_lib();
     mts::shutdown_mts_lib();
     nano::shutdown_nano_lib();
