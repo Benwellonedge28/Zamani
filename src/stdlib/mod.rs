@@ -23,7 +23,8 @@ pub mod crypto;
 pub mod serialize;
 pub mod gui;
 pub mod db;
-pub mod time; // New module for Time and Date
+pub mod time;
+pub mod numeric; // New module for Numerical Analysis and Scientific Computing
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -43,7 +44,8 @@ pub fn initialize_stdlib() {
     serialize::init_serialize_lib();
     gui::init_gui_lib();
     db::init_db_lib();
-    time::init_time_lib(); // Initialize Time and Date module
+    time::init_time_lib();
+    numeric::init_numeric_lib(); // Initialize Numerical Analysis module
     println!("Zenith UMC Standard Library initialized.");
 }
 
@@ -51,7 +53,8 @@ pub fn initialize_stdlib() {
 
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    time::shutdown_time_lib(); // Shutdown Time and Date module
+    numeric::shutdown_numeric_lib(); // Shutdown Numerical Analysis module
+    time::shutdown_time_lib(); 
     db::shutdown_db_lib(); 
     gui::shutdown_gui_lib(); 
     serialize::shutdown_serialize_lib(); 
