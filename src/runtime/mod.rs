@@ -19,6 +19,7 @@ pub mod nano;
 pub mod mts;
 pub mod sankofa;
 pub mod nimbus_os; // New module for direct Nimbus OS interaction
+pub mod core_lang_primitives; // New module for core language primitives
 
 use std::sync::{Arc, Mutex};
 
@@ -27,13 +28,14 @@ pub static mut QUANTUM_PROCESSOR_HANDLE: Option<Arc<Mutex<quantum::QuantumProces
 pub static mut NANO_ORCHESTRATOR_HANDLE: Option<Arc<Mutex<nano::NanoAgentOrchestrator>>> = None;
 pub static mut MTS_ORCHESTRATOR_HANDLE: Option<Arc<Mutex<mts::MultiTimelineOrchestrator>>> = None;
 pub static mut SANKOFA_RUNTIME_STATE_HANDLE: Option<Arc<Mutex<sankofa::SankofaRuntimeState>>> = None;
+pub static mut NIMBUS_MICROKERNEL_HANDLE: Option<Arc<Mutex<nimbus_os::NimbusMicrokernel>>> = None; // New handle
 
 /// Initializes all integrated runtimes required for Zenith program execution.
 pub fn init_runtime() {
     println!("Initializing Zenith UMC Runtime System...");
     
     // Initialize core language primitives (memory, concurrency, Nimbus syscalls)
-    crate::core_lang_primitives::init_core_lang_primitives(); // Call the new core primitives init
+    core_lang_primitives::init_core_lang_primitives(); // Call the new core primitives init
 
     // Initialize specialized runtimes
     unsafe { 
@@ -41,7 +43,7 @@ pub fn init_runtime() {
         NANO_ORCHESTRATOR_HANDLE = Some(nano::init_nano_runtime());
         MTS_ORCHESTRATOR_HANDLE = Some(mts::init_mts_runtime());
         SANKOFA_RUNTIME_STATE_HANDLE = Some(sankofa::init_sankofa_runtime());
-        // nimbus_os::init_nimbus_os_interface(); // Conceptual Nimbus OS interface
+        NIMBUS_MICROKERNEL_HANDLE = Some(nimbus_os::init_nimbus_os_interface()); // Initialize Nimbus OS interface
     }
     
     println!("Zenith UMC Runtime System initialized.");
@@ -55,9 +57,10 @@ pub fn shutdown_runtime() {
     mts::shutdown_mts_runtime();
     nano::shutdown_nano_runtime();
     quantum::shutdown_quantum_runtime();
+    nimbus_os::shutdown_nimbus_os_interface(); // Shutdown Nimbus OS interface
     
     // Shutdown core language primitives
-    crate::core_lang_primitives::shutdown_core_lang_primitives(); // Call the new core primitives shutdown
+    core_lang_primitives::shutdown_core_lang_primitives(); // Call the new core primitives shutdown
 
     println!("Zenith UMC Runtime System shut down.");
 }
