@@ -1,0 +1,68 @@
+
+# Zenith.toml - Zenith Project Manifest
+# This file describes a Zenith project, its metadata, dependencies,
+# and how it should be built, optimized, and deployed across various paradigms.
+
+[package]
+name = "zenith_therapeutic_system"
+version = "0.1.0"
+authors = ["Samuel Mukandara <samuelmukandara@gmail.com>"]
+edition = "2026" # Refers to a Zenith language edition, e.g., features enabled
+description = "A quantum-enhanced nano-therapeutic system developed in Zenith."
+homepage = "https://zenith-lang.org/therapeutic-system"
+repository = "https://github.com/Benwellonedge28/Zenith" # Points to the example's repo
+license = "Apache-2.0/MIT" # Example licenses
+
+# Project type defines the primary target output/purpose
+# Examples: 'application', 'library', 'quantum-circuit', 'nano-agent-blueprint', 'mts-simulation'
+type = "application"
+
+[dependencies]
+# Dependencies are specified as paths to .zpkg files or registry entries
+# This demonstrates Zenith's conceptual package manager
+sankofa_std = { version = "0.1.0" }
+quantum_sdk = { version = "0.2.0" }
+nano_swarm_lib = { version = "0.1.1" }
+mts_simulation_utils = { version = "0.1.0" }
+zenith_json = { version = "0.1.0" } # For serialization/deserialization
+
+# Dependencies can also be local paths for development
+local_diagnostic_module = { path = "./modules/diagnostic" }
+
+[features]
+# Conditional compilation flags or feature gates
+# 'quantum_hardware_support': Enables direct QPU interaction
+# 'nano_sim_full_physics': Enables high-fidelity nano-agent environment simulation
+hardware_acceleration = ["quantum_hardware_support", "nano_sim_full_physics"]
+secure_logging = [] # Feature for enhanced logging with Nimbus security
+
+[build]
+# Build-specific configurations
+target = "nimbus-vm" # Default target for the project (e.g., nimbus-vm, wasm, x86_64, qpu_ibm, qpu_google)
+optimization_level = "aggressive" # "none", "basic", "aggressive", "quantum-aware"
+debug_info = true # Whether to emit debug information (e.g., for zenith-dbg)
+codegen_backend = "unified-llvm-qiskit-nanoasm" # Backend selection (conceptual)
+
+# Environment variables to pass to the build process (e.g., for Nimbus OS configuration)
+[build.env]
+NIMBUS_OS_RUNTIME_MODE = "production"
+QUANTUM_SIMULATOR_PRECISION = "high"
+
+[deploy]
+# Deployment specific configurations
+platform = "Nimbus_OS_Cloud" # Target deployment platform
+auto_rollback_on_failure = true
+continuous_monitoring = { enabled = true, metrics = ["cpu", "memory", "qpu_latency"] }
+
+[nimbus.os]
+# Configuration specific to the Nimbus OS environment
+security_policy = "strict_isolated_container" # For Nimbus's microkernel enforcement
+resource_limits = { cpu = "2 cores", memory = "4GB", qpu_time_units = "1000" }
+multi_timeline_strategy = "optimistic_concurrency" # How MTS orchestrates
+network_isolation = true
+
+[sankofa.memory]
+# Configuration for Sankofa memory behavior
+default_consistency = "causal" # "eventual", "causal", "strong"
+max_temporal_depth = "100 years" # How far back history is actively maintained
+learning_agents_enabled = true
