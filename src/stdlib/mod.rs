@@ -29,7 +29,8 @@ pub mod web;
 pub mod ai_reasoning;
 pub mod nlp;
 pub mod vision;
-pub mod robotics; // New module for Robotics and Control
+pub mod robotics;
+pub mod agents; // New module for Agent Systems
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -55,7 +56,8 @@ pub fn initialize_stdlib() {
     ai_reasoning::init_ai_reasoning_lib();
     nlp::init_nlp_lib();
     vision::init_vision_lib();
-    robotics::init_robotics_lib(); // Initialize Robotics module
+    robotics::init_robotics_lib();
+    agents::init_agents_lib(); // Initialize Agent Systems module
     println!("Zenith UMC Standard Library initialized.");
 }
 
@@ -63,7 +65,8 @@ pub fn initialize_stdlib() {
 
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    robotics::shutdown_robotics_lib(); // Shutdown Robotics module
+    agents::shutdown_agents_lib(); // Shutdown Agent Systems module
+    robotics::shutdown_robotics_lib(); 
     vision::shutdown_vision_lib(); 
     nlp::shutdown_nlp_lib(); 
     ai_reasoning::shutdown_ai_reasoning_lib(); 
