@@ -12,8 +12,7 @@
 pub mod ai_cognition; // For keywords like infer, learn, assert
 pub mod concurrency_actors; // For actor keyword
 pub mod explainability_transparency; // For explain, transparent keywords
-// Other language spec modules will be added here later:
-// pub mod declarative_system_directives; // For self_adjust, version blocks
+pub mod declarative_system_directives; // For self_adjust, version blocks
 // pub mod security_ethics_attributes; // For #[safety], #[ethics] attributes
 // pub mod advanced_types_syntax; // For dependent, linear types syntax
 
@@ -23,17 +22,17 @@ pub fn init_language_spec() {
     println!("  - Initializing Zenith Language Specification Modules...");
     ai_cognition::init_ai_cognition_keywords();
     concurrency_actors::init_concurrency_actors_keywords();
-    explainability_transparency::init_explainability_transparency_keywords(); // Initialize Explainability & Transparency module
-    // Initialize other modules as they are added
+    explainability_transparency::init_explainability_transparency_keywords();
+    declarative_system_directives::init_declarative_system_directives_keywords(); // Initialize Declarative System Directives module
     println!("  - Zenith Language Specification Modules initialized.");
 }
 
 /// Shuts down all Zenith language specification modules.
 pub fn shutdown_language_spec() {
     println!("  - Shutting down Zenith Language Specification Modules...");
-    explainability_transparency::shutdown_explainability_transparency_keywords(); // Shutdown Explainability & Transparency module
+    declarative_system_directives::shutdown_declarative_system_directives_keywords(); // Shutdown Declarative System Directives module
+    explainability_transparency::shutdown_explainability_transparency_keywords();
     concurrency_actors::shutdown_concurrency_actors_keywords();
     ai_cognition::shutdown_ai_cognition_keywords();
-    // Shutdown other modules as they are added
     println!("  - Zenith Language Specification Modules shut down.");
 }
