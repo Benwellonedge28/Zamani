@@ -26,7 +26,8 @@ pub mod db;
 pub mod time;
 pub mod numeric;
 pub mod web;
-pub mod ai_reasoning; // New module for AI Reasoning
+pub mod ai_reasoning;
+pub mod nlp; // New module for Natural Language Processing
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -49,7 +50,8 @@ pub fn initialize_stdlib() {
     time::init_time_lib();
     numeric::init_numeric_lib();
     web::init_web_lib();
-    ai_reasoning::init_ai_reasoning_lib(); // Initialize AI Reasoning module
+    ai_reasoning::init_ai_reasoning_lib();
+    nlp::init_nlp_lib(); // Initialize NLP module
     println!("Zenith UMC Standard Library initialized.");
 }
 
@@ -57,7 +59,8 @@ pub fn initialize_stdlib() {
 
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    ai_reasoning::shutdown_ai_reasoning_lib(); // Shutdown AI Reasoning module
+    nlp::shutdown_nlp_lib(); // Shutdown NLP module
+    ai_reasoning::shutdown_ai_reasoning_lib(); 
     web::shutdown_web_lib(); 
     numeric::shutdown_numeric_lib(); 
     time::shutdown_time_lib(); 
