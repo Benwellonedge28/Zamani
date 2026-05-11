@@ -17,7 +17,8 @@ pub mod sankofa;
 pub mod reflection;
 pub mod ml;
 pub mod net;
-pub mod fs; // New module for File System access
+pub mod fs;
+pub mod sync; // New module for Concurrency Utilities
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -31,7 +32,8 @@ pub fn initialize_stdlib() {
     reflection::init_reflection_lib();
     ml::init_ml_lib();
     net::init_net_lib();
-    fs::init_fs_lib(); // Initialize File System module
+    fs::init_fs_lib();
+    sync::init_sync_lib(); // Initialize Concurrency Utilities module
     println!("Zenith UMC Standard Library initialized.");
 }
 
@@ -39,7 +41,8 @@ pub fn initialize_stdlib() {
 
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    fs::shutdown_fs_lib(); // Shutdown File System module
+    sync::shutdown_sync_lib(); // Shutdown Concurrency Utilities module
+    fs::shutdown_fs_lib(); 
     net::shutdown_net_lib(); 
     ml::shutdown_ml_lib(); 
     reflection::shutdown_reflection_lib(); 
