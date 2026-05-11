@@ -31,7 +31,8 @@ pub mod nlp;
 pub mod vision;
 pub mod robotics;
 pub mod agents;
-pub mod meta_ops; // New module for Meta-Operations
+pub mod meta_ops;
+pub mod external_services; // New module for External Services Integration
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -59,7 +60,8 @@ pub fn initialize_stdlib() {
     vision::init_vision_lib();
     robotics::init_robotics_lib();
     agents::init_agents_lib();
-    meta_ops::init_meta_ops_lib(); // Initialize Meta-Operations module
+    meta_ops::init_meta_ops_lib();
+    external_services::init_external_services_lib(); // Initialize External Services Integration module
     println!("Zenith UMC Standard Library initialized.");
 }
 
@@ -67,7 +69,8 @@ pub fn initialize_stdlib() {
 
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    meta_ops::shutdown_meta_ops_lib(); // Shutdown Meta-Operations module
+    external_services::shutdown_external_services_lib(); // Shutdown External Services Integration module
+    meta_ops::shutdown_meta_ops_lib(); 
     agents::shutdown_agents_lib(); 
     robotics::shutdown_robotics_lib(); 
     vision::shutdown_vision_lib(); 
