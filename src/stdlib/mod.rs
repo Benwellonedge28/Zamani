@@ -21,7 +21,8 @@ pub mod fs;
 pub mod sync;
 pub mod crypto;
 pub mod serialize;
-pub mod gui; // New module for GUI and Multimedia
+pub mod gui;
+pub mod db; // New module for Database and Data Persistence
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -39,7 +40,8 @@ pub fn initialize_stdlib() {
     sync::init_sync_lib();
     crypto::init_crypto_lib();
     serialize::init_serialize_lib();
-    gui::init_gui_lib(); // Initialize GUI module
+    gui::init_gui_lib();
+    db::init_db_lib(); // Initialize Database module
     println!("Zenith UMC Standard Library initialized.");
 }
 
@@ -47,7 +49,8 @@ pub fn initialize_stdlib() {
 
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    gui::shutdown_gui_lib(); // Shutdown GUI module
+    db::shutdown_db_lib(); // Shutdown Database module
+    gui::shutdown_gui_lib(); 
     serialize::shutdown_serialize_lib(); 
     crypto::shutdown_crypto_lib(); 
     sync::shutdown_sync_lib(); 
