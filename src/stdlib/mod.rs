@@ -35,7 +35,7 @@ pub mod distributed_ledger;
 pub mod iot;
 pub mod human_interface_devices;
 pub mod chat_architect_agent;
-pub mod documentation; // New: Exhaustive Omni-Documentation & Multi-Modal Engine
+pub mod documentation_system; // New: For autonomous, multi-modal documentation generation
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -72,14 +72,14 @@ pub fn initialize_stdlib() {
     iot::init_iot_lib();
     human_interface_devices::init_hid_lib();
     chat_architect_agent::init_chat_architect_agent();
-    documentation::init_documentation_lib(); // Initialize Documentation engine
+    documentation_system::init_documentation_system(); // Initialize Autonomous Documentation System module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    documentation::shutdown_documentation_lib(); // Shutdown Documentation engine
+    documentation_system::shutdown_documentation_system(); // Shutdown Autonomous Documentation System module
     chat_architect_agent::shutdown_chat_architect_agent();
     human_interface_devices::shutdown_hid_lib();
     iot::shutdown_iot_lib();
