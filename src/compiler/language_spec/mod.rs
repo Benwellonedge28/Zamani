@@ -14,7 +14,7 @@ pub mod concurrency_actors; // For actor keyword
 pub mod explainability_transparency; // For explain, transparent keywords
 pub mod declarative_system_directives; // For self_adjust, version blocks
 pub mod security_ethics_attributes; // For #[safety], #[ethics] attributes
-// pub mod advanced_types_syntax; // For dependent, linear types syntax
+pub mod advanced_types_syntax; // For dependent, linear types syntax
 
 
 /// Initializes all Zenith language specification modules.
@@ -24,14 +24,16 @@ pub fn init_language_spec() {
     concurrency_actors::init_concurrency_actors_keywords();
     explainability_transparency::init_explainability_transparency_keywords();
     declarative_system_directives::init_declarative_system_directives_keywords();
-    security_ethics_attributes::init_security_ethics_attributes(); // Initialize Security & Ethics Attributes module
+    security_ethics_attributes::init_security_ethics_attributes();
+    advanced_types_syntax::init_advanced_types_syntax(); // Initialize Advanced Type System Syntax module
     println!("  - Zenith Language Specification Modules initialized.");
 }
 
 /// Shuts down all Zenith language specification modules.
 pub fn shutdown_language_spec() {
     println!("  - Shutting down Zenith Language Specification Modules...");
-    security_ethics_attributes::shutdown_security_ethics_attributes(); // Shutdown Security & Ethics Attributes module
+    advanced_types_syntax::shutdown_advanced_types_syntax(); // Shutdown Advanced Type System Syntax module
+    security_ethics_attributes::shutdown_security_ethics_attributes();
     declarative_system_directives::shutdown_declarative_system_directives_keywords();
     explainability_transparency::shutdown_explainability_transparency_keywords();
     concurrency_actors::shutdown_concurrency_actors_keywords();
