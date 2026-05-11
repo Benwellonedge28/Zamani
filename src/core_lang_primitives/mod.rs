@@ -10,7 +10,9 @@
 use std::collections::HashMap; // For conceptual use in NimbusSystemCall
 use std::ptr; // For raw pointers
 use crate::ast::Identifier; // For Identifier
-use crate::runtime::nimbus_os::NimbusContextId; // Import NimbusContextId
+// Updated import path for Nimbus OS types
+use crate::nimbus_os::mod_rs::{NimbusContextId, SandboxPolicy, NimbusMicrokernel}; 
+use crate::runtime::nimbus_os_interface; // For access to global microkernel instance
 
 // -----------------------------------------------------------------------------
 // Core Traits/Interfaces (Implicitly implemented by types)
@@ -205,9 +207,9 @@ impl<T> Mutex<T> {
 // Nimbus OS Interaction (Conceptual System Calls)
 // -----------------------------------------------------------------------------
 
-// Moved NimbusContextId to runtime/nimbus_os.rs
-use crate::runtime::nimbus_os::NimbusContextId;
-use crate::runtime::nimbus_os::SandboxPolicy; // For new create_isolated_context
+// Import Nimbus OS types from the new dedicated module
+use crate::nimbus_os::mod_rs::{NimbusContextId, SandboxPolicy};
+use crate::runtime::nimbus_os_interface::get_nimbus_microkernel; // For accessing the global microkernel
 
 /// Conceptual interface for low-level Nimbus OS system calls.
 /// This would be exposed to Zenith's runtime for direct interaction.
@@ -218,53 +220,83 @@ impl NimbusSystemCall {
     /// Can specify the memory region type (e.g., QPU-local, secure).
     pub fn secure_alloc(size: Size, region: MemoryRegion, policy_id: u64) -> *mut u8 {
         println!("[Core::Nimbus] Conceptual SystemCall: SecureAlloc {} bytes in region {:?} with policy {}.".to_string(), size.0, region, policy_id);
-        // Actual call to Nimbus OS kernel
+        // Actual call to Nimbus OS kernel via the global instance
+        if let Some(microkernel_arc) = get_nimbus_microkernel() {
+            let mut microkernel = microkernel_arc.lock().unwrap();
+            // Conceptual: microkernel.secure_alloc_internal(size, region, policy_id)
+        }
         ptr::null_mut() // Dummy pointer
     }
 
     /// Conceptual: Deallocates a secure memory region via Nimbus microkernel.
     pub fn secure_dealloc(ptr: *mut u8, size: Size, region: MemoryRegion) {
         println!("[Core::Nimbus] Conceptual SystemCall: SecureDealloc {} bytes in region {:?} at {:p}.".to_string(), size.0, region, ptr);
-        // Actual call to Nimbus OS kernel
+        if let Some(microkernel_arc) = get_nimbus_microkernel() {
+            let mut microkernel = microkernel_arc.lock().unwrap();
+            // Conceptual: microkernel.secure_dealloc_internal(ptr, size, region)
+        }
     }
 
     /// Conceptual: Allocates a shared memory region between specified contexts.
     pub fn allocate_shared_memory(size: Size, contexts: &[NimbusContextId]) -> Result<u64, String> {
         println!("[Core::Nimbus] Conceptual SystemCall: Allocating {} bytes shared by {:?}.".to_string(), size.0, contexts);
+        if let Some(microkernel_arc) = get_nimbus_microkernel() {
+            let mut microkernel = microkernel_arc.lock().unwrap();
+            // Conceptual: microkernel.allocate_shared_memory_internal(size, contexts)
+        }
         Ok(12345) // Dummy shared memory ID
     }
 
     /// Conceptual: Maps a memory region into a context's address space.
     pub fn map_memory_region(context_id: NimbusContextId, region_id: u64, permissions: u8) -> Result<(), String> {
         println!("[Core::Nimbus] Conceptual SystemCall: Mapping memory region {} to context {} with permissions {}.".to_string(), region_id, context_id, permissions);
+        if let Some(microkernel_arc) = get_nimbus_microkernel() {
+            let mut microkernel = microkernel_arc.lock().unwrap();
+            // Conceptual: microkernel.map_memory_region_internal(context_id, region_id, permissions)
+        }
         Ok(())
     }
 
     /// Conceptual: Creates a new isolated execution context (process/thread/timeline).
     pub fn create_isolated_context(blueprint_id: Identifier, sandbox_policy: SandboxPolicy) -> NimbusContextId {
         println!("[Core::Nimbus] Conceptual SystemCall: CreateIsolatedContext with blueprint {:?} and policy {:?}.".to_string(), blueprint_id, sandbox_policy);
-        // Actual call to Nimbus OS kernel
-        0 // Dummy context ID
+        if let Some(microkernel_arc) = get_nimbus_microkernel() {
+            let mut microkernel = microkernel_arc.lock().unwrap();
+            microkernel.create_context(blueprint_id.0, None, sandbox_policy).unwrap_or(0)
+        } else {
+            0 // Dummy
+        }
     }
 
     /// Conceptual: Sends a message via Nimbus's secure IPC channel.
     pub fn send_secure_message(target_context_id: NimbusContextId, message: &[u8]) -> Result<(), String> {
         println!("[Core::Nimbus] Conceptual SystemCall: SendSecureMessage to context {} ({} bytes).".to_string(), target_context_id, message.len());
-        // Actual call to Nimbus OS kernel
-        Ok(())
+        if let Some(microkernel_arc) = get_nimbus_microkernel() {
+            let microkernel = microkernel_arc.lock().unwrap();
+            // Conceptual: microkernel.send_message_to_context(target_context_id, message)
+        }
+        Ok(()) // Dummy
     }
 
     /// Conceptual: Receives a message via Nimbus's secure IPC channel.
     pub fn receive_secure_message(context_id: NimbusContextId) -> Result<Option<Vec<u8>>, String> {
         println!("[Core::Nimbus] Conceptual SystemCall: Receiving secure message for context {}.".to_string(), context_id);
+        if let Some(microkernel_arc) = get_nimbus_microkernel() {
+            let microkernel = microkernel_arc.lock().unwrap();
+            // Conceptual: microkernel.receive_message_from_context(context_id)
+        }
         Ok(Some(vec![0xAA, 0xBB])) // Dummy message
     }
 
     /// Conceptual: Accesses Nimbus's hardware abstraction layer for specific device.
     pub fn hardware_access(context_id: NimbusContextId, device_id: u64, command: &[u8]) -> Result<Vec<u8>, String> {
         println!("[Core::Nimbus] Conceptual SystemCall: Context {} accessing hardware device {} with command.".to_string(), context_id, device_id);
-        // Actual call to Nimbus OS HAL
-        Ok(Vec::new())
+        if let Some(microkernel_arc) = get_nimbus_microkernel() {
+            let microkernel = microkernel_arc.lock().unwrap();
+            microkernel.access_hardware(context_id, device_id, command)
+        } else {
+            Err("Nimbus Microkernel not initialized.".to_string())
+        }
     }
 }
 

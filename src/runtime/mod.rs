@@ -1,5 +1,5 @@
 
-//! Zenith UMC Runtime System
+//! Zenith Universal Meta-Compiler (UMC) Runtime System
 //!
 //! This module defines the conceptual runtime environment for executing Zenith programs.
 //! It orchestrates the various specialized runtimes (classical, quantum, nano, MTS, Sankofa)
@@ -18,18 +18,19 @@ pub mod quantum;
 pub mod nano;
 pub mod mts;
 pub mod sankofa;
-pub mod nimbus_os; // New module for direct Nimbus OS interaction
+pub mod nimbus_os_interface; // Renamed module
 pub mod core_lang_primitives; // New module for core language primitives
 pub mod memory_manager; // New module for memory management
 
 use std::sync::{Arc, Mutex};
+use crate::nimbus_os::mod_rs::NimbusMicrokernel; // Import from new Nimbus OS module
 
 // Conceptual global runtime state handles
 pub static mut QUANTUM_PROCESSOR_HANDLE: Option<Arc<Mutex<quantum::QuantumProcessor>>> = None;
 pub static mut NANO_ORCHESTRATOR_HANDLE: Option<Arc<Mutex<nano::NanoAgentOrchestrator>>> = None;
 pub static mut MTS_ORCHESTRATOR_HANDLE: Option<Arc<Mutex<mts::MultiTimelineOrchestrator>>> = None;
 pub static mut SANKOFA_RUNTIME_STATE_HANDLE: Option<Arc<Mutex<sankofa::SankofaRuntimeState>>> = None;
-pub static mut NIMBUS_MICROKERNEL_HANDLE: Option<Arc<Mutex<nimbus_os::NimbusMicrokernel>>> = None; 
+pub static mut NIMBUS_MICROKERNEL_HANDLE: Option<Arc<Mutex<NimbusMicrokernel>>> = None; // Update type to new location
 pub static mut MEMORY_MANAGER_HANDLE: Option<Arc<Mutex<memory_manager::MemoryManager>>> = None; // New handle for memory manager
 
 /// Initializes all integrated runtimes required for Zenith program execution.
@@ -41,8 +42,9 @@ pub fn init_runtime() {
 
     // Initialize specialized runtimes. Order matters for dependencies.
     unsafe {
-        NIMBUS_MICROKERNEL_HANDLE = Some(nimbus_os::init_nimbus_os_interface()); // Nimbus OS first, others may depend on its services
-        MEMORY_MANAGER_HANDLE = Some(memory_manager::init_memory_manager()); // Memory Manager next, depends on core primitives and potentially Nimbus OS for secure alloc
+        // Nimbus OS Microkernel is foundational and initialized first.
+        NIMBUS_MICROKERNEL_HANDLE = Some(nimbus_os_interface::init_nimbus_os_interface()); 
+        MEMORY_MANAGER_HANDLE = Some(memory_manager::init_memory_manager()); 
         QUANTUM_PROCESSOR_HANDLE = Some(quantum::init_quantum_runtime()); 
         NANO_ORCHESTRATOR_HANDLE = Some(nano::init_nano_runtime());
         MTS_ORCHESTRATOR_HANDLE = Some(mts::init_mts_runtime());
@@ -60,11 +62,11 @@ pub fn shutdown_runtime() {
     mts::shutdown_mts_runtime();
     nano::shutdown_nano_runtime();
     quantum::shutdown_quantum_runtime();
-    memory_manager::shutdown_memory_manager(); // Shutdown Memory Manager
-    nimbus_os::shutdown_nimbus_os_interface(); // Shutdown Nimbus OS interface
+    memory_manager::shutdown_memory_manager(); 
+    nimbus_os_interface::shutdown_nimbus_os_interface(); // Call shutdown from interface module
     
     // Shutdown core language primitives
-    core_lang_primitives::shutdown_core_lang_primitives(); // Call the new core primitives shutdown
+    core_lang_primitives::shutdown_core_lang_primitives(); 
 
     println!("Zenith UMC Runtime System shut down.");
 }

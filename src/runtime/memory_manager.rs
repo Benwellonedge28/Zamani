@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use crate::core_lang_primitives::{
     Size, MemoryRegion, HeapAlloc, StackAlloc, LinearAllocator, AffineAllocator,
 }; // Remove NimbusSystemCall from here
-use crate::runtime::nimbus_os::{NimbusContextId, NimbusSystemCall}; // Import NimbusContextId and NimbusSystemCall
+use crate::nimbus_os::mod_rs::{NimbusContextId, NimbusSystemCall}; // Import NimbusContextId and NimbusSystemCall from new path
 
 /// Represents a conceptual allocation block in memory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -85,7 +85,7 @@ impl MemoryManager {
             linear_allocator: LinearAllocator,
             affine_allocator: AffineAllocator,
             garbage_collector: Arc::new(Mutex::new(MarkAndSweepGC::new())),
-            nimbus_system_call: NimbusSystemCall,
+            nimbus_system_call: NimbusSystemCall, // This will be the one in core_lang_primitives
             next_shared_mem_id: 1,
         }
     }
@@ -146,8 +146,8 @@ impl MemoryManager {
                     // Stack deallocation is typically compiler-managed.
                 }
                 MemoryRegion::SecureRegion(_) => {
-                    // Conceptual: NimbusSystemCall for deallocating secure regions.
-                    // NimbusSystemCall::secure_dealloc(ptr, block.size, block.region.policy_id) // Add secure_dealloc to NimbusSystemCall
+                    // Use NimbusSystemCall for deallocating secure regions.
+                    self.nimbus_system_call.secure_dealloc(ptr, block.size, block.region.clone());
                 }
                 _ => { /* other regions handled conceptually */ }
             }
