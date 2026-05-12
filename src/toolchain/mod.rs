@@ -1,41 +1,34 @@
 
-//! Zenith Universal Meta-Compiler (UMC) Toolchain Integration
+//! Zenith Universal Meta-Compiler (UMC) Toolchain Components
 //!
-//! This module orchestrates the integration of various toolchain components
-//! with the UMC. It provides interfaces for debugging, IDE support,
-//! static analysis, and formal verification, ensuring a comprehensive
-//! development experience for Zenith programmers.
+//! This module aggregates and manages all toolchain-related components
+//! for Zenith, including code generation, self-evolution, and hardware
+//! description language (HDL) integration.
 
-pub mod debug_info;
-pub mod ide_support;
-pub mod formal_verification;
-pub mod hdl;
-pub mod self_evolution;
-pub mod lang_integration;
-pub mod meta_programming; // New module for Autonomous Meta-Programming & Macros
+pub mod meta_programming; // Autonomous Code Generation
+pub mod self_evolution;   // Autonomous Self-Adjustment and Improvement
+pub mod hdl;              // Hardware Description Language Integration
+pub mod formal_verification; // Formal Verification Engine
+pub mod autonomous_toolchain; // New: The Orchestrator for the entire toolchain
 
 /// Initializes all toolchain components.
-pub fn init_toolchain_integration() {
-    println!("Initializing Zenith UMC Toolchain Integration...");
-    debug_info::init_debug_info();
-    ide_support::init_ide_support();
-    formal_verification::init_formal_verification();
-    hdl::init_hdl();
+pub fn initialize_toolchain() {
+    println!("Initializing Zenith Toolchain...");
+    meta_programming::init_meta_programming();
     self_evolution::init_self_evolution();
-    lang_integration::init_lang_integration();
-    meta_programming::init_meta_programming(); // Initialize Autonomous Meta-Programming & Macros module
-    println!("Zenith UMC Toolchain Integration initialized.");
+    hdl::init_hdl();
+    formal_verification::init_formal_verification();
+    autonomous_toolchain::init_autonomous_toolchain(); // Initialize Autonomous Toolchain
+    println!("Zenith Toolchain initialized.");
 }
 
 /// Shuts down all toolchain components.
-pub fn shutdown_toolchain_integration() {
-    println!("Shutting down Zenith UMC Toolchain Integration...");
-    meta_programming::shutdown_meta_programming(); // Shutdown Autonomous Meta-Programming & Macros module
-    lang_integration::fn_shutdown_lang_integration(); 
-    self_evolution::shutdown_self_evolution(); 
-    hdl::shutdown_hdl(); 
+pub fn shutdown_toolchain() {
+    println!("Shutting down Zenith Toolchain...");
+    autonomous_toolchain::shutdown_autonomous_toolchain(); // Shutdown Autonomous Toolchain
     formal_verification::shutdown_formal_verification();
-    ide_support::shutdown_ide_support();
-    debug_info::shutdown_debug_info();
-    println!("Zenith UMC Toolchain Integration shut down.");
+    hdl::shutdown_hdl();
+    self_evolution::shutdown_self_evolution();
+    meta_programming::shutdown_meta_programming();
+    println!("Zenith Toolchain shut down.");
 }
