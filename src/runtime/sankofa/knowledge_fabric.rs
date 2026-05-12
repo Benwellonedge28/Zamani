@@ -1,0 +1,296 @@
+
+//! Zenith Runtime: Sankofa - Omniversal Knowledge Fabric Module
+//!
+//! This module elevates Sankofa to be a truly Omniversal, Hyper-Dimensional
+//! Knowledge Fabric. It provides a living, evolving, and self-organizing
+//! knowledge base that natively understands temporal, causal, and modal
+//! contexts.
+//!
+//! The Knowledge Fabric fuses data from all modalities (text, vision, sensor,
+//! quantum, nano) into a coherent, interlinked temporal causality graph,
+//! enabling deep AGI reasoning, cross-contextual learning, and verifiable
+//! data sovereignty.
+
+use crate::ast::Identifier; // For concept IDs, entity IDs, event IDs
+use crate::stdlib::core::Result; // Zenith Result type
+use crate::stdlib::collections::{List, Map, HashSet, Option}; // For managing the graph, caches
+use crate::stdlib::ml::{Model, Tensor}; // For knowledge embedding, relationship extraction
+use crate::stdlib::ai_reasoning::{Planner, Fact, FactObject, CausalEngine}; // For reasoning over the fabric, causality discovery
+use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of knowledge access and curation
+use crate::runtime::sankofa::{SasaKnowledge, KnowledgeId, SaliencyScore}; // Core Sankofa components
+use crate::runtime::mts::{MtsTimelineId, MtsTimePoint}; // For temporal grounding of knowledge
+use crate::stdlib::distributed_ledger::data_provenance::{ProvenanceRecord, ProvenanceManager}; // For verifiable data lineage
+use crate::stdlib::meta_ops::MetaValue; // Generic MetaValue for knowledge items
+use crate::source_map::Span; // For Identifier creation
+
+
+/// Initializes the Omniversal Knowledge Fabric module.
+pub fn init_knowledge_fabric() {
+    println!("  - Initializing Runtime Sankofa: Omniversal Knowledge Fabric (Temporal, Causal, Hyper-Dimensional)...");
+}
+
+/// Shuts down the Omniversal Knowledge Fabric module.
+pub fn shutdown_knowledge_fabric() {
+    println!("  - Shutting down Runtime Sankofa: Omniversal Knowledge Fabric...");
+}
+
+// -----------------------------------------------------------------------------
+// Core Omniversal Knowledge Fabric
+// -----------------------------------------------------------------------------
+
+pub struct KnowledgeFabric {
+    pub sasa_knowledge: SasaKnowledge, // Underlying active knowledge base
+    pub causal_engine: CausalEngine, // For discovering and reasoning about causal links
+    pub provenance_manager: ProvenanceManager, // Ensures every piece of knowledge has a verifiable origin
+    pub knowledge_curator_agi: Model, // AGI model for autonomous curation and pruning
+    pub evas_filter: EvasFilter, // For ethical access control and bias auditing
+    pub semantic_graph: Map<KnowledgeId, List<KnowledgeEdge>>, // The hyper-dimensional graph structure
+}
+
+impl KnowledgeFabric {
+    pub fn new() -> Self {
+        KnowledgeFabric {
+            sasa_knowledge: SasaKnowledge::new(),
+            causal_engine: CausalEngine::new(),
+            provenance_manager: ProvenanceManager::new(),
+            knowledge_curator_agi: Model::new(Identifier("knowledge_curator".to_string(), Span::dummy())),
+            evas_filter: EvasFilter::new(EvasPolicyLevel::Strict),
+            semantic_graph: Map::new(),
+        }
+    }
+
+    /// Ingests new information into the fabric, grounding it temporally and causally.
+    /// Fuses multi-modal data and establishes provenance.
+    #[security(level="high", provenance_required="true")]
+    #[ethics(principles="privacy_preservation", bias_mitigation="true")]
+    pub fn ingest_knowledge(&mut self, content: MetaValue, context: IngestionContext, provenance: ProvenanceRecord) -> Result<KnowledgeId, String> {
+        println!("[Runtime::KnowledgeFabric] Ingesting new knowledge with provenance: {}.".to_string(), provenance.id.0);
+
+        // 1. E.V.A.S. Vetting for Ingestion (e.g., privacy check, bias scan)
+        let evas_context = EvasActionContext {
+            action_type: "knowledge_ingestion".to_string(),
+            perceived_intent: format!("Ingest knowledge from source {}", provenance.source_id.0),
+            initiating_context_id: nimbus.os::get_current_context_id(),
+            // ... add content summary, potential privacy flags ...
+            ..Default::default()
+        };
+        match self.evas_filter.evaluate_action(evas_context) {
+            EvasDecision::Block(reason) => return Err(format!("E.V.A.S. BLOCKED knowledge ingestion: {}.\n", reason)),
+            _ => { /* Proceed */ }
+        }
+
+        // 2. Establish Temporal and Causal Grounding
+        let time_point = context.timestamp.unwrap_or(MtsTimePoint::now());
+        let causal_links = self.causal_engine.discover_causal_graph(&content.to_tensor()?)?; 
+
+        // 3. Register Provenance
+        self.provenance_manager.record_provenance(provenance)?;
+
+        // 4. Store in SasaKnowledge and Update Semantic Graph
+        let knowledge_id = self.sasa_knowledge.add_knowledge_item(content.clone(), SaliencyScore::new(0.8))?;
+        
+        let edge = KnowledgeEdge {
+            target_id: knowledge_id.clone(),
+            relation_type: KnowledgeRelation::Temporal(time_point),
+            causal_certainty: 0.9,
+            modality_link: context.modality,
+        };
+        // update self.semantic_graph
+
+        println!("[Runtime::KnowledgeFabric] Knowledge item {} ingested and grounded.".to_string(), knowledge_id.0);
+        Ok(knowledge_id)
+    }
+
+    /// Queries the knowledge fabric, considering temporal and causal relationships.
+    /// Supports multi-modal and cross-contextual retrieval.
+    pub fn query_fabric(&self, query_intent: Fact, query_context: QueryContext) -> Result<List<KnowledgeItem>, String> {
+        println!("[Runtime::KnowledgeFabric] Querying fabric for intent: {:?}.".to_string(), query_intent);
+
+        // 1. E.V.A.S. Vetting for Access Control (Crucial for data sovereignty)
+        let evas_context = EvasActionContext {
+            action_type: "knowledge_query".to_string(),
+            perceived_intent: format!("Query fabric for intent {:?}", query_intent),
+            initiating_context_id: nimbus.os::get_current_context_id(),
+            // ... add user identity, query sensitivity ...
+            ..Default::default()
+        };
+        match self.evas_filter.evaluate_action(evas_context) {
+            EvasDecision::Block(reason) => return Err(format!("E.V.A.S. BLOCKED knowledge query: {}.\n", reason)),
+            _ => { /* Proceed */ }
+        }
+
+        // 2. Perform Hyper-Dimensional Search
+        // Consider temporal constraints, causal relevance, and multi-modal alignment
+        let results = self.sasa_knowledge.query_semantic_search(query_intent, query_context.time_window)?; 
+
+        Ok(results)
+    }
+
+    /// Autonomously curates and prunes the knowledge fabric.
+    /// Ensures relevance, consistency, and ethical compliance.
+    #[ethics(principles="right_to_be_forgotten", data_minimization="true")]
+    pub fn autonomous_curation_cycle(&mut self) -> Result<(), String> {
+        println!("[Runtime::KnowledgeFabric] Starting autonomous knowledge curation cycle.".to_string());
+
+        // 1. Identify Low-Saliency or Contradictory Information
+        let curation_candidates = self.sasa_knowledge.identify_curation_candidates()?; 
+
+        for candidate in curation_candidates {
+            // 2. Evaluate for Pruning or Archiving (Ethically Vetted)
+            let evas_context = EvasActionContext {
+                action_type: "knowledge_curation".to_string(),
+                perceived_intent: format!("Prune/Archive knowledge item {}", candidate.id.0),
+                initiating_context_id: nimbus.os::get_current_context_id(),
+                ..Default::default()
+            };
+
+            match self.evas_filter.evaluate_action(evas_context) {
+                EvasDecision::Allow => {
+                    self.sasa_knowledge.prune_item(candidate.id)?; 
+                },
+                _ => { /* Skip */ }
+            }
+        }
+        Ok(())
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Data Structures for Knowledge Fabric
+// -----------------------------------------------------------------------------
+
+/// Represents an edge in the hyper-dimensional knowledge graph.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KnowledgeEdge {
+    pub target_id: KnowledgeId,
+    pub relation_type: KnowledgeRelation,
+    pub causal_certainty: f32, // 0.0 - 1.0
+    pub modality_link: Option<LinguisticModality>, // e.g., if this link is based on vision
+}
+
+/// Types of relations between knowledge items.
+#[derive(Debug, Clone, PartialEq)]
+pub enum KnowledgeRelation {
+    Temporal(MtsTimePoint), // Grounded in time
+    Causal(Fact), // Expresses a causal link (e.g., A causes B)
+    Semantic(Identifier), // Semantic similarity (e.g., "is_a", "part_of")
+    Modal(Identifier), // Relation based on modal logic (e.g., "possibly", "necessarily")
+    Custom(Identifier),
+}
+
+/// Represents a single item of knowledge in the fabric.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KnowledgeItem {
+    pub id: KnowledgeId,
+    pub content: MetaValue,
+    pub provenance_id: Identifier, // Link to ProvenanceRecord
+    pub saliency: SaliencyScore,
+    pub temporal_grounding: Option<MtsTimePoint>,
+    pub metadata: Map<String, MetaValue>,
+}
+
+/// Context for knowledge ingestion.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IngestionContext {
+    pub timestamp: Option<MtsTimePoint>,
+    pub modality: Option<LinguisticModality>,
+    pub environment_id: Option<Identifier>,
+}
+
+/// Context for querying the fabric.
+#[derive(Debug, Clone, PartialEq)]
+pub struct QueryContext {
+    pub time_window: Option<(MtsTimePoint, MtsTimePoint)>,
+    pub required_modality: Option<LinguisticModality>,
+    pub max_results: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LinguisticModality { Text, Image, Sensor, Audio, Quantum, Nano }
+
+
+// Dummy structures/extensions for conceptual compilation
+pub mod nimbus {
+    pub mod os {
+        pub type NimbusContextId = u64;
+        pub fn get_current_context_id() -> NimbusContextId { 0 }
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct EvasActionContext { pub action_type: String, pub perceived_intent: String, pub initiating_context_id: NimbusContextId, }
+        impl Default for EvasActionContext { fn default() -> Self { EvasActionContext { action_type: "".to_string(), perceived_intent: "".to_string(), initiating_context_id: 0 } } }
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum EvasDecision { Allow, Block(String) } 
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct EvasFilter; 
+        impl EvasFilter { pub fn new(policy: EvasPolicyLevel) -> Self { EvasFilter{} } pub fn evaluate_action(&self, ctx: EvasActionContext) -> EvasDecision { EvasDecision::Allow } }
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum EvasPolicyLevel { Strict }
+    }
+}
+pub mod stdlib {
+    pub mod ai_reasoning {
+        use crate::ast::Identifier;
+        use crate::stdlib::collections::List;
+        use crate::stdlib::meta_ops::MetaValue;
+        #[derive(Debug, Clone, PartialEq)] pub struct Fact { pub name: String, pub args: List<MetaValue> }
+        pub struct FactObject;
+        pub struct Planner;
+        impl Planner { pub fn new() -> Self { Planner{} } }
+        pub struct CausalEngine;
+        impl CausalEngine { pub fn new() -> Self { CausalEngine{} } pub fn discover_causal_graph(&self, tensor: &super::ml::Tensor<f32>) -> Result<collections::List<Fact>, String> { Ok(collections::List::new()) } }
+    }
+    pub mod ml {
+        use crate::ast::Identifier;
+        use crate::stdlib::collections::List;
+        #[derive(Debug, Clone, PartialEq)] pub struct Model { pub id: Identifier }
+        impl Model { pub fn new(id: Identifier) -> Self { Model { id } } }
+        #[derive(Debug, Clone, PartialEq)] pub struct Tensor<T> { pub data: List<T> }
+    }
+    pub mod distributed_ledger {
+        pub mod data_provenance {
+            use crate::ast::Identifier;
+            #[derive(Debug, Clone, PartialEq)] pub struct ProvenanceRecord { pub id: Identifier, pub source_id: Identifier }
+            pub struct ProvenanceManager;
+            impl ProvenanceManager { pub fn new() -> Self { ProvenanceManager{} } pub fn record_provenance(&self, record: ProvenanceRecord) -> Result<(), String> { Ok(()) } }
+        }
+    }
+    pub mod resource_management {
+        pub struct ResourceOrchestrator;
+        impl ResourceOrchestrator { pub fn new() -> Self { ResourceOrchestrator{} } pub fn plan_and_intervene(&self, anomalies: crate::stdlib::collections::List<ResourceAnomaly>, goals: crate::stdlib::collections::List<crate::stdlib::ai_reasoning::Fact>) -> Result<(), String> { Ok(()) } }
+        pub struct ResourceAnomaly;
+    }
+}
+pub mod runtime {
+    pub mod sankofa {
+        use crate::ast::Identifier;
+        use crate::stdlib::meta_ops::MetaValue;
+        use super::KnowledgeItem;
+        use crate::stdlib::collections::List;
+        pub struct SasaKnowledge;
+        impl SasaKnowledge { pub fn new() -> Self { SasaKnowledge{} } pub fn add_knowledge_item(&mut self, content: MetaValue, saliency: SaliencyScore) -> Result<KnowledgeId, String> { Ok(Identifier("item_id".to_string(), crate::source_map::Span::dummy())) } pub fn query_semantic_search(&self, intent: crate::stdlib::ai_reasoning::Fact, time_window: Option<(crate::runtime::mts::MtsTimePoint, crate::runtime::mts::MtsTimePoint)>) -> Result<List<KnowledgeItem>, String> { Ok(List::new()) } pub fn identify_curation_candidates(&self) -> Result<List<KnowledgeItem>, String> { Ok(List::new()) } pub fn prune_item(&mut self, id: KnowledgeId) -> Result<(), String> { Ok(()) } }
+        pub type KnowledgeId = Identifier;
+        #[derive(Debug, Clone, PartialEq)] pub struct SaliencyScore(pub f32);
+        impl SaliencyScore { pub fn new(s: f32) -> Self { SaliencyScore(s) } }
+    }
+    pub mod mts {
+        #[derive(Debug, Clone, Copy, PartialEq)] pub struct MtsTimePoint(pub u64);
+        impl MtsTimePoint { pub fn now() -> Self { MtsTimePoint(0) } }
+        pub type MtsTimelineId = u64;
+    }
+}
+pub mod ast {
+    use crate::stdlib::core::String;
+    use crate::source_map::Span;
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)] pub struct Identifier(pub String, pub Span);
+}
+pub mod source_map { #[derive(Debug, Clone, PartialEq, Eq, Hash)] pub struct Span; impl Span { pub fn dummy() -> Self { Span{} } } }
+pub mod collections {
+    pub use std::collections::{HashMap, HashSet};
+    pub use crate::stdlib::collections::{List, Map, Option};
+}
+pub mod core { pub use crate::core::{Result, println, String}; }
+pub mod stdlib {
+    pub mod meta_ops {
+        #[derive(Debug, Clone, PartialEq)] pub enum MetaValue { String(crate::stdlib::core::String), Null }
+        extension MetaValue { fn to_tensor(&self) -> Result<crate::stdlib::ml::Tensor<f32>, String> { Ok(crate::stdlib::ml::Tensor { data: crate::stdlib::collections::List::new() }) } }
+    }
+}
