@@ -11,7 +11,7 @@ pub mod hdl;              // Hardware Description Language Integration
 pub mod formal_verification; // Formal Verification Engine
 pub mod autonomous_toolchain; // The Orchestrator for the entire toolchain
 pub mod zbe_connector; // Zenith Bridge Extension (ZBE) Connector for IDE/Editor integration
-pub mod hyper_evolution; // New: Hyper-Evolution & Performance Multiplier
+pub mod hyper_ascension; // New: For 1,000,000x recursive self-improvement
 
 /// Initializes all toolchain components.
 pub fn initialize_toolchain() {
@@ -22,14 +22,14 @@ pub fn initialize_toolchain() {
     formal_verification::init_formal_verification();
     autonomous_toolchain::init_autonomous_toolchain();
     zbe_connector::init_zbe_connector();
-    hyper_evolution::init_hyper_evolution(); // Initialize Hyper-Evolution
+    hyper_ascension::init_hyper_ascension(); // Initialize Hyper-Ascension
     println!("Zenith Toolchain initialized.");
 }
 
 /// Shuts down all toolchain components.
 pub fn shutdown_toolchain() {
     println!("Shutting down Zenith Toolchain...");
-    hyper_evolution::shutdown_hyper_evolution(); // Shutdown Hyper-Evolution
+    hyper_ascension::shutdown_hyper_ascension(); // Shutdown Hyper-Ascension
     zbe_connector::shutdown_zbe_connector();
     autonomous_toolchain::shutdown_autonomous_toolchain();
     formal_verification::shutdown_formal_verification();
