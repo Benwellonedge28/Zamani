@@ -37,7 +37,8 @@ pub mod human_interface_devices;
 pub mod chat_architect_agent;
 pub mod documentation_system;
 pub mod omniversal_simulation;
-pub mod on_device_agents; // New: For developing and managing ubiquitous on-device AI/AGI agents
+pub mod on_device_agents;
+pub mod resource_management; // New: For Hyper-Efficient Resource & Energy Management across all devices
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -76,14 +77,16 @@ pub fn initialize_stdlib() {
     chat_architect_agent::init_chat_architect_agent();
     documentation_system::init_documentation_system();
     omniversal_simulation::init_omniversal_simulation();
-    on_device_agents::init_on_device_agents(); // Initialize On-Device Agents module
+    on_device_agents::init_on_device_agents();
+    resource_management::init_resource_management(); // Initialize Resource Management module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    on_device_agents::shutdown_on_device_agents(); // Shutdown On-Device Agents module
+    resource_management::shutdown_resource_management(); // Shutdown Resource Management module
+    on_device_agents::shutdown_on_device_agents();
     omniversal_simulation::shutdown_omniversal_simulation();
     documentation_system::shutdown_documentation_system();
     chat_architect_agent::shutdown_chat_architect_agent();
