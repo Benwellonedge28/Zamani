@@ -12,7 +12,8 @@ pub mod optimizer; // Code Optimization
 pub mod backend;  // Target-specific Code Generation
 pub mod oop_advanced; // Advanced OOP Features
 pub mod language_spec; // Zenith Language Specification modules
-pub mod compilation_techniques; // New: For Hybrid Compilation Strategies
+pub mod compilation_techniques; // For Hybrid Compilation Strategies
+pub mod optimization_strategies; // For managing and applying diverse optimization passes
 
 /// Initializes the entire Zenith UMC compiler pipeline.
 pub fn initialize_compiler() {
@@ -23,14 +24,16 @@ pub fn initialize_compiler() {
     backend::init_backend();
     oop_advanced::init_oop_advanced();
     language_spec::init_language_spec();
-    compilation_techniques::init_compilation_techniques(); // Initialize Compilation Techniques module
+    compilation_techniques::init_compilation_techniques();
+    optimization_strategies::init_optimization_strategies(); // Initialize Optimization Strategies module
     println!("Zenith UMC Compiler initialized.");
 }
 
 /// Shuts down the entire Zenith UMC compiler pipeline.
 pub fn shutdown_compiler() {
     println!("Shutting down Zenith UMC Compiler...");
-    compilation_techniques::shutdown_compilation_techniques(); // Shutdown Compilation Techniques module
+    optimization_strategies::shutdown_optimization_strategies(); // Shutdown Optimization Strategies module
+    compilation_techniques::shutdown_compilation_techniques();
     language_spec::shutdown_language_spec();
     oop_advanced::shutdown_oop_advanced();
     backend::shutdown_backend();

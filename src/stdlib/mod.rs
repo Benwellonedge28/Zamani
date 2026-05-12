@@ -36,7 +36,8 @@ pub mod iot;
 pub mod human_interface_devices;
 pub mod chat_architect_agent;
 pub mod documentation_system;
-pub mod omniversal_simulation; // New: For Omniversal Simulation & Sandbox Environment
+pub mod omniversal_simulation;
+pub mod on_device_agents; // New: For developing and managing ubiquitous on-device AI/AGI agents
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -74,14 +75,16 @@ pub fn initialize_stdlib() {
     human_interface_devices::init_hid_lib();
     chat_architect_agent::init_chat_architect_agent();
     documentation_system::init_documentation_system();
-    omniversal_simulation::init_omniversal_simulation(); // Initialize Omniversal Simulation module
+    omniversal_simulation::init_omniversal_simulation();
+    on_device_agents::init_on_device_agents(); // Initialize On-Device Agents module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_simulation::shutdown_omniversal_simulation(); // Shutdown Omniversal Simulation module
+    on_device_agents::shutdown_on_device_agents(); // Shutdown On-Device Agents module
+    omniversal_simulation::shutdown_omniversal_simulation();
     documentation_system::shutdown_documentation_system();
     chat_architect_agent::shutdown_chat_architect_agent();
     human_interface_devices::shutdown_hid_lib();
