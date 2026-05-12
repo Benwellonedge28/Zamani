@@ -1,40 +1,40 @@
 
-//! Zenith Universal Meta-Compiler (UMC) Runtime
+//! Zenith Runtime: Core Runtime Components
 //!
-//! This module aggregates and manages all core runtime components for Zenith.
-//! It provides the execution environment for Zenith programs, orchestrating
-//! interactions between the Nimbus OS, multi-paradigm hardware (Z-MMP),
-//! and the various standard library and application components.
-//!
-//! This includes initialization and shutdown procedures for all major runtime subsystems.
+//! This module aggregates and manages the core runtime components for Zenith,
+//! providing essential services for application execution, memory management,
+//! and concurrency.
 
-pub mod quantum;
-pub mod nano;
-pub mod mts;
-pub mod sankofa;
-pub mod nimbus_os_interface; // Provides high-level interfaces to Nimbus OS
-pub mod cloud_network_security; // New module for Autonomous Cloud & Network Security
+pub mod memory_manager; // Memory Allocation and Garbage Collection
+pub mod concurrency_manager; // Task Scheduling and Parallel Execution
+pub mod quantum; // Quantum Runtime Environment
+pub mod nano; // Nano Runtime Environment
+pub mod mts; // Multi-Timeline System for speculative execution
+pub mod sankofa; // Long-term memory and learning integration
+pub mod universal_runtime; // New: Universal Runtime & POCO-REAF Engine
 
-/// Initializes all Zenith runtime components.
+/// Initializes all runtime components.
 pub fn initialize_runtime() {
-    println!("Initializing Zenith UMC Runtime...");
-    nimbus_os_interface::init_nimbus_os_interface(); // Initialize the OS interface first
+    println!("Initializing Zenith Runtime...");
+    memory_manager::init_memory_manager();
+    concurrency_manager::init_concurrency_manager();
     quantum::init_quantum_runtime();
     nano::init_nano_runtime();
     mts::init_mts_runtime();
-    sankofa::init_sankofa_runtime();
-    cloud_network_security::init_cloud_network_security(); // Initialize Cloud & Network Security module
-    println!("Zenith UMC Runtime initialized.");
+    sankofa::init_sankofa_integration();
+    universal_runtime::init_universal_runtime(); // Initialize Universal Runtime
+    println!("Zenith Runtime initialized.");
 }
 
-/// Shuts down all Zenith runtime components.
+/// Shuts down all runtime components.
 pub fn shutdown_runtime() {
-    println!("Shutting down Zenith UMC Runtime...");
-    cloud_network_security::shutdown_cloud_network_security(); // Shutdown Cloud & Network Security module
-    sankofa::shutdown_sankofa_runtime();
+    println!("Shutting down Zenith Runtime...");
+    universal_runtime::shutdown_universal_runtime(); // Shutdown Universal Runtime
+    sankofa::shutdown_sankofa_integration();
     mts::shutdown_mts_runtime();
     nano::shutdown_nano_runtime();
     quantum::shutdown_quantum_runtime();
-    nimbus_os_interface::shutdown_nimbus_os_interface();
-    println!("Zenith UMC Runtime shut down.");
+    concurrency_manager::shutdown_concurrency_manager();
+    memory_manager::shutdown_memory_manager();
+    println!("Zenith Runtime shut down.");
 }
