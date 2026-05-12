@@ -1,4 +1,5 @@
-// src/apps/universal_cognitive_orchestrator.zn
+// src/apps/UCO.zn
+// universal_cognitive_orchestrator
 // A Zenith AGI application for autonomous environmental monitoring and adaptive intervention.
 
 // Import necessary Zenith Standard Library modules and Runtime interfaces
