@@ -40,7 +40,8 @@ pub mod omniversal_simulation;
 pub mod on_device_agents;
 pub mod resource_management;
 pub mod developer_relations;
-pub mod omniversal_nlp; // New: For Omniversal Natural Language Processing
+pub mod omniversal_nlp;
+pub mod omniversal_sovereignty; // New: For Omniversal Sovereignty & Infinite Scalability
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -64,7 +65,7 @@ pub fn initialize_stdlib() {
     numeric::init_numeric_lib();
     web::init_web_lib();
     ai_reasoning::init_ai_reasoning_lib();
-    nlp::init_nlp_lib(); // The existing, more basic NLP module
+    nlp::init_nlp_lib();
     vision::init_vision_lib();
     robotics::init_robotics_lib();
     agents::init_agents_lib();
@@ -82,14 +83,16 @@ pub fn initialize_stdlib() {
     on_device_agents::init_on_device_agents();
     resource_management::init_resource_management();
     developer_relations::init_developer_relations();
-    omniversal_nlp::init_omniversal_nlp(); // Initialize Omniversal NLP module
+    omniversal_nlp::init_omniversal_nlp();
+    omniversal_sovereignty::init_omniversal_sovereignty(); // Initialize Sovereignty module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_nlp::shutdown_omniversal_nlp(); // Shutdown Omniversal NLP module
+    omniversal_sovereignty::shutdown_omniversal_sovereignty(); // Shutdown Sovereignty module
+    omniversal_nlp::shutdown_omniversal_nlp();
     developer_relations::shutdown_developer_relations();
     resource_management::shutdown_resource_management();
     on_device_agents::shutdown_on_device_agents();
@@ -107,7 +110,7 @@ pub fn shutdown_stdlib() {
     agents::shutdown_agents_lib(); 
     robotics::shutdown_robotics_lib(); 
     vision::shutdown_vision_lib(); 
-    nlp::shutdown_nlp_lib(); // The existing, more basic NLP module
+    nlp::shutdown_nlp_lib(); 
     ai_reasoning::shutdown_ai_reasoning_lib(); 
     web::shutdown_web_lib(); 
     numeric::shutdown_numeric_lib(); 
