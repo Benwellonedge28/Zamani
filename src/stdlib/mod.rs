@@ -39,7 +39,8 @@ pub mod documentation_system;
 pub mod omniversal_simulation;
 pub mod on_device_agents;
 pub mod resource_management;
-pub mod developer_relations; // New: For Zenith's self-discoverable presence and polyglot developer integration
+pub mod developer_relations;
+pub mod omniversal_nlp; // New: For Omniversal Natural Language Processing
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -63,7 +64,7 @@ pub fn initialize_stdlib() {
     numeric::init_numeric_lib();
     web::init_web_lib();
     ai_reasoning::init_ai_reasoning_lib();
-    nlp::init_nlp_lib();
+    nlp::init_nlp_lib(); // The existing, more basic NLP module
     vision::init_vision_lib();
     robotics::init_robotics_lib();
     agents::init_agents_lib();
@@ -80,14 +81,16 @@ pub fn initialize_stdlib() {
     omniversal_simulation::init_omniversal_simulation();
     on_device_agents::init_on_device_agents();
     resource_management::init_resource_management();
-    developer_relations::init_developer_relations(); // Initialize Developer Relations module
+    developer_relations::init_developer_relations();
+    omniversal_nlp::init_omniversal_nlp(); // Initialize Omniversal NLP module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    developer_relations::shutdown_developer_relations(); // Shutdown Developer Relations module
+    omniversal_nlp::shutdown_omniversal_nlp(); // Shutdown Omniversal NLP module
+    developer_relations::shutdown_developer_relations();
     resource_management::shutdown_resource_management();
     on_device_agents::shutdown_on_device_agents();
     omniversal_simulation::shutdown_omniversal_simulation();
@@ -104,7 +107,7 @@ pub fn shutdown_stdlib() {
     agents::shutdown_agents_lib(); 
     robotics::shutdown_robotics_lib(); 
     vision::shutdown_vision_lib(); 
-    nlp::shutdown_nlp_lib(); 
+    nlp::shutdown_nlp_lib(); // The existing, more basic NLP module
     ai_reasoning::shutdown_ai_reasoning_lib(); 
     web::shutdown_web_lib(); 
     numeric::shutdown_numeric_lib(); 
