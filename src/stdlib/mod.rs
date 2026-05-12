@@ -38,7 +38,8 @@ pub mod chat_architect_agent;
 pub mod documentation_system;
 pub mod omniversal_simulation;
 pub mod on_device_agents;
-pub mod resource_management; // New: For Hyper-Efficient Resource & Energy Management across all devices
+pub mod resource_management;
+pub mod developer_relations; // New: For Zenith's self-discoverable presence and polyglot developer integration
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -78,14 +79,16 @@ pub fn initialize_stdlib() {
     documentation_system::init_documentation_system();
     omniversal_simulation::init_omniversal_simulation();
     on_device_agents::init_on_device_agents();
-    resource_management::init_resource_management(); // Initialize Resource Management module
+    resource_management::init_resource_management();
+    developer_relations::init_developer_relations(); // Initialize Developer Relations module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    resource_management::shutdown_resource_management(); // Shutdown Resource Management module
+    developer_relations::shutdown_developer_relations(); // Shutdown Developer Relations module
+    resource_management::shutdown_resource_management();
     on_device_agents::shutdown_on_device_agents();
     omniversal_simulation::shutdown_omniversal_simulation();
     documentation_system::shutdown_documentation_system();
