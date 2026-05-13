@@ -186,8 +186,8 @@ impl AdvancedOmniversalNlpEngine {
             base_nlp_result.extracted_concepts.clone().into_iter().map(|c| Fact::new(c.0, List::new())).collect(),
             text,
             Some(context_data),
-            Some(current_percepts),
-            Some(current_actions),
+            Some(current_percepts.clone()),
+            Some(current_actions.clone()),
         )?; 
         
         let mut enhanced_result = EnhancedNlpAnalysisResult::from_base_result(base_nlp_result);
@@ -201,8 +201,8 @@ impl AdvancedOmniversalNlpEngine {
         self.knowledge_grounding_manager.record_experiential_grounding(
             enhanced_result.extracted_concepts.clone(),
             embedded_meaning.clone(),
-            grounded_meaning.percepts.clone(),
-            grounded_meaning.actions.clone(),
+            current_percepts.clone(),
+            current_actions.clone(),
             grounded_meaning.causal_links.clone(),
         )?; 
 
@@ -371,6 +371,11 @@ impl MeaningGroundingEngine {
         actions: Option<List<ActuatorCommand>>,
     ) -> Result<MeaningGroundingResult, String> { 
         println!("[MeaningGroundingEngine] Grounding concepts to reality.".to_string());
+        // In a real implementation, this would: 
+        // 1. Map concepts to nodes in the conceptual_graph (Sankofa).
+        // 2. Correlate with real-time percepts (SensorData) and available actions (ActuatorCommand).
+        // 3. Infer causal links based on observed interactions and stored knowledge.
+        // 4. Extract type contracts from the system's schema or inferred properties.
         Ok(MeaningGroundingResult::new()) 
     }
 }
@@ -382,14 +387,19 @@ impl MultimodalEmbeddingEngine {
     pub fn new() -> Self { MultimodalEmbeddingEngine { multimodal_fusion_model: Model::new(Identifier("multimodal_fusion".to_string(), Span::dummy())) } }
     pub fn embed_multimodal_meaning(&self, text: String, sensory_context: Option<MetaValue>) -> Result<MultimodalEmbedding, String> { 
         println!("[MultimodalEmbeddingEngine] Generating multimodal embedding.".to_string());
+        // This would take text and fuse it with any available sensory context (image, audio) 
+        // into a rich, dense vector representation.
         Ok(MultimodalEmbedding::new()) 
     }
     pub fn decode_to_action(&self, embedding: MultimodalEmbedding) -> Result<ActuatorCommand, String> { 
         println!("[MultimodalEmbeddingEngine] Decoding embedding to action.".to_string());
+        // Decodes a multimodal embedding into a specific executable action.
         Ok(ActuatorCommand::new()) 
     }
     pub fn decode_to_ast(&self, embedding: MultimodalEmbedding, grounded_meaning: MeaningGroundingResult) -> Result<AbstractSyntaxTree, String> {
         println!("[MultimodalEmbeddingEngine] Decoding embedding to AST.".to_string());
+        // Translates a rich multimodal meaning into a structured Abstract Syntax Tree (AST),
+        // which represents executable code or a formal plan.
         Ok(AbstractSyntaxTree::new()) 
     }
 }
@@ -408,6 +418,9 @@ impl KnowledgeGroundingManager {
         causal_links: List<CausalLink>,
     ) -> Result<(), String> { 
         println!("[KnowledgeGroundingManager] Recording experiential grounding in Sankofa.".to_string());
+        // This function would store the rich, multimodal, and grounded understanding
+        // of concepts in Sankofa's long-term memory, linking text, sensory data,
+        // actions, and causal relationships.
         Ok(()) 
     }
 }
