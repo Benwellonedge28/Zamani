@@ -43,7 +43,9 @@ pub mod developer_relations;
 pub mod omniversal_nlp;
 pub mod omniversal_sovereignty;
 pub mod omniversal_nlp_adv;
-pub mod multidimensional; // New: For 1D-1000D and Infinity Dimensions (∞)
+pub mod multidimensional;
+pub mod math_foundations; // New: For High Computational Advanced Mathematics and Invention
+pub mod network; // New: For Zenith Internet Protocol Stack
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -88,14 +90,18 @@ pub fn initialize_stdlib() {
     omniversal_nlp::init_omniversal_nlp();
     omniversal_sovereignty::init_omniversal_sovereignty();
     omniversal_nlp_adv::init_omniversal_nlp_adv();
-    multidimensional::init_multidimensional(); // Initialize Multidimensional module
+    multidimensional::init_multidimensional();
+    math_foundations::init_math_foundations(); // Initialize Mathematical Foundations
+    network::init_network_stack(); // Initialize Network Stack
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    multidimensional::shutdown_multidimensional(); // Shutdown Multidimensional module
+    network::shutdown_network_stack(); // Shutdown Network Stack
+    math_foundations::shutdown_math_foundations(); // Shutdown Mathematical Foundations
+    multidimensional::shutdown_multidimensional();
     omniversal_nlp_adv::shutdown_omniversal_nlp_adv();
     omniversal_sovereignty::shutdown_omniversal_sovereignty();
     omniversal_nlp::shutdown_omniversal_nlp();
