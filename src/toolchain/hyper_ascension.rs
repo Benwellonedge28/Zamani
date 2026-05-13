@@ -135,7 +135,7 @@ impl MultiversalAlgorithmSearcher {
 pub struct HardwareSoftwareCoEvolutionOrchestrator;
 impl HardwareSoftwareCoEvolutionOrchestrator {
     pub fn new() -> Self { HardwareSoftwareCoEvolutionOrchestrator }
-    pub fn evolve_hardware_spec(&self, sw_logic: ()) -> Result<(), String> {
+    pub fn evolve_hardware_spec(&self, sw_logic: List<Fact>) -> Result<(), String> {
         println!("[Ascension::CoEvol] Generating evolved NACU and QPU hardware configurations.".to_string());
         Ok(())
     }
@@ -146,4 +146,108 @@ pub struct AscensionReport {
     pub performance_multiplier: f32,
     pub efficiency_gain: f32,
     pub new_capabilities: List<String>,
+}
+
+
+pub mod nimbus {
+    pub mod os {
+        pub type NimbusContextId = u64;
+        pub fn get_current_context_id() -> NimbusContextId { 0 }
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct EvasActionContext { pub action_type: String, pub perceived_intent: String, pub initiating_context_id: NimbusContextId, }
+        impl Default for EvasActionContext { fn default() -> Self { EvasActionContext { action_type: "".to_string(), perceived_intent: "".to_string(), initiating_context_id: 0 } } }
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum EvasDecision { Allow, Block(String) }
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct EvasFilter; impl EvasFilter { pub fn new(policy: EvasPolicyLevel) -> Self { EvasFilter{} } }
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum EvasPolicyLevel { Strict }
+    }
+}
+
+pub mod stdlib {
+    pub mod collections {
+        pub use std::collections::{HashMap, HashSet};
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct List<T> { pub data: Vec<T> }
+        impl<T> List<T> {
+            pub fn new() -> Self { List { data: Vec::new() } }
+            pub fn from(slice: &[T]) -> Self where T: Clone { List { data: slice.to_vec() } }
+            pub fn extend(&mut self, other: List<T>) { self.data.extend(other.data); }
+        }
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct Map<K, V> { pub data: HashMap<K, V> }
+        impl<K, V> Map<K, V> where K: Eq + std::hash::Hash { 
+            pub fn new() -> Self { Map { data: HashMap::new() } }
+        }
+    }
+    pub mod ml {
+        use crate::ast::Identifier;
+        use crate::stdlib::collections::List;
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct Model { pub id: Identifier }
+        impl Model { pub fn new(id: Identifier) -> Self { Model { id } } }
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct Tensor<T> { pub data: List<T> }
+    }
+    pub mod ai_reasoning {
+        use crate::ast::Identifier;
+        use crate::stdlib::collections::List;
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct Fact { pub name: String, pub args: List<MetaValue> }
+    }
+    pub mod meta_ops {
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum MetaValue { Null }
+    }
+}
+
+pub mod toolchain {
+    pub mod self_evolution {
+        use crate::ast::Identifier;
+        use crate::stdlib::collections::List;
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct EvolutionProposal { pub id: Identifier, pub description: String }
+        pub struct SelfEvolutionEngine;
+        impl SelfEvolutionEngine { pub fn new() -> Self { SelfEvolutionEngine{} } }
+    }
+    pub mod meta_programming {
+        pub struct AutonomousCodeGenerator;
+        impl AutonomousCodeGenerator { pub fn new() -> Self { AutonomousCodeGenerator{} } }
+    }
+    pub mod formal_verification {
+        pub struct FormalVerificationEngine;
+        impl FormalVerificationEngine { pub fn new() -> Self { FormalVerificationEngine{} } }
+    }
+    pub mod hyper_ascension {
+        pub struct HyperAscensionEngine; // Dummy
+        impl HyperAscensionEngine { pub fn new() -> Self { HyperAscensionEngine{} } pub fn initiate_hyper_ascension_cycle(&mut self) -> Result<AscensionReport, String> { Ok(AscensionReport{performance_multiplier:0.0, efficiency_gain:0.0, new_capabilities:List::new()}) } }
+        pub struct AscensionReport; // Dummy
+    }
+}
+
+pub mod compiler {
+    pub mod compilation_techniques {
+        pub struct HybridCompilerOrchestrator;
+        impl HybridCompilerOrchestrator { pub fn new() -> Self { HybridCompilerOrchestrator{} } }
+    }
+}
+
+pub mod runtime {
+    pub mod mts {
+        pub struct MtsTimelineId; // Dummy
+        impl MtsTimelineId { pub fn new() -> Self { MtsTimelineId{} } }
+    }
+}
+
+pub mod ast {
+    use crate::stdlib::core::String;
+    use crate::source_map::Span;
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub struct Identifier(pub String, pub Span);
+}
+
+pub mod source_map {
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub struct Span; impl Span { pub fn dummy() -> Self { Span{} } }
 }
