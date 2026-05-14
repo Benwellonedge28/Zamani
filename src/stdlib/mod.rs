@@ -46,7 +46,8 @@ pub mod omniversal_nlp_adv;
 pub mod multidimensional;
 pub mod math_foundations;
 pub mod network;
-pub mod music_language; // New: For Music as a Language (MusLing)
+pub mod music_language;
+pub mod physical_hardware_control; // New: For Physical Hardware Control (PHC)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -94,14 +95,16 @@ pub fn initialize_stdlib() {
     multidimensional::init_multidimensional();
     math_foundations::init_math_foundations();
     network::init_network_stack();
-    music_language::init_music_language(); // Initialize Music Language module
+    music_language::init_music_language();
+    physical_hardware_control::init_physical_hardware_control(); // Initialize PHC module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    music_language::shutdown_music_language(); // Shutdown Music Language module
+    physical_hardware_control::shutdown_physical_hardware_control(); // Shutdown PHC module
+    music_language::shutdown_music_language();
     network::shutdown_network_stack();
     math_foundations::shutdown_math_foundations();
     multidimensional::shutdown_multidimensional();
