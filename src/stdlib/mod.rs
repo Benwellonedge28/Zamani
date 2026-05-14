@@ -47,7 +47,8 @@ pub mod multidimensional;
 pub mod math_foundations;
 pub mod network;
 pub mod music_language;
-pub mod physical_hardware_control; // New: For Physical Hardware Control (PHC)
+pub mod physical_hardware_control;
+pub mod mgns; // New: Mukandara Global Navigation System (MGNS)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -96,14 +97,16 @@ pub fn initialize_stdlib() {
     math_foundations::init_math_foundations();
     network::init_network_stack();
     music_language::init_music_language();
-    physical_hardware_control::init_physical_hardware_control(); // Initialize PHC module
+    physical_hardware_control::init_physical_hardware_control();
+    mgns::init_mgns(); // Initialize MGNS module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    physical_hardware_control::shutdown_physical_hardware_control(); // Shutdown PHC module
+    mgns::shutdown_mgns(); // Shutdown MGNS module
+    physical_hardware_control::shutdown_physical_hardware_control();
     music_language::shutdown_music_language();
     network::shutdown_network_stack();
     math_foundations::shutdown_math_foundations();
@@ -135,7 +138,7 @@ pub fn shutdown_stdlib() {
     time::shutdown_time_lib(); 
     db::shutdown_db_lib(); 
     gui::shutdown_gui_lib(); 
-    serialize::shutdown_serialize_lib(); 
+    serialize::init_serialize_lib(); 
     crypto::shutdown_crypto_lib(); 
     sync::shutdown_sync_lib(); 
     fs::shutdown_fs_lib(); 
