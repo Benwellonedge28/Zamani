@@ -54,7 +54,8 @@ pub mod editor_integration;
 pub mod system_design;
 pub mod runtime_governance;
 pub mod omniversal_hashing;
-pub mod omniversal_generative_ai; // New: For Omniversal Generative AI & Reality Synthesis (OGAI-RS)
+pub mod omniversal_generative_ai;
+pub mod design_principles; // New: For formalizing design principles
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -110,14 +111,16 @@ pub fn initialize_stdlib() {
     system_design::init_system_design();
     runtime_governance::init_runtime_governance();
     omniversal_hashing::init_omniversal_hashing();
-    omniversal_generative_ai::init_omniversal_generative_ai(); // Initialize Omniversal Generative AI module
+    omniversal_generative_ai::init_omniversal_generative_ai();
+    design_principles::init_design_principles(); // Initialize Design Principles module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_generative_ai::shutdown_omniversal_generative_ai(); // Shutdown Omniversal Generative AI module
+    design_principles::shutdown_design_principles(); // Shutdown Design Principles module
+    omniversal_generative_ai::shutdown_omniversal_generative_ai();
     omniversal_hashing::shutdown_omniversal_hashing();
     runtime_governance::shutdown_runtime_governance();
     system_design::shutdown_system_design();

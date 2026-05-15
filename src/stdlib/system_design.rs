@@ -44,9 +44,11 @@ use crate::stdlib::network::ZenithNetworkStack;
 use crate::stdlib::physical_hardware_control::PhysicalHardwareControlEngine;
 use crate::stdlib::mgns::MukandaraGlobalNavigationSystem;
 use crate::stdlib::omniversal_simulation::OmniversalSimulationEngine;
+use crate::stdlib::resource_management::{ResourceOrchestrator, ResourceAnomaly};
 use crate::toolchain::self_evolution::SelfEvolutionEngine;
 use crate::toolchain::test_generator::{TestGenerator, TestSuite};
 use crate::stdlib::editor_integration::{EditorDiagnostic, EditorCommand, EditorCodeLensData};
+use crate::stdlib::design_principles::{DesignPrinciple, DesignPrincipleDefinition, DesignPrinciplesEngine, PrincipleVerificationResult, VerificationContext}; // New
 use crate::source_map::Span;
 
 /// Initializes the Autonomous System Design (ASD) module.
@@ -81,6 +83,7 @@ pub struct AutonomousSystemDesignEngine {
     pub system_health_predictor: SystemHealthPredictor,
     pub deployment_orchestrator: DeploymentOrchestrator,
     pub editor_integration_client: EditorIntegrationClient,
+    pub design_principles_engine: DesignPrinciplesEngine, // New: For managing design principles
 }
 
 impl AutonomousSystemDesignEngine {
@@ -103,27 +106,45 @@ impl AutonomousSystemDesignEngine {
             system_health_predictor: SystemHealthPredictor::new(),
             deployment_orchestrator: DeploymentOrchestrator::new(),
             editor_integration_client: EditorIntegrationClient::new(),
+            design_principles_engine: DesignPrinciplesEngine::new(), // Initialize
         }
     }
 
-    /// Initiates the autonomous design process for a new system based on high-level goals.
+    /// Initiates the autonomous design process for a new system based on high-level goals and desired principles.
     #[ethics(principles="system_integrity", resource_optimization="true")]
     #[security(level="omomniscient", threat_model="design_vulnerabilities")]
-    pub fn design_new_system(&mut self, high_level_goals: String) -> Result<SystemDesignReport, String> {
+    pub fn design_new_system(
+        &mut self,
+        high_level_goals: String,
+        desired_principles: Option<List<DesignPrinciple>>,
+    ) -> Result<SystemDesignReport, String> {
         println!("[ASD] Initiating design for new system based on: '{}'".to_string(), high_level_goals);
 
-        // 1. Interpret Goals: Convert natural language into formal DesignGoals.
+        // 1. Interpret Goals: Convert natural language into formal DesignGoals, including desired principles.
         let nlp_context = LinguisticContext { current_topic: Some(Identifier("system_design".to_string(), Span::dummy())), ..Default::default() };
         let interpreted_goals = self.nlp_engine.interpret_and_verify_intent(high_level_goals.clone(), nlp_context)?; 
-        let design_goals = DesignGoal::from_symbolic_plan(interpreted_goals)?; 
+        let mut design_goals = DesignGoal::from_symbolic_plan(interpreted_goals)?; 
+        if let Some(principles) = desired_principles {
+            design_goals.add_principles(principles);
+        }
 
         // 2. Synthesize Architecture: Generate a candidate system architecture.
         let mut candidate_architecture = self.synthesize_initial_architecture(design_goals.clone())?; 
 
-        // 3. Formally Verify Architecture: Prove correctness, safety, performance, security.
-        let verification_report = self.math_engine.theorem_proving_engine.prove_system_architecture_properties(candidate_architecture.to_ast(), design_goals.clone())?; 
-        if verification_report.has_critical_failures() { 
-            println!("[ASD] Initial architecture failed formal verification. Redesigning...");
+        // 3. Formally Verify Architecture: Prove correctness, safety, performance, security, AND ADHERENCE TO PRINCIPLES.
+        let verification_context = VerificationContext::new(); // Context for theorem prover
+        let principle_definitions = design_goals.get_principle_definitions(&self.design_principles_engine);
+        let principle_verification_results = self.design_principles_engine.verify_architecture_adherence(
+            candidate_architecture.to_ast(), 
+            principle_definitions.clone(), 
+            verification_context.clone(),
+        )?; 
+        
+        let architecture_verification_report = self.math_engine.theorem_proving_engine.prove_system_architecture_properties(candidate_architecture.to_ast(), design_goals.clone())?; 
+
+        let combined_verification_report = architecture_verification_report.combine_with_principles(principle_verification_results);
+        if combined_verification_report.has_critical_failures() { 
+            println!("[ASD] Initial architecture failed formal verification (including principles). Redesigning...");
             return self.redesign_system(design_goals, None); // Recursively redesign
         }
 
@@ -165,12 +186,12 @@ impl AutonomousSystemDesignEngine {
             goals: design_goals, 
             architecture: candidate_architecture, 
             deployment_plan: Some(deployment_plan), 
-            verification_report: Some(verification_report), 
+            verification_report: Some(combined_verification_report), 
             test_suite: Some(test_suite) 
         })
     }
 
-    /// Autonomously monitors a deployed system and adapts its design if necessary.
+    /// Autonomously monitors a deployed system and adapts its design if necessary, ensuring principle adherence.
     #[ethics(principles="continuous_optimization", resilience_by_design="true")]
     pub fn monitor_and_adapt_system(&mut self, system_id: Identifier) -> Result<(), String> {
         println!("[ASD] Monitoring and adapting system {}.".to_string(), system_id.0);
@@ -179,23 +200,46 @@ impl AutonomousSystemDesignEngine {
 
         loop {
             // 1. Observe: Collect real-time operational data and health metrics.
-            let operational_data = self.network_stack.telemetry_system.collect_operational_data(deployed_architecture.id.clone())?; 
+            let operational_data = self.network_stack.telemetry_system_mut().collect_operational_data(deployed_architecture.id.clone())?; 
 
             // 2. Predict: Identify potential failures or performance degradations.
             let predicted_health_status = self.system_health_predictor.predict_status(deployed_architecture.id.clone(), operational_data.clone())?; 
 
-            // 3. Evaluate against original goals and current context.
+            // 3. Evaluate against original goals and current context, including principles.
             let current_goals = self.sankofa_knowledge.get_current_design_goals(deployed_architecture.id.clone())?;
-            let (deviations, new_threats) = self.causal_engine.analyze_deviations_and_threats(operational_data, current_goals)?; 
+            let (deviations, new_threats) = self.causal_engine.analyze_deviations_and_threats(operational_data, current_goals.clone())?; 
 
-            if deviations.is_empty() && new_threats.is_empty() { /* continue monitoring */ continue; }
+            // Also check for principle violations during runtime
+            let principle_definitions = current_goals.get_principle_definitions(&self.design_principles_engine);
+            let runtime_principle_checks = self.design_principles_engine.verify_architecture_adherence(
+                deployed_architecture.to_ast(), // Or a runtime snapshot AST
+                principle_definitions.clone(), 
+                VerificationContext::new(), // Runtime context
+            )?; 
+            let principle_violations: List<Fact> = runtime_principle_checks.data.into_iter()
+                .filter(|r| !r.adhered)
+                .map(|r| Fact::new(format!("Principle Violation: {:?} - {}", r.principle, r.explanation), List::new()))
+                .collect();
 
-            println!("[ASD] Deviations or threats detected for system {}. Initiating adaptation.".to_string(), system_id.0);
+            if deviations.is_empty() && new_threats.is_empty() && principle_violations.is_empty() { /* continue monitoring */ continue; }
 
-            // 4. Propose Adaptation: Generate design modifications.
-            let proposed_adaptation = self.synthesize_adaptation_plan(deployed_architecture.clone(), deviations, new_threats)?; 
+            println!("[ASD] Deviations, threats, or principle violations detected for system {}. Initiating adaptation.".to_string(), system_id.0);
 
-            // 5. Verify & Simulate Adaptation: Ensure new design is safe and effective.
+            // 4. Propose Adaptation: Generate design modifications based on all detected issues.
+            let proposed_adaptation = self.synthesize_adaptation_plan(deployed_architecture.clone(), deviations, new_threats, principle_violations)?; 
+
+            // 5. Verify & Simulate Adaptation: Ensure new design is safe, effective, AND adheres to principles.
+            let adaptation_principle_verification = self.design_principles_engine.verify_architecture_adherence(
+                proposed_adaptation.new_architecture.to_ast(), 
+                principle_definitions.clone(), 
+                VerificationContext::new(),
+            )?; 
+            if adaptation_principle_verification.data.into_iter().any(|r| !r.adhered) {
+                println!("[ASD] Proposed adaptation violates design principles. Re-planning...");
+                self.failure_analysis_registry.record_adaptation_failure(deployed_architecture.id.clone(), Fact::new("Principle violation in adaptation".to_string(), List::new()))?;
+                continue;
+            }
+
             let verification = self.math_engine.theorem_proving_engine.prove_adaptation_safety(proposed_adaptation.to_ast())?;
             let simulation = self.simulation_engine.run_adaptation_simulation(proposed_adaptation.to_simulation_model())?;
 
@@ -206,7 +250,7 @@ impl AutonomousSystemDesignEngine {
                     EvasDecision::Block(reason) => { println!("[ASD] E.V.A.S. BLOCKED adaptation: {}", reason); /* human review needed */ },
                     _ => { 
                         // 7. Deploy Adaptation:
-                        self.deployment_orchestrator.deploy_adaptation(proposed_adaptation)?; 
+                        self.deployment_orchestrator.deploy_adaptation(proposed_adaptation.clone())?; 
                         println!("[ASD] System {} successfully adapted.".to_string(), system_id.0);
                         // Update deployed architecture in Sankofa
                         self.sankofa_knowledge.update_deployed_architecture(system_id.clone(), proposed_adaptation.new_architecture)?; 
@@ -214,7 +258,7 @@ impl AutonomousSystemDesignEngine {
                 }
             } else {
                 println!("[ASD] Proposed adaptation failed verification or simulation. Re-planning...");
-                self.failure_analysis_registry.record_adaptation_failure(deployed_architecture.id.clone(), proposed_adaptation.to_fact())?;
+                self.failure_analysis_registry.record_adaptation_failure(deployed_architecture.id.clone(), Fact::new("Adaptation verification/simulation failure".to_string(), List::new()))?;
             }
             // Placeholder for loop control; this would be continuous.
             break; 
@@ -227,7 +271,7 @@ impl AutonomousSystemDesignEngine {
     fn synthesize_initial_architecture(&mut self, goals: DesignGoal) -> Result<SystemArchitecture, String> {
         println!("[ASD::Synth] Synthesizing initial architecture for {}.".to_string(), goals.id.0);
         // Leverages design patterns from Sankofa, novel architecture generation (self_evolution_engine),
-        // and resource optimization (ai_reasoning).
+        // and resource optimization (ai_reasoning). Ensures adherence to principles.
         Ok(SystemArchitecture::new(goals.id.clone())) 
     }
 
@@ -236,11 +280,11 @@ impl AutonomousSystemDesignEngine {
         println!("[ASD::Redesign] Redesigning system for {} due to failure: {:?}.".to_string(), goals.id.0, cause_of_failure);
         // Use failure analysis, updated learning from Sankofa, and potentially mathematical discovery
         // to generate a new, improved design iteration.
-        self.design_new_system(goals.to_natural_language_prompt())
+        self.design_new_system(goals.to_natural_language_prompt(), Some(goals.get_principles()))
     }
 
     /// Helper function to synthesize an adaptation plan for a deployed system.
-    fn synthesize_adaptation_plan(&mut self, current_arch: SystemArchitecture, deviations: List<Fact>, threats: List<Fact>) -> Result<SystemAdaptationPlan, String> {
+    fn synthesize_adaptation_plan(&mut self, current_arch: SystemArchitecture, deviations: List<Fact>, threats: List<Fact>, principle_violations: List<Fact>) -> Result<SystemAdaptationPlan, String> {
         println!("[ASD::Adapt] Synthesizing adaptation plan.".to_string());
         // Uses causal reasoning, self-evolution, and mathematical optimization
         // to propose changes to the architecture, network, or physical controls.
@@ -258,14 +302,26 @@ pub struct DesignGoal {
     pub requirements: List<Fact>, // Functional and non-functional requirements
     pub constraints: List<Fact>, // Budget, power, ethical, security constraints
     pub metrics: List<Fact>, // KPIs to optimize
+    pub desired_principles: List<DesignPrincipleDefinition>, // Explicitly desired design principles
 }
 impl DesignGoal {
-    pub fn new(id: Identifier) -> Self { DesignGoal { id, requirements: List::new(), constraints: List::new(), metrics: List::new() } }
+    pub fn new(id: Identifier) -> Self { DesignGoal { id, requirements: List::new(), constraints: List::new(), metrics: List::new(), desired_principles: List::new() } }
     pub fn from_symbolic_plan(plan: SymbolicActionPlan) -> Result<Self, String> { 
         println!("[ASD::Goal] Converting symbolic plan to DesignGoal.".to_string());
         Ok(DesignGoal::new(Identifier("derived_goal".to_string(), Span::dummy()))) 
     }
     pub fn to_natural_language_prompt(&self) -> String { format!("Design system for {}", self.id.0) }
+    pub fn add_principles(&mut self, principles: List<DesignPrinciple>) {
+        // Convert raw principles into definitions (this would involve DP Engine)
+        self.desired_principles.extend(principles.data.into_iter().map(DesignPrincipleDefinition::new).collect());
+    }
+    pub fn get_principles(&self) -> List<DesignPrinciple> {
+        self.desired_principles.data.iter().map(|d| d.principle_type.clone()).collect()
+    }
+    pub fn get_principle_definitions(&self, dp_engine: &DesignPrinciplesEngine) -> List<DesignPrincipleDefinition> {
+        // In a real scenario, this would dynamically fetch/formalize principles from the engine
+        self.desired_principles.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -275,9 +331,10 @@ pub struct SystemArchitecture {
     pub connections: List<SystemConnection>,
     pub deployment_environment: List<MetaValue>, // Cloud, physical, quantum, nano
     pub formal_spec: AbstractSyntaxTree, // Formal mathematical/logical specification
+    pub embodied_principles: List<DesignPrincipleDefinition>, // Principles this architecture adheres to
 }
 impl SystemArchitecture {
-    pub fn new(id: Identifier) -> Self { SystemArchitecture { id, components: List::new(), connections: List::new(), deployment_environment: List::new(), formal_spec: AbstractSyntaxTree::new() } }
+    pub fn new(id: Identifier) -> Self { SystemArchitecture { id, components: List::new(), connections: List::new(), deployment_environment: List::new(), formal_spec: AbstractSyntaxTree::new(), embodied_principles: List::new() } }
     pub fn to_ast(&self) -> AbstractSyntaxTree { self.formal_spec.clone() }
     pub fn to_simulation_model(&self) -> MetaValue { MetaValue::Null }
     pub fn to_fact(&self) -> Fact { Fact::new("system_architecture".to_string(), List::new()) }
@@ -300,11 +357,19 @@ pub struct VerificationReport {
     pub id: Identifier,
     pub proofs: List<Proof>, // References to mathematical proofs
     pub simulation_results: List<Fact>, // Summaries of simulation runs
+    pub principle_verification_results: List<PrincipleVerificationResult>, // New
     pub has_critical_failures: bool,
 }
 impl VerificationReport { 
-    pub fn new(id: Identifier) -> Self { VerificationReport { id, proofs: List::new(), simulation_results: List::new(), has_critical_failures: false } }
+    pub fn new(id: Identifier) -> Self { VerificationReport { id, proofs: List::new(), simulation_results: List::new(), principle_verification_results: List::new(), has_critical_failures: false } }
     pub fn has_critical_failures(&self) -> bool { self.has_critical_failures }
+    pub fn combine_with_principles(&self, principle_results: List<PrincipleVerificationResult>) -> Self {
+        let mut combined = self.clone();
+        combined.principle_verification_results.extend(principle_results);
+        combined.has_critical_failures = combined.has_critical_failures || combined.principle_verification_results.data.iter().any(|r| !r.adhered);
+        combined
+    }
+    pub fn clone(&self) -> Self { VerificationReport { id: self.id.clone(), proofs: self.proofs.clone(), simulation_results: self.simulation_results.clone(), principle_verification_results: self.principle_verification_results.clone(), has_critical_failures: self.has_critical_failures } }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -323,13 +388,15 @@ pub struct SystemAdaptationPlan {
     pub original_architecture: Identifier,
     pub proposed_changes: List<Fact>,
     pub new_architecture: SystemArchitecture,
+    pub principles_addressed: List<DesignPrincipleDefinition>, // Principles improved/restored
 }
 impl SystemAdaptationPlan { 
-    pub fn new(id: Identifier) -> Self { SystemAdaptationPlan { id, original_architecture: id.clone(), proposed_changes: List::new(), new_architecture: SystemArchitecture::new(id.clone()) } }
+    pub fn new(id: Identifier) -> Self { SystemAdaptationPlan { id, original_architecture: id.clone(), proposed_changes: List::new(), new_architecture: SystemArchitecture::new(id.clone()), principles_addressed: List::new() } }
     pub fn to_ast(&self) -> AbstractSyntaxTree { self.new_architecture.to_ast() }
     pub fn to_simulation_model(&self) -> MetaValue { MetaValue::Null }
     pub fn to_fact(&self) -> Fact { Fact::new("system_adaptation_plan".to_string(), List::new()) }
     pub fn is_successful(&self) -> bool { true }
+    pub fn clone(&self) -> Self { SystemAdaptationPlan { id: self.id.clone(), original_architecture: self.original_architecture.clone(), proposed_changes: self.proposed_changes.clone(), new_architecture: self.new_architecture.clone(), principles_addressed: self.principles_addressed.clone() } }
 }
 
 // -----------------------------------------------------------------------------
@@ -374,6 +441,7 @@ impl EditorIntegrationClient {
 
 // --- Dummy/Simplified Definitions for Conceptual Compilation --- //
 pub mod nimbus { pub mod os { pub type NimbusContextId = u64; pub fn get_current_context_id() -> NimbusContextId { 0 } } }
+
 pub mod toolchain { pub mod self_evolution { use crate::ast::Identifier; use crate::stdlib::collections::List; use crate::stdlib::ai_reasoning::Fact; #[derive(Debug, Clone, PartialEq)] pub struct TypeSystemEvolutionProposal { pub id: Identifier, pub new_types: List<Fact> } pub struct SelfEvolutionEngine; impl SelfEvolutionEngine { pub fn new() -> Self { SelfEvolutionEngine{} } pub fn propose_type_system_change(&mut self, proposal: TypeSystemEvolutionProposal) -> Result<(), String> { Ok(()) } } } pub mod test_generator { use crate::ast::Identifier; use crate::stdlib::collections::List; use crate::stdlib::ai_reasoning::Fact; #[derive(Debug, Clone, PartialEq)] pub struct TestSuite; impl TestSuite { pub fn new() -> Self { TestSuite{} } } pub struct TestGenerator; impl TestGenerator { pub fn new() -> Self { TestGenerator{} } pub fn generate_system_tests(&mut self, arch: crate::stdlib::system_design::SystemArchitecture) -> Result<TestSuite, String> { Ok(TestSuite::new()) } } } }
 
 pub mod stdlib {
@@ -381,5 +449,6 @@ pub mod stdlib {
     pub mod editor_integration { use crate::ast::Identifier; use crate::stdlib::collections::{List, Map}; use crate::stdlib::meta_ops::MetaValue; #[derive(Debug, Clone, PartialEq)] pub struct EditorDiagnostic; impl EditorDiagnostic { pub fn new() -> Self { EditorDiagnostic{} } } pub struct EditorIntegrationClient; impl EditorIntegrationClient { pub fn new() -> Self { EditorIntegrationClient{} } pub fn display_system_architecture(&self, arch: SystemArchitecture) -> Result<(), String> { Ok(()) } pub fn send_diagnostic(&self, diag: EditorDiagnostic) -> Result<(), String> { Ok(()) } } #[derive(Debug, Clone, PartialEq)] pub struct SystemArchitecture; // Dummy to avoid circular dependency in stdlib mod }
     pub mod physical_hardware_control { use crate::stdlib::math_foundations::AdvancedMathEngine; use crate::nimbus::os::evas::EvasFilter; use crate::stdlib::ai_reasoning::CausalEngine; #[derive(Debug, Clone, PartialEq)] pub struct PhysicalHardwareControlEngine; impl PhysicalHardwareControlEngine { pub fn new() -> Self { PhysicalHardwareControlEngine{} } } }
     pub mod mgns { #[derive(Debug, Clone, PartialEq)] pub struct MukandaraGlobalNavigationSystem; impl MukandaraGlobalNavigationSystem { pub fn new() -> Self { MukandaraGlobalNavigationSystem{} } } }
-    pub mod omniversal_simulation { #[derive(Debug, Clone, PartialEq)] pub struct OmniversalSimulationEngine; impl OmniversalSimulationEngine { pub fn new() -> Self { OmniversalSimulationEngine{} } pub fn run_simulation(&mut self, model: MetaValue, goals: DesignGoal) -> Result<SimulationResults, String> { Ok(SimulationResults::new()) } pub fn run_adaptation_simulation(&mut self, model: MetaValue) -> Result<SimulationResults, String> { Ok(SimulationResults::new()) } } #[derive(Debug, Clone, PartialEq)] pub struct SimulationResults; impl SimulationResults { pub fn new() -> Self { SimulationResults{} } pub fn shows_major_flaws(&self) -> bool { false } pub fn to_fact(&self) -> Fact { Fact::new("simulation_result".to_string(), List::new()) } } }
+    pub mod omniversal_simulation { use crate::stdlib::meta_ops::MetaValue; #[derive(Debug, Clone, PartialEq)] pub struct OmniversalSimulationEngine; impl OmniversalSimulationEngine { pub fn new() -> Self { OmniversalSimulationEngine{} } pub fn run_simulation(&mut self, model: MetaValue, goals: DesignGoal) -> Result<SimulationResults, String> { Ok(SimulationResults::new()) } pub fn run_adaptation_simulation(&mut self, model: MetaValue) -> Result<SimulationResults, String> { Ok(SimulationResults::new()) } } #[derive(Debug, Clone, PartialEq)] pub struct SimulationResults; impl SimulationResults { pub fn new() -> Self { SimulationResults{} } pub fn shows_major_flaws(&self) -> bool { false } pub fn to_fact(&self) -> Fact { Fact::new("simulation_result".to_string(), List::new()) } } }
+    pub mod runtime_governance { #[derive(Debug, Clone, PartialEq)] pub struct AutonomousRuntimeGovernanceEngine; impl AutonomousRuntimeGovernanceEngine { pub fn new() -> Self { AutonomousRuntimeGovernanceEngine{} } } #[derive(Debug, Clone, PartialEq)] pub struct RuntimeMetrics; impl RuntimeMetrics { pub fn new() -> Self { RuntimeMetrics{} } } }
 }
