@@ -49,7 +49,8 @@ pub mod network;
 pub mod music_language;
 pub mod physical_hardware_control;
 pub mod mgns;
-pub mod test_framework; // New: For integrated testing framework primitives
+pub mod test_framework;
+pub mod editor_integration; // New: For Editor Integration Interfaces
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -100,14 +101,16 @@ pub fn initialize_stdlib() {
     music_language::init_music_language();
     physical_hardware_control::init_physical_hardware_control();
     mgns::init_mgns();
-    test_framework::init_test_framework(); // Initialize Test Framework module
+    test_framework::init_test_framework();
+    editor_integration::init_editor_integration(); // Initialize Editor Integration module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    test_framework::shutdown_test_framework(); // Shutdown Test Framework module
+    editor_integration::shutdown_editor_integration(); // Shutdown Editor Integration module
+    test_framework::shutdown_test_framework();
     mgns::shutdown_mgns();
     physical_hardware_control::shutdown_physical_hardware_control();
     music_language::shutdown_music_language();
