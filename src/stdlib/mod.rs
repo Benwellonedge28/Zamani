@@ -50,7 +50,8 @@ pub mod music_language;
 pub mod physical_hardware_control;
 pub mod mgns;
 pub mod test_framework;
-pub mod editor_integration; // New: For Editor Integration Interfaces
+pub mod editor_integration;
+pub mod system_design; // New: For Autonomous System Design (ASD)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -102,14 +103,16 @@ pub fn initialize_stdlib() {
     physical_hardware_control::init_physical_hardware_control();
     mgns::init_mgns();
     test_framework::init_test_framework();
-    editor_integration::init_editor_integration(); // Initialize Editor Integration module
+    editor_integration::init_editor_integration();
+    system_design::init_system_design(); // Initialize ASD module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    editor_integration::shutdown_editor_integration(); // Shutdown Editor Integration module
+    system_design::shutdown_system_design(); // Shutdown ASD module
+    editor_integration::shutdown_editor_integration();
     test_framework::shutdown_test_framework();
     mgns::shutdown_mgns();
     physical_hardware_control::shutdown_physical_hardware_control();
