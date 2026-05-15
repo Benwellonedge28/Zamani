@@ -48,7 +48,8 @@ pub mod math_foundations;
 pub mod network;
 pub mod music_language;
 pub mod physical_hardware_control;
-pub mod mgns; // New: Mukandara Global Navigation System (MGNS)
+pub mod mgns;
+pub mod test_framework; // New: For integrated testing framework primitives
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -98,14 +99,16 @@ pub fn initialize_stdlib() {
     network::init_network_stack();
     music_language::init_music_language();
     physical_hardware_control::init_physical_hardware_control();
-    mgns::init_mgns(); // Initialize MGNS module
+    mgns::init_mgns();
+    test_framework::init_test_framework(); // Initialize Test Framework module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    mgns::shutdown_mgns(); // Shutdown MGNS module
+    test_framework::shutdown_test_framework(); // Shutdown Test Framework module
+    mgns::shutdown_mgns();
     physical_hardware_control::shutdown_physical_hardware_control();
     music_language::shutdown_music_language();
     network::shutdown_network_stack();
