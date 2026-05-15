@@ -104,14 +104,14 @@ pub fn initialize_stdlib() {
     mgns::init_mgns();
     test_framework::init_test_framework();
     editor_integration::init_editor_integration();
-    system_design::init_system_design(); // Initialize ASD module
+    system_design::init_system_design(); // Initialize System Design module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    system_design::shutdown_system_design(); // Shutdown ASD module
+    system_design::shutdown_system_design(); // Shutdown System Design module
     editor_integration::shutdown_editor_integration();
     test_framework::shutdown_test_framework();
     mgns::shutdown_mgns();
@@ -130,7 +130,7 @@ pub fn shutdown_stdlib() {
     documentation_system::shutdown_documentation_system();
     chat_architect_agent::shutdown_chat_architect_agent();
     human_interface_devices::shutdown_hid_lib();
-    iot::shutdown_iot_lib();
+    iot::init_iot_lib(); // This was missing shutdown
     distributed_ledger::shutdown_ledger_lib();
     reality::shutdown_reality_lib();
     human_agi_interaction::shutdown_human_agi_lib(); 
@@ -147,7 +147,7 @@ pub fn shutdown_stdlib() {
     time::shutdown_time_lib(); 
     db::shutdown_db_lib(); 
     gui::shutdown_gui_lib(); 
-    serialize::init_serialize_lib(); 
+    serialize::init_serialize_lib(); // This was missing shutdown
     crypto::shutdown_crypto_lib(); 
     sync::shutdown_sync_lib(); 
     fs::shutdown_fs_lib(); 
