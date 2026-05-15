@@ -52,7 +52,8 @@ pub mod mgns;
 pub mod test_framework;
 pub mod editor_integration;
 pub mod system_design;
-pub mod runtime_governance; // New: For Autonomous Runtime Governance (ARG)
+pub mod runtime_governance;
+pub mod omniversal_hashing; // New: For Omniversal Hashing (OH)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -106,14 +107,16 @@ pub fn initialize_stdlib() {
     test_framework::init_test_framework();
     editor_integration::init_editor_integration();
     system_design::init_system_design();
-    runtime_governance::init_runtime_governance(); // Initialize Runtime Governance module
+    runtime_governance::init_runtime_governance();
+    omniversal_hashing::init_omniversal_hashing(); // Initialize Omniversal Hashing module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    runtime_governance::shutdown_runtime_governance(); // Shutdown Runtime Governance module
+    omniversal_hashing::shutdown_omniversal_hashing(); // Shutdown Omniversal Hashing module
+    runtime_governance::shutdown_runtime_governance();
     system_design::shutdown_system_design();
     editor_integration::shutdown_editor_integration();
     test_framework::shutdown_test_framework();
