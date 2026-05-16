@@ -13,12 +13,6 @@ pub mod reflection;
 pub mod ml;
 pub mod net;
 pub mod fs;
-pub mod mts;
-pub mod sankofa;
-pub mod reflection;
-pub mod ml;
-pub mod net;
-pub mod fs;
 pub mod sync;
 pub mod crypto;
 pub mod serialize;
@@ -74,7 +68,8 @@ pub mod omniversal_strategic_goal_management;
 pub mod omniversal_trust_identity_management;
 pub mod omniversal_hallucination_rag;
 pub mod omniversal_bionano_os;
-pub mod omniversal_reality_metaphysical_engineering; // New: For Omniversal Reality Synthesizer & Metaphysical Engineering (ORSME)
+pub mod omniversal_reality_metaphysical_engineering;
+pub mod omniversal_self_sovereignty_existential_management; // New: For Omniversal Self-Sovereignty & Existential Management (OSSEM)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -144,14 +139,16 @@ pub fn initialize_stdlib() {
     omniversal_trust_identity_management::init_omniversal_trust_identity_management();
     omniversal_hallucination_rag::init_omniversal_hallucination_rag();
     omniversal_bionano_os::init_omniversal_bionano_os();
-    omniversal_reality_metaphysical_engineering::init_omniversal_reality_metaphysical_engineering(); // Initialize ORSME module
+    omniversal_reality_metaphysical_engineering::init_omniversal_reality_metaphysical_engineering();
+    omniversal_self_sovereignty_existential_management::init_omniversal_self_sovereignty_existential_management(); // Initialize OSSEM module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_reality_metaphysical_engineering::shutdown_omniversal_reality_metaphysical_engineering(); // Shutdown ORSME module
+    omniversal_self_sovereignty_existential_management::shutdown_omniversal_self_sovereignty_existential_management(); // Shutdown OSSEM module
+    omniversal_reality_metaphysical_engineering::shutdown_omniversal_reality_metaphysical_engineering();
     omniversal_bionano_os::shutdown_omniversal_bionano_os();
     omniversal_hallucination_rag::shutdown_omniversal_hallucination_rag();
     omniversal_trust_identity_management::shutdown_omniversal_trust_identity_management();
