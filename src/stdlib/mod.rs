@@ -70,7 +70,8 @@ pub mod omniversal_hallucination_rag;
 pub mod omniversal_bionano_os;
 pub mod omniversal_reality_metaphysical_engineering;
 pub mod omniversal_self_sovereignty_existential_management;
-pub mod omniversal_zkp_privacy_computing; // New: For Omniversal Zero-Knowledge Proof & Privacy-Preserving Computing (OZKPPC)
+pub mod omniversal_zkp_privacy_computing;
+pub mod omniversal_rogue_prevention_alignment; // New: For Omniversal AGI Alignment & Sovereign Containment (OASAC)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -142,14 +143,16 @@ pub fn initialize_stdlib() {
     omniversal_bionano_os::init_omniversal_bionano_os();
     omniversal_reality_metaphysical_engineering::init_omniversal_reality_metaphysical_engineering();
     omniversal_self_sovereignty_existential_management::init_omniversal_self_sovereignty_existential_management();
-    omniversal_zkp_privacy_computing::init_omniversal_zkp_privacy_computing(); // Initialize OZKPPC module
+    omniversal_zkp_privacy_computing::init_omniversal_zkp_privacy_computing();
+    omniversal_rogue_prevention_alignment::init_omniversal_agi_alignment_sovereign_containment(); // Initialize OASAC module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_zkp_privacy_computing::shutdown_omniversal_zkp_privacy_computing(); // Shutdown OZKPPC module
+    omniversal_rogue_prevention_alignment::shutdown_omniversal_agi_alignment_sovereign_containment(); // Shutdown OASAC module
+    omniversal_zkp_privacy_computing::shutdown_omniversal_zkp_privacy_computing();
     omniversal_self_sovereignty_existential_management::shutdown_omniversal_self_sovereignty_existential_management();
     omniversal_reality_metaphysical_engineering::shutdown_omniversal_reality_metaphysical_engineering();
     omniversal_bionano_os::shutdown_omniversal_bionano_os();
