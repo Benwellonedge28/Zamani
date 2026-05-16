@@ -13,6 +13,12 @@ pub mod reflection;
 pub mod ml;
 pub mod net;
 pub mod fs;
+pub mod mts;
+pub mod sankofa;
+pub mod reflection;
+pub mod ml;
+pub mod net;
+pub mod fs;
 pub mod sync;
 pub mod crypto;
 pub mod serialize;
@@ -67,7 +73,8 @@ pub mod omniversal_perception_autonomous_action;
 pub mod omniversal_strategic_goal_management;
 pub mod omniversal_trust_identity_management;
 pub mod omniversal_hallucination_rag;
-pub mod omniversal_bionano_os; // New: For Omniversal Bio-Nano Operating System (OBNOS)
+pub mod omniversal_bionano_os;
+pub mod omniversal_reality_metaphysical_engineering; // New: For Omniversal Reality Synthesizer & Metaphysical Engineering (ORSME)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -136,14 +143,16 @@ pub fn initialize_stdlib() {
     omniversal_strategic_goal_management::init_omniversal_strategic_goal_management();
     omniversal_trust_identity_management::init_omniversal_trust_identity_management();
     omniversal_hallucination_rag::init_omniversal_hallucination_rag();
-    omniversal_bionano_os::init_omniversal_bionano_os(); // Initialize OBNOS module
+    omniversal_bionano_os::init_omniversal_bionano_os();
+    omniversal_reality_metaphysical_engineering::init_omniversal_reality_metaphysical_engineering(); // Initialize ORSME module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_bionano_os::shutdown_omniversal_bionano_os(); // Shutdown OBNOS module
+    omniversal_reality_metaphysical_engineering::shutdown_omniversal_reality_metaphysical_engineering(); // Shutdown ORSME module
+    omniversal_bionano_os::shutdown_omniversal_bionano_os();
     omniversal_hallucination_rag::shutdown_omniversal_hallucination_rag();
     omniversal_trust_identity_management::shutdown_omniversal_trust_identity_management();
     omniversal_strategic_goal_management::shutdown_omniversal_strategic_goal_management();
