@@ -58,7 +58,9 @@ pub mod omniversal_generative_ai;
 pub mod design_principles;
 pub mod meta_programming_self_mod;
 pub mod programming_paradigms;
-pub mod web_development; // New: For Omniversal Web Development
+pub mod web_development;
+pub mod omniversal_data_structures;
+pub mod omniversal_prompt_firewall; // New: For Omniversal Prompt Firewall (OPF)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -118,14 +120,18 @@ pub fn initialize_stdlib() {
     design_principles::init_design_principles();
     meta_programming_self_mod::init_meta_programming_self_mod();
     programming_paradigms::init_programming_paradigms();
-    web_development::init_web_development(); // Initialize Web Development module
+    web_development::init_web_development();
+    omniversal_data_structures::init_omniversal_data_structures();
+    omniversal_prompt_firewall::init_omniversal_prompt_firewall(); // Initialize Omniversal Prompt Firewall module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    web_development::shutdown_web_development(); // Shutdown Web Development module
+    omniversal_prompt_firewall::shutdown_omniversal_prompt_firewall(); // Shutdown Omniversal Prompt Firewall module
+    omniversal_data_structures::shutdown_omniversal_data_structures();
+    web_development::shutdown_web_development();
     programming_paradigms::shutdown_programming_paradigms();
     meta_programming_self_mod::shutdown_meta_programming_self_mod();
     design_principles::shutdown_design_principles();
