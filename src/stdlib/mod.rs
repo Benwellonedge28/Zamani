@@ -56,7 +56,8 @@ pub mod runtime_governance;
 pub mod omniversal_hashing;
 pub mod omniversal_generative_ai;
 pub mod design_principles;
-pub mod meta_programming_self_mod; // New: For Meta-Programming & Self-Modification (MPSM)
+pub mod meta_programming_self_mod;
+pub mod programming_paradigms; // New: For Programming Paradigms Module
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -114,14 +115,16 @@ pub fn initialize_stdlib() {
     omniversal_hashing::init_omniversal_hashing();
     omniversal_generative_ai::init_omniversal_generative_ai();
     design_principles::init_design_principles();
-    meta_programming_self_mod::init_meta_programming_self_mod(); // Initialize MPSM module
+    meta_programming_self_mod::init_meta_programming_self_mod();
+    programming_paradigms::init_programming_paradigms(); // Initialize Programming Paradigms module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    meta_programming_self_mod::shutdown_meta_programming_self_mod(); // Shutdown MPSM module
+    programming_paradigms::shutdown_programming_paradigms(); // Shutdown Programming Paradigms module
+    meta_programming_self_mod::shutdown_meta_programming_self_mod();
     design_principles::shutdown_design_principles();
     omniversal_generative_ai::shutdown_omniversal_generative_ai();
     omniversal_hashing::shutdown_omniversal_hashing();
