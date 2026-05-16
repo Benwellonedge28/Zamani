@@ -55,7 +55,8 @@ pub mod system_design;
 pub mod runtime_governance;
 pub mod omniversal_hashing;
 pub mod omniversal_generative_ai;
-pub mod design_principles; // New: For formalizing design principles
+pub mod design_principles;
+pub mod meta_programming_self_mod; // New: For Meta-Programming & Self-Modification (MPSM)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -112,14 +113,16 @@ pub fn initialize_stdlib() {
     runtime_governance::init_runtime_governance();
     omniversal_hashing::init_omniversal_hashing();
     omniversal_generative_ai::init_omniversal_generative_ai();
-    design_principles::init_design_principles(); // Initialize Design Principles module
+    design_principles::init_design_principles();
+    meta_programming_self_mod::init_meta_programming_self_mod(); // Initialize MPSM module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    design_principles::shutdown_design_principles(); // Shutdown Design Principles module
+    meta_programming_self_mod::shutdown_meta_programming_self_mod(); // Shutdown MPSM module
+    design_principles::shutdown_design_principles();
     omniversal_generative_ai::shutdown_omniversal_generative_ai();
     omniversal_hashing::shutdown_omniversal_hashing();
     runtime_governance::shutdown_runtime_governance();
