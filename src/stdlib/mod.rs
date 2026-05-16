@@ -69,7 +69,8 @@ pub mod omniversal_trust_identity_management;
 pub mod omniversal_hallucination_rag;
 pub mod omniversal_bionano_os;
 pub mod omniversal_reality_metaphysical_engineering;
-pub mod omniversal_self_sovereignty_existential_management; // New: For Omniversal Self-Sovereignty & Existential Management (OSSEM)
+pub mod omniversal_self_sovereignty_existential_management;
+pub mod omniversal_zkp_privacy_computing; // New: For Omniversal Zero-Knowledge Proof & Privacy-Preserving Computing (OZKPPC)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -140,14 +141,16 @@ pub fn initialize_stdlib() {
     omniversal_hallucination_rag::init_omniversal_hallucination_rag();
     omniversal_bionano_os::init_omniversal_bionano_os();
     omniversal_reality_metaphysical_engineering::init_omniversal_reality_metaphysical_engineering();
-    omniversal_self_sovereignty_existential_management::init_omniversal_self_sovereignty_existential_management(); // Initialize OSSEM module
+    omniversal_self_sovereignty_existential_management::init_omniversal_self_sovereignty_existential_management();
+    omniversal_zkp_privacy_computing::init_omniversal_zkp_privacy_computing(); // Initialize OZKPPC module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_self_sovereignty_existential_management::shutdown_omniversal_self_sovereignty_existential_management(); // Shutdown OSSEM module
+    omniversal_zkp_privacy_computing::shutdown_omniversal_zkp_privacy_computing(); // Shutdown OZKPPC module
+    omniversal_self_sovereignty_existential_management::shutdown_omniversal_self_sovereignty_existential_management();
     omniversal_reality_metaphysical_engineering::shutdown_omniversal_reality_metaphysical_engineering();
     omniversal_bionano_os::shutdown_omniversal_bionano_os();
     omniversal_hallucination_rag::shutdown_omniversal_hallucination_rag();
