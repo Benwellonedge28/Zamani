@@ -60,7 +60,8 @@ pub mod meta_programming_self_mod;
 pub mod programming_paradigms;
 pub mod web_development;
 pub mod omniversal_data_structures;
-pub mod omniversal_prompt_firewall; // New: For Omniversal Prompt Firewall (OPF)
+pub mod omniversal_prompt_firewall;
+pub mod autonomous_workflow_agent_orchestration; // New: For Autonomous Workflow & Multi-Agent Orchestration (AWMAO)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -122,14 +123,16 @@ pub fn initialize_stdlib() {
     programming_paradigms::init_programming_paradigms();
     web_development::init_web_development();
     omniversal_data_structures::init_omniversal_data_structures();
-    omniversal_prompt_firewall::init_omniversal_prompt_firewall(); // Initialize Omniversal Prompt Firewall module
+    omniversal_prompt_firewall::init_omniversal_prompt_firewall();
+    autonomous_workflow_agent_orchestration::init_autonomous_workflow_agent_orchestration(); // Initialize AWMAO module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_prompt_firewall::shutdown_omniversal_prompt_firewall(); // Shutdown Omniversal Prompt Firewall module
+    autonomous_workflow_agent_orchestration::shutdown_autonomous_workflow_agent_orchestration(); // Shutdown AWMAO module
+    omniversal_prompt_firewall::shutdown_omniversal_prompt_firewall();
     omniversal_data_structures::shutdown_omniversal_data_structures();
     web_development::shutdown_web_development();
     programming_paradigms::shutdown_programming_paradigms();
