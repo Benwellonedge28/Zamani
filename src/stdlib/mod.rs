@@ -64,7 +64,8 @@ pub mod omniversal_prompt_firewall;
 pub mod autonomous_workflow_agent_orchestration;
 pub mod omniversal_knowledge_semantic_reasoning;
 pub mod omniversal_perception_autonomous_action;
-pub mod omniversal_strategic_goal_management; // New: For Omniversal Strategic Goal Management & Self-Actualization (OSGMS)
+pub mod omniversal_strategic_goal_management;
+pub mod omniversal_trust_identity_management; // New: For Omniversal Trust, Reputation, & Identity Management (OTRIMS)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -130,14 +131,16 @@ pub fn initialize_stdlib() {
     autonomous_workflow_agent_orchestration::init_autonomous_workflow_agent_orchestration();
     omniversal_knowledge_semantic_reasoning::init_omniversal_knowledge_semantic_reasoning();
     omniversal_perception_autonomous_action::init_omniversal_perception_autonomous_action();
-    omniversal_strategic_goal_management::init_omniversal_strategic_goal_management(); // Initialize OSGMS module
+    omniversal_strategic_goal_management::init_omniversal_strategic_goal_management();
+    omniversal_trust_identity_management::init_omniversal_trust_identity_management(); // Initialize OTRIMS module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_strategic_goal_management::shutdown_omniversal_strategic_goal_management(); // Shutdown OSGMS module
+    omniversal_trust_identity_management::shutdown_omniversal_trust_identity_management(); // Shutdown OTRIMS module
+    omniversal_strategic_goal_management::shutdown_omniversal_strategic_goal_management();
     omniversal_perception_autonomous_action::shutdown_omniversal_perception_autonomous_action();
     omniversal_knowledge_semantic_reasoning::shutdown_omniversal_knowledge_semantic_reasoning();
     autonomous_workflow_agent_orchestration::shutdown_autonomous_workflow_agent_orchestration();
@@ -170,7 +173,7 @@ pub fn shutdown_stdlib() {
     chat_architect_agent::shutdown_chat_architect_agent();
     human_interface_devices::shutdown_hid_lib();
     iot::shutdown_iot_lib();
-    distributed_ledger::shutdown_ledger_lib();
+    distributed_ledger::shutdown_distributed_ledger();
     reality::shutdown_reality_lib();
     human_agi_interaction::shutdown_human_agi_lib(); 
     agi_governance::shutdown_agi_governance_lib();
