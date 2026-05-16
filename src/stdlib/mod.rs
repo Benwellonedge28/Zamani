@@ -63,7 +63,8 @@ pub mod omniversal_data_structures;
 pub mod omniversal_prompt_firewall;
 pub mod autonomous_workflow_agent_orchestration;
 pub mod omniversal_knowledge_semantic_reasoning;
-pub mod omniversal_perception_autonomous_action; // New: For Omniversal Perception & Autonomous Action (OPAA)
+pub mod omniversal_perception_autonomous_action;
+pub mod omniversal_strategic_goal_management; // New: For Omniversal Strategic Goal Management & Self-Actualization (OSGMS)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -128,14 +129,16 @@ pub fn initialize_stdlib() {
     omniversal_prompt_firewall::init_omniversal_prompt_firewall();
     autonomous_workflow_agent_orchestration::init_autonomous_workflow_agent_orchestration();
     omniversal_knowledge_semantic_reasoning::init_omniversal_knowledge_semantic_reasoning();
-    omniversal_perception_autonomous_action::init_omniversal_perception_autonomous_action(); // Initialize OPAA module
+    omniversal_perception_autonomous_action::init_omniversal_perception_autonomous_action();
+    omniversal_strategic_goal_management::init_omniversal_strategic_goal_management(); // Initialize OSGMS module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_perception_autonomous_action::shutdown_omniversal_perception_autonomous_action(); // Shutdown OPAA module
+    omniversal_strategic_goal_management::shutdown_omniversal_strategic_goal_management(); // Shutdown OSGMS module
+    omniversal_perception_autonomous_action::shutdown_omniversal_perception_autonomous_action();
     omniversal_knowledge_semantic_reasoning::shutdown_omniversal_knowledge_semantic_reasoning();
     autonomous_workflow_agent_orchestration::shutdown_autonomous_workflow_agent_orchestration();
     omniversal_prompt_firewall::shutdown_omniversal_prompt_firewall();
