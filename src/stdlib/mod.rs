@@ -65,7 +65,8 @@ pub mod autonomous_workflow_agent_orchestration;
 pub mod omniversal_knowledge_semantic_reasoning;
 pub mod omniversal_perception_autonomous_action;
 pub mod omniversal_strategic_goal_management;
-pub mod omniversal_trust_identity_management; // New: For Omniversal Trust, Reputation, & Identity Management (OTRIMS)
+pub mod omniversal_trust_identity_management;
+pub mod omniversal_hallucination_rag; // New: For Omniversal Hallucination Firewall & Retrieval-Augmented Generation (OHFRAG)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -132,14 +133,16 @@ pub fn initialize_stdlib() {
     omniversal_knowledge_semantic_reasoning::init_omniversal_knowledge_semantic_reasoning();
     omniversal_perception_autonomous_action::init_omniversal_perception_autonomous_action();
     omniversal_strategic_goal_management::init_omniversal_strategic_goal_management();
-    omniversal_trust_identity_management::init_omniversal_trust_identity_management(); // Initialize OTRIMS module
+    omniversal_trust_identity_management::init_omniversal_trust_identity_management();
+    omniversal_hallucination_rag::init_omniversal_hallucination_rag(); // Initialize OHFRAG module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_trust_identity_management::shutdown_omniversal_trust_identity_management(); // Shutdown OTRIMS module
+    omniversal_hallucination_rag::shutdown_omniversal_hallucination_rag(); // Shutdown OHFRAG module
+    omniversal_trust_identity_management::shutdown_omniversal_trust_identity_management();
     omniversal_strategic_goal_management::shutdown_omniversal_strategic_goal_management();
     omniversal_perception_autonomous_action::shutdown_omniversal_perception_autonomous_action();
     omniversal_knowledge_semantic_reasoning::shutdown_omniversal_knowledge_semantic_reasoning();
