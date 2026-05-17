@@ -73,7 +73,8 @@ pub mod omniversal_self_sovereignty_existential_management;
 pub mod omniversal_zkp_privacy_computing;
 pub mod omniversal_rogue_prevention_alignment;
 pub mod omniversal_alignment_orchestration_global_immutable_nexus;
-pub mod omniversal_living_character_narrative_evolution; // New: For Omniversal Living Character & Narrative Evolution (OLCNE)
+pub mod omniversal_living_character_narrative_evolution;
+pub mod omniversal_autonomous_code_system_synthesis; // New: For Omniversal Autonomous Code & System Synthesis (OACSS)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -148,14 +149,16 @@ pub fn initialize_stdlib() {
     omniversal_zkp_privacy_computing::init_omniversal_zkp_privacy_computing();
     omniversal_rogue_prevention_alignment::init_omniversal_agi_alignment_sovereign_containment();
     omniversal_alignment_orchestration_global_immutable_nexus::init_omniversal_alignment_orchestration_global_immutable_nexus();
-    omniversal_living_character_narrative_evolution::init_omniversal_living_character_narrative_evolution(); // Initialize OLCNE module
+    omniversal_living_character_narrative_evolution::init_omniversal_living_character_narrative_evolution();
+    omniversal_autonomous_code_system_synthesis::init_omniversal_autonomous_code_system_synthesis(); // Initialize OACSS module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_living_character_narrative_evolution::shutdown_omniversal_living_character_narrative_evolution(); // Shutdown OLCNE module
+    omniversal_autonomous_code_system_synthesis::shutdown_omniversal_autonomous_code_system_synthesis(); // Shutdown OACSS module
+    omniversal_living_character_narrative_evolution::shutdown_omniversal_living_character_narrative_evolution();
     omniversal_alignment_orchestration_global_immutable_nexus::shutdown_omniversal_alignment_orchestration_global_immutable_nexus();
     omniversal_rogue_prevention_alignment::shutdown_omniversal_agi_alignment_sovereign_containment();
     omniversal_zkp_privacy_computing::shutdown_omniversal_zkp_privacy_computing();
@@ -201,7 +204,7 @@ pub fn shutdown_stdlib() {
     reality::shutdown_reality_lib();
     human_agi_interaction::shutdown_human_agi_lib(); 
     agi_governance::shutdown_agi_governance_lib();
-    external_services::shutdown_external_services_lib();
+    external_services::shutdown_external_services_lib(); 
     meta_ops::shutdown_meta_ops_lib(); 
     agents::shutdown_agents_lib(); 
     robotics::shutdown_robotics_lib(); 
