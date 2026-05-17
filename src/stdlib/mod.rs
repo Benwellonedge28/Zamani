@@ -74,7 +74,8 @@ pub mod omniversal_zkp_privacy_computing;
 pub mod omniversal_rogue_prevention_alignment;
 pub mod omniversal_alignment_orchestration_global_immutable_nexus;
 pub mod omniversal_living_character_narrative_evolution;
-pub mod omniversal_autonomous_code_system_synthesis; // New: For Omniversal Autonomous Code & System Synthesis (OACSS)
+pub mod omniversal_autonomous_code_system_synthesis;
+pub mod omniversal_economic_optimization_global_markets; // New: For Omniversal Economic Optimization & Global Markets (OEOGM)
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -150,14 +151,16 @@ pub fn initialize_stdlib() {
     omniversal_rogue_prevention_alignment::init_omniversal_agi_alignment_sovereign_containment();
     omniversal_alignment_orchestration_global_immutable_nexus::init_omniversal_alignment_orchestration_global_immutable_nexus();
     omniversal_living_character_narrative_evolution::init_omniversal_living_character_narrative_evolution();
-    omniversal_autonomous_code_system_synthesis::init_omniversal_autonomous_code_system_synthesis(); // Initialize OACSS module
+    omniversal_autonomous_code_system_synthesis::init_omniversal_autonomous_code_system_synthesis();
+    omniversal_economic_optimization_global_markets::init_omniversal_economic_optimization_global_markets(); // Initialize OEOGM module
     println!("Zenith UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
-    omniversal_autonomous_code_system_synthesis::shutdown_omniversal_autonomous_code_system_synthesis(); // Shutdown OACSS module
+    omniversal_economic_optimization_global_markets::shutdown_omniversal_economic_optimization_global_markets(); // Shutdown OEOGM module
+    omniversal_autonomous_code_system_synthesis::shutdown_omniversal_autonomous_code_system_synthesis();
     omniversal_living_character_narrative_evolution::shutdown_omniversal_living_character_narrative_evolution();
     omniversal_alignment_orchestration_global_immutable_nexus::shutdown_omniversal_alignment_orchestration_global_immutable_nexus();
     omniversal_rogue_prevention_alignment::shutdown_omniversal_agi_alignment_sovereign_containment();
