@@ -314,16 +314,16 @@ impl Lexer {
         let position = self.position.0 + 1; // Skip opening quote
         self.read_char(); // Consume opening quote
         // Expect exactly one character, or an escaped sequence
-        if self.ch == Some('\') { // Handle backslash escape explicitly
+        if self.ch == Some('\\') { // Handle backslash escape explicitly
             self.read_char(); // Consume backslash
             self.read_char(); // Consume escaped char
-        } else if self.ch.is_some() && self.ch != Some(''') {
+        } else if self.ch.is_some() && self.ch != Some('\'') {
             self.read_char(); // Consume char
         }
 
         let char_literal = self.input.get(position as usize..self.position.0 as usize).unwrap_or("").to_string();
         
-        if self.ch == Some(''') {
+        if self.ch == Some('\'') {
             self.read_char(); // Consume closing quote
             char_literal
         } else {
@@ -466,7 +466,7 @@ impl Lexer {
                 literal = self.read_string();
                 token_type = TokenType::String;
             }
-            Some(''') => {
+            Some('\'') => {
                 literal = self.read_char_literal();
                 token_type = TokenType::Char;
             }
