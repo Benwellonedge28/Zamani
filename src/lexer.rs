@@ -56,17 +56,10 @@ pub enum TokenType {
     SigmaSymbol, // Σ
     PiSymbol,    // Π
 
-    // --- OOP Keywords ---
-    KeywordClass,
-    KeywordInterface,
-    KeywordExtends,
+    // --- OOP Keywords (unique additions) ---
     KeywordImplements,
-    KeywordPublic,
-    KeywordPrivate,
     KeywordProtected,
-    KeywordNew,
     KeywordThis,
-    KeywordSuper,
     KeywordOverride,
     KeywordVirtual,
     KeywordAbstract,
@@ -155,9 +148,19 @@ impl Lexer {
         map.insert("with".to_string(), TokenType::KeywordWith);
         
         // --- OOP Keywords ---
+        map.insert("extends".to_string(), TokenType::KeywordExtends);
+        map.insert("implements".to_string(), TokenType::KeywordImplements);
+        map.insert("protected".to_string(), TokenType::KeywordProtected);
+        map.insert("this".to_string(), TokenType::KeywordThis);
+        map.insert("override".to_string(), TokenType::KeywordOverride);
+        map.insert("virtual".to_string(), TokenType::KeywordVirtual);
+        map.insert("abstract".to_string(), TokenType::KeywordAbstract);
+        map.insert("public".to_string(), TokenType::KeywordPublic);
+        map.insert("private".to_string(), TokenType::KeywordPrivate);
+        map.insert("new".to_string(), TokenType::KeywordNew);
+        map.insert("super".to_string(), TokenType::KeywordSuper);
         map.insert("class".to_string(), TokenType::KeywordClass);
         map.insert("interface".to_string(), TokenType::KeywordInterface);
-        map.insert("extends".to_string(), TokenType::KeywordExtends);
         map.insert("implements".to_string(), TokenType::KeywordImplements);
         map.insert("public".to_string(), TokenType::KeywordPublic);
         map.insert("private".to_string(), TokenType::KeywordPrivate);
