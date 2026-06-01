@@ -67,3 +67,9 @@ pub mod memory { pub struct MemoryManager; impl MemoryManager { pub fn new() -> 
 pub mod quantum_execution { pub struct QuantumProcessor; impl QuantumProcessor { pub fn new() -> Self { QuantumProcessor } } }
 pub mod nano_orchestrator { pub struct NanoOrchestrator; impl NanoOrchestrator { pub fn new() -> Self { NanoOrchestrator } } }
 pub mod effects { pub struct EffectDispatcher; impl EffectDispatcher { pub fn new() -> Self { EffectDispatcher } pub fn dispatch(&mut self, _effect: &str) {} } }
+
+/// Initialise the Zenith runtime environment.
+/// Called once at compiler startup.
+pub fn init_runtime() {
+    println!("[Runtime] Zenith Universal Runtime initialised.");
+}
