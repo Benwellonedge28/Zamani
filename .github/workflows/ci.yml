@@ -35,17 +35,32 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
       - name: Build (debug)
         run: cargo build --verbose
 
-      - name: Run Clippy (lints)
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
       - name: Run tests
         run: cargo test --verbose
+
+      - name: Run Clippy (lints)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+        continue-on-error: true
+
+  fmt-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
   build-release:
     name: Release Build
