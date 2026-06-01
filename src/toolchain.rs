@@ -81,3 +81,8 @@ mod compiler {
 }
 mod ir { pub struct UMCIR; impl UMCIR { pub fn new() -> Self { UMCIR } } }
 mod context { pub struct CompileOptions; }
+
+/// Initialise toolchain integration (build system, package manager, etc.).
+pub fn init_toolchain_integration() {
+    println!("[Toolchain] Zenith toolchain integration initialised.");
+}
