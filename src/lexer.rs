@@ -298,7 +298,7 @@ impl Lexer {
             if c == '"' {
                 break;
             }
-            if c == '\'.to_string().chars().next().unwrap() { // Handle escape sequences conceptually
+            if c == '\\' { // Handle escape sequences conceptually
                 self.read_char(); // Consume backslash
                 self.read_char(); // Consume escaped char
             } else {
