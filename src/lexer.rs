@@ -92,7 +92,7 @@ pub struct Lexer {
     read_position: BytePos,
     ch: Option<char>,
     errors: Vec<LexerError>,
-    keywords_map: HashMap<String, TokenType>, // For efficient keyword lookup
+    pub keywords_map: HashMap<String, TokenType>, // For efficient keyword lookup
 }
 
 impl Lexer {
@@ -179,21 +179,31 @@ impl Lexer {
         &self.errors
     }
 
+    /// Convenience constructor for tests — create Lexer directly from a &str.
+    pub fn from_str(file_id: FileId, source: &str) -> Self {
+        let sf = std::sync::Arc::new(crate::source_map::SourceFile::new(
+            "<test>".to_string(),
+            source.to_string(),
+        ));
+        Lexer::new(file_id, sf)
+    }
+
     fn read_char(&mut self) {
+        self.position = self.read_position; // current char starts here
         if self.read_position.0 >= self.input.len() as u32 {
             self.ch = None;
         } else {
-            // Handle Unicode characters correctly
-            let char_len = self.input.char_indices().nth(self.read_position.0 as usize)
-                .map_or(1, |(i, c)| c.len_utf8());
-            self.ch = self.input.chars().nth(self.read_position.0 as usize);
-            self.read_position.0 += char_len as u32;
+            // Use char_indices for correct UTF-8 byte tracking
+            if let Some((byte_offset, ch)) = self.input
+                .char_indices()
+                .find(|(i, _)| *i == self.read_position.0 as usize)
+            {
+                self.ch = Some(ch);
+                self.read_position.0 = (byte_offset + ch.len_utf8()) as u32;
+            } else {
+                self.ch = None;
+            }
         }
-        self.position = self.read_position;
-        // Note: The above logic is still problematic for position/read_position
-        // if `nth` doesn't map directly to byte position for multi-byte chars.
-        // A more robust lexer would use `char_indices` to update byte positions.
-        // For conceptual purposes, we keep it simple for now.
     }
 
     fn peek_char(&self) -> Option<char> {
@@ -472,7 +482,7 @@ impl Lexer {
             }
             Some('Π') => token_type = TokenType::PiSymbol,
             Some('Σ') => token_type = TokenType::SigmaSymbol,
-            Some(c) if c.is_ascii_alphanumeric() || c == '_' => {
+            Some(c) if c.is_ascii_alphabetic() || c == '_' => {
                 literal = self.read_identifier();
                 token_type = self.keywords_map.get(&literal).cloned().unwrap_or(TokenType::Identifier);
             }
@@ -532,5 +542,22 @@ impl Iterator for Lexer {
         } else {
             Some(token)
         }
+    }
+}
+
+#[cfg(test)]
+mod lexer_unit_tests {
+    use super::*;
+    use crate::source_map::FileId;
+
+    #[test]
+    fn test_let_keyword() {
+        let mut lexer = Lexer::from_str(FileId::new(1), "let x");
+        let tok1 = lexer.next_token();
+        println!("Token 1: {:?} literal={:?}", tok1.token_type, tok1.literal);
+        let tok2 = lexer.next_token();
+        println!("Token 2: {:?} literal={:?}", tok2.token_type, tok2.literal);
+        println!("keywords_map has let: {}", lexer.keywords_map.contains_key("let"));
+        assert_eq!(tok1.token_type, TokenType::KeywordLet, "let should be KeywordLet");
     }
 }
