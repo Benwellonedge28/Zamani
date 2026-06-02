@@ -1,87 +1,226 @@
-name: CI
+name: CI — Zenith Compiler
 
 on:
   push:
-    branches: [ main ]
+    branches: ["main", "develop", "release/**", "hotfix/**"]
   pull_request:
-    branches: [ main ]
+    branches: ["main", "develop"]
+  workflow_dispatch:
+    inputs:
+      run_benchmarks:
+        description: "Run benchmark suite"
+        required: false
+        default: "false"
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
+  RUST_BACKTRACE: full
+  RUSTFLAGS: "-D warnings"
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_LOG: debug
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
 
 jobs:
-  build-and-test:
-    name: Build & Test
+  # ── 1. Format check ─────────────────────────────────────────────────────────
+  fmt:
+    name: "🎨 Format (rustfmt)"
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
+  # ── 2. Clippy lint ────────────────────────────────────────────────────────────
+  clippy:
+    name: "🔍 Lint (clippy)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery -A clippy::module_name_repetitions
+        continue-on-error: true
+
+  # ── 3. Multi-platform build & test ────────────────────────────────────────────
+  test:
+    name: "🧪 Test (${{ matrix.os }} / ${{ matrix.rust }})"
+    needs: [fmt]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, beta, nightly]
+        exclude:
+          - os: windows-latest
+            rust: nightly   # nightly windows is flaky
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-
 
       - name: Build (debug)
         run: cargo build --verbose
 
-      - name: Run tests
-        run: cargo test --verbose
+      - name: Build (release)
+        run: cargo build --release --verbose
 
-      - name: Run Clippy (lints)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Run unit + integration tests
+        run: cargo test --verbose --all-features -- --test-threads=4
+
+      - name: Run doc tests
+        run: cargo test --doc
         continue-on-error: true
 
-  fmt-check:
-    name: Format Check
+  # ── 4. Code coverage ─────────────────────────────────────────────────────────
+  coverage:
+    name: "📊 Coverage (tarpaulin)"
+    needs: [test]
     runs-on: ubuntu-latest
-    continue-on-error: true
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-  build-release:
-    name: Release Build
-    runs-on: ubuntu-latest
-    needs: build-and-test
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-coverage-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --quiet
+      - name: Run coverage
+        run: cargo tarpaulin --out Xml --output-dir ./coverage --timeout 120
+        continue-on-error: true
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: ./coverage
+          retention-days: 14
 
-      - name: Build (release)
-        run: cargo build --release --verbose
+  # ── 5. WASM cross-compile ─────────────────────────────────────────────────────
+  wasm:
+    name: "🌐 WASM32 Cross-Compile"
+    needs: [fmt]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-wasm-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build for WASM
+        run: cargo build --target wasm32-unknown-unknown --release --lib
+
+  # ── 6. Dependency audit ───────────────────────────────────────────────────────
+  audit:
+    name: "🔒 Dependency Audit"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --quiet
+      - name: Audit dependencies
+        run: cargo audit --deny warnings
+        continue-on-error: true
+
+  # ── 7. Minimal versions check ─────────────────────────────────────────────────
+  minimal-versions:
+    name: "📦 Minimal Dependency Versions"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Check minimal versions
+        run: cargo +nightly check -Z minimal-versions
+        continue-on-error: true
+
+  # ── 8. Benchmarks (optional) ──────────────────────────────────────────────────
+  bench:
+    name: "⚡ Benchmarks"
+    if: ${{ github.event.inputs.run_benchmarks == 'true' || github.ref == 'refs/heads/main' }}
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-bench-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run benchmarks
+        run: cargo bench --no-fail-fast 2>&1 | tee bench_results.txt
+        continue-on-error: true
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-results
+          path: bench_results.txt
+
+  # ── 9. CI gate ────────────────────────────────────────────────────────────────
+  ci-gate:
+    name: "✅ CI Gate"
+    if: always()
+    needs: [fmt, clippy, test, wasm, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all required jobs passed
+        run: |
+          if [[ "${{ needs.fmt.result }}" != "success" ]]; then
+            echo "❌ fmt failed"
+            exit 1
+          fi
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "❌ test failed"
+            exit 1
+          fi
+          echo "✅ All required CI checks passed"
