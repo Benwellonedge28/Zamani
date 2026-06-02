@@ -1,57 +1,83 @@
-
-//! Zenith Universal Meta-Compiler (UMC) Intermediate Representation (IR) Generator
+//! Zenith UMC Intermediate Representation Generator
 //!
-//! This module implements the IR generation phase of the Zenith compiler. It takes
-//! the semantically analyzed Abstract Syntax Tree (AST) and translates it into a
-//! platform-agnostic Intermediate Representation (IR). This IR is designed to
-//! efficiently represent multi-paradigm constructs (classical, quantum, nano, MTS,
-//! Sankofa) and is the input for optimization and backend code generation stages.
+//! Translates the typed AST into a platform-agnostic IR module ready for
+//! optimization and backend code generation.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use crate::ast::{
-    Program, Statement, Expression, Literal, Identifier, Parameter, MatchCase,
-    AccessModifier, ClassMember, InterfaceMember, TypeExpr, MethodModifier, TokenType
-};
-use crate::compiler_types::{Type, MethodType, IntWidth, FloatWidth};
-use crate::semantic::{SymbolTable, SemanticError, Symbol}; // Access to resolved types and symbols
+use crate::ast::{Expression, Literal, Program, Statement};
+use crate::compiler_types::Type;
 use crate::source_map::Span;
+use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IrGenError {
-    pub message: String,
-    pub span: Span,
+// ─── IR types ─────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum IrType {
+    Unit,
+    Bool,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    F32,
+    F64,
+    F128,
+    Ptr(Box<IrType>),
+    Array(Box<IrType>, usize),
+    Struct(String),
+    Quantum,
+    Nano,
+    MTS,
+    Sankofa,
+    Function(Vec<IrType>, Box<IrType>),
 }
 
-// --- Intermediate Representation (IR) Instructions --- 
+#[derive(Debug, Clone, PartialEq)]
+pub enum IrValue {
+    Reg(IrRegister),
+    ConstInt(i64),
+    ConstFloat(f64),
+    ConstBool(bool),
+    ConstStr(String),
+    Null,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IrRegister(pub String);
+
+impl IrRegister {
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum IrInstruction {
-    // Control Flow
+    // Control
     Label(String),
     Jump(String),
-    CondJump(IrValue, String),
+    CondJump(IrValue, String, String),
     Ret(Option<IrValue>),
 
-    // Variable Operations
+    // Variables
     Alloc(IrRegister, IrType),
     Assign(IrRegister, IrValue),
     Load(IrRegister, IrValue),
     Store(IrValue, IrValue),
 
-    // Arithmetic & Logic
+    // Arithmetic
     Add(IrRegister, IrValue, IrValue),
     Sub(IrRegister, IrValue, IrValue),
     Mul(IrRegister, IrValue, IrValue),
     Div(IrRegister, IrValue, IrValue),
     Mod(IrRegister, IrValue, IrValue),
-    And(IrRegister, IrValue, IrValue),
-    Or(IrRegister, IrValue, IrValue),
-    Xor(IrRegister, IrValue, IrValue),
-    Not(IrRegister, IrValue),
-    Neg(IrRegister, IrValue),
 
-    // Comparisons
+    // Comparison
     CmpEq(IrRegister, IrValue, IrValue),
     CmpNeq(IrRegister, IrValue, IrValue),
     CmpLt(IrRegister, IrValue, IrValue),
@@ -59,280 +85,301 @@ pub enum IrInstruction {
     CmpLe(IrRegister, IrValue, IrValue),
     CmpGe(IrRegister, IrValue, IrValue),
 
-    // Function Calls
-    Call(IrRegister, String, Vec<IrValue>), // Result Reg, Function Name, Arguments
+    // Logic
+    And(IrRegister, IrValue, IrValue),
+    Or(IrRegister, IrValue, IrValue),
+    Not(IrRegister, IrValue),
 
-    // Quantum-Specific
-    QAlloc(IrRegister, IrValue), // Allocate Qubit/QReg, store ID in Reg
-    QGate(IrRegister, String, Vec<IrValue>), // Apply Gate to Qubit/QReg in Reg, Gate Name, Arguments (e.g., control qubits)
-    QMeasure(IrRegister, IrValue), // Measure Qubit/QReg, store classical result in Reg
+    // Functions
+    Call(IrRegister, String, Vec<IrValue>),
+    CallVoid(String, Vec<IrValue>),
 
-    // Nano-Specific
-    NanoAssemble(IrRegister, IrValue, Vec<IrValue>), // Assemble NanoAgent, blueprint, components
-    NanoCommunicate(IrValue, IrValue, IrValue), // Sender, Receiver, Message
-    NanoReplicate(IrRegister, IrValue), // Replicate Agent, store new ID in Reg
-    NanoAction(IrValue, IrValue), // Agent, Action
+    // Quantum
+    QAlloc(IrRegister, u32),
+    QGate(String, Vec<IrRegister>),
+    QMeasure(IrRegister, IrRegister),
 
-    // MTS-Specific (Multi-Timeline System)
-    MTSCreate(IrRegister, IrValue), // Create timeline, initial state, store ID in Reg
-    MTSStore(IrValue, IrValue, IrValue), // Timeline ID, Timestamp, State Content
-    MTSLoad(IrRegister, IrValue, IrValue), // Load state from Timeline ID at Timestamp, store in Reg
-    MTSSynchronize(IrRegister, IrValue, IrValue, IrValue), // Reg for result ID, Timeline1, Timeline2, MergePoint
-    MTSCheckCausality(IrRegister, IrValue), // Timeline ID, store bool result in Reg
+    // Nano
+    NanoSpawn(IrRegister, String),
+    NanoSend(IrRegister, IrValue),
 
-    // Sankofa-Specific
-    SankofaRecordFact(IrValue, IrValue, IrValue, IrValue), // Fact ID, Content, Timestamp, Provenance
-    SankofaAccessFact(IrRegister, IrValue), // Reg for content, Fact ID
-    SankofaUpdateKnowledge(IrRegister, IrValue, IrValue, IrValue, Vec<IrValue>), // Reg for new version, Knowledge ID, Content, Timestamp, Causal Predecessors
-    SankofaAccessKnowledge(IrRegister, IrValue, IrValue), // Reg for content, Knowledge ID, Timestamp
-    SankofaTemporalLearn(IrValue, IrValue, IrValue), // Knowledge ID, Start Time, End Time
+    // MTS
+    MTSSnapshot(IrRegister),
+    MTSRestore(IrRegister),
 
-    // Algebraic Effects
-    PerformEffect(Identifier, Option<IrValue>), // Effect name, optional payload
-    HandleEffect(Identifier, String, String), // Effect name, handler code block label, original code block label
+    // Sankofa
+    SankofaStore(String, IrValue),
+    SankofaRecall(IrRegister, String),
 
-    // No Operation
-    NoOp,
-
-    // --- OOP IR Additions --- 
-    AllocObject(IrRegister, Type), // Allocate memory for an object of Type, store ptr in Reg
-    LoadField(IrRegister, IrRegister, Identifier), // Load field 'Ident' from object in Reg1, store value in Reg2
-    StoreField(IrRegister, Identifier, IrRegister), // Store value in Reg3 into field 'Ident' of object in Reg1
-    CallMethod(IrRegister, IrRegister, Identifier, Vec<IrValue>, CallType), // Result Reg, Object in Reg, Method Name, Arguments, CallType (static/dynamic)
-    LoadThis(IrRegister), // Load 'this' pointer into register
-    LoadSuper(IrRegister), // Load 'super' pointer into register (or parent class context)
-    CreateVtable(Type), // Create a vtable for class Type
-    CreateItable(Type, Type), // Create an itable for class Type implementing Interface Type
+    // Memory
+    Phi(IrRegister, Vec<(IrValue, String)>),
+    Nop,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum CallType {
-    Static,   // Direct call to a known method
-    Dynamic,  // Call via vtable lookup
-    Super,    // Call to parent class method
+// ─── IR Function / Module ─────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct IrFunction {
+    pub name: String,
+    pub params: Vec<(String, IrType)>,
+    pub return_type: IrType,
+    pub body: Vec<IrInstruction>,
 }
 
-// --- IR Value Types ---
-#[derive(Debug, Clone, PartialEq)]
-pub enum IrValue {
-    Register(IrRegister),
-    Literal(Literal),
-    Label(String),
-    Type(IrType),
+impl IrFunction {
+    pub fn new(name: impl Into<String>, ret: IrType) -> Self {
+        IrFunction {
+            name: name.into(),
+            params: vec![],
+            return_type: ret,
+            body: vec![],
+        }
+    }
+
+    pub fn push(&mut self, ins: IrInstruction) {
+        self.body.push(ins);
+    }
 }
 
-// --- IR Register ---
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct IrRegister(pub usize);
-
-// --- IR Type (simplified for now) ---
-#[derive(Debug, Clone, PartialEq)]
-pub enum IrType {
-    I32, // Integer 32-bit
-    Bool,
-    String,
-    Qubit,
-    NanoAgent,
-    MtsSlice,
-    Ptr,
-    Unit,
-    Class(Identifier), // Reference to a class type for object allocation
+#[derive(Debug, Clone, Default)]
+pub struct IrModule {
+    pub functions: Vec<IrFunction>,
+    pub globals: HashMap<String, IrValue>,
+    pub types: HashMap<String, IrType>,
 }
+
+impl IrModule {
+    pub fn new() -> Self {
+        IrModule::default()
+    }
+    pub fn add_function(&mut self, f: IrFunction) {
+        self.functions.push(f);
+    }
+    pub fn instruction_count(&self) -> usize {
+        self.functions.iter().map(|f| f.body.len()).sum()
+    }
+}
+
+// ─── IR generator ────────────────────────────────────────────────────────────
 
 pub struct IrGenerator {
-    current_ir: Vec<IrInstruction>,
-    symbol_table: Arc<SymbolTable>, // Access to the semantically analyzed symbol table
-    next_register: usize,
-    errors: Vec<IrGenError>,
+    pub module: IrModule,
+    reg_counter: usize,
+    label_counter: usize,
 }
 
 impl IrGenerator {
-    pub fn new(symbol_table: Arc<SymbolTable>) -> Self { // Now takes a resolved symbol table
+    pub fn new() -> Self {
         IrGenerator {
-            current_ir: Vec::new(),
-            symbol_table,
-            next_register: 0,
-            errors: Vec::new(),
+            module: IrModule::new(),
+            reg_counter: 0,
+            label_counter: 0,
         }
     }
 
-    pub fn generate_ir(&mut self, program: &Program, initial_symbol_table: &SymbolTable) -> Result<Vec<IrInstruction>, Vec<IrGenError>> {
-        // Note: For a real compiler, the symbol_table passed to new() should be the final, resolved table
-        // from semantic analysis. We pass it here for conceptual access.
+    fn fresh_reg(&mut self) -> IrRegister {
+        let r = IrRegister(format!("%r{}", self.reg_counter));
+        self.reg_counter += 1;
+        r
+    }
 
-        self.current_ir.clear();
-        self.next_register = 0;
-        self.errors.clear();
+    fn fresh_label(&mut self, prefix: &str) -> String {
+        let l = format!("{}{}", prefix, self.label_counter);
+        self.label_counter += 1;
+        l
+    }
 
-        // Generate IR for OOP metadata first (vtables, itables)
-        if let Err(e) = self.generate_oop_metadata_ir() {
-            self.errors.push(e);
-        }
-
+    pub fn generate(&mut self, program: &Program) -> IrModule {
+        let mut top = IrFunction::new("__top__", IrType::Unit);
         for stmt in &program.statements {
-            if let Err(e) = self.generate_statement_ir(stmt) {
-                self.errors.push(e);
-            }
+            self.emit_statement(stmt, &mut top);
         }
-
-        if self.errors.is_empty() { Ok(self.current_ir.clone()) } else { Err(self.errors.clone()) }
+        top.push(IrInstruction::Ret(None));
+        self.module.add_function(top);
+        self.module.clone()
     }
 
-    fn generate_statement_ir(&mut self, stmt: &Statement) -> Result<(), IrGenError> {
+    fn emit_statement(&mut self, stmt: &Statement, func: &mut IrFunction) {
         match stmt {
-            Statement::Let(span, name, _, expr) => {
-                let expr_val = self.generate_expression_ir(expr)?;
-                let reg = self.new_register(); // Should look up type in symbol table to get correct IrType
-                self.current_ir.push(IrInstruction::Assign(reg, expr_val));
-                // Store name -> reg mapping in a local IR symbol table (conceptual)
-                Ok(())
+            Statement::Let(_, name, _, expr) => {
+                let val = self.emit_expression(expr, func);
+                let reg = IrRegister(format!("%{}", name));
+                func.push(IrInstruction::Assign(reg, val));
             }
-            Statement::Return(span, expr) => {
-                let expr_val = self.generate_expression_ir(expr)?;
-                self.current_ir.push(IrInstruction::Ret(Some(expr_val)));
-                Ok(())
+            Statement::Return(_, expr) => {
+                let val = self.emit_expression(expr, func);
+                func.push(IrInstruction::Ret(Some(val)));
             }
             Statement::Expression(expr) => {
-                self.generate_expression_ir(expr)?;
-                Ok(())
+                self.emit_expression(expr, func);
             }
-            Statement::Function(span, name, params, ret_type, body) => {
-                self.current_ir.push(IrInstruction::Label(format!("fn_{}", name)));
-                // Generate IR for function parameters (conceptual: store in registers/stack slots)
-                self.generate_expression_ir(body)?;
-                self.current_ir.push(IrInstruction::Ret(None)); // Implicit return unit if no explicit return
-                Ok(())
+            Statement::Function(_, name, params, ret_ann, body) => {
+                let mut f = IrFunction::new(name.clone(), IrType::Unit);
+                for param in params {
+                    f.params.push((param.name.0.clone(), IrType::I64));
+                }
+                self.emit_expression(body, &mut f);
+                f.push(IrInstruction::Ret(None));
+                self.module.add_function(f);
             }
-            // --- OOP Statements ---
-            Statement::Class(_, _, _, _) => Ok(()), // Class definitions primarily influence types and vtables/itables, not direct executable IR for definition itself
-            Statement::Interface(_, _, _, _) => Ok(()), // Interfaces are pure type definitions
-
-            _ => Err(IrGenError { message: format!("Unsupported statement for IR generation: {:?}", stmt), span: stmt.span() }),
+            Statement::While(_, cond, body) => {
+                let lbl_cond = self.fresh_label("while_cond");
+                let lbl_body = self.fresh_label("while_body");
+                let lbl_end = self.fresh_label("while_end");
+                func.push(IrInstruction::Jump(lbl_cond.clone()));
+                func.push(IrInstruction::Label(lbl_cond.clone()));
+                let cv = self.emit_expression(cond, func);
+                func.push(IrInstruction::CondJump(
+                    cv,
+                    lbl_body.clone(),
+                    lbl_end.clone(),
+                ));
+                func.push(IrInstruction::Label(lbl_body));
+                self.emit_expression(body, func);
+                func.push(IrInstruction::Jump(lbl_cond));
+                func.push(IrInstruction::Label(lbl_end));
+            }
+            Statement::QuantumCircuit(_, name, body) => {
+                let reg = self.fresh_reg();
+                func.push(IrInstruction::QAlloc(reg.clone(), 8));
+                self.emit_expression(body, func);
+            }
+            Statement::NanoAgent(_, name, body) => {
+                let reg = self.fresh_reg();
+                func.push(IrInstruction::NanoSpawn(reg, name.clone()));
+                self.emit_expression(body, func);
+            }
+            Statement::SankofaMemory(_, name, expr) => {
+                let val = self.emit_expression(expr, func);
+                func.push(IrInstruction::SankofaStore(name.clone(), val));
+            }
+            Statement::Match(_, subject, cases) => {
+                let sv = self.emit_expression(subject, func);
+                let end = self.fresh_label("match_end");
+                for case in cases {
+                    let lbl = self.fresh_label("case");
+                    func.push(IrInstruction::Label(lbl));
+                    self.emit_expression(&case.body, func);
+                }
+                func.push(IrInstruction::Label(end));
+            }
+            _ => {
+                func.push(IrInstruction::Nop);
+            }
         }
     }
 
-    fn generate_expression_ir(&mut self, expr: &Expression) -> Result<IrValue, IrGenError> {
+    fn emit_expression(&mut self, expr: &Expression, func: &mut IrFunction) -> IrValue {
         match expr {
-            Expression::Identifier(ident) => {
-                // Lookup identifier in IR symbol table to get its register or memory location
-                // For now, assume it's a placeholder or already assigned to a register
-                Ok(IrValue::Register(IrRegister(0))) // Dummy
+            Expression::Literal(lit) => match lit {
+                Literal::Integer(n, _) => IrValue::ConstInt(*n),
+                Literal::Float(f, _) => IrValue::ConstFloat(*f),
+                Literal::Boolean(b, _) => IrValue::ConstBool(*b),
+                Literal::String(s, _) => IrValue::ConstStr(s.clone()),
+                _ => IrValue::Null,
+            },
+            Expression::Identifier(id) => {
+                let reg = self.fresh_reg();
+                func.push(IrInstruction::Load(
+                    reg.clone(),
+                    IrValue::Reg(IrRegister(format!("%{}", id.0))),
+                ));
+                IrValue::Reg(reg)
             }
-            Expression::Literal(lit) => Ok(IrValue::Literal(lit.clone())),
-            Expression::Infix(span, left, op, right) => {
-                let left_val = self.generate_expression_ir(left)?;
-                let right_val = self.generate_expression_ir(right)?;
-                let result_reg = self.new_register();
-                match op {
-                    TokenType::Plus => self.current_ir.push(IrInstruction::Add(result_reg, left_val, right_val)),
-                    TokenType::Minus => self.current_ir.push(IrInstruction::Sub(result_reg, left_val, right_val)),
-                    // ... other ops
-                    _ => return Err(IrGenError { message: format!("Unsupported infix operator for IR: {:?}", op), span: span.clone() }),
-                }
-                Ok(IrValue::Register(result_reg))
-            }
-            Expression::Call(span, func_expr, args) => {
-                // This is for standalone functions, not methods
-                if let Expression::Identifier(func_name_ident) = func_expr.as_ref() {
-                    let args_ir = args.iter().map(|arg| self.generate_expression_ir(arg)).collect::<Result<Vec<IrValue>, IrGenError>>()?;
-                    let result_reg = self.new_register();
-                    self.current_ir.push(IrInstruction::Call(result_reg, func_name_ident.0.clone(), args_ir));
-                    Ok(IrValue::Register(result_reg))
-                } else {
-                    Err(IrGenError { message: "Function call on non-identifier expression not yet supported in IR gen.".to_string(), span: func_expr.span() })
-                }
-            }
-            // --- OOP IR Generation ---
-            Expression::NewInstance(span, class_name_ident, args) => {
-                // Lookup resolved class type from symbol table
-                if let Some(Type::Class { name, .. }) = self.symbol_table.lookup_class_type(&class_name_ident.0) {
-                    let obj_reg = self.new_register();
-                    self.current_ir.push(IrInstruction::AllocObject(obj_reg, Type::Class { name: name.clone(), fields: HashMap::new(), methods: HashMap::new(), parent_class: None, implemented_interfaces: Vec::new(), is_abstract: false })); // Allocate object with resolved class type
-
-                    // Generate IR for constructor arguments
-                    let args_ir = args.iter().map(|arg| self.generate_expression_ir(arg)).collect::<Result<Vec<IrValue>, IrGenError>>()?;
-                    
-                    // Call constructor (conceptual: a special method named 'init' or default constructor)
-                    // Add 'this' (object pointer) as first arg to constructor
-                    let mut constructor_args = vec![IrValue::Register(obj_reg)];
-                    constructor_args.extend(args_ir);
-                    
-                    // The constructor itself would be a method of the class
-                    self.current_ir.push(IrInstruction::CallMethod(obj_reg, obj_reg, Identifier("init".to_string(), span.clone()), constructor_args, CallType::Static)); // Call 'init'
-                    Ok(IrValue::Register(obj_reg))
-                } else {
-                    Err(IrGenError { message: format!("Class '{}' not found for instantiation.", class_name_ident.0), span: span.clone() })
-                }
-            }
-            Expression::MethodCall(span, object_expr, method_name_ident, args) => {
-                let obj_value = self.generate_expression_ir(object_expr)?; // Get object pointer/value
-                let obj_reg = match obj_value { // Ensure it's in a register
-                    IrValue::Register(r) => r,
-                    _ => {
-                        let temp_reg = self.new_register();
-                        self.current_ir.push(IrInstruction::Assign(temp_reg, obj_value));
-                        temp_reg
-                    }
+            Expression::Infix(_, left, op, right) => {
+                let lv = self.emit_expression(left, func);
+                let rv = self.emit_expression(right, func);
+                let reg = self.fresh_reg();
+                use crate::lexer::TokenType::*;
+                let ins = match op {
+                    Plus => IrInstruction::Add(reg.clone(), lv, rv),
+                    Minus => IrInstruction::Sub(reg.clone(), lv, rv),
+                    Star => IrInstruction::Mul(reg.clone(), lv, rv),
+                    Slash => IrInstruction::Div(reg.clone(), lv, rv),
+                    Modulo => IrInstruction::Mod(reg.clone(), lv, rv),
+                    Equals => IrInstruction::CmpEq(reg.clone(), lv, rv),
+                    NotEquals => IrInstruction::CmpNeq(reg.clone(), lv, rv),
+                    LessThan => IrInstruction::CmpLt(reg.clone(), lv, rv),
+                    GreaterThan => IrInstruction::CmpGt(reg.clone(), lv, rv),
+                    LessThanEqual => IrInstruction::CmpLe(reg.clone(), lv, rv),
+                    GreaterThanEqual => IrInstruction::CmpGe(reg.clone(), lv, rv),
+                    LogicalAnd => IrInstruction::And(reg.clone(), lv, rv),
+                    LogicalOr => IrInstruction::Or(reg.clone(), lv, rv),
+                    _ => IrInstruction::Nop,
                 };
-
-                let method_args_ir = args.iter().map(|arg| self.generate_expression_ir(arg)).collect::<Result<Vec<IrValue>, IrGenError>>()?;
-                
-                // Determine CallType (static vs. dynamic) based on object_expr's type and method modifiers
-                // This requires looking up the method in the object's resolved type from semantic analysis.
-                // For conceptual, let's assume dynamic for now for non-private methods and specific call for super.
-                let call_type = if let Expression::Super(_) = object_expr.as_ref() { CallType::Super } else { CallType::Dynamic };
-
-                let return_reg = self.new_register();
-                self.current_ir.push(IrInstruction::CallMethod(return_reg, obj_reg, method_name_ident.clone(), method_args_ir, call_type));
-                Ok(IrValue::Register(return_reg))
+                func.push(ins);
+                IrValue::Reg(reg)
             }
-            Expression::FieldAccess(span, object_expr, field_name_ident) => {
-                let obj_value = self.generate_expression_ir(object_expr)?; // Object must be resolved to a register
-                let obj_reg = match obj_value {
-                    IrValue::Register(r) => r,
-                    _ => {
-                        let temp_reg = self.new_register();
-                        self.current_ir.push(IrInstruction::Assign(temp_reg, obj_value));
-                        temp_reg
-                    }
+            Expression::Prefix(_, op, operand) => {
+                let ov = self.emit_expression(operand, func);
+                let reg = self.fresh_reg();
+                use crate::lexer::TokenType::*;
+                let ins = match op {
+                    Bang => IrInstruction::Not(reg.clone(), ov),
+                    Minus => IrInstruction::Sub(reg.clone(), IrValue::ConstInt(0), ov),
+                    _ => IrInstruction::Nop,
                 };
-                let field_reg = self.new_register();
-                self.current_ir.push(IrInstruction::LoadField(field_reg, obj_reg, field_name_ident.clone()));
-                Ok(IrValue::Register(field_reg))
+                func.push(ins);
+                IrValue::Reg(reg)
             }
-            Expression::This(span) => {
-                let this_reg = self.new_register();
-                self.current_ir.push(IrInstruction::LoadThis(this_reg));
-                Ok(IrValue::Register(this_reg))
+            Expression::Call(_, func_expr, args) => {
+                let fn_name = match func_expr.as_ref() {
+                    Expression::Identifier(id) => id.0.clone(),
+                    _ => "__dynamic__".to_string(),
+                };
+                let arg_vals: Vec<IrValue> =
+                    args.iter().map(|a| self.emit_expression(a, func)).collect();
+                let reg = self.fresh_reg();
+                func.push(IrInstruction::Call(reg.clone(), fn_name, arg_vals));
+                IrValue::Reg(reg)
             }
-            Expression::Super(span) => {
-                let super_reg = self.new_register();
-                self.current_ir.push(IrInstruction::LoadSuper(super_reg));
-                Ok(IrValue::Register(super_reg))
+            Expression::If(_, cond, then_branch, else_branch) => {
+                let cv = self.emit_expression(cond, func);
+                let then_lbl = self.fresh_label("then");
+                let else_lbl = self.fresh_label("else");
+                let end_lbl = self.fresh_label("endif");
+                func.push(IrInstruction::CondJump(
+                    cv,
+                    then_lbl.clone(),
+                    else_lbl.clone(),
+                ));
+                func.push(IrInstruction::Label(then_lbl));
+                let then_val = self.emit_expression(then_branch, func);
+                func.push(IrInstruction::Jump(end_lbl.clone()));
+                func.push(IrInstruction::Label(else_lbl));
+                if let Some(eb) = else_branch {
+                    self.emit_expression(eb, func);
+                }
+                func.push(IrInstruction::Label(end_lbl));
+                then_val
             }
-            _ => Err(IrGenError { message: format!("Unsupported expression for IR generation: {:?}", expr), span: expr.span() }),
+            Expression::Block(_, stmts) => {
+                let mut last = IrValue::Null;
+                for stmt in stmts {
+                    if let Statement::Expression(e) = stmt {
+                        last = self.emit_expression(e, func);
+                    } else {
+                        self.emit_statement(stmt, func);
+                    }
+                }
+                last
+            }
+            Expression::Recall(_, key) => {
+                let key_str = match key.as_ref() {
+                    Expression::Identifier(id) => id.0.clone(),
+                    _ => "__key__".to_string(),
+                };
+                let reg = self.fresh_reg();
+                func.push(IrInstruction::SankofaRecall(reg.clone(), key_str));
+                IrValue::Reg(reg)
+            }
+            _ => IrValue::Null,
         }
     }
+}
 
-    // New helper for allocating registers
-    fn new_register(&mut self) -> IrRegister {
-        let reg = IrRegister(self.next_register);
-        self.next_register += 1;
-        reg
-    }
-
-    // Function to generate vtables/itables after all classes/interfaces are known
-    fn generate_oop_metadata_ir(&mut self) -> Result<(), IrGenError> {
-        // Iterate through all resolved classes in the symbol table
-        for (name_str, class_type) in self.symbol_table.resolved_classes.iter() {
-            if let Type::Class { name, fields, methods, parent_class, implemented_interfaces, .. } = class_type {
-                self.current_ir.push(IrInstruction::CreateVtable(class_type.clone()));
-                // For each implemented interface, create an Itable
-                for iface_type in implemented_interfaces {
-                    self.current_ir.push(IrInstruction::CreateItable(class_type.clone(), iface_type.clone()));
-                }
-            }
-        }
-        Ok(())
+impl Default for IrGenerator {
+    fn default() -> Self {
+        Self::new()
     }
 }
