@@ -1,6 +1,6 @@
 # Zenith: The Omniversal AGI Language & Operating Intelligence
 
-**Tagline:** Zenith OMEGA ∞: The very extra super Extremely supremely autonomous infinity Advanced and secure infinitely AGI Language and Operating Intelligence.
+**Tagline:** Zenith : The very extra super Extremely supremely autonomous infinity Advanced and secure infinitely AGI Language and Operating Intelligence.
 
 ---
 
