@@ -5,17 +5,21 @@
 use std::hint::black_box;
 
 fn lex_simple(source: &str) {
+    use std::sync::Arc;
     use zenith_compiler::lexer::Lexer;
     use zenith_compiler::source_map::{FileId, SourceFile};
-    use std::sync::Arc;
     let sf = Arc::new(SourceFile::new("<bench>".to_string(), source.to_string()));
     let mut lex = Lexer::new(FileId::new(1), sf);
     while lex.next_token().is_some() {}
 }
 
 fn parse_simple(source: &str) {
-    use zenith_compiler::{lexer::Lexer, parser::Parser, source_map::{FileId, SourceFile}};
     use std::sync::Arc;
+    use zenith_compiler::{
+        lexer::Lexer,
+        parser::Parser,
+        source_map::{FileId, SourceFile},
+    };
     let sf = Arc::new(SourceFile::new("<bench>".to_string(), source.to_string()));
     let lex = Lexer::new(FileId::new(1), sf);
     let mut parser = Parser::new(lex);
@@ -35,18 +39,26 @@ fn main() {
     let runs = 1000;
 
     let start = std::time::Instant::now();
-    for _ in 0..runs { lex_simple(black_box(src_small)); }
+    for _ in 0..runs {
+        lex_simple(black_box(src_small));
+    }
     println!("lex_small: {:?}/iter", start.elapsed() / runs);
 
     let start = std::time::Instant::now();
-    for _ in 0..runs { parse_simple(black_box(src_small)); }
+    for _ in 0..runs {
+        parse_simple(black_box(src_small));
+    }
     println!("parse_small: {:?}/iter", start.elapsed() / runs);
 
     let start = std::time::Instant::now();
-    for _ in 100u32..(100 + runs) { compile_full(black_box(src_medium.as_str())); }
+    for _ in 100u32..(100 + runs) {
+        compile_full(black_box(src_medium.as_str()));
+    }
     println!("compile_medium: {:?}/iter", start.elapsed() / runs);
 
     let start = std::time::Instant::now();
-    for _ in 0..100u32 { compile_full(black_box(src_large.as_str())); }
+    for _ in 0..100u32 {
+        compile_full(black_box(src_large.as_str()));
+    }
     println!("compile_large (100 runs): {:?}/iter", start.elapsed() / 100);
 }

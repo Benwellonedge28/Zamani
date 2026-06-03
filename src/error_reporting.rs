@@ -4,8 +4,8 @@
 //! Extended error types (parser, semantic, ir_gen, etc.) will be added
 //! as those modules are progressively enabled.
 
-use crate::source_map::{Span, SourceMap};
 use crate::lexer::LexerError;
+use crate::source_map::{SourceMap, Span};
 use std::fmt;
 
 /// Severity level of a compiler diagnostic.
@@ -20,10 +20,10 @@ pub enum Severity {
 impl fmt::Display for Severity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Severity::Note    => write!(f, "note"),
+            Severity::Note => write!(f, "note"),
             Severity::Warning => write!(f, "warning"),
-            Severity::Error   => write!(f, "error"),
-            Severity::Fatal   => write!(f, "fatal error"),
+            Severity::Error => write!(f, "error"),
+            Severity::Fatal => write!(f, "fatal error"),
         }
     }
 }
@@ -32,19 +32,31 @@ impl fmt::Display for Severity {
 #[derive(Debug, Clone)]
 pub struct CompilerError {
     pub severity: Severity,
-    pub code:     Option<String>,
-    pub message:  String,
-    pub span:     Option<Span>,
-    pub hint:     Option<String>,
+    pub code: Option<String>,
+    pub message: String,
+    pub span: Option<Span>,
+    pub hint: Option<String>,
 }
 
 impl CompilerError {
     pub fn error(message: impl Into<String>, span: Option<Span>) -> Self {
-        CompilerError { severity: Severity::Error, code: None, message: message.into(), span, hint: None }
+        CompilerError {
+            severity: Severity::Error,
+            code: None,
+            message: message.into(),
+            span,
+            hint: None,
+        }
     }
 
     pub fn warning(message: impl Into<String>, span: Option<Span>) -> Self {
-        CompilerError { severity: Severity::Warning, code: None, message: message.into(), span, hint: None }
+        CompilerError {
+            severity: Severity::Warning,
+            code: None,
+            message: message.into(),
+            span,
+            hint: None,
+        }
     }
 
     pub fn with_hint(mut self, hint: impl Into<String>) -> Self {

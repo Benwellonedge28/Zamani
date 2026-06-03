@@ -1,4 +1,3 @@
-
 //! Zenith Universal Meta-Compiler (UMC) Source Map and Spans
 //!
 //! This module provides fundamental data structures for tracking source code
@@ -6,8 +5,8 @@
 //! Accurate source mapping is crucial for precise error reporting, debugging,
 //! and integrating with IDEs.
 
-use std::sync::Arc; // For shared ownership of source code in SourceMap
 use std::collections::HashMap;
+use std::sync::Arc; // For shared ownership of source code in SourceMap
 
 /// Unique identifier for a source file within a compilation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -40,8 +39,20 @@ pub struct Span {
 }
 
 impl Span {
-    pub fn new(file_id: FileId, start: BytePos, end: BytePos, start_line: u32, start_column: u32) -> Self {
-        Span { file_id, start, end, start_line, start_column }
+    pub fn new(
+        file_id: FileId,
+        start: BytePos,
+        end: BytePos,
+        start_line: u32,
+        start_column: u32,
+    ) -> Self {
+        Span {
+            file_id,
+            start,
+            end,
+            start_line,
+            start_column,
+        }
     }
 
     /// Creates a dummy span for cases where no real source location is available.
@@ -72,15 +83,16 @@ impl Span {
 
     /// Checks if this span contains another span.
     pub fn contains(&self, other: &Self) -> bool {
-        self.file_id == other.file_id &&
-        self.start <= other.start &&
-        self.end >= other.end
+        self.file_id == other.file_id && self.start <= other.start && self.end >= other.end
     }
 
     /// Merges two spans into a single span that covers both.
     /// Panics if the spans are from different files.
     pub fn merge(&self, other: &Self) -> Self {
-        assert_eq!(self.file_id, other.file_id, "Cannot merge spans from different files.");
+        assert_eq!(
+            self.file_id, other.file_id,
+            "Cannot merge spans from different files."
+        );
         Span {
             file_id: self.file_id,
             start: self.start.min(other.start),
@@ -165,6 +177,7 @@ impl SourceMap {
 
     /// Retrieves the content of a specific line from a file in the source map.
     pub fn get_source_line(&self, file_id: FileId, line_num: u32) -> Option<String> {
-        self.get_file(file_id).and_then(|file| file.get_line(line_num).map(String::from))
+        self.get_file(file_id)
+            .and_then(|file| file.get_line(line_num).map(String::from))
     }
 }
