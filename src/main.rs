@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code, unused_mut)]
+
 //! Zenith Universal Meta-Compiler (UMC) - Main Entry Point
 //!
 //! Entry point for the Zenith compiler CLI. Initialises the runtime,

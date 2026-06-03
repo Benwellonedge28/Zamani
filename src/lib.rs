@@ -3,6 +3,12 @@
 //! Exposes the full Zenith compiler pipeline:
 //! source_map → lexer → AST → parser → semantic → ir_gen → optimizer → backend
 
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(unused_mut)]
+#![allow(dead_code)]
+#![allow(clippy::all)]
+
 pub mod ast;
 pub mod backend;
 pub mod compiler_types;

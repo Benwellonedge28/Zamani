@@ -4,8 +4,7 @@
 //! Passes: DCE, CSE, constant folding, quantum gate cancellation,
 //! nano resource optimization, MTS timeline fusion, Sankofa access optimization.
 
-use crate::ir_gen::{IrFunction, IrInstruction, IrModule, IrRegister, IrValue};
-use crate::source_map::Span;
+use crate::ir_gen::{IrInstruction, IrModule, IrRegister, IrValue};
 use std::collections::{HashMap, HashSet};
 
 // ─── Errors ───────────────────────────────────────────────────────────────────

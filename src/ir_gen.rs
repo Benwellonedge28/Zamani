@@ -4,8 +4,6 @@
 //! optimization and backend code generation.
 
 use crate::ast::{Expression, Literal, Program, Statement};
-use crate::compiler_types::Type;
-use crate::source_map::Span;
 use std::collections::HashMap;
 
 // ─── IR types ─────────────────────────────────────────────────────────────────
@@ -313,10 +311,10 @@ impl IrGenerator {
             Expression::Prefix(_, op, operand) => {
                 let ov = self.emit_expression(operand, func);
                 let reg = self.fresh_reg();
-                use crate::lexer::TokenType::*;
+                use crate::lexer::TokenType;
                 let ins = match op {
-                    Bang => IrInstruction::Not(reg.clone(), ov),
-                    Minus => IrInstruction::Sub(reg.clone(), IrValue::ConstInt(0), ov),
+                    TokenType::Not => IrInstruction::Not(reg.clone(), ov),
+                    TokenType::Minus => IrInstruction::Sub(reg.clone(), IrValue::ConstInt(0), ov),
                     _ => IrInstruction::Nop,
                 };
                 func.push(ins);

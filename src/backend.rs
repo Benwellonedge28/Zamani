@@ -5,7 +5,7 @@
 //! MTS Bytecode, LLVM IR text, RISC-V assembly.
 
 use crate::compiler_types::{CompilationTarget, CompilerConfig};
-use crate::ir_gen::{IrFunction, IrInstruction, IrModule, IrRegister, IrType, IrValue};
+use crate::ir_gen::{IrInstruction, IrModule, IrRegister, IrValue};
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
