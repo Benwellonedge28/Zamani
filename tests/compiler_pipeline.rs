@@ -1,3 +1,12 @@
+#![allow(
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unreachable_code,
+    unused_comparisons
+)]
+
 //! Zenith Compiler Pipeline — End-to-End Integration Tests
 //!
 //! Tests the full pipeline: source → lex → parse → semantic → IR → optimize → codegen.

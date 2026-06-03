@@ -1,3 +1,12 @@
+#![allow(
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unreachable_code,
+    unused_comparisons
+)]
+
 //! Zenith Optimizer — Comprehensive Integration Tests
 
 use zenith_compiler::ir_gen::{IrFunction, IrInstruction, IrModule, IrRegister, IrType, IrValue};

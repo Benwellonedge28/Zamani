@@ -1,3 +1,12 @@
+#![allow(
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unreachable_code,
+    unused_comparisons
+)]
+
 //! Zenith IR Generator — Comprehensive Integration Tests
 
 use std::sync::Arc;
