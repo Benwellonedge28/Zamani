@@ -226,3 +226,51 @@ pub enum InterfaceMember {
         Expression,
     ),
 }
+
+// Helper to get the span of any expression
+    impl Expression {
+        pub fn span(&self) -> &Span {
+            match self {
+                Expression::Identifier(id) => &id.1,
+                Expression::Literal(lit) => match lit {
+                    Literal::Integer(_, span) => span,
+                    Literal::Float(_, span) => span,
+                    Literal::String(_, span) => span,
+                    Literal::Boolean(_, span) => span,
+                    Literal::Char(_, span) => span,
+                    Literal::Quantum(_, span) => span,
+                    Literal::Nano(_, span) => span,
+                    Literal::MTS(_, span) => span,
+                },
+                Expression::Prefix(span, _, _) => span,
+                Expression::Infix(span, _, _, _) => span,
+                Expression::If(span, _, _, _) => span,
+                Expression::Block(span, _) => span,
+                Expression::Call(span, _, _) => span,
+                Expression::Index(span, _, _) => span,
+                Expression::MemberAccess(span, _, _) => span,
+            }
+        }
+    }
+
+    // Helper to get the span of any TypeExpr
+    impl TypeExpr {
+        pub fn span(&self) -> &Span {
+            match self {
+                TypeExpr::Base(id) => &id.1,
+                TypeExpr::Generic(base, _) => base.span(),
+                TypeExpr::Array(base, _) => base.span(),
+                TypeExpr::FunctionType(_, ret) => ret.span(), // Simplified, should cover all
+                TypeExpr::DependentPi(_, _, ret) => ret.span(),
+                TypeExpr::DependentSigma(_, _, ret) => ret.span(),
+                TypeExpr::Linear(base) => base.span(),
+                TypeExpr::Affine(base) => base.span(),
+                TypeExpr::Effectful(base, _) => base.span(),
+                TypeExpr::Universe(_) => &Span::dummy(), // Placeholder for now
+                TypeExpr::SankofaHistory(base, _) => base.span(),
+                TypeExpr::SankofaConsensus(base) => base.span(),
+                TypeExpr::SankofaInterMemory(_, base) => base.span(),
+            }
+        }
+    }
+}
