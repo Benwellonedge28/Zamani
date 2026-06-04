@@ -12,19 +12,25 @@ pub mod crypto;
 pub mod db;
 pub mod distributed_ledger;
 pub mod documentation_system;
+pub mod editor_integration;
 pub mod external_services;
 pub mod fs;
 pub mod gui;
 pub mod human_agi_interaction;
 pub mod human_interface_devices;
 pub mod iot;
+pub mod math_foundations;
 pub mod meta_ops;
+pub mod mgns;
 pub mod ml;
 pub mod mts;
+pub mod music_language;
 pub mod nano;
 pub mod net;
+pub mod network;
 pub mod nlp;
 pub mod numeric;
+pub mod omniversal_sovereignty;
 pub mod quantum;
 pub mod reality;
 pub mod reflection;
@@ -32,40 +38,48 @@ pub mod robotics;
 pub mod sankofa;
 pub mod serialize;
 pub mod sync;
+pub mod test_framework;
 pub mod time;
 pub mod vision;
 pub mod web;
-// MISSING: omniversal_simulation  // temporarily disabled — Zenith-specific syntax
-// MISSING: on_device_agents  // temporarily disabled — Zenith-specific syntax
-// MISSING: resource_management  // temporarily disabled — Zenith-specific syntax
-// MISSING: developer_relations  // temporarily disabled — Zenith-specific syntax
-// MISSING: omniversal_nlp  // temporarily disabled — Zenith-specific syntax
-#[cfg(feature = "full")]
-pub mod omniversal_sovereignty;
-// MISSING: omniversal_nlp_adv  // temporarily disabled — Zenith-specific syntax
-// MISSING: multidimensional  // temporarily disabled — Zenith-specific syntax
-pub mod math_foundations;
-pub mod music_language;
-pub mod network;
-// MISSING: physical_hardware_control  // temporarily disabled — Zenith-specific syntax
-pub mod editor_integration;
-pub mod mgns;
-pub mod test_framework;
-// MISSING: system_design  // temporarily disabled — Zenith-specific syntax
-// MISSING: runtime_governance  // temporarily disabled
-// MISSING: omniversal_hashing  // temporarily disabled
-// MISSING: omniversal_generative_ai  // temporarily disabled
-// MISSING: design_principles  // temporarily disabled
-// MISSING: meta_programming_self_mod  // temporarily disabled
-// MISSING: programming_paradigms  // temporarily disabled
-// MISSING: web_development  // temporarily disabled
-// MISSING: omniversal_data_structures  // temporarily disabled
-// MISSING: omniversal_prompt_firewall  // temporarily disabled
-// MISSING: autonomous_workflow_agent_orchestration  // temporarily disabled
-// MISSING: omniversal_knowledge_semantic_reasoning  // temporarily disabled
-// MISSING: omniversal_perception_autonomous_action  // temporarily disabled
-// MISSING: omniversal_strategic_goal_management  // temporarily disabled
-// MISSING: omniversal_trust_identity_management  // temporarily disabled
+
+// --- Wired stdlib modules ---
+pub mod autonomous_workflow_agent_orchestration;
+pub mod concurrent;
+pub mod design_principles;
+pub mod developer_relations;
+pub mod documentation;
+pub mod io;
+pub mod meta_programming_self_mod;
+pub mod multidimensional;
+pub mod omniversal_advanced_data_science_mining;
+pub mod omniversal_alignment_orchestration_global_immutable_nexus;
+pub mod omniversal_autonomous_code_system_synthesis;
+pub mod omniversal_autonomous_deployment_orchestration_secure_hardening;
+pub mod omniversal_bionano_os;
+pub mod omniversal_data_structures;
+pub mod omniversal_generative_ai;
+pub mod omniversal_hallucination_rag;
+pub mod omniversal_hashing;
+pub mod omniversal_knowledge_semantic_reasoning;
+pub mod omniversal_nlp;
+pub mod omniversal_nlp_adv;
+pub mod omniversal_perception_autonomous_action;
+pub mod omniversal_prompt_firewall;
+pub mod omniversal_reality_metaphysical_engineering;
+pub mod omniversal_rogue_prevention_alignment;
+pub mod omniversal_self_sovereignty_existential_management;
+pub mod omniversal_simulation;
+pub mod omniversal_strategic_goal_management;
+pub mod omniversal_trust_identity_management;
+pub mod omniversal_zkp_privacy_computing;
+pub mod on_device_agents;
+pub mod physical_hardware_control;
+pub mod programming_paradigms;
+pub mod resource_management;
+pub mod runtime_governance;
+pub mod system_design;
+pub mod web_development;
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -133,8 +147,8 @@ pub fn initialize_stdlib() {
     omniversal_perception_autonomous_action::init_omniversal_perception_autonomous_action();
     omniversal_strategic_goal_management::init_omniversal_strategic_goal_management();
     omniversal_trust_identity_management::init_omniversal_trust_identity_management();
-    omniversal_rogue_prevention_alignment::init_omniversal_agi_alignment_sovereign_containment();
-    omniversal_living_character_narrative_evolution::init_omniversal_living_character_narrative_evolution();
+    omniversal_rogue_prevention_alignment::init_omniversal_rogue_prevention_alignment();
+    // omniversal_living_character_narrative_evolution::init (module not in tree)();
     omniversal_autonomous_deployment_orchestration_secure_hardening::init_omniversal_autonomous_deployment_orchestration_secure_hardening(); // Initialize OADOSH module
     println!("Zenith UMC Standard Library initialized.");
 }
@@ -143,7 +157,7 @@ pub fn initialize_stdlib() {
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
     omniversal_autonomous_deployment_orchestration_secure_hardening::shutdown_omniversal_autonomous_deployment_orchestration_secure_hardening(); // Shutdown OADOSH module
-    omniversal_living_character_narrative_evolution::shutdown_omniversal_living_character_narrative_evolution();
+                                                                                                                                                 // omniversal_living_character_narrative_evolution::shutdown (module not in tree)();
     omniversal_rogue_prevention_alignment::shutdown_omniversal_agi_alignment_sovereign_containment(
     );
     omniversal_trust_identity_management::shutdown_omniversal_trust_identity_management();

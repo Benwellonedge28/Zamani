@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Concurrency
 //!
 //! This module provides conceptual primitives and utilities for concurrent and
@@ -29,7 +28,9 @@ impl<T> Future<T> {
     {
         println!("[StdLib::concurrent] Creating a new Future...");
         // In a real implementation, this would execute `f` in a non-blocking way.
-        Future { _phantom: std::marker::PhantomData }
+        Future {
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     /// Conceptual: Awaits the completion of the future and returns its result.
@@ -48,21 +49,39 @@ pub struct Channel<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: Send + 'static + Default> Channel<T> { // Added Default bound for Receiver::recv
+impl<T: Send + 'static + Default> Channel<T> {
+    // Added Default bound for Receiver::recv
     pub fn new() -> (Sender<T>, Receiver<T>) {
         println!("[StdLib::concurrent] Creating a new Channel...");
-        (Sender { _phantom: std::marker::PhantomData }, Receiver { _phantom: std::marker::PhantomData }) 
+        (
+            Sender {
+                _phantom: std::marker::PhantomData,
+            },
+            Receiver {
+                _phantom: std::marker::PhantomData,
+            },
+        )
     }
 }
 
 /// Conceptual sender half of a channel.
-pub struct Sender<T> { _phantom: std::marker::PhantomData<T>, }
+pub struct Sender<T> {
+    _phantom: std::marker::PhantomData<T>,
+}
 impl<T: Send + 'static> Sender<T> {
-    pub fn send(&self, msg: T) { println!("[StdLib::concurrent] Sending message."); }
+    pub fn send(&self, msg: T) {
+        println!("[StdLib::concurrent] Sending message.");
+    }
 }
 
 /// Conceptual receiver half of a channel.
-pub struct Receiver<T> { _phantom: std::marker::PhantomData<T>, }
-impl<T: Send + 'static + Default> Receiver<T> { // Added Default bound
-    pub fn recv(&self) -> T { println!("[StdLib::concurrent] Receiving message."); T::default() } // Placeholder
+pub struct Receiver<T> {
+    _phantom: std::marker::PhantomData<T>,
+}
+impl<T: Send + 'static + Default> Receiver<T> {
+    // Added Default bound
+    pub fn recv(&self) -> T {
+        println!("[StdLib::concurrent] Receiving message.");
+        T::default()
+    } // Placeholder
 }

@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Omni-Documentation & Multi-Modal Content Engine
 //!
 //! This module provides a supremely autonomous documentation system capable of
@@ -6,24 +5,26 @@
 //! and any product compiled within it.
 //!
 //! It produces books, journals, news articles, technical reports, and multi-modal
-//! media (diagrams, videos, interactive demos) by performing a deep recursive 
-//! traversal of the system's architecture, knowledge base (Sankofa), and 
-//! historical evolution. It is designed to be "no-shortcut," explaining 
+//! media (diagrams, videos, interactive demos) by performing a deep recursive
+//! traversal of the system's architecture, knowledge base (Sankofa), and
+//! historical evolution. It is designed to be "no-shortcut," explaining
 //! every fundamental principle in exhaustive detail.
 
 use crate::ast::Identifier;
-use crate::stdlib::core::Result;
+use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
+use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner};
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::nlp::{NaturalLanguageProcessor, Summarizer};
-use crate::stdlib::ai_reasoning::{KnowledgeBase, Planner, FactObject};
-use crate::runtime::sankofa::{SasaKnowledge, KnowledgeId};
+use crate::stdlib::core::Result;
 use crate::stdlib::gui::Window;
 use crate::stdlib::meta_ops::MetaValue;
+use crate::stdlib::nlp::{NaturalLanguageProcessor, Summarizer};
 use crate::toolchain::meta_programming::ZenithCodeSnippet;
 
 /// Initializes the Omni-Documentation module.
 pub fn init_documentation_lib() {
-    println!("  - Initializing StdLib Omni-Documentation Engine (Exhaustive Knowledge Synthesis)...");
+    println!(
+        "  - Initializing StdLib Omni-Documentation Engine (Exhaustive Knowledge Synthesis)..."
+    );
 }
 
 /// Shuts down the Omni-Documentation module.
@@ -53,9 +54,16 @@ impl OmniDocEngine {
     /// Triggers the automatic generation of an exhaustive documentation suite.
     /// This method performs recursive introspection of the entire Zenith ecosystem
     /// or a specific compiled target.
-    pub fn generate_exhaustive_suite(&mut self, target_id: Identifier, format: DocFormat) -> Result<List<DocArtifact>, String> {
-        println!("[StdLib::Doc] Starting exhaustive generation for: {}. Mode: {:?}.", target_id.0, format);
-        
+    pub fn generate_exhaustive_suite(
+        &mut self,
+        target_id: Identifier,
+        format: DocFormat,
+    ) -> Result<List<DocArtifact>, String> {
+        println!(
+            "[StdLib::Doc] Starting exhaustive generation for: {}. Mode: {:?}.",
+            target_id.0, format
+        );
+
         // 1. Deep Knowledge Extraction
         // Traverses the AST, IR, and Sankofa history to gather every detail.
         let raw_knowledge = self.knowledge_retriever.query_recursive(&target_id)?;
@@ -73,11 +81,13 @@ impl OmniDocEngine {
         let mut artifacts = List::new();
         for chapter in doc_plan.sections.data {
             let content = self.synthesize_detailed_prose(&chapter, &raw_knowledge)?;
-            
+
             // 4. Multi-modal Integration
             // Automatically generate diagrams, charts, and media to accompany the text.
-            let media = self.media_generator.generate_contextual_media(&chapter, &content)?;
-            
+            let media = self
+                .media_generator
+                .generate_contextual_media(&chapter, &content)?;
+
             artifacts.push(DocArtifact {
                 title: chapter.title,
                 body: content,
@@ -89,10 +99,17 @@ impl OmniDocEngine {
         Ok(artifacts)
     }
 
-    fn synthesize_detailed_prose(&self, section: &DocSection, knowledge: &FactObject) -> Result<String, String> {
+    fn synthesize_detailed_prose(
+        &self,
+        section: &DocSection,
+        knowledge: &FactObject,
+    ) -> Result<String, String> {
         // Conceptual: Use internal AGI models to write long-form content.
         // It explains "Why" things are designed this way, not just "What".
-        Ok(format!("## {}\n Exhaustive explanation of Zenith logic...", section.title))
+        Ok(format!(
+            "## {}\n Exhaustive explanation of Zenith logic...",
+            section.title
+        ))
     }
 }
 
@@ -103,11 +120,20 @@ impl OmniDocEngine {
 pub struct MultiModalGenerator;
 
 impl MultiModalGenerator {
-    pub fn new() -> Self { MultiModalGenerator }
+    pub fn new() -> Self {
+        MultiModalGenerator
+    }
 
     /// Automatically synthesizes visual and interactive content to explain concepts.
-    pub fn generate_contextual_media(&self, section: &DocSection, text_content: &str) -> Result<List<MediaArtifact>, String> {
-        println!("[StdLib::Doc] Generating multi-modal media for section: {}.", section.title);
+    pub fn generate_contextual_media(
+        &self,
+        section: &DocSection,
+        text_content: &str,
+    ) -> Result<List<MediaArtifact>, String> {
+        println!(
+            "[StdLib::Doc] Generating multi-modal media for section: {}.",
+            section.title
+        );
         // Conceptual: call generateMedia tool for 'diagram', 'chart', 'image'.
         Ok(List::new())
     }

@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Input/Output
 //!
 //! This module provides conceptual APIs for performing input and output operations,
@@ -23,14 +22,21 @@ pub fn read_line() -> String {
 
 /// Writes a string to a conceptual file path.
 pub fn write_file(path: &str, content: &str) -> Result<(), String> {
-    println!("[StdLib::io] Writing to file '{}' ({} bytes)...".to_string(), path, content.len());
+    println!(
+        "[StdLib::io] Writing to file '{}' ({} bytes)...".to_string(),
+        path,
+        content.len()
+    );
     // In a real implementation, this would write to a file system.
     Ok(())
 }
 
 /// Reads the entire content of a conceptual file path.
 pub fn read_file(path: &str) -> Result<String, String> {
-    println!("[StdLib::io] Reading from file '{}' (conceptual)...".to_string(), path);
+    println!(
+        "[StdLib::io] Reading from file '{}' (conceptual)...".to_string(),
+        path
+    );
     // In a real implementation, this would read from a file system.
     Ok("conceptual file content".to_string())
 }
