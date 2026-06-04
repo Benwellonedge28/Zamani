@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal Reality Synthesizer & Metaphysical Engineering (ORSME) Engine
 //!

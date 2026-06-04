@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal Living Character & Narrative Evolution (OLCNE) Engine
 //!

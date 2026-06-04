@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Runtime: Sankofa - Omniversal Knowledge Fabric Module
 //!

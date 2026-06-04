@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Advanced Omniversal Natural Language Processing (ONLP-Adv) Module
 //!

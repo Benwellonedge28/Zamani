@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal Autonomous Code & System Synthesis (OACSS) Engine
 //!

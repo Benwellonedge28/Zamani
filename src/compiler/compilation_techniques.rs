@@ -1,3 +1,6 @@
+#![cfg(feature = "full")]
+#![allow(dead_code, unused_imports, unused_variables)]
+
 
 //! Zenith Universal Meta-Compiler (UMC): Compilation Techniques Module
 //!
@@ -269,26 +272,29 @@ pub mod nlp { // Dummy nlp module elements needed for compilation
     // Define other necessary structs/enums if needed by other modules
 }
 
-extension ml {
-    pub struct Model { pub id: Identifier }
-    impl Model {
-        pub fn new(id: Identifier) -> Self { Model { id } }
-        pub fn predict(&self, input: &Tensor<f32>) -> Result<Tensor<f32>, String> { Ok(Tensor::new(List::new())) }
-    }
-    pub struct Tensor<T> { pub data: List<T> }
-    impl<T> Tensor<T> {
-        pub fn new(data: List<T>) -> Self { Tensor { data } }
-        pub fn new_from_map(map: Map<String, MetaValue>) -> Self { Tensor { data: List::new() } }
-    }
-}
+// ZENITH_SYNTAX: extension ml {
+//     pub struct Model { pub id: Identifier }
+//     impl Model {
+//         pub fn new(id: Identifier) -> Self { Model { id } }
+//         pub fn predict(&self, input: &Tensor<f32>) -> Result<Tensor<f32>, String> { Ok(Tensor::new(List::new())) }
+//     }
+//     pub struct Tensor<T> { pub data: List<T> }
+//     impl<T> Tensor<T> {
+//         pub fn new(data: List<T>) -> Self { Tensor { data } }
+//         pub fn new_from_map(map: Map<String, MetaValue>) -> Self { Tensor { data: List::new() } }
+//     }
+// }
 
-extension ai_reasoning {
-    pub struct Planner { pub id: Identifier }
-    impl Planner {
-        pub fn new() -> Self { Planner { id: Identifier("default_planner".to_string(), Span::dummy()) } }
-    }
-}
 
-extension nimbus::os {
-    fn get_current_context_id() -> NimbusContextId { 0 }
-}
+// ZENITH_SYNTAX: extension ai_reasoning {
+//     pub struct Planner { pub id: Identifier }
+//     impl Planner {
+//         pub fn new() -> Self { Planner { id: Identifier("default_planner".to_string(), Span::dummy()) } }
+//     }
+// }
+
+
+// ZENITH_SYNTAX: extension nimbus::os {
+//     fn get_current_context_id() -> NimbusContextId { 0 }
+// }
+

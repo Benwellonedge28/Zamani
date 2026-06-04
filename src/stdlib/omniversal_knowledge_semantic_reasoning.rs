@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal Knowledge Graph & Semantic Reasoning (OKGSR) Module
 //!

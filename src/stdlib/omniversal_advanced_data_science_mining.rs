@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal Advanced Data Science & Mining (OADSM) Engine
 //!

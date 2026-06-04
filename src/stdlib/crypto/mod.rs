@@ -9,7 +9,6 @@ pub mod hashing;
 pub mod signature;
 pub mod tls;
 pub mod quantum_safe_primitives;
-pub mod quantum_identity; // New: Quantum-Secure Identity & Trust Fabric
 
 // Re-export core types to simplify usage in other modules
 pub use self::hashing::{Crypto, Hash};
@@ -28,15 +27,13 @@ pub fn init_crypto() {
     hashing::init_hashing();
     signature::init_signature();
     tls::init_tls();
-    quantum_safe_primitives::init_quantum_safe_primitives();
-    quantum_identity::init_quantum_identity(); // Initialize Quantum Identity
+    quantum_safe_primitives::init_quantum_safe_primitives(); // Initialize Quantum Identity
     println!("Zenith Cryptography Module initialized.");
 }
 
 /// Shuts down all cryptography components.
 pub fn shutdown_crypto() {
-    println!("Shutting down Zenith Cryptography Module...");
-    quantum_identity::shutdown_quantum_identity(); // Shutdown Quantum Identity
+    println!("Shutting down Zenith Cryptography Module..."); // Shutdown Quantum Identity
     quantum_safe_primitives::shutdown_quantum_safe_primitives();
     tls::shutdown_tls();
     signature::shutdown_signature();

@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Runtime: Universal Runtime & POCO-REAF Engine
 //!

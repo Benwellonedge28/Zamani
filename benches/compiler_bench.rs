@@ -6,11 +6,16 @@ use std::hint::black_box;
 
 fn lex_simple(source: &str) {
     use std::sync::Arc;
-    use zenith_compiler::lexer::Lexer;
+    use zenith_compiler::lexer::{Lexer, TokenType};
     use zenith_compiler::source_map::{FileId, SourceFile};
     let sf = Arc::new(SourceFile::new("<bench>".to_string(), source.to_string()));
     let mut lex = Lexer::new(FileId::new(1), sf);
-    while lex.next_token().is_some() {}
+    loop {
+        let tok = lex.next_token();
+        if tok.token_type == TokenType::EOF {
+            break;
+        }
+    }
 }
 
 fn parse_simple(source: &str) {

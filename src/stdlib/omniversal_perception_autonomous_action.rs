@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal Perception & Autonomous Action (OPAA) Module
 //!

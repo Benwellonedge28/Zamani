@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code, unused_mut)]
+
 
 //! Zenith Language Specification: Declarative System Directives
 //!
@@ -37,16 +39,16 @@ pub fn shutdown_declarative_system_directives_keywords() {
 /// Conceptual representation of Zenith's AST nodes for self-adjustment statements.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelfAdjustmentAst {
-    SelfAdjust(Identifier, List<AdjustmentRuleAst>), // e.g., self_adjust MyComponent { ... rules ... }
+    SelfAdjust(Identifier, Vec<AdjustmentRuleAst>), // e.g., self_adjust MyComponent { ... rules ... }
     AdjustmentRule(Expression, Statement), // when condition then action
 }
 
 /// Conceptual representation of Zenith's AST nodes for versioning statements.
 #[derive(Debug, Clone, PartialEq)]
 pub enum VersioningAst {
-    Version(Identifier, List<VersionRecordAst>), // e.g., version MyModule { ... records ... }
+    Version(Identifier, Vec<VersionRecordAst>), // e.g., version MyModule { ... records ... }
     VersionRecord(Identifier, Identifier, Identifier, Expression), // record 1.0 created by Admin at timestamp
-    VersionChangeLog(Identifier, List<ChangeLogEntryAst>), // changelog MyModule { ... changes ... }
+    VersionChangeLog(Identifier, Vec<ChangeLogEntryAst>), // changelog MyModule { ... changes ... }
     ChangeLogEntry(String, Identifier, Expression), // change "bugfix" made by Dev at timestamp
 }
 
@@ -83,18 +85,18 @@ impl DeclarativeSystemDirectivesSemanticAnalyzer {
 pub struct DeclarativeSystemDirectivesIrGenerator;
 
 impl DeclarativeSystemDirectivesIrGenerator {
-    pub fn generate_ir_self_adjust(&self, ast_node: &SelfAdjustmentAst) -> Result<List<IrInstruction>, String> {
+    pub fn generate_ir_self_adjust(&self, ast_node: &SelfAdjustmentAst) -> Result<Vec<IrInstruction>, String> {
         println!("[LangSpec::DeclSysDir] Generating IR for self_adjust statement: {:?}.".to_string(), ast_node);
         // Conceptual:
         // Translate into IR instructions that configure the `toolchain::self_evolution` engine,
         // defining autonomous monitoring and response rules.
-        Ok(List::new()))
+        Ok(vec![])
     }
 
-    pub fn generate_ir_versioning(&self, ast_node: &VersioningAst) -> Result<List<IrInstruction>, String> {
+    pub fn generate_ir_versioning(&self, ast_node: &VersioningAst) -> Result<Vec<IrInstruction>, String> {
         println!("[LangSpec::DeclSysDir] Generating IR for versioning statement: {:?}.".to_string(), ast_node);
         // Conceptual:
         // Translate into IR instructions that interact with Sankofa to store version metadata and changelogs.
-        Ok(List::new()))
+        Ok(vec![])
     }
 }

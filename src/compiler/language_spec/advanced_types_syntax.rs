@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code, unused_mut)]
+
 
 //! Zenith Language Specification: Advanced Type System Keywords
 //!
@@ -34,13 +36,13 @@ pub fn shutdown_advanced_types_syntax() {
 /// Conceptual representation of Zenith's AST nodes for advanced type constructs.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AdvancedTypeAst {
-    DependentType(Type, List<Parameter>),     // e.g., List(size: N) of int;
+    DependentType(Type, Vec<Parameter>),     // e.g., List(size: N) of int;
     LinearType(Type),                         // e.g., Linear[MyResource]; (ensures single use)
-    TypeClassDefinition(Identifier, List<TypeParameter>, List<TraitBound>), // e.g., type class Eq<A> where A: HasEq { ... }
-    TypeClassInstance(Identifier, Type, List<IrInstruction>), // e.g., instance Eq<int> { ... }
-    HigherKindedType(Identifier, List<TypeParameter>), // e.g., F<A> where F is a type constructor
+    TypeClassDefinition(Identifier, Vec<TypeParameter>, Vec<TraitBound>), // e.g., type class Eq<A> where A: HasEq { ... }
+    TypeClassInstance(Identifier, Type, Vec<IrInstruction>), // e.g., instance Eq<int> { ... }
+    HigherKindedType(Identifier, Vec<TypeParameter>), // e.g., F<A> where F is a type constructor
     SelfType(Type),                           // e.g., self MyClass;
-    TypeFamily(Identifier, List<TypeParameter>), // e.g., type Family<A> = B;
+    TypeFamily(Identifier, Vec<TypeParameter>), // e.g., type Family<A> = B;
     SingletonType(Type),                      // type MyLiteralType = "hello";
     FunctionalDependency(Identifier, Identifier), // A -> B (type A determines type B)
     VarianceAnnotation(TypeParameter, Variance), // in T, out U
@@ -75,7 +77,7 @@ impl AdvancedTypesSemanticAnalyzer {
 pub struct AdvancedTypesIrGenerator;
 
 impl AdvancedTypesIrGenerator {
-    pub fn generate_ir(&self, ast_node: &AdvancedTypeAst) -> Result<List<IrInstruction>, String> {
+    pub fn generate_ir(&self, ast_node: &AdvancedTypeAst) -> Result<Vec<IrInstruction>, String> {
         println!("[LangSpec::AdvTypes] Generating IR for advanced type construct: {:?}.".to_string(), ast_node);
         // Conceptual:
         // Translate type-level constructs into IR that guides runtime checks (if necessary)

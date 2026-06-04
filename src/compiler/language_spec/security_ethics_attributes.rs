@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code, unused_mut)]
+
 
 //! Zenith Language Specification: Security & Ethics Attributes
 //!
@@ -39,10 +41,10 @@ pub fn shutdown_security_ethics_attributes() {
 /// These attributes would be attached to various language constructs (modules, classes, functions, fields).
 #[derive(Debug, Clone, PartialEq)]
 pub enum SecurityEthicsAttributeAst {
-    Safety(List<AttributeArgument>),       // #safety(level="critical", rules="no_unintended_physical_harm")
-    Security(List<AttributeArgument>),     // #security(mode="zero_trust", encryption="homomorphic")
-    Ethics(List<AttributeArgument>),       // #ethics(principles="do_no_harm", bias_mitigation_level="high")
-    Governance(List<AttributeArgument>),   // #governance(compliance="GDPR", audit_frequency="daily")
+    Safety(Vec<AttributeArgument>),       // #safety(level="critical", rules="no_unintended_physical_harm")
+    Security(Vec<AttributeArgument>),     // #security(mode="zero_trust", encryption="homomorphic")
+    Ethics(Vec<AttributeArgument>),       // #ethics(principles="do_no_harm", bias_mitigation_level="high")
+    Governance(Vec<AttributeArgument>),   // #governance(compliance="GDPR", audit_frequency="daily")
 }
 
 /// Conceptual semantic analysis for Security & Ethics attributes.
@@ -64,7 +66,7 @@ impl SecurityEthicsAttributesSemanticAnalyzer {
 pub struct SecurityEthicsAttributesIrGenerator;
 
 impl SecurityEthicsAttributesIrGenerator {
-    pub fn generate_ir(&self, attribute: &SecurityEthicsAttributeAst, attached_to_ir: &List<IrInstruction>) -> Result<List<IrInstruction>, String> {
+    pub fn generate_ir(&self, attribute: &SecurityEthicsAttributeAst, attached_to_ir: &Vec<IrInstruction>) -> Result<Vec<IrInstruction>, String> {
         println!("[LangSpec::SecEth] Generating IR for attribute {:?} applied to IR block.".to_string(), attribute);
         // Conceptual:
         // 1. Inject runtime checks (e.g., E.V.A.S. hooks) into the generated IR.

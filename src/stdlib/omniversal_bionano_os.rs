@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal Bio-Nano Operating System (OBNOS) Module
 //!

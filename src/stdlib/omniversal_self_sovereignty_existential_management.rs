@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal Self-Sovereignty & Existential Management (OSSEM) Engine
 //!

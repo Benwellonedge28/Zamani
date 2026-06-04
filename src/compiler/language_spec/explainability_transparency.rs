@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code, unused_mut)]
+
 
 //! Zenith Language Specification: Explainability & Transparency Keywords
 //!
@@ -59,7 +61,7 @@ impl ExplainabilitySemanticAnalyzer {
 pub struct ExplainabilityIrGenerator;
 
 impl ExplainabilityIrGenerator {
-    pub fn generate_ir(&self, ast_node: &ExplainabilityStatementAst) -> Result<List<IrInstruction>, String> {
+    pub fn generate_ir(&self, ast_node: &ExplainabilityStatementAst) -> Result<Vec<IrInstruction>, String> {
         println!("[LangSpec::Explain] Generating IR for explainability statement: {:?}.", ast_node);
         // Conceptual:
         // Translate these keywords into sequences of IR instructions that interact

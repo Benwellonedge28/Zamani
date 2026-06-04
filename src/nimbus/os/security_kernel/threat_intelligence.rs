@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Nimbus OS: Security Kernel - Autonomous Threat Intelligence Module
 //!

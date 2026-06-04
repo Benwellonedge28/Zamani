@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Universal Meta-Compiler (UMC) Standard Library
 //!

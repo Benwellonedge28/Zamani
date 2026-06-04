@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Quantum-Secure Identity & Trust Fabric Module
 //!

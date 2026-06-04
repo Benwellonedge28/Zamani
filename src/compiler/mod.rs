@@ -6,12 +6,9 @@
 //! compiler pipeline and integrates advanced features like optimization,
 //! formal verification, and multi-paradigm support.
 
-pub mod frontend; // Lexer, Parser, AST, Semantic Analysis
-pub mod ir_gen;   // Intermediate Representation Generation
-pub mod optimizer; // Code Optimization
-pub mod backend;  // Target-specific Code Generation
 pub mod oop_advanced; // Advanced OOP Features
 pub mod language_spec; // Zenith Language Specification modules
+#[cfg(feature = "full")]
 pub mod compilation_techniques; // For Hybrid Compilation Strategies
 pub mod optimization_strategies; // For managing and applying diverse optimization passes
 

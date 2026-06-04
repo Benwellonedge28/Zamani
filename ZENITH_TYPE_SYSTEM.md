@@ -1,1 +1,39 @@
-Type System: ZENITH Universal Trinity Type System v2.0 — ALL types from all three languages unified: ZENITH ORIGINAL (retained): Pi-types Π(x:T)T, Sigma-types Σ(x:T)T, Identity Id(T,e,e), Universe hierarchy Type_N, Kind, Sort, Prop, Qubit, QReg[N], Superposition<T>, Entangled<A,B>, QMeasured<T>, Atom<E>, Molecule<F>, NanoAgent<C>, Archaeve<T>, MtsSlice<N>, linear T, affine T, T/[effects], all trait bounds, generic params, lifetime annotations ABSORBED FROM NIMBUS: dependent ∀/∃, refinement {x:T|pred}, session Session<P>, modal □T/◇T, FHE Encrypted<T>, AI ai<Narrow|General|Super>, Hive<T>/Bee<T>/Nectar<T>, cell types, biological types, consciousness_state, emotion_type, prophecy_type<T>, morphic_field<T>, dna_sequence, membrane_type<O,I>, Foam<T>, gradual/dynamic any/dyn, row-polymorphic {..row}, higher-kinded F<_>, History<D,Y> (from Sankofa via NIMBUS) ABSORBED FROM SANKOFA: History<Domain,Span>, ConsensusTrue<T>, Wisdom<T,Source>, AncestralPattern<T>, InterMemory<Lang,T>, TemporalLearning<T>, Zamani<T>, Sasa<T>, Mwanzo<T>, Consensus<T,Quorum> COMBINED: The most complete type system in the history of computing. All three languages share the same type system — programs are fully interoperable at the type level across all three languages.
+# Zenith Type System
+
+## Primitive Types
+
+- `Int` — 64-bit signed integer
+- `Float` — 64-bit IEEE 754 float
+- `Bool` — boolean (true/false)
+- `Str` — UTF-8 string
+- `Void` — unit/void return type
+- `Never` — bottom type (diverging functions)
+
+## Composite Types
+
+- `Array<T>` — fixed-size homogeneous array
+- `List<T>` — dynamic list
+- `Map<K, V>` — hash map
+- `Tuple<T...>` — heterogeneous tuple
+- `Option<T>` — nullable/optional value
+- `Result<T, E>` — fallible computation
+
+## Advanced Types
+
+- `Π(x:T) U` — dependent function (Pi type)
+- `Σ(x:T) U` — dependent pair (Sigma type)
+- `Id(T, a, b)` — identity/equality type
+- `linear T` — linear type (must be used exactly once)
+- `affine T` — affine type (used at most once)
+- `Qubit` — quantum bit
+- `QReg[N]` — N-qubit quantum register
+- `Superposition<T>` — superposed value
+- `Entangled<A, B>` — entangled pair
+
+## Type Inference
+
+Zenith uses bidirectional type inference. Type annotations are optional for local bindings but required for function signatures.
+
+## Subtyping
+
+Zenith uses structural subtyping for interfaces and nominal subtyping for classes.

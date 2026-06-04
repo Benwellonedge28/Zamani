@@ -6,8 +6,7 @@
 //! description language (HDL) integration.
 
 pub mod meta_programming; // Autonomous Code Generation
-pub mod self_evolution;   // Autonomous Self-Adjustment and Improvement
-pub mod hdl;              // Hardware Description Language Integration
+// (gated) pub mod self_evolution;
 pub mod formal_verification; // Formal Verification Engine
 pub mod autonomous_toolchain; // The Orchestrator for the entire toolchain
 pub mod zbe_connector; // Zenith Bridge Extension (ZBE) Connector for IDE/Editor integration
@@ -17,7 +16,6 @@ pub mod hyper_ascension; // New: For 1,000,000x recursive self-improvement
 pub fn initialize_toolchain() {
     println!("Initializing Zenith Toolchain...");
     meta_programming::init_meta_programming();
-    self_evolution::init_self_evolution();
     hdl::init_hdl();
     formal_verification::init_formal_verification();
     autonomous_toolchain::init_autonomous_toolchain();
@@ -34,7 +32,6 @@ pub fn shutdown_toolchain() {
     autonomous_toolchain::shutdown_autonomous_toolchain();
     formal_verification::shutdown_formal_verification();
     hdl::shutdown_hdl();
-    self_evolution::shutdown_self_evolution();
     meta_programming::shutdown_meta_programming();
     println!("Zenith Toolchain shut down.");
 }

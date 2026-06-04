@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal Generative AI & Reality Synthesis (OGAI-RS) Module
 //!

@@ -3,80 +3,70 @@
 //!
 //! This module aggregates and manages all standard library components for Zenith.
 
-// TODO: pub mod core;
-// TODO: pub mod collections;
-// TODO: pub mod quantum;
-// TODO: pub mod nano;
-// TODO: pub mod mts;
-// TODO: pub mod sankofa;
-// TODO: pub mod reflection;
-// TODO: pub mod ml;
-// TODO: pub mod net;
-// TODO: pub mod fs;
-// TODO: pub mod sync;
-// TODO: pub mod crypto;
-// TODO: pub mod serialize;
-// TODO: pub mod gui;
-// TODO: pub mod db;
-// TODO: pub mod time;
-// TODO: pub mod numeric;
-// TODO: pub mod web;
-// TODO: pub mod ai_reasoning;
-// TODO: pub mod nlp;
-// TODO: pub mod vision;
-// TODO: pub mod robotics;
-// TODO: pub mod agents;
-// TODO: pub mod meta_ops;
-// TODO: pub mod external_services;
-// TODO: pub mod agi_governance;
-// TODO: pub mod human_agi_interaction;
-// TODO: pub mod reality;
-// TODO: pub mod distributed_ledger;
-// TODO: pub mod iot;
-// TODO: pub mod human_interface_devices;
-// TODO: pub mod chat_architect_agent;
-// TODO: pub mod documentation_system;
-// TODO: pub mod omniversal_simulation;  // temporarily disabled — Zenith-specific syntax
-// TODO: pub mod on_device_agents;  // temporarily disabled — Zenith-specific syntax
-// TODO: pub mod resource_management;  // temporarily disabled — Zenith-specific syntax
-// TODO: pub mod developer_relations;  // temporarily disabled — Zenith-specific syntax
-// TODO: pub mod omniversal_nlp;  // temporarily disabled — Zenith-specific syntax
-// TODO: pub mod omniversal_sovereignty;
-// TODO: pub mod omniversal_nlp_adv;  // temporarily disabled — Zenith-specific syntax
-// TODO: pub mod multidimensional;  // temporarily disabled — Zenith-specific syntax
-// TODO: pub mod math_foundations;
-// TODO: pub mod network;
-// TODO: pub mod music_language;
-// TODO: pub mod physical_hardware_control;  // temporarily disabled — Zenith-specific syntax
-// TODO: pub mod mgns;
-// TODO: pub mod test_framework;
-// TODO: pub mod editor_integration;
-// TODO: pub mod system_design;  // temporarily disabled — Zenith-specific syntax
-// TODO: pub mod runtime_governance;  // temporarily disabled
-// TODO: pub mod omniversal_hashing;  // temporarily disabled
-// TODO: pub mod omniversal_generative_ai;  // temporarily disabled
-// TODO: pub mod design_principles;  // temporarily disabled
-// TODO: pub mod meta_programming_self_mod;  // temporarily disabled
-// TODO: pub mod programming_paradigms;  // temporarily disabled
-// TODO: pub mod web_development;  // temporarily disabled
-// TODO: pub mod omniversal_data_structures;  // temporarily disabled
-// TODO: pub mod omniversal_prompt_firewall;  // temporarily disabled
-// TODO: pub mod autonomous_workflow_agent_orchestration;  // temporarily disabled
-// TODO: pub mod omniversal_knowledge_semantic_reasoning;  // temporarily disabled
-// TODO: pub mod omniversal_perception_autonomous_action;  // temporarily disabled
-// TODO: pub mod omniversal_strategic_goal_management;  // temporarily disabled
-// TODO: pub mod omniversal_trust_identity_management;  // temporarily disabled
-// TODO: pub mod omniversal_hallucination_rag;
-// TODO: pub mod omniversal_bionano_os;
-// TODO: pub mod omniversal_reality_metaphysical_engineering;
-// TODO: pub mod omniversal_self_sovereignty_existential_management;
-// TODO: pub mod omniversal_zkp_privacy_computing;
-// TODO: pub mod omniversal_rogue_prevention_alignment;
-// TODO: pub mod omniversal_alignment_orchestration_global_immutable_nexus;
-// (missing file) // pub mod omniversal_living_character_narrative_evolution;
-// TODO: pub mod omniversal_autonomous_code_system_synthesis;
-// TODO: pub mod omniversal_advanced_data_science_mining;
-// TODO: pub mod omniversal_autonomous_deployment_orchestration_secure_hardening; // New: For Omniversal Autonomous Deployment Orchestration & Secure Hardening (OADOSH)
+pub mod core;
+pub mod collections;
+pub mod quantum;
+pub mod nano;
+pub mod mts;
+pub mod sankofa;
+pub mod reflection;
+pub mod ml;
+pub mod net;
+pub mod fs;
+pub mod sync;
+pub mod crypto;
+pub mod serialize;
+pub mod gui;
+pub mod db;
+pub mod time;
+pub mod numeric;
+pub mod web;
+pub mod ai_reasoning;
+pub mod nlp;
+pub mod vision;
+pub mod robotics;
+pub mod agents;
+pub mod meta_ops;
+pub mod external_services;
+pub mod agi_governance;
+pub mod human_agi_interaction;
+pub mod reality;
+pub mod distributed_ledger;
+pub mod iot;
+pub mod human_interface_devices;
+pub mod chat_architect_agent;
+pub mod documentation_system;
+// MISSING: omniversal_simulation  // temporarily disabled — Zenith-specific syntax
+// MISSING: on_device_agents  // temporarily disabled — Zenith-specific syntax
+// MISSING: resource_management  // temporarily disabled — Zenith-specific syntax
+// MISSING: developer_relations  // temporarily disabled — Zenith-specific syntax
+// MISSING: omniversal_nlp  // temporarily disabled — Zenith-specific syntax
+#[cfg(feature = "full")]
+pub mod omniversal_sovereignty;
+// MISSING: omniversal_nlp_adv  // temporarily disabled — Zenith-specific syntax
+// MISSING: multidimensional  // temporarily disabled — Zenith-specific syntax
+pub mod math_foundations;
+pub mod network;
+pub mod music_language;
+// MISSING: physical_hardware_control  // temporarily disabled — Zenith-specific syntax
+pub mod mgns;
+pub mod test_framework;
+pub mod editor_integration;
+// MISSING: system_design  // temporarily disabled — Zenith-specific syntax
+// MISSING: runtime_governance  // temporarily disabled
+// MISSING: omniversal_hashing  // temporarily disabled
+// MISSING: omniversal_generative_ai  // temporarily disabled
+// MISSING: design_principles  // temporarily disabled
+// MISSING: meta_programming_self_mod  // temporarily disabled
+// MISSING: programming_paradigms  // temporarily disabled
+// MISSING: web_development  // temporarily disabled
+// MISSING: omniversal_data_structures  // temporarily disabled
+// MISSING: omniversal_prompt_firewall  // temporarily disabled
+// MISSING: autonomous_workflow_agent_orchestration  // temporarily disabled
+// MISSING: omniversal_knowledge_semantic_reasoning  // temporarily disabled
+// MISSING: omniversal_perception_autonomous_action  // temporarily disabled
+// MISSING: omniversal_strategic_goal_management  // temporarily disabled
+// MISSING: omniversal_trust_identity_management  // temporarily disabled
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
@@ -144,16 +134,8 @@ pub fn initialize_stdlib() {
     omniversal_perception_autonomous_action::init_omniversal_perception_autonomous_action();
     omniversal_strategic_goal_management::init_omniversal_strategic_goal_management();
     omniversal_trust_identity_management::init_omniversal_trust_identity_management();
-    omniversal_hallucination_rag::init_omniversal_hallucination_rag();
-    omniversal_bionano_os::init_omniversal_bionano_os();
-    omniversal_reality_metaphysical_engineering::init_omniversal_reality_metaphysical_engineering();
-    omniversal_self_sovereignty_existential_management::init_omniversal_self_sovereignty_existential_management();
-    omniversal_zkp_privacy_computing::init_omniversal_zkp_privacy_computing();
     omniversal_rogue_prevention_alignment::init_omniversal_agi_alignment_sovereign_containment();
-    omniversal_alignment_orchestration_global_immutable_nexus::init_omniversal_alignment_orchestration_global_immutable_nexus();
     omniversal_living_character_narrative_evolution::init_omniversal_living_character_narrative_evolution();
-    omniversal_autonomous_code_system_synthesis::init_omniversal_autonomous_code_system_synthesis();
-    omniversal_advanced_data_science_mining::init_omniversal_advanced_data_science_mining();
     omniversal_autonomous_deployment_orchestration_secure_hardening::init_omniversal_autonomous_deployment_orchestration_secure_hardening(); // Initialize OADOSH module
     println!("Zenith UMC Standard Library initialized.");
 }
@@ -162,16 +144,8 @@ pub fn initialize_stdlib() {
 pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
     omniversal_autonomous_deployment_orchestration_secure_hardening::shutdown_omniversal_autonomous_deployment_orchestration_secure_hardening(); // Shutdown OADOSH module
-    omniversal_advanced_data_science_mining::shutdown_omniversal_advanced_data_science_mining();
-    omniversal_autonomous_code_system_synthesis::shutdown_omniversal_autonomous_code_system_synthesis();
     omniversal_living_character_narrative_evolution::shutdown_omniversal_living_character_narrative_evolution();
-    omniversal_alignment_orchestration_global_immutable_nexus::shutdown_omniversal_alignment_orchestration_global_immutable_nexus();
     omniversal_rogue_prevention_alignment::shutdown_omniversal_agi_alignment_sovereign_containment();
-    omniversal_zkp_privacy_computing::shutdown_omniversal_zkp_privacy_computing();
-    omniversal_self_sovereignty_existential_management::shutdown_omniversal_self_sovereignty_existential_management();
-    omniversal_reality_metaphysical_engineering::shutdown_omniversal_reality_metaphysical_engineering();
-    omniversal_bionano_os::shutdown_omniversal_bionano_os();
-    omniversal_hallucination_rag::shutdown_omniversal_hallucination_rag();
     omniversal_trust_identity_management::shutdown_omniversal_trust_identity_management();
     omniversal_strategic_goal_management::shutdown_omniversal_strategic_goal_management();
     omniversal_perception_autonomous_action::shutdown_omniversal_perception_autonomous_action();

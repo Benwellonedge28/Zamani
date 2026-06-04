@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code, unused_mut)]
+
 
 //! Zenith Language Specification: AI Cognition Keywords
 //!
@@ -65,7 +67,7 @@ impl AiCognitionSemanticAnalyzer {
 pub struct AiCognitionIrGenerator;
 
 impl AiCognitionIrGenerator {
-    pub fn generate_ir(&self, ast_node: &AiStatementAst) -> Result<List<IrInstruction>, String> {
+    pub fn generate_ir(&self, ast_node: &AiStatementAst) -> Result<Vec<IrInstruction>, String> {
         println!("[LangSpec::AICog] Generating IR for AI statement: {:?}.".to_string(), ast_node);
         // Conceptual:
         // Translate high-level AI keywords into sequences of IR instructions that

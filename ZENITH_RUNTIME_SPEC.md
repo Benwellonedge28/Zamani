@@ -1,1 +1,30 @@
-Runtime Spec: NIMBUS programs execute on: Zenith POCO-REAF Runtime v1.0 (primary). POCO-REAF provides: GC-free execution, algebraic effect dispatch, quantum circuit simulation, nano-agent orchestration, actor mailbox scheduler, async task executor, FFI bridge, hot-reload, REAF self-healing loop. Sankofa layer wraps POCO-REAF with temporal learning, memory consolidation, and optimization feedback.
+# Zenith Runtime Specification
+
+## Overview
+
+The Zenith Universal Trinity Runtime (ZUTR) supports three execution modes: native binary, WASM, and interpreted VM.
+
+## Runtime Layers
+
+1. *Core Runtime* — memory management, stack frames, call dispatch
+2. *Standard Library Bridge* — connects compiled IR to stdlib implementations
+3. *FFI Layer* — foreign function interface for C/C++/Python interop
+4. *Safety Kernel* — bounds checking, null safety, OOM handling
+
+## Memory Model
+
+- Stack-allocated values for primitives
+- Reference-counted heap for strings and collections
+- Arena allocator for compiler-internal structures
+
+## Concurrency
+
+- Green threads via cooperative scheduling
+- Channel-based message passing (actor model)
+- No shared mutable state without explicit synchronization
+
+## Targets
+
+- `native` — x86_64, ARM64
+- `wasm32-unknown-unknown` — WebAssembly
+- `zenith-vm` — interpreted mode for tooling/REPL

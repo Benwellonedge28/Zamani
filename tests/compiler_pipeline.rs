@@ -193,7 +193,7 @@ fn test_constant_folding_in_pipeline() {
     let stats = opt.run_all(&mut module);
     // 6*7 should be folded to 42
     assert!(
-        stats.instructions_removed > 0 || stats.constants_folded >= 0,
+        stats.instructions_removed > 0 || stats.constants_folded > 0,
         "Optimizer should run at least one pass"
     );
 }

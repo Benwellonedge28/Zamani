@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Nimbus OS: Zenith Administration Interface Module
 //!

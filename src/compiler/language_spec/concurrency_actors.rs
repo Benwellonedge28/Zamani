@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code, unused_mut)]
+
 
 //! Zenith Language Specification: Concurrency with Actors
 //!
@@ -41,7 +43,7 @@ pub struct ActorDefinitionAst {
     pub state_fields: Map<Identifier, Type>, // Internal state of the actor
     pub message_handlers: Map<Identifier, Statement>, // Methods for handling messages
     pub behavior_logic: Statement, // Initial/main logic of the actor
-    pub capabilities_granted: List<CapabilityToken>, // Nimbus OS capabilities
+    pub capabilities_granted: Vec<CapabilityToken>, // Nimbus OS capabilities
 }
 
 /// Conceptual semantic analysis for actor declarations.
@@ -63,7 +65,7 @@ impl ConcurrencyActorsSemanticAnalyzer {
 pub struct ConcurrencyActorsIrGenerator;
 
 impl ConcurrencyActorsIrGenerator {
-    pub fn generate_ir(&self, actor_def: &ActorDefinitionAst) -> Result<List<IrInstruction>, String> {
+    pub fn generate_ir(&self, actor_def: &ActorDefinitionAst) -> Result<Vec<IrInstruction>, String> {
         println!("[LangSpec::Actors] Generating IR for actor: {}.".to_string(), actor_def.name.0);
         // Conceptual:
         // 1. Generate IR for the actor's state initialization.

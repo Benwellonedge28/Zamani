@@ -6,12 +6,10 @@
 //! and concurrency.
 
 pub mod memory_manager; // Memory Allocation and Garbage Collection
-pub mod concurrency_manager; // Task Scheduling and Parallel Execution
 pub mod quantum; // Quantum Runtime Environment
 pub mod nano; // Nano Runtime Environment
 pub mod mts; // Multi-Timeline System for speculative execution
 pub mod sankofa; // Long-term memory and learning integration
-pub mod universal_runtime; // New: Universal Runtime & POCO-REAF Engine
 
 /// Initializes all runtime components.
 pub fn initialize_runtime() {
@@ -21,15 +19,13 @@ pub fn initialize_runtime() {
     quantum::init_quantum_runtime();
     nano::init_nano_runtime();
     mts::init_mts_runtime();
-    sankofa::init_sankofa_integration();
-    universal_runtime::init_universal_runtime(); // Initialize Universal Runtime
+    sankofa::init_sankofa_integration(); // Initialize Universal Runtime
     println!("Zenith Runtime initialized.");
 }
 
 /// Shuts down all runtime components.
 pub fn shutdown_runtime() {
-    println!("Shutting down Zenith Runtime...");
-    universal_runtime::shutdown_universal_runtime(); // Shutdown Universal Runtime
+    println!("Shutting down Zenith Runtime..."); // Shutdown Universal Runtime
     sankofa::shutdown_sankofa_integration();
     mts::shutdown_mts_runtime();
     nano::shutdown_nano_runtime();

@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 
 //! Zenith Standard Library: Omniversal AGI Alignment & Sovereign Containment (OASAC) Engine
 //!

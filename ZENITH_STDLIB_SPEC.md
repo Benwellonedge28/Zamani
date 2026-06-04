@@ -1,1 +1,39 @@
-Standard Library: ZENITH Universal Trinity Standard Library v2.0 — 70 modules: [ZENITH ORIGINAL MODULES — 32] core, collections, io, strings, math, crypto, effects, concurrency, generics, traits, patterns, macros, umc_ir, poco_reaf, language_forge, quantum_circuits, nano_forge, mts_engine, archaeve, effect_system, umc_interop, si_cognition, si_agency, si_security, si_perception, si_communication, si_meta, graph, geometry, physics, formal_proofs, category_theory [ABSORBED FROM NIMBUS — 28 new modules] nimbus::ai — AI typed system (Narrow/General/Super) nimbus::cell — cell_ai/cell_agi/cell_colony/synapse/morphic_field nimbus::bio — dna_compute/protein_fold/immune_system/epigenetic nimbus::hive — Hive/Bee/Pollinate/Nectar/Swarm concurrency nimbus::quantum_ext — NIMBUS quantum extensions beyond Zenith native nimbus::fhe — Fully homomorphic encryption native types nimbus::ussd — USSD 2G feature phone compilation target nimbus::nlp_frontend — 8,106 language NL front-end nimbus::ethics — Constitutional ethics layer/EVAS kernel nimbus::decision_log — decision/log/unlearn/seed syntax support nimbus::civilisational — Civilisational mandate types and tools nimbus::ubuntu — ubuntu_protocol network axiom nimbus::cosmic — stellar_network/planetary_consciousness/omega_point nimbus::temporal — retrocausal/prophecy_type/eternal_loop nimbus::emotion — emotion_type/love_compute/grief_process nimbus::hardware — @metal/@dma/@simd/@mmio hardware access nimbus::power — Energy budget/thermal/BLE/LoRaWAN/solar nimbus::build — nb one-click universal build system nimbus::debug — Full debug suite (ASAN/TSAN/fuzzing/WCET/formal) nimbus::bio_debug — Biological/cellular debug tools nimbus::paradigm — paradigm{} extensible paradigm declaration nimbus::session — Session types and protocol verification nimbus::foam — Foam data structure (O(1) insert/delete/random) nimbus::pqc — Post-quantum cryptography (Kyber/Dilithium) nimbus::zkp — Zero-knowledge proof generation nimbus::smpc — Secure multi-party computation nimbus::governance — AI governance and decision accountability nimbus::wellbeing — Program wellbeing monitoring [ABSORBED FROM SANKOFA — 10 modules] sankofa::memory, sankofa::learn, sankofa::wisdom, sankofa::zamani, sankofa::consensus, sankofa::arch_debug, sankofa::living_doc, sankofa::inter_memory, sankofa::history, sankofa::forge
+# Zenith Standard Library Specification
+
+## Core Modules
+
+- `stdlib.core` — fundamentals: print, assert, panic, type_of
+- `stdlib.collections` — List, Map, Set, Queue, Stack, Deque
+- `stdlib.io` — file I/O, stdin/stdout, buffered streams
+- `stdlib.fs` — filesystem: read, write, mkdir, walk, watch
+- `stdlib.net` — TCP/UDP sockets, HTTP client/server
+- `stdlib.time` — clock, Duration, DateTime, timezone
+- `stdlib.math` — arithmetic, trigonometry, statistics, matrices
+- `stdlib.serialize` — JSON, MessagePack, CBOR, Protobuf
+- `stdlib.sync` — Mutex, RwLock, Semaphore, Barrier
+- `stdlib.concurrent` — channels, async/await, green threads
+
+## AI & ML Modules
+
+- `stdlib.ml` — tensor ops, model inference, gradient descent
+- `stdlib.nlp` — tokenization, embeddings, text classification
+- `stdlib.vision` — image processing, object detection
+- `stdlib.ai_reasoning` — symbolic AI, planning, knowledge graphs
+- `stdlib.agi_governance` — alignment, safety constraints, audit logs
+
+## Systems Modules
+
+- `stdlib.crypto` — AES, RSA, Ed25519, SHA-3, ZKP primitives
+- `stdlib.quantum` — quantum circuit simulation, gate operations
+- `stdlib.nano` — nanoscale agent APIs, molecular simulation
+- `stdlib.robotics` — motor control, sensor fusion, SLAM
+- `stdlib.iot` — device discovery, MQTT, sensor protocols
+- `stdlib.hdl` — hardware description, FPGA synthesis
+
+## Platform Modules
+
+- `stdlib.web` — HTTP server, WebSocket, REST, GraphQL
+- `stdlib.db` — SQL, NoSQL, graph DB, time-series connectors
+- `stdlib.gui` — cross-platform UI, reactive components
+- `stdlib.reflection` — runtime introspection, meta-programming
+- `stdlib.runtime_governance` — resource quotas, watchdogs, SLAs
