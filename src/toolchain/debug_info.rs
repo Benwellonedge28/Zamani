@@ -1,4 +1,3 @@
-
 //! Zenith Toolchain: Debug Information Generation and Consumption
 //!
 //! This module provides conceptual functionalities for generating and utilizing
@@ -6,8 +5,8 @@
 //! all paradigms (classical, quantum, nano, MTS). It supports traditional
 //! step-through debugging as well as advanced time-travel and multi-paradigm views.
 
-use crate::source_map::Span;
-use crate::compiler_types::Type; // For variable types
+use crate::compiler_types::Type;
+use crate::source_map::Span; // For variable types
 
 /// Initializes the debug information generation components.
 pub fn init_debug_info_gen() {
@@ -47,7 +46,7 @@ pub struct VariableInfo {
     pub name: String,
     pub typ: Type,
     pub memory_location: String, // e.g., "register R1", "stack_offset 16", "quantum_state_ref Q5"
-    pub current_value: String, // String representation of the value
+    pub current_value: String,   // String representation of the value
     pub scope_start_addr: usize,
     pub scope_end_addr: usize,
     pub is_param: bool,
@@ -99,20 +98,27 @@ pub struct MtsTimelineSnapshot {
     pub logical_time: u64,
     pub timeline_id: u64,
     pub current_state_hash: String, // Hash of the serialized state
-    pub active_contexts: Vec<u64>, // List of Nimbus context IDs running on this timeline
+    pub active_contexts: Vec<u64>,  // List of Nimbus context IDs running on this timeline
     pub branched_from: Option<u64>, // Parent timeline ID
 }
 
 /// Conceptual function to embed debug information into a compiled artifact.
 pub fn embed_debug_info(artifact_path: &str, debug_data: DebugData) -> Result<(), String> {
-    println!("[Toolchain::debug] Embedding {} lines of debug info into '{}'...".to_string(), debug_data.source_map.len(), artifact_path);
+    println!(
+        "[Toolchain::debug] Embedding {} lines of debug info into '{}'...".to_string(),
+        debug_data.source_map.len(),
+        artifact_path
+    );
     // Conceptual: Serialize debug_data into DWARF, PDB, or a custom multi-paradigm format.
     Ok(())
 }
 
 /// Conceptual function to load debug information from an artifact.
 pub fn load_debug_info(artifact_path: &str) -> Result<DebugData, String> {
-    println!("[Toolchain::debug] Loading debug info from '{}'...".to_string(), artifact_path);
+    println!(
+        "[Toolchain::debug] Loading debug info from '{}'...".to_string(),
+        artifact_path
+    );
     // Conceptual: Deserialize debug data.
     Ok(DebugData {
         source_map: Vec::new(),
@@ -129,9 +135,13 @@ pub fn load_debug_info(artifact_path: &str) -> Result<DebugData, String> {
 pub fn start_debugger_session(
     artifact_path: &str,
     target_id: &str, // e.g., "NimbusContext:123", "SimulatedQPU:IBM_Q"
-    mode: &str,       // "step-through", "time-travel", "observational"
+    mode: &str,      // "step-through", "time-travel", "observational"
 ) -> Result<(), String> {
-    println!("[Toolchain::debug] Starting debugger session for '{}' on target '{}' in '{}' mode...".to_string(), artifact_path, target_id, mode);
+    println!(
+        "[Toolchain::debug] Starting debugger session for '{}' on target '{}' in '{}' mode..."
+            .to_string(),
+        artifact_path, target_id, mode
+    );
     // Conceptual: Connect to a classical process, quantum simulator, nano-agent emulator, or MTS visualiser.
     // Load relevant debug_data.
     Ok(())
@@ -142,12 +152,21 @@ pub struct BreakpointManager;
 
 impl BreakpointManager {
     pub fn set_code_breakpoint(file_id: usize, line: u32, condition: Option<String>) {
-        println!("[Toolchain::debug] Setting code breakpoint at file {} line {} with condition {:?}", file_id, line, condition);
+        println!(
+            "[Toolchain::debug] Setting code breakpoint at file {} line {} with condition {:?}",
+            file_id, line, condition
+        );
     }
     pub fn set_quantum_state_breakpoint(qubit_id: usize, expected_state: String) {
-        println!("[Toolchain::debug] Setting quantum state breakpoint on Q{} for state '{}'.", qubit_id, expected_state);
+        println!(
+            "[Toolchain::debug] Setting quantum state breakpoint on Q{} for state '{}'.",
+            qubit_id, expected_state
+        );
     }
     pub fn set_mts_event_breakpoint(timeline_id: u64, event_type: String) {
-        println!("[Toolchain::debug] Setting MTS event breakpoint on Timeline {} for event '{}'.", timeline_id, event_type);
+        println!(
+            "[Toolchain::debug] Setting MTS event breakpoint on Timeline {} for event '{}'.",
+            timeline_id, event_type
+        );
     }
 }

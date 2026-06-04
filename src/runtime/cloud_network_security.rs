@@ -1,4 +1,3 @@
-
 //! Zenith Universal Meta-Compiler (UMC): Autonomous Cloud & Network Security Module
 //!
 //! This module defines the conceptual framework for Zenith's autonomous and infinitely
@@ -11,19 +10,18 @@
 //! cloud/network environment.
 
 use crate::ast::Identifier; // For agent IDs, threat IDs, resource IDs
-use crate::core_lang_primitives::{Size, TimeStamp, Duration}; // For processing times, attack windows
-use crate::stdlib::core::Result; // For error handling
-use crate::stdlib::collections::{List, Map}; // For network topologies, agent swarm definitions
-use crate::stdlib::crypto::{SymmetricKey, PublicKey, HomomorphicCiphertext, ZeroKnowledgeProof}; // For hyper-security
-use crate::stdlib::agents::{AutonomousAgent, MultiAgentEnvironment, AgentAction}; // For cybersecurity agents
-use crate::stdlib::ml::{Model, Tensor}; // For threat prediction, anomaly detection
-use crate::stdlib::ai_reasoning::{KnowledgeBase, Planner}; // For autonomous response planning
-use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For learning from historical threats
-use crate::toolchain::self_evolution::{SelfEvolutionEngine, EvolutionProposal}; // For self-healing infrastructure
-use crate::nimbus_os::mod_rs::{NimbusContextId, CapabilityToken, NimbusMicrokernel}; // For secure OS interactions
+use crate::core_lang_primitives::{Duration, Size, TimeStamp}; // For processing times, attack windows
 use crate::nimbus_os::evas; // For E.V.A.S. vetting
-use crate::source_map::Span; // For Identifier creation
-
+use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId, NimbusMicrokernel}; // For secure OS interactions
+use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For learning from historical threats
+use crate::source_map::Span;
+use crate::stdlib::agents::{AgentAction, AutonomousAgent, MultiAgentEnvironment}; // For cybersecurity agents
+use crate::stdlib::ai_reasoning::{KnowledgeBase, Planner}; // For autonomous response planning
+use crate::stdlib::collections::{List, Map}; // For network topologies, agent swarm definitions
+use crate::stdlib::core::Result; // For error handling
+use crate::stdlib::crypto::{HomomorphicCiphertext, PublicKey, SymmetricKey, ZeroKnowledgeProof}; // For hyper-security
+use crate::stdlib::ml::{Model, Tensor}; // For threat prediction, anomaly detection
+use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For self-healing infrastructure // For Identifier creation
 
 /// Initializes the Autonomous Cloud & Network Security module.
 pub fn init_cloud_network_security() {
@@ -62,8 +60,14 @@ pub struct CloudNetworkOrchestrator;
 impl CloudNetworkOrchestrator {
     /// Deploys a Zenith application across heterogeneous cloud/network resources.
     /// Optimizes deployment based on performance, cost, and security policies.
-    pub fn deploy_zenith_application(app_id: Identifier, policy: ManagementPolicy) -> Result<List<CloudResource>, String> {
-        println!("[Runtime::CloudNetSec] Deploying Zenith app '{}' with policy '{}'.".to_string(), app_id.0, policy.name.0);
+    pub fn deploy_zenith_application(
+        app_id: Identifier,
+        policy: ManagementPolicy,
+    ) -> Result<List<CloudResource>, String> {
+        println!(
+            "[Runtime::CloudNetSec] Deploying Zenith app '{}' with policy '{}'.".to_string(),
+            app_id.0, policy.name.0
+        );
         // Conceptual: Uses Nimbus OS's distributed capabilities, consults Planner, ML for optimization.
         Ok(List::new()) // Dummy list of deployed resources
     }
@@ -78,11 +82,20 @@ impl CloudNetworkOrchestrator {
 
     /// Triggers self-optimization and self-healing mechanisms based on monitoring data.
     /// Integrates with `toolchain::self_evolution` for code-level optimization.
-    pub fn trigger_self_optimization(&self, anomaly_report: Map<String, String>) -> Result<(), String> {
-        println!("[Runtime::CloudNetSec] Triggering self-optimization due to anomaly: {:?}.".to_string(), anomaly_report);
+    pub fn trigger_self_optimization(
+        &self,
+        anomaly_report: Map<String, String>,
+    ) -> Result<(), String> {
+        println!(
+            "[Runtime::CloudNetSec] Triggering self-optimization due to anomaly: {:?}.".to_string(),
+            anomaly_report
+        );
         // Conceptual: The SelfEvolutionEngine would identify, propose, and apply patches to the runtime or deployed apps.
         let evolution_engine = SelfEvolutionEngine;
-        let proposals = evolution_engine.generate_optimization_proposals(Identifier("cloud_runtime_component".to_string(), Span::dummy()))?; // Dummy target
+        let proposals = evolution_engine.generate_optimization_proposals(Identifier(
+            "cloud_runtime_component".to_string(),
+            Span::dummy(),
+        ))?; // Dummy target
         for mut proposal in proposals.data.into_iter() {
             evolution_engine.evaluate_proposal(&mut proposal)?; // E.V.A.S. vetting happens here
             if proposal.ethical_vetting_status == format!("{:?}", evas::EvasDecision::Allow) {
@@ -116,7 +129,10 @@ impl CyberDefenseSwarm {
 
     /// Deploys a swarm of autonomous cybersecurity agents across the network/cloud.
     /// Agents operate at multiple layers (firmware, OS, application, network fabric).
-    pub fn deploy_cyber_agents(&mut self, agent_blueprints: List<CybersecurityAgent>) -> Result<(), String> {
+    pub fn deploy_cyber_agents(
+        &mut self,
+        agent_blueprints: List<CybersecurityAgent>,
+    ) -> Result<(), String> {
         println!("[Runtime::CloudNetSec] Deploying {} cybersecurity agents forming a self-organizing defense swarm.".to_string(), agent_blueprints.len());
         for agent in agent_blueprints.data.into_iter() {
             self.0.add_agent(agent.base_agent);
@@ -147,7 +163,11 @@ impl CyberDefenseSwarm {
     /// Initiates a self-healing process for compromised components.
     /// Coordinates with `toolchain::self_evolution` and Nimbus OS for secure recovery.
     pub fn initiate_self_healing(&self, compromised_resource: Identifier) -> Result<(), String> {
-        println!("[Runtime::CloudNetSec] Initiating self-healing for compromised resource '{}'.".to_string(), compromised_resource.0);
+        println!(
+            "[Runtime::CloudNetSec] Initiating self-healing for compromised resource '{}'."
+                .to_string(),
+            compromised_resource.0
+        );
         // Conceptual: Isolate resource (Nimbus OS sandbox), apply patches (self-evolution), restore state (Sankofa).
         Ok(())
     }
@@ -162,7 +182,10 @@ pub struct InfiniteSecurityPrimitives;
 impl InfiniteSecurityPrimitives {
     /// Establishes an infinitely re-encrypting data pipeline.
     /// Data is continuously encrypted and re-encrypted using various quantum-safe and classical schemes.
-    pub fn establish_perpetual_encryption_pipeline(data_stream_id: Identifier, keys: List<SymmetricKey>) -> Result<(), String> {
+    pub fn establish_perpetual_encryption_pipeline(
+        data_stream_id: Identifier,
+        keys: List<SymmetricKey>,
+    ) -> Result<(), String> {
         println!("[Runtime::CloudNetSec] Establishing perpetual encryption pipeline for data stream '{}'.".to_string(), data_stream_id.0);
         // Conceptual: Data chunks are re-encrypted on the fly by dedicated hardware units.
         Ok(())
@@ -171,14 +194,21 @@ impl InfiniteSecurityPrimitives {
     /// Verifies the integrity and authenticity of all network communications at quantum speeds.
     /// Uses quantum entanglement-based authentication or extremely fast PQC verification.
     pub fn verify_quantum_network_integrity(network_segment_id: Identifier) -> Result<(), String> {
-        println!("[Runtime::CloudNetSec] Verifying quantum network integrity for segment '{}'.".to_string(), network_segment_id.0);
+        println!(
+            "[Runtime::CloudNetSec] Verifying quantum network integrity for segment '{}'."
+                .to_string(),
+            network_segment_id.0
+        );
         // Conceptual: Dedicated QPU-accelerated hardware.
         Ok(())
     }
 
     /// Enforces zero-trust dynamic access control at every layer of the network stack.
     /// Access is granted temporarily based on continuous authentication and real-time risk assessment.
-    pub fn enforce_dynamic_zero_trust_access(user_id: Identifier, resource_id: Identifier) -> Result<bool, String> {
+    pub fn enforce_dynamic_zero_trust_access(
+        user_id: Identifier,
+        resource_id: Identifier,
+    ) -> Result<bool, String> {
         println!("[Runtime::CloudNetSec] Enforcing dynamic zero-trust for user '{}' accessing resource '{}'.".to_string(), user_id.0, resource_id.0);
         // Conceptual: Continuous authentication, behavioral biometrics, real-time risk score from ML.
         Ok(true) // Access granted

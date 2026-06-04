@@ -1,4 +1,3 @@
-
 //! Zenith Toolchain: Zenith Test Runner (`zenith-test`)
 //!
 //! This module defines the standalone `zenith-test` tool, responsible for running
@@ -24,14 +23,14 @@
 //! - **Daemon Mode (`zenith-testd`):** Optionally runs as a resident daemon for faster
 //!   test execution in IDEs/editors.
 
-use crate::ast::{Identifier, AbstractSyntaxTree};
-use crate::stdlib::core::Result;
-use crate::stdlib::collections::{List, Map, HashSet};
-use crate::stdlib::meta_ops::MetaValue;
-use crate::compiler::test_metadata::{TestMetadata, PropertyTestInfo, FuzzTestInfo, TestScope};
-use crate::toolchain::build_orchestrator::{BuildOptions, BuildReport};
+use crate::ast::{AbstractSyntaxTree, Identifier};
+use crate::compiler::test_metadata::{FuzzTestInfo, PropertyTestInfo, TestMetadata, TestScope};
 use crate::runtime::vm::ZenithVM; // Or an IR interpreter
 use crate::source_map::Span;
+use crate::stdlib::collections::{HashSet, List, Map};
+use crate::stdlib::core::Result;
+use crate::stdlib::meta_ops::MetaValue;
+use crate::toolchain::build_orchestrator::{BuildOptions, BuildReport};
 
 pub struct ZenithTestRunner {
     pub vm: ZenithVM, // For executing bytecode/IR
@@ -39,13 +38,22 @@ pub struct ZenithTestRunner {
 
 impl ZenithTestRunner {
     pub fn new() -> Self {
-        ZenithTestRunner { vm: ZenithVM::new() }
+        ZenithTestRunner {
+            vm: ZenithVM::new(),
+        }
     }
 
     /// Runs fast, lightweight property and contract checks.
     /// Typically executed in an editor's LSP on save, or by `zenith build` asynchronously.
-    pub fn run_fast_tests(&mut self, bytecode_path: String, metadata: TestMetadata) -> Result<TestReport, String> {
-        println!("[zenith-test::fast] Running fast tests for {}...".to_string(), bytecode_path);
+    pub fn run_fast_tests(
+        &mut self,
+        bytecode_path: String,
+        metadata: TestMetadata,
+    ) -> Result<TestReport, String> {
+        println!(
+            "[zenith-test::fast] Running fast tests for {}...".to_string(),
+            bytecode_path
+        );
         let mut report = TestReport::new();
         // In a real implementation, this would load bytecode and run a limited number of iterations.
         for prop_info in metadata.properties.data {
@@ -62,8 +70,16 @@ impl ZenithTestRunner {
 
     /// Runs full, exhaustive property, fuzz, and cross-backend tests.
     /// Typically executed in CI or with `zenith build --full-tests`.
-    pub fn run_full_tests(&mut self, bytecode_path: String, metadata: TestMetadata, options: &BuildOptions) -> Result<TestReport, String> {
-        println!("[zenith-test::full] Running full tests for {}...".to_string(), bytecode_path);
+    pub fn run_full_tests(
+        &mut self,
+        bytecode_path: String,
+        metadata: TestMetadata,
+        options: &BuildOptions,
+    ) -> Result<TestReport, String> {
+        println!(
+            "[zenith-test::full] Running full tests for {}...".to_string(),
+            bytecode_path
+        );
         let mut report = TestReport::new();
 
         for prop_info in metadata.properties.data {
@@ -87,8 +103,16 @@ impl ZenithTestRunner {
     }
 
     /// Executes a single property-based test.
-    fn run_property_test(&mut self, prop_info: PropertyTestInfo, bytecode_path: &String, iterations: u32) -> Result<SingleTestResult, String> {
-        println!("[zenith-test::property] Running property: {} ({} iterations).".to_string(), prop_info.name.0, iterations);
+    fn run_property_test(
+        &mut self,
+        prop_info: PropertyTestInfo,
+        bytecode_path: &String,
+        iterations: u32,
+    ) -> Result<SingleTestResult, String> {
+        println!(
+            "[zenith-test::property] Running property: {} ({} iterations).".to_string(),
+            prop_info.name.0, iterations
+        );
         // Simulate input generation, VM execution, and assertion check
         for i in 0..iterations {
             let inputs = TestInputGenerator::generate_for_signature(prop_info.signature.clone());
@@ -100,8 +124,16 @@ impl ZenithTestRunner {
     }
 
     /// Executes a single fuzz test.
-    fn run_fuzz_test(&mut self, fuzz_info: FuzzTestInfo, bytecode_path: &String, iterations: u32) -> Result<SingleTestResult, String> {
-        println!("[zenith-test::fuzz] Running fuzz test: {} ({} iterations).".to_string(), fuzz_info.name.0, iterations);
+    fn run_fuzz_test(
+        &mut self,
+        fuzz_info: FuzzTestInfo,
+        bytecode_path: &String,
+        iterations: u32,
+    ) -> Result<SingleTestResult, String> {
+        println!(
+            "[zenith-test::fuzz] Running fuzz test: {} ({} iterations).".to_string(),
+            fuzz_info.name.0, iterations
+        );
         // Simulate input generation, VM execution, and crash detection
         for i in 0..iterations {
             let inputs = FuzzInputGenerator::generate_bytes();
@@ -115,14 +147,23 @@ impl ZenithTestRunner {
 
 pub struct ZenithTestDaemon;
 impl ZenithTestDaemon {
-    pub fn new() -> Self { ZenithTestDaemon{} }
-    pub fn start(&self) -> Result<(), String> { 
+    pub fn new() -> Self {
+        ZenithTestDaemon {}
+    }
+    pub fn start(&self) -> Result<(), String> {
         println!("Starting zenith-testd daemon...");
         // This daemon would listen for build events/requests from `zenith build`
         // and orchestrate the `run_fast_tests` and `run_full_tests` calls asynchronously.
-        Ok(()) 
+        Ok(())
     }
-    pub fn send_test_job(&self, bytecode_path: String, metadata: TestMetadata, options: &BuildOptions) -> Result<(), String> { Ok(()) }
+    pub fn send_test_job(
+        &self,
+        bytecode_path: String,
+        metadata: TestMetadata,
+        options: &BuildOptions,
+    ) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -135,8 +176,15 @@ pub struct TestReport {
     pub summary: String,
 }
 impl TestReport {
-    pub fn new() -> Self { TestReport { results: List::new(), summary: String::new() } }
-    pub fn add_result(&mut self, result: SingleTestResult) { self.results.push(result); }
+    pub fn new() -> Self {
+        TestReport {
+            results: List::new(),
+            summary: String::new(),
+        }
+    }
+    pub fn add_result(&mut self, result: SingleTestResult) {
+        self.results.push(result);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,17 +201,22 @@ pub enum SingleTestResult {
 
 pub struct TestInputGenerator;
 impl TestInputGenerator {
-    pub fn generate_for_signature(signature: String) -> List<MetaValue> { 
-        println!("[TestInputGen] Generating inputs for signature: {}".to_string(), signature);
+    pub fn generate_for_signature(signature: String) -> List<MetaValue> {
+        println!(
+            "[TestInputGen] Generating inputs for signature: {}".to_string(),
+            signature
+        );
         // Uses Zenith's type system and metadata to generate diverse inputs.
         // For `MGNS::EncryptedPosition`, ensures opaque nature is respected.
-        List::new() 
+        List::new()
     }
 }
 
 pub struct FuzzInputGenerator;
 impl FuzzInputGenerator {
-    pub fn generate_bytes() -> List<u8> { List::new() }
+    pub fn generate_bytes() -> List<u8> {
+        List::new()
+    }
 }
 
 // --- Dummy/Simplified Definitions for Conceptual Compilation --- //
@@ -172,11 +225,31 @@ pub mod compiler {
         use crate::ast::Identifier;
         use crate::stdlib::collections::{List, Map};
         use crate::stdlib::meta_ops::MetaValue;
-        #[derive(Debug, Clone, PartialEq)] pub enum TestScope { Module, Function } // Dummy
-        #[derive(Debug, Clone, PartialEq)] pub struct PropertyTestInfo { pub name: Identifier, pub signature: String, pub scope: TestScope } // Dummy
-        #[derive(Debug, Clone, PartialEq)] pub struct FuzzTestInfo { pub name: Identifier, pub signature: String, pub scope: TestScope } // Dummy
-        #[derive(Debug, Clone, PartialEq)] pub struct PureFunctionInfo { pub name: Identifier } // Dummy
-        #[derive(Debug, Clone, PartialEq)] pub struct LinearTypeInfo { pub name: Identifier } // Dummy
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum TestScope {
+            Module,
+            Function,
+        } // Dummy
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct PropertyTestInfo {
+            pub name: Identifier,
+            pub signature: String,
+            pub scope: TestScope,
+        } // Dummy
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct FuzzTestInfo {
+            pub name: Identifier,
+            pub signature: String,
+            pub scope: TestScope,
+        } // Dummy
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct PureFunctionInfo {
+            pub name: Identifier,
+        } // Dummy
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct LinearTypeInfo {
+            pub name: Identifier,
+        } // Dummy
 
         #[derive(Debug, Clone, PartialEq)]
         pub struct TestMetadata {
@@ -185,12 +258,36 @@ pub mod compiler {
             pub pure_functions: List<PureFunctionInfo>,
             pub linear_types: List<LinearTypeInfo>,
         } // Dummy
-        impl TestMetadata { pub fn new() -> Self { TestMetadata { properties: List::new(), fuzz_tests: List::new(), pure_functions: List::new(), linear_types: List::new() } } }
+        impl TestMetadata {
+            pub fn new() -> Self {
+                TestMetadata {
+                    properties: List::new(),
+                    fuzz_tests: List::new(),
+                    pure_functions: List::new(),
+                    linear_types: List::new(),
+                }
+            }
+        }
     }
 }
-pub mod runtime { pub mod vm { pub struct ZenithVM; impl ZenithVM { pub fn new() -> Self { ZenithVM{} } } } }
-pub mod toolchain { pub mod build_orchestrator {
-    use crate::stdlib::collections::List;
-    #[derive(Debug, Clone, PartialEq)] pub struct BuildOptions { pub enable_cross_backend_tests: bool } // Dummy
-    #[derive(Debug, Clone, PartialEq)] pub struct BuildReport; // Dummy
-} }
+pub mod runtime {
+    pub mod vm {
+        pub struct ZenithVM;
+        impl ZenithVM {
+            pub fn new() -> Self {
+                ZenithVM {}
+            }
+        }
+    }
+}
+pub mod toolchain {
+    pub mod build_orchestrator {
+        use crate::stdlib::collections::List;
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct BuildOptions {
+            pub enable_cross_backend_tests: bool,
+        } // Dummy
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct BuildReport; // Dummy
+    }
+}

@@ -1,4 +1,3 @@
-
 //! Zenith Toolchain: IDE Support
 //!
 //! This module defines conceptual interfaces and protocols for enabling rich
@@ -7,7 +6,7 @@
 //! It focuses on providing a multi-paradigm-aware development experience.
 
 use crate::source_map::Span; // For diagnostics and code locations
-use crate::toolchain::debug_info::{SemanticHighlightingInfo, VariableInfo, CallStackFrame}; // Use debug_info for shared structs
+use crate::toolchain::debug_info::{CallStackFrame, SemanticHighlightingInfo, VariableInfo}; // Use debug_info for shared structs
 
 /// Initializes the IDE support components.
 pub fn init_ide_support() {
@@ -28,7 +27,10 @@ pub fn start_lsp_server() {
 
 /// Provides detailed diagnostics for a given Zenith source file.
 pub fn get_diagnostics(file_path: &str) -> Vec<Diagnostic> {
-    println!("[Toolchain::ide] Providing diagnostics for '{}'...".to_string(), file_path);
+    println!(
+        "[Toolchain::ide] Providing diagnostics for '{}'...".to_string(),
+        file_path
+    );
     // Conceptual: Run lexer, parser, semantic analyzer, etc., collect errors/warnings.
     Vec::new()
 }
@@ -45,7 +47,10 @@ pub struct Diagnostic {
 
 /// Conceptual function to provide auto-completion suggestions.
 pub fn get_completions(file_path: &str, cursor_span: Span) -> Vec<CompletionItem> {
-    println!("[Toolchain::ide] Providing completions for '{}' at {:?}...".to_string(), file_path, cursor_span);
+    println!(
+        "[Toolchain::ide] Providing completions for '{}' at {:?}...".to_string(),
+        file_path, cursor_span
+    );
     // Conceptual: Use symbol table, available standard library functions, context-aware suggestions.
     Vec::new()
 }
@@ -61,24 +66,40 @@ pub struct CompletionItem {
 
 /// Conceptual function to provide go-to-definition for an identifier.
 pub fn go_to_definition(file_path: &str, identifier_span: Span) -> Option<Span> {
-    println!("[Toolchain::ide] Go-to-definition for identifier at {:?} in '{}'...".to_string(), identifier_span, file_path);
+    println!(
+        "[Toolchain::ide] Go-to-definition for identifier at {:?} in '{}'...".to_string(),
+        identifier_span, file_path
+    );
     // Conceptual: Resolve symbol in symbol table, find its declaration span.
     None
 }
 
 /// Conceptual function to start a Debugger Adapter Protocol (DAP) server.
 pub fn start_dap_server(port: u16) {
-    println!("[Toolchain::ide] Starting Zenith Debugger Adapter Protocol (DAP) server on port {}...".to_string(), port);
+    println!(
+        "[Toolchain::ide] Starting Zenith Debugger Adapter Protocol (DAP) server on port {}..."
+            .to_string(),
+        port
+    );
     // Conceptual: Listen for debugger client connections, interface with zenith-dbg backend.
 }
 
 /// Conceptual function to get live previews for multi-paradigm elements.
 pub fn get_live_preview(file_path: &str, preview_type: &str) -> Option<LivePreviewData> {
-    println!("[Toolchain::ide] Generating live preview for '{}' (type: {})...".to_string(), file_path, preview_type);
+    println!(
+        "[Toolchain::ide] Generating live preview for '{}' (type: {})...".to_string(),
+        file_path, preview_type
+    );
     match preview_type {
-        "quantum_circuit_graph" => Some(LivePreviewData::Graph("Conceptual Quantum Circuit Graph".to_string())),
-        "nano_agent_simulation" => Some(LivePreviewData::Animation("Conceptual Nano-Agent Simulation".to_string())),
-        "mts_timeline_view" => Some(LivePreviewData::TimelineGraph("Conceptual MTS Timeline View".to_string())),
+        "quantum_circuit_graph" => Some(LivePreviewData::Graph(
+            "Conceptual Quantum Circuit Graph".to_string(),
+        )),
+        "nano_agent_simulation" => Some(LivePreviewData::Animation(
+            "Conceptual Nano-Agent Simulation".to_string(),
+        )),
+        "mts_timeline_view" => Some(LivePreviewData::TimelineGraph(
+            "Conceptual MTS Timeline View".to_string(),
+        )),
         _ => None,
     }
 }
@@ -86,8 +107,8 @@ pub fn get_live_preview(file_path: &str, preview_type: &str) -> Option<LivePrevi
 /// Conceptual data for live previews.
 #[derive(Debug, Clone)]
 pub enum LivePreviewData {
-    Graph(String),        // e.g., Mermaid code, SVG
-    Animation(String),    // e.g., URL to interactive simulation
-    TimelineGraph(String),// Custom JSON for timeline visualization
+    Graph(String),         // e.g., Mermaid code, SVG
+    Animation(String),     // e.g., URL to interactive simulation
+    TimelineGraph(String), // Custom JSON for timeline visualization
     RawText(String),
 }

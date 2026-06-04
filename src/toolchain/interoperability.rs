@@ -1,4 +1,3 @@
-
 //! Zenith Toolchain: Cross-Language Interoperability
 //!
 //! This module defines conceptual mechanisms for enabling Zenith code to
@@ -17,16 +16,24 @@ pub fn shutdown_interoperability_layer() {
 
 /// Conceptual function to generate Foreign Function Interface (FFI) bindings
 /// for calling functions from other languages into Zenith.
-pub fn generate_ffi_bindings(zenith_declarations: &str, target_language: &str) -> Result<String, String> {
+pub fn generate_ffi_bindings(
+    zenith_declarations: &str,
+    target_language: &str,
+) -> Result<String, String> {
     println!("[Toolchain::interop] Generating FFI bindings for '{}' from Zenith declarations (conceptual)...".to_string(), target_language);
     // Conceptual: Analyze Zenith function signatures and generate corresponding
     // C headers, Rust `extern "C"` blocks, Python CFFI stubs, etc.
-    Ok(format!("// Conceptual {} FFI bindings for Zenith", target_language))
+    Ok(format!(
+        "// Conceptual {} FFI bindings for Zenith",
+        target_language
+    ))
 }
 
 /// Conceptual function to generate Zenith wrappers for calling external library functions.
 pub fn generate_external_wrappers(external_library_signature: &str) -> Result<String, String> {
-    println!("[Toolchain::interop] Generating Zenith wrappers for external library (conceptual)...");
+    println!(
+        "[Toolchain::interop] Generating Zenith wrappers for external library (conceptual)..."
+    );
     // Conceptual: Analyze external function signatures and generate Zenith `extern` blocks.
     Ok("// Conceptual Zenith wrappers for external library".to_string())
 }
