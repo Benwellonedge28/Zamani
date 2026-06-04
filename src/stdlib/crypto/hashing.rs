@@ -2,7 +2,7 @@
 //! Zenith — hashing module
 
 /// Initialize hashing
-pub fn init_hashing() { }
+pub fn init_hashing() {}
 
 /// Shutdown hashing
-pub fn shutdown_hashing() { }
+pub fn shutdown_hashing() {}

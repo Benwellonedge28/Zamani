@@ -2,7 +2,7 @@
 //! Zenith — transaction_manager module
 
 /// Initialize transaction_manager
-pub fn init_transaction_manager() { }
+pub fn init_transaction_manager() {}
 
 /// Shutdown transaction_manager
-pub fn shutdown_transaction_manager() { }
+pub fn shutdown_transaction_manager() {}

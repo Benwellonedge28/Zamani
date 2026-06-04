@@ -1,4 +1,3 @@
-
 //! Zenith Universal Meta-Compiler (UMC) Compiler Stages and Control
 //!
 //! This module orchestrates the various stages of the Zenith UMC, from
@@ -6,10 +5,10 @@
 //! compiler pipeline and integrates advanced features like optimization,
 //! formal verification, and multi-paradigm support.
 
-pub mod oop_advanced; // Advanced OOP Features
-pub mod language_spec; // Zenith Language Specification modules
 #[cfg(feature = "full")]
 pub mod compilation_techniques; // For Hybrid Compilation Strategies
+pub mod language_spec; // Zenith Language Specification modules
+pub mod oop_advanced; // Advanced OOP Features
 pub mod optimization_strategies; // For managing and applying diverse optimization passes
 
 /// Initializes the entire Zenith UMC compiler pipeline.

@@ -1,15 +1,17 @@
-
 //! Zenith Standard Library: Quantum Computing APIs
 //!
 //! This module provides high-level abstractions and APIs for working with
 //! quantum computing concepts within Zenith programs. It simplifies interaction
 //! with the underlying quantum runtime and hardware.
 
-use crate::runtime::quantum::{ // Import specific runtime components
-    get_quantum_processor, QuantumProcessor, QubitState,
+use crate::runtime::quantum::{
+    // Import specific runtime components
+    get_quantum_processor,
+    QuantumProcessor,
+    QubitState,
 };
-use std::sync::{Arc, Mutex};
 use std::fmt::{self, Debug};
+use std::sync::{Arc, Mutex};
 
 // Global conceptual runtime state reference (managed by init/shutdown of the runtime)
 static mut QUANTUM_PROCESSOR_ARC: Option<Arc<Mutex<QuantumProcessor>>> = None;
@@ -51,7 +53,10 @@ impl Qubit {
 
     /// Deallocates the qubit.
     pub fn deallocate(&self) {
-        println!("[StdLib::quantum] Deallocating Qubit {}.".to_string(), self.0);
+        println!(
+            "[StdLib::quantum] Deallocating Qubit {}.".to_string(),
+            self.0
+        );
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
             let mut processor = processor_arc.lock().unwrap();
             processor.deallocate_qubit(self.0);
@@ -60,14 +65,20 @@ impl Qubit {
 
     // --- Single-Qubit Gates ---
     pub fn h(&mut self) {
-        println!("[StdLib::quantum] Applying Hadamard gate to Qubit {}.".to_string(), self.0);
+        println!(
+            "[StdLib::quantum] Applying Hadamard gate to Qubit {}.".to_string(),
+            self.0
+        );
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
             let mut processor = processor_arc.lock().unwrap();
             processor.apply_single_qubit_gate(self.0, "H");
         }
     }
     pub fn x(&mut self) {
-        println!("[StdLib::quantum] Applying X (Pauli-X) gate to Qubit {}.".to_string(), self.0);
+        println!(
+            "[StdLib::quantum] Applying X (Pauli-X) gate to Qubit {}.".to_string(),
+            self.0
+        );
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
             let mut processor = processor_arc.lock().unwrap();
             processor.apply_single_qubit_gate(self.0, "X");
@@ -78,7 +89,10 @@ impl Qubit {
     // --- Multi-Qubit Gates ---
     /// Applies a CNOT gate to this control qubit and a target qubit.
     pub fn cnot(&mut self, target: &mut Qubit) {
-        println!("[StdLib::quantum] Applying CNOT gate (Control: {}, Target: {}).".to_string(), self.0, target.0);
+        println!(
+            "[StdLib::quantum] Applying CNOT gate (Control: {}, Target: {}).".to_string(),
+            self.0, target.0
+        );
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
             let mut processor = processor_arc.lock().unwrap();
             processor.apply_cnot_gate(self.0, target.0);
@@ -101,7 +115,11 @@ impl Qubit {
     pub fn get_state(&self) -> QubitState {
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
             let processor = processor_arc.lock().unwrap();
-            processor.allocated_qubits.get(&self.0).map(|q| q.state.clone()).unwrap_or(QubitState::Mixed)
+            processor
+                .allocated_qubits
+                .get(&self.0)
+                .map(|q| q.state.clone())
+                .unwrap_or(QubitState::Mixed)
         } else {
             QubitState::Mixed
         }
@@ -111,7 +129,10 @@ impl Qubit {
     pub fn is_entangled_with(&self, other: &Qubit) -> bool {
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
             let processor = processor_arc.lock().unwrap();
-            processor.allocated_qubits.get(&self.0).map_or(false, |q| q.entangled_with.contains(&other.0))
+            processor
+                .allocated_qubits
+                .get(&self.0)
+                .map_or(false, |q| q.entangled_with.contains(&other.0))
         } else {
             false
         }
@@ -127,7 +148,10 @@ pub struct QReg {
 impl QReg {
     /// Allocates a quantum register with `size` qubits.
     pub fn new(size: usize) -> Self {
-        println!("[StdLib::quantum] Allocating a QReg with {} qubits.".to_string(), size);
+        println!(
+            "[StdLib::quantum] Allocating a QReg with {} qubits.".to_string(),
+            size
+        );
         let mut qubits = Vec::with_capacity(size);
         for _ in 0..size {
             qubits.push(Qubit::new());

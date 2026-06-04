@@ -1,12 +1,11 @@
-
 //! Zenith Universal Meta-Compiler (UMC) Standard Library: AGI Agents Module
 //!
 //! This module aggregates and manages all components related to the creation,
 //! deployment, and orchestration of AGI agents within the Zenith ecosystem.
 
+pub mod agent_communication;
 pub mod agent_interface; // Generic Agent Interface
-pub mod agent_lifecycle; // Agent Lifecycle Management
-pub mod agent_communication; // Inter-Agent Communication Protocols
+pub mod agent_lifecycle; // Agent Lifecycle Management // Inter-Agent Communication Protocols
 
 /// Initializes all AGI agents components.
 pub fn init_agents_lib() {

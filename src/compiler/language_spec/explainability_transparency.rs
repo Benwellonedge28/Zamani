@@ -1,6 +1,5 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-
 //! Zenith Language Specification: Explainability & Transparency Keywords
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
@@ -12,13 +11,12 @@
 //! integrate directly with Zenith's E.V.A.S. filter in Nimbus OS and the
 //! Sankofa memory system for automated decision logging and justification.
 
-use crate::ast::{Identifier, Expression, Statement}; // Zenith AST elements
+use crate::ast::{Expression, Identifier, Statement}; // Zenith AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
 use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
-use crate::nimbus_os::evas::{EvasFilter, EvasActionContext}; // For E.V.A.S. integration
-use crate::stdlib::core::Result; // Zenith Result type
-use crate::stdlib::collections::List; // Zenith List type
-
+use crate::nimbus_os::evas::{EvasActionContext, EvasFilter}; // For E.V.A.S. integration
+use crate::stdlib::collections::List;
+use crate::stdlib::core::Result; // Zenith Result type // Zenith List type
 
 /// Initializes the Explainability & Transparency Keywords language specification.
 pub fn init_explainability_transparency_keywords() {
@@ -46,8 +44,16 @@ pub enum ExplainabilityStatementAst {
 pub struct ExplainabilitySemanticAnalyzer;
 
 impl ExplainabilitySemanticAnalyzer {
-    pub fn analyze(&self, ast_node: &ExplainabilityStatementAst, semantic_analyzer: &mut SemanticAnalyzer, type_checker: &mut TypeChecker) -> Result<(), String> {
-        println!("[LangSpec::Explain] Performing semantic analysis for explainability statement: {:?}.", ast_node);
+    pub fn analyze(
+        &self,
+        ast_node: &ExplainabilityStatementAst,
+        semantic_analyzer: &mut SemanticAnalyzer,
+        type_checker: &mut TypeChecker,
+    ) -> Result<(), String> {
+        println!(
+            "[LangSpec::Explain] Performing semantic analysis for explainability statement: {:?}.",
+            ast_node
+        );
         // Conceptual:
         // 1. Validate 'expr' and 'reason_expr' for correct types.
         // 2. Ensure the AGI component has the necessary 'transparency_logging' capability from Nimbus OS.
@@ -61,8 +67,14 @@ impl ExplainabilitySemanticAnalyzer {
 pub struct ExplainabilityIrGenerator;
 
 impl ExplainabilityIrGenerator {
-    pub fn generate_ir(&self, ast_node: &ExplainabilityStatementAst) -> Result<Vec<IrInstruction>, String> {
-        println!("[LangSpec::Explain] Generating IR for explainability statement: {:?}.", ast_node);
+    pub fn generate_ir(
+        &self,
+        ast_node: &ExplainabilityStatementAst,
+    ) -> Result<Vec<IrInstruction>, String> {
+        println!(
+            "[LangSpec::Explain] Generating IR for explainability statement: {:?}.",
+            ast_node
+        );
         // Conceptual:
         // Translate these keywords into sequences of IR instructions that interact
         // with the Nimbus OS E.V.A.S. filter and Sankofa to record justifications and states.
@@ -72,10 +84,16 @@ impl ExplainabilityIrGenerator {
                 Ok(List::from(vec![
                     IrInstruction::LoadLiteral(IrValue::String(format!("decision:{:?}", expr))),
                     IrInstruction::LoadLiteral(IrValue::String(format!("reason:{:?}", reason))),
-                    IrInstruction::CallBuiltin("nimbus_os::evas::record_explanation".to_string(), List::new()),
+                    IrInstruction::CallBuiltin(
+                        "nimbus_os::evas::record_explanation".to_string(),
+                        List::new(),
+                    ),
                 ]))
-            },
-            _ => Err("IR generation for this explainability statement not yet fully conceptualized.".to_string()),
+            }
+            _ => Err(
+                "IR generation for this explainability statement not yet fully conceptualized."
+                    .to_string(),
+            ),
         }
     }
 }

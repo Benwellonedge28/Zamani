@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Computer Vision Module
 //!
 //! This module provides conceptual APIs for processing and understanding visual data
@@ -8,13 +7,12 @@
 //! and advanced cognitive perception.
 
 use crate::ast::Identifier; // For model names, object classes
-use crate::core_lang_primitives::{Size}; // For image dimensions, data sizes
-use crate::stdlib::core::Result; // For error handling
+use crate::core_lang_primitives::Size; // For image dimensions, data sizes
+use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
 use crate::stdlib::collections::{List, Map}; // For pixel data, detected objects
-use crate::stdlib::ml::{Tensor, Model}; // For neural vision models
-use crate::stdlib::gui::{Image, Rect, Point}; // For image representation, bounding boxes
-use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For contextual scene understanding
-
+use crate::stdlib::core::Result; // For error handling
+use crate::stdlib::gui::{Image, Point, Rect}; // For image representation, bounding boxes
+use crate::stdlib::ml::{Model, Tensor}; // For neural vision models // For contextual scene understanding
 
 /// Initializes the Computer Vision standard library components.
 pub fn init_vision_lib() {
@@ -51,20 +49,38 @@ pub struct ImageBuffer {
 
 impl ImageBuffer {
     pub fn new(width: u32, height: u32, format: PixelFormat, data: List<u8>) -> Self {
-        ImageBuffer { width, height, format, data }
+        ImageBuffer {
+            width,
+            height,
+            format,
+            data,
+        }
     }
 
     /// Converts an image to grayscale.
     pub fn to_grayscale(&self) -> Result<ImageBuffer, String> {
         println!("[StdLib::Vision] Converting image to grayscale.");
         // Conceptual: Perform pixel manipulation.
-        Ok(ImageBuffer { width: self.width, height: self.height, format: PixelFormat::Grayscale, data: List::new() })
+        Ok(ImageBuffer {
+            width: self.width,
+            height: self.height,
+            format: PixelFormat::Grayscale,
+            data: List::new(),
+        })
     }
 
     /// Resizes an image.
     pub fn resize(&self, new_width: u32, new_height: u32) -> Result<ImageBuffer, String> {
-        println!("[StdLib::Vision] Resizing image to {}x{}.".to_string(), new_width, new_height);
-        Ok(ImageBuffer { width: new_width, height: new_height, format: self.format.clone(), data: List::new() })
+        println!(
+            "[StdLib::Vision] Resizing image to {}x{}.".to_string(),
+            new_width, new_height
+        );
+        Ok(ImageBuffer {
+            width: new_width,
+            height: new_height,
+            format: self.format.clone(),
+            data: List::new(),
+        })
     }
 }
 
@@ -82,7 +98,10 @@ pub struct Vision;
 impl Vision {
     /// Loads an image from a file.
     pub fn load_image(path: &str) -> Result<ImageBuffer, String> {
-        println!("[StdLib::Vision] Loading image from '{}'.".to_string(), path);
+        println!(
+            "[StdLib::Vision] Loading image from '{}'.".to_string(),
+            path
+        );
         // Conceptual: Uses stdlib::fs to read file, then parses image format.
         Ok(ImageBuffer::new(100, 100, PixelFormat::RGB, List::new()))
     }
@@ -114,13 +133,19 @@ pub struct ObjectDetector {
 
 impl ObjectDetector {
     pub fn new(model: Box<dyn Model>, classes: List<String>) -> Self {
-        ObjectDetector { ml_model: model, classes }
+        ObjectDetector {
+            ml_model: model,
+            classes,
+        }
     }
 
     /// Detects objects in an image.
     /// Can leverage AI accelerators for real-time performance.
     pub fn detect_objects(&self, image: &ImageBuffer) -> Result<List<DetectedObject>, String> {
-        println!("[StdLib::Vision] Detecting objects in image ({}x{}).".to_string(), image.width, image.height);
+        println!(
+            "[StdLib::Vision] Detecting objects in image ({}x{}).".to_string(),
+            image.width, image.height
+        );
         // Conceptual: Convert image to tensor, feed to ML model, parse output.
         Ok(List::new()) // Dummy detected objects
     }
@@ -139,7 +164,10 @@ impl SceneUnderstandingModel {
     /// Analyzes an image to understand the overall scene, relationships between objects, etc.
     /// Can leverage multi-paradigm fusion for richer interpretation.
     pub fn understand_scene(&self, image: &ImageBuffer) -> Result<Map<String, String>, String> {
-        println!("[StdLib::Vision] Understanding scene from image ({}x{}).".to_string(), image.width, image.height);
+        println!(
+            "[StdLib::Vision] Understanding scene from image ({}x{}).".to_string(),
+            image.width, image.height
+        );
         // Conceptual: Outputs high-level scene description.
         Ok(Map::new()) // Dummy scene description
     }
@@ -154,7 +182,10 @@ pub struct MultiModalVision;
 impl MultiModalVision {
     /// Fuses visual data with quantum sensor data for enhanced perception.
     /// Leverages QPU for analysis of quantum entanglement patterns in sensor data.
-    pub fn fuse_quantum_vision(image: &ImageBuffer, quantum_sensor_data: &Tensor<f32>) -> Result<Tensor<f32>, String> {
+    pub fn fuse_quantum_vision(
+        image: &ImageBuffer,
+        quantum_sensor_data: &Tensor<f32>,
+    ) -> Result<Tensor<f32>, String> {
         println!("[StdLib::Vision] Fusing classical image with quantum sensor data.");
         // Conceptual: Complex multi-modal ML model running across classical + quantum hardware.
         Ok(Tensor::new(vec![1])) // Dummy fused representation
@@ -162,15 +193,29 @@ impl MultiModalVision {
 
     /// Analyzes video streams for events, objects, and changes over time.
     /// Leverages MTS for temporal reasoning on video sequences.
-    pub fn analyze_video_stream(video_frames: List<ImageBuffer>, timeline_id: &crate::runtime::mts::TimelineId) -> Result<List<DetectedObject>, String> {
-        println!("[StdLib::Vision] Analyzing video stream ({:?} frames) with MTS timeline {}.".to_string(), video_frames.len(), timeline_id);
+    pub fn analyze_video_stream(
+        video_frames: List<ImageBuffer>,
+        timeline_id: &crate::runtime::mts::TimelineId,
+    ) -> Result<List<DetectedObject>, String> {
+        println!(
+            "[StdLib::Vision] Analyzing video stream ({:?} frames) with MTS timeline {}."
+                .to_string(),
+            video_frames.len(),
+            timeline_id
+        );
         // Conceptual: Each frame is a state on an MTS timeline; analyze causal links between frames.
         Ok(List::new()) // Dummy results
     }
 
     /// Contextualizes visual understanding using Sankofa's knowledge graph.
-    pub fn contextualize_visual_data(image_analysis_results: &Map<String, String>, context_kb: &KnowledgeId) -> Result<Map<String, String>, String> {
-        println!("[StdLib::Vision] Contextualizing visual data using Sankofa KB {}.".to_string(), context_kb.0);
+    pub fn contextualize_visual_data(
+        image_analysis_results: &Map<String, String>,
+        context_kb: &KnowledgeId,
+    ) -> Result<Map<String, String>, String> {
+        println!(
+            "[StdLib::Vision] Contextualizing visual data using Sankofa KB {}.".to_string(),
+            context_kb.0
+        );
         // Conceptual: Query Sankofa for context related to detected objects/scenes.
         Ok(Map::new()) // Dummy enriched analysis
     }

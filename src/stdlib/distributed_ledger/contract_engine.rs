@@ -2,7 +2,7 @@
 //! Zenith — contract_engine module
 
 /// Initialize contract_engine
-pub fn init_contract_engine() { }
+pub fn init_contract_engine() {}
 
 /// Shutdown contract_engine
-pub fn shutdown_contract_engine() { }
+pub fn shutdown_contract_engine() {}

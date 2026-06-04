@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Core Utilities
 //!
 //! This module provides foundational and universally applicable utilities
@@ -6,8 +5,8 @@
 //! structures, common mathematical operations, string manipulation, and
 //! essential input/output functions.
 
-use std::fmt::{self, Display, Formatter}; // For Display trait implementation
-use std::collections::HashMap; // For Map
+use std::collections::HashMap;
+use std::fmt::{self, Display, Formatter}; // For Display trait implementation // For Map
 
 // --- Basic Data Structures (Conceptual) ---
 
@@ -19,7 +18,9 @@ pub struct List<T> {
 
 impl<T> List<T> {
     pub fn new() -> Self {
-        List { elements: Vec::new() }
+        List {
+            elements: Vec::new(),
+        }
     }
 
     pub fn push(&mut self, item: T) {
@@ -51,7 +52,9 @@ pub struct Map<K, V> {
 
 impl<K, V> Map<K, V> {
     pub fn new() -> Self {
-        Map { entries: HashMap::new() }
+        Map {
+            entries: HashMap::new(),
+        }
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
@@ -113,7 +116,11 @@ pub fn abs_float(value: f64) -> f64 {
 
 /// Returns the maximum of two comparable values.
 pub fn max<T: PartialOrd>(a: T, b: T) -> T {
-    if a > b { a } else { b }
+    if a > b {
+        a
+    } else {
+        b
+    }
 }
 
 /// Returns a random float between 0.0 and 1.0 (exclusive).

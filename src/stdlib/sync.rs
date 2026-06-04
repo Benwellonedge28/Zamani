@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Concurrency Utilities Module
 //!
 //! This module provides conceptual APIs for high-level concurrency primitives,
@@ -7,13 +6,12 @@
 //! for quantum, nano-agent, and MTS contexts, leveraging Nimbus OS's secure scheduling.
 
 use crate::ast::Identifier; // For thread names, channel names
-use crate::core_lang_primitives::{Size, TimeStamp, Atomic, Mutex}; // Low-level primitives
-use crate::nimbus_os::mod_rs::{NimbusContextId, ThreadId, ThreadState, NimbusMicrokernel}; // OS-level thread management
-use crate::stdlib::core::Result; // For error handling
+use crate::core_lang_primitives::{Atomic, Mutex, Size, TimeStamp}; // Low-level primitives
+use crate::nimbus_os::mod_rs::{NimbusContextId, NimbusMicrokernel, ThreadId, ThreadState}; // OS-level thread management
 use crate::stdlib::collections::List; // For concurrent collections
+use crate::stdlib::core::Result; // For error handling
 use std::collections::VecDeque; // For MPSC channel
 use std::sync::{Arc, Condvar}; // For Rust's Condvar as concept
-
 
 /// Initializes the concurrency standard library components.
 pub fn init_sync_lib() {
@@ -56,22 +54,33 @@ impl Thread {
             .ok_or_else(|| "Nimbus Microkernel not initialized.".to_string())?;
 
         let mut microkernel = microkernel_instance.lock().unwrap();
-        let thread_id = microkernel.create_thread(current_context_id, entry_point_fn_ptr, stack_size)?;
+        let thread_id =
+            microkernel.create_thread(current_context_id, entry_point_fn_ptr, stack_size)?;
         microkernel.start_thread(current_context_id, thread_id)?; // Start immediately
 
-        Ok(Thread { id: thread_id, context_id: current_context_id, name: name.to_string() })
+        Ok(Thread {
+            id: thread_id,
+            context_id: current_context_id,
+            name: name.to_string(),
+        })
     }
 
     /// Joins the current thread with another, waiting for it to complete.
     pub fn join(&self) -> Result<(), String> {
-        println!("[StdLib::Sync] Joining with thread {}:'{}'.".to_string(), self.id, self.name);
+        println!(
+            "[StdLib::Sync] Joining with thread {}:'{}'.".to_string(),
+            self.id, self.name
+        );
         // Conceptual: Blocks current thread until target thread terminates.
         Ok(())
     }
 
     /// Puts the current thread to sleep for a specified duration.
     pub fn sleep(duration: TimeStamp) {
-        println!("[StdLib::Sync] Thread sleeping for {} ms.".to_string(), duration.0);
+        println!(
+            "[StdLib::Sync] Thread sleeping for {} ms.".to_string(),
+            duration.0
+        );
         // Conceptual: Nimbus OS scheduler is invoked.
     }
 }
@@ -112,7 +121,10 @@ pub fn channel<T: Send + 'static>() -> (Sender<T>, Receiver<T>) {
     println!("[StdLib::Sync] Creating new MPSC channel.");
     let queue = Arc::new(Mutex::new(VecDeque::new()));
     let condvar = Arc::new(Condvar::new());
-    (Sender(queue.clone(), condvar.clone()), Receiver(queue, condvar))
+    (
+        Sender(queue.clone(), condvar.clone()),
+        Receiver(queue, condvar),
+    )
 }
 
 // -----------------------------------------------------------------------------
@@ -128,7 +140,10 @@ pub struct Barrier {
 
 impl Barrier {
     pub fn new(count: usize) -> Self {
-        println!("[StdLib::Sync] Creating Barrier with count {}.".to_string(), count);
+        println!(
+            "[StdLib::Sync] Creating Barrier with count {}.".to_string(),
+            count
+        );
         Barrier {
             count,
             current: Arc::new(Mutex::new(0)),
@@ -156,7 +171,10 @@ impl Barrier {
 
 /// Conceptual: Synchronizes a classical thread with a quantum computation.
 pub fn sync_classical_quantum(thread: &Thread, q_op_handle: u64) -> Result<(), String> {
-    println!("[StdLib::Sync] Synchronizing classical thread {} with quantum operation {}.".to_string(), thread.id, q_op_handle);
+    println!(
+        "[StdLib::Sync] Synchronizing classical thread {} with quantum operation {}.".to_string(),
+        thread.id, q_op_handle
+    );
     // Conceptual: Block classical thread until QPU reports completion of `q_op_handle`.
     // Relies on Nimbus OS's underlying event notification for QPU status.
     Ok(())
@@ -164,15 +182,24 @@ pub fn sync_classical_quantum(thread: &Thread, q_op_handle: u64) -> Result<(), S
 
 /// Conceptual: Synchronizes classical execution with a nano-agent swarm's completion.
 pub fn sync_classical_nano_swarm(thread: &Thread, swarm_id: u64) -> Result<(), String> {
-    println!("[StdLib::Sync] Synchronizing classical thread {} with nano-agent swarm {}.".to_string(), thread.id, swarm_id);
+    println!(
+        "[StdLib::Sync] Synchronizing classical thread {} with nano-agent swarm {}.".to_string(),
+        thread.id, swarm_id
+    );
     // Conceptual: Block classical thread until NACU reports swarm completion/state.
     // Relies on Nimbus OS's IPC for NACU status.
     Ok(())
 }
 
 /// Conceptual: Synchronizes classical code across different MTS timelines.
-pub fn sync_across_mts_timelines(timeline_ids: List<TimelineId>, sync_point: TimeStamp) -> Result<(), String> {
-    println!("[StdLib::Sync] Synchronizing across MTS timelines at timestamp {}.".to_string(), sync_point.0);
+pub fn sync_across_mts_timelines(
+    timeline_ids: List<TimelineId>,
+    sync_point: TimeStamp,
+) -> Result<(), String> {
+    println!(
+        "[StdLib::Sync] Synchronizing across MTS timelines at timestamp {}.".to_string(),
+        sync_point.0
+    );
     // Conceptual: Co-ordinate with MTS Orchestrator to ensure all specified timelines
     // have reached or passed `sync_point`, potentially waiting or merging.
     Ok(())

@@ -1,4 +1,3 @@
-
 //! Zenith Runtime: Core Runtime Components
 //!
 //! This module aggregates and manages the core runtime components for Zenith,
@@ -6,9 +5,9 @@
 //! and concurrency.
 
 pub mod memory_manager; // Memory Allocation and Garbage Collection
-pub mod quantum; // Quantum Runtime Environment
-pub mod nano; // Nano Runtime Environment
 pub mod mts; // Multi-Timeline System for speculative execution
+pub mod nano; // Nano Runtime Environment
+pub mod quantum; // Quantum Runtime Environment
 pub mod sankofa; // Long-term memory and learning integration
 
 /// Initializes all runtime components.

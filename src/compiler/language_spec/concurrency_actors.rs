@@ -1,6 +1,5 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-
 //! Zenith Language Specification: Concurrency with Actors
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
@@ -12,14 +11,13 @@
 //! with Zenith's Multi-Timeline System (MTS) for scheduling, Nimbus OS for
 //! secure isolated execution, and `stdlib::sync` for message passing.
 
-use crate::ast::{Identifier, Type, Statement}; // Zenith AST elements
+use crate::ast::{Identifier, Statement, Type}; // Zenith AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
 use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
-use crate::runtime::mts::{MtsActorRuntime, ActorId}; // Underlying MTS Actor Runtime
-use crate::stdlib::core::Result; // Zenith Result type
+use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId};
+use crate::runtime::mts::{ActorId, MtsActorRuntime}; // Underlying MTS Actor Runtime
 use crate::stdlib::collections::{List, Map}; // Zenith List type
-use crate::nimbus_os::mod_rs::{NimbusContextId, CapabilityToken}; // For secure execution contexts
-
+use crate::stdlib::core::Result; // Zenith Result type // For secure execution contexts
 
 /// Initializes the Concurrency with Actors language specification.
 pub fn init_concurrency_actors_keywords() {
@@ -50,8 +48,16 @@ pub struct ActorDefinitionAst {
 pub struct ConcurrencyActorsSemanticAnalyzer;
 
 impl ConcurrencyActorsSemanticAnalyzer {
-    pub fn analyze(&self, actor_def: &ActorDefinitionAst, semantic_analyzer: &mut SemanticAnalyzer, type_checker: &mut TypeChecker) -> Result<(), String> {
-        println!("[LangSpec::Actors] Performing semantic analysis for actor: {}.".to_string(), actor_def.name.0);
+    pub fn analyze(
+        &self,
+        actor_def: &ActorDefinitionAst,
+        semantic_analyzer: &mut SemanticAnalyzer,
+        type_checker: &mut TypeChecker,
+    ) -> Result<(), String> {
+        println!(
+            "[LangSpec::Actors] Performing semantic analysis for actor: {}.".to_string(),
+            actor_def.name.0
+        );
         // Conceptual:
         // 1. Validate `mailbox_type`, `state_fields`, `message_handlers`.
         // 2. Ensure actor behavior logic is type-safe and E.V.A.S. compliant.
@@ -65,8 +71,14 @@ impl ConcurrencyActorsSemanticAnalyzer {
 pub struct ConcurrencyActorsIrGenerator;
 
 impl ConcurrencyActorsIrGenerator {
-    pub fn generate_ir(&self, actor_def: &ActorDefinitionAst) -> Result<Vec<IrInstruction>, String> {
-        println!("[LangSpec::Actors] Generating IR for actor: {}.".to_string(), actor_def.name.0);
+    pub fn generate_ir(
+        &self,
+        actor_def: &ActorDefinitionAst,
+    ) -> Result<Vec<IrInstruction>, String> {
+        println!(
+            "[LangSpec::Actors] Generating IR for actor: {}.".to_string(),
+            actor_def.name.0
+        );
         // Conceptual:
         // 1. Generate IR for the actor's state initialization.
         // 2. Generate IR for message handler functions.
@@ -74,7 +86,10 @@ impl ConcurrencyActorsIrGenerator {
         //    including its Nimbus OS context requirements.
         // 4. Create secure communication channels via Nimbus OS.
         Ok(List::from(vec![
-            IrInstruction::CallBuiltin("runtime::mts::MtsActorRuntime::register_actor".to_string(), List::new()),
+            IrInstruction::CallBuiltin(
+                "runtime::mts::MtsActorRuntime::register_actor".to_string(),
+                List::new(),
+            ),
             // ... more IR instructions for actor creation, state, handlers
         ]))
     }

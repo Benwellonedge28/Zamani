@@ -1,6 +1,5 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-
 //! Zenith Language Specification: Declarative System Directives
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
@@ -13,14 +12,13 @@
 //! these integrate directly with Zenith's `toolchain::self_evolution` engine
 //! and the Sankofa memory system for managing system changes and historical records.
 
-use crate::ast::{Identifier, Statement, Expression}; // Zenith AST elements
+use crate::ast::{Expression, Identifier, Statement}; // Zenith AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
 use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
-use crate::toolchain::self_evolution::{SelfEvolutionEngine, EvolutionProposal}; // For self-evolution integration
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For version history and learning
+use crate::stdlib::collections::{List, Map};
 use crate::stdlib::core::Result; // Zenith Result type
-use crate::stdlib::collections::{List, Map}; // Zenith List type for rules
-
+use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For self-evolution integration // Zenith List type for rules
 
 /// Initializes the Declarative System Directives language specification.
 pub fn init_declarative_system_directives_keywords() {
@@ -40,7 +38,7 @@ pub fn shutdown_declarative_system_directives_keywords() {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelfAdjustmentAst {
     SelfAdjust(Identifier, Vec<AdjustmentRuleAst>), // e.g., self_adjust MyComponent { ... rules ... }
-    AdjustmentRule(Expression, Statement), // when condition then action
+    AdjustmentRule(Expression, Statement),          // when condition then action
 }
 
 /// Conceptual representation of Zenith's AST nodes for versioning statements.
@@ -58,21 +56,38 @@ pub enum AdjustmentRuleAst {
     Logic(Identifier, Statement),             // logic MyLogic { ... }
 }
 
-
 /// Conceptual semantic analysis for declarative system directives.
 pub struct DeclarativeSystemDirectivesSemanticAnalyzer;
 
 impl DeclarativeSystemDirectivesSemanticAnalyzer {
-    pub fn analyze(&self, ast_node: &SelfAdjustmentAst, semantic_analyzer: &mut SemanticAnalyzer, type_checker: &mut TypeChecker) -> Result<(), String> {
-        println!("[LangSpec::DeclSysDir] Performing semantic analysis for self_adjust statement: {:?}.".to_string(), ast_node);
+    pub fn analyze(
+        &self,
+        ast_node: &SelfAdjustmentAst,
+        semantic_analyzer: &mut SemanticAnalyzer,
+        type_checker: &mut TypeChecker,
+    ) -> Result<(), String> {
+        println!(
+            "[LangSpec::DeclSysDir] Performing semantic analysis for self_adjust statement: {:?}."
+                .to_string(),
+            ast_node
+        );
         // Conceptual:
         // 1. Validate rules and logic for type safety and E.V.A.S. compliance.
         // 2. Register these self-adjustment policies with the `toolchain::self_evolution` engine.
         Ok(())
     }
 
-    pub fn analyze_versioning(&self, ast_node: &VersioningAst, semantic_analyzer: &mut SemanticAnalyzer, type_checker: &mut TypeChecker) -> Result<(), String> {
-        println!("[LangSpec::DeclSysDir] Performing semantic analysis for versioning statement: {:?}.".to_string(), ast_node);
+    pub fn analyze_versioning(
+        &self,
+        ast_node: &VersioningAst,
+        semantic_analyzer: &mut SemanticAnalyzer,
+        type_checker: &mut TypeChecker,
+    ) -> Result<(), String> {
+        println!(
+            "[LangSpec::DeclSysDir] Performing semantic analysis for versioning statement: {:?}."
+                .to_string(),
+            ast_node
+        );
         // Conceptual:
         // 1. Validate version identifiers and timestamps.
         // 2. Register version records and changelogs with Sankofa for historical traceability.
@@ -85,16 +100,28 @@ impl DeclarativeSystemDirectivesSemanticAnalyzer {
 pub struct DeclarativeSystemDirectivesIrGenerator;
 
 impl DeclarativeSystemDirectivesIrGenerator {
-    pub fn generate_ir_self_adjust(&self, ast_node: &SelfAdjustmentAst) -> Result<Vec<IrInstruction>, String> {
-        println!("[LangSpec::DeclSysDir] Generating IR for self_adjust statement: {:?}.".to_string(), ast_node);
+    pub fn generate_ir_self_adjust(
+        &self,
+        ast_node: &SelfAdjustmentAst,
+    ) -> Result<Vec<IrInstruction>, String> {
+        println!(
+            "[LangSpec::DeclSysDir] Generating IR for self_adjust statement: {:?}.".to_string(),
+            ast_node
+        );
         // Conceptual:
         // Translate into IR instructions that configure the `toolchain::self_evolution` engine,
         // defining autonomous monitoring and response rules.
         Ok(vec![])
     }
 
-    pub fn generate_ir_versioning(&self, ast_node: &VersioningAst) -> Result<Vec<IrInstruction>, String> {
-        println!("[LangSpec::DeclSysDir] Generating IR for versioning statement: {:?}.".to_string(), ast_node);
+    pub fn generate_ir_versioning(
+        &self,
+        ast_node: &VersioningAst,
+    ) -> Result<Vec<IrInstruction>, String> {
+        println!(
+            "[LangSpec::DeclSysDir] Generating IR for versioning statement: {:?}.".to_string(),
+            ast_node
+        );
         // Conceptual:
         // Translate into IR instructions that interact with Sankofa to store version metadata and changelogs.
         Ok(vec![])

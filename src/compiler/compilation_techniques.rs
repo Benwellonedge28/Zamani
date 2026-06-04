@@ -1,7 +1,6 @@
 #![cfg(feature = "full")]
 #![allow(dead_code, unused_imports, unused_variables)]
 
-
 //! Zenith Universal Meta-Compiler (UMC): Compilation Techniques Module
 //!
 //! This module conceptually defines and orchestrates the diverse range of
@@ -17,22 +16,23 @@
 //! performance across the entire Omniverse.
 
 use crate::ast::{Identifier, ZenithAstNode}; // For AST representations
+use crate::compiler::backend::{CompiledBinary, TargetPlatform}; // For specific hardware backends
+use crate::compiler::optimizer::{OptimizationLevel, OptimizationPass}; // For various optimization strategies
 use crate::ir_gen::{IrInstruction, ZenithIR}; // For Intermediate Representation
-use crate::compiler::optimizer::{OptimizationPass, OptimizationLevel}; // For various optimization strategies
-use crate::compiler::backend::{TargetPlatform, CompiledBinary}; // For specific hardware backends
-use crate::runtime::mts::MtsTimeline; // For speculative compilation/optimization
-use crate::stdlib::ml::{Model, Tensor}; // For AI-driven compilation models
-use crate::stdlib::ai_reasoning::{Planner, Fact}; // For adaptive compilation planning
-use crate::stdlib::core::Result; // Zenith Result type
-use crate::stdlib::collections::{List, Map}; // For compilation artifacts, metadata
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of compilation choices
+use crate::runtime::mts::MtsTimeline; // For speculative compilation/optimization
+use crate::source_map::Span;
+use crate::stdlib::ai_reasoning::{Fact, Planner}; // For adaptive compilation planning
+use crate::stdlib::collections::{List, Map}; // For compilation artifacts, metadata
+use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::meta_ops::MetaValue; // Generic data for events
-use crate::source_map::Span; // For Identifier creation
-
+use crate::stdlib::ml::{Model, Tensor}; // For AI-driven compilation models // For Identifier creation
 
 /// Initializes the Compilation Techniques module.
 pub fn init_compilation_techniques() {
-    println!("  - Initializing Zenith Compilation Techniques (Hybrid, Adaptive, Multi-Paradigm)...");
+    println!(
+        "  - Initializing Zenith Compilation Techniques (Hybrid, Adaptive, Multi-Paradigm)..."
+    );
 }
 
 /// Shuts down the Compilation Techniques module.
@@ -51,27 +51,47 @@ pub enum CompilationStrategy {
     JustInTime(JitConfig),
     AdaptiveOptimization(AdaptiveOptConfig),
     MultiParadigmTranspilation(TranspilationConfig),
-    HardwareSynthesis(HdlSynthConfig), // For HDL generation
+    HardwareSynthesis(HdlSynthConfig),        // For HDL generation
     QuantumCompilation(QuantumCompileConfig), // Specific to QPU targets
-    NanoCompilation(NanoCompileConfig), // Specific to NACU targets
-    MixedMode(List<CompilationStrategy>), // Combining multiple strategies
+    NanoCompilation(NanoCompileConfig),       // Specific to NACU targets
+    MixedMode(List<CompilationStrategy>),     // Combining multiple strategies
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AotConfig { pub optimization_level: OptimizationLevel, pub target: TargetPlatform }
+pub struct AotConfig {
+    pub optimization_level: OptimizationLevel,
+    pub target: TargetPlatform,
+}
 #[derive(Debug, Clone, PartialEq)]
-pub struct JitConfig { pub enable_profiling: bool, pub recompile_threshold: f32 }
+pub struct JitConfig {
+    pub enable_profiling: bool,
+    pub recompile_threshold: f32,
+}
 #[derive(Debug, Clone, PartialEq)]
-pub struct AdaptiveOptConfig { pub strategy_model: Model, pub learning_rate: f32 }
+pub struct AdaptiveOptConfig {
+    pub strategy_model: Model,
+    pub learning_rate: f32,
+}
 #[derive(Debug, Clone, PartialEq)]
-pub struct TranspilationConfig { pub source_paradigm: Identifier, pub target_paradigm: Identifier }
+pub struct TranspilationConfig {
+    pub source_paradigm: Identifier,
+    pub target_paradigm: Identifier,
+}
 #[derive(Debug, Clone, PartialEq)]
-pub struct HdlSynthConfig { pub target_chip_design: Identifier, pub power_budget_mw: f32 }
+pub struct HdlSynthConfig {
+    pub target_chip_design: Identifier,
+    pub power_budget_mw: f32,
+}
 #[derive(Debug, Clone, PartialEq)]
-pub struct QuantumCompileConfig { pub qpu_architecture: Identifier, pub error_correction_level: f32 }
+pub struct QuantumCompileConfig {
+    pub qpu_architecture: Identifier,
+    pub error_correction_level: f32,
+}
 #[derive(Debug, Clone, PartialEq)]
-pub struct NanoCompileConfig { pub nacu_architecture: Identifier, pub self_assembly_protocol: Identifier }
-
+pub struct NanoCompileConfig {
+    pub nacu_architecture: Identifier,
+    pub self_assembly_protocol: Identifier,
+}
 
 // -----------------------------------------------------------------------------
 // Zenith UMC Compiler Orchestrator
@@ -80,7 +100,7 @@ pub struct NanoCompileConfig { pub nacu_architecture: Identifier, pub self_assem
 pub struct HybridCompilerOrchestrator {
     pub current_strategy: CompilationStrategy,
     pub ai_compiler_model: Model, // ML model to predict optimal strategy
-    pub planner: Planner, // AI planner for complex compilation tasks
+    pub planner: Planner,         // AI planner for complex compilation tasks
 }
 
 impl HybridCompilerOrchestrator {
@@ -90,16 +110,28 @@ impl HybridCompilerOrchestrator {
                 optimization_level: OptimizationLevel::O2,
                 target: TargetPlatform::X86_64,
             }),
-            ai_compiler_model: Model::new(Identifier("adaptive_compiler_model".to_string(), Span::dummy())),
+            ai_compiler_model: Model::new(Identifier(
+                "adaptive_compiler_model".to_string(),
+                Span::dummy(),
+            )),
             planner: Planner::new(),
         }
     }
 
     /// Dynamically selects the most optimal compilation strategy based on input code,
     /// target platform, and runtime characteristics.
-    #[ethics(principles="resource_efficiency", safety_risk="performance_degradation")] // Ethical vetting of compilation choice
-    pub fn select_optimal_strategy(&mut self, source_code_characteristics: Map<String, MetaValue>, deployment_context: Map<String, MetaValue>) -> Result<CompilationStrategy, String> {
-        println!("[Compiler::Tech] Dynamically selecting optimal compilation strategy.".to_string());
+    #[ethics(
+        principles = "resource_efficiency",
+        safety_risk = "performance_degradation"
+    )] // Ethical vetting of compilation choice
+    pub fn select_optimal_strategy(
+        &mut self,
+        source_code_characteristics: Map<String, MetaValue>,
+        deployment_context: Map<String, MetaValue>,
+    ) -> Result<CompilationStrategy, String> {
+        println!(
+            "[Compiler::Tech] Dynamically selecting optimal compilation strategy.".to_string()
+        );
 
         // 1. AI-Driven Prediction: Use ML model to predict best strategy
         let input_tensor = Tensor::new_from_map(source_code_characteristics.clone()); // Dummy
@@ -109,13 +141,22 @@ impl HybridCompilerOrchestrator {
         // 2. E.V.A.S. Vetting: Ensure the chosen strategy is ethically compliant and safe
         let evas_context = EvasActionContext {
             action_type: "compilation_strategy_selection".to_string(),
-            perceived_intent: format!("Optimize code for performance and resource usage: {:?}", predicted_strategy),
+            perceived_intent: format!(
+                "Optimize code for performance and resource usage: {:?}",
+                predicted_strategy
+            ),
             initiating_context_id: nimbus.os.get_current_context_id(),
             // ... add deployment context, code characteristics ...
             ..Default::default()
         };
-        match EvasFilter::new(EvasPolicyLevel::Strict).evaluate_action(evas_context) { // Dummy
-            EvasDecision::Block(reason) => return Err(format!("E.V.A.S. BLOCKED compilation strategy: {}.\n", reason)),
+        match EvasFilter::new(EvasPolicyLevel::Strict).evaluate_action(evas_context) {
+            // Dummy
+            EvasDecision::Block(reason) => {
+                return Err(format!(
+                    "E.V.A.S. BLOCKED compilation strategy: {}.\n",
+                    reason
+                ))
+            }
             _ => println!("[Compiler::Tech] E.V.A.S. approved compilation strategy."),
         }
 
@@ -125,71 +166,155 @@ impl HybridCompilerOrchestrator {
 
     /// Executes the chosen compilation strategy, coordinating various ZUMC components.
     pub fn execute_compilation(&self, source_ir: ZenithIR) -> Result<CompiledArtifact, String> {
-        println!("[Compiler::Tech] Executing compilation using strategy: {:?}.".to_string(), self.current_strategy);
+        println!(
+            "[Compiler::Tech] Executing compilation using strategy: {:?}.".to_string(),
+            self.current_strategy
+        );
 
         match &self.current_strategy {
             CompilationStrategy::AheadOfTime(config) => self.aot_compile(source_ir, config),
             CompilationStrategy::JustInTime(config) => self.jit_compile(source_ir, config),
-            CompilationStrategy::AdaptiveOptimization(config) => self.adaptive_compile(source_ir, config),
-            CompilationStrategy::MultiParadigmTranspilation(config) => self.transpile(source_ir, config),
-            CompilationStrategy::HardwareSynthesis(config) => self.hdl_synthesize(source_ir, config),
-            CompilationStrategy::QuantumCompilation(config) => self.quantum_compile(source_ir, config),
+            CompilationStrategy::AdaptiveOptimization(config) => {
+                self.adaptive_compile(source_ir, config)
+            }
+            CompilationStrategy::MultiParadigmTranspilation(config) => {
+                self.transpile(source_ir, config)
+            }
+            CompilationStrategy::HardwareSynthesis(config) => {
+                self.hdl_synthesize(source_ir, config)
+            }
+            CompilationStrategy::QuantumCompilation(config) => {
+                self.quantum_compile(source_ir, config)
+            }
             CompilationStrategy::NanoCompilation(config) => self.nano_compile(source_ir, config),
-            CompilationStrategy::MixedMode(strategies) => self.mixed_mode_compile(source_ir, strategies),
+            CompilationStrategy::MixedMode(strategies) => {
+                self.mixed_mode_compile(source_ir, strategies)
+            }
         }
     }
 
     // --- Private/Internal Compilation Method Implementations (Conceptual) ---
 
     fn aot_compile(&self, ir: ZenithIR, config: &AotConfig) -> Result<CompiledArtifact, String> {
-        println!("[Compiler::Tech] Performing Ahead-of-Time compilation for target {:?}.".to_string(), config.target);
+        println!(
+            "[Compiler::Tech] Performing Ahead-of-Time compilation for target {:?}.".to_string(),
+            config.target
+        );
         // Conceptual: IR -> Optimizer -> Backend (e.g., LLVM, GCC)
-        let optimized_ir = crate::compiler::optimizer::Optimizer::new().optimize(ir, config.optimization_level)?;
-        let compiled_binary = crate::compiler::backend::Backend::new().generate_code(optimized_ir, config.target)?; // Call generate_code from Backend
+        let optimized_ir =
+            crate::compiler::optimizer::Optimizer::new().optimize(ir, config.optimization_level)?;
+        let compiled_binary =
+            crate::compiler::backend::Backend::new().generate_code(optimized_ir, config.target)?; // Call generate_code from Backend
         Ok(CompiledArtifact::Binary(compiled_binary))
     }
 
     fn jit_compile(&self, ir: ZenithIR, config: &JitConfig) -> Result<CompiledArtifact, String> {
-        println!("[Compiler::Tech] Performing Just-in-Time compilation (profiling enabled: {}).".to_string(), config.enable_profiling);
+        println!(
+            "[Compiler::Tech] Performing Just-in-Time compilation (profiling enabled: {})."
+                .to_string(),
+            config.enable_profiling
+        );
         // Conceptual: IR -> runtime code generation (e.g., LLVM JIT, custom JIT)
-        Ok(CompiledArtifact::RuntimeCodeRef(Identifier("jit_handle".to_string(), Span::dummy())))
+        Ok(CompiledArtifact::RuntimeCodeRef(Identifier(
+            "jit_handle".to_string(),
+            Span::dummy(),
+        )))
     }
 
-    fn adaptive_compile(&self, ir: ZenithIR, config: &AdaptiveOptConfig) -> Result<CompiledArtifact, String> {
-        println!("[Compiler::Tech] Performing Adaptive Optimization (using model {:?}).".to_string(), config.strategy_model.id);
+    fn adaptive_compile(
+        &self,
+        ir: ZenithIR,
+        config: &AdaptiveOptConfig,
+    ) -> Result<CompiledArtifact, String> {
+        println!(
+            "[Compiler::Tech] Performing Adaptive Optimization (using model {:?}).".to_string(),
+            config.strategy_model.id
+        );
         // Conceptual: Profile -> analyze hotspots -> re-optimize/re-JIT code sections.
-        Ok(CompiledArtifact::RuntimeCodeRef(Identifier("adaptive_jit_handle".to_string(), Span::dummy())))
+        Ok(CompiledArtifact::RuntimeCodeRef(Identifier(
+            "adaptive_jit_handle".to_string(),
+            Span::dummy(),
+        )))
     }
 
-    fn transpile(&self, ir: ZenithIR, config: &TranspilationConfig) -> Result<CompiledArtifact, String> {
-        println!("[Compiler::Tech] Performing Multi-Paradigm Transpilation from {:?} to {:?}.".to_string(), config.source_paradigm.0, config.target_paradigm.0);
+    fn transpile(
+        &self,
+        ir: ZenithIR,
+        config: &TranspilationConfig,
+    ) -> Result<CompiledArtifact, String> {
+        println!(
+            "[Compiler::Tech] Performing Multi-Paradigm Transpilation from {:?} to {:?}."
+                .to_string(),
+            config.source_paradigm.0, config.target_paradigm.0
+        );
         // Conceptual: IR -> semantic transformation -> new IR for target paradigm.
         // E.g., classical loop to quantum phase estimation, or classical to nano-swarm behavior.
-        Ok(CompiledArtifact::ZenithIR(ZenithIR::new(Identifier("transpiled_ir".to_string(), Span::dummy()))))
+        Ok(CompiledArtifact::ZenithIR(ZenithIR::new(Identifier(
+            "transpiled_ir".to_string(),
+            Span::dummy(),
+        ))))
     }
 
-    fn hdl_synthesize(&self, ir: ZenithIR, config: &HdlSynthConfig) -> Result<CompiledArtifact, String> {
-        println!("[Compiler::Tech] Performing Hardware Description Language synthesis for {:?}.".to_string(), config.target_chip_design.0);
+    fn hdl_synthesize(
+        &self,
+        ir: ZenithIR,
+        config: &HdlSynthConfig,
+    ) -> Result<CompiledArtifact, String> {
+        println!(
+            "[Compiler::Tech] Performing Hardware Description Language synthesis for {:?}."
+                .to_string(),
+            config.target_chip_design.0
+        );
         // Conceptual: IR -> Zenith HDL -> (external tools) -> GDSII, Verilog.
-        Ok(CompiledArtifact::HardwareDescription(Identifier("generated_hdl".to_string(), Span::dummy())))
+        Ok(CompiledArtifact::HardwareDescription(Identifier(
+            "generated_hdl".to_string(),
+            Span::dummy(),
+        )))
     }
 
-    fn quantum_compile(&self, ir: ZenithIR, config: &QuantumCompileConfig) -> Result<CompiledArtifact, String> {
-        println!("[Compiler::Tech] Performing Quantum Compilation for QPU {:?}.".to_string(), config.qpu_architecture.0);
+    fn quantum_compile(
+        &self,
+        ir: ZenithIR,
+        config: &QuantumCompileConfig,
+    ) -> Result<CompiledArtifact, String> {
+        println!(
+            "[Compiler::Tech] Performing Quantum Compilation for QPU {:?}.".to_string(),
+            config.qpu_architecture.0
+        );
         // Conceptual: Quantum IR -> QPU-specific instruction set (e.g., OpenQASM, Quil).
-        Ok(CompiledArtifact::QuantumCircuit(Identifier("compiled_q_circuit".to_string(), Span::dummy())))
+        Ok(CompiledArtifact::QuantumCircuit(Identifier(
+            "compiled_q_circuit".to_string(),
+            Span::dummy(),
+        )))
     }
 
-    fn nano_compile(&self, ir: ZenithIR, config: &NanoCompileConfig) -> Result<CompiledArtifact, String> {
-        println!("[Compiler::Tech] Performing Nano-Compilation for NACU {:?}.".to_string(), config.nacu_architecture.0);
+    fn nano_compile(
+        &self,
+        ir: ZenithIR,
+        config: &NanoCompileConfig,
+    ) -> Result<CompiledArtifact, String> {
+        println!(
+            "[Compiler::Tech] Performing Nano-Compilation for NACU {:?}.".to_string(),
+            config.nacu_architecture.0
+        );
         // Conceptual: Nano-agent behavior IR -> NACU-specific control sequences for self-assembly/function.
-        Ok(CompiledArtifact::NanoAssemblyInstructions(Identifier("compiled_nano_inst".to_string(), Span::dummy())))
+        Ok(CompiledArtifact::NanoAssemblyInstructions(Identifier(
+            "compiled_nano_inst".to_string(),
+            Span::dummy(),
+        )))
     }
 
-    fn mixed_mode_compile(&self, ir: ZenithIR, strategies: &List<CompilationStrategy>) -> Result<CompiledArtifact, String> {
-        println!("[Compiler::Tech] Performing Mixed-Mode compilation with {:?} strategies.".to_string(), strategies.len());
+    fn mixed_mode_compile(
+        &self,
+        ir: ZenithIR,
+        strategies: &List<CompilationStrategy>,
+    ) -> Result<CompiledArtifact, String> {
+        println!(
+            "[Compiler::Tech] Performing Mixed-Mode compilation with {:?} strategies.".to_string(),
+            strategies.len()
+        );
         // Conceptual: Orchestrate multiple compilation passes, potentially in parallel or sequential.
-        // E.g., AOT for core logic, JIT for hot paths, Quantum for specific functions. 
+        // E.g., AOT for core logic, JIT for hot paths, Quantum for specific functions.
         Ok(CompiledArtifact::Mixed(List::new()))
     }
 
@@ -222,32 +347,79 @@ pub enum CompiledArtifact {
 // Dummy structures needed for compilation techniques module
 // Should ideally come from other compiler modules
 pub mod optimizer {
-    use crate::ir_gen::ZenithIR;
-    use crate::stdlib::core::Result;
-    use crate::stdlib::collections::Map;
     use crate::ast::Identifier;
+    use crate::ir_gen::ZenithIR;
+    use crate::stdlib::collections::Map;
+    use crate::stdlib::core::Result;
 
     #[derive(Debug, Clone, PartialEq)]
-    pub enum OptimizationLevel { O0, O1, O2, O3, Os, Oz }
-    pub struct Optimizer { pub id: Identifier }
+    pub enum OptimizationLevel {
+        O0,
+        O1,
+        O2,
+        O3,
+        Os,
+        Oz,
+    }
+    pub struct Optimizer {
+        pub id: Identifier,
+    }
     impl Optimizer {
-        pub fn new() -> Self { Optimizer { id: Identifier("default_optimizer".to_string(), crate::source_map::Span::dummy()) } }
-        pub fn optimize(&self, ir: ZenithIR, level: OptimizationLevel) -> Result<ZenithIR, String> { Ok(ir) }
+        pub fn new() -> Self {
+            Optimizer {
+                id: Identifier(
+                    "default_optimizer".to_string(),
+                    crate::source_map::Span::dummy(),
+                ),
+            }
+        }
+        pub fn optimize(&self, ir: ZenithIR, level: OptimizationLevel) -> Result<ZenithIR, String> {
+            Ok(ir)
+        }
     }
 }
 
 pub mod backend {
+    use crate::ast::Identifier;
     use crate::ir_gen::ZenithIR;
     use crate::stdlib::core::Result;
-    use crate::ast::Identifier;
 
     #[derive(Debug, Clone, PartialEq)]
-    pub enum TargetPlatform { X86_64, ARM64, WASM, LLVMIR, QPU, NACU, Custom(Identifier) }
-    pub struct CompiledBinary { pub data: crate::stdlib::collections::List<u8>, pub format: String }
-    pub struct Backend { pub id: Identifier }
+    pub enum TargetPlatform {
+        X86_64,
+        ARM64,
+        WASM,
+        LLVMIR,
+        QPU,
+        NACU,
+        Custom(Identifier),
+    }
+    pub struct CompiledBinary {
+        pub data: crate::stdlib::collections::List<u8>,
+        pub format: String,
+    }
+    pub struct Backend {
+        pub id: Identifier,
+    }
     impl Backend {
-        pub fn new() -> Self { Backend { id: Identifier("default_backend".to_string(), crate::source_map::Span::dummy()) } }
-        pub fn generate_code(&self, ir: ZenithIR, target: TargetPlatform) -> Result<CompiledBinary, String> { Ok(CompiledBinary { data: crate::stdlib::collections::List::new(), format: "elf".to_string() }) }
+        pub fn new() -> Self {
+            Backend {
+                id: Identifier(
+                    "default_backend".to_string(),
+                    crate::source_map::Span::dummy(),
+                ),
+            }
+        }
+        pub fn generate_code(
+            &self,
+            ir: ZenithIR,
+            target: TargetPlatform,
+        ) -> Result<CompiledBinary, String> {
+            Ok(CompiledBinary {
+                data: crate::stdlib::collections::List::new(),
+                format: "elf".to_string(),
+            })
+        }
     }
 }
 
@@ -258,17 +430,30 @@ pub mod ir_gen {
     #[derive(Debug, Clone, PartialEq)]
     pub struct IrInstruction; // Dummy
     #[derive(Debug, Clone, PartialEq)]
-    pub struct ZenithIR { pub id: Identifier, pub instructions: crate::stdlib::collections::List<IrInstruction> }
+    pub struct ZenithIR {
+        pub id: Identifier,
+        pub instructions: crate::stdlib::collections::List<IrInstruction>,
+    }
     impl ZenithIR {
-        pub fn new(id: Identifier) -> Self { ZenithIR { id, instructions: crate::stdlib::collections::List::new() } }
+        pub fn new(id: Identifier) -> Self {
+            ZenithIR {
+                id,
+                instructions: crate::stdlib::collections::List::new(),
+            }
+        }
     }
 }
 
-pub mod nlp { // Dummy nlp module elements needed for compilation
+pub mod nlp {
+    // Dummy nlp module elements needed for compilation
     use crate::stdlib::collections::Map;
     use crate::stdlib::meta_ops::MetaValue;
     #[derive(Debug, Clone, PartialEq)]
-    pub enum Sentiment { Positive, Negative, Neutral }
+    pub enum Sentiment {
+        Positive,
+        Negative,
+        Neutral,
+    }
     // Define other necessary structs/enums if needed by other modules
 }
 
@@ -285,7 +470,6 @@ pub mod nlp { // Dummy nlp module elements needed for compilation
 //     }
 // }
 
-
 // ZENITH_SYNTAX: extension ai_reasoning {
 //     pub struct Planner { pub id: Identifier }
 //     impl Planner {
@@ -293,8 +477,6 @@ pub mod nlp { // Dummy nlp module elements needed for compilation
 //     }
 // }
 
-
 // ZENITH_SYNTAX: extension nimbus::os {
 //     fn get_current_context_id() -> NimbusContextId { 0 }
 // }
-

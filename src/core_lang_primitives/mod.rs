@@ -1,4 +1,3 @@
-
 //! Zenith Universal Meta-Compiler (UMC) Core Language Primitives
 //!
 //! This module defines fundamental traits, types, and interfaces that are
@@ -7,11 +6,11 @@
 //! These are "core" concepts, meaning they are often compiler-intrinsics
 //! or directly supported by the Zenith runtime/Nimbus OS.
 
+use crate::ast::Identifier;
 use std::collections::HashMap; // For conceptual use in NimbusSystemCall
-use std::ptr; // For raw pointers
-use crate::ast::Identifier; // For Identifier
-// Updated import path for Nimbus OS types
-use crate::nimbus_os::mod_rs::{NimbusContextId, SandboxPolicy, NimbusMicrokernel}; 
+use std::ptr; // For raw pointers // For Identifier
+              // Updated import path for Nimbus OS types
+use crate::nimbus_os::mod_rs::{NimbusContextId, NimbusMicrokernel, SandboxPolicy};
 use crate::runtime::nimbus_os_interface; // For access to global microkernel instance
 
 // -----------------------------------------------------------------------------
@@ -70,10 +69,10 @@ pub struct TimeStamp(pub u64); // Milliseconds from epoch, or abstract timeline 
 pub enum MemoryRegion {
     GeneralPurposeHeap,
     Stack,
-    SecureRegion(u64), // Policy ID for Nimbus-managed secure memory
-    QpuLocalMemory(u64), // Memory local to a Quantum Processing Unit
+    SecureRegion(u64),         // Policy ID for Nimbus-managed secure memory
+    QpuLocalMemory(u64),       // Memory local to a Quantum Processing Unit
     NanoAgentLocalMemory(u64), // Memory local to a Nano-Agent instance
-    SharedMemory(u64), // Shared memory segment ID
+    SharedMemory(u64),         // Shared memory segment ID
 }
 
 /// Conceptual interface for general-purpose heap allocation.
@@ -83,26 +82,39 @@ impl HeapAlloc {
     /// Allocates memory on the general-purpose heap.
     /// Returns a raw pointer (conceptual).
     pub fn allocate(size: Size) -> *mut u8 {
-        println!("[Core::Mem] Conceptual HeapAlloc: Allocating {} bytes.", size.0);
+        println!(
+            "[Core::Mem] Conceptual HeapAlloc: Allocating {} bytes.",
+            size.0
+        );
         // Conceptual: Delegates to Nimbus OS kernel for memory allocation
         ptr::null_mut() // Dummy pointer
     }
 
     /// Reallocates a block of memory on the heap.
     pub fn reallocate(ptr: *mut u8, old_size: Size, new_size: Size) -> *mut u8 {
-        println!("[Core::Mem] Conceptual HeapAlloc: Reallocating from {} to {} bytes at {:p}.".to_string(), old_size.0, new_size.0, ptr);
+        println!(
+            "[Core::Mem] Conceptual HeapAlloc: Reallocating from {} to {} bytes at {:p}."
+                .to_string(),
+            old_size.0, new_size.0, ptr
+        );
         ptr::null_mut() // Dummy pointer
     }
 
     /// Deallocates memory from the heap.
     pub fn deallocate(ptr: *mut u8, size: Size) {
-        println!("[Core::Mem] Conceptual HeapAlloc: Deallocating {} bytes at {:p}.".to_string(), size.0, ptr);
+        println!(
+            "[Core::Mem] Conceptual HeapAlloc: Deallocating {} bytes at {:p}.".to_string(),
+            size.0, ptr
+        );
         // Conceptual: Delegates to Nimbus OS kernel for memory deallocation
     }
 
     /// Allocates memory on the heap with a specific alignment.
     pub fn aligned_allocate(size: Size, alignment: Size) -> *mut u8 {
-        println!("[Core::Mem] Conceptual HeapAlloc: Allocating {} bytes with alignment {}.".to_string(), size.0, alignment.0);
+        println!(
+            "[Core::Mem] Conceptual HeapAlloc: Allocating {} bytes with alignment {}.".to_string(),
+            size.0, alignment.0
+        );
         ptr::null_mut() // Dummy pointer
     }
 }
@@ -120,7 +132,11 @@ impl StackAlloc {
 
     /// Allocates a temporary block on the stack (conceptual, compiler intrinsic).
     pub fn allocate_temp(size: Size) -> *mut u8 {
-        println!("[Core::Mem] Conceptual StackAlloc: Allocating {} bytes temporarily on stack.".to_string(), size.0);
+        println!(
+            "[Core::Mem] Conceptual StackAlloc: Allocating {} bytes temporarily on stack."
+                .to_string(),
+            size.0
+        );
         ptr::null_mut() // Dummy pointer
     }
 }
@@ -131,7 +147,11 @@ pub struct LinearAllocator;
 impl LinearAllocator {
     /// Allocates memory for a linear type.
     pub fn allocate(size: Size) -> *mut u8 {
-        println!("[Core::Mem] Conceptual LinearAllocator: Allocating {} bytes for a linear type.".to_string(), size.0);
+        println!(
+            "[Core::Mem] Conceptual LinearAllocator: Allocating {} bytes for a linear type."
+                .to_string(),
+            size.0
+        );
         // Conceptual: Allocation might involve special tracking to ensure single use.
         ptr::null_mut() // Dummy pointer
     }
@@ -149,7 +169,11 @@ pub struct AffineAllocator;
 impl AffineAllocator {
     /// Allocates memory for an affine type.
     pub fn allocate(size: Size) -> *mut u8 {
-        println!("[Core::Mem] Conceptual AffineAllocator: Allocating {} bytes for an affine type.".to_string(), size.0);
+        println!(
+            "[Core::Mem] Conceptual AffineAllocator: Allocating {} bytes for an affine type."
+                .to_string(),
+            size.0
+        );
         // Conceptual: Allocation might involve special tracking to ensure at most one use.
         ptr::null_mut() // Dummy pointer
     }
@@ -160,7 +184,6 @@ impl AffineAllocator {
         // Conceptual: Runtime check to ensure it was used at most once.
     }
 }
-
 
 // -----------------------------------------------------------------------------
 // Concurrency Primitives (Conceptual Low-Level)
@@ -173,7 +196,10 @@ impl<T> Atomic<T> {
     pub fn new(value: T) -> Self {
         println!("[Core::Concurrency] Conceptual Atomic: Creating new atomic variable.");
         // Conceptual: Initialize atomic storage in Nimbus shared memory region
-        Atomic(std::sync::atomic::AtomicUsize::new(0), std::marker::PhantomData)
+        Atomic(
+            std::sync::atomic::AtomicUsize::new(0),
+            std::marker::PhantomData,
+        )
     }
 
     /// Conceptually performs an atomic compare-and-swap.
@@ -202,7 +228,6 @@ impl<T> Mutex<T> {
     }
 }
 
-
 // -----------------------------------------------------------------------------
 // Nimbus OS Interaction (Conceptual System Calls)
 // -----------------------------------------------------------------------------
@@ -230,7 +255,11 @@ impl NimbusSystemCall {
 
     /// Conceptual: Deallocates a secure memory region via Nimbus microkernel.
     pub fn secure_dealloc(ptr: *mut u8, size: Size, region: MemoryRegion) {
-        println!("[Core::Nimbus] Conceptual SystemCall: SecureDealloc {} bytes in region {:?} at {:p}.".to_string(), size.0, region, ptr);
+        println!(
+            "[Core::Nimbus] Conceptual SystemCall: SecureDealloc {} bytes in region {:?} at {:p}."
+                .to_string(),
+            size.0, region, ptr
+        );
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let mut microkernel = microkernel_arc.lock().unwrap();
             // Conceptual: microkernel.secure_dealloc_internal(ptr, size, region)
@@ -239,7 +268,10 @@ impl NimbusSystemCall {
 
     /// Conceptual: Allocates a shared memory region between specified contexts.
     pub fn allocate_shared_memory(size: Size, contexts: &[NimbusContextId]) -> Result<u64, String> {
-        println!("[Core::Nimbus] Conceptual SystemCall: Allocating {} bytes shared by {:?}.".to_string(), size.0, contexts);
+        println!(
+            "[Core::Nimbus] Conceptual SystemCall: Allocating {} bytes shared by {:?}.".to_string(),
+            size.0, contexts
+        );
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let mut microkernel = microkernel_arc.lock().unwrap();
             // Conceptual: microkernel.allocate_shared_memory_internal(size, contexts)
@@ -248,7 +280,11 @@ impl NimbusSystemCall {
     }
 
     /// Conceptual: Maps a memory region into a context's address space.
-    pub fn map_memory_region(context_id: NimbusContextId, region_id: u64, permissions: u8) -> Result<(), String> {
+    pub fn map_memory_region(
+        context_id: NimbusContextId,
+        region_id: u64,
+        permissions: u8,
+    ) -> Result<(), String> {
         println!("[Core::Nimbus] Conceptual SystemCall: Mapping memory region {} to context {} with permissions {}.".to_string(), region_id, context_id, permissions);
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let mut microkernel = microkernel_arc.lock().unwrap();
@@ -258,19 +294,32 @@ impl NimbusSystemCall {
     }
 
     /// Conceptual: Creates a new isolated execution context (process/thread/timeline).
-    pub fn create_isolated_context(blueprint_id: Identifier, sandbox_policy: SandboxPolicy) -> NimbusContextId {
+    pub fn create_isolated_context(
+        blueprint_id: Identifier,
+        sandbox_policy: SandboxPolicy,
+    ) -> NimbusContextId {
         println!("[Core::Nimbus] Conceptual SystemCall: CreateIsolatedContext with blueprint {:?} and policy {:?}.".to_string(), blueprint_id, sandbox_policy);
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let mut microkernel = microkernel_arc.lock().unwrap();
-            microkernel.create_context(blueprint_id.0, None, sandbox_policy).unwrap_or(0)
+            microkernel
+                .create_context(blueprint_id.0, None, sandbox_policy)
+                .unwrap_or(0)
         } else {
             0 // Dummy
         }
     }
 
     /// Conceptual: Sends a message via Nimbus's secure IPC channel.
-    pub fn send_secure_message(target_context_id: NimbusContextId, message: &[u8]) -> Result<(), String> {
-        println!("[Core::Nimbus] Conceptual SystemCall: SendSecureMessage to context {} ({} bytes).".to_string(), target_context_id, message.len());
+    pub fn send_secure_message(
+        target_context_id: NimbusContextId,
+        message: &[u8],
+    ) -> Result<(), String> {
+        println!(
+            "[Core::Nimbus] Conceptual SystemCall: SendSecureMessage to context {} ({} bytes)."
+                .to_string(),
+            target_context_id,
+            message.len()
+        );
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let microkernel = microkernel_arc.lock().unwrap();
             // Conceptual: microkernel.send_message_to_context(target_context_id, message)
@@ -280,7 +329,11 @@ impl NimbusSystemCall {
 
     /// Conceptual: Receives a message via Nimbus's secure IPC channel.
     pub fn receive_secure_message(context_id: NimbusContextId) -> Result<Option<Vec<u8>>, String> {
-        println!("[Core::Nimbus] Conceptual SystemCall: Receiving secure message for context {}.".to_string(), context_id);
+        println!(
+            "[Core::Nimbus] Conceptual SystemCall: Receiving secure message for context {}."
+                .to_string(),
+            context_id
+        );
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let microkernel = microkernel_arc.lock().unwrap();
             // Conceptual: microkernel.receive_message_from_context(context_id)
@@ -289,7 +342,11 @@ impl NimbusSystemCall {
     }
 
     /// Conceptual: Accesses Nimbus's hardware abstraction layer for specific device.
-    pub fn hardware_access(context_id: NimbusContextId, device_id: u64, command: &[u8]) -> Result<Vec<u8>, String> {
+    pub fn hardware_access(
+        context_id: NimbusContextId,
+        device_id: u64,
+        command: &[u8],
+    ) -> Result<Vec<u8>, String> {
         println!("[Core::Nimbus] Conceptual SystemCall: Context {} accessing hardware device {} with command.".to_string(), context_id, device_id);
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let microkernel = microkernel_arc.lock().unwrap();

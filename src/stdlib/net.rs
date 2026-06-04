@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Networking Module
 //!
 //! This module provides conceptual APIs for network communication, enabling Zenith
@@ -7,12 +6,11 @@
 
 use crate::ast::Identifier; // For hostnames
 use crate::core_lang_primitives::{Size, TimeStamp}; // For timeouts, buffer sizes
-// Use specific imports from nimbus_os::mod_rs for clarity
-use crate::nimbus_os::mod_rs::{NimbusContextId, ChannelId, NimbusMicrokernel};
+                                                    // Use specific imports from nimbus_os::mod_rs for clarity
+use crate::nimbus_os::mod_rs::{ChannelId, NimbusContextId, NimbusMicrokernel};
 use crate::stdlib::core::Result; // For error handling
 use std::collections::HashMap; // For headers
 use std::sync::{Arc, Mutex}; // For internal NimbusMicrokernel access
-
 
 /// Initializes the networking standard library components.
 pub fn init_net_lib() {
@@ -60,7 +58,10 @@ pub struct TcpListener;
 
 impl TcpListener {
     pub fn bind(addr: SocketAddr) -> Result<Self, String> {
-        println!("[StdLib::Net] TcpListener: Binding to {:?}.".to_string(), addr);
+        println!(
+            "[StdLib::Net] TcpListener: Binding to {:?}.".to_string(),
+            addr
+        );
         // Conceptual: Nimbus OS would provide secure network capabilities.
         Ok(TcpListener)
     }
@@ -68,7 +69,13 @@ impl TcpListener {
     pub fn accept(&self) -> Result<(TcpStream, SocketAddr), String> {
         println!("[StdLib::Net] TcpListener: Accepting connection.");
         // Conceptual: Blocks until a connection is established.
-        Ok((TcpStream, SocketAddr { ip: IpAddr::V4(127, 0, 0, 1), port: 8080 }))
+        Ok((
+            TcpStream,
+            SocketAddr {
+                ip: IpAddr::V4(127, 0, 0, 1),
+                port: 8080,
+            },
+        ))
     }
 }
 
@@ -77,7 +84,10 @@ pub struct TcpStream;
 
 impl TcpStream {
     pub fn connect(addr: SocketAddr) -> Result<Self, String> {
-        println!("[StdLib::Net] TcpStream: Connecting to {:?}.".to_string(), addr);
+        println!(
+            "[StdLib::Net] TcpStream: Connecting to {:?}.".to_string(),
+            addr
+        );
         // Conceptual: Initiates a connection.
         Ok(TcpStream)
     }
@@ -90,7 +100,10 @@ impl NetworkConnection for TcpStream {
         Ok(Size(data.len()))
     }
     fn receive(&self, buffer: &mut [u8]) -> Result<Size, String> {
-        println!("[StdLib::Net] TcpStream: Receiving into {} byte buffer.", buffer.len());
+        println!(
+            "[StdLib::Net] TcpStream: Receiving into {} byte buffer.",
+            buffer.len()
+        );
         // Conceptual: Call to Nimbus OS network stack.
         Ok(Size(buffer.len() / 2)) // Dummy receive half
     }
@@ -99,10 +112,16 @@ impl NetworkConnection for TcpStream {
         Ok(())
     }
     fn peer_addr(&self) -> Result<SocketAddr, String> {
-        Ok(SocketAddr { ip: IpAddr::V4(127, 0, 0, 1), port: 8080 })
+        Ok(SocketAddr {
+            ip: IpAddr::V4(127, 0, 0, 1),
+            port: 8080,
+        })
     }
     fn local_addr(&self) -> Result<SocketAddr, String> {
-        Ok(SocketAddr { ip: IpAddr::V4(127, 0, 0, 1), port: 12345 })
+        Ok(SocketAddr {
+            ip: IpAddr::V4(127, 0, 0, 1),
+            port: 12345,
+        })
     }
 }
 
@@ -115,18 +134,34 @@ pub struct UdpSocket;
 
 impl UdpSocket {
     pub fn bind(addr: SocketAddr) -> Result<Self, String> {
-        println!("[StdLib::Net] UdpSocket: Binding to {:?}.".to_string(), addr);
+        println!(
+            "[StdLib::Net] UdpSocket: Binding to {:?}.".to_string(),
+            addr
+        );
         Ok(UdpSocket)
     }
 
     pub fn send_to(&self, data: &[u8], addr: SocketAddr) -> Result<Size, String> {
-        println!("[StdLib::Net] UdpSocket: Sending {} bytes to {:?}.".to_string(), data.len(), addr);
+        println!(
+            "[StdLib::Net] UdpSocket: Sending {} bytes to {:?}.".to_string(),
+            data.len(),
+            addr
+        );
         Ok(Size(data.len()))
     }
 
     pub fn receive_from(&self, buffer: &mut [u8]) -> Result<(Size, SocketAddr), String> {
-        println!("[StdLib::Net] UdpSocket: Receiving from {} byte buffer.".to_string(), buffer.len());
-        Ok((Size(buffer.len() / 2), SocketAddr { ip: IpAddr::V4(127, 0, 0, 1), port: 8080 }))
+        println!(
+            "[StdLib::Net] UdpSocket: Receiving from {} byte buffer.".to_string(),
+            buffer.len()
+        );
+        Ok((
+            Size(buffer.len() / 2),
+            SocketAddr {
+                ip: IpAddr::V4(127, 0, 0, 1),
+                port: 8080,
+            },
+        ))
     }
 }
 
@@ -155,15 +190,22 @@ pub struct HttpResponse {
 pub struct HttpClient;
 
 impl HttpClient {
-    pub fn new() -> Self { HttpClient }
+    pub fn new() -> Self {
+        HttpClient
+    }
 
     pub fn send(&self, request: HttpRequest) -> Result<HttpResponse, String> {
-        println!("[StdLib::Net] HttpClient: Sending {} request to {}.".to_string(), request.method, request.url);
+        println!(
+            "[StdLib::Net] HttpClient: Sending {} request to {}.".to_string(),
+            request.method, request.url
+        );
         // Conceptual: Internally uses TcpStream or secure channels, potentially via NimbusSystemCall
         Ok(HttpResponse {
             status: 200,
             headers: HashMap::new(),
-            body: "<html><body>Hello Zenith!</body></html>".as_bytes().to_vec(),
+            body: "<html><body>Hello Zenith!</body></html>"
+                .as_bytes()
+                .to_vec(),
         })
     }
 }
@@ -182,32 +224,61 @@ pub struct SecureChannel {
 
 impl SecureChannel {
     /// Establishes a secure channel between two Nimbus contexts.
-    pub fn establish(local_context: NimbusContextId, peer_context: NimbusContextId) -> Result<Self, String> {
-        println!("[StdLib::Net] SecureChannel: Establishing between contexts {} and {}.".to_string(), local_context, peer_context);
-        
+    pub fn establish(
+        local_context: NimbusContextId,
+        peer_context: NimbusContextId,
+    ) -> Result<Self, String> {
+        println!(
+            "[StdLib::Net] SecureChannel: Establishing between contexts {} and {}.".to_string(),
+            local_context, peer_context
+        );
+
         // Conceptual: Retrieve the global microkernel instance
         let microkernel_instance = crate::runtime::nimbus_os_interface::get_nimbus_microkernel()
             .ok_or_else(|| "Nimbus Microkernel not initialized.".to_string())?;
 
-        let channel_id = microkernel_instance.lock().unwrap().create_channel(local_context, peer_context)?;
-        Ok(SecureChannel { channel_id, local_context_id: local_context, peer_context_id: peer_context, microkernel_instance })
+        let channel_id = microkernel_instance
+            .lock()
+            .unwrap()
+            .create_channel(local_context, peer_context)?;
+        Ok(SecureChannel {
+            channel_id,
+            local_context_id: local_context,
+            peer_context_id: peer_context,
+            microkernel_instance,
+        })
     }
 
     /// Sends a message through the secure channel.
     pub fn send_message(&self, data: &[u8]) -> Result<(), String> {
-        println!("[StdLib::Net] SecureChannel: Sending {} bytes.".to_string(), data.len());
-        self.microkernel_instance.lock().unwrap().send_async_message(self.channel_id, self.local_context_id, data.to_vec())
+        println!(
+            "[StdLib::Net] SecureChannel: Sending {} bytes.".to_string(),
+            data.len()
+        );
+        self.microkernel_instance
+            .lock()
+            .unwrap()
+            .send_async_message(self.channel_id, self.local_context_id, data.to_vec())
     }
 
     /// Receives a message from the secure channel.
     pub fn receive_message(&self) -> Result<Option<Vec<u8>>, String> {
         println!("[StdLib::Net] SecureChannel: Attempting to receive message.");
-        self.microkernel_instance.lock().unwrap().receive_sync_message(self.channel_id, self.local_context_id)
+        self.microkernel_instance
+            .lock()
+            .unwrap()
+            .receive_sync_message(self.channel_id, self.local_context_id)
     }
 
     /// Terminates the secure channel.
     pub fn terminate(&self) -> Result<(), String> {
-        println!("[StdLib::Net] SecureChannel: Terminating channel {}.".to_string(), self.channel_id);
-        self.microkernel_instance.lock().unwrap().destroy_channel(self.channel_id)
+        println!(
+            "[StdLib::Net] SecureChannel: Terminating channel {}.".to_string(),
+            self.channel_id
+        );
+        self.microkernel_instance
+            .lock()
+            .unwrap()
+            .destroy_channel(self.channel_id)
     }
 }

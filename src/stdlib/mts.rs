@@ -1,21 +1,22 @@
-
 //! Zenith Standard Library: Multi-Timeline System (MTS) APIs
 //!
 //! This module provides high-level abstractions and APIs for managing and
 //! interacting with multi-timeline systems within Zenith programs.
 
-use crate::runtime::mts::{ // Import specific runtime components
+use crate::runtime::mts::{
+    check_causality as runtime_check_causality,
+    // Import specific runtime components
     create_timeline_slice as runtime_create_timeline_slice,
     load_timeline_state as runtime_load_timeline_state,
     store_timeline_state as runtime_store_timeline_state,
     synchronize_timelines as runtime_synchronize_timelines,
-    check_causality as runtime_check_causality,
-    TimelineId, Timestamp,
     MultiTimelineOrchestrator,
+    TimelineId,
+    Timestamp,
 };
-use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::sync::{Arc, Mutex};
 
 // Global conceptual orchestrator reference.
 static mut MTS_ORCHESTRATOR_ARC: Option<Arc<Mutex<MultiTimelineOrchestrator>>> = None;
@@ -43,8 +44,13 @@ pub struct MtsSlice(TimelineId);
 impl MtsSlice {
     /// Creates a new MTS slice with an initial state.
     pub fn new<T: Debug + serde_json::Serialize>(initial_state: T) -> Self {
-        println!("[StdLib::mts] Creating new MTS Slice with initial state (conceptual: {:?}).".to_string(), initial_state);
-        let content_bytes = serde_json::to_vec(&initial_state).expect("Failed to serialize initial state");
+        println!(
+            "[StdLib::mts] Creating new MTS Slice with initial state (conceptual: {:?})."
+                .to_string(),
+            initial_state
+        );
+        let content_bytes =
+            serde_json::to_vec(&initial_state).expect("Failed to serialize initial state");
         let timestamp = chrono::Utc::now().timestamp_millis() as Timestamp;
 
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
@@ -57,14 +63,20 @@ impl MtsSlice {
 
     /// Forks a new timeline from this slice at the current timestamp.
     pub fn fork(&self, new_name: &str) -> Result<Self, String> {
-        println!("[StdLib::mts] Forking MtsSlice {} as '{}'.".to_string(), self.0, new_name);
+        println!(
+            "[StdLib::mts] Forking MtsSlice {} as '{}'.".to_string(),
+            self.0, new_name
+        );
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
             let orchestrator = orchestrator_arc.lock().unwrap();
-            let current_timestamp = orchestrator.get_timeline(self.0).map_or(0, |t| t.current_timestamp);
+            let current_timestamp = orchestrator
+                .get_timeline(self.0)
+                .map_or(0, |t| t.current_timestamp);
             drop(orchestrator); // Release lock before re-acquiring for mutable operation
 
             let mut orchestrator_mut = orchestrator_arc.lock().unwrap();
-            orchestrator_mut.fork_timeline(self.0, new_name.to_string(), current_timestamp)
+            orchestrator_mut
+                .fork_timeline(self.0, new_name.to_string(), current_timestamp)
                 .map(MtsSlice)
         } else {
             Err("MTS Runtime not initialized.".to_string())
@@ -72,8 +84,15 @@ impl MtsSlice {
     }
 
     /// Loads the state of this MTS slice at a specific temporal timestamp.
-    pub fn load<T: Debug + serde_json::de::DeserializeOwned + Default>(&self, timestamp: Timestamp) -> T { // Added Default bound
-        println!("[StdLib::mts] Loading state from MTS Slice {} at timestamp {}.".to_string(), self.0, timestamp);
+    pub fn load<T: Debug + serde_json::de::DeserializeOwned + Default>(
+        &self,
+        timestamp: Timestamp,
+    ) -> T {
+        // Added Default bound
+        println!(
+            "[StdLib::mts] Loading state from MTS Slice {} at timestamp {}.".to_string(),
+            self.0, timestamp
+        );
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
             runtime_load_timeline_state(self.0, timestamp)
                 .and_then(|bytes| serde_json::from_bytes(&bytes).ok())
@@ -88,8 +107,15 @@ impl MtsSlice {
     }
 
     /// Stores a new state into this MTS slice at a specific temporal timestamp.
-    pub fn store<T: Debug + serde_json::Serialize>(&self, state: T, timestamp: Timestamp) -> Result<(), String> {
-        println!("[StdLib::mts] Storing state {:?} into MTS Slice {} at timestamp {}.".to_string(), state, self.0, timestamp);
+    pub fn store<T: Debug + serde_json::Serialize>(
+        &self,
+        state: T,
+        timestamp: Timestamp,
+    ) -> Result<(), String> {
+        println!(
+            "[StdLib::mts] Storing state {:?} into MTS Slice {} at timestamp {}.".to_string(),
+            state, self.0, timestamp
+        );
         let content_bytes = serde_json::to_vec(&state).expect("Failed to serialize state");
         // For simplicity, causal parents are just this timeline itself for now.
         let mut causal_parents = HashSet::new();
@@ -104,11 +130,13 @@ impl MtsSlice {
 
     /// Synchronizes (merges) this MTS slice with another slice.
     pub fn synchronize(&self, other: &MtsSlice) -> Result<Self, String> {
-        println!("[StdLib::mts] Synchronizing MTS Slice {} with {}.".to_string(), self.0, other.0);
+        println!(
+            "[StdLib::mts] Synchronizing MTS Slice {} with {}.".to_string(),
+            self.0, other.0
+        );
         let merge_point = chrono::Utc::now().timestamp_millis() as Timestamp; // Conceptual merge point
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
-            runtime_synchronize_timelines(self.0, other.0, merge_point)
-                .map(MtsSlice)
+            runtime_synchronize_timelines(self.0, other.0, merge_point).map(MtsSlice)
         } else {
             Err("MTS Runtime not initialized.".to_string())
         }
@@ -116,7 +144,10 @@ impl MtsSlice {
 
     /// Checks for causal consistency of this timeline.
     pub fn check_causality(&self) -> bool {
-        println!("[StdLib::mts] Checking causality for MtsSlice {}.".to_string(), self.0);
+        println!(
+            "[StdLib::mts] Checking causality for MtsSlice {}.".to_string(),
+            self.0
+        );
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
             runtime_check_causality(self.0)
         } else {

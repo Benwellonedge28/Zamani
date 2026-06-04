@@ -1,4 +1,3 @@
-
 //! Zenith Universal Meta-Compiler (UMC) Standard Library: Reality Module
 //!
 //! This module aggregates and manages all components for interacting with,

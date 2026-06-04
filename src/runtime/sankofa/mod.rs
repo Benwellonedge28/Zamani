@@ -1,13 +1,12 @@
-
 //! Zenith Runtime: Sankofa - Long-Term Learning and Memory Integration
 //!
 //! This module aggregates and manages all components for Sankofa, Zenith's
 //! system for long-term learning, memory, and cultural knowledge integration.
 
-pub mod sasa_knowledge; // Active/Current Knowledge Base
-pub mod zamani_memory;   // Deep/Historical Memory Storage
+pub mod cultural_adapter;
 pub mod learning_engine; // Autonomous Learning and Refinement
-pub mod cultural_adapter; // Cultural Nuance and Language Specifics
+pub mod sasa_knowledge; // Active/Current Knowledge Base
+pub mod zamani_memory; // Deep/Historical Memory Storage // Cultural Nuance and Language Specifics
 
 /// Initializes all Sankofa components.
 pub fn init_sankofa_integration() {

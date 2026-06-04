@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Editor Integration Interfaces
 //!
 //! This module defines common interfaces and data structures used for seamless
@@ -13,9 +12,9 @@
 //! - User commands for triggering toolchain actions (e.g., running property tests).
 
 use crate::ast::Identifier;
+use crate::source_map::Span;
 use crate::stdlib::collections::{List, Map};
 use crate::stdlib::meta_ops::MetaValue;
-use crate::source_map::Span;
 
 /// Common data structure for editor diagnostics.
 #[derive(Debug, Clone, PartialEq)]
@@ -24,17 +23,23 @@ pub struct EditorDiagnostic {
     pub message: String,
     pub range: EditorRange,
     pub code: Option<String>,
-    pub source: String, // e.g., "zenithc", "zenith-test", "zenith-lsp"
+    pub source: String,          // e.g., "zenithc", "zenith-test", "zenith-lsp"
     pub data: Option<MetaValue>, // Additional structured data for advanced diagnostics
 }
 
 /// Common structure for defining a region in source code.
 #[derive(Debug, Clone, PartialEq)]
-pub struct EditorRange { pub start: EditorPosition, pub end: EditorPosition }
+pub struct EditorRange {
+    pub start: EditorPosition,
+    pub end: EditorPosition,
+}
 
 /// Common structure for defining a position in source code.
 #[derive(Debug, Clone, PartialEq)]
-pub struct EditorPosition { pub line: u32, pub character: u32 }
+pub struct EditorPosition {
+    pub line: u32,
+    pub character: u32,
+}
 
 /// Represents a command that can be executed by the editor (e.g., from CodeLens).
 #[derive(Debug, Clone, PartialEq)]
@@ -47,7 +52,7 @@ pub struct EditorCommand {
 /// Represents data associated with a CodeLens item.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EditorCodeLensData {
-    pub kind: String, // e.g., "property", "backendDsl", "effectInfo"
+    pub kind: String,      // e.g., "property", "backendDsl", "effectInfo"
     pub entity_id: String, // Fully qualified ID of the associated entity
     pub additional_info: Map<String, MetaValue>, // Any extra data specific to the kind
 }
@@ -62,7 +67,12 @@ pub struct CustomEditorDisplay {
 
 impl CustomEditorDisplay {
     pub fn new(id: Identifier, content_type: String, payload: MetaValue, title: String) -> Self {
-        CustomEditorDisplay { display_id: id, content_type, payload, title }
+        CustomEditorDisplay {
+            display_id: id,
+            content_type,
+            payload,
+            title,
+        }
     }
 }
 

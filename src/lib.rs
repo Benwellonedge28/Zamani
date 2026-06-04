@@ -11,33 +11,32 @@
 
 pub mod ast;
 pub mod backend;
-pub mod compiler_types;
-pub mod error_reporting;
-pub mod ir_gen;
-pub mod lexer;
-pub mod optimizer;
-pub mod parser;
-pub mod semantic;
-pub mod source_map;
 #[cfg(feature = "full")]
 pub mod compiler;
+pub mod compiler_types;
 #[cfg(feature = "full")]
 pub mod core_lang_primitives;
+pub mod error_reporting;
 #[cfg(feature = "full")]
 pub mod hdl;
+pub mod ir_gen;
+pub mod lexer;
 #[cfg(feature = "full")]
 pub mod nimbus;
 #[cfg(feature = "full")]
 pub mod nimbus_os;
+pub mod optimizer;
+pub mod parser;
 #[cfg(feature = "full")]
 pub mod runtime;
+pub mod semantic;
+pub mod source_map;
 #[cfg(feature = "full")]
 pub mod stdlib;
 #[cfg(feature = "full")]
 pub mod toolchain;
 #[cfg(feature = "full")]
 pub mod zenith_project_config;
-
 
 /// Initialise the Zenith Universal Trinity Runtime.
 pub fn initialize_runtime() {

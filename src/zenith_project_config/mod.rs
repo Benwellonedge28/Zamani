@@ -1,4 +1,3 @@
-
 //! Zenith Universal Meta-Compiler (UMC) Project Configuration
 //!
 //! This module defines the data structures for parsing and representing
@@ -39,7 +38,7 @@ pub struct PackageSection {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DependencyConfig {
     pub version: String,
-    pub path: Option<String>, // For local path dependencies
+    pub path: Option<String>,          // For local path dependencies
     pub features: Option<Vec<String>>, // Optional features to enable for this dependency
 }
 
@@ -55,7 +54,8 @@ impl ZenithToml {
                 version: "0.1.0".to_string(),
                 authors: vec!["Samuel Mukandara <samuelmukandara@gmail.com>".to_string()],
                 edition: "2026".to_string(),
-                description: "A quantum-enhanced nano-therapeutic system developed in Zenith.".to_string(),
+                description: "A quantum-enhanced nano-therapeutic system developed in Zenith."
+                    .to_string(),
                 homepage: Some("https://zenith-lang.org/therapeutic-system".to_string()),
                 repository: Some("https://github.com/Benwellonedge28/Zenith".to_string()),
                 license: Some("Apache-2.0/MIT".to_string()),
@@ -63,12 +63,54 @@ impl ZenithToml {
             },
             dependencies: {
                 let mut deps = HashMap::new();
-                deps.insert("sankofa_std".to_string(), DependencyConfig { version: "0.1.0".to_string(), path: None, features: None });
-                deps.insert("quantum_sdk".to_string(), DependencyConfig { version: "0.2.0".to_string(), path: None, features: None });
-                deps.insert("nano_swarm_lib".to_string(), DependencyConfig { version: "0.1.1".to_string(), path: None, features: None });
-                deps.insert("mts_simulation_utils".to_string(), DependencyConfig { version: "0.1.0".to_string(), path: None, features: None });
-                deps.insert("zenith_json".to_string(), DependencyConfig { version: "0.1.0".to_string(), path: None, features: None });
-                deps.insert("local_diagnostic_module".to_string(), DependencyConfig { version: "0.0.1".to_string(), path: Some("./modules/diagnostic".to_string()), features: None });
+                deps.insert(
+                    "sankofa_std".to_string(),
+                    DependencyConfig {
+                        version: "0.1.0".to_string(),
+                        path: None,
+                        features: None,
+                    },
+                );
+                deps.insert(
+                    "quantum_sdk".to_string(),
+                    DependencyConfig {
+                        version: "0.2.0".to_string(),
+                        path: None,
+                        features: None,
+                    },
+                );
+                deps.insert(
+                    "nano_swarm_lib".to_string(),
+                    DependencyConfig {
+                        version: "0.1.1".to_string(),
+                        path: None,
+                        features: None,
+                    },
+                );
+                deps.insert(
+                    "mts_simulation_utils".to_string(),
+                    DependencyConfig {
+                        version: "0.1.0".to_string(),
+                        path: None,
+                        features: None,
+                    },
+                );
+                deps.insert(
+                    "zenith_json".to_string(),
+                    DependencyConfig {
+                        version: "0.1.0".to_string(),
+                        path: None,
+                        features: None,
+                    },
+                );
+                deps.insert(
+                    "local_diagnostic_module".to_string(),
+                    DependencyConfig {
+                        version: "0.0.1".to_string(),
+                        path: Some("./modules/diagnostic".to_string()),
+                        features: None,
+                    },
+                );
                 deps
             },
         })

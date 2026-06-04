@@ -1,4 +1,3 @@
-
 //! Zenith UMC Runtime: Memory Manager
 //!
 //! This module defines the conceptual memory management subsystem of the Zenith
@@ -6,12 +5,12 @@
 //! interfaces with the Nimbus OS for secure memory, and manages the Garbage Collector (GC).
 //! It is critical for enforcing Zenith's unique memory safety and ownership models.
 
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 use crate::core_lang_primitives::{
-    Size, MemoryRegion, HeapAlloc, StackAlloc, LinearAllocator, AffineAllocator,
+    AffineAllocator, HeapAlloc, LinearAllocator, MemoryRegion, Size, StackAlloc,
 }; // Remove NimbusSystemCall from here
-use crate::nimbus_os::mod_rs::{NimbusContextId, NimbusSystemCall}; // Import NimbusContextId and NimbusSystemCall from new path
+use crate::nimbus_os::mod_rs::{NimbusContextId, NimbusSystemCall};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex}; // Import NimbusContextId and NimbusSystemCall from new path
 
 /// Represents a conceptual allocation block in memory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -43,7 +42,9 @@ pub struct MarkAndSweepGC {
 
 impl MarkAndSweepGC {
     pub fn new() -> Self {
-        MarkAndSweepGC { roots: HashSet::new() }
+        MarkAndSweepGC {
+            roots: HashSet::new(),
+        }
     }
 }
 
@@ -91,7 +92,15 @@ impl MemoryManager {
     }
 
     /// Allocates memory for a given size and region type.
-    pub fn allocate(&mut self, size: Size, region: MemoryRegion, owner_context: NimbusContextId, is_managed_by_gc: bool, is_linear: bool, is_affine: bool) -> Result<*mut u8, String> {
+    pub fn allocate(
+        &mut self,
+        size: Size,
+        region: MemoryRegion,
+        owner_context: NimbusContextId,
+        is_managed_by_gc: bool,
+        is_linear: bool,
+        is_affine: bool,
+    ) -> Result<*mut u8, String> {
         let ptr = match region {
             MemoryRegion::GeneralPurposeHeap => self.heap_allocator.allocate(size),
             MemoryRegion::Stack => {
@@ -99,7 +108,8 @@ impl MemoryManager {
                 StackAlloc::allocate_temp(size)
             }
             MemoryRegion::SecureRegion(policy_id) => {
-                self.nimbus_system_call.secure_alloc(size, region.clone(), policy_id)
+                self.nimbus_system_call
+                    .secure_alloc(size, region.clone(), policy_id)
             }
             MemoryRegion::QpuLocalMemory(_) | MemoryRegion::NanoAgentLocalMemory(_) => {
                 // Conceptual: These would be handled by specialized runtime components or Nimbus HAL.
@@ -109,12 +119,18 @@ impl MemoryManager {
             }
             MemoryRegion::SharedMemory(_) => {
                 // Shared memory regions must be allocated/mapped via NimbusSystemCall first.
-                return Err("Shared memory allocation needs explicit setup via NimbusSystemCall.".to_string());
+                return Err(
+                    "Shared memory allocation needs explicit setup via NimbusSystemCall."
+                        .to_string(),
+                );
             }
         };
 
         if ptr.is_null() {
-            Err(format!("Failed to allocate {} bytes in region {:?}", size.0, region))
+            Err(format!(
+                "Failed to allocate {} bytes in region {:?}",
+                size.0, region
+            ))
         } else {
             let block = AllocationBlock {
                 address: ptr,
@@ -147,13 +163,17 @@ impl MemoryManager {
                 }
                 MemoryRegion::SecureRegion(_) => {
                     // Use NimbusSystemCall for deallocating secure regions.
-                    self.nimbus_system_call.secure_dealloc(ptr, block.size, block.region.clone());
+                    self.nimbus_system_call
+                        .secure_dealloc(ptr, block.size, block.region.clone());
                 }
                 _ => { /* other regions handled conceptually */ }
             }
             Ok(())
         } else {
-            Err(format!("Attempted to deallocate unknown memory block at {:p}.", ptr))
+            Err(format!(
+                "Attempted to deallocate unknown memory block at {:p}.",
+                ptr
+            ))
         }
     }
 
@@ -166,7 +186,10 @@ impl MemoryManager {
     pub fn check_linear_usage(&self, ptr: *mut u8) -> Result<(), String> {
         if let Some(block) = self.allocated_blocks.get(&ptr) {
             if block.is_linear {
-                println!("[Runtime::Mem] Conceptual: Checking linear usage for {:p}...", ptr);
+                println!(
+                    "[Runtime::Mem] Conceptual: Checking linear usage for {:p}...",
+                    ptr
+                );
                 // Real implementation would track usage counts.
                 // If usage count is not 1, return Err.
             }
@@ -178,7 +201,10 @@ impl MemoryManager {
     pub fn check_affine_usage(&self, ptr: *mut u8) -> Result<(), String> {
         if let Some(block) = self.allocated_blocks.get(&ptr) {
             if block.is_affine {
-                println!("[Runtime::Mem] Conceptual: Checking affine usage for {:p}...", ptr);
+                println!(
+                    "[Runtime::Mem] Conceptual: Checking affine usage for {:p}...",
+                    ptr
+                );
                 // Real implementation would track usage counts.
                 // If usage count is > 1, return Err.
             }
@@ -196,7 +222,9 @@ static mut MEMORY_MANAGER: Option<Arc<Mutex<MemoryManager>>> = None;
 pub fn init_memory_manager() -> Arc<Mutex<MemoryManager>> {
     println!("  - Initializing Runtime Memory Manager (Heap, GC, Linear/Affine, Secure Memory)...");
     let manager = Arc::new(Mutex::new(MemoryManager::new()));
-    unsafe { MEMORY_MANAGER = Some(Arc::clone(&manager)); }
+    unsafe {
+        MEMORY_MANAGER = Some(Arc::clone(&manager));
+    }
     println!("    -> Runtime Memory Manager initialized.");
     manager
 }
@@ -204,7 +232,9 @@ pub fn init_memory_manager() -> Arc<Mutex<MemoryManager>> {
 /// Shuts down the Memory Manager runtime.
 pub fn shutdown_memory_manager() {
     println!("  - Shutting down Runtime Memory Manager...");
-    unsafe { MEMORY_MANAGER = None; }
+    unsafe {
+        MEMORY_MANAGER = None;
+    }
     // Conceptual: Free all remaining allocated memory, shut down GC.
 }
 

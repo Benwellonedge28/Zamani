@@ -1,4 +1,3 @@
-
 //! Zenith Universal Meta-Compiler (UMC): Advanced Object-Oriented Programming Features
 //!
 //! This module defines the conceptual framework for Zenith's "very extra super
@@ -12,20 +11,21 @@
 
 use crate::ast::{Identifier, Type}; // For class names, method names, type definitions
 use crate::core_lang_primitives::{Size, TimeStamp}; // For object lifecycles, memory allocation
-use crate::stdlib::core::Result; // For error handling
-use crate::stdlib::collections::{List, Map}; // For object state, method tables
-use crate::stdlib::meta_ops::{MetaOperations, TranscodeSource, TranscodeTarget, OverridePatch, MetaValue}; // For meta-object protocols
-use crate::stdlib::crypto::{Signature, PublicKey, KeyManagementSystem, HomomorphicCiphertext}; // For secure object states
-use crate::stdlib::ai_reasoning::{KnowledgeBase, Planner, FactObject}; // For autonomous object intelligence
-use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For object behavioral history
-use crate::toolchain::self_evolution::{SelfEvolutionEngine, EvolutionProposal}; // For self-optimizing objects
-use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For provably correct objects
-use crate::nimbus_os::mod_rs::{NimbusContextId, CapabilityToken, NimbusMicrokernel}; // For secure object execution
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision}; // For ethical object behavior vetting
+use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId, NimbusMicrokernel}; // For secure object execution
+use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For object behavioral history
+use crate::source_map::Span;
 use crate::stdlib::agents::AutonomousAgent; // For embedding agents in objects
+use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner}; // For autonomous object intelligence
+use crate::stdlib::collections::{List, Map}; // For object state, method tables
+use crate::stdlib::core::Result; // For error handling
+use crate::stdlib::crypto::{HomomorphicCiphertext, KeyManagementSystem, PublicKey, Signature}; // For secure object states
+use crate::stdlib::meta_ops::{
+    MetaOperations, MetaValue, OverridePatch, TranscodeSource, TranscodeTarget,
+}; // For meta-object protocols
+use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For provably correct objects
 use crate::toolchain::meta_programming::AutonomousCodeGenerator; // For code generation by objects
-use crate::source_map::Span; // For Identifier creation
-
+use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For self-optimizing objects // For Identifier creation
 
 /// Initializes the Advanced OOP Features module.
 pub fn init_oop_advanced() {
@@ -45,11 +45,11 @@ pub fn shutdown_oop_advanced() {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ZenithObject {
     ClassicalObject(Identifier, Map<Identifier, MetaValue>), // Standard object with fields
-    QuantumObject(Identifier, List<QuantumStateRef>),      // Object with quantum state properties
-    NanoObject(Identifier, NanoAgentRef),                  // Object backed by a swarm of nano-agents
-    MTSObject(Identifier, List<MTSStateSnapshot>),         // Object with a temporal state history
-    HomomorphicObject(Identifier, HomomorphicCiphertext),  // Object whose internal state is encrypted
-    // ... potentially other paradigm-specific object types
+    QuantumObject(Identifier, List<QuantumStateRef>),        // Object with quantum state properties
+    NanoObject(Identifier, NanoAgentRef), // Object backed by a swarm of nano-agents
+    MTSObject(Identifier, List<MTSStateSnapshot>), // Object with a temporal state history
+    HomomorphicObject(Identifier, HomomorphicCiphertext), // Object whose internal state is encrypted
+                                                          // ... potentially other paradigm-specific object types
 }
 
 /// Reference to a quantum state (conceptual).
@@ -58,7 +58,6 @@ pub struct QuantumStateRef;
 pub struct NanoAgentRef;
 /// Reference to an MTS state snapshot (conceptual).
 pub struct MTSStateSnapshot;
-
 
 /// Defines advanced class capabilities and behaviors.
 #[derive(Debug, Clone, PartialEq)]
@@ -82,9 +81,9 @@ pub struct MethodDefinitionAdvanced {
     pub return_type: Type,
     pub classical_impl: Option<ZenithCodeSnippet>,
     pub quantum_impl: Option<QuantumCircuitDefinition>, // QPU-accelerated logic
-    pub nano_impl: Option<NanoBehaviorBlueprint>,      // Nano-agent orchestrated behavior
-    pub temporal_impl: Option<MTSWorkflowDefinition>,  // MTS-coordinated logic
-    pub security_constraints: List<String>, // Method-specific security constraints
+    pub nano_impl: Option<NanoBehaviorBlueprint>,       // Nano-agent orchestrated behavior
+    pub temporal_impl: Option<MTSWorkflowDefinition>,   // MTS-coordinated logic
+    pub security_constraints: List<String>,             // Method-specific security constraints
     pub evas_approval_required: bool, // Does this method require E.V.A.S. pre-approval?
 }
 
@@ -94,7 +93,6 @@ pub struct QuantumCircuitDefinition;
 pub struct NanoBehaviorBlueprint;
 /// Conceptual MTS Workflow Definition.
 pub struct MTSWorkflowDefinition;
-
 
 /// Defines fine-grained access control policies for objects and methods.
 #[derive(Debug, Clone, PartialEq)]
@@ -106,11 +104,15 @@ pub struct AccessPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AccessLevel { Public, Private, Protected, Restricted(List<Identifier>) }
+pub enum AccessLevel {
+    Public,
+    Private,
+    Protected,
+    Restricted(List<Identifier>),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AccessRule; // Placeholder for complex rules
-
 
 /// Represents the inherent security level of an object or its state.
 #[derive(Debug, Clone, PartialEq)]
@@ -133,7 +135,6 @@ pub enum SelfHealingPolicy {
     AdaptiveRedundancy(usize), // Maintain N redundant copies
 }
 
-
 // -----------------------------------------------------------------------------
 // Autonomous Object Behaviors
 // -----------------------------------------------------------------------------
@@ -147,7 +148,10 @@ impl AutonomousObject {
     /// Autonomously decides and performs actions to maintain its state,
     /// optimize performance, or defend against threats.
     pub fn autonomous_cognitive_cycle(&mut self) -> Result<(), String> {
-        println!("[Compiler::OOPAdv] Autonomous Object '{}' performing cognitive cycle.".to_string(), self.base_object.get_id());
+        println!(
+            "[Compiler::OOPAdv] Autonomous Object '{}' performing cognitive cycle.".to_string(),
+            self.base_object.get_id()
+        );
         // Conceptual: The embedded AGI agent (AutonomousAgent) executes its cognitive cycle.
         // It uses AI Reasoning for planning, Vision/NLP for perception, and MetaOps for action.
         self.cognitive_agent.cognitive_cycle()?;
@@ -157,9 +161,15 @@ impl AutonomousObject {
     /// Triggers autonomous self-optimization of the object's implementation.
     /// Leverages `toolchain::self_evolution`.
     pub fn self_optimize(&mut self, optimization_goal: String) -> Result<(), String> {
-        println!("[Compiler::OOPAdv] Autonomous Object '{}' initiating self-optimization for goal '{}'.".to_string(), self.base_object.get_id(), optimization_goal);
+        println!(
+            "[Compiler::OOPAdv] Autonomous Object '{}' initiating self-optimization for goal '{}'."
+                .to_string(),
+            self.base_object.get_id(),
+            optimization_goal
+        );
         let current_code = self.base_object.get_zenith_code_representation(); // Conceptual
-        let optimized_code = AutonomousCodeGenerator.autonomously_optimize_code(current_code, optimization_goal)?; // Assuming AutonomousCodeGenerator is in scope
+        let optimized_code =
+            AutonomousCodeGenerator.autonomously_optimize_code(current_code, optimization_goal)?; // Assuming AutonomousCodeGenerator is in scope
         self.base_object.update_implementation(optimized_code); // Conceptual
         Ok(())
     }
@@ -167,7 +177,10 @@ impl AutonomousObject {
     /// Autonomously verifies its own state and behavior for correctness and security.
     /// Integrates with `toolchain::formal_verification`.
     pub fn self_verify(&self) -> Result<Proof, String> {
-        println!("[Compiler::OOPAdv] Autonomous Object '{}' performing self-verification.".to_string(), self.base_object.get_id());
+        println!(
+            "[Compiler::OOPAdv] Autonomous Object '{}' performing self-verification.".to_string(),
+            self.base_object.get_id()
+        );
         let verifier = FormalVerificationEngine; // Dummy instantiation
         verifier.verify_object_state(self.base_object.clone(), Map::new()) // Conceptual: verify object state
     }
@@ -184,23 +197,41 @@ pub struct MetaObjectProtocol;
 impl MetaObjectProtocol {
     /// Dynamically changes the implementation of a method for a specific object or class.
     /// Leverages `stdlib::meta_ops::override_behavior`.
-    pub fn dynamically_override_method(object_id: Identifier, method_name: Identifier, new_impl: OverridePatch) -> Result<(), String> {
-        println!("[Compiler::OOPAdv] Dynamically overriding method '{}' for object '{}'.".to_string(), method_name.0, object_id.0);
+    pub fn dynamically_override_method(
+        object_id: Identifier,
+        method_name: Identifier,
+        new_impl: OverridePatch,
+    ) -> Result<(), String> {
+        println!(
+            "[Compiler::OOPAdv] Dynamically overriding method '{}' for object '{}'.".to_string(),
+            method_name.0, object_id.0
+        );
         MetaOperations.override_behavior(object_id, new_impl, Map::new()) // Use MetaOps for security vetting
     }
 
     /// Installs a custom meta-behavior (e.g., logging, aspect-oriented concerns)
     /// for all instances of a class.
-    pub fn install_custom_meta_behavior(class_name: Identifier, behavior_code: ZenithCodeSnippet) -> Result<(), String> {
-        println!("[Compiler::OOPAdv] Installing custom meta-behavior for class '{}'.".to_string(), class_name.0);
+    pub fn install_custom_meta_behavior(
+        class_name: Identifier,
+        behavior_code: ZenithCodeSnippet,
+    ) -> Result<(), String> {
+        println!(
+            "[Compiler::OOPAdv] Installing custom meta-behavior for class '{}'.".to_string(),
+            class_name.0
+        );
         // Conceptual: Intercept method calls, field accesses for this class.
         Ok(())
     }
 
     /// Provides reflective access to an object's internal structure and type information.
     /// Leverages `stdlib::reflection`.
-    pub fn reflect_object_structure(object_id: Identifier) -> Result<Map<String, MetaValue>, String> {
-        println!("[Compiler::OOPAdv] Reflecting structure of object '{}'.".to_string(), object_id.0);
+    pub fn reflect_object_structure(
+        object_id: Identifier,
+    ) -> Result<Map<String, MetaValue>, String> {
+        println!(
+            "[Compiler::OOPAdv] Reflecting structure of object '{}'.".to_string(),
+            object_id.0
+        );
         crate::stdlib::reflection::Reflection.get_object_info(object_id) // Conceptual call
     }
 }
@@ -213,38 +244,83 @@ pub struct SecureObjectOperations;
 
 impl SecureObjectOperations {
     /// Stores an object's state in an encrypted form, leveraging homomorphic encryption.
-    pub fn encrypt_object_state(object_id: Identifier, object_state: Map<Identifier, MetaValue>, public_key: PublicKey) -> Result<HomomorphicCiphertext, String> {
-        println!("[Compiler::OOPAdv] Encrypting state of object '{}' homomorphically.".to_string(), object_id.0);
-        let serialized_state = crate::stdlib::serialize::Serialize.to_bytes(&object_state, crate::stdlib::serialize::SerializationFormat::Json)?; // Assuming Serialize is available
-        crate::stdlib::crypto::Crypto.encrypt_homomorphic(&public_key.0, serialized_state.as_bytes()) // Assumes public key is raw bytes
+    pub fn encrypt_object_state(
+        object_id: Identifier,
+        object_state: Map<Identifier, MetaValue>,
+        public_key: PublicKey,
+    ) -> Result<HomomorphicCiphertext, String> {
+        println!(
+            "[Compiler::OOPAdv] Encrypting state of object '{}' homomorphically.".to_string(),
+            object_id.0
+        );
+        let serialized_state = crate::stdlib::serialize::Serialize.to_bytes(
+            &object_state,
+            crate::stdlib::serialize::SerializationFormat::Json,
+        )?; // Assuming Serialize is available
+        crate::stdlib::crypto::Crypto
+            .encrypt_homomorphic(&public_key.0, serialized_state.as_bytes()) // Assumes public key is raw bytes
     }
 
     /// Computes directly on encrypted object states without decryption.
-    pub fn operate_on_encrypted_object(encrypted_object_state: HomomorphicCiphertext, operation: Identifier, encrypted_args: List<HomomorphicCiphertext>) -> Result<HomomorphicCiphertext, String> {
-        println!("[Compiler::OOPAdv] Operating on encrypted object state with operation '{}'.".to_string(), operation.0);
+    pub fn operate_on_encrypted_object(
+        encrypted_object_state: HomomorphicCiphertext,
+        operation: Identifier,
+        encrypted_args: List<HomomorphicCiphertext>,
+    ) -> Result<HomomorphicCiphertext, String> {
+        println!(
+            "[Compiler::OOPAdv] Operating on encrypted object state with operation '{}'."
+                .to_string(),
+            operation.0
+        );
         // Conceptual: Requires a HE-aware method dispatcher for object operations.
-        crate::stdlib::crypto::Crypto.homomorphic_add(&encrypted_object_state, &encrypted_args.data[0]) // Dummy op
+        crate::stdlib::crypto::Crypto
+            .homomorphic_add(&encrypted_object_state, &encrypted_args.data[0]) // Dummy op
     }
 
     /// Digitally signs an object's state or a method's execution trace for auditability.
-    pub fn sign_object_trace(object_id: Identifier, trace_data: List<u8>, signing_key_id: Identifier) -> Result<Signature, String> {
-        println!("[Compiler::OOPAdv] Signing execution trace for object '{}'.".to_string(), object_id.0);
+    pub fn sign_object_trace(
+        object_id: Identifier,
+        trace_data: List<u8>,
+        signing_key_id: Identifier,
+    ) -> Result<Signature, String> {
+        println!(
+            "[Compiler::OOPAdv] Signing execution trace for object '{}'.".to_string(),
+            object_id.0
+        );
         let kms = KeyManagementSystem; // Dummy instantiation
-        let private_key_ref = kms.request_key(Map::from([("key_id".to_string(), signing_key_id.0.to_string())]))?; // Dummy request
-        crate::stdlib::crypto::Crypto.sign(&crate::stdlib::crypto::PrivateKey(List::new()), trace_data.as_bytes()) // Use as_bytes() for List<u8>
+        let private_key_ref = kms.request_key(Map::from([(
+            "key_id".to_string(),
+            signing_key_id.0.to_string(),
+        )]))?; // Dummy request
+        crate::stdlib::crypto::Crypto.sign(
+            &crate::stdlib::crypto::PrivateKey(List::new()),
+            trace_data.as_bytes(),
+        ) // Use as_bytes() for List<u8>
     }
 
     /// Verifies that an object's behavior or state adheres to predefined ethical guidelines.
     /// Uses Nimbus OS E.V.A.S. filter for continuous monitoring.
-    pub fn verify_ethical_compliance(object_id: Identifier, current_behavior_context: Map<String, String>) -> Result<EvasDecision, String> {
-        println!("[Compiler::OOPAdv] Verifying ethical compliance for object '{}'.".to_string(), object_id.0);
+    pub fn verify_ethical_compliance(
+        object_id: Identifier,
+        current_behavior_context: Map<String, String>,
+    ) -> Result<EvasDecision, String> {
+        println!(
+            "[Compiler::OOPAdv] Verifying ethical compliance for object '{}'.".to_string(),
+            object_id.0
+        );
         let evas_action = EvasActionContext {
             action_type: "object_behavior_check".to_string(),
-            perceived_intent: format!("Verify ethical compliance of object {}.".to_string(), object_id.0),
+            perceived_intent: format!(
+                "Verify ethical compliance of object {}.".to_string(),
+                object_id.0
+            ),
             initiating_context_id: nimbus.os.get_current_context_id(), // Assume AGI is running in a context
             ..Default::default()
         };
-        Ok(nimbus.os.get_microkernel_evas_filter().evaluate_action(evas_action))
+        Ok(nimbus
+            .os
+            .get_microkernel_evas_filter()
+            .evaluate_action(evas_action))
     }
 }
 
@@ -266,6 +342,9 @@ impl ZenithObject {
         format!("// Zenith code representation for object {:?}", self)
     }
     pub fn update_implementation(&mut self, code: ZenithCodeSnippet) {
-        println!("Conceptual: Updating implementation for object {:?} with code snippet.".to_string(), self.get_id());
+        println!(
+            "Conceptual: Updating implementation for object {:?} with code snippet.".to_string(),
+            self.get_id()
+        );
     }
 }

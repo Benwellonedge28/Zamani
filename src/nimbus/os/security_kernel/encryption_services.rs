@@ -2,7 +2,7 @@
 //! Zenith — encryption_services module
 
 /// Initialize encryption_services
-pub fn init_encryption_services() { }
+pub fn init_encryption_services() {}
 
 /// Shutdown encryption_services
-pub fn shutdown_encryption_services() { }
+pub fn shutdown_encryption_services() {}

@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Chat Architect Agent Module
 //!
 //! This module provides the conceptual framework for Zenith's "Chat Architect Agent,"
@@ -13,21 +12,22 @@
 //! a rigorous verification loop, all within secure Nimbus OS contexts.
 
 use crate::ast::Identifier; // For component names, generated code IDs
-use crate::stdlib::core::Result; // Zenith Result type
-use crate::stdlib::collections::{List, Map}; // For prompt context, generated file lists
-use crate::stdlib::nlp::{NaturalLanguageProcessor, Intent, Sentiment}; // For NLP capabilities
-use crate::stdlib::ai_reasoning::{KnowledgeBase, Planner, Fact, FactObject}; // For reasoning and goal breakdown
-use crate::toolchain::meta_programming::{AutonomousCodeGenerator, ZenithCodeSnippet, SecureMetaProgramming, MacroDefinition}; // For core code generation
-use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For proving generated code correctness
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of generated code
-use crate::runtime::sankofa::{SasaKnowledge, KnowledgeId}; // For contextual knowledge and RAG
-use crate::stdlib::external_services::{ServiceHandle, CloudPlatform}; // For deploying generated code
-use crate::stdlib::human_agi_interaction::AdminPortal; // For human oversight/feedback
+use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For contextual knowledge and RAG
+use crate::source_map::Span;
+use crate::stdlib::ai_reasoning::{Fact, FactObject, KnowledgeBase, Planner}; // For reasoning and goal breakdown
+use crate::stdlib::collections::{List, Map}; // For prompt context, generated file lists
+use crate::stdlib::core::Result; // Zenith Result type
+use crate::stdlib::external_services::{CloudPlatform, ServiceHandle}; // For deploying generated code
 use crate::stdlib::gui::Window; // For multi-modal code preview
-use crate::toolchain::self_evolution::{SelfEvolutionEngine, EvolutionProposal}; // For adapting generation strategies
+use crate::stdlib::human_agi_interaction::AdminPortal; // For human oversight/feedback
 use crate::stdlib::meta_ops::MetaValue; // Generic data for events
-use crate::source_map::Span; // For Identifier creation
-
+use crate::stdlib::nlp::{Intent, NaturalLanguageProcessor, Sentiment}; // For NLP capabilities
+use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For proving generated code correctness
+use crate::toolchain::meta_programming::{
+    AutonomousCodeGenerator, MacroDefinition, SecureMetaProgramming, ZenithCodeSnippet,
+}; // For core code generation
+use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For adapting generation strategies // For Identifier creation
 
 /// Initializes the Chat Architect Agent module.
 pub fn init_chat_architect_agent() {
@@ -68,19 +68,30 @@ impl ChatArchitectAgent {
 
     /// Processes a natural language prompt to generate, optimize, and verify Zenith code.
     /// This is the core "Chat-to-Code" pipeline, leveraging SIMD-like parallelism for tasks.
-    #[security(level="critical", integrity_check="self_attestation")] // High security for code generation
-    #[ethics(principles="responsible_agi_design", bias_mitigation_level="extreme")] // Ethical vetting of intent
+    #[security(level = "critical", integrity_check = "self_attestation")] // High security for code generation
+    #[ethics(
+        principles = "responsible_agi_design",
+        bias_mitigation_level = "extreme"
+    )] // Ethical vetting of intent
     pub fn process_nl_prompt(&mut self, prompt: &str) -> Result<GeneratedCodeArtifact, String> {
-        println!("[StdLib::ChatArch] Processing natural language prompt: '{}'.".to_string(), prompt);
+        println!(
+            "[StdLib::ChatArch] Processing natural language prompt: '{}'.".to_string(),
+            prompt
+        );
 
         // 1. Intent Extraction & Semantic Mapping (NLP + AI Reasoning)
         let nlp_result = self.nlp_processor.analyze_text(prompt)?;
         let intent = nlp_result.get_primary_intent();
         let constraints = nlp_result.get_extracted_entities();
-        self.current_conversation_context.insert("last_intent".to_string(), MetaValue::String(intent.to_string()));
+        self.current_conversation_context.insert(
+            "last_intent".to_string(),
+            MetaValue::String(intent.to_string()),
+        );
 
         let goal = Fact::new(format!("generate_code_for_{}", intent), List::new()); // Convert intent to a Zenith Fact/Goal
-        let plan = self.planner.generate_plan(goal.clone(), constraints.clone())?; // Break down into actionable steps
+        let plan = self
+            .planner
+            .generate_plan(goal.clone(), constraints.clone())?; // Break down into actionable steps
 
         // 2. Goal-Oriented Code Synthesis (AutonomousCodeGenerator)
         // This is where SIMD concept applies: a single NL intent (e.g., "create X library")
@@ -95,13 +106,19 @@ impl ChatArchitectAgent {
         // Simulate parallel/concurrent generation for different aspects of the request
         let core_logic_snippet = self.code_generator.generate_code_from_goal(
             goal.clone(),
-            constraints.clone().insert("component".to_string(), MetaValue::String("core_logic".to_string()))
+            constraints.clone().insert(
+                "component".to_string(),
+                MetaValue::String("core_logic".to_string()),
+            ),
         )?;
         generated_code_snippets.insert("core_logic".to_string(), core_logic_snippet);
 
         let test_suite_snippet = self.code_generator.generate_code_from_goal(
             Fact::new("generate_unit_tests".to_string(), List::new()),
-            constraints.clone().insert("for_component".to_string(), MetaValue::String(goal.to_string()))
+            constraints.clone().insert(
+                "for_component".to_string(),
+                MetaValue::String(goal.to_string()),
+            ),
         )?;
         generated_code_snippets.insert("unit_tests".to_string(), test_suite_snippet);
 
@@ -119,29 +136,57 @@ impl ChatArchitectAgent {
             ..Default::default()
         };
         match self.evas_filter.evaluate_action(evas_prompt_context) {
-            EvasDecision::Block(reason) => return Err(format!("E.V.A.S. BLOCKED prompt: {}.\n Generated code discarded.".to_string(), reason)),
+            EvasDecision::Block(reason) => {
+                return Err(format!(
+                    "E.V.A.S. BLOCKED prompt: {}.\n Generated code discarded.".to_string(),
+                    reason
+                ))
+            }
             EvasDecision::HumanReviewRequired(reason) => {
-                AdminPortal::submit_admin_directive(&format!("Prompt requires human review: {}", reason), 1.0)?; // Use &str for directive
-                return Err("Prompt requires human review before code generation. Waiting for approval.".to_string());
-            },
+                AdminPortal::submit_admin_directive(
+                    &format!("Prompt requires human review: {}", reason),
+                    1.0,
+                )?; // Use &str for directive
+                return Err(
+                    "Prompt requires human review before code generation. Waiting for approval."
+                        .to_string(),
+                );
+            }
             _ => println!("[StdLib::ChatArch] E.V.A.S. approved prompt for generation."),
         }
 
         // b. Autonomous Compilation & Static Analysis
-        let combined_code = generated_code_snippets.values().fold("".to_string(), |acc, x| acc + x + "\n"); // Combine for compilation
-        let compilation_result = self.code_generator.autonomously_optimize_code(combined_code.clone(), "initial_compilation".to_string())?;
-        verification_results.insert("compilation_status".to_string(), MetaValue::String(compilation_result));
-
+        let combined_code = generated_code_snippets
+            .values()
+            .fold("".to_string(), |acc, x| acc + x + "\n"); // Combine for compilation
+        let compilation_result = self
+            .code_generator
+            .autonomously_optimize_code(combined_code.clone(), "initial_compilation".to_string())?;
+        verification_results.insert(
+            "compilation_status".to_string(),
+            MetaValue::String(compilation_result),
+        );
 
         // c. Formal Verification (for critical sections or based on #[security]/#[ethics] attributes)
-        if constraints.get("security_level").unwrap_or(&MetaValue::String("low".to_string())) == &MetaValue::String("critical".to_string()) {
-            let formal_proof = self.verifier.formally_verify_meta_code(combined_code.clone())?;
-            verification_results.insert("formal_proof".to_string(), MetaValue::String(format!("{:?}", formal_proof)));
+        if constraints
+            .get("security_level")
+            .unwrap_or(&MetaValue::String("low".to_string()))
+            == &MetaValue::String("critical".to_string())
+        {
+            let formal_proof = self
+                .verifier
+                .formally_verify_meta_code(combined_code.clone())?;
+            verification_results.insert(
+                "formal_proof".to_string(),
+                MetaValue::String(format!("{:?}", formal_proof)),
+            );
         }
 
         // d. Autonomous Test Execution (against generated unit tests)
         // (Conceptual: run the generated `test_suite_snippet` against the `core_logic_snippet`)
-        let test_results = self.code_generator.autonomously_optimize_code(test_suite_snippet.clone(), "run_tests".to_string())?; // Dummy: use optimize_code to simulate running tests
+        let test_results = self
+            .code_generator
+            .autonomously_optimize_code(test_suite_snippet.clone(), "run_tests".to_string())?; // Dummy: use optimize_code to simulate running tests
         verification_results.insert("test_results".to_string(), MetaValue::String(test_results));
 
         // 4. Interaction & Refinement (Output)
@@ -149,15 +194,23 @@ impl ChatArchitectAgent {
             prompt: prompt.to_string(),
             generated_code: generated_code_snippets,
             verification_summary: verification_results,
-            initial_feedback: "Code generated and verified. Ready for review or deployment.".to_string(),
+            initial_feedback: "Code generated and verified. Ready for review or deployment."
+                .to_string(),
             architecture_diagram: collections::Option::None, // Placeholder
-            // Optional: links to generated diagrams (using generateMedia) or simulation results (from MTS)
+                                                             // Optional: links to generated diagrams (using generateMedia) or simulation results (from MTS)
         })
     }
 
     /// Allows for multi-turn conversational refinement of the generated code.
-    pub fn refine_code(&mut self, artifact: &GeneratedCodeArtifact, refinement_prompt: &str) -> Result<GeneratedCodeArtifact, String> {
-        println!("[StdLib::ChatArch] Refining code based on prompt: '{}'.".to_string(), refinement_prompt);
+    pub fn refine_code(
+        &mut self,
+        artifact: &GeneratedCodeArtifact,
+        refinement_prompt: &str,
+    ) -> Result<GeneratedCodeArtifact, String> {
+        println!(
+            "[StdLib::ChatArch] Refining code based on prompt: '{}'.".to_string(),
+            refinement_prompt
+        );
         // Conceptual: NLP -> identify delta -> generate new plan ->
         // use `stdlib::meta_ops::override_behavior` or `toolchain::meta_programming::autonomously_optimize_code`
         // to incrementally modify the existing generated_code.
@@ -167,7 +220,10 @@ impl ChatArchitectAgent {
 
     /// Displays generated code and metadata in a multi-modal format in the chat interface.
     pub fn display_generated_code(&self, artifact: &GeneratedCodeArtifact) {
-        println!("[StdLib::ChatArch] Displaying generated code for prompt: '{}'.".to_string(), artifact.prompt);
+        println!(
+            "[StdLib::ChatArch] Displaying generated code for prompt: '{}'.".to_string(),
+            artifact.prompt
+        );
         // Conceptual: Call Tariro's generateMedia for 'code_preview' and 'diagram'
         // gui.Window::get_by_id("tariro_chat_interface").display_media("code_preview", artifact.generated_code.get("core_logic").unwrap());
         // gui.Window::get_by_id("tariro_chat_interface").display_media("diagram", "architectural_overview_of_generated_code");

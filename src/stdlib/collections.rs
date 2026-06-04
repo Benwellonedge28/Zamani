@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Collections
 //!
 //! This module defines fundamental collection data structures that are
@@ -20,7 +19,9 @@ pub struct List<T> {
 
 impl<T> List<T> {
     pub fn new() -> Self {
-        List { elements: Vec::new() }
+        List {
+            elements: Vec::new(),
+        }
     }
 
     pub fn push(&mut self, item: T) {
@@ -55,7 +56,9 @@ pub struct Map<K, V> {
 
 impl<K, V> Map<K, V> {
     pub fn new() -> Self {
-        Map { entries: HashMap::new() }
+        Map {
+            entries: HashMap::new(),
+        }
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {

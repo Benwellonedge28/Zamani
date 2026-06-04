@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Natural Language Processing (NLP) Module
 //!
 //! This module provides conceptual APIs for processing, understanding, and generating
@@ -7,13 +6,12 @@
 //! Zenith's multi-paradigm compute capabilities for efficiency and contextual understanding.
 
 use crate::ast::Identifier; // For language IDs, model names
-use crate::core_lang_primitives::{Size}; // For text lengths
-use crate::stdlib::core::Result; // For error handling
-use crate::stdlib::collections::{List, Map}; // For vocabularies, parsed trees
-use crate::stdlib::ml::{Tensor, Model}; // For neural NLP models
+use crate::core_lang_primitives::Size; // For text lengths
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For contextual understanding
-use crate::source_map::Span; // For Identifier creation
-
+use crate::source_map::Span;
+use crate::stdlib::collections::{List, Map}; // For vocabularies, parsed trees
+use crate::stdlib::core::Result; // For error handling
+use crate::stdlib::ml::{Model, Tensor}; // For neural NLP models // For Identifier creation
 
 /// Initializes the Natural Language Processing standard library components.
 pub fn init_nlp_lib() {
@@ -42,9 +40,9 @@ pub struct Token {
 /// Represents a conceptual parsed sentence or phrase.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseTree {
-    pub root: String, // e.g., "S" for Sentence
+    pub root: String,              // e.g., "S" for Sentence
     pub children: List<ParseTree>, // Sub-phrases or tokens
-    pub tokens: List<Token>, // Leaf tokens
+    pub tokens: List<Token>,       // Leaf tokens
 }
 
 pub struct Nlp;
@@ -52,26 +50,48 @@ pub struct Nlp;
 impl Nlp {
     /// Performs tokenization on an input text.
     pub fn tokenize(text: &str, language: &str) -> Result<List<Token>, String> {
-        println!("[StdLib::NLP] Tokenizing text for language '{}' ({} chars).".to_string(), language, text.len());
+        println!(
+            "[StdLib::NLP] Tokenizing text for language '{}' ({} chars).".to_string(),
+            language,
+            text.len()
+        );
         // Conceptual: Uses language-specific rules.
         Ok(List::new()) // Dummy tokens
     }
 
     /// Performs part-of-speech tagging on a list of tokens.
     pub fn pos_tag(tokens: List<Token>, language: &str) -> Result<List<Token>, String> {
-        println!("[StdLib::NLP] Part-of-speech tagging {} tokens for language '{}'.".to_string(), tokens.len(), language);
+        println!(
+            "[StdLib::NLP] Part-of-speech tagging {} tokens for language '{}'.".to_string(),
+            tokens.len(),
+            language
+        );
         Ok(tokens) // Dummy
     }
 
     /// Parses a sentence into a syntactic parse tree.
     pub fn parse_sentence(tokens: List<Token>, language: &str) -> Result<ParseTree, String> {
-        println!("[StdLib::NLP] Parsing sentence with {} tokens for language '{}'.".to_string(), tokens.len(), language);
-        Ok(ParseTree { root: "S".to_string(), children: List::new(), tokens }) // Dummy tree
+        println!(
+            "[StdLib::NLP] Parsing sentence with {} tokens for language '{}'.".to_string(),
+            tokens.len(),
+            language
+        );
+        Ok(ParseTree {
+            root: "S".to_string(),
+            children: List::new(),
+            tokens,
+        }) // Dummy tree
     }
 
     /// Performs named entity recognition (NER) on a text.
-    pub fn named_entity_recognition(text: &str, language: &str) -> Result<Map<String, List<String>>, String> {
-        println!("[StdLib::NLP] Performing NER on text for language '{}'.".to_string(), language);
+    pub fn named_entity_recognition(
+        text: &str,
+        language: &str,
+    ) -> Result<Map<String, List<String>>, String> {
+        println!(
+            "[StdLib::NLP] Performing NER on text for language '{}'.".to_string(),
+            language
+        );
         // Conceptual: Identify persons, organizations, locations.
         Ok(Map::new()) // Dummy entities
     }
@@ -89,13 +109,19 @@ pub struct TextGenerator {
 
 impl TextGenerator {
     pub fn new(model: Box<dyn Model>, vocabulary: List<String>) -> Self {
-        TextGenerator { ml_model: model, vocabulary }
+        TextGenerator {
+            ml_model: model,
+            vocabulary,
+        }
     }
 
     /// Generates text based on a given prompt.
     /// Can leverage AI accelerators for faster generation.
     pub fn generate(&self, prompt: &str, max_length: usize) -> Result<String, String> {
-        println!("[StdLib::NLP] Generating text with prompt '{}' (max {} words).".to_string(), prompt, max_length);
+        println!(
+            "[StdLib::NLP] Generating text with prompt '{}' (max {} words).".to_string(),
+            prompt, max_length
+        );
         // Conceptual: Convert prompt to tensor, feed to ML model, decode output.
         Ok("Generated text output.".to_string())
     }
@@ -110,13 +136,20 @@ pub struct Translator {
 
 impl Translator {
     pub fn new(model: Box<dyn Model>, source_lang: &str, target_lang: &str) -> Self {
-        Translator { ml_model: model, source_lang: source_lang.to_string(), target_lang: target_lang.to_string() }
+        Translator {
+            ml_model: model,
+            source_lang: source_lang.to_string(),
+            target_lang: target_lang.to_string(),
+        }
     }
 
     /// Translates text from source to target language.
     /// Can leverage QPU for quantum-enhanced semantic understanding.
     pub fn translate(&self, text: &str) -> Result<String, String> {
-        println!("[StdLib::NLP] Translating text from {} to {}.".to_string(), self.source_lang, self.target_lang);
+        println!(
+            "[StdLib::NLP] Translating text from {} to {}.".to_string(),
+            self.source_lang, self.target_lang
+        );
         // Conceptual: Convert text to tensors, feed to ML model, decode.
         Ok("Translated text.".to_string())
     }
@@ -130,16 +163,29 @@ pub struct ContextualNlp;
 
 impl ContextualNlp {
     /// Enriches text understanding by querying Sankofa's knowledge graph for context.
-    pub fn enrich_understanding(text: &str, context_kb: &KnowledgeId) -> Result<Map<String, String>, String> {
-        println!("[StdLib::NLP] Enriching understanding of text using Sankofa KB {}.".to_string(), context_kb.0);
+    pub fn enrich_understanding(
+        text: &str,
+        context_kb: &KnowledgeId,
+    ) -> Result<Map<String, String>, String> {
+        println!(
+            "[StdLib::NLP] Enriching understanding of text using Sankofa KB {}.".to_string(),
+            context_kb.0
+        );
         // Conceptual: Extract keywords/entities, query Sankofa for related facts, causal chains.
         // SankofaRuntimeState::query_causal_links(context_kb, entity);
         Ok(Map::new()) // Dummy enriched context
     }
 
     /// Generates contextually aware responses based on conversation history in Sankofa.
-    pub fn generate_contextual_response(conversation_history: &KnowledgeId, current_utterance: &str) -> Result<String, String> {
-        println!("[StdLib::NLP] Generating contextual response using Sankofa conversation history {}.".to_string(), conversation_history.0);
+    pub fn generate_contextual_response(
+        conversation_history: &KnowledgeId,
+        current_utterance: &str,
+    ) -> Result<String, String> {
+        println!(
+            "[StdLib::NLP] Generating contextual response using Sankofa conversation history {}."
+                .to_string(),
+            conversation_history.0
+        );
         // Conceptual: Use Sankofa to reconstruct conversation context, feed to advanced LLM.
         Ok("Contextually generated response.".to_string())
     }

@@ -1,6 +1,5 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-
 //! Zenith Language Specification: Advanced Type System Keywords
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
@@ -12,12 +11,11 @@
 //! Inspired by UBUNTU's extensive advanced type system features, these integrate
 //! deeply with Zenith's formal verification engine and compiler's semantic analysis.
 
-use crate::ast::{Identifier, Type, Expression, Parameter, TypeParameter, TypeBound}; // Zenith AST elements
+use crate::ast::{Expression, Identifier, Parameter, Type, TypeBound, TypeParameter}; // Zenith AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
 use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
-use crate::stdlib::core::Result; // Zenith Result type
-use crate::stdlib::collections::{List, Map}; // Zenith List type for type arguments
-
+use crate::stdlib::collections::{List, Map};
+use crate::stdlib::core::Result; // Zenith Result type // Zenith List type for type arguments
 
 /// Initializes the Advanced Type System Keywords language specification.
 pub fn init_advanced_types_syntax() {
@@ -36,33 +34,49 @@ pub fn shutdown_advanced_types_syntax() {
 /// Conceptual representation of Zenith's AST nodes for advanced type constructs.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AdvancedTypeAst {
-    DependentType(Type, Vec<Parameter>),     // e.g., List(size: N) of int;
-    LinearType(Type),                         // e.g., Linear[MyResource]; (ensures single use)
+    DependentType(Type, Vec<Parameter>), // e.g., List(size: N) of int;
+    LinearType(Type),                    // e.g., Linear[MyResource]; (ensures single use)
     TypeClassDefinition(Identifier, Vec<TypeParameter>, Vec<TraitBound>), // e.g., type class Eq<A> where A: HasEq { ... }
     TypeClassInstance(Identifier, Type, Vec<IrInstruction>), // e.g., instance Eq<int> { ... }
     HigherKindedType(Identifier, Vec<TypeParameter>), // e.g., F<A> where F is a type constructor
-    SelfType(Type),                           // e.g., self MyClass;
-    TypeFamily(Identifier, Vec<TypeParameter>), // e.g., type Family<A> = B;
-    SingletonType(Type),                      // type MyLiteralType = "hello";
-    FunctionalDependency(Identifier, Identifier), // A -> B (type A determines type B)
-    VarianceAnnotation(TypeParameter, Variance), // in T, out U
+    SelfType(Type),                                   // e.g., self MyClass;
+    TypeFamily(Identifier, Vec<TypeParameter>),       // e.g., type Family<A> = B;
+    SingletonType(Type),                              // type MyLiteralType = "hello";
+    FunctionalDependency(Identifier, Identifier),     // A -> B (type A determines type B)
+    VarianceAnnotation(TypeParameter, Variance),      // in T, out U
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TraitBound { // Represents a trait constraint, similar to Rust traits
-    HasEq, HasOrd, HasClone, Custom(Identifier)
+pub enum TraitBound {
+    // Represents a trait constraint, similar to Rust traits
+    HasEq,
+    HasOrd,
+    HasClone,
+    Custom(Identifier),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Variance { In, Out, Invariant }
-
+pub enum Variance {
+    In,
+    Out,
+    Invariant,
+}
 
 /// Conceptual semantic analysis for advanced type system constructs.
 pub struct AdvancedTypesSemanticAnalyzer;
 
 impl AdvancedTypesSemanticAnalyzer {
-    pub fn analyze(&self, ast_node: &AdvancedTypeAst, semantic_analyzer: &mut SemanticAnalyzer, type_checker: &mut TypeChecker) -> Result<(), String> {
-        println!("[LangSpec::AdvTypes] Performing semantic analysis for advanced type construct: {:?}.".to_string(), ast_node);
+    pub fn analyze(
+        &self,
+        ast_node: &AdvancedTypeAst,
+        semantic_analyzer: &mut SemanticAnalyzer,
+        type_checker: &mut TypeChecker,
+    ) -> Result<(), String> {
+        println!(
+            "[LangSpec::AdvTypes] Performing semantic analysis for advanced type construct: {:?}."
+                .to_string(),
+            ast_node
+        );
         // Conceptual:
         // 1. Validate type parameters, bounds, and dependencies.
         // 2. Perform advanced type inference and checking (e.g., for dependent types).
@@ -78,7 +92,10 @@ pub struct AdvancedTypesIrGenerator;
 
 impl AdvancedTypesIrGenerator {
     pub fn generate_ir(&self, ast_node: &AdvancedTypeAst) -> Result<Vec<IrInstruction>, String> {
-        println!("[LangSpec::AdvTypes] Generating IR for advanced type construct: {:?}.".to_string(), ast_node);
+        println!(
+            "[LangSpec::AdvTypes] Generating IR for advanced type construct: {:?}.".to_string(),
+            ast_node
+        );
         // Conceptual:
         // Translate type-level constructs into IR that guides runtime checks (if necessary)
         // or provides metadata for the backend/optimizer. For type classes, generate IR for
@@ -87,15 +104,21 @@ impl AdvancedTypesIrGenerator {
             AdvancedTypeAst::DependentType(base_type, params) => {
                 Ok(List::from(vec![
                     IrInstruction::TypeCheck(base_type.clone(), List::new()), // Dummy IR
-                    IrInstruction::RuntimeAssert(format!("validate_dependent_params({:?})", params)),
+                    IrInstruction::RuntimeAssert(format!(
+                        "validate_dependent_params({:?})",
+                        params
+                    )),
                 ]))
-            },
+            }
             AdvancedTypeAst::LinearType(typ) => {
                 Ok(List::from(vec![
                     IrInstruction::TrackResourceLinearity(typ.clone()), // Dummy IR
                 ]))
-            },
-            _ => Err("IR generation for this advanced type construct not yet fully conceptualized.".to_string()),
+            }
+            _ => Err(
+                "IR generation for this advanced type construct not yet fully conceptualized."
+                    .to_string(),
+            ),
         }
     }
 }

@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: External Services Integration Module
 //!
 //! This module provides conceptual APIs for Zenith AGI to securely and autonomously
@@ -13,17 +12,18 @@
 
 use crate::ast::Identifier; // For service IDs, resource names
 use crate::core_lang_primitives::{Size, TimeStamp}; // For job durations, resource sizes
-use crate::stdlib::core::Result; // For error handling
-use crate::stdlib::collections::{List, Map}; // For configurations, results, credentials
-use crate::stdlib::crypto::{SymmetricKey, PublicKey}; // For secure communication with external services
-use crate::stdlib::net::{HttpRequest, HttpResponse, HttpClient, TcpStream}; // For web/network interactions
-use crate::stdlib::db::{Connection, QueryResult}; // For database operations
-use crate::stdlib::ai_reasoning::{KnowledgeBase, Planner}; // For intelligent orchestration
-use crate::runtime::cloud_network_security::{CloudNetworkOrchestrator, CloudResource, ManagementPolicy}; // For autonomous cloud management
-use crate::nimbus_os::mod_rs::{NimbusContextId, CapabilityToken}; // For secure execution
+use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId}; // For secure execution
+use crate::runtime::cloud_network_security::{
+    CloudNetworkOrchestrator, CloudResource, ManagementPolicy,
+}; // For autonomous cloud management
 use crate::source_map::Span; // For Identifier creation
-use crate::stdlib::meta_ops::MetaValue; // For generic arguments
-
+use crate::stdlib::ai_reasoning::{KnowledgeBase, Planner}; // For intelligent orchestration
+use crate::stdlib::collections::{List, Map}; // For configurations, results, credentials
+use crate::stdlib::core::Result; // For error handling
+use crate::stdlib::crypto::{PublicKey, SymmetricKey}; // For secure communication with external services
+use crate::stdlib::db::{Connection, QueryResult}; // For database operations
+use crate::stdlib::meta_ops::MetaValue;
+use crate::stdlib::net::{HttpClient, HttpRequest, HttpResponse, TcpStream}; // For web/network interactions // For generic arguments
 
 /// Initializes the External Services Integration module.
 pub fn init_external_services_lib() {
@@ -71,16 +71,38 @@ pub enum ServiceType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum CloudProviderType { AWS, Azure, GCP, Custom(Identifier) }
+pub enum CloudProviderType {
+    AWS,
+    Azure,
+    GCP,
+    Custom(Identifier),
+}
 #[derive(Debug, Clone, PartialEq)]
-pub enum DatabaseType { SQL, NoSQL, GraphDB, Ledger, Custom(Identifier) }
+pub enum DatabaseType {
+    SQL,
+    NoSQL,
+    GraphDB,
+    Ledger,
+    Custom(Identifier),
+}
 #[derive(Debug, Clone, PartialEq)]
-pub enum VersionControlType { Git, Custom(Identifier) }
+pub enum VersionControlType {
+    Git,
+    Custom(Identifier),
+}
 #[derive(Debug, Clone, PartialEq)]
-pub enum CICDToolType { Jenkins, GitLabCI, GitHubActions, Custom(Identifier) }
+pub enum CICDToolType {
+    Jenkins,
+    GitLabCI,
+    GitHubActions,
+    Custom(Identifier),
+}
 #[derive(Debug, Clone, PartialEq)]
-pub enum ContainerPlatformType { Docker, Kubernetes, Custom(Identifier) }
-
+pub enum ContainerPlatformType {
+    Docker,
+    Kubernetes,
+    Custom(Identifier),
+}
 
 pub struct ExternalServices;
 
@@ -88,21 +110,36 @@ impl ExternalServices {
     /// Establishes a secure connection to an external service.
     /// Manages credential handling via Nimbus OS secure enclave.
     pub fn connect_service(config: ServiceConfiguration) -> Result<ServiceHandle, String> {
-        println!("[StdLib::ExternalServices] Connecting to service '{}' (Type: {:?}).".to_string(), config.service_id.0, config.service_type);
+        println!(
+            "[StdLib::ExternalServices] Connecting to service '{}' (Type: {:?}).".to_string(),
+            config.service_id.0, config.service_type
+        );
         // Conceptual: Nimbus OS mediates secure connection setup, potentially using `stdlib::crypto`.
-        Ok(ServiceHandle { id: config.service_id })
+        Ok(ServiceHandle {
+            id: config.service_id,
+        })
     }
 
     /// Disconnects from an external service.
     pub fn disconnect_service(handle: ServiceHandle) -> Result<(), String> {
-        println!("[StdLib::ExternalServices] Disconnecting from service '{}'.".to_string(), handle.id.0);
+        println!(
+            "[StdLib::ExternalServices] Disconnecting from service '{}'.".to_string(),
+            handle.id.0
+        );
         Ok(())
     }
 
     /// Invokes a generic operation on an external service.
     /// This routes the call to the appropriate service-specific handler.
-    pub fn invoke_service_operation(handle: ServiceHandle, operation_name: Identifier, args: List<MetaValue>) -> Result<MetaValue, String> {
-        println!("[StdLib::ExternalServices] Invoking operation '{}' on service '{}'.".to_string(), operation_name.0, handle.id.0);
+    pub fn invoke_service_operation(
+        handle: ServiceHandle,
+        operation_name: Identifier,
+        args: List<MetaValue>,
+    ) -> Result<MetaValue, String> {
+        println!(
+            "[StdLib::ExternalServices] Invoking operation '{}' on service '{}'.".to_string(),
+            operation_name.0, handle.id.0
+        );
         // Conceptual: Internal dispatcher based on handle.id.0, arguments could be serialized JSON/Protobuf.
         // The `MetaValue` here from `stdlib::meta_ops` provides a universal way to pass args.
         Ok(MetaValue::Null) // Dummy result
@@ -122,14 +159,34 @@ pub struct CloudPlatform;
 
 impl CloudPlatform {
     /// Provision a new compute instance on a specified cloud provider.
-    pub fn provision_compute_instance(handle: ServiceHandle, instance_type: String, os_image: String, size_gb: usize) -> Result<CloudResource, String> {
-        println!("[StdLib::ExternalServices] Provisioning compute instance on cloud service '{}'.".to_string(), handle.id.0);
+    pub fn provision_compute_instance(
+        handle: ServiceHandle,
+        instance_type: String,
+        os_image: String,
+        size_gb: usize,
+    ) -> Result<CloudResource, String> {
+        println!(
+            "[StdLib::ExternalServices] Provisioning compute instance on cloud service '{}'."
+                .to_string(),
+            handle.id.0
+        );
         // Conceptual: Uses CloudNetworkOrchestrator logic and cloud provider APIs.
-        Ok(CloudResource { id: Identifier("new_vm".to_string(), Span::dummy()), resource_type: "VM".to_string(), current_status: "provisioning".to_string(), deployed_zenith_app: collections::Option::None, allocated_capabilities: List::new() })
+        Ok(CloudResource {
+            id: Identifier("new_vm".to_string(), Span::dummy()),
+            resource_type: "VM".to_string(),
+            current_status: "provisioning".to_string(),
+            deployed_zenith_app: collections::Option::None,
+            allocated_capabilities: List::new(),
+        })
     }
 
     /// Deploy a Zenith application container to a managed container service.
-    pub fn deploy_containerized_app(handle: ServiceHandle, container_image_id: Identifier, target_service_id: Identifier, config: Map<String, String>) -> Result<(), String> {
+    pub fn deploy_containerized_app(
+        handle: ServiceHandle,
+        container_image_id: Identifier,
+        target_service_id: Identifier,
+        config: Map<String, String>,
+    ) -> Result<(), String> {
         println!("[StdLib::ExternalServices] Deploying containerized app '{}' to '{}' on cloud service '{}'.".to_string(), container_image_id.0, target_service_id.0, handle.id.0);
         // Conceptual: Integrates with CloudNetworkOrchestrator and Nimbus for secure deployment.
         Ok(())
@@ -144,20 +201,40 @@ pub struct DevOpsTools;
 
 impl DevOpsTools {
     /// Triggers a CI/CD pipeline in Jenkins or similar tool.
-    pub fn trigger_pipeline(handle: ServiceHandle, pipeline_name: Identifier, parameters: Map<String, String>) -> Result<Identifier, String> {
-        println!("[StdLib::ExternalServices] Triggering pipeline '{}' on CI/CD service '{}'.".to_string(), pipeline_name.0, handle.id.0);
+    pub fn trigger_pipeline(
+        handle: ServiceHandle,
+        pipeline_name: Identifier,
+        parameters: Map<String, String>,
+    ) -> Result<Identifier, String> {
+        println!(
+            "[StdLib::ExternalServices] Triggering pipeline '{}' on CI/CD service '{}'."
+                .to_string(),
+            pipeline_name.0, handle.id.0
+        );
         Ok(Identifier("job_id_123".to_string(), Span::dummy()))
     }
 
     /// Clones a Git repository from a version control service.
-    pub fn clone_repository(handle: ServiceHandle, repo_url: String, local_path: String) -> Result<(), String> {
-        println!("[StdLib::ExternalServices] Cloning repository '{}' to '{}' using service '{}'.".to_string(), repo_url, local_path, handle.id.0);
+    pub fn clone_repository(
+        handle: ServiceHandle,
+        repo_url: String,
+        local_path: String,
+    ) -> Result<(), String> {
+        println!(
+            "[StdLib::ExternalServices] Cloning repository '{}' to '{}' using service '{}'."
+                .to_string(),
+            repo_url, local_path, handle.id.0
+        );
         // Conceptual: Uses `stdlib::fs` for local storage, credentials from `ServiceHandle`. Also involves Git-specific commands.
         Ok(())
     }
 
     /// Executes an Ansible playbook or similar automation script on managed infrastructure.
-    pub fn execute_automation_script(handle: ServiceHandle, script_id: Identifier, target_hosts: List<String>) -> Result<(), String> {
+    pub fn execute_automation_script(
+        handle: ServiceHandle,
+        script_id: Identifier,
+        target_hosts: List<String>,
+    ) -> Result<(), String> {
         println!("[StdLib::ExternalServices] Executing automation script '{}' on hosts {:?} via service '{}'.".to_string(), script_id.0, target_hosts.data, handle.id.0);
         Ok(())
     }

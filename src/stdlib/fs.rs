@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: File System Module
 //!
 //! This module provides conceptual APIs for interacting with the underlying file system,
@@ -7,11 +6,10 @@
 
 use crate::ast::Identifier; // For file/path names
 use crate::core_lang_primitives::{Size, TimeStamp}; // For file sizes, timestamps
-use crate::nimbus_os::mod_rs::{NimbusContextId, CapabilityToken}; // For security
-use crate::stdlib::core::Result; // For error handling
+use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId}; // For security
+use crate::source_map::Span;
 use crate::stdlib::collections::List; // For directory listings
-use crate::source_map::Span; // For dummy Identifier
-
+use crate::stdlib::core::Result; // For error handling // For dummy Identifier
 
 /// Initializes the file system standard library components.
 pub fn init_fs_lib() {
@@ -70,20 +68,31 @@ impl File {
 
     /// Reads data from the file into a buffer.
     pub fn read(&mut self, buffer: &mut [u8]) -> Result<Size, String> {
-        println!("[StdLib::FS] Reading {} bytes from file {:?}.", buffer.len(), self.0);
+        println!(
+            "[StdLib::FS] Reading {} bytes from file {:?}.",
+            buffer.len(),
+            self.0
+        );
         // Conceptual: Call to Nimbus OS for file I/O.
         Ok(Size(buffer.len() / 2)) // Dummy read half
     }
 
     /// Writes data from a buffer into the file.
     pub fn write(&mut self, data: &[u8]) -> Result<Size, String> {
-        println!("[StdLib::FS] Writing {} bytes to file {:?}.", data.len(), self.0);
+        println!(
+            "[StdLib::FS] Writing {} bytes to file {:?}.",
+            data.len(),
+            self.0
+        );
         Ok(Size(data.len()))
     }
 
     /// Seeks to a specific position in the file.
     pub fn seek(&mut self, position: Size) -> Result<(), String> {
-        println!("[StdLib::FS] Seeking to position {} in file {:?}.", position.0, self.0);
+        println!(
+            "[StdLib::FS] Seeking to position {} in file {:?}.",
+            position.0, self.0
+        );
         Ok(())
     }
 
@@ -137,8 +146,16 @@ impl Fs {
     pub fn read_dir(path: &Path) -> Result<List<DirEntry>, String> {
         println!("[StdLib::FS] Reading directory {:?}.".to_string(), path);
         let mut entries = List::new();
-        entries.push(DirEntry { path: path.join("file1.txt"), is_dir: false, is_file: true });
-        entries.push(DirEntry { path: path.join("subdir"), is_dir: true, is_file: false });
+        entries.push(DirEntry {
+            path: path.join("file1.txt"),
+            is_dir: false,
+            is_file: true,
+        });
+        entries.push(DirEntry {
+            path: path.join("subdir"),
+            is_dir: true,
+            is_file: false,
+        });
         Ok(entries)
     }
 
@@ -156,13 +173,20 @@ impl Fs {
 
     /// Reads the entire contents of a file into a byte vector.
     pub fn read_to_bytes(path: &Path) -> Result<List<u8>, String> {
-        println!("[StdLib::FS] Reading entire file {:?} to bytes.".to_string(), path);
+        println!(
+            "[StdLib::FS] Reading entire file {:?} to bytes.".to_string(),
+            path
+        );
         Ok(List::new()) // Dummy
     }
 
     /// Writes a slice of bytes to a file, creating it if necessary.
     pub fn write_bytes(path: &Path, contents: &[u8]) -> Result<(), String> {
-        println!("[StdLib::FS] Writing {} bytes to file {:?}.".to_string(), contents.len(), path);
+        println!(
+            "[StdLib::FS] Writing {} bytes to file {:?}.".to_string(),
+            contents.len(),
+            path
+        );
         Ok(())
     }
 }

@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Time and Date Module
 //!
 //! This module provides conceptual APIs for handling time, dates, and durations
@@ -6,15 +5,17 @@
 //! awareness, and precise temporal synchronization, leveraging Nimbus OS's
 //! Multi-Timeline System (MTS) for advanced temporal consistency.
 
-use crate::core_lang_primitives::{TimeStamp}; // Zenith's core TimeStamp
-use crate::stdlib::core::Result; // For error handling
-use std::collections::HashMap; // For time zone rules
 use crate::ast::Identifier; // For time zone IDs
-use crate::source_map::Span; // For dummy Identifier
+use crate::core_lang_primitives::TimeStamp; // Zenith's core TimeStamp
+use crate::source_map::Span;
+use crate::stdlib::core::Result; // For error handling
+use std::collections::HashMap; // For time zone rules // For dummy Identifier
 
 /// Initializes the time standard library components.
 pub fn init_time_lib() {
-    println!("  - Initializing StdLib Time and Date Module (Clocks, Durations, TimeZones, MTS Sync)...");
+    println!(
+        "  - Initializing StdLib Time and Date Module (Clocks, Durations, TimeZones, MTS Sync)..."
+    );
 }
 
 /// Shuts down the time standard library components.
@@ -55,13 +56,25 @@ impl Instant {
 pub struct Duration(u64); // Nanoseconds (conceptual)
 
 impl Duration {
-    pub fn from_nanos(nanos: u64) -> Self { Duration(nanos) }
-    pub fn from_millis(millis: u64) -> Self { Duration(millis * 1_000_000) }
-    pub fn from_secs(secs: u64) -> Self { Duration(secs * 1_000_000_000) }
+    pub fn from_nanos(nanos: u64) -> Self {
+        Duration(nanos)
+    }
+    pub fn from_millis(millis: u64) -> Self {
+        Duration(millis * 1_000_000)
+    }
+    pub fn from_secs(secs: u64) -> Self {
+        Duration(secs * 1_000_000_000)
+    }
 
-    pub fn as_nanos(&self) -> u64 { self.0 }
-    pub fn as_millis(&self) -> u64 { self.0 / 1_000_000 }
-    pub fn as_secs(&self) -> u64 { self.0 / 1_000_000_000 }
+    pub fn as_nanos(&self) -> u64 {
+        self.0
+    }
+    pub fn as_millis(&self) -> u64 {
+        self.0 / 1_000_000
+    }
+    pub fn as_secs(&self) -> u64 {
+        self.0 / 1_000_000_000
+    }
 }
 
 /// Represents a conceptual date and time, with timezone awareness.
@@ -80,29 +93,48 @@ pub struct DateTime {
 impl DateTime {
     /// Creates a DateTime from a Unix timestamp (seconds since epoch).
     pub fn from_unix_timestamp(timestamp: i64, tz: TimeZone) -> Result<Self, String> {
-        println!("[StdLib::Time] Creating DateTime from Unix timestamp {}.".to_string(), timestamp);
+        println!(
+            "[StdLib::Time] Creating DateTime from Unix timestamp {}.".to_string(),
+            timestamp
+        );
         // Conceptual: Convert timestamp to components, apply timezone.
         Ok(DateTime {
-            year: 2026, month: 5, day: 11,
-            hour: 10, minute: 0, second: 0, nanosecond: 0,
+            year: 2026,
+            month: 5,
+            day: 11,
+            hour: 10,
+            minute: 0,
+            second: 0,
+            nanosecond: 0,
             timezone: tz,
         })
     }
 
     /// Returns the current system date and time in a specified timezone.
     pub fn now_in(tz: TimeZone) -> Self {
-        println!("[StdLib::Time] Getting current DateTime in timezone {:?}.".to_string(), tz);
+        println!(
+            "[StdLib::Time] Getting current DateTime in timezone {:?}.".to_string(),
+            tz
+        );
         // Conceptual: Combines Instant::now() with timezone conversion.
         DateTime {
-            year: 2026, month: 5, day: 11,
-            hour: 10, minute: 0, second: 0, nanosecond: 0,
+            year: 2026,
+            month: 5,
+            day: 11,
+            hour: 10,
+            minute: 0,
+            second: 0,
+            nanosecond: 0,
             timezone: tz,
         }
     }
 
     /// Formats the DateTime into a string.
     pub fn format(&self, format_string: &str) -> String {
-        println!("[StdLib::Time] Formatting DateTime with '{}'.".to_string(), format_string);
+        println!(
+            "[StdLib::Time] Formatting DateTime with '{}'.".to_string(),
+            format_string
+        );
         // Conceptual: Standard formatting logic.
         "2026-05-11 10:00:00 UTC".to_string()
     }
@@ -118,20 +150,29 @@ impl DateTime {
 /// Represents a conceptual time zone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimeZone {
-    pub id: Identifier, // e.g., "UTC", "America/New_York"
+    pub id: Identifier,      // e.g., "UTC", "America/New_York"
     pub offset_seconds: i32, // Offset from UTC
 }
 
 impl TimeZone {
     pub fn utc() -> Self {
-        TimeZone { id: Identifier("UTC".to_string(), Span::dummy()), offset_seconds: 0 }
+        TimeZone {
+            id: Identifier("UTC".to_string(), Span::dummy()),
+            offset_seconds: 0,
+        }
     }
 
     pub fn from_id(id: &str) -> Result<Self, String> {
-        println!("[StdLib::Time] Loading TimeZone from ID '{}'.".to_string(), id);
+        println!(
+            "[StdLib::Time] Loading TimeZone from ID '{}'.".to_string(),
+            id
+        );
         // Conceptual: Lookup in a system-wide timezone database provided by Nimbus OS.
         if id == "America/New_York" {
-            Ok(TimeZone { id: Identifier(id.to_string(), Span::dummy()), offset_seconds: -18000 }) // -5 hours
+            Ok(TimeZone {
+                id: Identifier(id.to_string(), Span::dummy()),
+                offset_seconds: -18000,
+            }) // -5 hours
         } else if id == "UTC" {
             Ok(TimeZone::utc())
         } else {
@@ -149,16 +190,28 @@ pub struct TemporalSync;
 
 impl TemporalSync {
     /// Waits for a specific timestamp to be reached across a given MTS timeline.
-    pub fn wait_for_timestamp(timeline_id: crate::runtime::mts::TimelineId, target_timestamp: TimeStamp) -> Result<(), String> {
-        println!("[StdLib::Time] Waiting for MTS timeline {} to reach timestamp {}.".to_string(), timeline_id, target_timestamp.0);
+    pub fn wait_for_timestamp(
+        timeline_id: crate::runtime::mts::TimelineId,
+        target_timestamp: TimeStamp,
+    ) -> Result<(), String> {
+        println!(
+            "[StdLib::Time] Waiting for MTS timeline {} to reach timestamp {}.".to_string(),
+            timeline_id, target_timestamp.0
+        );
         // Conceptual: Interacts with the MTS Orchestrator to block until temporal condition is met.
         // This is a high-level abstraction over `stdlib::sync::sync_across_mts_timelines`.
         Ok(())
     }
 
     /// Sets an event to trigger when a specific global temporal condition is met.
-    pub fn register_temporal_event(condition: &str, callback: Box<dyn Fn() -> () + Send + Sync>) -> Result<(), String> {
-        println!("[StdLib::Time] Registering temporal event: '{}'.".to_string(), condition);
+    pub fn register_temporal_event(
+        condition: &str,
+        callback: Box<dyn Fn() -> () + Send + Sync>,
+    ) -> Result<(), String> {
+        println!(
+            "[StdLib::Time] Registering temporal event: '{}'.".to_string(),
+            condition
+        );
         // Conceptual: Nimbus OS's MTS hooks for event dispatch.
         Ok(())
     }

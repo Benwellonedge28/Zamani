@@ -2,7 +2,7 @@
 //! Zenith — agent_lifecycle module
 
 /// Initialize agent_lifecycle
-pub fn init_agent_lifecycle() { }
+pub fn init_agent_lifecycle() {}
 
 /// Shutdown agent_lifecycle
-pub fn shutdown_agent_lifecycle() { }
+pub fn shutdown_agent_lifecycle() {}

@@ -1,16 +1,14 @@
-
 //! Nimbus OS: Security Kernel - Core Security Components
 //!
 //! This module aggregates and manages the core security components for Nimbus OS,
 //! providing sandboxing, access control, encryption, and threat monitoring.
 
-pub mod sandbox_manager; // Secure Sandboxing and Isolation
 pub mod access_control; // Fine-grained Access Control
-pub mod encryption_services; // Cryptographic Services
+pub mod encryption_services;
+pub mod sandbox_manager; // Secure Sandboxing and Isolation // Cryptographic Services
 #[cfg(feature = "full")]
-
 // Re-export core types to simplify usage in other modules
-pub use self::sandbox_manager::{SecureExecutionEnvironment, SandboxPolicy, IsolationLevel};
+pub use self::sandbox_manager::{IsolationLevel, SandboxPolicy, SecureExecutionEnvironment};
 
 /// Initializes all security kernel components.
 pub fn init_security_kernel() {

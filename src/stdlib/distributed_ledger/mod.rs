@@ -1,12 +1,11 @@
-
 //! Zenith Universal Meta-Compiler (UMC) Standard Library: Distributed Ledger Module
 //!
 //! This module aggregates and manages all distributed ledger and blockchain-related
 //! components for Zenith, ensuring secure, transparent, and immutable records.
 
+pub mod contract_engine;
 pub mod ledger_client; // Client for interacting with Zenith ledgers
-pub mod transaction_manager; // Transaction creation, signing, and submission
-pub mod contract_engine; // Zenith Smart Contract execution environment
+pub mod transaction_manager; // Transaction creation, signing, and submission // Zenith Smart Contract execution environment
 
 /// Initializes all distributed ledger components.
 pub fn init_ledger() {

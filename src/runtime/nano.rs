@@ -1,4 +1,3 @@
-
 //! Zenith UMC Nano-Agent Runtime
 //!
 //! This module defines the conceptual runtime components for orchestrating
@@ -12,9 +11,9 @@
 //! - **Blueprint Interpretation:** Translating high-level blueprints into nano-scale actions.
 //! - **Malfunction Reporting:** Detecting and propagating nano-agent failures.
 
+use rand::Rng;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use rand::Rng; // For conceptual random events
+use std::sync::{Arc, Mutex}; // For conceptual random events
 
 /// Represents the conceptual state and properties of a single Nano-Agent.
 #[derive(Debug, Clone, PartialEq)]
@@ -82,7 +81,10 @@ impl NanoAgentOrchestrator {
             status: NanoAgentStatus::Idle,
         };
         self.deployed_agents.insert(id, new_agent);
-        println!("    -> Nano Runtime: Assembled Nano-Agent {} (Blueprint: {}).".to_string(), id, blueprint_id);
+        println!(
+            "    -> Nano Runtime: Assembled Nano-Agent {} (Blueprint: {}).".to_string(),
+            id, blueprint_id
+        );
         id
     }
 
@@ -90,20 +92,31 @@ impl NanoAgentOrchestrator {
     pub fn perform_action(&mut self, agent_id: usize, action: &str) -> Result<(), String> {
         if let Some(agent) = self.deployed_agents.get_mut(&agent_id) {
             if matches!(agent.status, NanoAgentStatus::Malfunction(_)) {
-                return Err(format!("Agent {} is malfunctioning, cannot perform action.", agent_id));
+                return Err(format!(
+                    "Agent {} is malfunctioning, cannot perform action.",
+                    agent_id
+                ));
             }
             agent.status = NanoAgentStatus::ExecutingAction(action.to_string());
             agent.energy_level -= 0.05; // Conceptual energy cost
 
             // Simulate action success/failure based on environment/agent state
             let mut rng = rand::thread_rng();
-            if rng.gen_bool(0.01) { // 1% chance of malfunction
-                agent.status = NanoAgentStatus::Malfunction(format!("Action '{}' failed randomly.", action));
-                println!("      -> Nano-Agent {} malfunctioned during action '{}'.".to_string(), agent_id, action);
+            if rng.gen_bool(0.01) {
+                // 1% chance of malfunction
+                agent.status =
+                    NanoAgentStatus::Malfunction(format!("Action '{}' failed randomly.", action));
+                println!(
+                    "      -> Nano-Agent {} malfunctioned during action '{}'.".to_string(),
+                    agent_id, action
+                );
                 return Err(agent.status.to_string());
             }
-            
-            println!("    -> Nano Runtime: Agent {} performing action '{}'.".to_string(), agent_id, action);
+
+            println!(
+                "    -> Nano Runtime: Agent {} performing action '{}'.".to_string(),
+                agent_id, action
+            );
             agent.status = NanoAgentStatus::Idle; // Action complete
             Ok(())
         } else {
@@ -112,9 +125,22 @@ impl NanoAgentOrchestrator {
     }
 
     /// Conceptual function for nano-agent communication.
-    pub fn nano_communicate(&mut self, sender_id: usize, target_id: usize, message: &[u8]) -> Result<(), String> {
-        if self.deployed_agents.contains_key(&sender_id) && self.deployed_agents.contains_key(&target_id) {
-            println!("    -> Nano Runtime: Agent {} communicating with {} with message ({} bytes).".to_string(), sender_id, target_id, message.len());
+    pub fn nano_communicate(
+        &mut self,
+        sender_id: usize,
+        target_id: usize,
+        message: &[u8],
+    ) -> Result<(), String> {
+        if self.deployed_agents.contains_key(&sender_id)
+            && self.deployed_agents.contains_key(&target_id)
+        {
+            println!(
+                "    -> Nano Runtime: Agent {} communicating with {} with message ({} bytes)."
+                    .to_string(),
+                sender_id,
+                target_id,
+                message.len()
+            );
             // Conceptual: Simulate message delivery, potentially with latency or loss.
             Ok(())
         } else {
@@ -129,13 +155,23 @@ impl NanoAgentOrchestrator {
             self.next_agent_id += 1;
             let mut new_agent = original_agent.clone();
             new_agent.id = new_id;
-            new_agent.current_location = (new_agent.current_location.0 + 0.1, new_agent.current_location.1, new_agent.current_location.2); // Slightly offset
+            new_agent.current_location = (
+                new_agent.current_location.0 + 0.1,
+                new_agent.current_location.1,
+                new_agent.current_location.2,
+            ); // Slightly offset
             new_agent.energy_level = 0.8; // New agent starts with less energy
             self.deployed_agents.insert(new_id, new_agent);
-            println!("    -> Nano Runtime: Replicated Nano-Agent {} to new Agent {}.".to_string(), agent_id, new_id);
+            println!(
+                "    -> Nano Runtime: Replicated Nano-Agent {} to new Agent {}.".to_string(),
+                agent_id, new_id
+            );
             Ok(new_id)
         } else {
-            Err(format!("Original Nano-Agent {} not found for replication.", agent_id))
+            Err(format!(
+                "Original Nano-Agent {} not found for replication.",
+                agent_id
+            ))
         }
     }
 
@@ -144,13 +180,18 @@ impl NanoAgentOrchestrator {
         if let Some(agent) = self.deployed_agents.get_mut(&agent_id) {
             agent.status = NanoAgentStatus::Disassembled;
             self.deployed_agents.remove(&agent_id);
-            println!("    -> Nano Runtime: Disassembled Nano-Agent {}.".to_string(), agent_id);
+            println!(
+                "    -> Nano Runtime: Disassembled Nano-Agent {}.".to_string(),
+                agent_id
+            );
         }
     }
 
     /// Gets the status of a nano-agent.
     pub fn get_nano_agent_status(&self, agent_id: usize) -> Option<NanoAgentStatus> {
-        self.deployed_agents.get(&agent_id).map(|a| a.status.clone())
+        self.deployed_agents
+            .get(&agent_id)
+            .map(|a| a.status.clone())
     }
 }
 
@@ -161,9 +202,13 @@ static mut NANO_ORCHESTRATOR: Option<Arc<Mutex<NanoAgentOrchestrator>>> = None;
 
 /// Initializes the nano-agent runtime.
 pub fn init_nano_runtime() -> Arc<Mutex<NanoAgentOrchestrator>> {
-    println!("  - Initializing Nano-Agent Runtime (Assembly, Communication, Lifecycle Management)...");
+    println!(
+        "  - Initializing Nano-Agent Runtime (Assembly, Communication, Lifecycle Management)..."
+    );
     let orchestrator = Arc::new(Mutex::new(NanoAgentOrchestrator::new()));
-    unsafe { NANO_ORCHESTRATOR = Some(Arc::clone(&orchestrator)); }
+    unsafe {
+        NANO_ORCHESTRATOR = Some(Arc::clone(&orchestrator));
+    }
     println!("    -> Nano-Agent Runtime initialized.");
     orchestrator
 }
@@ -171,7 +216,9 @@ pub fn init_nano_runtime() -> Arc<Mutex<NanoAgentOrchestrator>> {
 /// Shuts down the nano-agent runtime.
 pub fn shutdown_nano_runtime() {
     println!("  - Shutting down Nano-Agent Runtime...");
-    unsafe { NANO_ORCHESTRATOR = None; }
+    unsafe {
+        NANO_ORCHESTRATOR = None;
+    }
     // Conceptual: Halt all nano-agent operations, disassemble resources, clean up simulations.
 }
 

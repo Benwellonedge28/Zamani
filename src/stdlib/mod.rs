@@ -1,41 +1,40 @@
-
 //! Zenith Universal Meta-Compiler (UMC) Standard Library
 //!
 //! This module aggregates and manages all standard library components for Zenith.
 
-pub mod core;
-pub mod collections;
-pub mod quantum;
-pub mod nano;
-pub mod mts;
-pub mod sankofa;
-pub mod reflection;
-pub mod ml;
-pub mod net;
-pub mod fs;
-pub mod sync;
-pub mod crypto;
-pub mod serialize;
-pub mod gui;
-pub mod db;
-pub mod time;
-pub mod numeric;
-pub mod web;
-pub mod ai_reasoning;
-pub mod nlp;
-pub mod vision;
-pub mod robotics;
 pub mod agents;
-pub mod meta_ops;
-pub mod external_services;
 pub mod agi_governance;
-pub mod human_agi_interaction;
-pub mod reality;
-pub mod distributed_ledger;
-pub mod iot;
-pub mod human_interface_devices;
+pub mod ai_reasoning;
 pub mod chat_architect_agent;
+pub mod collections;
+pub mod core;
+pub mod crypto;
+pub mod db;
+pub mod distributed_ledger;
 pub mod documentation_system;
+pub mod external_services;
+pub mod fs;
+pub mod gui;
+pub mod human_agi_interaction;
+pub mod human_interface_devices;
+pub mod iot;
+pub mod meta_ops;
+pub mod ml;
+pub mod mts;
+pub mod nano;
+pub mod net;
+pub mod nlp;
+pub mod numeric;
+pub mod quantum;
+pub mod reality;
+pub mod reflection;
+pub mod robotics;
+pub mod sankofa;
+pub mod serialize;
+pub mod sync;
+pub mod time;
+pub mod vision;
+pub mod web;
 // MISSING: omniversal_simulation  // temporarily disabled — Zenith-specific syntax
 // MISSING: on_device_agents  // temporarily disabled — Zenith-specific syntax
 // MISSING: resource_management  // temporarily disabled — Zenith-specific syntax
@@ -46,12 +45,12 @@ pub mod omniversal_sovereignty;
 // MISSING: omniversal_nlp_adv  // temporarily disabled — Zenith-specific syntax
 // MISSING: multidimensional  // temporarily disabled — Zenith-specific syntax
 pub mod math_foundations;
-pub mod network;
 pub mod music_language;
+pub mod network;
 // MISSING: physical_hardware_control  // temporarily disabled — Zenith-specific syntax
+pub mod editor_integration;
 pub mod mgns;
 pub mod test_framework;
-pub mod editor_integration;
 // MISSING: system_design  // temporarily disabled — Zenith-specific syntax
 // MISSING: runtime_governance  // temporarily disabled
 // MISSING: omniversal_hashing  // temporarily disabled
@@ -145,7 +144,8 @@ pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
     omniversal_autonomous_deployment_orchestration_secure_hardening::shutdown_omniversal_autonomous_deployment_orchestration_secure_hardening(); // Shutdown OADOSH module
     omniversal_living_character_narrative_evolution::shutdown_omniversal_living_character_narrative_evolution();
-    omniversal_rogue_prevention_alignment::shutdown_omniversal_agi_alignment_sovereign_containment();
+    omniversal_rogue_prevention_alignment::shutdown_omniversal_agi_alignment_sovereign_containment(
+    );
     omniversal_trust_identity_management::shutdown_omniversal_trust_identity_management();
     omniversal_strategic_goal_management::shutdown_omniversal_strategic_goal_management();
     omniversal_perception_autonomous_action::shutdown_omniversal_perception_autonomous_action();
@@ -182,27 +182,27 @@ pub fn shutdown_stdlib() {
     iot::shutdown_iot_lib();
     distributed_ledger::shutdown_distributed_ledger();
     reality::shutdown_reality_lib();
-    human_agi_interaction::shutdown_human_agi_lib(); 
+    human_agi_interaction::shutdown_human_agi_lib();
     agi_governance::shutdown_agi_governance_lib();
-    external_services::shutdown_external_services_lib(); 
-    meta_ops::shutdown_meta_ops_lib(); 
-    agents::shutdown_agents_lib(); 
-    robotics::shutdown_robotics_lib(); 
-    vision::shutdown_vision_lib(); 
-    nlp::shutdown_nlp_lib(); 
-    ai_reasoning::shutdown_ai_reasoning_lib(); 
-    web::shutdown_web_lib(); 
-    numeric::shutdown_numeric_lib(); 
-    time::shutdown_time_lib(); 
-    db::shutdown_db_lib(); 
-    gui::shutdown_gui_lib(); 
-    serialize::shutdown_serialize_lib(); 
-    crypto::shutdown_crypto_lib(); 
-    sync::shutdown_sync_lib(); 
-    fs::shutdown_fs_lib(); 
-    net::shutdown_net_lib(); 
-    ml::shutdown_ml_lib(); 
-    reflection::shutdown_reflection_lib(); 
+    external_services::shutdown_external_services_lib();
+    meta_ops::shutdown_meta_ops_lib();
+    agents::shutdown_agents_lib();
+    robotics::shutdown_robotics_lib();
+    vision::shutdown_vision_lib();
+    nlp::shutdown_nlp_lib();
+    ai_reasoning::shutdown_ai_reasoning_lib();
+    web::shutdown_web_lib();
+    numeric::shutdown_numeric_lib();
+    time::shutdown_time_lib();
+    db::shutdown_db_lib();
+    gui::shutdown_gui_lib();
+    serialize::shutdown_serialize_lib();
+    crypto::shutdown_crypto_lib();
+    sync::shutdown_sync_lib();
+    fs::shutdown_fs_lib();
+    net::shutdown_net_lib();
+    ml::shutdown_ml_lib();
+    reflection::shutdown_reflection_lib();
     sankofa::shutdown_sankofa_lib();
     mts::shutdown_mts_lib();
     nano::shutdown_nano_lib();

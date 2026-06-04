@@ -2,7 +2,7 @@
 //! Zenith — tls module
 
 /// Initialize tls
-pub fn init_tls() { }
+pub fn init_tls() {}
 
 /// Shutdown tls
-pub fn shutdown_tls() { }
+pub fn shutdown_tls() {}

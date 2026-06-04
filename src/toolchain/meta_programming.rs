@@ -1,4 +1,3 @@
-
 //! Zenith Universal Meta-Compiler (UMC): Autonomous Meta-Programming & Macros Module
 //!
 //! This module defines the conceptual framework for Zenith's "very extra super Extremely
@@ -13,17 +12,18 @@
 
 use crate::ast::Identifier; // For macro names, code snippets, component IDs
 use crate::core_lang_primitives::{Size, TimeStamp}; // For code metrics, generation timestamps
-use crate::stdlib::core::Result; // For error handling
-use crate::stdlib::collections::{List, Map}; // For AST nodes, macro arguments, configurations
-use crate::stdlib::meta_ops::{MetaOperations, TranscodeSource, TranscodeTarget, TranscodedOutput, OverridePatch, MetaValue}; // Fundamental meta-ops
-use crate::stdlib::ai_reasoning::{KnowledgeBase, Planner, FactObject}; // For intelligent code generation
-use crate::stdlib::crypto::{Signature, PublicKey, HomomorphicCiphertext, KeyManagementSystem}; // For secure meta-code
-use crate::toolchain::self_evolution::{SelfEvolutionEngine, EvolutionProposal}; // For integration with self-evolution
-use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For proving meta-code correctness
-use crate::nimbus_os::mod_rs::{NimbusContextId, CapabilityToken}; // For secure execution contexts
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision}; // For ethical vetting of meta-code
-use crate::source_map::Span; // For Identifier creation
-
+use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId}; // For secure execution contexts
+use crate::source_map::Span;
+use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner}; // For intelligent code generation
+use crate::stdlib::collections::{List, Map}; // For AST nodes, macro arguments, configurations
+use crate::stdlib::core::Result; // For error handling
+use crate::stdlib::crypto::{HomomorphicCiphertext, KeyManagementSystem, PublicKey, Signature}; // For secure meta-code
+use crate::stdlib::meta_ops::{
+    MetaOperations, MetaValue, OverridePatch, TranscodeSource, TranscodeTarget, TranscodedOutput,
+}; // Fundamental meta-ops
+use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For proving meta-code correctness
+use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For integration with self-evolution // For Identifier creation
 
 /// Initializes the Autonomous Meta-Programming & Macros module.
 pub fn init_meta_programming() {
@@ -60,15 +60,24 @@ impl MacroProcessor {
     /// Registers a new meta-programming macro with the Zenith compiler.
     /// Macro logic is stored and executed within a secure Nimbus OS context.
     pub fn register_macro(macro_def: MacroDefinition) -> Result<(), String> {
-        println!("[Toolchain::MetaProg] Registering macro '{}'.".to_string(), macro_def.name.0);
+        println!(
+            "[Toolchain::MetaProg] Registering macro '{}'.".to_string(),
+            macro_def.name.0
+        );
         // Conceptual: Store macro definition, compile generator_logic to executable form.
         Ok(())
     }
 
     /// Expands a macro invocation during compilation or runtime meta-programming.
     /// This process itself is E.V.A.S.-vetted and formally verifiable.
-    pub fn expand_macro(macro_name: Identifier, args: List<MetaValue>) -> Result<ZenithCodeSnippet, String> {
-        println!("[Toolchain::MetaProg] Expanding macro '{}' with args: {:?}.".to_string(), macro_name.0, args);
+    pub fn expand_macro(
+        macro_name: Identifier,
+        args: List<MetaValue>,
+    ) -> Result<ZenithCodeSnippet, String> {
+        println!(
+            "[Toolchain::MetaProg] Expanding macro '{}' with args: {:?}.".to_string(),
+            macro_name.0, args
+        );
 
         // E.V.A.S. vetting for macro expansion, especially if it generates complex/privileged code.
         let evas_action = EvasActionContext {
@@ -77,8 +86,17 @@ impl MacroProcessor {
             initiating_context_id: nimbus.os.get_current_context_id(), // Assume AGI is running in a context
             ..Default::default()
         };
-        match nimbus.os.get_microkernel_evas_filter().evaluate_action(evas_action) {
-            EvasDecision::Block(reason) => return Err(format!("E.V.A.S. blocked macro expansion: {}.".to_string(), reason)),
+        match nimbus
+            .os
+            .get_microkernel_evas_filter()
+            .evaluate_action(evas_action)
+        {
+            EvasDecision::Block(reason) => {
+                return Err(format!(
+                    "E.V.A.S. blocked macro expansion: {}.".to_string(),
+                    reason
+                ))
+            }
             _ => { /* Allow or Warn */ }
         }
 
@@ -97,7 +115,7 @@ impl MacroProcessor {
 pub struct MetaProgrammingAgent {
     pub base_agent: AutonomousAgent,
     pub code_generation_models: List<Model>, // AI models for generating Zenith code/IR/HDL
-    pub optimization_planner: Planner, // For planning code transformations
+    pub optimization_planner: Planner,       // For planning code transformations
     pub formal_verification_integrations: List<Identifier>, // Tools used for proving correctness
 }
 
@@ -106,8 +124,14 @@ pub struct AutonomousCodeGenerator;
 impl AutonomousCodeGenerator {
     /// Autonomously generates Zenith code (or IR, HDL, etc.) based on high-level goals.
     /// Leverages AI models for creativity, AI Reasoning for logic, and Sankofa for knowledge.
-    pub fn generate_code_from_goal(goal: FactObject, constraints: Map<String, MetaValue>) -> Result<ZenithCodeSnippet, String> {
-        println!("[Toolchain::MetaProg] Autonomously generating code for goal: {:?}.".to_string(), goal);
+    pub fn generate_code_from_goal(
+        goal: FactObject,
+        constraints: Map<String, MetaValue>,
+    ) -> Result<ZenithCodeSnippet, String> {
+        println!(
+            "[Toolchain::MetaProg] Autonomously generating code for goal: {:?}.".to_string(),
+            goal
+        );
 
         // E.V.A.S. vetting for autonomous code generation, especially for sensitive domains.
         let evas_action = EvasActionContext {
@@ -116,8 +140,17 @@ impl AutonomousCodeGenerator {
             initiating_context_id: nimbus.os.get_current_context_id(),
             ..Default::default()
         };
-        match nimbus.os.get_microkernel_evas_filter().evaluate_action(evas_action) {
-            EvasDecision::Block(reason) => return Err(format!("E.V.A.S. blocked code generation: {}.".to_string(), reason)),
+        match nimbus
+            .os
+            .get_microkernel_evas_filter()
+            .evaluate_action(evas_action)
+        {
+            EvasDecision::Block(reason) => {
+                return Err(format!(
+                    "E.V.A.S. blocked code generation: {}.".to_string(),
+                    reason
+                ))
+            }
             _ => { /* Allow or Warn */ }
         }
 
@@ -127,26 +160,48 @@ impl AutonomousCodeGenerator {
 
     /// Autonomously refactors and optimizes existing Zenith code.
     /// Leverages `toolchain::self_evolution` for iterative improvement.
-    pub fn autonomously_optimize_code(code_snippet: ZenithCodeSnippet, optimization_goal: String) -> Result<ZenithCodeSnippet, String> {
-        println!("[Toolchain::MetaProg] Autonomously optimizing code for goal: '{}'.".to_string(), optimization_goal);
+    pub fn autonomously_optimize_code(
+        code_snippet: ZenithCodeSnippet,
+        optimization_goal: String,
+    ) -> Result<ZenithCodeSnippet, String> {
+        println!(
+            "[Toolchain::MetaProg] Autonomously optimizing code for goal: '{}'.".to_string(),
+            optimization_goal
+        );
         let self_evo_engine = SelfEvolutionEngine; // Dummy instantiation
-        let proposal_result = self_evo_engine.generate_optimization_proposals(Identifier("code_refactor_agent".to_string(), Span::dummy()));
+        let proposal_result = self_evo_engine.generate_optimization_proposals(Identifier(
+            "code_refactor_agent".to_string(),
+            Span::dummy(),
+        ));
         let proposal = proposal_result?.data[0].clone(); // Dummy: taking first proposal
-        // Apply proposal etc.
+                                                         // Apply proposal etc.
         Ok("// Optimized Zenith code".to_string())
     }
 
     /// Autonomously adapts code to new or changing multi-paradigm hardware targets.
     /// Uses `stdlib::meta_ops::transcode` and Zenith HDL knowledge.
-    pub fn adapt_code_to_new_hardware(code_snippet: ZenithCodeSnippet, new_hardware_target: Identifier) -> Result<ZenithCodeSnippet, String> {
-        println!("[Toolchain::MetaProg] Autonomously adapting code to new hardware target '{}'.".to_string(), new_hardware_target.0);
+    pub fn adapt_code_to_new_hardware(
+        code_snippet: ZenithCodeSnippet,
+        new_hardware_target: Identifier,
+    ) -> Result<ZenithCodeSnippet, String> {
+        println!(
+            "[Toolchain::MetaProg] Autonomously adapting code to new hardware target '{}'."
+                .to_string(),
+            new_hardware_target.0
+        );
         let transcoded_output = MetaOperations.transcode(
-            TranscodeSource::SourceCode(code_snippet, Identifier("Zenith".to_string(), Span::dummy())),
+            TranscodeSource::SourceCode(
+                code_snippet,
+                Identifier("Zenith".to_string(), Span::dummy()),
+            ),
             TranscodeTarget::HardwareConfiguration(new_hardware_target),
             Map::new(),
         )?; // Ensure MetaOperations is handled
         if let TranscodedOutput::Bytes(config_bytes) = transcoded_output {
-            Ok(format!("// Adapted code for hardware {:?}\n// Configuration: {:?}", new_hardware_target, config_bytes))
+            Ok(format!(
+                "// Adapted code for hardware {:?}\n// Configuration: {:?}",
+                new_hardware_target, config_bytes
+            ))
         } else {
             Err("Failed to adapt code to hardware configuration.".to_string())
         }
@@ -170,34 +225,55 @@ impl SecureMetaProgramming {
 
     /// Digitally signs generated code/macros to ensure authenticity and integrity.
     /// Uses `stdlib::crypto::sign`.
-    pub fn sign_generated_code(code_to_sign: ZenithCodeSnippet, signing_key_id: Identifier) -> Result<Signature, String> {
+    pub fn sign_generated_code(
+        code_to_sign: ZenithCodeSnippet,
+        signing_key_id: Identifier,
+    ) -> Result<Signature, String> {
         println!("[Toolchain::MetaProg] Signing generated code.");
         // Conceptual: Use KMS to retrieve signing key from secure enclave and sign.
         let kms = KeyManagementSystem; // Dummy instantiation
-        let private_key_ref = kms.request_key(Map::from([("key_id".to_string(), signing_key_id.0.to_string())]))?; // Dummy request
-        // Need to convert private_key_ref (Identifier) to actual PrivateKey object to pass to crypto.sign.
-        // For now, assume a direct crypto.sign call with a dummy key and dummy data conversion.
-        crate::stdlib::crypto::Crypto.sign(&crate::stdlib::crypto::PrivateKey(List::new()), code_to_sign.as_bytes()) // Use as_bytes() for code_to_sign
+        let private_key_ref = kms.request_key(Map::from([(
+            "key_id".to_string(),
+            signing_key_id.0.to_string(),
+        )]))?; // Dummy request
+               // Need to convert private_key_ref (Identifier) to actual PrivateKey object to pass to crypto.sign.
+               // For now, assume a direct crypto.sign call with a dummy key and dummy data conversion.
+        crate::stdlib::crypto::Crypto.sign(
+            &crate::stdlib::crypto::PrivateKey(List::new()),
+            code_to_sign.as_bytes(),
+        ) // Use as_bytes() for code_to_sign
     }
 
     /// Ensures generated code adheres to ethical guidelines using E.V.A.S. filter.
-    pub fn ethical_vetting_of_generated_code(code_snippet: ZenithCodeSnippet) -> Result<EvasDecision, String> {
+    pub fn ethical_vetting_of_generated_code(
+        code_snippet: ZenithCodeSnippet,
+    ) -> Result<EvasDecision, String> {
         println!("[Toolchain::MetaProg] Ethically vetting generated code.");
         let evas_action = EvasActionContext {
             action_type: "generated_code_deployment".to_string(),
-            perceived_intent: format!("Deploy new generated code: {}.".to_string(), &code_snippet[..std::cmp::min(code_snippet.len(), 50)]),
+            perceived_intent: format!(
+                "Deploy new generated code: {}.".to_string(),
+                &code_snippet[..std::cmp::min(code_snippet.len(), 50)]
+            ),
             initiating_context_id: nimbus.os.get_current_context_id(),
             ..Default::default()
         };
-        Ok(nimbus.os.get_microkernel_evas_filter().evaluate_action(evas_action))
+        Ok(nimbus
+            .os
+            .get_microkernel_evas_filter()
+            .evaluate_action(evas_action))
     }
 
     /// Applies homomorphic encryption to meta-programming operations or generated code
     /// that operates on sensitive data, ensuring privacy at all times.
-    pub fn homomorphic_meta_computation(encrypted_code: HomomorphicCiphertext, encrypted_data: HomomorphicCiphertext) -> Result<HomomorphicCiphertext, String> {
+    pub fn homomorphic_meta_computation(
+        encrypted_code: HomomorphicCiphertext,
+        encrypted_data: HomomorphicCiphertext,
+    ) -> Result<HomomorphicCiphertext, String> {
         println!("[Toolchain::MetaProg] Performing homomorphic meta-computation.");
         // Conceptual: Execute encrypted generated code on encrypted data.
         // This implies a HE-compatible compiler and runtime.
-        crate::stdlib::crypto::Crypto.homomorphic_multiply(&encrypted_code, &encrypted_data) // Dummy: assumes multiply for computation
+        crate::stdlib::crypto::Crypto.homomorphic_multiply(&encrypted_code, &encrypted_data)
+        // Dummy: assumes multiply for computation
     }
 }

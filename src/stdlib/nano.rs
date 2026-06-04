@@ -1,14 +1,16 @@
-
 //! Zenith Standard Library: Nano-Agent APIs
 //!
 //! This module provides high-level abstractions and APIs for programming
 //! and interacting with nano-agents within Zenith programs.
 
-use crate::runtime::nano::{ // Import specific runtime components
-    get_nano_orchestrator, NanoAgentOrchestrator, NanoAgentStatus,
+use crate::runtime::nano::{
+    // Import specific runtime components
+    get_nano_orchestrator,
+    NanoAgentOrchestrator,
+    NanoAgentStatus,
 };
-use std::sync::{Arc, Mutex};
-use std::fmt::{self, Debug, Display, Formatter}; // For Display trait
+use std::fmt::{self, Debug, Display, Formatter};
+use std::sync::{Arc, Mutex}; // For Display trait
 
 // Global conceptual orchestrator reference.
 static mut NANO_ORCHESTRATOR_ARC: Option<Arc<Mutex<NanoAgentOrchestrator>>> = None;
@@ -42,7 +44,10 @@ impl Display for NanoAgent {
 impl NanoAgent {
     /// Assembles a new nano-agent based on a blueprint and initial components.
     pub fn assemble(blueprint_id: &str, components: &[String]) -> Self {
-        println!("[StdLib::nano] Assembling NanoAgent '{}' with components {:?}", blueprint_id, components);
+        println!(
+            "[StdLib::nano] Assembling NanoAgent '{}' with components {:?}",
+            blueprint_id, components
+        );
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {
             let mut orchestrator = orchestrator_arc.lock().unwrap();
             NanoAgent(orchestrator.assemble_nano_agent(blueprint_id, components))
@@ -55,7 +60,10 @@ impl NanoAgent {
     /// Commands this nano-agent to perform a conceptual action.
     /// May return an error if the agent malfunctions.
     pub fn perform_action(&self, action: &str) -> Result<(), String> {
-        println!("[StdLib::nano] NanoAgent {} performing action: '{}'.", self.0, action);
+        println!(
+            "[StdLib::nano] NanoAgent {} performing action: '{}'.",
+            self.0, action
+        );
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {
             let mut orchestrator = orchestrator_arc.lock().unwrap();
             orchestrator.perform_action(self.0, action)
@@ -66,21 +74,32 @@ impl NanoAgent {
 
     /// Sends a message to another nano-agent.
     pub fn communicate(&self, target: &NanoAgent, message: &str) {
-        println!("[StdLib::nano] NanoAgent {} communicating with {} (message: '{}').", self.0, target.0, message);
+        println!(
+            "[StdLib::nano] NanoAgent {} communicating with {} (message: '{}').",
+            self.0, target.0, message
+        );
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {
             let mut orchestrator = orchestrator_arc.lock().unwrap();
-            orchestrator.nano_communicate(self.0, target.0, message.as_bytes()).unwrap_or_else(|e| println!("  Communication failed: {}", e));
+            orchestrator
+                .nano_communicate(self.0, target.0, message.as_bytes())
+                .unwrap_or_else(|e| println!("  Communication failed: {}", e));
         }
     }
 
     /// Replicates this nano-agent, creating an identical copy.
     pub fn replicate(&self) -> Self {
-        println!("[StdLib::nano] Replicating NanoAgent {}.".to_string(), self.0);
+        println!(
+            "[StdLib::nano] Replicating NanoAgent {}.".to_string(),
+            self.0
+        );
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {
             let mut orchestrator = orchestrator_arc.lock().unwrap();
             orchestrator.replicate_nano_agent(self.0).map_or_else(
-                |e| { println!("  Replication failed: {}", e); NanoAgent(0) }, // Return dummy on failure
-                NanoAgent
+                |e| {
+                    println!("  Replication failed: {}", e);
+                    NanoAgent(0)
+                }, // Return dummy on failure
+                NanoAgent,
             )
         } else {
             NanoAgent(0) // Dummy agent ID
@@ -89,7 +108,10 @@ impl NanoAgent {
 
     /// Disassembles the nano-agent.
     pub fn disassemble(&self) {
-        println!("[StdLib::nano] Disassembling NanoAgent {}.".to_string(), self.0);
+        println!(
+            "[StdLib::nano] Disassembling NanoAgent {}.".to_string(),
+            self.0
+        );
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {
             let mut orchestrator = orchestrator_arc.lock().unwrap();
             orchestrator.disassemble_nano_agent(self.0);
@@ -100,7 +122,9 @@ impl NanoAgent {
     pub fn get_status(&self) -> NanoAgentStatus {
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {
             let orchestrator = orchestrator_arc.lock().unwrap();
-            orchestrator.get_nano_agent_status(self.0).unwrap_or(NanoAgentStatus::Disassembled)
+            orchestrator
+                .get_nano_agent_status(self.0)
+                .unwrap_or(NanoAgentStatus::Disassembled)
         } else {
             NanoAgentStatus::Disassembled // Default for uninitialized runtime
         }
@@ -113,7 +137,10 @@ pub struct NanoSwarm;
 impl NanoSwarm {
     /// Conceptual: Sends a command to all agents in a swarm matching a blueprint.
     pub fn command_all_by_blueprint(blueprint_id: &str, command: &str) {
-        println!("[StdLib::nano] Commanding all agents with blueprint '{}' to: '{}'.".to_string(), blueprint_id, command);
+        println!(
+            "[StdLib::nano] Commanding all agents with blueprint '{}' to: '{}'.".to_string(),
+            blueprint_id, command
+        );
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {
             let orchestrator = orchestrator_arc.lock().unwrap();
             for agent in orchestrator.deployed_agents.values() {

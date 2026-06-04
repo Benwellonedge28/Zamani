@@ -1,4 +1,3 @@
-
 //! Zenith Standard Library: Reflection API
 //!
 //! This module provides a conceptual runtime reflection API for Zenith programs.
@@ -8,7 +7,7 @@
 //! multi-paradigm and self-modifying context.
 
 use crate::ast::Identifier;
-use crate::compiler_types::{Type, AccessModifier, MethodModifier, IntWidth, FloatWidth}; // Re-using compiler types for reflection
+use crate::compiler_types::{AccessModifier, FloatWidth, IntWidth, MethodModifier, Type}; // Re-using compiler types for reflection
 use crate::source_map::Span; // For span info
 use std::collections::HashMap; // For TypeInfo attributes, etc.
 
@@ -72,8 +71,8 @@ pub struct MethodInfo {
     pub return_type: TypeInfo,
     pub access_modifier: AccessModifier,
     pub method_modifier: Option<MethodModifier>, // Override, Virtual, Abstract
-    pub effects: Vec<Identifier>, // Effects performed by this method
-    pub is_static: bool, // Conceptual
+    pub effects: Vec<Identifier>,                // Effects performed by this method
+    pub is_static: bool,                         // Conceptual
 }
 
 /// Metadata about a method parameter.
@@ -94,10 +93,18 @@ pub trait ObjectMirror {
     fn get_field_value(&self, field_name: &str) -> Option<Box<dyn std::any::Any>>;
 
     /// Sets the value of a field by name.
-    fn set_field_value(&mut self, field_name: &str, value: Box<dyn std::any::Any>) -> Result<(), String>;
+    fn set_field_value(
+        &mut self,
+        field_name: &str,
+        value: Box<dyn std::any::Any>,
+    ) -> Result<(), String>;
 
     /// Invokes a method by name with given arguments.
-    fn invoke_method(&mut self, method_name: &str, args: Vec<Box<dyn std::any::Any>>) -> Result<Box<dyn std::any::Any>, String>;
+    fn invoke_method(
+        &mut self,
+        method_name: &str,
+        args: Vec<Box<dyn std::any::Any>>,
+    ) -> Result<Box<dyn std::any::Any>, String>;
 
     // Multi-Paradigm specific reflection concepts
     fn get_quantum_state_info(&self) -> Option<HashMap<String, String>>; // For Quantum objects
@@ -109,7 +116,10 @@ pub trait ObjectMirror {
 /// Conceptual intrinsic function to obtain `TypeInfo` for any type `T`.
 /// This is a compiler intrinsic that generates the necessary metadata.
 pub fn reflect<T: 'static>() -> TypeInfo {
-    println!("[StdLib::Reflection] Conceptual: Reflecting on type {}.", std::any::type_name::<T>());
+    println!(
+        "[StdLib::Reflection] Conceptual: Reflecting on type {}.",
+        std::any::type_name::<T>()
+    );
     // In a real compiler, this would generate TypeInfo based on T's static type.
     TypeInfo {
         name: std::any::type_name::<T>().to_string(), // Placeholder, actual Zenith type name
@@ -125,19 +135,46 @@ pub fn reflect<T: 'static>() -> TypeInfo {
 
 /// Conceptual intrinsic function to obtain an `ObjectMirror` for an instance.
 pub fn mirror<T: 'static>(instance: &T) -> Box<dyn ObjectMirror> {
-    println!("[StdLib::Reflection] Conceptual: Creating ObjectMirror for instance of type {}.", std::any::type_name::<T>());
+    println!(
+        "[StdLib::Reflection] Conceptual: Creating ObjectMirror for instance of type {}.",
+        std::any::type_name::<T>()
+    );
     // In a real compiler, this would return a dynamic object capable of introspection.
     // For now, a dummy implementation.
     struct DummyMirror;
     impl ObjectMirror for DummyMirror {
-        fn get_type_info(&self) -> TypeInfo { reflect::<T>() }
-        fn get_field_value(&self, _field_name: &str) -> Option<Box<dyn std::any::Any>> { None }
-        fn set_field_value(&mut self, _field_name: &str, _value: Box<dyn std::any::Any>) -> Result<(), String> { Err("Not implemented".to_string()) }
-        fn invoke_method(&mut self, _method_name: &str, _args: Vec<Box<dyn std::any::Any>>) -> Result<Box<dyn std::any::Any>, String> { Err("Not implemented".to_string()) }
-        fn get_quantum_state_info(&self) -> Option<HashMap<String, String>> { None }
-        fn get_nano_agent_properties(&self) -> Option<HashMap<String, String>> { None }
-        fn get_mts_timeline_properties(&self) -> Option<HashMap<String, String>> { None }
-        fn get_sankofa_schema(&self) -> Option<HashMap<String, String>> { None }
+        fn get_type_info(&self) -> TypeInfo {
+            reflect::<T>()
+        }
+        fn get_field_value(&self, _field_name: &str) -> Option<Box<dyn std::any::Any>> {
+            None
+        }
+        fn set_field_value(
+            &mut self,
+            _field_name: &str,
+            _value: Box<dyn std::any::Any>,
+        ) -> Result<(), String> {
+            Err("Not implemented".to_string())
+        }
+        fn invoke_method(
+            &mut self,
+            _method_name: &str,
+            _args: Vec<Box<dyn std::any::Any>>,
+        ) -> Result<Box<dyn std::any::Any>, String> {
+            Err("Not implemented".to_string())
+        }
+        fn get_quantum_state_info(&self) -> Option<HashMap<String, String>> {
+            None
+        }
+        fn get_nano_agent_properties(&self) -> Option<HashMap<String, String>> {
+            None
+        }
+        fn get_mts_timeline_properties(&self) -> Option<HashMap<String, String>> {
+            None
+        }
+        fn get_sankofa_schema(&self) -> Option<HashMap<String, String>> {
+            None
+        }
     }
     Box::new(DummyMirror)
 }
