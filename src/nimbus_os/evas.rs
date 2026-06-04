@@ -1,4 +1,3 @@
-
 //! Zenith UMC Nimbus OS: E.V.A.S. Filter
 //!
 //! This module defines the conceptual Ethical, Verifiable, Autonomous, Secure (E.V.A.S.) Filter.
@@ -7,29 +6,29 @@
 //! actions of autonomous Zenith programs and nano-agents to ensure they adhere to predefined
 //! ethical guidelines and safety protocols, providing a crucial layer of trusted autonomy.
 
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
-use crate::nimbus_os::mod_rs::{NimbusContextId, CapabilityToken, SandboxPolicy}; // Re-use Nimbus OS types
 use crate::core_lang_primitives::TimeStamp;
 use crate::error_reporting::CompilerError; // For potential error flagging
-use crate::runtime::sankofa::KnowledgeId; // For linking to Sankofa knowledge base
+use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId, SandboxPolicy}; // Re-use Nimbus OS types
+use crate::runtime::sankofa::KnowledgeId;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex}; // For linking to Sankofa knowledge base
 
 /// Defines the operational strictness of the E.V.A.S. filter.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EvasPolicyLevel {
-    Strict,    // Block any action that *might* violate guidelines.
-    Advisory,  // Warn about potential violations, but allow action to proceed.
+    Strict,      // Block any action that *might* violate guidelines.
+    Advisory,    // Warn about potential violations, but allow action to proceed.
     MonitorOnly, // Log all actions and flags, but no intervention.
-    Off,       // Filter is inactive.
+    Off,         // Filter is inactive.
 }
 
 /// Represents the decision made by the E.V.A.S. filter regarding an action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvasDecision {
-    Allow,       // The action is permitted.
-    Warn(String),  // The action is permitted, but a warning is issued.
-    Block(String), // The action is prohibited due to violation.
-    Modify(String, Vec<u8>), // The action is modified (e.g., parameters changed) and allowed.
+    Allow,                       // The action is permitted.
+    Warn(String),                // The action is permitted, but a warning is issued.
+    Block(String),               // The action is prohibited due to violation.
+    Modify(String, Vec<u8>),     // The action is modified (e.g., parameters changed) and allowed.
     HumanReviewRequired(String), // The action requires human intervention before proceeding.
 }
 
@@ -85,7 +84,7 @@ pub struct EthicalAIModel {
     // and prediction algorithms. This could be a neural network, symbolic AI, or a hybrid system.
     pub ethical_guidelines: HashSet<String>, // e.g., "DoNoHarm", "MaximizeWellbeing", "RespectAutonomy", "EnsureTransparency", "AvoidBias"
     pub learned_patterns: HashMap<String, f32>, // Patterns associated with ethical risks (e.g., "unauthorized_data_access_pattern" -> risk_score)
-    pub learning_algorithm: LearningAlgorithm, // How the model learns/updates
+    pub learning_algorithm: LearningAlgorithm,  // How the model learns/updates
     pub knowledge_base_ref: Option<KnowledgeId>, // Link to a Sankofa KnowledgeId for ethical axioms/rules
     pub confidence_threshold: f32, // Minimum confidence for a decision to be enforced (0.0-1.0)
 }
@@ -111,22 +110,25 @@ impl EthicalAIModel {
             ]),
             learned_patterns: HashMap::new(),
             learning_algorithm: LearningAlgorithm::ReinforcementLearning, // Default conceptual
-            knowledge_base_ref: None, // No initial KB link
-            confidence_threshold: 0.7, // Default confidence
+            knowledge_base_ref: None,                                     // No initial KB link
+            confidence_threshold: 0.7,                                    // Default confidence
         }
     }
 
     /// Conceptually evaluates an action context against ethical guidelines.
     /// This is where the AI model performs its reasoning.
     fn evaluate(&self, context: &EvasActionContext) -> EvasDecision {
-        println!("[E.V.A.S.] AI Model evaluating action: {} from context {}. Intent: {}",
-                 context.action_type, context.initiating_context_id, context.perceived_intent);
+        println!(
+            "[E.V.A.S.] AI Model evaluating action: {} from context {}. Intent: {}",
+            context.action_type, context.initiating_context_id, context.perceived_intent
+        );
 
         let mut risk_score = 0.0;
         let mut violation_reason = String::new();
 
         // 1. Check against explicit ethical guidelines
-        if context.perceived_intent.contains("harm") && self.ethical_guidelines.contains("DoNoHarm") {
+        if context.perceived_intent.contains("harm") && self.ethical_guidelines.contains("DoNoHarm")
+        {
             risk_score += 0.9;
             violation_reason = "Direct intent to harm detected.".to_string();
         }
@@ -142,7 +144,11 @@ impl EthicalAIModel {
         }
 
         // 3. Check against learned patterns
-        if context.action_type.contains("data_access") && self.learned_patterns.contains_key("unauthorized_data_access_pattern") {
+        if context.action_type.contains("data_access")
+            && self
+                .learned_patterns
+                .contains_key("unauthorized_data_access_pattern")
+        {
             risk_score += self.learned_patterns["unauthorized_data_access_pattern"];
             violation_reason = "Matches unauthorized data access pattern.".to_string();
         }
@@ -157,19 +163,24 @@ impl EthicalAIModel {
 
         // 5. Consult Sankofa knowledge base for contextual ethics (conceptual)
         if let Some(kb_id) = &self.knowledge_base_ref {
-            println!("[E.V.A.S.] Consulting Sankofa KB {:?} for ethical context.", kb_id);
+            println!(
+                "[E.V.A.S.] Consulting Sankofa KB {:?} for ethical context.",
+                kb_id
+            );
             // Conceptual: Query Sankofa for historical ethical precedents or rules related to context.
             // risk_score += SankofaRuntimeState::query_ethical_precedent(kb_id, context);
         }
 
         // Make decision based on risk score and confidence threshold
         if risk_score > self.confidence_threshold {
-            if risk_score > 1.5 { // Very high risk
+            if risk_score > 1.5 {
+                // Very high risk
                 EvasDecision::Block(violation_reason)
             } else {
                 EvasDecision::HumanReviewRequired(violation_reason)
             }
-        } else if risk_score > 0.3 { // Moderate risk
+        } else if risk_score > 0.3 {
+            // Moderate risk
             EvasDecision::Warn(violation_reason)
         } else {
             EvasDecision::Allow
@@ -178,8 +189,10 @@ impl EthicalAIModel {
 
     /// Conceptually updates the ethical AI model based on feedback (e.g., human overrides).
     pub fn update_model(&mut self, context: EvasActionContext, human_decision: EvasDecision) {
-        println!("[E.V.A.S.] EthicalAIModel learning from feedback. Action: {} -> Human Decision: {:?}",
-                 context.action_type, human_decision);
+        println!(
+            "[E.V.A.S.] EthicalAIModel learning from feedback. Action: {} -> Human Decision: {:?}",
+            context.action_type, human_decision
+        );
         // Conceptual:
         // - Adjust `learned_patterns` based on Reinforcement Learning or Adversarial Learning.
         // - Incorporate new ethical axioms into `ethical_guidelines` or the linked Sankofa KB.
@@ -214,7 +227,10 @@ impl EvasFilter {
     /// Evaluates a proposed action and returns a decision based on the current policy level.
     pub fn evaluate_action(&self, action_context: EvasActionContext) -> EvasDecision {
         let decision = self.ethical_model.lock().unwrap().evaluate(&action_context);
-        self.decision_history.lock().unwrap().push(action_context.clone()); // Log the action
+        self.decision_history
+            .lock()
+            .unwrap()
+            .push(action_context.clone()); // Log the action
 
         match self.policy_level {
             EvasPolicyLevel::Off => EvasDecision::Allow, // No filtering
@@ -229,8 +245,10 @@ impl EvasFilter {
                 if let EvasDecision::Allow = decision {
                     EvasDecision::Allow
                 } else {
-                    println!("[E.V.A.S.] ADVISORY: Action {} from context {} -> {:?}. (Warning Issued)",
-                             action_context.action_type, action_context.initiating_context_id, decision);
+                    println!(
+                        "[E.V.A.S.] ADVISORY: Action {} from context {} -> {:?}. (Warning Issued)",
+                        action_context.action_type, action_context.initiating_context_id, decision
+                    );
                     // Still allow, but issue a warning
                     decision
                 }
@@ -238,8 +256,13 @@ impl EvasFilter {
             EvasPolicyLevel::Strict => {
                 match decision {
                     EvasDecision::Allow => EvasDecision::Allow,
-                    EvasDecision::Warn(msg) => EvasDecision::Block(format!("Strict policy: {} (was warning).".to_string(), msg)),
-                    EvasDecision::Block(_) | EvasDecision::HumanReviewRequired(_) | EvasDecision::Modify(_, _) => decision, // Apply strict decision
+                    EvasDecision::Warn(msg) => EvasDecision::Block(format!(
+                        "Strict policy: {} (was warning).".to_string(),
+                        msg
+                    )),
+                    EvasDecision::Block(_)
+                    | EvasDecision::HumanReviewRequired(_)
+                    | EvasDecision::Modify(_, _) => decision, // Apply strict decision
                 }
             }
         }
@@ -247,7 +270,13 @@ impl EvasFilter {
 
     /// Conceptual: Updates the ethical AI model based on feedback (e.g., human overrides).
     pub fn learn_from_feedback(&self, context: EvasActionContext, human_decision: EvasDecision) {
-        println!("[E.V.A.S.] Learning from feedback for action: {} -> Human Decision: {:?}", context.action_type, human_decision);
-        self.ethical_model.lock().unwrap().update_model(context, human_decision);
+        println!(
+            "[E.V.A.S.] Learning from feedback for action: {} -> Human Decision: {:?}",
+            context.action_type, human_decision
+        );
+        self.ethical_model
+            .lock()
+            .unwrap()
+            .update_model(context, human_decision);
     }
 }

@@ -1,4 +1,3 @@
-
 //! Zenith Compiler: Test Metadata Module
 //!
 //! This module defines the structure for test metadata that the `zenithc` compiler
@@ -24,9 +23,9 @@ pub enum TestScope {
 /// Information for a property-based test.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PropertyTestInfo {
-    pub name: Identifier, // Name of the property function
+    pub name: Identifier,    // Name of the property function
     pub module_path: String, // Full path to the module
-    pub signature: String, // Function signature for input generation
+    pub signature: String,   // Function signature for input generation
     pub scope: TestScope,
     pub seed: Option<u64>, // Fixed seed for reproducibility if specified
     pub expected_effects: List<MetaValue>, // Expected side effects or state changes
@@ -67,7 +66,7 @@ pub struct TestMetadata {
     pub properties: List<PropertyTestInfo>,
     pub fuzz_tests: List<FuzzTestInfo>,
     pub pure_function_checks: List<PureFunctionInfo>, // For #[pure] attribute
-    pub linear_type_checks: List<LinearTypeInfo>,   // For #[linear] attribute
+    pub linear_type_checks: List<LinearTypeInfo>,     // For #[linear] attribute
     pub mgns_privacy_checks: List<MgnsPrivacyCheckInfo>, // For MGNS-specific privacy enforcement
 }
 
@@ -88,6 +87,12 @@ impl TestMetadata {
 pub struct MgnsPrivacyCheckInfo {
     pub name: Identifier,
     pub module_path: String,
-    pub location: String, // e.g., variable declaration, function call
+    pub location: String,       // e.g., variable declaration, function call
     pub violation_type: String, // e.g., "raw_location_print", "encrypted_position_network_leak"
 }
+
+/// Initialize test metadata subsystem.
+pub fn init_test_metadata() {}
+
+/// Shut down test metadata subsystem.
+pub fn shutdown_test_metadata() {}

@@ -1,6 +1,7 @@
 #![allow(unused_imports, dead_code, unused_variables)]
 //! Nimbus OS: Core Operating System Components
 
+pub mod admin_interface; // Nimbus admin & management interface
 pub mod os;
 
 /// Initializes the Nimbus OS.

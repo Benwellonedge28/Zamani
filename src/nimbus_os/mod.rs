@@ -5,6 +5,8 @@
 //! multi-context management, inter-process communication (IPC), and
 //! capability-based security. These are the direct OS-level abstractions.
 
+pub mod evas; // E.V.A.S. — Ethical Value Alignment System
+
 use crate::ast::Identifier; // For Identifier
 use crate::core_lang_primitives::{Duration, MemoryRegion, Size, TimeStamp}; // Use core primitives
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};

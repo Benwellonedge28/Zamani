@@ -9,33 +9,28 @@
 pub mod compilation_techniques; // For Hybrid Compilation Strategies
 pub mod language_spec; // Zenith Language Specification modules
 pub mod oop_advanced; // Advanced OOP Features
-pub mod optimization_strategies; // For managing and applying diverse optimization passes
+pub mod optimization_strategies;
+pub mod test_metadata; // Compiler test metadata helpers // For managing and applying diverse optimization passes
 
 /// Initializes the entire Zenith UMC compiler pipeline.
 pub fn initialize_compiler() {
     println!("Initializing Zenith UMC Compiler...");
-    frontend::init_frontend();
-    ir_gen::init_ir_gen();
-    optimizer::init_optimizer();
-    backend::init_backend();
     oop_advanced::init_oop_advanced();
     language_spec::init_language_spec();
     compilation_techniques::init_compilation_techniques();
     optimization_strategies::init_optimization_strategies(); // Initialize Optimization Strategies module
+    test_metadata::init_test_metadata();
     println!("Zenith UMC Compiler initialized.");
 }
 
 /// Shuts down the entire Zenith UMC compiler pipeline.
 pub fn shutdown_compiler() {
     println!("Shutting down Zenith UMC Compiler...");
+    test_metadata::shutdown_test_metadata();
     optimization_strategies::shutdown_optimization_strategies(); // Shutdown Optimization Strategies module
     compilation_techniques::shutdown_compilation_techniques();
     language_spec::shutdown_language_spec();
     oop_advanced::shutdown_oop_advanced();
-    backend::shutdown_backend();
-    optimizer::shutdown_optimizer();
-    ir_gen::shutdown_ir_gen();
-    frontend::shutdown_frontend();
     println!("Zenith UMC Compiler shut down.");
 }
 

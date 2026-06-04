@@ -21,12 +21,15 @@ pub mod error_reporting;
 pub mod hdl;
 pub mod ir_gen;
 pub mod lexer;
+pub mod nano; // Nano runtime primitives
 #[cfg(feature = "full")]
 pub mod nimbus;
 #[cfg(feature = "full")]
 pub mod nimbus_os;
+pub mod omega_trinity_libs_161_200; // Omega Trinity extended libs 161-200
 pub mod optimizer;
 pub mod parser;
+pub mod quantum; // Quantum primitives
 #[cfg(feature = "full")]
 pub mod runtime;
 pub mod semantic;
