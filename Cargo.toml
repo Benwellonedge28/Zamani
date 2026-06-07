@@ -2,6 +2,7 @@
 name = "zenith"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.70"
 authors = ["Samuel Mukandara <samuelmukandara@gmail.com>"]
 description = "Zenith: The Omniversal AGI Language & Operating Intelligence"
 repository = "https://github.com/Benwellonedge28/Zenith"
@@ -32,7 +33,7 @@ omniversal = []
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 anyhow = "1.0"
 log = "0.4"
 env_logger = "0.11"

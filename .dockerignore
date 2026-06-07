@@ -1,0 +1,34 @@
+# Version control
+.git
+.gitignore
+
+# Build output
+target/
+
+# CI / editor / OS noise
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docs (not needed in the image)
+docs/
+*.md
+LICENSE
+CHANGELOG.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+
+# Fuzz targets (not needed in production image)
+fuzz/
+
+# Bench (not needed in production image)
+benches/
+
+# Test artifacts
+coverage/
+bench_results.txt
