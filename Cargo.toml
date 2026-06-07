@@ -5,6 +5,9 @@ edition = "2021"
 authors = ["Samuel Mukandara <samuelmukandara@gmail.com>"]
 description = "Zenith: The Omniversal AGI Language & Operating Intelligence"
 repository = "https://github.com/Benwellonedge28/Zenith"
+categories = ["compilers", "development-tools", "command-line-utilities"]
+keywords = ["compiler", "programming-language", "agi", "zenith", "zutc"]
+homepage = "https://github.com/Benwellonedge28/Zenith"
 license = "Apache-2.0 OR MIT"
 readme = "README.md"
 
@@ -16,6 +19,10 @@ path = "src/main.rs"
 name = "zenith_compiler"
 path = "src/lib.rs"
 
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []

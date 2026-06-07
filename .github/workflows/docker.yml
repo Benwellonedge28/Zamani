@@ -17,9 +17,33 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/zenith-compiler
 
 jobs:
-  # ── 1. Build & test Docker image ─────────────────────────────────────────────
+  # ── 1. Pre-flight: verify cargo build + test natively ────────────────────────
+  cargo-verify:
+    name: "🦀 Cargo Build & Test"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-docker-preflight-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: cargo build --release --verbose
+
+      - name: Run test suite
+        run: cargo test --release -- --test-threads=4
+
+  # ── 2. Build & push Docker image ─────────────────────────────────────────────
   docker-build:
-    name: "🐳 Build & Test Image"
+    name: "🐳 Build & Push Image"
+    needs: [cargo-verify]
     runs-on: ubuntu-latest
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
@@ -50,13 +74,14 @@ jobs:
             type=sha,format=short
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build Docker image
+      - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -66,10 +91,17 @@ jobs:
             GIT_COMMIT=${{ github.sha }}
             VERSION=${{ steps.meta.outputs.version }}
 
-      - name: Verify image
-        run: echo "✅ Docker image built successfully for linux/amd64"
+      - name: Smoke-test image (pull requests)
+        if: github.event_name == 'pull_request'
+        run: |
+          IMAGE=$(echo "${{ steps.meta.outputs.tags }}" | head -1)
+          docker run --rm "$IMAGE" /usr/local/bin/zenith --help && echo "✅ Smoke test passed"
 
-  # ── 2. Container security scan ───────────────────────────────────────────────
+      - name: Confirm push
+        if: github.event_name != 'pull_request'
+        run: echo "✅ Image pushed — digest ${{ steps.build.outputs.digest }}"
+
+  # ── 3. Container security scan ───────────────────────────────────────────────
   trivy-scan:
     name: "🔍 Trivy Container Scan"
     needs: [docker-build]

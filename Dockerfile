@@ -1,4 +1,4 @@
-# ── Stage 1: Dependency cache ────────────────────────────────────────────────
+# ── Stage 1: Chef / planner ───────────────────────────────────────────────────
 FROM rust:slim-bookworm AS deps
 
 ARG BUILD_DATE
@@ -11,39 +11,37 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends pkg-config libssl-dev && \
     apt-get clean
 
-# Copy manifests and lock file first for layer caching
+# Copy manifests and lock file for reproducible dependency caching
 COPY Cargo.toml Cargo.lock ./
 
-# Create dummy source to pre-fetch and pre-build dependencies only
+# Pre-fetch all dependencies using a dummy binary and library
+# This layer is only rebuilt when Cargo.toml/Cargo.lock changes
 RUN mkdir -p src && \
-    printf '#![allow(dead_code)]\nfn main() {}\n' > src/main.rs && \
-    printf '#![allow(dead_code)]\n' > src/lib.rs && \
-    cargo fetch && \
-    cargo build --release 2>/dev/null; \
+    printf 'fn main() {}\n' > src/main.rs && \
+    printf 'pub fn _placeholder() {}\n' > src/lib.rs && \
+    cargo build --release 2>&1; \
     rm src/main.rs src/lib.rs
 
-# ── Stage 2: Builder ─────────────────────────────────────────────────────────
+# ── Stage 2: Full source build ───────────────────────────────────────────────
 FROM deps AS builder
 
+# Copy entire source tree (including .zn preserved files)
 COPY src ./src
 COPY tests ./tests
 
-# Touch to force rebuild of our actual source
-RUN touch src/main.rs src/lib.rs && \
-    cargo build --release
+# Touch to invalidate incremental cache from dummy build, then build for real
+RUN touch src/main.rs src/lib.rs && cargo build --release
 
-# ── Stage 3: Test runner ─────────────────────────────────────────────────────
-FROM builder AS tester
-
-RUN cargo test --release -- --test-threads=4
-
-# ── Stage 4: Minimal runtime image ───────────────────────────────────────────
+# ── Stage 3: Minimal runtime ─────────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.title="Zenith Compiler"
 LABEL org.opencontainers.image.description="Zenith Universal Meta-Compiler (ZUTC)"
 LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zenith"
 LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
