@@ -5,7 +5,8 @@
 
 pub mod access_control; // Fine-grained Access Control
 pub mod encryption_services;
-pub mod sandbox_manager; // Secure Sandboxing and Isolation // Cryptographic Services
+pub mod sandbox_manager;
+pub mod threat_intelligence; // Autonomous Threat Intelligence // Secure Sandboxing and Isolation // Cryptographic Services
 #[cfg(feature = "full")]
 // Re-export core types to simplify usage in other modules
 pub use self::sandbox_manager::{IsolationLevel, SandboxPolicy, SecureExecutionEnvironment};

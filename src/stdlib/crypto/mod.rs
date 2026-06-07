@@ -4,6 +4,7 @@
 
 pub mod asymmetric_encryption;
 pub mod hashing;
+pub mod quantum_identity; // Quantum-Secure Identity & Trust Fabric
 pub mod quantum_safe_primitives;
 pub mod signature;
 pub mod symmetric_encryption;
@@ -27,12 +28,14 @@ pub fn init_crypto() {
     signature::init_signature();
     tls::init_tls();
     quantum_safe_primitives::init_quantum_safe_primitives(); // Initialize Quantum Identity
+    quantum_identity::init_quantum_identity();
     println!("Zenith Cryptography Module initialized.");
 }
 
 /// Shuts down all cryptography components.
 pub fn shutdown_crypto() {
-    println!("Shutting down Zenith Cryptography Module..."); // Shutdown Quantum Identity
+    println!("Shutting down Zenith Cryptography Module...");
+    quantum_identity::shutdown_quantum_identity(); // Shutdown Quantum Identity
     quantum_safe_primitives::shutdown_quantum_safe_primitives();
     tls::shutdown_tls();
     signature::shutdown_signature();

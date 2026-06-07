@@ -42,3 +42,7 @@ strip = true
 [profile.dev]
 opt-level = 0
 debug = true
+
+[[bench]]
+name = "compiler_bench"
+harness = false
