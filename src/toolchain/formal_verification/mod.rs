@@ -27,3 +27,42 @@ pub fn shutdown_formal_verification() {
     verifier::shutdown_verifier();
     println!("Zenith Formal Verification Module shut down.");
 }
+
+// ── merged from flat_backup ────
+
+pub enum VerificationProperty {
+    Safety(String),            // e.g., "no null pointer dereferences", "no unauthorized access"
+    Liveness(String),          // e.g., "eventually terminates", "always responds"
+    Termination,               // Program always halts
+    MemorySafety,              // No out-of-bounds access, use-after-free
+    CausalConsistency,         // For MTS and Sankofa temporal logic
+    EntanglementPurity,        // For quantum circuits, ensures desired entanglement
+    NanoResourceGuarantee,     // Ensures nano-agents operate within resource bounds
+    TypeSoundness,             // Type system prevents runtime errors
+    Equivalence(String, String), // Two code fragments produce same result
+    Custom(String),            // User-defined property
+}
+
+pub enum VerificationResult {
+    Proven(VerificationReport),
+    Disproven(VerificationReport, CounterExample), // With a counter-example
+    Unproven(VerificationReport),               // Prover timed out, or incomplete proof
+    Error(VerificationReport),                  // Tool error during verification
+}
+
+pub struct VerificationReport {
+    pub property: VerificationProperty,
+    pub status: String, // "proved", "disproved", "timeout", "error"
+    pub duration_ms: u64,
+    pub tool_output: String, // Raw output from the prover/checker
+    pub insights: Vec<String>, // Human-readable summary or suggestions
+    pub related_span: Option<Span>, // Where the property applies
+}
+
+pub struct CounterExample {
+    pub trace: Vec<String>, // Sequence of events/states leading to violation
+    pub variable_states: HashMap<String, String>, // Variable values at key points
+    pub related_span: Option<Span>,
+}
+
+pub struct ZenithFormalVerifier;

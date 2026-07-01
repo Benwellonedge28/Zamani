@@ -1,9 +1,67 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith toolchain — self_evolution
-//! Full implementation uses Zenith-native syntax compiled via the ZUTC pipeline.
+//! Zenith Self-Evolution — the compiler rewriting and improving itself.
 
-/// Initialize the self_evolution subsystem.
-pub fn init_self_evolution() {}
+#[derive(Debug, Clone, PartialEq)]
+pub enum SelfModTarget { Lexer, Parser, SemanticAnalyser, IrGenerator, Optimiser, Backend, Runtime }
 
-/// Shut down the self_evolution subsystem.
-pub fn shutdown_self_evolution() {}
+#[derive(Debug, Clone)]
+pub struct SelfModPatch {
+    pub id: u64,
+    pub target: SelfModTarget,
+    pub description: String,
+    pub performance_delta: f32,
+    pub verified: bool,
+    pub applied: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelfEvolutionReport {
+    pub patches_generated: u32,
+    pub patches_verified: u32,
+    pub patches_applied: u32,
+    pub total_improvement_pct: f32,
+}
+
+pub struct SelfEvolutionEngine {
+    patches: Vec<SelfModPatch>,
+    next_id: u64,
+    total_improvement: f32,
+}
+
+impl SelfEvolutionEngine {
+    pub fn new() -> Self { SelfEvolutionEngine { patches: Vec::new(), next_id: 1, total_improvement: 0.0 } }
+
+    pub fn propose_patch(&mut self, target: SelfModTarget, description: &str, delta: f32) -> u64 {
+        let id = self.next_id; self.next_id += 1;
+        self.patches.push(SelfModPatch { id, target, description: description.into(), performance_delta: delta, verified: false, applied: false });
+        id
+    }
+
+    pub fn verify_patch(&mut self, id: u64) -> bool {
+        if let Some(p) = self.patches.iter_mut().find(|p| p.id == id) {
+            p.verified = p.performance_delta > 0.0;
+            return p.verified;
+        }
+        false
+    }
+
+    pub fn apply_patch(&mut self, id: u64) -> bool {
+        if let Some(p) = self.patches.iter_mut().find(|p| p.id == id && p.verified) {
+            p.applied = true;
+            self.total_improvement += p.performance_delta;
+            return true;
+        }
+        false
+    }
+
+    pub fn report(&self) -> SelfEvolutionReport {
+        SelfEvolutionReport {
+            patches_generated: self.patches.len() as u32,
+            patches_verified: self.patches.iter().filter(|p| p.verified).count() as u32,
+            patches_applied: self.patches.iter().filter(|p| p.applied).count() as u32,
+            total_improvement_pct: self.total_improvement,
+        }
+    }
+}
+
+impl Default for SelfEvolutionEngine { fn default() -> Self { Self::new() } }

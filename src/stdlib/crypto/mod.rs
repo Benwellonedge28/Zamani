@@ -44,3 +44,56 @@ pub fn shutdown_crypto() {
     symmetric_encryption::shutdown_symmetric_encryption();
     println!("Zenith Cryptography Module shut down.");
 }
+
+// ── merged from flat_backup ────
+
+pub fn init_crypto_lib() {
+    println!("  - Initializing StdLib Cryptography Module (Encryption, Hashing, Signatures, Quantum-Safe, Homomorphic, ZKP, SMC, KMS)...");
+}
+
+pub fn shutdown_crypto_lib() {
+    println!("  - Shutting down StdLib Cryptography Module...");
+}
+
+pub struct SymmetricKey(List<u8>);
+
+pub struct PublicKey(List<u8>);
+
+pub struct PrivateKey(List<u8>);
+
+pub struct Hash(List<u8>);
+
+pub struct Signature(List<u8>);
+
+pub struct Nonce(List<u8>);
+
+pub struct Crypto;
+
+pub struct QuantumSafePublicKey(List<u8>);
+
+pub struct QuantumSafePrivateKey(List<u8>);
+
+pub struct SecureEnclave;
+
+pub struct HomomorphicCiphertext(List<u8>);
+
+pub struct HomomorphicKeyPair {
+    pub public_key: List<u8>,
+    pub secret_key: List<u8>,
+}
+
+pub enum EncryptionLayer {
+    Symmetric(SymmetricKey, Nonce),
+    Asymmetric(PublicKey),
+    QuantumSafe(QuantumSafePublicKey),
+    Homomorphic(List<u8>), // Public key for HE
+    // ... potentially other schemes
+}
+
+pub struct ZeroKnowledgeProof(List<u8>);
+
+pub struct ZKPVerificationKey(List<u8>);
+
+pub struct ZKPProvingKey(List<u8>);
+
+pub struct KeyManagementSystem;

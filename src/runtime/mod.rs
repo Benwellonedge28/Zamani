@@ -49,3 +49,18 @@ pub fn shutdown_runtime() {
     cloud_network_security::shutdown_cloud_network_security();
     println!("Zenith Runtime shut down.");
 }
+
+// ── merged from flat_backup ────
+
+pub struct PocoReafRuntime {
+    scheduler: Scheduler,
+    memory_manager: MemoryManager,
+    quantum_processor: QuantumProcessor,
+    nano_orchestrator: NanoOrchestrator,
+    effect_dispatcher: EffectDispatcher,
+    // ... other runtime components
+}
+
+pub fn init_runtime() {
+    println!("[Runtime] Zenith Universal Runtime initialised.");
+}

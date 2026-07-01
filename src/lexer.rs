@@ -265,8 +265,27 @@ impl Lexer {
         map.insert("virtual".to_string(), TokenType::KeywordVirtual);
         map.insert("abstract".to_string(), TokenType::KeywordAbstract);
 
+        // Essential missing keywords
+        map.insert("mut".to_string(), TokenType::KeywordMut);
+        map.insert("const".to_string(), TokenType::KeywordConst);
+        map.insert("var".to_string(), TokenType::KeywordVar);
+        map.insert("module".to_string(), TokenType::KeywordModule);
+        map.insert("import".to_string(), TokenType::KeywordImport);
+        map.insert("struct".to_string(), TokenType::KeywordStruct);
+        map.insert("enum".to_string(), TokenType::KeywordEnum);
+        map.insert("async".to_string(), TokenType::KeywordAsync);
+        map.insert("await".to_string(), TokenType::KeywordAwait);
+        map.insert("as".to_string(), TokenType::KeywordAs);
+        map.insert("from".to_string(), TokenType::KeywordFrom);
+        map.insert("where".to_string(), TokenType::KeywordWhere);
+        map.insert("self".to_string(), TokenType::KeywordSelf);
+        map.insert("static".to_string(), TokenType::KeywordStatic);
+        map.insert("impl".to_string(), TokenType::KeywordImpl);
+        map.insert("is".to_string(), TokenType::KeywordIs);
+        map.insert("or".to_string(), TokenType::KeywordOr);
         map
     }
+
 
     pub fn get_errors(&self) -> &Vec<LexerError> {
         &self.errors
@@ -505,6 +524,9 @@ impl Lexer {
                 if self.peek_char() == Some('=') {
                     token_type = TokenType::Equals;
                     self.read_char();
+                } else if self.peek_char() == Some('>') {
+                    token_type = TokenType::FatArrow;
+                    self.read_char();
                 } else {
                     token_type = TokenType::Assign;
                 }
@@ -661,6 +683,8 @@ impl Lexer {
 impl TokenType {
     // Helper to identify token types that automatically advance position when their literal is fully read.
     fn is_keyword_or_literal_with_read_ahead(&self) -> bool {
+        // These token types were produced by read_identifier() or read_number()/read_string(),
+        // which already advanced self.position past the token. No extra read_char() needed.
         matches!(
             self,
             TokenType::Identifier
@@ -668,6 +692,34 @@ impl TokenType {
                 | TokenType::Float
                 | TokenType::String
                 | TokenType::Char
+                | TokenType::Boolean
+        ) || self.is_any_keyword()
+    }
+
+    fn is_any_keyword(&self) -> bool {
+        matches!(self,
+            TokenType::KeywordLet | TokenType::KeywordFn | TokenType::KeywordReturn
+            | TokenType::KeywordIf | TokenType::KeywordElse | TokenType::KeywordWhile
+            | TokenType::KeywordFor | TokenType::KeywordIn | TokenType::KeywordBreak
+            | TokenType::KeywordContinue | TokenType::KeywordMatch | TokenType::KeywordWith
+            | TokenType::KeywordQuantum | TokenType::KeywordCircuit | TokenType::KeywordNano
+            | TokenType::KeywordAgent | TokenType::KeywordRemember | TokenType::KeywordRecall
+            | TokenType::KeywordLearn | TokenType::KeywordWisdom | TokenType::KeywordZamani
+            | TokenType::KeywordSasa | TokenType::KeywordAncestor | TokenType::KeywordLinear
+            | TokenType::KeywordAffine | TokenType::KeywordHandle | TokenType::KeywordEffect
+            | TokenType::KeywordPerform | TokenType::KeywordUnsafe | TokenType::KeywordType
+            | TokenType::KeywordStruct | TokenType::KeywordEnum | TokenType::KeywordModule
+            | TokenType::KeywordImport | TokenType::KeywordConst | TokenType::KeywordVar
+            | TokenType::KeywordMut | TokenType::KeywordAsync | TokenType::KeywordAwait
+            | TokenType::KeywordAs | TokenType::KeywordFrom | TokenType::KeywordWhere
+            | TokenType::KeywordSelf | TokenType::KeywordStatic | TokenType::KeywordImpl
+            | TokenType::KeywordIs | TokenType::KeywordOr | TokenType::KeywordAnd
+            | TokenType::KeywordNot | TokenType::KeywordNew | TokenType::KeywordClass
+            | TokenType::KeywordInterface | TokenType::KeywordExtends
+            | TokenType::KeywordImplements | TokenType::KeywordPublic | TokenType::KeywordPrivate
+            | TokenType::KeywordProtected | TokenType::KeywordThis | TokenType::KeywordOverride
+            | TokenType::KeywordVirtual | TokenType::KeywordAbstract | TokenType::KeywordSuper
+            | TokenType::KeywordCase | TokenType::KeywordCatch
         )
     }
 }

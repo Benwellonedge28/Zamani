@@ -64,3 +64,15 @@ pub fn shutdown_toolchain() {
     autonomous_toolchain::shutdown_autonomous_toolchain();
     println!("Zenith Toolchain shut down.");
 }
+
+// ── merged from flat_backup ────
+
+pub struct Toolchain {
+    compiler: Compiler,
+    runtime: PocoReafRuntime,
+    // ... other toolchain components like debugger, package manager, etc.
+}
+
+pub fn init_toolchain_integration() {
+    println!("[Toolchain] Zenith toolchain integration initialised.");
+}

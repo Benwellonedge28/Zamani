@@ -27,3 +27,36 @@ pub fn shutdown_ledger() {
     ledger_client::shutdown_ledger_client();
     println!("Zenith Distributed Ledger Module shut down.");
 }
+
+// ── merged from flat_backup ────
+
+pub fn init_ledger_lib() {
+    println!("  - Initializing StdLib Distributed Ledger Module (Blockchain, Smart Contracts, Consensus)...");
+}
+
+pub fn shutdown_ledger_lib() {
+    println!("  - Shutting down StdLib Distributed Ledger Module...");
+}
+
+pub struct Block {
+    pub index: u64,
+    pub prev_hash: Hash,
+    pub timestamp: u64,
+    pub transactions: List<Transaction>,
+    pub nonce: u64,
+}
+
+pub struct Transaction {
+    pub sender: PublicKey,
+    pub receiver: PublicKey,
+    pub amount: f64,
+    pub signature: Signature,
+    pub metadata: Map<String, String>,
+}
+
+pub struct LedgerClient;
+
+pub struct SmartContract {
+    pub contract_address: String,
+    pub abi_definition: String,
+}

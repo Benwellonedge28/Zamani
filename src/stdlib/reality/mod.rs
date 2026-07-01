@@ -24,3 +24,19 @@ pub fn shutdown_reality_lib() {
     reality_definition::shutdown_reality_definition();
     println!("Zenith Reality Module shut down.");
 }
+
+// ── merged from flat_backup ────
+
+pub struct XrSession {
+    pub session_id: Identifier,
+    pub session_type: XrType,
+}
+
+pub enum XrType { VirtualReality, AugmentedReality, MixedReality }
+
+pub struct SpatialAnchor {
+    pub position: Point,
+    pub orientation: (f32, f32, f32, f32), // Quaternion
+}
+
+pub struct GestureRecognition;

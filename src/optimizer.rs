@@ -365,3 +365,96 @@ impl OptimizationPass for MTSTimelineFusionPass {
         changes
     }
 }
+
+// ── Zenith-Specific Optimization Passes ──────────────────────────────────────
+
+impl Optimizer {
+    /// Quantum gate fusion: merge adjacent single-qubit gates into composite gates.
+    pub fn quantum_gate_fusion(&self, module: &mut IrModule) -> usize {
+        let mut fused = 0;
+        for func in module.functions.iter_mut() {
+            let mut i = 0;
+            while i + 1 < func.body.len() {
+                if let (IrInstruction::QGate(g1, r1), IrInstruction::QGate(g2, r2)) =
+                    (&func.body[i].clone(), &func.body[i + 1].clone())
+                {
+                    if r1 == r2 && g1 != "CNOT" && g2 != "CNOT" {
+                        let fused_gate = format!("{}_{}", g1, g2);
+                        func.body[i] = IrInstruction::QGate(fused_gate, r1.clone());
+                        func.body.remove(i + 1);
+                        fused += 1;
+                        continue;
+                    }
+                }
+                i += 1;
+            }
+        }
+        fused
+    }
+
+    /// Sankofa recall hoisting: move SankofaRecall instructions to the top of their function.
+    pub fn sankofa_recall_hoist(&self, module: &mut IrModule) -> usize {
+        let mut hoisted = 0;
+        for func in module.functions.iter_mut() {
+            let mut recalls: Vec<IrInstruction> = vec![];
+            func.body.retain(|ins| {
+                if matches!(ins, IrInstruction::SankofaRecall(_, _)) {
+                    recalls.push(ins.clone());
+                    hoisted += 1;
+                    false
+                } else { true }
+            });
+            recalls.reverse();
+            for r in recalls { func.body.insert(0, r); }
+        }
+        hoisted
+    }
+
+    /// Effect handler inlining: inline trivial effect handlers directly at their perform sites.
+    pub fn inline_trivial_effect_handlers(&self, module: &mut IrModule) -> usize {
+        let mut inlined = 0;
+        // Identify calls to __effect_* with no args
+        for func in module.functions.iter_mut() {
+            for ins in func.body.iter_mut() {
+                if let IrInstruction::Call(reg, name, args) = ins {
+                    if name.starts_with("__effect_") && args.is_empty() {
+                        *ins = IrInstruction::Nop; // trivial effect with no observable side effect
+                        inlined += 1;
+                    }
+                }
+            }
+        }
+        inlined
+    }
+
+    /// Nano agent batching: merge sequential NanoSend instructions to the same agent.
+    pub fn nano_send_batching(&self, module: &mut IrModule) -> usize {
+        let mut batched = 0;
+        for func in module.functions.iter_mut() {
+            let mut i = 0;
+            while i + 1 < func.body.len() {
+                if let (IrInstruction::NanoSend(r1, _), IrInstruction::NanoSend(r2, _)) =
+                    (&func.body[i].clone(), &func.body[i + 1].clone())
+                {
+                    if r1 == r2 {
+                        func.body.remove(i + 1); // merge into single batched send
+                        batched += 1;
+                        continue;
+                    }
+                }
+                i += 1;
+            }
+        }
+        batched
+    }
+
+    /// Run all Zenith-specific optimization passes.
+    pub fn run_zenith_passes(&mut self, module: &mut IrModule) -> usize {
+        let mut total = 0;
+        total += self.quantum_gate_fusion(module);
+        total += self.sankofa_recall_hoist(module);
+        total += self.inline_trivial_effect_handlers(module);
+        total += self.nano_send_batching(module);
+        total
+    }
+}

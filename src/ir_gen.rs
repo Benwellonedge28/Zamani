@@ -381,3 +381,55 @@ impl Default for IrGenerator {
         Self::new()
     }
 }
+
+// ── Extended IR emission for new statement types ──────────────────────────────
+
+impl IrGenerator {
+    /// Lower a Zenith-native `perform EffName(args)` into an IR call.
+    pub fn emit_perform_effect(&mut self, eff_name: &str, args: Vec<IrValue>, func: &mut IrFunction) -> IrValue {
+        let reg = self.fresh_reg();
+        func.push(IrInstruction::Call(reg.clone(), format!("__effect_{}", eff_name), args));
+        IrValue::Reg(reg)
+    }
+
+    /// Lower `invariant { condition }` into an IR assert-like call.
+    pub fn emit_invariant(&mut self, cond: IrValue, func: &mut IrFunction) {
+        let reg = self.fresh_reg();
+        func.push(IrInstruction::Call(reg, "__invariant_check".into(), vec![cond]));
+    }
+
+    /// Lower `prove(theorem)` into an IR metadata annotation.
+    pub fn emit_prove_attr(&mut self, theorem: &str, func: &mut IrFunction) {
+        func.push(IrInstruction::Nop); // proof annotations are compile-time; Nop at runtime
+    }
+
+    /// Lower a `consensus[participants] vote proposition` into a distributed vote call.
+    pub fn emit_consensus(&mut self, participants: Vec<IrValue>, proposition: IrValue, func: &mut IrFunction) -> IrValue {
+        let reg = self.fresh_reg();
+        let mut args = participants;
+        args.push(proposition);
+        func.push(IrInstruction::Call(reg.clone(), "__consensus_vote".into(), args));
+        IrValue::Reg(reg)
+    }
+
+    /// Lower `zamani { ... }` or `sasa { ... }` Sankofa temporal blocks.
+    pub fn emit_sankofa_temporal(&mut self, kind: &str, body: IrValue, func: &mut IrFunction) -> IrValue {
+        let reg = self.fresh_reg();
+        func.push(IrInstruction::Call(reg.clone(), format!("__sankofa_{}", kind), vec![body]));
+        IrValue::Reg(reg)
+    }
+
+    /// Lower `actor_spawn { name, behaviour }` into a runtime actor creation.
+    pub fn emit_actor_spawn(&mut self, name: &str, func: &mut IrFunction) -> IrValue {
+        let reg = self.fresh_reg();
+        func.push(IrInstruction::Call(reg.clone(), "__actor_spawn".into(), vec![IrValue::ConstStr(name.to_string())]));
+        IrValue::Reg(reg)
+    }
+
+    /// Lower `sovereign_entity! { id, capabilities }` into a trust engine call.
+    pub fn emit_sovereign_entity(&mut self, entity_id: &str, func: &mut IrFunction) -> IrValue {
+        let reg = self.fresh_reg();
+        func.push(IrInstruction::Call(reg.clone(), "__sovereign_register".into(), vec![IrValue::ConstStr(entity_id.to_string())]));
+        IrValue::Reg(reg)
+    }
+}

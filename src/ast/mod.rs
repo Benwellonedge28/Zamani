@@ -226,3 +226,128 @@ pub enum InterfaceMember {
         Expression,
     ),
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Zenith-Native Language Constructs
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// `#[prove(theorem="...", context="...")]` — formal verification attribute.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProveAttribute {
+    pub theorem: String,
+    pub context: Option<String>,
+    pub span: Span,
+}
+
+/// `invariant { condition }` — structural invariant assertion.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InvariantBlock {
+    pub condition: Box<Expression>,
+    pub description: Option<String>,
+    pub span: Span,
+}
+
+/// `post_condition { result => expr }` — function postcondition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PostCondition {
+    pub result_ident: Identifier,
+    pub condition: Box<Expression>,
+    pub span: Span,
+}
+
+/// `#[ensure_ethical(policy="...")]` — ethical compliance attribute.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EthicalAttribute {
+    pub policy: String,
+    pub severity: String,
+    pub span: Span,
+}
+
+/// `sovereign_entity! { id: "...", capabilities: [...] }` declaration.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SovereignEntityDecl {
+    pub entity_id: String,
+    pub capabilities: Vec<String>,
+    pub span: Span,
+}
+
+/// `paradigm_block(ParadigmType) { ... }` — omni-paradigm execution.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParadigmBlock {
+    pub paradigm: String,
+    pub body: Box<Expression>,
+    pub span: Span,
+}
+
+/// `actor_spawn! { name: "...", behaviour: fn }` — actor primitive.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActorSpawn {
+    pub actor_name: String,
+    pub behaviour: Box<Expression>,
+    pub initial_state: Option<Box<Expression>>,
+    pub span: Span,
+}
+
+/// `contextof!()` — omniversal context intrinsic.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContextOfExpr {
+    pub span: Span,
+}
+
+/// `query_omni_state!(property, condition)` — global AGI state query.
+#[derive(Debug, Clone, PartialEq)]
+pub struct QueryOmniState {
+    pub property: String,
+    pub condition: Box<Expression>,
+    pub span: Span,
+}
+
+/// `#meta_transform { pattern => replacement }` — adaptive syntax transform.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MetaTransformDirective {
+    pub pattern: String,
+    pub replacement: String,
+    pub span: Span,
+}
+
+/// `language_dialect! { name: "...", extends: "...", adds: [...] }`
+#[derive(Debug, Clone, PartialEq)]
+pub struct LanguageDialectDecl {
+    pub name: String,
+    pub extends: String,
+    pub added_constructs: Vec<String>,
+    pub span: Span,
+}
+
+/// Wisdom declaration (Sankofa): accumulated ancestral knowledge.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WisdomDecl {
+    pub name: Identifier,
+    pub content: Box<Expression>,
+    pub span: Span,
+}
+
+/// `consensus[expr_list] vote expr` — distributed consensus expression.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConsensusExpr {
+    pub participants: Vec<Expression>,
+    pub proposition: Box<Expression>,
+    pub span: Span,
+}
+
+/// Top-level Zenith-native declaration.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ZenithDecl {
+    Prove(ProveAttribute),
+    Invariant(InvariantBlock),
+    PostCondition(PostCondition),
+    Ethical(EthicalAttribute),
+    Sovereign(SovereignEntityDecl),
+    Paradigm(ParadigmBlock),
+    Actor(ActorSpawn),
+    MetaTransform(MetaTransformDirective),
+    Dialect(LanguageDialectDecl),
+    Wisdom(WisdomDecl),
+    Consensus(ConsensusExpr),
+}
