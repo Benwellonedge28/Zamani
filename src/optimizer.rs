@@ -434,6 +434,7 @@ fn is_constant(v: &IrValue) -> bool {
             | IrValue::ConstFloat(..)
             | IrValue::ConstBool(_)
             | IrValue::ConstStr(_)
+            | IrValue::GlobalPtr(..)
     )
 }
 

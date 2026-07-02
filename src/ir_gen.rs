@@ -114,6 +114,14 @@ pub enum IrValue {
     ConstFloat(f64, IrType),
     ConstBool(bool),
     ConstStr(String),
+    /// Address of a named global symbol (e.g. a string literal constant or
+    /// a lifted lambda function). `len` is the byte length of the
+    /// underlying `[len x i8]` global array (including any null
+    /// terminator) when the global is a string constant; use 0 when the
+    /// referenced global isn't an `[N x i8]` array (e.g. a function
+    /// symbol), in which case the bare `@name` form is emitted instead of
+    /// a `getelementptr`.
+    GlobalPtr(String, usize),
     ConstNull,
     Void,
 }
@@ -126,6 +134,7 @@ impl IrValue {
             IrValue::ConstFloat(_, t) => t.clone(),
             IrValue::ConstBool(_) => IrType::Bool,
             IrValue::ConstStr(_) => IrType::Ptr(Box::new(IrType::I8)),
+            IrValue::GlobalPtr(..) => IrType::Ptr(Box::new(IrType::I8)),
             IrValue::ConstNull => IrType::Ptr(Box::new(IrType::Void)),
             IrValue::Void => IrType::Void,
         }
@@ -144,6 +153,17 @@ impl IrValue {
                 }
             }
             IrValue::ConstStr(s) => format!("c\"{}\\00\"", s),
+            IrValue::GlobalPtr(name, len) => {
+                if *len > 0 {
+                    format!(
+                        "getelementptr inbounds ([{len} x i8], [{len} x i8]* @{name}, i64 0, i64 0)",
+                        len = len,
+                        name = name
+                    )
+                } else {
+                    format!("@{}", name)
+                }
+            }
             IrValue::ConstNull => "null".into(),
             IrValue::Void => "void".into(),
         }
@@ -680,7 +700,37 @@ impl IrGenerator {
             self.emit_statement(stmt, &mut main_fn, &mut module);
         }
         main_fn.push(IrInstruction::Ret(Some(IrValue::ConstInt(0, IrType::I32))));
-        module.add_function(main_fn);
+
+        // Top-level `fn` declarations (handled in emit_statement's
+        // Statement::Function arm) are added directly to `module` as they
+        // are encountered, using their declared name. If the source
+        // program itself declares a top-level `fn main(...)`, adding this
+        // synthetic wrapper under the same name would produce two
+        // functions called `main` in one module -- invalid/duplicate
+        // symbols for every backend target. Resolve the collision instead
+        // of silently emitting broken output:
+        //   - if the synthetic wrapper has no real work in it beyond the
+        //     entry comment (i.e. every top-level statement was itself an
+        //     item declaration like `fn`/`struct`/etc., so nothing was
+        //     appended to its body), just drop it and let the
+        //     user-defined `main` be the sole entry point.
+        //   - if the synthetic wrapper DOES carry real top-level
+        //     statements (loose code outside of any function) as well as
+        //     a user-defined `main`, keep both by renaming the synthetic
+        //     wrapper to `__zenith_start` rather than dropping code.
+        let user_defined_main = module.functions.iter().any(|f| f.name == "main");
+        let synthetic_is_empty = main_fn.body.len() <= 2; // entry comment + trailing ret
+        if user_defined_main {
+            if synthetic_is_empty {
+                // Nothing of value in the synthetic wrapper; the user's
+                // own `main` is the entry point.
+            } else {
+                main_fn.name = "__zenith_start".to_string();
+                module.add_function(main_fn);
+            }
+        } else {
+            module.add_function(main_fn);
+        }
         module
     }
 
@@ -983,7 +1033,7 @@ impl IrGenerator {
                 lf.push(IrInstruction::Ret(Some(body_val)));
                 self.env = old_env;
                 module.add_function(lf);
-                IrValue::ConstStr(fn_name)
+                IrValue::GlobalPtr(fn_name, 0)
             }
 
             Expression::Array(_, elems) => {
@@ -1238,7 +1288,9 @@ impl IrGenerator {
                 let name = format!("str{}", self.string_counter);
                 self.string_counter += 1;
                 module.string_literals.push((name.clone(), s.clone()));
-                IrValue::ConstStr(name)
+                // +1 accounts for the NUL terminator emitted alongside the
+                // literal by IrModule::to_ir_string()'s global definition.
+                IrValue::GlobalPtr(name, s.len() + 1)
             }
             Literal::Char(c, _) => IrValue::ConstInt(*c as i64, IrType::I8),
             Literal::Null(_) | Literal::Unit(_) => IrValue::Void,
