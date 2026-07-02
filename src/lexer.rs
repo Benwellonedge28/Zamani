@@ -541,6 +541,12 @@ impl Lexer {
         let start_pos = self.position;
         let mut token_type;
         let mut literal = "".to_string();
+        // Tracks whether this branch already consumed its full token text
+        // (e.g. via read_identifier/read_number/read_string/read_char_literal
+        // or manual read_char() calls for multi-codepoint literals like
+        // QuantumLiteral/NanoAnnotation). When true, the generic
+        // single-character "consume last char" step below is skipped.
+        let mut already_advanced = false;
 
         match self.ch {
             Some('(') => token_type = TokenType::LParen,
@@ -673,6 +679,7 @@ impl Lexer {
                         .unwrap_or("")
                         .to_string();
                     token_type = TokenType::QuantumLiteral;
+                    already_advanced = true;
                 } else {
                     token_type = TokenType::Pipe;
                 }
@@ -687,12 +694,13 @@ impl Lexer {
                 if let Some(c) = self.ch {
                     if c.is_ascii_alphanumeric() {
                         // Start of an identifier for annotation
-                        let id_start_pos = self.position;
                         let id = self.read_identifier();
                         literal = format!("@{}", id);
                         token_type = TokenType::NanoAnnotation;
                     } else {
-                        // If it's just '@' not followed by an identifier, treat as TokenType::At
+                        // If it's just '@' not followed by an identifier, treat as TokenType::At.
+                        // The read_char() above already consumed '@', so no further
+                        // advance is needed.
                         token_type = TokenType::At;
                         literal = "@".to_string();
                     }
@@ -700,14 +708,17 @@ impl Lexer {
                     token_type = TokenType::At;
                     literal = "@".to_string();
                 }
+                already_advanced = true;
             }
             Some('"') => {
                 literal = self.read_string();
                 token_type = TokenType::String;
+                already_advanced = true;
             }
             Some('\'') => {
                 literal = self.read_char_literal();
                 token_type = TokenType::Char;
+                already_advanced = true;
             }
             Some('Π') => token_type = TokenType::PiSymbol,
             Some('Σ') => token_type = TokenType::SigmaSymbol,
@@ -718,6 +729,7 @@ impl Lexer {
                     .get(&literal)
                     .cloned()
                     .unwrap_or(TokenType::Identifier);
+                already_advanced = true;
             }
             Some(c) if c.is_ascii_digit() => {
                 literal = self.read_number();
@@ -726,6 +738,7 @@ impl Lexer {
                 } else {
                     TokenType::Integer
                 };
+                already_advanced = true;
             }
             None => token_type = TokenType::EOF,
             _ => {
@@ -741,11 +754,7 @@ impl Lexer {
         let end_pos = self.position; // This is the start of the *next* character.
                                      // If the `match` arm consumed chars, self.position is already updated.
                                      // If not, we need to manually advance for single-char tokens.
-        if token_type != TokenType::QuantumLiteral
-            && token_type != TokenType::NanoAnnotation
-            && !token_type.is_keyword_or_literal_with_read_ahead()
-            && self.ch.is_some()
-        {
+        if !already_advanced && self.ch.is_some() {
             self.read_char(); // Advance for single character tokens and unhandled multi-char.
         }
 
@@ -766,93 +775,6 @@ impl Lexer {
             literal,
             span,
         }
-    }
-}
-
-impl TokenType {
-    // Helper to identify token types that automatically advance position when their literal is fully read.
-    fn is_keyword_or_literal_with_read_ahead(&self) -> bool {
-        // These token types were produced by read_identifier() or read_number()/read_string(),
-        // which already advanced self.position past the token. No extra read_char() needed.
-        matches!(
-            self,
-            TokenType::Identifier
-                | TokenType::Integer
-                | TokenType::Float
-                | TokenType::String
-                | TokenType::Char
-                | TokenType::Boolean
-        ) || self.is_any_keyword()
-    }
-
-    fn is_any_keyword(&self) -> bool {
-        matches!(
-            self,
-            TokenType::KeywordLet
-                | TokenType::KeywordFn
-                | TokenType::KeywordReturn
-                | TokenType::KeywordIf
-                | TokenType::KeywordElse
-                | TokenType::KeywordWhile
-                | TokenType::KeywordFor
-                | TokenType::KeywordIn
-                | TokenType::KeywordBreak
-                | TokenType::KeywordContinue
-                | TokenType::KeywordMatch
-                | TokenType::KeywordWith
-                | TokenType::KeywordQuantum
-                | TokenType::KeywordCircuit
-                | TokenType::KeywordNano
-                | TokenType::KeywordAgent
-                | TokenType::KeywordRemember
-                | TokenType::KeywordRecall
-                | TokenType::KeywordLearn
-                | TokenType::KeywordWisdom
-                | TokenType::KeywordZamani
-                | TokenType::KeywordSasa
-                | TokenType::KeywordAncestor
-                | TokenType::KeywordLinear
-                | TokenType::KeywordAffine
-                | TokenType::KeywordHandle
-                | TokenType::KeywordEffect
-                | TokenType::KeywordPerform
-                | TokenType::KeywordUnsafe
-                | TokenType::KeywordType
-                | TokenType::KeywordStruct
-                | TokenType::KeywordEnum
-                | TokenType::KeywordModule
-                | TokenType::KeywordImport
-                | TokenType::KeywordConst
-                | TokenType::KeywordVar
-                | TokenType::KeywordMut
-                | TokenType::KeywordAsync
-                | TokenType::KeywordAwait
-                | TokenType::KeywordAs
-                | TokenType::KeywordFrom
-                | TokenType::KeywordWhere
-                | TokenType::KeywordSelf
-                | TokenType::KeywordStatic
-                | TokenType::KeywordImpl
-                | TokenType::KeywordIs
-                | TokenType::KeywordOr
-                | TokenType::KeywordAnd
-                | TokenType::KeywordNot
-                | TokenType::KeywordNew
-                | TokenType::KeywordClass
-                | TokenType::KeywordInterface
-                | TokenType::KeywordExtends
-                | TokenType::KeywordImplements
-                | TokenType::KeywordPublic
-                | TokenType::KeywordPrivate
-                | TokenType::KeywordProtected
-                | TokenType::KeywordThis
-                | TokenType::KeywordOverride
-                | TokenType::KeywordVirtual
-                | TokenType::KeywordAbstract
-                | TokenType::KeywordSuper
-                | TokenType::KeywordCase
-                | TokenType::KeywordCatch
-        )
     }
 }
 
