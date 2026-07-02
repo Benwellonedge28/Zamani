@@ -5,7 +5,13 @@
 pub mod security_kernel;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum NimbusOsState { Booting, Running, Suspended, Hibernating, Terminating }
+pub enum NimbusOsState {
+    Booting,
+    Running,
+    Suspended,
+    Hibernating,
+    Terminating,
+}
 
 #[derive(Debug, Clone)]
 pub struct NimbusProcess {
@@ -18,7 +24,13 @@ pub struct NimbusProcess {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ProcessState { Ready, Running, Blocked, Zombie, Suspended }
+pub enum ProcessState {
+    Ready,
+    Running,
+    Blocked,
+    Zombie,
+    Suspended,
+}
 
 #[derive(Debug, Clone)]
 pub struct IpcMessage {
@@ -29,7 +41,12 @@ pub struct IpcMessage {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum IpcKind { Signal, Data, Capability, Shutdown }
+pub enum IpcKind {
+    Signal,
+    Data,
+    Capability,
+    Shutdown,
+}
 
 pub struct NimbusKernel {
     pub state: NimbusOsState,
@@ -50,15 +67,24 @@ impl NimbusKernel {
         }
     }
 
-    pub fn boot(&mut self) { self.state = NimbusOsState::Running; }
+    pub fn boot(&mut self) {
+        self.state = NimbusOsState::Running;
+    }
 
     pub fn spawn(&mut self, name: &str, priority: u8, ethical_clearance: u8) -> u64 {
         let pid = self.next_pid;
         self.next_pid += 1;
-        self.processes.insert(pid, NimbusProcess {
-            pid, name: name.to_string(), state: ProcessState::Ready,
-            memory_pages: 16, priority, ethical_clearance,
-        });
+        self.processes.insert(
+            pid,
+            NimbusProcess {
+                pid,
+                name: name.to_string(),
+                state: ProcessState::Ready,
+                memory_pages: 16,
+                priority,
+                ethical_clearance,
+            },
+        );
         pid
     }
 
@@ -84,8 +110,16 @@ impl NimbusKernel {
         }
     }
 
-    pub fn process_count(&self) -> usize { self.processes.len() }
-    pub fn is_running(&self) -> bool { self.state == NimbusOsState::Running }
+    pub fn process_count(&self) -> usize {
+        self.processes.len()
+    }
+    pub fn is_running(&self) -> bool {
+        self.state == NimbusOsState::Running
+    }
 }
 
-impl Default for NimbusKernel { fn default() -> Self { Self::new() } }
+impl Default for NimbusKernel {
+    fn default() -> Self {
+        Self::new()
+    }
+}

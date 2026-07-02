@@ -32,7 +32,11 @@ pub struct XrSession {
     pub session_type: XrType,
 }
 
-pub enum XrType { VirtualReality, AugmentedReality, MixedReality }
+pub enum XrType {
+    VirtualReality,
+    AugmentedReality,
+    MixedReality,
+}
 
 pub struct SpatialAnchor {
     pub position: Point,

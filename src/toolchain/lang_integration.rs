@@ -3,7 +3,19 @@
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ForeignLang { Rust, Python, C, Cpp, JavaScript, Wasm, Java, Go, Haskell, Coq, Lean }
+pub enum ForeignLang {
+    Rust,
+    Python,
+    C,
+    Cpp,
+    JavaScript,
+    Wasm,
+    Java,
+    Go,
+    Haskell,
+    Coq,
+    Lean,
+}
 
 #[derive(Debug, Clone)]
 pub struct FfiBinding {
@@ -28,7 +40,12 @@ pub struct LangIntegrationEngine {
 }
 
 impl LangIntegrationEngine {
-    pub fn new() -> Self { LangIntegrationEngine { bindings: HashMap::new(), calls: 0 } }
+    pub fn new() -> Self {
+        LangIntegrationEngine {
+            bindings: HashMap::new(),
+            calls: 0,
+        }
+    }
 
     pub fn register_binding(&mut self, binding: FfiBinding) {
         self.bindings.insert(binding.function_name.clone(), binding);
@@ -37,14 +54,32 @@ impl LangIntegrationEngine {
     pub fn call_foreign(&mut self, fn_name: &str, args: &[String]) -> InteropResult {
         self.calls += 1;
         match self.bindings.get(fn_name) {
-            Some(b) => InteropResult { success: b.safe, output: format!("[FFI→{:?}::{}({})]", b.lang, fn_name, args.join(",")), type_coercions: vec![], overhead_ns: 100 },
-            None => InteropResult { success: false, output: format!("No binding for: {}", fn_name), type_coercions: vec![], overhead_ns: 0 },
+            Some(b) => InteropResult {
+                success: b.safe,
+                output: format!("[FFI→{:?}::{}({})]", b.lang, fn_name, args.join(",")),
+                type_coercions: vec![],
+                overhead_ns: 100,
+            },
+            None => InteropResult {
+                success: false,
+                output: format!("No binding for: {}", fn_name),
+                type_coercions: vec![],
+                overhead_ns: 0,
+            },
         }
     }
 
     pub fn generate_glue(&self, lang: &ForeignLang) -> String {
-        format!("// Auto-generated Zenith ↔ {:?} glue code\n// {} bindings registered", lang, self.bindings.len())
+        format!(
+            "// Auto-generated Zenith ↔ {:?} glue code\n// {} bindings registered",
+            lang,
+            self.bindings.len()
+        )
     }
 }
 
-impl Default for LangIntegrationEngine { fn default() -> Self { Self::new() } }
+impl Default for LangIntegrationEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}

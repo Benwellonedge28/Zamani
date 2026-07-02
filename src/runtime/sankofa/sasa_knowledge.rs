@@ -40,13 +40,16 @@ impl SasaKnowledgeBase {
     }
 
     pub fn assert_fact(&mut self, key: &str, value: &str, confidence: f64) {
-        self.facts.insert(key.to_string(), SasaFact {
-            key: key.to_string(),
-            value: value.to_string(),
-            confidence,
-            active_since: self.tick,
-            last_validated: self.tick,
-        });
+        self.facts.insert(
+            key.to_string(),
+            SasaFact {
+                key: key.to_string(),
+                value: value.to_string(),
+                confidence,
+                active_since: self.tick,
+                last_validated: self.tick,
+            },
+        );
     }
 
     pub fn query_fact(&self, key: &str) -> Option<&SasaFact> {
@@ -58,7 +61,9 @@ impl SasaKnowledgeBase {
     }
 
     pub fn update_context(&mut self, env_key: &str, env_val: &str) {
-        self.context.current_environment.insert(env_key.to_string(), env_val.to_string());
+        self.context
+            .current_environment
+            .insert(env_key.to_string(), env_val.to_string());
     }
 
     pub fn tick(&mut self) {
@@ -71,7 +76,13 @@ impl SasaKnowledgeBase {
         }
     }
 
-    pub fn fact_count(&self) -> usize { self.facts.len() }
+    pub fn fact_count(&self) -> usize {
+        self.facts.len()
+    }
 }
 
-impl Default for SasaKnowledgeBase { fn default() -> Self { Self::new(0) } }
+impl Default for SasaKnowledgeBase {
+    fn default() -> Self {
+        Self::new(0)
+    }
+}

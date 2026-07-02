@@ -10,7 +10,7 @@
 //! Zenith IR Generator — Comprehensive Integration Tests
 
 use std::sync::Arc;
-use zenith_compiler::ir_gen::{IrGenerator, IrInstruction, IrModule, IrRegister, IrValue};
+use zenith_compiler::ir_gen::{CmpOp, IrGenerator, IrInstruction, IrModule, IrRegister, IrValue};
 use zenith_compiler::lexer::Lexer;
 use zenith_compiler::parser::Parser;
 use zenith_compiler::source_map::{FileId, SourceFile};
@@ -30,10 +30,7 @@ fn gen_ir(source: &str) -> IrModule {
 }
 
 fn has_instruction<F: Fn(&IrInstruction) -> bool>(module: &IrModule, pred: F) -> bool {
-    module
-        .functions
-        .iter()
-        .any(|f| f.body.iter().any(|i| pred(i)))
+    module.functions.iter().any(|f| f.body.iter().any(&pred))
 }
 
 // ── Module structure ──────────────────────────────────────────────────────────
@@ -50,7 +47,7 @@ fn test_empty_program_generates_module() {
 #[test]
 fn test_module_has_top_level_function() {
     let module = gen_ir("let x = 1;");
-    assert!(module.functions.iter().any(|f| f.name == "__top__"));
+    assert!(module.functions.iter().any(|f| f.name == "main"));
 }
 
 #[test]
@@ -72,21 +69,21 @@ fn test_multiple_functions() {
 // ── Integer literals ──────────────────────────────────────────────────────────
 
 #[test]
-fn test_integer_literal_generates_assign() {
-    let module = gen_ir("let x = 42;");
+fn test_integer_literal_propagates_into_addition() {
+    let module = gen_ir("let x = 42; let y = x + 1;");
     let found = has_instruction(&module, |i| {
-        matches!(i, IrInstruction::Assign(_, IrValue::ConstInt(42)))
+        matches!(i, IrInstruction::Add(_, IrValue::ConstInt(42, _), _))
     });
-    assert!(found, "Expected Assign with ConstInt(42)");
+    assert!(found, "Expected Add instruction referencing ConstInt(42)");
 }
 
 #[test]
-fn test_zero_literal() {
-    let module = gen_ir("let z = 0;");
+fn test_zero_literal_propagates_into_addition() {
+    let module = gen_ir("let z = 0; let w = z + 1;");
     let found = has_instruction(&module, |i| {
-        matches!(i, IrInstruction::Assign(_, IrValue::ConstInt(0)))
+        matches!(i, IrInstruction::Add(_, IrValue::ConstInt(0, _), _))
     });
-    assert!(found, "Expected ConstInt(0)");
+    assert!(found, "Expected Add instruction referencing ConstInt(0)");
 }
 
 #[test]
@@ -137,20 +134,20 @@ fn test_division_generates_div() {
 // ── Comparison IR ─────────────────────────────────────────────────────────────
 
 #[test]
-fn test_equality_generates_cmpeq() {
+fn test_equality_generates_cmp_eq() {
     let module = gen_ir("let b = 1 == 1;");
     assert!(has_instruction(&module, |i| matches!(
         i,
-        IrInstruction::CmpEq(_, _, _)
+        IrInstruction::Cmp(_, CmpOp::Eq, _, _)
     )));
 }
 
 #[test]
-fn test_less_than_generates_cmplt() {
+fn test_less_than_generates_cmp_lt() {
     let module = gen_ir("let b = 1 < 2;");
     assert!(has_instruction(&module, |i| matches!(
         i,
-        IrInstruction::CmpLt(_, _, _)
+        IrInstruction::Cmp(_, CmpOp::Lt, _, _)
     )));
 }
 
@@ -190,35 +187,38 @@ fn test_function_call_generates_call() {
 // ── Zenith-specific IR ────────────────────────────────────────────────────────
 
 #[test]
-fn test_quantum_circuit_generates_qalloc() {
+fn test_quantum_circuit_generates_quantum_gate() {
     let module = gen_ir("quantum circuit Bell { let q = 1; }");
     assert!(
-        has_instruction(&module, |i| matches!(i, IrInstruction::QAlloc(_, _))),
-        "Expected QAlloc for quantum circuit"
+        has_instruction(
+            &module,
+            |i| matches!(i, IrInstruction::QuantumGate(_, name, _) if name == "Bell")
+        ),
+        "Expected QuantumGate for quantum circuit"
     );
 }
 
 #[test]
-fn test_nano_agent_generates_nanospawn() {
+fn test_nano_agent_generates_nano_op() {
     let module = gen_ir("agent Scout { let x = 1; }");
     assert!(
         has_instruction(
             &module,
-            |i| matches!(i, IrInstruction::NanoSpawn(_, name) if name == "Scout")
+            |i| matches!(i, IrInstruction::NanoOp(_, name, _) if name == "Scout")
         ),
-        "Expected NanoSpawn for agent"
+        "Expected NanoOp for agent"
     );
 }
 
 #[test]
-fn test_sankofa_generates_store() {
+fn test_sankofa_generates_remember() {
     let module = gen_ir("remember mem_val = 42;");
     assert!(
         has_instruction(
             &module,
-            |i| matches!(i, IrInstruction::SankofaStore(key, _) if key == "mem_val")
+            |i| matches!(i, IrInstruction::SankofaRemember(key, _) if key == "mem_val")
         ),
-        "Expected SankofaStore for remember"
+        "Expected SankofaRemember for remember"
     );
 }
 
@@ -227,14 +227,10 @@ fn test_sankofa_generates_store() {
 #[test]
 fn test_top_level_ends_with_ret() {
     let module = gen_ir("let x = 1;");
-    let top = module
-        .functions
-        .iter()
-        .find(|f| f.name == "__top__")
-        .unwrap();
+    let top = module.functions.iter().find(|f| f.name == "main").unwrap();
     assert!(
-        matches!(top.body.last(), Some(IrInstruction::Ret(None))),
-        "Top-level should end with Ret(None)"
+        matches!(top.body.last(), Some(IrInstruction::Ret(Some(_)))),
+        "Top-level should end with a Ret"
     );
 }
 

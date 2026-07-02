@@ -157,6 +157,36 @@ pub enum TokenType {
     KeywordVirtual,
     KeywordAbstract,
 
+    // --- Additional control-flow / language keywords ---
+    KeywordLoop,
+    KeywordSpawn,
+    KeywordInfer,
+    KeywordLanguage,
+    KeywordVoid,
+    KeywordInt,
+    KeywordFloat,
+    KeywordBool,
+    KeywordStr,
+    KeywordStringType,
+    KeywordCharType,
+    KeywordNil,
+    KeywordPrint,
+    KeywordPrintln,
+    KeywordAssert,
+    KeywordPanic,
+    KeywordLen,
+    KeywordSizeof,
+    KeywordTry,
+
+    // --- Compound assignment & range operators ---
+    PlusAssign,
+    MinusAssign,
+    StarAssign,
+    SlashAssign,
+    DotDot,
+    DotDotEq,
+    QuestionMark,
+
     // End of file
     EOF,
     // Error token
@@ -212,8 +242,8 @@ impl Lexer {
         map.insert("return".to_string(), TokenType::KeywordReturn);
         map.insert("if".to_string(), TokenType::KeywordIf);
         map.insert("else".to_string(), TokenType::KeywordElse);
-        map.insert("true".to_string(), TokenType::Boolean);
-        map.insert("false".to_string(), TokenType::Boolean);
+        map.insert("true".to_string(), TokenType::KeywordTrue);
+        map.insert("false".to_string(), TokenType::KeywordFalse);
         map.insert("quantum".to_string(), TokenType::KeywordQuantum);
         map.insert("circuit".to_string(), TokenType::KeywordCircuit);
         map.insert("nano".to_string(), TokenType::KeywordNano);
@@ -283,9 +313,31 @@ impl Lexer {
         map.insert("impl".to_string(), TokenType::KeywordImpl);
         map.insert("is".to_string(), TokenType::KeywordIs);
         map.insert("or".to_string(), TokenType::KeywordOr);
+        map.insert("and".to_string(), TokenType::KeywordAnd);
+        map.insert("use".to_string(), TokenType::KeywordUse);
+        map.insert("trait".to_string(), TokenType::KeywordTrait);
+        map.insert("loop".to_string(), TokenType::KeywordLoop);
+        map.insert("spawn".to_string(), TokenType::KeywordSpawn);
+        map.insert("infer".to_string(), TokenType::KeywordInfer);
+        map.insert("language".to_string(), TokenType::KeywordLanguage);
+        map.insert("void".to_string(), TokenType::KeywordVoid);
+        map.insert("int".to_string(), TokenType::KeywordInt);
+        map.insert("float".to_string(), TokenType::KeywordFloat);
+        map.insert("bool".to_string(), TokenType::KeywordBool);
+        map.insert("str".to_string(), TokenType::KeywordStr);
+        map.insert("String".to_string(), TokenType::KeywordStringType);
+        map.insert("char".to_string(), TokenType::KeywordCharType);
+        map.insert("nil".to_string(), TokenType::KeywordNil);
+        map.insert("null".to_string(), TokenType::KeywordNil);
+        map.insert("print".to_string(), TokenType::KeywordPrint);
+        map.insert("println".to_string(), TokenType::KeywordPrintln);
+        map.insert("assert".to_string(), TokenType::KeywordAssert);
+        map.insert("panic".to_string(), TokenType::KeywordPanic);
+        map.insert("len".to_string(), TokenType::KeywordLen);
+        map.insert("sizeof".to_string(), TokenType::KeywordSizeof);
+        map.insert("try".to_string(), TokenType::KeywordTry);
         map
     }
-
 
     pub fn get_errors(&self) -> &Vec<LexerError> {
         &self.errors
@@ -498,7 +550,19 @@ impl Lexer {
             Some('[') => token_type = TokenType::LBracket,
             Some(']') => token_type = TokenType::RBracket,
             Some(',') => token_type = TokenType::Comma,
-            Some('.') => token_type = TokenType::Dot,
+            Some('.') => {
+                if self.peek_char() == Some('.') {
+                    self.read_char(); // consume second '.'
+                    if self.peek_char() == Some('=') {
+                        self.read_char(); // consume '='
+                        token_type = TokenType::DotDotEq;
+                    } else {
+                        token_type = TokenType::DotDot;
+                    }
+                } else {
+                    token_type = TokenType::Dot;
+                }
+            }
             Some(';') => token_type = TokenType::Semicolon,
             Some(':') => {
                 if self.peek_char() == Some(':') {
@@ -508,17 +572,41 @@ impl Lexer {
                     token_type = TokenType::Colon;
                 }
             }
-            Some('+') => token_type = TokenType::Plus,
+            Some('+') => {
+                if self.peek_char() == Some('=') {
+                    token_type = TokenType::PlusAssign;
+                    self.read_char();
+                } else {
+                    token_type = TokenType::Plus;
+                }
+            }
             Some('-') => {
                 if self.peek_char() == Some('>') {
                     token_type = TokenType::ThinArrow;
+                    self.read_char();
+                } else if self.peek_char() == Some('=') {
+                    token_type = TokenType::MinusAssign;
                     self.read_char();
                 } else {
                     token_type = TokenType::Minus;
                 }
             }
-            Some('*') => token_type = TokenType::Star,
-            Some('/') => token_type = TokenType::Slash, // Comments handled before
+            Some('*') => {
+                if self.peek_char() == Some('=') {
+                    token_type = TokenType::StarAssign;
+                    self.read_char();
+                } else {
+                    token_type = TokenType::Star;
+                }
+            }
+            Some('/') => {
+                if self.peek_char() == Some('=') {
+                    token_type = TokenType::SlashAssign;
+                    self.read_char();
+                } else {
+                    token_type = TokenType::Slash; // Comments handled before
+                }
+            }
             Some('%') => token_type = TokenType::Modulo,
             Some('=') => {
                 if self.peek_char() == Some('=') {
@@ -589,6 +677,7 @@ impl Lexer {
                     token_type = TokenType::Pipe;
                 }
             }
+            Some('?') => token_type = TokenType::QuestionMark,
             Some('^') => token_type = TokenType::Caret,
             Some('~') => token_type = TokenType::Tilde,
             Some('#') => token_type = TokenType::Hash,
@@ -697,29 +786,72 @@ impl TokenType {
     }
 
     fn is_any_keyword(&self) -> bool {
-        matches!(self,
-            TokenType::KeywordLet | TokenType::KeywordFn | TokenType::KeywordReturn
-            | TokenType::KeywordIf | TokenType::KeywordElse | TokenType::KeywordWhile
-            | TokenType::KeywordFor | TokenType::KeywordIn | TokenType::KeywordBreak
-            | TokenType::KeywordContinue | TokenType::KeywordMatch | TokenType::KeywordWith
-            | TokenType::KeywordQuantum | TokenType::KeywordCircuit | TokenType::KeywordNano
-            | TokenType::KeywordAgent | TokenType::KeywordRemember | TokenType::KeywordRecall
-            | TokenType::KeywordLearn | TokenType::KeywordWisdom | TokenType::KeywordZamani
-            | TokenType::KeywordSasa | TokenType::KeywordAncestor | TokenType::KeywordLinear
-            | TokenType::KeywordAffine | TokenType::KeywordHandle | TokenType::KeywordEffect
-            | TokenType::KeywordPerform | TokenType::KeywordUnsafe | TokenType::KeywordType
-            | TokenType::KeywordStruct | TokenType::KeywordEnum | TokenType::KeywordModule
-            | TokenType::KeywordImport | TokenType::KeywordConst | TokenType::KeywordVar
-            | TokenType::KeywordMut | TokenType::KeywordAsync | TokenType::KeywordAwait
-            | TokenType::KeywordAs | TokenType::KeywordFrom | TokenType::KeywordWhere
-            | TokenType::KeywordSelf | TokenType::KeywordStatic | TokenType::KeywordImpl
-            | TokenType::KeywordIs | TokenType::KeywordOr | TokenType::KeywordAnd
-            | TokenType::KeywordNot | TokenType::KeywordNew | TokenType::KeywordClass
-            | TokenType::KeywordInterface | TokenType::KeywordExtends
-            | TokenType::KeywordImplements | TokenType::KeywordPublic | TokenType::KeywordPrivate
-            | TokenType::KeywordProtected | TokenType::KeywordThis | TokenType::KeywordOverride
-            | TokenType::KeywordVirtual | TokenType::KeywordAbstract | TokenType::KeywordSuper
-            | TokenType::KeywordCase | TokenType::KeywordCatch
+        matches!(
+            self,
+            TokenType::KeywordLet
+                | TokenType::KeywordFn
+                | TokenType::KeywordReturn
+                | TokenType::KeywordIf
+                | TokenType::KeywordElse
+                | TokenType::KeywordWhile
+                | TokenType::KeywordFor
+                | TokenType::KeywordIn
+                | TokenType::KeywordBreak
+                | TokenType::KeywordContinue
+                | TokenType::KeywordMatch
+                | TokenType::KeywordWith
+                | TokenType::KeywordQuantum
+                | TokenType::KeywordCircuit
+                | TokenType::KeywordNano
+                | TokenType::KeywordAgent
+                | TokenType::KeywordRemember
+                | TokenType::KeywordRecall
+                | TokenType::KeywordLearn
+                | TokenType::KeywordWisdom
+                | TokenType::KeywordZamani
+                | TokenType::KeywordSasa
+                | TokenType::KeywordAncestor
+                | TokenType::KeywordLinear
+                | TokenType::KeywordAffine
+                | TokenType::KeywordHandle
+                | TokenType::KeywordEffect
+                | TokenType::KeywordPerform
+                | TokenType::KeywordUnsafe
+                | TokenType::KeywordType
+                | TokenType::KeywordStruct
+                | TokenType::KeywordEnum
+                | TokenType::KeywordModule
+                | TokenType::KeywordImport
+                | TokenType::KeywordConst
+                | TokenType::KeywordVar
+                | TokenType::KeywordMut
+                | TokenType::KeywordAsync
+                | TokenType::KeywordAwait
+                | TokenType::KeywordAs
+                | TokenType::KeywordFrom
+                | TokenType::KeywordWhere
+                | TokenType::KeywordSelf
+                | TokenType::KeywordStatic
+                | TokenType::KeywordImpl
+                | TokenType::KeywordIs
+                | TokenType::KeywordOr
+                | TokenType::KeywordAnd
+                | TokenType::KeywordNot
+                | TokenType::KeywordNew
+                | TokenType::KeywordClass
+                | TokenType::KeywordInterface
+                | TokenType::KeywordExtends
+                | TokenType::KeywordImplements
+                | TokenType::KeywordPublic
+                | TokenType::KeywordPrivate
+                | TokenType::KeywordProtected
+                | TokenType::KeywordThis
+                | TokenType::KeywordOverride
+                | TokenType::KeywordVirtual
+                | TokenType::KeywordAbstract
+                | TokenType::KeywordSuper
+                | TokenType::KeywordCase
+                | TokenType::KeywordCatch
         )
     }
 }

@@ -1,11 +1,17 @@
-//! Zenith UMC Code Generation Backend
+//! Zenith Code Generation Backend
 //!
 //! Translates the optimized IR into target-specific output.
-//! Supports: X86-64 Linux, WASM32, QASM (quantum), NanoControl,
-//! MTS Bytecode, LLVM IR text, RISC-V assembly.
+//! Supported targets:
+//!  - LLVM IR text (real LLVM-compatible output)
+//!  - x86-64 assembly (Linux System V ABI)
+//!  - WebAssembly text format (WAT)
+//!  - QASM 2.0 (quantum circuits)
+//!  - RISC-V assembly (RV64GC)
+//!  - MTS Bytecode
+//!  - NanoControl
 
 use crate::compiler_types::{CompilationTarget, CompilerConfig};
-use crate::ir_gen::{IrInstruction, IrModule, IrRegister, IrType, IrValue};
+use crate::ir_gen::{CmpOp, IrFunction, IrInstruction, IrModule, IrType, IrValue};
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
@@ -42,7 +48,7 @@ pub struct CodeGenOutput {
     pub size_bytes: usize,
 }
 
-// ─── Code generator ───────────────────────────────────────────────────────────
+// ─── Dispatcher ───────────────────────────────────────────────────────────────
 
 pub struct CodeGenerator {
     config: CompilerConfig,
@@ -56,162 +62,26 @@ impl CodeGenerator {
     pub fn generate(&self, module: &IrModule) -> Result<CodeGenOutput, CodeGenError> {
         let backend: Box<dyn Backend> = match &self.config.target {
             CompilationTarget::X86_64Linux => Box::new(X86Backend),
+            CompilationTarget::Arm64 => Box::new(X86Backend),
             CompilationTarget::Wasm32 => Box::new(WasmBackend),
             CompilationTarget::QASM => Box::new(QasmBackend),
+            CompilationTarget::NanoControl => Box::new(NanoBackend),
             CompilationTarget::LLVMIR => Box::new(LlvmIrBackend),
-            CompilationTarget::NanoControl => Box::new(NanoControlBackend),
-            CompilationTarget::MTSBytecode => Box::new(MtsBytecodeBackend),
-            _ => Box::new(LlvmIrBackend),
+            CompilationTarget::RiscV => Box::new(RiscVBackend),
+            CompilationTarget::MTSBytecode => Box::new(MtsBackend),
         };
         let source = backend.generate(module)?;
-        let size_bytes = source.len();
+        let size = source.len();
         Ok(CodeGenOutput {
-            target: backend.target_name().to_string(),
-            extension: backend.file_extension().to_string(),
+            target: backend.target_name().into(),
+            extension: backend.file_extension().into(),
             source,
-            size_bytes,
+            size_bytes: size,
         })
     }
 }
 
-// ─── X86-64 Linux backend ─────────────────────────────────────────────────────
-
-pub struct X86Backend;
-
-impl Backend for X86Backend {
-    fn target_name(&self) -> &str {
-        "x86_64-linux"
-    }
-    fn file_extension(&self) -> &str {
-        "s"
-    }
-
-    fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
-        let mut out = String::new();
-        out.push_str(".section .text\n.global _start\n\n");
-        for func in &module.functions {
-            out.push_str(&format!("{}:\n", func.name));
-            out.push_str("    pushq %rbp\n    movq %rsp, %rbp\n");
-            for ins in &func.body {
-                out.push_str(&x86_emit(ins));
-            }
-            out.push_str("    popq %rbp\n    ret\n\n");
-        }
-        Ok(out)
-    }
-}
-
-fn x86_emit(ins: &IrInstruction) -> String {
-    match ins {
-        IrInstruction::Assign(reg, IrValue::ConstInt(n)) => format!("    movq ${}, {}\n", n, reg.0),
-        IrInstruction::Add(dst, IrValue::Reg(a), IrValue::Reg(b)) => format!(
-            "    movq {}, %rax\n    addq {}, %rax\n    movq %rax, {}\n",
-            a.0, b.0, dst.0
-        ),
-        IrInstruction::Sub(dst, IrValue::Reg(a), IrValue::Reg(b)) => format!(
-            "    movq {}, %rax\n    subq {}, %rax\n    movq %rax, {}\n",
-            a.0, b.0, dst.0
-        ),
-        IrInstruction::Mul(dst, IrValue::Reg(a), IrValue::Reg(b)) => format!(
-            "    movq {}, %rax\n    imulq {}\n    movq %rax, {}\n",
-            a.0, b.0, dst.0
-        ),
-        IrInstruction::Ret(Some(IrValue::ConstInt(n))) => format!("    movq ${}, %rax\n", n),
-        IrInstruction::Ret(None) | IrInstruction::Ret(Some(IrValue::Null)) => "".to_string(),
-        IrInstruction::Label(l) => format!("{}:\n", l),
-        IrInstruction::Jump(l) => format!("    jmp {}\n", l),
-        IrInstruction::CallVoid(name, _) => format!("    call {}\n", name),
-        IrInstruction::Call(dst, name, _) => {
-            format!("    call {}\n    movq %rax, {}\n", name, dst.0)
-        }
-        IrInstruction::Nop => "    nop\n".to_string(),
-        _ => format!("    # {:?}\n", ins),
-    }
-}
-
-// ─── WASM32 backend ───────────────────────────────────────────────────────────
-
-pub struct WasmBackend;
-
-impl Backend for WasmBackend {
-    fn target_name(&self) -> &str {
-        "wasm32"
-    }
-    fn file_extension(&self) -> &str {
-        "wat"
-    }
-
-    fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
-        let mut out = String::from("(module\n");
-        for func in &module.functions {
-            out.push_str(&format!("  (func ${} (result i64)\n", func.name));
-            for ins in &func.body {
-                out.push_str(&wasm_emit(ins));
-            }
-            out.push_str("  )\n");
-        }
-        out.push_str(")\n");
-        Ok(out)
-    }
-}
-
-fn wasm_emit(ins: &IrInstruction) -> String {
-    match ins {
-        IrInstruction::Assign(_, IrValue::ConstInt(n)) => format!("    i64.const {}\n", n),
-        IrInstruction::Add(_, _, _) => "    i64.add\n".to_string(),
-        IrInstruction::Sub(_, _, _) => "    i64.sub\n".to_string(),
-        IrInstruction::Mul(_, _, _) => "    i64.mul\n".to_string(),
-        IrInstruction::Ret(Some(IrValue::ConstInt(n))) => format!("    i64.const {}\n", n),
-        IrInstruction::Label(l) => format!("    ;; label: {}\n", l),
-        IrInstruction::Nop => "    nop\n".to_string(),
-        _ => format!("    ;; {:?}\n", ins),
-    }
-}
-
-// ─── QASM backend ────────────────────────────────────────────────────────────
-
-pub struct QasmBackend;
-
-impl Backend for QasmBackend {
-    fn target_name(&self) -> &str {
-        "qasm"
-    }
-    fn file_extension(&self) -> &str {
-        "qasm"
-    }
-
-    fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
-        let mut out = String::from("OPENQASM 3.0;\n\n");
-        for func in &module.functions {
-            out.push_str(&format!("// Function: {}\n", func.name));
-            for ins in &func.body {
-                match ins {
-                    IrInstruction::QAlloc(reg, qubits) => out.push_str(&format!(
-                        "qubit[{}] {};\n",
-                        qubits,
-                        reg.0.replace('%', "q_")
-                    )),
-                    IrInstruction::QGate(gate, qregs) => {
-                        let args: Vec<String> =
-                            qregs.iter().map(|r| r.0.replace('%', "q_")).collect();
-                        out.push_str(&format!("{} {};\n", gate.to_lowercase(), args.join(", ")));
-                    }
-                    IrInstruction::QMeasure(result, qubit) => out.push_str(&format!(
-                        "{} = measure {};\n",
-                        result.0.replace('%', "c_"),
-                        qubit.0.replace('%', "q_")
-                    )),
-                    IrInstruction::Label(l) => out.push_str(&format!("// {}\n", l)),
-                    IrInstruction::Nop => {}
-                    _ => out.push_str(&format!("// {:?}\n", ins)),
-                }
-            }
-        }
-        Ok(out)
-    }
-}
-
-// ─── LLVM IR backend ─────────────────────────────────────────────────────────
+// ─── LLVM IR Backend (primary) ────────────────────────────────────────────────
 
 pub struct LlvmIrBackend;
 
@@ -220,257 +90,620 @@ impl Backend for LlvmIrBackend {
         "llvm-ir"
     }
     fn file_extension(&self) -> &str {
-        "ll"
+        ".ll"
     }
 
     fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
-        let mut out =
-            String::from("; Zenith LLVM IR\ntarget triple = \"x86_64-unknown-linux-gnu\"\n\n");
+        Ok(module.to_ir_string())
+    }
+}
+
+// ─── x86-64 Assembly Backend ──────────────────────────────────────────────────
+
+pub struct X86Backend;
+
+impl Backend for X86Backend {
+    fn target_name(&self) -> &str {
+        "x86_64"
+    }
+    fn file_extension(&self) -> &str {
+        ".s"
+    }
+
+    fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
+        let mut out = String::new();
+        // File header
+        out.push_str(&format!("    .file   \"{}\"\n", module.name));
+        out.push_str("    .text\n");
+        out.push_str("    .section .rodata\n");
+
+        // String literals
+        for (name, s) in &module.string_literals {
+            out.push_str(&format!(".{}:\n    .string \"{}\"\n", name, s));
+        }
+        out.push_str("    .text\n\n");
+
         for func in &module.functions {
-            out.push_str(&format!("define i64 @{}() {{\n", func.name));
-            out.push_str("entry:\n");
-            for ins in &func.body {
-                out.push_str(&llvm_emit(ins));
+            if func.is_external {
+                continue;
             }
-            out.push_str("}\n\n");
+            let fname = &func.name;
+            out.push_str(&format!("    .globl {}\n", fname));
+            out.push_str(&format!("    .type {}, @function\n", fname));
+            out.push_str(&format!("{}:\n", fname));
+            out.push_str("    pushq   %rbp\n");
+            out.push_str("    movq    %rsp, %rbp\n");
+
+            let mut reg_map: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            let mut stack_offset: i32 = -8;
+            let arg_regs = ["%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"];
+            for (i, (name, _)) in func.params.iter().enumerate() {
+                if i < arg_regs.len() {
+                    out.push_str(&format!(
+                        "    movq    {}, {}(%rbp)\n",
+                        arg_regs[i], stack_offset
+                    ));
+                    reg_map.insert(name.clone(), format!("{}(%rbp)", stack_offset));
+                    stack_offset -= 8;
+                }
+            }
+
+            for inst in &func.body {
+                match inst {
+                    IrInstruction::Comment(c) => {
+                        out.push_str(&format!("    # {}\n", c));
+                    }
+                    IrInstruction::Label(l) => {
+                        out.push_str(&format!(".L_{}:\n", l));
+                    }
+                    IrInstruction::Assign(r, v) => {
+                        let src = val_to_x86(v, &reg_map);
+                        let dst = alloc_stack(&r.0, &mut reg_map, &mut stack_offset);
+                        out.push_str(&format!("    movq    {}, %rax\n", src));
+                        out.push_str(&format!("    movq    %rax, {}\n", dst));
+                    }
+                    IrInstruction::Add(r, a, b) => {
+                        let src_a = val_to_x86(a, &reg_map);
+                        let src_b = val_to_x86(b, &reg_map);
+                        let dst = alloc_stack(&r.0, &mut reg_map, &mut stack_offset);
+                        out.push_str(&format!("    movq    {}, %rax\n", src_a));
+                        out.push_str(&format!("    addq    {}, %rax\n", src_b));
+                        out.push_str(&format!("    movq    %rax, {}\n", dst));
+                    }
+                    IrInstruction::Sub(r, a, b) => {
+                        let src_a = val_to_x86(a, &reg_map);
+                        let src_b = val_to_x86(b, &reg_map);
+                        let dst = alloc_stack(&r.0, &mut reg_map, &mut stack_offset);
+                        out.push_str(&format!("    movq    {}, %rax\n", src_a));
+                        out.push_str(&format!("    subq    {}, %rax\n", src_b));
+                        out.push_str(&format!("    movq    %rax, {}\n", dst));
+                    }
+                    IrInstruction::Mul(r, a, b) => {
+                        let src_a = val_to_x86(a, &reg_map);
+                        let src_b = val_to_x86(b, &reg_map);
+                        let dst = alloc_stack(&r.0, &mut reg_map, &mut stack_offset);
+                        out.push_str(&format!("    movq    {}, %rax\n", src_a));
+                        out.push_str(&format!("    imulq   {}, %rax\n", src_b));
+                        out.push_str(&format!("    movq    %rax, {}\n", dst));
+                    }
+                    IrInstruction::Div(r, a, b) => {
+                        let src_a = val_to_x86(a, &reg_map);
+                        let src_b = val_to_x86(b, &reg_map);
+                        let dst = alloc_stack(&r.0, &mut reg_map, &mut stack_offset);
+                        out.push_str(&format!("    movq    {}, %rax\n", src_a));
+                        out.push_str("    cqto\n");
+                        out.push_str(&format!("    movq    {}, %rcx\n", src_b));
+                        out.push_str("    idivq   %rcx\n");
+                        out.push_str(&format!("    movq    %rax, {}\n", dst));
+                    }
+                    IrInstruction::Cmp(r, op, a, b) => {
+                        let src_a = val_to_x86(a, &reg_map);
+                        let src_b = val_to_x86(b, &reg_map);
+                        let dst = alloc_stack(&r.0, &mut reg_map, &mut stack_offset);
+                        let set_instr = match op {
+                            CmpOp::Eq => "sete",
+                            CmpOp::Ne => "setne",
+                            CmpOp::Lt => "setl",
+                            CmpOp::Le => "setle",
+                            CmpOp::Gt => "setg",
+                            CmpOp::Ge => "setge",
+                            _ => "sete",
+                        };
+                        out.push_str(&format!("    movq    {}, %rax\n", src_a));
+                        out.push_str(&format!("    cmpq    {}, %rax\n", src_b));
+                        out.push_str(&format!("    {}    %al\n", set_instr));
+                        out.push_str("    movzbl  %al, %eax\n");
+                        out.push_str(&format!("    movq    %rax, {}\n", dst));
+                    }
+                    IrInstruction::Jump(l) => {
+                        out.push_str(&format!("    jmp     .L_{}\n", l));
+                    }
+                    IrInstruction::CondJump(cond, t, f) => {
+                        let cv = val_to_x86(cond, &reg_map);
+                        out.push_str(&format!("    movq    {}, %rax\n", cv));
+                        out.push_str("    testq   %rax, %rax\n");
+                        out.push_str(&format!("    jnz     .L_{}\n", t));
+                        out.push_str(&format!("    jmp     .L_{}\n", f));
+                    }
+                    IrInstruction::Ret(None) => {
+                        out.push_str("    xorl    %eax, %eax\n");
+                        out.push_str("    popq    %rbp\n");
+                        out.push_str("    ret\n");
+                    }
+                    IrInstruction::Ret(Some(v)) => {
+                        let src = val_to_x86(v, &reg_map);
+                        out.push_str(&format!("    movq    {}, %rax\n", src));
+                        out.push_str("    popq    %rbp\n");
+                        out.push_str("    ret\n");
+                    }
+                    IrInstruction::Call(dest, name, args) => {
+                        let arg_r = ["%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"];
+                        for (i, arg) in args.iter().enumerate() {
+                            if i < arg_r.len() {
+                                let av = val_to_x86(arg, &reg_map);
+                                out.push_str(&format!("    movq    {}, {}\n", av, arg_r[i]));
+                            }
+                        }
+                        out.push_str(&format!("    call    {}\n", name));
+                        if let Some(r) = dest {
+                            let dst = alloc_stack(&r.0, &mut reg_map, &mut stack_offset);
+                            out.push_str(&format!("    movq    %rax, {}\n", dst));
+                        }
+                    }
+                    _ => {
+                        out.push_str(&format!("    # {}\n", inst.to_ir_string().trim()));
+                    }
+                }
+            }
+
+            out.push_str(&format!("    .size {}, .-{}\n\n", fname, fname));
+        }
+
+        // Globals
+        out.push_str("    .data\n");
+        for g in &module.globals {
+            out.push_str(&format!("    .globl {}\n", g.name));
+            out.push_str(&format!("    .type {}, @object\n", g.name));
+            out.push_str(&format!("{}:\n", g.name));
+            match &g.value {
+                IrValue::ConstInt(n, _) => out.push_str(&format!("    .quad {}\n", n)),
+                IrValue::ConstFloat(f, _) => out.push_str(&format!("    .double {:e}\n", f)),
+                IrValue::ConstBool(b) => out.push_str(&format!("    .byte {}\n", *b as u8)),
+                _ => out.push_str("    .quad 0\n"),
+            }
+        }
+
+        out.push_str("    .section .note.GNU-stack,\"\",@progbits\n");
+        Ok(out)
+    }
+}
+
+fn val_to_x86(v: &IrValue, reg_map: &std::collections::HashMap<String, String>) -> String {
+    match v {
+        IrValue::Reg(r) => reg_map.get(&r.0).cloned().unwrap_or(format!("%{}", r.0)),
+        IrValue::ConstInt(n, _) => format!("${}", n),
+        IrValue::ConstFloat(f, _) => format!("${}", *f as i64),
+        IrValue::ConstBool(b) => format!("${}", *b as i64),
+        _ => "$0".into(),
+    }
+}
+
+fn alloc_stack(
+    name: &str,
+    reg_map: &mut std::collections::HashMap<String, String>,
+    offset: &mut i32,
+) -> String {
+    if let Some(s) = reg_map.get(name) {
+        return s.clone();
+    }
+    let s = format!("{}(%rbp)", offset);
+    *offset -= 8;
+    reg_map.insert(name.into(), s.clone());
+    s
+}
+
+// ─── WebAssembly Text Format Backend ─────────────────────────────────────────
+
+pub struct WasmBackend;
+
+impl Backend for WasmBackend {
+    fn target_name(&self) -> &str {
+        "wasm32"
+    }
+    fn file_extension(&self) -> &str {
+        ".wat"
+    }
+
+    fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
+        let mut out = String::new();
+        out.push_str(&format!("(module ;; {}\n", module.name));
+        out.push_str("  (import \"env\" \"zenith_println\" (func $zenith_println (param i32)))\n");
+        out.push_str("  (memory 1)\n");
+        out.push_str("  (export \"memory\" (memory 0))\n\n");
+
+        let mut data_offset = 0u32;
+        for (name, s) in &module.string_literals {
+            out.push_str(&format!(
+                "  (data (i32.const {}) \"{}\\00\")\n",
+                data_offset, s
+            ));
+            data_offset += s.len() as u32 + 1;
+        }
+        out.push('\n');
+
+        for func in &module.functions {
+            if func.is_external {
+                continue;
+            }
+            let params: Vec<String> = func
+                .params
+                .iter()
+                .map(|(n, _)| format!("(param ${} i64)", n))
+                .collect();
+            let ret = if func.return_type == IrType::Void {
+                ""
+            } else {
+                " (result i64)"
+            };
+            out.push_str(&format!(
+                "  (func ${} {}{}\n",
+                func.name,
+                params.join(" "),
+                ret
+            ));
+
+            for inst in &func.body {
+                let line = match inst {
+                    IrInstruction::Assign(_, v) => wasm_push(v),
+                    IrInstruction::Add(_, a, b) => {
+                        format!("{}\n    {}\n    i64.add", wasm_push(a), wasm_push(b))
+                    }
+                    IrInstruction::Sub(_, a, b) => {
+                        format!("{}\n    {}\n    i64.sub", wasm_push(a), wasm_push(b))
+                    }
+                    IrInstruction::Mul(_, a, b) => {
+                        format!("{}\n    {}\n    i64.mul", wasm_push(a), wasm_push(b))
+                    }
+                    IrInstruction::Div(_, a, b) => {
+                        format!("{}\n    {}\n    i64.div_s", wasm_push(a), wasm_push(b))
+                    }
+                    IrInstruction::Ret(None) => "return".into(),
+                    IrInstruction::Ret(Some(v)) => format!("{}\n    return", wasm_push(v)),
+                    IrInstruction::Label(l) => format!(";; label {}", l),
+                    IrInstruction::Comment(c) => format!(";; {}", c),
+                    IrInstruction::Call(_, name, args) => {
+                        let pushes: Vec<String> = args
+                            .iter()
+                            .map(|a| format!("    {}", wasm_push(a)))
+                            .collect();
+                        format!("{}\n    call ${}", pushes.join("\n"), name)
+                    }
+                    _ => format!(";; {}", inst.to_ir_string().trim()),
+                };
+                out.push_str(&format!("    {}\n", line));
+            }
+            out.push_str("  )\n\n");
+        }
+
+        if module.functions.iter().any(|f| f.name == "main") {
+            out.push_str("  (export \"main\" (func $main))\n");
+        }
+        out.push_str(")\n");
+        Ok(out)
+    }
+}
+
+fn wasm_push(v: &IrValue) -> String {
+    match v {
+        IrValue::ConstInt(n, _) => format!("i64.const {}", n),
+        IrValue::ConstBool(b) => format!("i32.const {}", *b as i32),
+        IrValue::Reg(r) => format!("local.get ${}", r.0),
+        _ => "i64.const 0".into(),
+    }
+}
+
+// ─── QASM 2.0 Backend ────────────────────────────────────────────────────────
+
+pub struct QasmBackend;
+
+impl Backend for QasmBackend {
+    fn target_name(&self) -> &str {
+        "qasm"
+    }
+    fn file_extension(&self) -> &str {
+        ".qasm"
+    }
+
+    fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
+        let mut out = String::new();
+        out.push_str("OPENQASM 2.0;\n");
+        out.push_str("include \"qelib1.inc\";\n\n");
+        out.push_str(&format!("// Zenith module: {}\n\n", module.name));
+
+        let mut qubit_count = 0usize;
+        let mut cbit_count = 0usize;
+
+        for func in &module.functions {
+            for inst in &func.body {
+                match inst {
+                    IrInstruction::QuantumGate(r, gate, args) => {
+                        qubit_count = qubit_count.max(args.len() + 1);
+                        cbit_count = cbit_count.max(1);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let qubits = qubit_count.max(4);
+        let cbits = cbit_count.max(4);
+        out.push_str(&format!("qreg q[{}];\n", qubits));
+        out.push_str(&format!("creg c[{}];\n\n", cbits));
+
+        let mut qi = 0usize;
+        for func in &module.functions {
+            for inst in &func.body {
+                match inst {
+                    IrInstruction::QuantumGate(_, gate, args) => {
+                        let gate_lower = gate.to_lowercase();
+                        let gate_name = match gate_lower.as_str() {
+                            "h" | "hadamard" => "h",
+                            "x" | "pauli_x" | "not" => "x",
+                            "y" | "pauli_y" => "y",
+                            "z" | "pauli_z" => "z",
+                            "cnot" | "cx" => "cx",
+                            "toffoli" | "ccx" => "ccx",
+                            "phase" | "p" => "p(pi/4)",
+                            "t" => "t",
+                            "s" => "s",
+                            "swap" => "swap",
+                            _ => "id",
+                        };
+                        if args.is_empty() {
+                            out.push_str(&format!("{} q[{}];\n", gate_name, qi % qubits));
+                        } else {
+                            let targets: Vec<String> = (0..args.len().min(2))
+                                .map(|i| format!("q[{}]", (qi + i) % qubits))
+                                .collect();
+                            out.push_str(&format!("{} {};\n", gate_name, targets.join(",")));
+                        }
+                        qi += 1;
+                    }
+                    IrInstruction::Comment(c) => {
+                        out.push_str(&format!("// {}\n", c));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        out.push_str("\n// Measure all qubits\n");
+        for i in 0..cbits.min(qubits) {
+            out.push_str(&format!("measure q[{}] -> c[{}];\n", i, i));
         }
         Ok(out)
     }
 }
 
-fn llvm_emit(ins: &IrInstruction) -> String {
-    match ins {
-        IrInstruction::Assign(reg, IrValue::ConstInt(n)) => {
-            format!("  {} = add i64 0, {}\n", reg.0, n)
-        }
-        IrInstruction::Add(dst, a, b) => format!(
-            "  {} = add i64 {}, {}\n",
-            dst.0,
-            ir_val_str(a),
-            ir_val_str(b)
-        ),
-        IrInstruction::Sub(dst, a, b) => format!(
-            "  {} = sub i64 {}, {}\n",
-            dst.0,
-            ir_val_str(a),
-            ir_val_str(b)
-        ),
-        IrInstruction::Mul(dst, a, b) => format!(
-            "  {} = mul i64 {}, {}\n",
-            dst.0,
-            ir_val_str(a),
-            ir_val_str(b)
-        ),
-        IrInstruction::Div(dst, a, b) => format!(
-            "  {} = sdiv i64 {}, {}\n",
-            dst.0,
-            ir_val_str(a),
-            ir_val_str(b)
-        ),
-        IrInstruction::CmpEq(dst, a, b) => format!(
-            "  {} = icmp eq i64 {}, {}\n",
-            dst.0,
-            ir_val_str(a),
-            ir_val_str(b)
-        ),
-        IrInstruction::CmpLt(dst, a, b) => format!(
-            "  {} = icmp slt i64 {}, {}\n",
-            dst.0,
-            ir_val_str(a),
-            ir_val_str(b)
-        ),
-        IrInstruction::Ret(Some(v)) => format!("  ret i64 {}\n", ir_val_str(v)),
-        IrInstruction::Ret(None) => "  ret void\n".to_string(),
-        IrInstruction::Label(l) => format!("{}:\n", l),
-        IrInstruction::Jump(l) => format!("  br label %{}\n", l),
-        IrInstruction::CondJump(v, t, f) => {
-            format!("  br i1 {}, label %{}, label %{}\n", ir_val_str(v), t, f)
-        }
-        IrInstruction::Call(dst, name, args) => {
-            let arg_str: Vec<String> = args
-                .iter()
-                .map(|a| format!("i64 {}", ir_val_str(a)))
-                .collect();
-            format!("  {} = call i64 @{}({})\n", dst.0, name, arg_str.join(", "))
-        }
-        IrInstruction::Nop => "  ; nop\n".to_string(),
-        _ => format!("  ; {:?}\n", ins),
-    }
-}
+// ─── RISC-V Assembly Backend ──────────────────────────────────────────────────
 
-fn ir_val_str(v: &IrValue) -> String {
-    match v {
-        IrValue::Reg(r) => r.0.clone(),
-        IrValue::ConstInt(n) => n.to_string(),
-        IrValue::ConstFloat(f) => f.to_string(),
-        IrValue::ConstBool(b) => if *b { "1" } else { "0" }.to_string(),
-        IrValue::ConstStr(s) => format!("\"{}\"", s),
-        IrValue::Null => "null".to_string(),
-    }
-}
+pub struct RiscVBackend;
 
-// ─── Nano control backend ────────────────────────────────────────────────────
-
-pub struct NanoControlBackend;
-
-impl Backend for NanoControlBackend {
+impl Backend for RiscVBackend {
     fn target_name(&self) -> &str {
-        "nano-control"
+        "riscv64"
     }
     fn file_extension(&self) -> &str {
+        ".rv64.s"
+    }
+
+    fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
+        let mut out = String::new();
+        out.push_str("    .text\n");
+        out.push_str("    .option nopic\n\n");
+        out.push_str(&format!("    # Zenith RISC-V module: {}\n\n", module.name));
+
+        for func in &module.functions {
+            if func.is_external {
+                continue;
+            }
+            out.push_str(&format!("    .globl {}\n", func.name));
+            out.push_str(&format!("    .type {}, @function\n", func.name));
+            out.push_str(&format!("{}:\n", func.name));
+            out.push_str("    addi    sp, sp, -16\n");
+            out.push_str("    sd      ra, 8(sp)\n");
+            out.push_str("    sd      s0, 0(sp)\n");
+            out.push_str("    addi    s0, sp, 16\n");
+
+            for inst in &func.body {
+                match inst {
+                    IrInstruction::Ret(None) => {
+                        out.push_str("    li      a0, 0\n");
+                        out.push_str("    ld      ra, 8(sp)\n");
+                        out.push_str("    ld      s0, 0(sp)\n");
+                        out.push_str("    addi    sp, sp, 16\n");
+                        out.push_str("    ret\n");
+                    }
+                    IrInstruction::Ret(Some(v)) => {
+                        let src = riscv_val(v);
+                        out.push_str(&format!("    mv      a0, {}\n", src));
+                        out.push_str("    ld      ra, 8(sp)\n");
+                        out.push_str("    ld      s0, 0(sp)\n");
+                        out.push_str("    addi    sp, sp, 16\n");
+                        out.push_str("    ret\n");
+                    }
+                    IrInstruction::Add(r, a, b) => {
+                        out.push_str(&format!(
+                            "    add     {}, {}, {}\n",
+                            r.0,
+                            riscv_val(a),
+                            riscv_val(b)
+                        ));
+                    }
+                    IrInstruction::Sub(r, a, b) => {
+                        out.push_str(&format!(
+                            "    sub     {}, {}, {}\n",
+                            r.0,
+                            riscv_val(a),
+                            riscv_val(b)
+                        ));
+                    }
+                    IrInstruction::Mul(r, a, b) => {
+                        out.push_str(&format!(
+                            "    mul     {}, {}, {}\n",
+                            r.0,
+                            riscv_val(a),
+                            riscv_val(b)
+                        ));
+                    }
+                    IrInstruction::Label(l) => {
+                        out.push_str(&format!(".{}_{}:\n", func.name, l));
+                    }
+                    IrInstruction::Jump(l) => {
+                        out.push_str(&format!("    j       .{}_{}\n", func.name, l));
+                    }
+                    IrInstruction::Comment(c) => {
+                        out.push_str(&format!("    # {}\n", c));
+                    }
+                    _ => {
+                        out.push_str(&format!("    # {}\n", inst.to_ir_string().trim()));
+                    }
+                }
+            }
+            out.push('\n');
+        }
+        Ok(out)
+    }
+}
+
+fn riscv_val(v: &IrValue) -> String {
+    match v {
+        IrValue::ConstInt(n, _) => format!("{}", n),
+        IrValue::ConstBool(b) => format!("{}", *b as i64),
+        IrValue::Reg(r) => r.0.clone(),
+        _ => "zero".into(),
+    }
+}
+
+// ─── Nano Backend ─────────────────────────────────────────────────────────────
+
+pub struct NanoBackend;
+
+impl Backend for NanoBackend {
+    fn target_name(&self) -> &str {
         "nano"
     }
+    fn file_extension(&self) -> &str {
+        ".nano"
+    }
 
     fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
-        let mut out = String::from("# Zenith Nano Control Bytecode\n# Version 1.0\n\n");
+        let mut out = String::new();
+        out.push_str(&format!("# Zenith NanoControl — module: {}\n", module.name));
+        out.push_str("nano_version: 1.0\n\n");
         for func in &module.functions {
-            out.push_str(&format!(".func {}\n", func.name));
-            for ins in &func.body {
-                match ins {
-                    IrInstruction::NanoSpawn(reg, name) => {
-                        out.push_str(&format!("  SPAWN {} -> {}\n", name, reg.0))
+            if func.is_external {
+                continue;
+            }
+            out.push_str(&format!("agent {}:\n", func.name));
+            for inst in &func.body {
+                match inst {
+                    IrInstruction::NanoOp(r, op, args) => {
+                        let args_str: Vec<String> = args.iter().map(|a| a.to_ir_string()).collect();
+                        out.push_str(&format!(
+                            "  nano_exec {} {} args=[{}]\n",
+                            op,
+                            r.0,
+                            args_str.join(",")
+                        ));
                     }
-                    IrInstruction::NanoSend(reg, val) => {
-                        out.push_str(&format!("  SEND {} MSG {}\n", reg.0, ir_val_str(val)))
+                    IrInstruction::Comment(c) => {
+                        out.push_str(&format!("  # {}\n", c));
                     }
-                    IrInstruction::Ret(_) => out.push_str("  HALT\n"),
-                    IrInstruction::Nop => {}
-                    _ => out.push_str(&format!("  # {:?}\n", ins)),
+                    IrInstruction::Ret(_) => {
+                        out.push_str("  halt\n");
+                    }
+                    _ => {
+                        out.push_str(&format!("  # {}\n", inst.to_ir_string().trim()));
+                    }
                 }
             }
-            out.push_str(".endfunc\n\n");
+            out.push_str("end_agent\n\n");
         }
         Ok(out)
     }
 }
 
-// ─── MTS bytecode backend ─────────────────────────────────────────────────────
+// ─── MTS Backend ─────────────────────────────────────────────────────────────
 
-pub struct MtsBytecodeBackend;
+pub struct MtsBackend;
 
-impl Backend for MtsBytecodeBackend {
+impl Backend for MtsBackend {
     fn target_name(&self) -> &str {
-        "mts-bytecode"
-    }
-    fn file_extension(&self) -> &str {
         "mts"
     }
+    fn file_extension(&self) -> &str {
+        ".mts"
+    }
 
     fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
-        let mut out = String::from("# Zenith MTS Bytecode\n# Multi-Timeline System v1.0\n\n");
+        let mut out = String::new();
+        out.push_str(&format!(
+            "// MTS Bytecode — Zenith module: {}\n",
+            module.name
+        ));
+        out.push_str("timeline main {\n");
+        let mut pc = 0u32;
         for func in &module.functions {
-            out.push_str(&format!(".timeline {}\n", func.name));
-            for ins in &func.body {
-                match ins {
-                    IrInstruction::MTSSnapshot(reg) => {
-                        out.push_str(&format!("  SNAPSHOT -> {}\n", reg.0))
-                    }
-                    IrInstruction::MTSRestore(reg) => {
-                        out.push_str(&format!("  RESTORE {}\n", reg.0))
-                    }
-                    IrInstruction::SankofaStore(key, val) => {
-                        out.push_str(&format!("  REMEMBER {} = {}\n", key, ir_val_str(val)))
-                    }
-                    IrInstruction::SankofaRecall(reg, key) => {
-                        out.push_str(&format!("  RECALL {} -> {}\n", key, reg.0))
-                    }
-                    IrInstruction::Ret(_) => out.push_str("  END_TIMELINE\n"),
-                    _ => out.push_str(&format!("  # {:?}\n", ins)),
-                }
+            if func.is_external {
+                continue;
             }
-            out.push_str(".end_timeline\n\n");
+            out.push_str(&format!("  section {} at tick {} {{\n", func.name, pc));
+            for inst in &func.body {
+                match inst {
+                    IrInstruction::Assign(r, v) => {
+                        out.push_str(&format!("    {} := {}\n", r.0, v.to_ir_string()));
+                    }
+                    IrInstruction::Add(r, a, b) => {
+                        out.push_str(&format!(
+                            "    {} := {} + {}\n",
+                            r.0,
+                            a.to_ir_string(),
+                            b.to_ir_string()
+                        ));
+                    }
+                    IrInstruction::Sub(r, a, b) => {
+                        out.push_str(&format!(
+                            "    {} := {} - {}\n",
+                            r.0,
+                            a.to_ir_string(),
+                            b.to_ir_string()
+                        ));
+                    }
+                    IrInstruction::Mul(r, a, b) => {
+                        out.push_str(&format!(
+                            "    {} := {} * {}\n",
+                            r.0,
+                            a.to_ir_string(),
+                            b.to_ir_string()
+                        ));
+                    }
+                    IrInstruction::Ret(_) => {
+                        out.push_str("    halt\n");
+                    }
+                    IrInstruction::Comment(c) => {
+                        out.push_str(&format!("    // {}\n", c));
+                    }
+                    _ => {
+                        out.push_str(&format!("    // {}\n", inst.to_ir_string().trim()));
+                    }
+                }
+                pc += 1;
+            }
+            out.push_str("  }\n");
         }
+        out.push_str("}\n");
         Ok(out)
-    }
-}
-
-// ── Extended Backend Targets ──────────────────────────────────────────────────
-
-/// Multi-target Zenith backend emitter
-pub struct ZenithBackendEmitter;
-
-impl ZenithBackendEmitter {
-    /// Emit RISC-V assembly.
-    pub fn emit_riscv64(&self, module: &IrModule) -> String {
-        let mut out = String::from("# Zenith RISC-V 64-bit output\n.text\n.global _start\n_start:\n");
-        for func in &module.functions {
-            out.push_str(&format!("{}:\n", func.name));
-            for ins in &func.body {
-                let asm = match ins {
-                    IrInstruction::Add(d, _, _)  => format!("  add x{}, x0, x1  # {}\n", d.name(), d.name()),
-                    IrInstruction::Ret(None)      => "  ret\n".into(),
-                    IrInstruction::Ret(Some(_))   => "  li a0, 0\n  ret\n".into(),
-                    IrInstruction::Nop            => "  nop\n".into(),
-                    _                             => "  nop  # complex\n".into(),
-                };
-                out.push_str(&asm);
-            }
-        }
-        out
-    }
-
-    /// Emit LLVM IR text format.
-    pub fn emit_llvm_ir(&self, module: &IrModule) -> String {
-        let mut out = String::from("; Zenith → LLVM IR\n; target triple = \"x86_64-unknown-linux-gnu\"\n\n");
-        for func in &module.functions {
-            let ret_ty = if func.return_type == IrType::Unit { "void" }
-                else if func.return_type == IrType::Bool { "i1" }
-                else if func.return_type == IrType::I64  { "i64" }
-                else if func.return_type == IrType::F64  { "double" }
-                else { "i64" };
-            out.push_str(&format!("define {} @{}() {{\nentry:\n", ret_ty, func.name));
-            for ins in &func.body {
-                let line = match ins {
-                    IrInstruction::Add(d, l, r)  => format!("  %{} = add i64 0, 0\n", d.name()),
-                    IrInstruction::Ret(None)      => "  ret void\n".into(),
-                    IrInstruction::Ret(Some(_))   => "  ret i64 0\n".into(),
-                    IrInstruction::Call(d, f, _)  => format!("  %{} = call i64 @{}()\n", d.name(), f),
-                    IrInstruction::Nop            => "  ; nop\n".into(),
-                    _                             => "  ; complex\n".into(),
-                };
-                out.push_str(&line);
-            }
-            out.push_str("}\n\n");
-        }
-        out
-    }
-
-    /// Emit OpenQASM 2.0 for quantum circuits.
-    pub fn emit_qasm(&self, module: &IrModule) -> String {
-        let mut out = String::from("OPENQASM 2.0;\ninclude \"qelib1.inc\";\n");
-        let mut qreg_count = 0u32;
-        for func in &module.functions {
-            for ins in &func.body {
-                match ins {
-                    IrInstruction::QAlloc(_, n)     => { out.push_str(&format!("qreg q{}[{}];\ncreg c{}[{}];\n", qreg_count, n, qreg_count, n)); qreg_count += 1; }
-                    IrInstruction::QGate(g, regs)   => { let targets: Vec<_> = regs.iter().map(|r| format!("q[{}]", 0)).collect(); out.push_str(&format!("{} {};\n", g.to_lowercase(), targets.join(", "))); }
-                    IrInstruction::QMeasure(q, c)   => { out.push_str(&format!("measure q[0] -> c[0];\n")); }
-                    _                               => {}
-                }
-            }
-        }
-        out
-    }
-
-    /// Emit C source code (C transpilation target).
-    pub fn emit_c(&self, module: &IrModule) -> String {
-        let mut out = String::from("/* Zenith → C transpilation */\n#include <stdio.h>\n#include <stdint.h>\n\n");
-        for func in &module.functions {
-            out.push_str(&format!("void {}(void) {{\n", func.name));
-            for ins in &func.body {
-                let line = match ins {
-                    IrInstruction::Assign(r, IrValue::ConstInt(n))  => format!("  int64_t {} = {};\n", r.name(), n),
-                    IrInstruction::Assign(r, IrValue::ConstBool(b)) => format!("  int {} = {};\n", r.name(), *b as i32),
-                    IrInstruction::CallVoid(f, _)                    => format!("  {}();\n", f),
-                    IrInstruction::Ret(None)                         => "  return;\n".into(),
-                    IrInstruction::Nop                               => "  /* nop */\n".into(),
-                    _                                                => "  /* complex */\n".into(),
-                };
-                out.push_str(&line);
-            }
-            out.push_str("}\n\n");
-        }
-        out.push_str("int main(void) { __top__(); return 0; }\n");
-        out
     }
 }

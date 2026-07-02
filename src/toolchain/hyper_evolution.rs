@@ -37,13 +37,25 @@ pub struct HyperEvolutionEngine {
 
 impl HyperEvolutionEngine {
     pub fn new(strategy: EvolutionStrategy) -> Self {
-        HyperEvolutionEngine { strategy, variants: Vec::new(), generation: 0, next_id: 1 }
+        HyperEvolutionEngine {
+            strategy,
+            variants: Vec::new(),
+            generation: 0,
+            next_id: 1,
+        }
     }
 
     pub fn initialise_population(&mut self) {
         for _ in 0..self.strategy.population_size {
-            let id = self.next_id; self.next_id += 1;
-            self.variants.push(CompilerVariant { id, generation: 0, fitness_score: 0.5, optimisations: vec!["base".into()], performance_improvement_pct: 0.0 });
+            let id = self.next_id;
+            self.next_id += 1;
+            self.variants.push(CompilerVariant {
+                id,
+                generation: 0,
+                fitness_score: 0.5,
+                optimisations: vec!["base".into()],
+                performance_improvement_pct: 0.0,
+            });
         }
     }
 
@@ -58,7 +70,9 @@ impl HyperEvolutionEngine {
     }
 
     pub fn best_variant(&self) -> Option<&CompilerVariant> {
-        self.variants.iter().max_by(|a, b| a.fitness_score.partial_cmp(&b.fitness_score).unwrap())
+        self.variants
+            .iter()
+            .max_by(|a, b| a.fitness_score.partial_cmp(&b.fitness_score).unwrap())
     }
 
     pub fn run(&mut self) -> EvolutionReport {
@@ -67,10 +81,24 @@ impl HyperEvolutionEngine {
         let mut convergence = 0;
         for g in 0..self.strategy.generations {
             let avg = self.evolve_generation();
-            if (avg - last_avg).abs() < 0.001 { convergence = g; break; }
+            if (avg - last_avg).abs() < 0.001 {
+                convergence = g;
+                break;
+            }
             last_avg = avg;
         }
-        let best = self.best_variant().cloned().unwrap_or(CompilerVariant { id: 0, generation: 0, fitness_score: 0.0, optimisations: vec![], performance_improvement_pct: 0.0 });
-        EvolutionReport { generations_run: self.generation, best_variant: best.clone(), improvement_pct: best.performance_improvement_pct, convergence_tick: convergence }
+        let best = self.best_variant().cloned().unwrap_or(CompilerVariant {
+            id: 0,
+            generation: 0,
+            fitness_score: 0.0,
+            optimisations: vec![],
+            performance_improvement_pct: 0.0,
+        });
+        EvolutionReport {
+            generations_run: self.generation,
+            best_variant: best.clone(),
+            improvement_pct: best.performance_improvement_pct,
+            convergence_tick: convergence,
+        }
     }
 }

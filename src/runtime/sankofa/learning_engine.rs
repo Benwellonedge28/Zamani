@@ -27,7 +27,11 @@ pub struct LearningEngine {
 
 impl LearningEngine {
     pub fn new(learning_rate: f64) -> Self {
-        LearningEngine { records: Vec::new(), patterns: Vec::new(), learning_rate }
+        LearningEngine {
+            records: Vec::new(),
+            patterns: Vec::new(),
+            learning_rate,
+        }
     }
 
     pub fn learn(&mut self, source: &str, knowledge: &str, weight: f64, timestamp: u64) {
@@ -65,7 +69,8 @@ impl LearningEngine {
     }
 
     pub fn recall_relevant(&self, query: &str) -> Vec<&LearningRecord> {
-        self.records.iter()
+        self.records
+            .iter()
             .filter(|r| r.knowledge.contains(query))
             .collect()
     }
@@ -77,4 +82,8 @@ impl LearningEngine {
     }
 }
 
-impl Default for LearningEngine { fn default() -> Self { Self::new(0.01) } }
+impl Default for LearningEngine {
+    fn default() -> Self {
+        Self::new(0.01)
+    }
+}

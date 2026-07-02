@@ -14,7 +14,12 @@ pub struct AttestationCertificate {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AttestationStatus { Valid, Expired, Revoked, PendingReview }
+pub enum AttestationStatus {
+    Valid,
+    Expired,
+    Revoked,
+    PendingReview,
+}
 
 pub struct AttestationEngine {
     certificates: HashMap<String, AttestationCertificate>,
@@ -23,14 +28,34 @@ pub struct AttestationEngine {
 }
 
 impl AttestationEngine {
-    pub fn new() -> Self { AttestationEngine { certificates: HashMap::new(), revoked: Vec::new(), issued: 0 } }
+    pub fn new() -> Self {
+        AttestationEngine {
+            certificates: HashMap::new(),
+            revoked: Vec::new(),
+            issued: 0,
+        }
+    }
 
-    pub fn issue(&mut self, artifact: &str, properties: Vec<String>, now: u64) -> AttestationCertificate {
+    pub fn issue(
+        &mut self,
+        artifact: &str,
+        properties: Vec<String>,
+        now: u64,
+    ) -> AttestationCertificate {
         self.issued += 1;
         let id = format!("cert_{}", self.issued);
         let sig: Vec<u8> = artifact.bytes().take(32).collect();
-        let cert = AttestationCertificate { id: id.clone(), artifact: artifact.into(), properties_proved: properties, signature: sig, timestamp: now, valid_until: now + 86400, issuer: "ZUTC-FormalEngine".into() };
-        self.certificates.insert(id, cert.clone()); cert
+        let cert = AttestationCertificate {
+            id: id.clone(),
+            artifact: artifact.into(),
+            properties_proved: properties,
+            signature: sig,
+            timestamp: now,
+            valid_until: now + 86400,
+            issuer: "ZUTC-FormalEngine".into(),
+        };
+        self.certificates.insert(id, cert.clone());
+        cert
     }
 
     pub fn verify(&self, cert_id: &str, now: u64) -> AttestationStatus {
@@ -42,7 +67,13 @@ impl AttestationEngine {
         }
     }
 
-    pub fn revoke(&mut self, cert_id: &str) { self.revoked.push(cert_id.into()); }
+    pub fn revoke(&mut self, cert_id: &str) {
+        self.revoked.push(cert_id.into());
+    }
 }
 
-impl Default for AttestationEngine { fn default() -> Self { Self::new() } }
+impl Default for AttestationEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}

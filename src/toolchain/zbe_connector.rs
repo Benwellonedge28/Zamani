@@ -3,7 +3,17 @@
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum BackendTarget { X86_64, AArch64, Wasm32, Wasm64, Riscv64, QuantumQasm, LlvmIr, CTranspile, JvmBytecode }
+pub enum BackendTarget {
+    X86_64,
+    AArch64,
+    Wasm32,
+    Wasm64,
+    Riscv64,
+    QuantumQasm,
+    LlvmIr,
+    CTranspile,
+    JvmBytecode,
+}
 
 #[derive(Debug, Clone)]
 pub struct EmittedCode {
@@ -22,7 +32,11 @@ pub struct ZbeConnector {
 impl ZbeConnector {
     pub fn new() -> Self {
         ZbeConnector {
-            supported_targets: vec![BackendTarget::X86_64, BackendTarget::Wasm32, BackendTarget::LlvmIr],
+            supported_targets: vec![
+                BackendTarget::X86_64,
+                BackendTarget::Wasm32,
+                BackendTarget::LlvmIr,
+            ],
             emissions: 0,
             code_cache: HashMap::new(),
         }
@@ -38,8 +52,14 @@ impl ZbeConnector {
             _ => format!("// Zenith compiled to {:?}\n{}", target, ir),
         };
         let size = code.len();
-        let emitted = EmittedCode { target, code, size_bytes: size, optimised: false };
-        self.code_cache.insert(format!("emit_{}", self.emissions), emitted.clone());
+        let emitted = EmittedCode {
+            target,
+            code,
+            size_bytes: size,
+            optimised: false,
+        };
+        self.code_cache
+            .insert(format!("emit_{}", self.emissions), emitted.clone());
         emitted
     }
 
@@ -48,4 +68,8 @@ impl ZbeConnector {
     }
 }
 
-impl Default for ZbeConnector { fn default() -> Self { Self::new() } }
+impl Default for ZbeConnector {
+    fn default() -> Self {
+        Self::new()
+    }
+}

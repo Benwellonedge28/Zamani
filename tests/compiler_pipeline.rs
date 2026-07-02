@@ -26,13 +26,13 @@ fn full_pipeline(source: &str) -> Result<String, Vec<String>> {
     compile(source).map(|module| {
         LlvmIrBackend
             .generate(&module)
-            .map(|o| o)
             .unwrap_or_else(|e| format!("CodeGenError: {}", e.message))
     })
 }
 
 fn pipeline_ok(source: &str) -> String {
-    full_pipeline(source).expect(&format!("Pipeline should succeed for: {:?}", source))
+    full_pipeline(source)
+        .unwrap_or_else(|e| panic!("Pipeline should succeed for: {:?} — {:?}", source, e))
 }
 
 // ── Runtime init ──────────────────────────────────────────────────────────────
@@ -176,10 +176,10 @@ fn test_function_decl_produces_named_function_in_ir() {
 
 #[test]
 fn test_optimize_then_codegen() {
-    let mut module = compile("let r = 3 + 4;").unwrap();
-    let mut opt = Optimizer::new();
-    opt.run_all(&mut module);
-    let out = LlvmIrBackend.generate(&module).unwrap();
+    let module = compile("let r = 3 + 4;").unwrap();
+    let mut opt = Optimizer::new(zenith_compiler::optimizer::OptimizationConfig::default());
+    let optimized = opt.optimize(&module);
+    let out = LlvmIrBackend.generate(&optimized).unwrap();
     assert!(
         !out.is_empty(),
         "Post-optimization codegen should produce output"
@@ -188,13 +188,13 @@ fn test_optimize_then_codegen() {
 
 #[test]
 fn test_constant_folding_in_pipeline() {
-    let mut module = compile("let r = 6 * 7;").unwrap();
-    let mut opt = Optimizer::new();
-    let stats = opt.run_all(&mut module);
+    let module = compile("let a = 6 * 7; let b = a + 1;").unwrap();
+    let mut opt = Optimizer::new(zenith_compiler::optimizer::OptimizationConfig::default());
+    opt.optimize(&module);
     // 6*7 should be folded to 42
     assert!(
-        stats.instructions_removed > 0 || stats.constants_folded > 0,
-        "Optimizer should run at least one pass"
+        opt.stats.constants_folded > 0,
+        "Optimizer should fold at least one constant expression"
     );
 }
 

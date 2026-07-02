@@ -10,7 +10,7 @@
 //! Zenith Semantic Analyser — Comprehensive Integration Tests
 
 use std::sync::Arc;
-use zenith_compiler::compiler_types::{FloatWidth, IntWidth, Type};
+use zenith_compiler::ast::{FloatWidth, IntWidth, Type};
 use zenith_compiler::lexer::Lexer;
 use zenith_compiler::parser::Parser;
 use zenith_compiler::semantic::SemanticAnalyzer;
@@ -165,7 +165,7 @@ fn test_quantum_circuit_registered() {
     let sem = analyze_ok("quantum circuit Bell { let q = 1; }");
     match sem.symbols.lookup("Bell") {
         Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
-            assert!(matches!(ty, Type::Quantum(_)), "Expected Quantum type");
+            assert!(matches!(ty, Type::Quantum), "Expected Quantum type");
         }
         _ => panic!("Expected Bell quantum circuit in scope"),
     }
@@ -173,10 +173,14 @@ fn test_quantum_circuit_registered() {
 
 #[test]
 fn test_sankofa_memory_type() {
+    // Sankofa `remember` bindings carry the type of their underlying value
     let sem = analyze_ok("remember mem_ancient = 42;");
     match sem.symbols.lookup("mem_ancient") {
         Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
-            assert!(matches!(ty, Type::Sankofa(_)), "Expected Sankofa type");
+            assert!(
+                ty.is_numeric(),
+                "Expected numeric type for remembered value"
+            );
         }
         _ => panic!("Expected ancient Sankofa in scope"),
     }
@@ -187,7 +191,10 @@ fn test_nano_agent_registered() {
     let sem = analyze_ok("agent Scout { let x = 1; }");
     match sem.symbols.lookup("Scout") {
         Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
-            assert!(matches!(ty, Type::Nano(_)), "Expected Nano type");
+            assert!(
+                matches!(ty, Type::Named(n) if n == "NanoAgent"),
+                "Expected NanoAgent type"
+            );
         }
         _ => panic!("Expected Scout nano in scope"),
     }

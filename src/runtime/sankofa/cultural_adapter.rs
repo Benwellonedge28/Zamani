@@ -12,8 +12,8 @@ pub struct CulturalContext {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EpistemicFramework {
-    Ubuntu,    // "I am because we are"
-    Sankofa,   // "Return to the past to move forward"
+    Ubuntu,  // "I am because we are"
+    Sankofa, // "Return to the past to move forward"
     Ubuntu2,
     Western,
     Eastern,
@@ -37,13 +37,19 @@ pub struct CulturalAdapter {
 
 impl CulturalAdapter {
     pub fn new() -> Self {
-        let mut adapter = CulturalAdapter { contexts: HashMap::new(), translations: Vec::new() };
-        adapter.contexts.insert("sankofa".into(), CulturalContext {
-            name: "Sankofa".into(),
-            language_code: "ak".into(),
-            knowledge_axioms: vec!["Se wo were fi na wosankofa a yenkyi".into()],
-            epistemic_framework: EpistemicFramework::Sankofa,
-        });
+        let mut adapter = CulturalAdapter {
+            contexts: HashMap::new(),
+            translations: Vec::new(),
+        };
+        adapter.contexts.insert(
+            "sankofa".into(),
+            CulturalContext {
+                name: "Sankofa".into(),
+                language_code: "ak".into(),
+                knowledge_axioms: vec!["Se wo were fi na wosankofa a yenkyi".into()],
+                epistemic_framework: EpistemicFramework::Sankofa,
+            },
+        );
         adapter
     }
 
@@ -64,7 +70,8 @@ impl CulturalAdapter {
     }
 
     pub fn enrich_with_ancestors(&self, knowledge: &str, ancestors: &[String]) -> String {
-        let wisdom = ancestors.iter()
+        let wisdom = ancestors
+            .iter()
             .map(|a| format!("∴ {}", a))
             .collect::<Vec<_>>()
             .join("; ");
@@ -72,4 +79,8 @@ impl CulturalAdapter {
     }
 }
 
-impl Default for CulturalAdapter { fn default() -> Self { Self::new() } }
+impl Default for CulturalAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}

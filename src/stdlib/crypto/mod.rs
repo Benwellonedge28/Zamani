@@ -87,7 +87,7 @@ pub enum EncryptionLayer {
     Asymmetric(PublicKey),
     QuantumSafe(QuantumSafePublicKey),
     Homomorphic(List<u8>), // Public key for HE
-    // ... potentially other schemes
+                           // ... potentially other schemes
 }
 
 pub struct ZeroKnowledgeProof(List<u8>);

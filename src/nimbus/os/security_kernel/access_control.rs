@@ -45,29 +45,51 @@ impl AccessController {
     }
 
     pub fn register_subject(&mut self, id: u64, name: &str, roles: Vec<&str>) {
-        self.subjects.insert(id, Subject {
-            id, name: name.to_string(),
-            roles: roles.iter().map(|r| Role(r.to_string())).collect(),
-            capabilities: HashSet::new(),
-        });
+        self.subjects.insert(
+            id,
+            Subject {
+                id,
+                name: name.to_string(),
+                roles: roles.iter().map(|r| Role(r.to_string())).collect(),
+                capabilities: HashSet::new(),
+            },
+        );
     }
 
     pub fn check(&mut self, subject_id: u64, permission: &str) -> bool {
-        let allowed = self.subjects.get(&subject_id).map(|s| {
-            s.roles.iter().any(|role| {
-                self.role_permissions.get(&role.0)
-                    .map(|perms| perms.contains(&Permission(permission.to_string()))
-                        || perms.contains(&Permission("all".to_string())))
-                    .unwrap_or(false)
-            }) || s.capabilities.contains(permission)
-        }).unwrap_or(false);
-        self.audit_log.push((subject_id, permission.to_string(), allowed));
+        let allowed = self
+            .subjects
+            .get(&subject_id)
+            .map(|s| {
+                s.roles.iter().any(|role| {
+                    self.role_permissions
+                        .get(&role.0)
+                        .map(|perms| {
+                            perms.contains(&Permission(permission.to_string()))
+                                || perms.contains(&Permission("all".to_string()))
+                        })
+                        .unwrap_or(false)
+                }) || s.capabilities.contains(permission)
+            })
+            .unwrap_or(false);
+        self.audit_log
+            .push((subject_id, permission.to_string(), allowed));
         allowed
     }
 
     pub fn grant_capability(&mut self, subject_id: u64, cap: &str) -> bool {
-        self.subjects.get_mut(&subject_id).map(|s| { s.capabilities.insert(cap.to_string()); true }).unwrap_or(false)
+        self.subjects
+            .get_mut(&subject_id)
+            .map(|s| {
+                s.capabilities.insert(cap.to_string());
+                true
+            })
+            .unwrap_or(false)
     }
 }
 
-impl Default for AccessController { fn default() -> Self { Self::new() } }
+impl Default for AccessController {
+    fn default() -> Self {
+        Self::new()
+    }
+}

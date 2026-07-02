@@ -67,19 +67,19 @@ pub enum AgentPerception {
     Auditory(List<String>),
     Tactile(Map<String, f32>),
     Semantic(Map<String, String>), // From NLP/AI Reasoning
-    Quantum(List<f32>), // From quantum sensors
-    Nano(List<f32>), // From nano-sensors
-    Temporal(List<String>), // From MTS/Sankofa history
+    Quantum(List<f32>),            // From quantum sensors
+    Nano(List<f32>),               // From nano-sensors
+    Temporal(List<String>),        // From MTS/Sankofa history
 }
 
 pub enum AgentAction {
-    Speak(String), // Via NLP TextGenerator
-    Move(ActuatorCommand), // Via Robotics
-    Manipulate(ActuatorCommand), // Via Robotics
-    QueryKnowledge(String), // Via AI Reasoning KnowledgeBase
+    Speak(String),                   // Via NLP TextGenerator
+    Move(ActuatorCommand),           // Via Robotics
+    Manipulate(ActuatorCommand),     // Via Robotics
+    QueryKnowledge(String),          // Via AI Reasoning KnowledgeBase
     Communicate(Identifier, String), // Via Networking
-    DeployNano(String), // Via Nano runtime
-    ControlHardware(u64, List<u8>), // Via Nimbus OS HAL
+    DeployNano(String),              // Via Nano runtime
+    ControlHardware(u64, List<u8>),  // Via Nimbus OS HAL
 }
 
 pub struct MultiAgentEnvironment {

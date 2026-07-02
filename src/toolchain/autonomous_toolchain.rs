@@ -3,7 +3,14 @@
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ToolchainState { Idle, Building, Testing, Packaging, Evolving, Error(String) }
+pub enum ToolchainState {
+    Idle,
+    Building,
+    Testing,
+    Packaging,
+    Evolving,
+    Error(String),
+}
 
 #[derive(Debug, Clone)]
 pub struct BuildTarget {
@@ -15,7 +22,13 @@ pub struct BuildTarget {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum OutputType { Executable, Library, Wasm, NativeCode, QuantumBytecode }
+pub enum OutputType {
+    Executable,
+    Library,
+    Wasm,
+    NativeCode,
+    QuantumBytecode,
+}
 
 #[derive(Debug, Clone)]
 pub struct BuildResult {
@@ -71,9 +84,16 @@ impl AutonomousToolchain {
     }
 
     pub fn success_rate(&self) -> f32 {
-        if self.build_history.is_empty() { return 0.0; }
-        self.build_history.iter().filter(|r| r.success).count() as f32 / self.build_history.len() as f32
+        if self.build_history.is_empty() {
+            return 0.0;
+        }
+        self.build_history.iter().filter(|r| r.success).count() as f32
+            / self.build_history.len() as f32
     }
 }
 
-impl Default for AutonomousToolchain { fn default() -> Self { Self::new() } }
+impl Default for AutonomousToolchain {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -5,10 +5,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum SandboxLevel {
     Unrestricted,
-    Permissive,   // Limited syscalls
-    Strict,       // Minimal syscalls
-    Isolated,     // No external I/O
-    NullSandbox,  // Complete isolation
+    Permissive,  // Limited syscalls
+    Strict,      // Minimal syscalls
+    Isolated,    // No external I/O
+    NullSandbox, // Complete isolation
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +28,13 @@ pub struct SandboxManager {
 }
 
 impl SandboxManager {
-    pub fn new() -> Self { SandboxManager { sandboxes: HashMap::new(), next_id: 1, escapes_attempted: 0 } }
+    pub fn new() -> Self {
+        SandboxManager {
+            sandboxes: HashMap::new(),
+            next_id: 1,
+            escapes_attempted: 0,
+        }
+    }
 
     pub fn create(&mut self, level: SandboxLevel, memory_limit_mb: u64) -> u64 {
         let id = self.next_id;
@@ -38,12 +44,28 @@ impl SandboxManager {
             SandboxLevel::Strict => vec!["read".into(), "write".into()],
             _ => Vec::new(),
         };
-        self.sandboxes.insert(id, Sandbox { id, level, allowed_syscalls: allowed, memory_limit_mb, cpu_quota: 0.1, active: true });
+        self.sandboxes.insert(
+            id,
+            Sandbox {
+                id,
+                level,
+                allowed_syscalls: allowed,
+                memory_limit_mb,
+                cpu_quota: 0.1,
+                active: true,
+            },
+        );
         id
     }
 
     pub fn allow_syscall(&mut self, id: u64, syscall: &str) -> bool {
-        self.sandboxes.get_mut(&id).map(|s| { s.allowed_syscalls.push(syscall.to_string()); true }).unwrap_or(false)
+        self.sandboxes
+            .get_mut(&id)
+            .map(|s| {
+                s.allowed_syscalls.push(syscall.to_string());
+                true
+            })
+            .unwrap_or(false)
     }
 
     pub fn attempt_escape(&mut self, _id: u64) -> bool {
@@ -56,4 +78,8 @@ impl SandboxManager {
     }
 }
 
-impl Default for SandboxManager { fn default() -> Self { Self::new() } }
+impl Default for SandboxManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
