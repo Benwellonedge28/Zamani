@@ -26,9 +26,6 @@ SECURITY.md
 # Fuzz targets (not needed in production image)
 fuzz/
 
-# Bench (not needed in production image)
-benches/
-
 # Test artifacts
 coverage/
 bench_results.txt
