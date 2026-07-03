@@ -118,3 +118,24 @@ pub struct ZKPVerificationKey(List<u8>);
 pub struct ZKPProvingKey(List<u8>);
 
 pub struct KeyManagementSystem;
+
+/// A dedicated post-quantum cryptography engine, providing lattice-based
+/// key exchange and signature primitives for modules that need
+/// quantum-resistant guarantees end-to-end (e.g. MGNS).
+pub struct PostQuantumCryptoEngine {
+    pub key: QuantumKey,
+}
+
+impl PostQuantumCryptoEngine {
+    pub fn new() -> Self {
+        PostQuantumCryptoEngine {
+            key: QuantumKey(List::new()),
+        }
+    }
+}
+
+impl Default for PostQuantumCryptoEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}

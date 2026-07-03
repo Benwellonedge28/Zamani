@@ -348,3 +348,42 @@ impl LearningAgent for CausalInferenceEngine {
         None
     }
 }
+
+// -----------------------------------------------------------------------------
+// Additional conceptual handles used by higher-level stdlib modules (e.g. MGNS)
+// that plug into the Sankofa (Zamani/Sasa) memory system.
+// -----------------------------------------------------------------------------
+
+/// Identifies a single stored piece of Sankofa knowledge.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct KnowledgeId {}
+
+/// A high-level, queryable handle onto the evolving Sasa (present) knowledge
+/// store, distinct from the lower-level `SasaStore` record cache.
+#[derive(Debug, Clone, Default)]
+pub struct SasaKnowledge {
+    pub entries: crate::stdlib::collections::Map<String, String>,
+}
+
+impl SasaKnowledge {
+    pub fn new() -> Self {
+        SasaKnowledge {
+            entries: crate::stdlib::collections::Map::new(),
+        }
+    }
+}
+
+/// A conceptual graph of related knowledge nodes, used for higher-order
+/// reasoning over Sankofa memory.
+#[derive(Debug, Clone, Default)]
+pub struct ConceptualGraph {
+    pub nodes: crate::stdlib::collections::List<String>,
+}
+
+impl ConceptualGraph {
+    pub fn new() -> Self {
+        ConceptualGraph {
+            nodes: crate::stdlib::collections::List::new(),
+        }
+    }
+}

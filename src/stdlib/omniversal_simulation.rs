@@ -71,3 +71,24 @@ impl SimEngine {
 }
 pub fn init_omniversal_simulation() {}
 pub fn shutdown_omniversal_simulation() {}
+
+/// A higher-level, "omniversal" digital-twin simulation engine that wraps the
+/// core `SimEngine` for cross-domain (physical + informational) scenario
+/// testing.
+pub struct OmniversalSimulationEngine {
+    pub engine: SimEngine,
+}
+
+impl OmniversalSimulationEngine {
+    pub fn new() -> Self {
+        OmniversalSimulationEngine {
+            engine: SimEngine::new(SimMode::Physics, 1.0),
+        }
+    }
+}
+
+impl Default for OmniversalSimulationEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -61,3 +61,26 @@ impl Tensor {
 }
 pub fn init_multidimensional() {}
 pub fn shutdown_multidimensional() {}
+
+/// A higher-level engine coordinating multidimensional tensor/manifold
+/// operations for modules (e.g. MGNS) that need N-dimensional math primitives.
+pub struct MultidimensionalEngine {
+    pub ops_performed: u64,
+}
+
+impl MultidimensionalEngine {
+    pub fn new() -> Self {
+        MultidimensionalEngine { ops_performed: 0 }
+    }
+
+    pub fn zeros(&mut self, shape: Vec<usize>) -> Tensor {
+        self.ops_performed += 1;
+        Tensor::zeros(shape)
+    }
+}
+
+impl Default for MultidimensionalEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -92,3 +92,21 @@ impl Default for AdvNlp {
 }
 pub fn init_omniversal_nlp_adv() {}
 pub fn shutdown_omniversal_nlp_adv() {}
+
+/// An advanced, "omniversal" NLP engine wrapping the core `AdvNlp` pipeline
+/// for higher-level consumers (e.g. MGNS) that need entity/sentiment analysis.
+pub struct AdvancedOmniversalNlpEngine {
+    pub nlp: AdvNlp,
+}
+
+impl AdvancedOmniversalNlpEngine {
+    pub fn new() -> Self {
+        AdvancedOmniversalNlpEngine { nlp: AdvNlp::new() }
+    }
+}
+
+impl Default for AdvancedOmniversalNlpEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}

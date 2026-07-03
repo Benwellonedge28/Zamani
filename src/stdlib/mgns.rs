@@ -24,34 +24,28 @@
 //!   policies for location data, making leakage by default impossible without explicit,
 //!   auditable developer action.
 
-use crate::ast::{AbstractSyntaxTree, Identifier};
-use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
-use crate::runtime::sankofa::{ConceptualGraph, KnowledgeId, SasaKnowledge};
-use crate::source_map::Span;
+use crate::ast::Identifier;
+use crate::nimbus_os::evas::{EvasFilter, EvasPolicyLevel};
+use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
 use crate::stdlib::ai_reasoning::{CausalEngine, Fact};
-use crate::stdlib::collections::{HashSet, List, Map};
+use crate::stdlib::collections::{List, Map};
 use crate::stdlib::core::Result;
 use crate::stdlib::crypto::PostQuantumCryptoEngine; // For quantum-resistant crypto
-use crate::stdlib::human_agi_interaction::HumanCultureModel;
-use crate::stdlib::iot::{ActuatorCommand, IoDevice, IoDeviceStatus, SensorData};
-use crate::stdlib::math_foundations::{
-    AdvancedMathEngine, EmpiricalResults, MathematicalDiscovery, Proof,
-};
+use crate::stdlib::math_foundations::AdvancedMathEngine;
 use crate::stdlib::meta_ops::MetaValue;
-use crate::stdlib::ml::{Model, Tensor};
-use crate::stdlib::multidimensional::{
-    InfinityDimensionSystem, Matrix, MultidimensionalEngine, Point, Transform,
-    UniversalVectorSpace, Vector,
-};
+use crate::stdlib::multidimensional::MultidimensionalEngine;
 use crate::stdlib::network::ZenithNetworkStack; // For integration with network capabilities
-use crate::stdlib::omniversal_nlp_adv::{
-    AdvancedOmniversalNlpEngine, EnhancedNlpAnalysisResult, SymbolicActionPlan,
-};
+use crate::stdlib::omniversal_nlp_adv::AdvancedOmniversalNlpEngine;
 use crate::stdlib::omniversal_simulation::OmniversalSimulationEngine; // For digital twin / testing
-use crate::stdlib::robotics::{
-    MobileRobot, Robot, RobotActuatorCommand, RobotSensorData, RoboticArm,
-};
-use crate::stdlib::vision::MultiModalSensorData;
+                                                                      // NOTE: AbstractSyntaxTree, EvasActionContext, EvasDecision, Span, HashSet,
+                                                                      // PostQuantumCryptoEngine's IoT/robotics/vision/ml counterparts
+                                                                      // (ActuatorCommand, IoDevice, IoDeviceStatus, SensorData, HumanCultureModel,
+                                                                      // Matrix, Point, Transform, UniversalVectorSpace, Vector, InfinityDimensionSystem,
+                                                                      // EnhancedNlpAnalysisResult, SymbolicActionPlan, MobileRobot, Robot,
+                                                                      // RobotActuatorCommand, RobotSensorData, RoboticArm, MultiModalSensorData, Model,
+                                                                      // ml::Tensor, EmpiricalResults, MathematicalDiscovery, Proof) were imported but
+                                                                      // never actually referenced anywhere in this file's logic — removed rather than
+                                                                      // inventing ~20 speculative types across 6 unrelated modules with no real call site.
 
 /// Initializes the Mukandara Global Navigation System (MGNS) module.
 pub fn init_mgns() {
@@ -165,7 +159,7 @@ impl MukandaraGlobalNavigationSystem {
     pub fn watch(
         &mut self,
         accuracy: AccuracyLevel,
-        callback: Fn(EncryptedPosition),
+        callback: impl Fn(EncryptedPosition),
     ) -> Result<(), String> {
         println!("[MGNS] Subscribing to continuous position updates.");
         // This would initiate a background process that periodically calls `locate`
@@ -553,6 +547,9 @@ pub mod stdlib {
         }
     }
     pub mod physical_hardware_control {
+        use crate::runtime::sankofa::KnowledgeId;
+        use crate::stdlib::ai_reasoning::Fact;
+        use crate::stdlib::core::Result;
         pub struct PermanentMemoryInterface;
         impl PermanentMemoryInterface {
             pub fn new() -> Self {
