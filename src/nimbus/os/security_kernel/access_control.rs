@@ -93,3 +93,13 @@ impl Default for AccessController {
         Self::new()
     }
 }
+
+/// Initializes the access control subsystem.
+pub fn init_access_control() {
+    println!("Initializing Nimbus OS Access Control...");
+}
+
+/// Shuts down the access control subsystem.
+pub fn shutdown_access_control() {
+    println!("Shutting down Nimbus OS Access Control...");
+}

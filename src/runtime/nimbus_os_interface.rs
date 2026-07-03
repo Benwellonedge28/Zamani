@@ -8,13 +8,12 @@ use std::sync::{Arc, Mutex};
 // Updated import to reflect changes in mod.rs for ThreadId, ThreadState, GlobalScheduler
 use crate::ast::Identifier;
 use crate::core_lang_primitives::{MemoryRegion, Size, TimeStamp}; // Use core primitives for types
-use crate::nimbus_os::{
-    CapabilityToken, ChannelId, GlobalScheduler, NimbusContext, NimbusContextId,
-    NimbusContextState, NimbusMicrokernel, SandboxPolicy, ThreadId, ThreadState,
-};
 use crate::runtime::mts::TimelineId; // Import TimelineId
 
-// Re-export core Nimbus types for convenience for other runtime modules
+// Re-export core Nimbus types for convenience for other runtime modules.
+// (NimbusMicrokernel is used locally only, so it is imported without being
+// re-exported here.)
+use crate::nimbus_os::NimbusMicrokernel;
 pub use crate::nimbus_os::{
     CapabilityToken, ChannelId, GlobalScheduler, NimbusContext, NimbusContextId,
     NimbusContextState, SandboxPolicy, ThreadId, ThreadState,

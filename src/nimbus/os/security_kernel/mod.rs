@@ -9,7 +9,13 @@ pub mod sandbox_manager;
 pub mod threat_intelligence; // Autonomous Threat Intelligence // Secure Sandboxing and Isolation // Cryptographic Services
 #[cfg(feature = "full")]
 // Re-export core types to simplify usage in other modules
-pub use self::sandbox_manager::{IsolationLevel, SandboxPolicy, SecureExecutionEnvironment};
+// Note: `IsolationLevel` and `SandboxPolicy` were previously (mis)re-exported
+// here but neither is defined by `sandbox_manager` nor used by any consumer
+// under those names — the real sandboxing config type is `SandboxLevel`
+// and the real access-policy type is `crate::nimbus_os::SandboxPolicy`, a
+// different, unrelated concept. Only `SecureExecutionEnvironment` (an alias
+// for `SandboxManager`) is genuinely constructed by consumers.
+pub use self::sandbox_manager::SecureExecutionEnvironment;
 
 /// Initializes all security kernel components.
 pub fn init_security_kernel() {

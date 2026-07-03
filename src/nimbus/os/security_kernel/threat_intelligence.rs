@@ -135,3 +135,13 @@ impl Default for ThreatIntelligence {
         Self::new()
     }
 }
+
+/// Initializes the threat intelligence subsystem.
+pub fn init_threat_intelligence() {
+    println!("Initializing Nimbus OS Threat Intelligence...");
+}
+
+/// Shuts down the threat intelligence subsystem.
+pub fn shutdown_threat_intelligence() {
+    println!("Shutting down Nimbus OS Threat Intelligence...");
+}

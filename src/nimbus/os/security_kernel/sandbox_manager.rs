@@ -83,3 +83,18 @@ impl Default for SandboxManager {
         Self::new()
     }
 }
+
+/// Alias exposing `SandboxManager` under the name other modules (e.g.
+/// `stdlib::omniversal_sovereignty`) actually construct and store as their
+/// "secure execution environment" handle.
+pub type SecureExecutionEnvironment = SandboxManager;
+
+/// Initializes the sandbox manager subsystem.
+pub fn init_sandbox_manager() {
+    println!("Initializing Nimbus OS Sandbox Manager...");
+}
+
+/// Shuts down the sandbox manager subsystem.
+pub fn shutdown_sandbox_manager() {
+    println!("Shutting down Nimbus OS Sandbox Manager...");
+}
