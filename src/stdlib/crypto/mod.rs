@@ -10,14 +10,11 @@ pub mod signature;
 pub mod symmetric_encryption;
 pub mod tls;
 
-// Re-export core types to simplify usage in other modules
-pub use self::asymmetric_encryption::{PrivateKey, PublicKey};
-pub use self::hashing::{Crypto, Hash};
-pub use self::quantum_identity::ZeroKnowledgeProof;
-pub use self::quantum_safe_primitives::QuantumKey;
-pub use self::signature::Signature;
-pub use self::symmetric_encryption::AesKey;
-pub use self::tls::SecureCommunicationChannel; // Need to ensure ZeroKnowledgeProof is publicly accessible
+// NOTE: PrivateKey, PublicKey, Hash, Signature, Crypto, and ZeroKnowledgeProof
+// are defined directly below (see "merged from flat_backup"), not in the
+// submodules above (which are currently init/shutdown-only stubs) — so no
+// re-export is needed for those. QuantumKey, AesKey, and
+// SecureCommunicationChannel are defined below for the same reason.
 
 /// Initializes all cryptography components.
 pub fn init_crypto() {
@@ -55,27 +52,51 @@ pub fn shutdown_crypto_lib() {
     println!("  - Shutting down StdLib Cryptography Module...");
 }
 
-pub struct SymmetricKey(List<u8>);
+use crate::stdlib::collections::List;
 
-pub struct PublicKey(List<u8>);
+/// A symmetric-cipher key backed by raw key bytes.
+pub struct SymmetricKey(pub List<u8>);
 
-pub struct PrivateKey(List<u8>);
+pub struct PublicKey(pub List<u8>);
 
-pub struct Hash(List<u8>);
+pub struct PrivateKey(pub List<u8>);
 
-pub struct Signature(List<u8>);
+pub struct Hash(pub List<u8>);
 
-pub struct Nonce(List<u8>);
+pub struct Signature(pub List<u8>);
+
+pub struct Nonce(pub List<u8>);
 
 pub struct Crypto;
 
-pub struct QuantumSafePublicKey(List<u8>);
+pub struct QuantumSafePublicKey(pub List<u8>);
 
-pub struct QuantumSafePrivateKey(List<u8>);
+pub struct QuantumSafePrivateKey(pub List<u8>);
 
 pub struct SecureEnclave;
 
-pub struct HomomorphicCiphertext(List<u8>);
+/// An AES symmetric key (raw key bytes).
+pub struct AesKey(pub List<u8>);
+
+/// A post-quantum KEM/signature key.
+pub struct QuantumKey(pub List<u8>);
+
+/// A handle to an established, encrypted TLS-like communication channel.
+pub struct SecureCommunicationChannel {
+    pub session_id: String,
+    pub established: bool,
+}
+
+impl SecureCommunicationChannel {
+    pub fn new(session_id: &str) -> Self {
+        SecureCommunicationChannel {
+            session_id: session_id.to_string(),
+            established: true,
+        }
+    }
+}
+
+pub struct HomomorphicCiphertext(pub List<u8>);
 
 pub struct HomomorphicKeyPair {
     pub public_key: List<u8>,

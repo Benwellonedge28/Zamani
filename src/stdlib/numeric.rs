@@ -80,6 +80,11 @@ impl<
 /// A conceptual vector (1D matrix).
 pub type Vector<T> = Matrix<T>;
 
+/// A probability value in [0.0, 1.0]. Kept as a plain alias (rather than a
+/// clamped newtype) so it composes freely with regular float arithmetic
+/// used throughout the AI-reasoning and statistics modules.
+pub type Prob = f64;
+
 // -----------------------------------------------------------------------------
 // Statistical Analysis (Conceptual)
 // -----------------------------------------------------------------------------

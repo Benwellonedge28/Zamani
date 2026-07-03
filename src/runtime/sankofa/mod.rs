@@ -3,6 +3,9 @@
 //! This module aggregates and manages all components for Sankofa, Zenith's
 //! system for long-term learning, memory, and cultural knowledge integration.
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 pub mod cultural_adapter;
 pub mod knowledge_fabric; // Omniversal Knowledge Fabric
 pub mod learning_engine; // Autonomous Learning and Refinement
@@ -10,29 +13,32 @@ pub mod sasa_knowledge; // Active/Current Knowledge Base
 pub mod zamani_memory; // Deep/Historical Memory Storage // Cultural Nuance and Language Specifics
 
 /// Initializes all Sankofa components.
+///
+/// `cultural_adapter`, `learning_engine`, `sasa_knowledge`, and `zamani_memory`
+/// each model themselves as structs with their own `::new()` constructors
+/// (constructed on demand by their callers, since they carry per-session
+/// state), so only the free-standing `knowledge_fabric` init/shutdown pair
+/// and this module's own process-wide runtime are handled globally here.
 pub fn init_sankofa_integration() {
     println!("Initializing Runtime Sankofa Module...");
-    sasa_knowledge::init_sasa_knowledge();
-    zamani_memory::init_zamani_memory();
-    learning_engine::init_learning_engine();
-    cultural_adapter::init_cultural_adapter(); // Initialize Knowledge Fabric
     knowledge_fabric::init_knowledge_fabric();
+    init_sankofa_runtime();
     println!("Runtime Sankofa Module initialized.");
 }
 
 /// Shuts down all Sankofa components.
 pub fn shutdown_sankofa_integration() {
     println!("Shutting down Runtime Sankofa Module...");
-    knowledge_fabric::shutdown_knowledge_fabric(); // Shutdown Knowledge Fabric
-    cultural_adapter::shutdown_cultural_adapter();
-    learning_engine::shutdown_learning_engine();
-    zamani_memory::shutdown_zamani_memory();
-    sasa_knowledge::shutdown_sasa_knowledge();
+    shutdown_sankofa_runtime();
+    knowledge_fabric::shutdown_knowledge_fabric();
     println!("Runtime Sankofa Module shut down.");
 }
 
 // ── merged from flat_backup ────
 
+static mut SANKOFA_RUNTIME_STATE_INSTANCE: Option<Arc<Mutex<SankofaRuntimeState>>> = None;
+
+#[derive(Clone)]
 pub struct ZamaniFactRecord {
     pub fact_id: String,
     pub content: Vec<u8>,
@@ -40,6 +46,7 @@ pub struct ZamaniFactRecord {
     pub provenance: String, // Source of the fact (e.g., "observer_A", "quantum_measurement_device")
 }
 
+#[derive(Clone)]
 pub struct SasaKnowledgeVersion {
     pub version_id: u64, // Unique ID for this version
     pub knowledge_id: String,
@@ -222,6 +229,122 @@ pub fn temporal_learn(
     );
 }
 
+impl ZamaniStore {
+    pub fn new() -> Self {
+        ZamaniStore {
+            facts: HashMap::new(),
+        }
+    }
+
+    pub fn record_fact(&mut self, fact: ZamaniFactRecord) {
+        self.facts.insert(fact.fact_id.clone(), fact);
+    }
+
+    pub fn get_fact(&self, fact_id: &str) -> Option<&ZamaniFactRecord> {
+        self.facts.get(fact_id)
+    }
+}
+
+impl Default for ZamaniStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SasaStore {
+    pub fn new() -> Self {
+        SasaStore {
+            knowledge_versions: HashMap::new(),
+            next_version_id: 1,
+        }
+    }
+
+    /// Records a new version of a piece of knowledge, closing out the
+    /// previously-current version (if any) by setting its `valid_to`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_knowledge_update(
+        &mut self,
+        knowledge_id: String,
+        content: Vec<u8>,
+        timestamp: u64,
+        causal_predecessors: Vec<u64>,
+        learning_agent_id: Option<String>,
+    ) -> SasaKnowledgeVersion {
+        let version_id = self.next_version_id;
+        self.next_version_id += 1;
+
+        let versions = self
+            .knowledge_versions
+            .entry(knowledge_id.clone())
+            .or_default();
+        if let Some(last) = versions.last_mut() {
+            if last.timestamp_valid_to.is_none() {
+                last.timestamp_valid_to = Some(timestamp);
+            }
+        }
+
+        let new_version = SasaKnowledgeVersion {
+            version_id,
+            knowledge_id,
+            content,
+            timestamp_valid_from: timestamp,
+            timestamp_valid_to: None,
+            causal_predecessors,
+            learning_agent_id,
+        };
+        versions.push(new_version.clone());
+        new_version
+    }
+
+    pub fn get_knowledge_at_time(
+        &self,
+        knowledge_id: &str,
+        timestamp: u64,
+    ) -> Option<&SasaKnowledgeVersion> {
+        self.knowledge_versions
+            .get(knowledge_id)
+            .and_then(|versions| {
+                versions.iter().find(|v| {
+                    v.timestamp_valid_from <= timestamp
+                        && v.timestamp_valid_to.map(|t| timestamp < t).unwrap_or(true)
+                })
+            })
+    }
+}
+
+impl Default for SasaStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct TemporalPatternMatcherAgent;
 
+impl LearningAgent for TemporalPatternMatcherAgent {
+    fn process_temporal_data(&self, data: &SasaKnowledgeVersion) -> Option<SasaKnowledgeVersion> {
+        // Conceptual: a real implementation would detect recurring patterns
+        // across the knowledge_id's version history. For now, this reports
+        // that it observed the version without synthesizing new knowledge.
+        println!(
+            "      -> TemporalPatternMatcherAgent observed version {} of '{}'.",
+            data.version_id, data.knowledge_id
+        );
+        None
+    }
+}
+
 pub struct CausalInferenceEngine;
+
+impl LearningAgent for CausalInferenceEngine {
+    fn process_temporal_data(&self, data: &SasaKnowledgeVersion) -> Option<SasaKnowledgeVersion> {
+        // Conceptual: a real implementation would infer causal links between
+        // this version and its `causal_predecessors`. For now, this reports
+        // the predecessor count it would reason over.
+        println!(
+            "      -> CausalInferenceEngine analyzing version {} ({} causal predecessors).",
+            data.version_id,
+            data.causal_predecessors.len()
+        );
+        None
+    }
+}

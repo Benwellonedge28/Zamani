@@ -10,7 +10,7 @@
 //! multi-modal channels, facilitating seamless human-AGI collaboration and control.
 
 use crate::ast::Identifier; // For device IDs, command names, gesture types
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId}; // For secure device access
+use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure device access
 use crate::stdlib::collections::{List, Map}; // For event data, configuration
 use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::meta_ops::MetaValue;

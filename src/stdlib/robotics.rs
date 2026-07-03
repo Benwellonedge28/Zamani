@@ -7,7 +7,7 @@
 
 use crate::ast::Identifier; // For robot names, controller IDs
 use crate::core_lang_primitives::{Size, TimeStamp}; // For control loops, sensor data
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId}; // For hardware access
+use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For hardware access
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Plan, Planner}; // For high-level mission planning
 use crate::stdlib::collections::{List, Map}; // For sensor data, trajectory points

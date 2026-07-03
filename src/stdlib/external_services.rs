@@ -12,7 +12,7 @@
 
 use crate::ast::Identifier; // For service IDs, resource names
 use crate::core_lang_primitives::{Size, TimeStamp}; // For job durations, resource sizes
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId}; // For secure execution
+use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure execution
 use crate::runtime::cloud_network_security::{
     CloudNetworkOrchestrator, CloudResource, ManagementPolicy,
 }; // For autonomous cloud management

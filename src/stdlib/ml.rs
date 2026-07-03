@@ -11,9 +11,86 @@
 
 use crate::stdlib::collections::{List, Map};
 use crate::stdlib::core::Result;
-use crate::stdlib::ml::{Dataset, Layer, Model, Optimizer, Tensor};
 
-// ... (Existing Tensor, Model, Optimizer, Layer, Dataset, QuantumSVM, SNN, Transformer) ...
+// -----------------------------------------------------------------------------
+// Core ML types (Tensor, Model, Dataset, Layer, Optimizer) — these back
+// everything else in this module and are depended on by nlp, vision, and
+// other stdlib modules that plug in ML models.
+// -----------------------------------------------------------------------------
+
+/// A conceptual n-dimensional array: `shape` gives its dimensions, `data` its
+/// flattened elements in row-major order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Tensor<T> {
+    pub shape: Vec<usize>,
+    pub data: Vec<T>,
+}
+
+impl<T: Default + Clone> Tensor<T> {
+    /// Creates a zero-initialized tensor of the given shape.
+    pub fn new(shape: Vec<usize>) -> Self {
+        let size = shape
+            .iter()
+            .product::<usize>()
+            .max(if shape.is_empty() { 0 } else { 1 });
+        Tensor {
+            data: vec![T::default(); size],
+            shape,
+        }
+    }
+
+    pub fn from_data(shape: Vec<usize>, data: Vec<T>) -> Self {
+        Tensor { shape, data }
+    }
+}
+
+/// Object-safe trait for any trainable/inferable ML model, so concrete model
+/// types (e.g. `Transformer`, `QuantumSVM`) can be passed around as
+/// `Box<dyn Model>` by higher-level stdlib modules (nlp, vision, ...).
+pub trait Model {
+    fn predict(&self, input: &Tensor<f32>) -> Result<Tensor<f32>, String>;
+    fn train(&mut self, dataset: &dyn Dataset) -> Result<(), String>;
+}
+
+/// Object-safe trait for a source of (input, label) training examples.
+pub trait Dataset {
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    fn get(&self, index: usize) -> (Tensor<f32>, Tensor<f32>);
+}
+
+/// Object-safe trait for a single layer within a neural network, supporting
+/// the forward/backward pass and parameter access needed for training.
+pub trait Layer {
+    fn forward(&self, input: &Tensor<f32>) -> Result<Tensor<f32>, String>;
+    fn backward(&self, grad: &Tensor<f32>) -> Result<Tensor<f32>, String>;
+    fn get_parameters(&self) -> Result<Tensor<f32>, String>;
+    fn set_parameters(&mut self, params: &Tensor<f32>) -> Result<(), String>;
+}
+
+/// A conceptual gradient-based optimizer (e.g. SGD/Adam) applied to a model's
+/// parameters during training.
+pub struct Optimizer {
+    pub learning_rate: f32,
+}
+
+impl Optimizer {
+    pub fn new(learning_rate: f32) -> Self {
+        Optimizer { learning_rate }
+    }
+
+    pub fn step(&self, params: &Tensor<f32>, grad: &Tensor<f32>) -> Tensor<f32> {
+        let data = params
+            .data
+            .iter()
+            .zip(grad.data.iter())
+            .map(|(p, g)| p - self.learning_rate * g)
+            .collect();
+        Tensor::from_data(params.shape.clone(), data)
+    }
+}
 
 // -----------------------------------------------------------------------------
 // Transfer Learning

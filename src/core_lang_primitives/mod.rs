@@ -10,7 +10,7 @@ use crate::ast::Identifier;
 use std::collections::HashMap; // For conceptual use in NimbusSystemCall
 use std::ptr; // For raw pointers // For Identifier
               // Updated import path for Nimbus OS types
-use crate::nimbus_os::mod_rs::{NimbusContextId, NimbusMicrokernel, SandboxPolicy};
+use crate::nimbus_os::{NimbusContextId, NimbusMicrokernel, SandboxPolicy};
 use crate::runtime::nimbus_os_interface; // For access to global microkernel instance
 
 // -----------------------------------------------------------------------------
@@ -229,7 +229,7 @@ impl<T> Mutex<T> {
 // -----------------------------------------------------------------------------
 
 // Import Nimbus OS types from the new dedicated module
-use crate::nimbus_os::mod_rs::{NimbusContextId, SandboxPolicy};
+use crate::nimbus_os::{NimbusContextId, SandboxPolicy};
 use crate::runtime::nimbus_os_interface::get_nimbus_microkernel; // For accessing the global microkernel
 
 /// Conceptual interface for low-level Nimbus OS system calls.

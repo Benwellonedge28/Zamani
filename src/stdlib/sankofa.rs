@@ -19,6 +19,10 @@ use crate::runtime::sankofa::{
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
+/// Identifier for a piece of Sasa (evolving) knowledge, used to correlate
+/// updates and lookups across the temporal knowledge store.
+pub type KnowledgeId = String;
+
 // Global conceptual runtime state reference (managed by init/shutdown of the runtime)
 static mut SANKOFA_RUNTIME_STATE_ARC: Option<Arc<Mutex<SankofaRuntimeState>>> = None;
 

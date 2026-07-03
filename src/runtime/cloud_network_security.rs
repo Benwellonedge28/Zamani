@@ -12,7 +12,7 @@
 use crate::ast::Identifier; // For agent IDs, threat IDs, resource IDs
 use crate::core_lang_primitives::{Duration, Size, TimeStamp}; // For processing times, attack windows
 use crate::nimbus_os::evas; // For E.V.A.S. vetting
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId, NimbusMicrokernel}; // For secure OS interactions
+use crate::nimbus_os::{CapabilityToken, NimbusContextId, NimbusMicrokernel}; // For secure OS interactions
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For learning from historical threats
 use crate::source_map::Span;
 use crate::stdlib::agents::{AgentAction, AutonomousAgent, MultiAgentEnvironment}; // For cybersecurity agents

@@ -12,7 +12,7 @@
 use crate::ast::{Identifier, Type}; // For class names, method names, type definitions
 use crate::core_lang_primitives::{Size, TimeStamp}; // For object lifecycles, memory allocation
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision}; // For ethical object behavior vetting
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId, NimbusMicrokernel}; // For secure object execution
+use crate::nimbus_os::{CapabilityToken, NimbusContextId, NimbusMicrokernel}; // For secure object execution
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For object behavioral history
 use crate::source_map::Span;
 use crate::stdlib::agents::AutonomousAgent; // For embedding agents in objects

@@ -7,7 +7,7 @@
 
 use crate::ast::Identifier; // For thread names, channel names
 use crate::core_lang_primitives::{Atomic, Mutex, Size, TimeStamp}; // Low-level primitives
-use crate::nimbus_os::mod_rs::{NimbusContextId, NimbusMicrokernel, ThreadId, ThreadState}; // OS-level thread management
+use crate::nimbus_os::{NimbusContextId, NimbusMicrokernel, ThreadId, ThreadState}; // OS-level thread management
 use crate::stdlib::collections::List; // For concurrent collections
 use crate::stdlib::core::Result; // For error handling
 use std::collections::VecDeque; // For MPSC channel

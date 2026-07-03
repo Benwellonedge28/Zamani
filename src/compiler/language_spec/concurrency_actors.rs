@@ -14,7 +14,7 @@
 use crate::ast::{Identifier, Statement, Type}; // Zenith AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
 use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId};
+use crate::nimbus_os::{CapabilityToken, NimbusContextId};
 use crate::runtime::mts::{ActorId, MtsActorRuntime}; // Underlying MTS Actor Runtime
 use crate::stdlib::collections::{List, Map}; // Zenith List type
 use crate::stdlib::core::Result; // Zenith Result type // For secure execution contexts

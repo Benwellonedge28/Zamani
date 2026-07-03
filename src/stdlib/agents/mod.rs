@@ -30,6 +30,14 @@ pub fn shutdown_agents_lib() {
 
 // ── merged from flat_backup ────
 
+use crate::ast::Identifier;
+use crate::core_lang_primitives::TimeStamp;
+use crate::nimbus_os::NimbusContextId;
+use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner};
+use crate::stdlib::collections::{List, Map};
+use crate::stdlib::robotics::ActuatorCommand;
+use crate::stdlib::vision::DetectedObject;
+
 pub struct AgentGoal {
     pub description: String,
     pub target_state: FactObject,
@@ -84,6 +92,6 @@ pub enum AgentAction {
 
 pub struct MultiAgentEnvironment {
     pub agents: Map<Identifier, AutonomousAgent>,
-    pub communication_channels: Map<Identifier, List<crate::nimbus_os::mod_rs::ChannelId>>,
+    pub communication_channels: Map<Identifier, List<crate::nimbus_os::ChannelId>>,
     pub shared_knowledge_bases: Map<Identifier, KnowledgeBase>,
 }

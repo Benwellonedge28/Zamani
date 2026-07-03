@@ -14,7 +14,7 @@ use crate::stdlib::ai_reasoning::{KnowledgeBase, Plan, FactObject, Planner}; // 
 use crate::stdlib::nlp::{Nlp, TextGenerator}; // For communication
 use crate::stdlib::vision::{Vision, ImageBuffer, DetectedObject}; // For perception
 use crate::stdlib::robotics::{Robot, RobotState, ActuatorCommand, MotionPlanner}; // For physical interaction
-use crate::nimbus_os::mod_rs::{NimbusContextId, CapabilityToken}; // For secure execution
+use crate::nimbus_os::{NimbusContextId, CapabilityToken}; // For secure execution
 use crate::source_map::Span; // For Identifier creation
 
 
@@ -168,7 +168,7 @@ impl AutonomousAgent {
 /// Represents a conceptual multi-agent environment or simulation.
 pub struct MultiAgentEnvironment {
     pub agents: Map<Identifier, AutonomousAgent>,
-    pub communication_channels: Map<Identifier, List<crate::nimbus_os::mod_rs::ChannelId>>,
+    pub communication_channels: Map<Identifier, List<crate::nimbus_os::ChannelId>>,
     pub shared_knowledge_bases: Map<Identifier, KnowledgeBase>,
 }
 

@@ -22,7 +22,7 @@
 // use crate::stdlib::collections::{List, Map, HashSet, Option}; // For threat models, intelligence data
 // use crate::stdlib::ml::{Model, Tensor}; // For predictive threat modeling, anomaly detection
 // use crate::stdlib::ai_reasoning::{Planner, Fact, FactObject}; // For AGI-driven causal analysis, response planning
-// use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of defensive actions
+// use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of defensive actions
 // use crate::nimbus::os::security_kernel::{SecureExecutionEnvironment, SandboxPolicy, IsolationLevel}; // Integrates with the core security kernel
 // use crate::stdlib::crypto::quantum_identity::{QuantumIdentity, IdentityManager, VerifiableCredential, EntityType}; // For authenticating threat intelligence sources/agents
 // use crate::stdlib::distributed_ledger::{LedgerClient, Transaction, TransactionId}; // For immutable logging of threat events and responses

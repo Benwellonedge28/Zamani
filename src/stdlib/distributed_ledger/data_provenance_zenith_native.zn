@@ -17,7 +17,7 @@ use crate::stdlib::collections::{List, Map, HashSet, Option}; // For provenance 
 use crate::stdlib::crypto::{Crypto, Signature, PublicKey, Hash}; // Cryptographic primitives for provenance
 use crate::stdlib::crypto::quantum_identity::{QuantumIdentity, IdentityManager}; // For authenticating data sources and handlers
 use crate::stdlib::distributed_ledger::{LedgerClient, Transaction, TransactionId}; // For immutable provenance logging
-use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of data usage and provenance
+use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of data usage and provenance
 use crate::stdlib::meta_ops::MetaValue; // Generic data for datum representation
 use crate::source_map::Span; // For Identifier creation
 

@@ -12,7 +12,7 @@ use crate::ast::Identifier; // For component names, function names, types
 use crate::core_lang_primitives::Size; // For data sizes
 use crate::ir_gen::IrInstruction; // For representing transpilation targets
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision}; // For ethical vetting
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId, NimbusMicrokernel}; // For secure execution of meta-ops
+use crate::nimbus_os::{CapabilityToken, NimbusContextId, NimbusMicrokernel}; // For secure execution of meta-ops
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For historical context of meta-operations
 use crate::source_map::Span;
 use crate::stdlib::collections::{List, Map}; // For arguments, configurations

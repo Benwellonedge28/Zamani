@@ -14,7 +14,7 @@ use crate::ast::Identifier; // For reality IDs, entity IDs, event IDs
 use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::collections::{List, Map, HashSet, Option}; // For reality states, entity mappings
 use crate::stdlib::ai_reasoning::{Planner, Fact, FactObject}; // For AGI planning across realities
-use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of cross-reality interactions
+use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of cross-reality interactions
 use crate::runtime::mts::{MtsTimelineId, MtsTimePoint, MtsEngine}; // For managing causal consistency and time across realities
 use crate::stdlib::crypto::quantum_identity::{QuantumIdentity, IdentityManager}; // For identity management across realities
 use crate::stdlib::meta_ops::MetaValue; // Generic MetaValue for reality parameters

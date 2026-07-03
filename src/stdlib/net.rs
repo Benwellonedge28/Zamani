@@ -7,7 +7,7 @@
 use crate::ast::Identifier; // For hostnames
 use crate::core_lang_primitives::{Size, TimeStamp}; // For timeouts, buffer sizes
                                                     // Use specific imports from nimbus_os::mod_rs for clarity
-use crate::nimbus_os::mod_rs::{ChannelId, NimbusContextId, NimbusMicrokernel};
+use crate::nimbus_os::{ChannelId, NimbusContextId, NimbusMicrokernel};
 use crate::stdlib::core::Result; // For error handling
 use std::collections::HashMap; // For headers
 use std::sync::{Arc, Mutex}; // For internal NimbusMicrokernel access

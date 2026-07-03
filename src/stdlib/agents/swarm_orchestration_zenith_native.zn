@@ -16,7 +16,7 @@ use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::collections::{List, Map, HashSet, Option}; // For managing swarm state, agent configurations
 use crate::stdlib::ml::{Model, Tensor}; // For predictive swarm behavior, optimization algorithms
 use crate::stdlib::ai_reasoning::{Planner, Fact, FactObject}; // For AGI planning of swarm missions
-use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of swarm actions
+use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of swarm actions
 use crate::stdlib::crypto::quantum_identity::{QuantumIdentity, IdentityManager}; // For authenticating agents within a swarm
 use crate::stdlib::resource_management::{ResourceOrchestrator, ResourceAnomaly}; // For dynamic resource allocation for swarms
 use crate::stdlib::on_device_agents::{OnDeviceAgentBlueprint, OnDeviceAgentInstance, AgentStatus, AgentCommand, OnDeviceAgentManager}; // For managing individual agents
@@ -298,7 +298,7 @@ pub mod stdlib {
         use crate::stdlib::ml::Model;
         use super::super::resource_management::ResourceAnomaly;
         use crate::ir_gen::ZenithIR;
-        use crate::nimbus::os::evas::EvasActionContext;
+        use crate::nimbus_os::evas::EvasActionContext;
 
         #[derive(Debug, Clone, PartialEq)] pub struct OnDeviceAgentBlueprint { pub id: Identifier, pub name: String, pub description: String, pub core_logic_ir: ZenithIR, pub on_device_models: List<Model>, pub required_capabilities: List<Identifier>, pub minimum_device_specs: Map<String, MetaValue>, pub self_preservation_protocols: List<EvasActionContext>, pub power_budget_mw: f32, pub footprint_bytes: u64 } // Simplified
         #[derive(Debug, Clone, PartialEq)] pub struct OnDeviceAgentInstance { pub id: Identifier, pub blueprint_id: Identifier, pub host_device_id: Identifier, pub current_status: AgentStatus }

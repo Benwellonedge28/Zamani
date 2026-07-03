@@ -13,7 +13,7 @@
 
 use crate::ast::Identifier;
 use crate::compiler::compilation_techniques::HybridCompilerOrchestrator;
-use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
+use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
 use crate::runtime::mts::MtsTimelineId;
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, Planner};

@@ -7,7 +7,7 @@
 
 use crate::ast::Identifier; // For identifiers like NodeId
 use crate::core_lang_primitives::{MemoryRegion, NimbusSystemCall, Size, TimeStamp};
-use crate::nimbus_os::mod_rs::{NimbusContextId, SandboxPolicy}; // Re-using Nimbus OS types
+use crate::nimbus_os::{NimbusContextId, SandboxPolicy}; // Re-using Nimbus OS types
 use crate::runtime::mts::TimelineId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex}; // Re-using MTS types

@@ -8,7 +8,7 @@
 use crate::core_lang_primitives::{
     AffineAllocator, HeapAlloc, LinearAllocator, MemoryRegion, Size, StackAlloc,
 }; // Remove NimbusSystemCall from here
-use crate::nimbus_os::mod_rs::{NimbusContextId, NimbusSystemCall};
+use crate::nimbus_os::{NimbusContextId, NimbusSystemCall};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex}; // Import NimbusContextId and NimbusSystemCall from new path
 

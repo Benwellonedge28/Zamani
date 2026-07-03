@@ -6,7 +6,7 @@
 
 use crate::ast::Identifier; // For file/path names
 use crate::core_lang_primitives::{Size, TimeStamp}; // For file sizes, timestamps
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId}; // For security
+use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For security
 use crate::source_map::Span;
 use crate::stdlib::collections::List; // For directory listings
 use crate::stdlib::core::Result; // For error handling // For dummy Identifier

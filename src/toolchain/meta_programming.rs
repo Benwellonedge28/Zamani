@@ -13,7 +13,7 @@
 use crate::ast::Identifier; // For macro names, code snippets, component IDs
 use crate::core_lang_primitives::{Size, TimeStamp}; // For code metrics, generation timestamps
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision}; // For ethical vetting of meta-code
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId}; // For secure execution contexts
+use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure execution contexts
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner}; // For intelligent code generation
 use crate::stdlib::collections::{List, Map}; // For AST nodes, macro arguments, configurations

@@ -17,7 +17,7 @@ use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::collections::{List, Map, HashSet, Option}; // For managing the graph, caches
 use crate::stdlib::ml::{Model, Tensor}; // For knowledge embedding, relationship extraction
 use crate::stdlib::ai_reasoning::{Planner, Fact, FactObject, CausalEngine}; // For reasoning over the fabric, causality discovery
-use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of knowledge access and curation
+use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of knowledge access and curation
 use crate::runtime::sankofa::{SasaKnowledge, KnowledgeId, SaliencyScore}; // Core Sankofa components
 use crate::runtime::mts::{MtsTimelineId, MtsTimePoint}; // For temporal grounding of knowledge
 use crate::stdlib::distributed_ledger::data_provenance::{ProvenanceRecord, ProvenanceManager}; // For verifiable data lineage

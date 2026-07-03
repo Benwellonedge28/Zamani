@@ -17,8 +17,8 @@
 //! - Multi-Universal Interoperability & Reality Definition
 
 use crate::ast::Identifier;
-use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
 use crate::nimbus::os::security_kernel::{SandboxPolicy, SecureExecutionEnvironment};
+use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
 use crate::runtime::mts::{MtsTimePoint, MtsTimelineId};
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
 use crate::source_map::Span;

@@ -44,8 +44,57 @@ impl<T> List<T> {
         self.elements.is_empty()
     }
 
-    // Conceptual: Iterator
-    // pub fn iter(&self) -> ListIterator<T> { ListIterator { list: self, index: 0 } }
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+        self.elements.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
+        self.elements.iter_mut()
+    }
+
+    pub fn from_vec(elements: Vec<T>) -> Self {
+        List { elements }
+    }
+
+    pub fn into_vec(self) -> Vec<T> {
+        self.elements
+    }
+}
+
+impl<T> Default for List<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> FromIterator<T> for List<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        List {
+            elements: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl<T> IntoIterator for List<T> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.elements.into_iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a List<T> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.elements.iter()
+    }
+}
+
+impl<T> From<Vec<T>> for List<T> {
+    fn from(elements: Vec<T>) -> Self {
+        List { elements }
+    }
 }
 
 /// A map (dictionary/hash table) from keys to values.
@@ -75,6 +124,28 @@ impl<K, V> Map<K, V> {
 
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, K, V> {
+        self.entries.iter()
+    }
+
+    pub fn values(&self) -> std::collections::hash_map::Values<'_, K, V> {
+        self.entries.values()
+    }
+
+    pub fn keys(&self) -> std::collections::hash_map::Keys<'_, K, V> {
+        self.entries.keys()
+    }
+}
+
+impl<K, V> Default for Map<K, V> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

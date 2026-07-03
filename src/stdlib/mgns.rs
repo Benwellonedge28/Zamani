@@ -25,7 +25,7 @@
 //!   auditable developer action.
 
 use crate::ast::{AbstractSyntaxTree, Identifier};
-use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
+use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
 use crate::runtime::sankofa::{ConceptualGraph, KnowledgeId, SasaKnowledge};
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{CausalEngine, Fact};
@@ -540,7 +540,7 @@ pub mod stdlib {
         }
     }
     pub mod network {
-        use crate::nimbus::os::evas::EvasFilter;
+        use crate::nimbus_os::evas::EvasFilter;
         use crate::stdlib::ai_reasoning::CausalEngine;
         use crate::stdlib::math_foundations::AdvancedMathEngine;
         use crate::toolchain::self_evolution::SelfEvolutionEngine;

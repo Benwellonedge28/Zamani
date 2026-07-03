@@ -7,7 +7,7 @@
 
 use crate::ast::Identifier; // For table names, query IDs
 use crate::core_lang_primitives::{Size, TimeStamp}; // For data sizes, timestamps
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId}; // For secure storage access
+use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure storage access
 use crate::source_map::Span;
 use crate::stdlib::collections::List; // For query results, records
 use crate::stdlib::core::Result; // For error handling

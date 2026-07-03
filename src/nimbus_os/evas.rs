@@ -8,7 +8,7 @@
 
 use crate::core_lang_primitives::TimeStamp;
 use crate::error_reporting::CompilerError; // For potential error flagging
-use crate::nimbus_os::mod_rs::{CapabilityToken, NimbusContextId, SandboxPolicy}; // Re-use Nimbus OS types
+use crate::nimbus_os::{CapabilityToken, NimbusContextId, SandboxPolicy}; // Re-use Nimbus OS types
 use crate::runtime::sankofa::KnowledgeId;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex}; // For linking to Sankofa knowledge base

@@ -14,7 +14,7 @@ use crate::stdlib::collections::{List, Map, HashSet, Option}; // For managing id
 use crate::stdlib::crypto::{QuantumKey, Signature, PublicKey, Crypto, ZeroKnowledgeProof, SecureCommunicationChannel}; // Core quantum crypto primitives
 use crate::stdlib::distributed_ledger::{LedgerClient, Transaction, TransactionId}; // For rooting identities in a distributed ledger
 use crate::stdlib::ai_reasoning::Fact; // For expressing identity claims
-use crate::nimbus::os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of identity operations
+use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of identity operations
 use crate::source_map::Span; // For Identifier creation
 
 
@@ -263,7 +263,7 @@ pub mod stdlib {
         use crate::ast::Identifier;
         use crate::stdlib::collections::{List, Map};
         use crate::stdlib::core::Result;
-        use crate::nimbus::os::evas::EvasActionContext;
+        use crate::nimbus_os::evas::EvasActionContext;
         use crate::source_map::Span;
 
         #[derive(Debug, Clone, PartialEq)]
