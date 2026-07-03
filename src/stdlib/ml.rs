@@ -11,6 +11,7 @@
 
 use crate::stdlib::collections::{List, Map};
 use crate::stdlib::core::Result;
+use crate::stdlib::meta_ops::MetaValue;
 
 // -----------------------------------------------------------------------------
 // Core ML types (Tensor, Model, Dataset, Layer, Optimizer) — these back
@@ -41,6 +42,29 @@ impl<T: Default + Clone> Tensor<T> {
 
     pub fn from_data(shape: Vec<usize>, data: Vec<T>) -> Self {
         Tensor { shape, data }
+    }
+}
+
+impl Tensor<f32> {
+    /// Builds a flat f32 tensor from a map of named characteristics (e.g.
+    /// source-code metrics), taking whichever fields carry a numeric value.
+    pub fn new_from_map(
+        map: crate::stdlib::collections::Map<String, crate::stdlib::meta_ops::MetaValue>,
+    ) -> Self {
+        let data: Vec<f32> = map
+            .values()
+            .filter_map(|v| match v {
+                crate::stdlib::meta_ops::MetaValue::Integer(n) => Some(*n as f32),
+                crate::stdlib::meta_ops::MetaValue::Float(n) => Some(*n as f32),
+                crate::stdlib::meta_ops::MetaValue::Boolean(b) => Some(if *b { 1.0 } else { 0.0 }),
+                _ => None,
+            })
+            .collect();
+        let len = data.len();
+        Tensor {
+            shape: vec![len],
+            data,
+        }
     }
 }
 

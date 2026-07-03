@@ -15,18 +15,17 @@
 //! targets, ensuring "infinity Advanced and secure infinitely and ready for production"
 //! performance across the entire Omniverse.
 
-use crate::ast::{Identifier, ZenithAstNode}; // For AST representations
-use crate::compiler::backend::{CompiledBinary, TargetPlatform}; // For specific hardware backends
-use crate::compiler::optimizer::{OptimizationLevel, OptimizationPass}; // For various optimization strategies
-use crate::ir_gen::{IrInstruction, ZenithIR}; // For Intermediate Representation
+use self::backend::{CompiledBinary, TargetPlatform}; // For specific hardware backends
+use self::ir_gen::{IrInstruction, ZenithIR}; // For Intermediate Representation
+use self::optimizer::OptimizationLevel; // For various optimization strategies
+use crate::ast::Identifier; // For AST representations
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of compilation choices
-use crate::runtime::mts::MtsTimeline; // For speculative compilation/optimization
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, Planner}; // For adaptive compilation planning
 use crate::stdlib::collections::{List, Map}; // For compilation artifacts, metadata
 use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::meta_ops::MetaValue; // Generic data for events
-use crate::stdlib::ml::{Model, Tensor}; // For AI-driven compilation models // For Identifier creation
+use crate::stdlib::ml::Tensor; // For AI-driven compilation models // For Identifier creation
 
 /// Initializes the Compilation Techniques module.
 pub fn init_compilation_techniques() {
@@ -69,7 +68,7 @@ pub struct JitConfig {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct AdaptiveOptConfig {
-    pub strategy_model: Model,
+    pub strategy_model: AiStrategyModel,
     pub learning_rate: f32,
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -99,8 +98,8 @@ pub struct NanoCompileConfig {
 
 pub struct HybridCompilerOrchestrator {
     pub current_strategy: CompilationStrategy,
-    pub ai_compiler_model: Model, // ML model to predict optimal strategy
-    pub planner: Planner,         // AI planner for complex compilation tasks
+    pub ai_compiler_model: AiStrategyModel, // ML model to predict optimal strategy
+    pub planner: Planner,                   // AI planner for complex compilation tasks
 }
 
 impl HybridCompilerOrchestrator {
@@ -110,7 +109,7 @@ impl HybridCompilerOrchestrator {
                 optimization_level: OptimizationLevel::O2,
                 target: TargetPlatform::X86_64,
             }),
-            ai_compiler_model: Model::new(Identifier(
+            ai_compiler_model: AiStrategyModel::new(Identifier(
                 "adaptive_compiler_model".to_string(),
                 Span::dummy(),
             )),
@@ -197,9 +196,9 @@ impl HybridCompilerOrchestrator {
         );
         // Conceptual: IR -> Optimizer -> Backend (e.g., LLVM, GCC)
         let optimized_ir =
-            crate::compiler::optimizer::Optimizer::new().optimize(ir, config.optimization_level)?;
+            self::optimizer::Optimizer::new().optimize(ir, config.optimization_level)?;
         let compiled_binary =
-            crate::compiler::backend::Backend::new().generate_code(optimized_ir, config.target)?; // Call generate_code from Backend
+            self::backend::Backend::new().generate_code(optimized_ir, config.target)?; // Call generate_code from Backend
         Ok(CompiledArtifact::Binary(compiled_binary))
     }
 
@@ -336,11 +335,28 @@ pub enum CompiledArtifact {
     Mixed(List<CompiledArtifact>),   // For mixed-mode compilation outputs
 }
 
+/// A concrete, instantiable AI model used to predict optimal compilation
+/// strategies. (This module needs a concrete model to store as a struct
+/// field and construct directly, unlike the object-safe `ml::Model` trait
+/// used by higher-level pluggable-model consumers elsewhere in stdlib.)
+#[derive(Debug, Clone, PartialEq)]
+pub struct AiStrategyModel {
+    pub id: Identifier,
+}
+impl AiStrategyModel {
+    pub fn new(id: Identifier) -> Self {
+        AiStrategyModel { id }
+    }
+    pub fn predict(&self, input: &Tensor<f32>) -> Result<Tensor<f32>, String> {
+        Ok(Tensor::from_data(input.shape.clone(), input.data.clone()))
+    }
+}
+
 // Dummy structures needed for compilation techniques module
 // Should ideally come from other compiler modules
 pub mod optimizer {
+    use super::ir_gen::ZenithIR;
     use crate::ast::Identifier;
-    use crate::ir_gen::ZenithIR;
     use crate::stdlib::collections::Map;
     use crate::stdlib::core::Result;
 
@@ -372,8 +388,8 @@ pub mod optimizer {
 }
 
 pub mod backend {
+    use super::ir_gen::ZenithIR;
     use crate::ast::Identifier;
-    use crate::ir_gen::ZenithIR;
     use crate::stdlib::core::Result;
 
     #[derive(Debug, Clone, PartialEq)]
