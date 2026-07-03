@@ -309,13 +309,10 @@ impl SecureObjectOperations {
         let evas_action = EvasActionContext {
             action_type: "object_behavior_check".to_string(),
             perceived_intent: format!("Verify ethical compliance of object {}.", object_id.0),
-            initiating_context_id: nimbus.os.get_current_context_id(), // Assume AGI is running in a context
+            initiating_context_id: crate::nimbus_os::get_current_context_id(), // Assume AGI is running in a context
             ..Default::default()
         };
-        Ok(nimbus
-            .os
-            .get_microkernel_evas_filter()
-            .evaluate_action(evas_action))
+        Ok(crate::nimbus_os::get_microkernel_evas_filter().evaluate_action(evas_action))
     }
 }
 

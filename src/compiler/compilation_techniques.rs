@@ -140,7 +140,7 @@ impl HybridCompilerOrchestrator {
                 "Optimize code for performance and resource usage: {:?}",
                 predicted_strategy
             ),
-            initiating_context_id: nimbus.os.get_current_context_id(),
+            initiating_context_id: crate::nimbus_os::get_current_context_id(),
             // ... add deployment context, code characteristics ...
             ..Default::default()
         };

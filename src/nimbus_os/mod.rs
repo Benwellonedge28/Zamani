@@ -16,6 +16,21 @@ use std::sync::{Arc, Mutex}; // Import E.V.A.S. components
 
 /// Unique identifier for an isolated Nimbus execution context.
 pub type NimbusContextId = u64;
+
+/// Returns the identifier of the context the calling code is conceptually
+/// executing within. Until full context propagation is threaded through the
+/// runtime call stack, this returns the root/default context id.
+pub fn get_current_context_id() -> NimbusContextId {
+    0
+}
+
+/// Returns the E.V.A.S. filter associated with the microkernel governing the
+/// current context, at the default (Strict) policy level. Callers that need
+/// a specific policy level or persistent instance should construct their own
+/// `evas::EvasFilter` directly instead.
+pub fn get_microkernel_evas_filter() -> evas::EvasFilter {
+    evas::EvasFilter::new(evas::EvasPolicyLevel::Strict)
+}
 /// Unique identifier for a secure communication channel.
 pub type ChannelId = u64;
 /// Represents a conceptual security sandbox policy.

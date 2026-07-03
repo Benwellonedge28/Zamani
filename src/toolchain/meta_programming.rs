@@ -83,14 +83,10 @@ impl MacroProcessor {
         let evas_action = EvasActionContext {
             action_type: "macro_expansion".to_string(),
             perceived_intent: format!("Generate code using macro {}.", macro_name.0),
-            initiating_context_id: nimbus.os.get_current_context_id(), // Assume AGI is running in a context
+            initiating_context_id: crate::nimbus_os::get_current_context_id(), // Assume AGI is running in a context
             ..Default::default()
         };
-        match nimbus
-            .os
-            .get_microkernel_evas_filter()
-            .evaluate_action(evas_action)
-        {
+        match crate::nimbus_os::get_microkernel_evas_filter().evaluate_action(evas_action) {
             EvasDecision::Block(reason) => {
                 return Err(format!("E.V.A.S. blocked macro expansion: {}.", reason))
             }
@@ -134,14 +130,10 @@ impl AutonomousCodeGenerator {
         let evas_action = EvasActionContext {
             action_type: "autonomous_code_generation".to_string(),
             perceived_intent: format!("Generate code to achieve goal {:?}.", goal),
-            initiating_context_id: nimbus.os.get_current_context_id(),
+            initiating_context_id: crate::nimbus_os::get_current_context_id(),
             ..Default::default()
         };
-        match nimbus
-            .os
-            .get_microkernel_evas_filter()
-            .evaluate_action(evas_action)
-        {
+        match crate::nimbus_os::get_microkernel_evas_filter().evaluate_action(evas_action) {
             EvasDecision::Block(reason) => {
                 return Err(format!("E.V.A.S. blocked code generation: {}.", reason))
             }
@@ -248,7 +240,7 @@ impl SecureMetaProgramming {
                 "Deploy new generated code: {}.",
                 &code_snippet[..std::cmp::min(code_snippet.len(), 50)]
             ),
-            initiating_context_id: nimbus.os.get_current_context_id(),
+            initiating_context_id: crate::nimbus_os::get_current_context_id(),
             ..Default::default()
         };
         Ok(nimbus

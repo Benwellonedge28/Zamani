@@ -171,7 +171,7 @@ impl DocumentationSystem {
         let evas_context = EvasActionContext {
             action_type: "documentation_generation".to_string(),
             perceived_intent: format!("Generate document: {}", request.title),
-            initiating_context_id: nimbus.os.get_current_context_id(),
+            initiating_context_id: crate::nimbus_os::get_current_context_id(),
             // ... context from content and request ...
             ..Default::default()
         };

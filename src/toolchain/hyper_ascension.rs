@@ -86,7 +86,7 @@ impl HyperAscensionEngine {
         let evas_context = EvasActionContext {
             action_type: "hyper_ascension_deployment".to_string(),
             perceived_intent: "Apply 1,000,000x self-improvement to Zenith core.".to_string(),
-            initiating_context_id: crate::nimbus::os::get_current_context_id(),
+            initiating_context_id: crate::nimbus_os::get_current_context_id(),
             ..Default::default()
         };
 

@@ -120,7 +120,7 @@ impl MusicLanguageEngine {
             action_type: "musical_interpretation".to_string(),
             perceived_intent: "Interpret cultural/emotional meaning of musical performance."
                 .to_string(),
-            initiating_context_id: crate::nimbus::os::get_current_context_id(),
+            initiating_context_id: crate::nimbus_os::get_current_context_id(),
             ..Default::default()
         };
         match self.evas_filter.evaluate_action(evas_context) {

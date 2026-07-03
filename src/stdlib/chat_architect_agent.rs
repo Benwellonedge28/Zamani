@@ -128,7 +128,7 @@ impl ChatArchitectAgent {
         let evas_prompt_context = EvasActionContext {
             action_type: "nl_code_generation_request".to_string(),
             perceived_intent: prompt.to_string(),
-            initiating_context_id: nimbus.os.get_current_context_id(), // Assume AGI is running in a context
+            initiating_context_id: crate::nimbus_os::get_current_context_id(), // Assume AGI is running in a context
             // ... more context from nlp_result ...
             ..Default::default()
         };

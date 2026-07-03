@@ -73,14 +73,10 @@ impl MetaOperations {
         let evas_action = EvasActionContext {
             action_type: "transcode_operation".to_string(),
             perceived_intent: format!("Transcode from {:?} to {:?}.", source, target_format),
-            initiating_context_id: nimbus.os.get_current_context_id(), // Assume AGI is running in a context
+            initiating_context_id: crate::nimbus_os::get_current_context_id(), // Assume AGI is running in a context
             ..Default::default()
         };
-        match nimbus
-            .os
-            .get_microkernel_evas_filter()
-            .evaluate_action(evas_action)
-        {
+        match crate::nimbus_os::get_microkernel_evas_filter().evaluate_action(evas_action) {
             EvasDecision::Block(reason) => {
                 return Err(format!("E.V.A.S. blocked transcoding: {}.", reason))
             }
@@ -111,14 +107,10 @@ impl MetaOperations {
                 "Override behavior of {} with patch type {:?}.",
                 target_component.0, override_patch
             ),
-            initiating_context_id: nimbus.os.get_current_context_id(), // Assume AGI is running in a context
+            initiating_context_id: crate::nimbus_os::get_current_context_id(), // Assume AGI is running in a context
             ..Default::default()
         };
-        match nimbus
-            .os
-            .get_microkernel_evas_filter()
-            .evaluate_action(evas_action)
-        {
+        match crate::nimbus_os::get_microkernel_evas_filter().evaluate_action(evas_action) {
             EvasDecision::Block(reason) => {
                 return Err(format!("E.V.A.S. blocked override: {}.", reason))
             }

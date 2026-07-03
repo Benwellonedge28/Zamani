@@ -185,7 +185,7 @@ impl AdvancedMathEngine {
         let evas_context = EvasActionContext {
             action_type: "mathematical_invention_deployment".to_string(),
             perceived_intent: format!("Deploy new mathematical discovery: {}", discovery.id.0),
-            initiating_context_id: crate::nimbus::os::get_current_context_id(),
+            initiating_context_id: crate::nimbus_os::get_current_context_id(),
             proposed_action_ast: Some(discovery.to_ast()), // Represent discovery as an AST
             ..Default::default()
         };
