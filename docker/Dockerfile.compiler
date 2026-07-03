@@ -9,6 +9,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && apt-get clean
 
 COPY Cargo.toml Cargo.lock ./
+COPY benches ./benches
 RUN mkdir -p src && printf 'fn main() {}\n' > src/main.rs && printf 'pub fn _p(){}\n' > src/lib.rs \
     && cargo build --release --bin zenith 2>&1; rm src/main.rs src/lib.rs
 

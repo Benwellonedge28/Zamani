@@ -11,6 +11,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && apt-get clean
 
 COPY Cargo.toml Cargo.lock ./
+COPY benches ./benches
 COPY src ./src
 RUN cargo build --release --features lsp --bin zenith-lsp
 
