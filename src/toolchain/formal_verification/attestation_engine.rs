@@ -77,3 +77,13 @@ impl Default for AttestationEngine {
         Self::new()
     }
 }
+
+/// Initializes the Attestation Engine component.
+pub fn init_attestation_engine() {
+    println!("    - Initializing Attestation Engine...");
+}
+
+/// Shuts down the Attestation Engine component.
+pub fn shutdown_attestation_engine() {
+    println!("    - Shutting down Attestation Engine...");
+}

@@ -54,3 +54,13 @@ impl Default for Verifier {
         Self::new()
     }
 }
+
+/// Initializes the Verifier component.
+pub fn init_verifier() {
+    println!("    - Initializing Verifier...");
+}
+
+/// Shuts down the Verifier component.
+pub fn shutdown_verifier() {
+    println!("    - Shutting down Verifier...");
+}

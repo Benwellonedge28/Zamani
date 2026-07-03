@@ -3,6 +3,9 @@
 //! This module aggregates and manages all formal verification-related components
 //! for Zenith, ensuring provable correctness and security for critical code and systems.
 
+use crate::source_map::Span;
+use std::collections::HashMap;
+
 pub mod attestation_engine; // Continuous Formal Verification Attestation Engine
 pub mod model_checker; // Model Checking for Temporal Properties
 pub mod theorem_prover;

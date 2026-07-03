@@ -83,3 +83,13 @@ impl Default for ModelChecker {
         Self::new()
     }
 }
+
+/// Initializes the Model Checker component.
+pub fn init_model_checker() {
+    println!("    - Initializing Model Checker...");
+}
+
+/// Shuts down the Model Checker component.
+pub fn shutdown_model_checker() {
+    println!("    - Shutting down Model Checker...");
+}
