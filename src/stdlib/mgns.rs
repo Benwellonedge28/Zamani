@@ -117,7 +117,7 @@ impl MukandaraGlobalNavigationSystem {
         mode: MgnsMode,
     ) -> Result<EncryptedPosition, String> {
         println!(
-            "[MGNS] Requesting position fix with accuracy {:?} in mode {:?}.".to_string(),
+            "[MGNS] Requesting position fix with accuracy {:?} in mode {:?}.",
             accuracy, mode
         );
 
@@ -137,7 +137,7 @@ impl MukandaraGlobalNavigationSystem {
             .verify_position_trust(encrypted_position_estimate.clone())?;
         if trust_score < self.trust_threshold(mode) {
             println!(
-                "[MGNS] Warning: Low trust score ({}). Initiating anomaly detection.".to_string(),
+                "[MGNS] Warning: Low trust score ({}). Initiating anomaly detection.",
                 trust_score.0
             );
             self.trust_layer
@@ -167,7 +167,7 @@ impl MukandaraGlobalNavigationSystem {
         accuracy: AccuracyLevel,
         callback: Fn(EncryptedPosition),
     ) -> Result<(), String> {
-        println!("[MGNS] Subscribing to continuous position updates.".to_string());
+        println!("[MGNS] Subscribing to continuous position updates.");
         // This would initiate a background process that periodically calls `locate`
         // and feeds the encrypted result to the provided callback.
         // The callback function itself would be subject to compiler privacy checks.
@@ -176,14 +176,14 @@ impl MukandaraGlobalNavigationSystem {
 
     /// Retrieves the current trust level of the last position fix.
     pub fn trust(&self) -> Result<TrustScore, String> {
-        println!("[MGNS] Checking current position trust score.".to_string());
+        println!("[MGNS] Checking current position trust score.");
         self.trust_layer.get_last_trust_score()
     }
 
     /// Orchestrates self-healing and adaptation to changes/attacks.
     #[security(level = "omomniscient", self_healing = "true")]
     pub fn run_self_healing_loop(&mut self) -> Result<(), String> {
-        println!("[MGNS] Running autonomous self-healing loop.".to_string());
+        println!("[MGNS] Running autonomous self-healing loop.");
         // Continuous monitoring, anomaly detection, and re-routing of PNT signals
         // leveraging all 5 layers and the trust network.
         // This would involve frequent interaction with the network_stack and simulation_engine.
@@ -211,14 +211,14 @@ impl MukandaraGlobalNavigationSystem {
         trust: TrustScore,
         accuracy: AccuracyLevel,
     ) -> Result<EncryptedPosition, String> {
-        println!("[MGNS] Refining encrypted position.".to_string());
+        println!("[MGNS] Refining encrypted position.");
         // This would use the math_engine for advanced filtering and refinement of encrypted coordinates.
         Ok(pos)
     }
 
     /// Helper for recording critical operations in Sankofa
     fn permanent_memory_record(&mut self, operation_type: String, mode_used: String, data: Fact) {
-        println!("[MGNS] Recording operation: {}".to_string(), operation_type);
+        println!("[MGNS] Recording operation: {}", operation_type);
         self.permanent_memory_interface
             .record_mgns_log(operation_type, mode_used, data)
             .unwrap_or_else(|e| println!("Failed to record MGNS log: {}", e));
@@ -297,7 +297,7 @@ impl TrustLayer {
         encrypted_pos: EncryptedPosition,
         trust: TrustScore,
     ) -> Result<(), String> {
-        println!("[MGNS::Trust] Anomaly detected and mitigated.".to_string());
+        println!("[MGNS::Trust] Anomaly detected and mitigated.");
         Ok(())
     }
 }

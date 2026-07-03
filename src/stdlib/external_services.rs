@@ -111,7 +111,7 @@ impl ExternalServices {
     /// Manages credential handling via Nimbus OS secure enclave.
     pub fn connect_service(config: ServiceConfiguration) -> Result<ServiceHandle, String> {
         println!(
-            "[StdLib::ExternalServices] Connecting to service '{}' (Type: {:?}).".to_string(),
+            "[StdLib::ExternalServices] Connecting to service '{}' (Type: {:?}).",
             config.service_id.0, config.service_type
         );
         // Conceptual: Nimbus OS mediates secure connection setup, potentially using `stdlib::crypto`.
@@ -123,7 +123,7 @@ impl ExternalServices {
     /// Disconnects from an external service.
     pub fn disconnect_service(handle: ServiceHandle) -> Result<(), String> {
         println!(
-            "[StdLib::ExternalServices] Disconnecting from service '{}'.".to_string(),
+            "[StdLib::ExternalServices] Disconnecting from service '{}'.",
             handle.id.0
         );
         Ok(())
@@ -137,7 +137,7 @@ impl ExternalServices {
         args: List<MetaValue>,
     ) -> Result<MetaValue, String> {
         println!(
-            "[StdLib::ExternalServices] Invoking operation '{}' on service '{}'.".to_string(),
+            "[StdLib::ExternalServices] Invoking operation '{}' on service '{}'.",
             operation_name.0, handle.id.0
         );
         // Conceptual: Internal dispatcher based on handle.id.0, arguments could be serialized JSON/Protobuf.
@@ -166,8 +166,7 @@ impl CloudPlatform {
         size_gb: usize,
     ) -> Result<CloudResource, String> {
         println!(
-            "[StdLib::ExternalServices] Provisioning compute instance on cloud service '{}'."
-                .to_string(),
+            "[StdLib::ExternalServices] Provisioning compute instance on cloud service '{}'.",
             handle.id.0
         );
         // Conceptual: Uses CloudNetworkOrchestrator logic and cloud provider APIs.
@@ -187,7 +186,7 @@ impl CloudPlatform {
         target_service_id: Identifier,
         config: Map<String, String>,
     ) -> Result<(), String> {
-        println!("[StdLib::ExternalServices] Deploying containerized app '{}' to '{}' on cloud service '{}'.".to_string(), container_image_id.0, target_service_id.0, handle.id.0);
+        println!("[StdLib::ExternalServices] Deploying containerized app '{}' to '{}' on cloud service '{}'.", container_image_id.0, target_service_id.0, handle.id.0);
         // Conceptual: Integrates with CloudNetworkOrchestrator and Nimbus for secure deployment.
         Ok(())
     }
@@ -207,8 +206,7 @@ impl DevOpsTools {
         parameters: Map<String, String>,
     ) -> Result<Identifier, String> {
         println!(
-            "[StdLib::ExternalServices] Triggering pipeline '{}' on CI/CD service '{}'."
-                .to_string(),
+            "[StdLib::ExternalServices] Triggering pipeline '{}' on CI/CD service '{}'.",
             pipeline_name.0, handle.id.0
         );
         Ok(Identifier("job_id_123".to_string(), Span::dummy()))
@@ -221,8 +219,7 @@ impl DevOpsTools {
         local_path: String,
     ) -> Result<(), String> {
         println!(
-            "[StdLib::ExternalServices] Cloning repository '{}' to '{}' using service '{}'."
-                .to_string(),
+            "[StdLib::ExternalServices] Cloning repository '{}' to '{}' using service '{}'.",
             repo_url, local_path, handle.id.0
         );
         // Conceptual: Uses `stdlib::fs` for local storage, credentials from `ServiceHandle`. Also involves Git-specific commands.
@@ -235,7 +232,7 @@ impl DevOpsTools {
         script_id: Identifier,
         target_hosts: List<String>,
     ) -> Result<(), String> {
-        println!("[StdLib::ExternalServices] Executing automation script '{}' on hosts {:?} via service '{}'.".to_string(), script_id.0, target_hosts.data, handle.id.0);
+        println!("[StdLib::ExternalServices] Executing automation script '{}' on hosts {:?} via service '{}'.", script_id.0, target_hosts.data, handle.id.0);
         Ok(())
     }
 }

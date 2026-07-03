@@ -65,7 +65,7 @@ impl CloudNetworkOrchestrator {
         policy: ManagementPolicy,
     ) -> Result<List<CloudResource>, String> {
         println!(
-            "[Runtime::CloudNetSec] Deploying Zenith app '{}' with policy '{}'.".to_string(),
+            "[Runtime::CloudNetSec] Deploying Zenith app '{}' with policy '{}'.",
             app_id.0, policy.name.0
         );
         // Conceptual: Uses Nimbus OS's distributed capabilities, consults Planner, ML for optimization.
@@ -87,7 +87,7 @@ impl CloudNetworkOrchestrator {
         anomaly_report: Map<String, String>,
     ) -> Result<(), String> {
         println!(
-            "[Runtime::CloudNetSec] Triggering self-optimization due to anomaly: {:?}.".to_string(),
+            "[Runtime::CloudNetSec] Triggering self-optimization due to anomaly: {:?}.",
             anomaly_report
         );
         // Conceptual: The SelfEvolutionEngine would identify, propose, and apply patches to the runtime or deployed apps.
@@ -133,7 +133,7 @@ impl CyberDefenseSwarm {
         &mut self,
         agent_blueprints: List<CybersecurityAgent>,
     ) -> Result<(), String> {
-        println!("[Runtime::CloudNetSec] Deploying {} cybersecurity agents forming a self-organizing defense swarm.".to_string(), agent_blueprints.len());
+        println!("[Runtime::CloudNetSec] Deploying {} cybersecurity agents forming a self-organizing defense swarm.", agent_blueprints.len());
         for agent in agent_blueprints.data.into_iter() {
             self.0.add_agent(agent.base_agent);
         }
@@ -164,8 +164,7 @@ impl CyberDefenseSwarm {
     /// Coordinates with `toolchain::self_evolution` and Nimbus OS for secure recovery.
     pub fn initiate_self_healing(&self, compromised_resource: Identifier) -> Result<(), String> {
         println!(
-            "[Runtime::CloudNetSec] Initiating self-healing for compromised resource '{}'."
-                .to_string(),
+            "[Runtime::CloudNetSec] Initiating self-healing for compromised resource '{}'.",
             compromised_resource.0
         );
         // Conceptual: Isolate resource (Nimbus OS sandbox), apply patches (self-evolution), restore state (Sankofa).
@@ -186,7 +185,7 @@ impl InfiniteSecurityPrimitives {
         data_stream_id: Identifier,
         keys: List<SymmetricKey>,
     ) -> Result<(), String> {
-        println!("[Runtime::CloudNetSec] Establishing perpetual encryption pipeline for data stream '{}'.".to_string(), data_stream_id.0);
+        println!("[Runtime::CloudNetSec] Establishing perpetual encryption pipeline for data stream '{}'.", data_stream_id.0);
         // Conceptual: Data chunks are re-encrypted on the fly by dedicated hardware units.
         Ok(())
     }
@@ -195,8 +194,7 @@ impl InfiniteSecurityPrimitives {
     /// Uses quantum entanglement-based authentication or extremely fast PQC verification.
     pub fn verify_quantum_network_integrity(network_segment_id: Identifier) -> Result<(), String> {
         println!(
-            "[Runtime::CloudNetSec] Verifying quantum network integrity for segment '{}'."
-                .to_string(),
+            "[Runtime::CloudNetSec] Verifying quantum network integrity for segment '{}'.",
             network_segment_id.0
         );
         // Conceptual: Dedicated QPU-accelerated hardware.
@@ -209,7 +207,7 @@ impl InfiniteSecurityPrimitives {
         user_id: Identifier,
         resource_id: Identifier,
     ) -> Result<bool, String> {
-        println!("[Runtime::CloudNetSec] Enforcing dynamic zero-trust for user '{}' accessing resource '{}'.".to_string(), user_id.0, resource_id.0);
+        println!("[Runtime::CloudNetSec] Enforcing dynamic zero-trust for user '{}' accessing resource '{}'.", user_id.0, resource_id.0);
         // Conceptual: Continuous authentication, behavioral biometrics, real-time risk score from ML.
         Ok(true) // Access granted
     }

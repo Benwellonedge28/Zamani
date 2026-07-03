@@ -88,10 +88,7 @@ impl NanoAgent {
 
     /// Replicates this nano-agent, creating an identical copy.
     pub fn replicate(&self) -> Self {
-        println!(
-            "[StdLib::nano] Replicating NanoAgent {}.".to_string(),
-            self.0
-        );
+        println!("[StdLib::nano] Replicating NanoAgent {}.", self.0);
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {
             let mut orchestrator = orchestrator_arc.lock().unwrap();
             orchestrator.replicate_nano_agent(self.0).map_or_else(
@@ -108,10 +105,7 @@ impl NanoAgent {
 
     /// Disassembles the nano-agent.
     pub fn disassemble(&self) {
-        println!(
-            "[StdLib::nano] Disassembling NanoAgent {}.".to_string(),
-            self.0
-        );
+        println!("[StdLib::nano] Disassembling NanoAgent {}.", self.0);
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {
             let mut orchestrator = orchestrator_arc.lock().unwrap();
             orchestrator.disassemble_nano_agent(self.0);
@@ -138,7 +132,7 @@ impl NanoSwarm {
     /// Conceptual: Sends a command to all agents in a swarm matching a blueprint.
     pub fn command_all_by_blueprint(blueprint_id: &str, command: &str) {
         println!(
-            "[StdLib::nano] Commanding all agents with blueprint '{}' to: '{}'.".to_string(),
+            "[StdLib::nano] Commanding all agents with blueprint '{}' to: '{}'.",
             blueprint_id, command
         );
         if let Some(orchestrator_arc) = unsafe { NANO_ORCHESTRATOR_ARC.as_ref() } {

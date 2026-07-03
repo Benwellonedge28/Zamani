@@ -1,0 +1,22 @@
+# ── Zenith Runtime ────────────────────────────────────────────────────────
+# Status: NOT YET BUILDABLE. `src/runtime/` (universal_runtime, sankofa
+# memory, quantum runtime, nimbus_os, mts, distributed, etc.) is aspirational
+# scaffolding gated behind the `full` cargo feature, which currently has
+# ~230 real compile errors concentrated here (undefined types like
+# `SasaKnowledge`/`KnowledgeId` mismatched across modules, missing
+# `Arc`/`Mutex` imports in a few spots, wrong cross-module paths). This is
+# real, trackable engineering debt — not a Docker/config problem — and needs
+# per-file fixes before this image can build. See ../docker/README.md.
+#
+# This Dockerfile is left in place, correctly structured, so it starts
+# working the moment `cargo build --features runtime` compiles: just add a
+# `runtime` feature in Cargo.toml (mirroring how `lsp`/`buildsystem` were
+# split out) once the errors below are resolved.
+FROM rust:slim-bookworm AS builder
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+# NOTE: intentionally not wired to a real bin yet — see status note above.
+RUN echo "BLOCKED: src/runtime/* does not compile under --features full yet." \
+    && echo "Run 'cargo build --features full' in the repo root to see current errors." \
+    && exit 1

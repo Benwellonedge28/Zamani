@@ -67,7 +67,7 @@ impl DocumentationSystem {
         request: DocumentationRequest,
     ) -> Result<GeneratedDocument, String> {
         println!(
-            "[StdLib::DocSys] Generating documentation for request: {:?}.".to_string(),
+            "[StdLib::DocSys] Generating documentation for request: {:?}.",
             request
         );
 
@@ -178,8 +178,7 @@ impl DocumentationSystem {
         match self.evas_filter.evaluate_action(evas_context) {
             EvasDecision::Block(reason) => {
                 return Err(format!(
-                    "E.V.A.S. BLOCKED documentation generation: {}.\n Output discarded."
-                        .to_string(),
+                    "E.V.A.S. BLOCKED documentation generation: {}.\n Output discarded.",
                     reason
                 ))
             }

@@ -129,9 +129,7 @@ impl HybridCompilerOrchestrator {
         source_code_characteristics: Map<String, MetaValue>,
         deployment_context: Map<String, MetaValue>,
     ) -> Result<CompilationStrategy, String> {
-        println!(
-            "[Compiler::Tech] Dynamically selecting optimal compilation strategy.".to_string()
-        );
+        println!("[Compiler::Tech] Dynamically selecting optimal compilation strategy.");
 
         // 1. AI-Driven Prediction: Use ML model to predict best strategy
         let input_tensor = Tensor::new_from_map(source_code_characteristics.clone()); // Dummy
@@ -167,7 +165,7 @@ impl HybridCompilerOrchestrator {
     /// Executes the chosen compilation strategy, coordinating various ZUMC components.
     pub fn execute_compilation(&self, source_ir: ZenithIR) -> Result<CompiledArtifact, String> {
         println!(
-            "[Compiler::Tech] Executing compilation using strategy: {:?}.".to_string(),
+            "[Compiler::Tech] Executing compilation using strategy: {:?}.",
             self.current_strategy
         );
 
@@ -197,7 +195,7 @@ impl HybridCompilerOrchestrator {
 
     fn aot_compile(&self, ir: ZenithIR, config: &AotConfig) -> Result<CompiledArtifact, String> {
         println!(
-            "[Compiler::Tech] Performing Ahead-of-Time compilation for target {:?}.".to_string(),
+            "[Compiler::Tech] Performing Ahead-of-Time compilation for target {:?}.",
             config.target
         );
         // Conceptual: IR -> Optimizer -> Backend (e.g., LLVM, GCC)
@@ -210,8 +208,7 @@ impl HybridCompilerOrchestrator {
 
     fn jit_compile(&self, ir: ZenithIR, config: &JitConfig) -> Result<CompiledArtifact, String> {
         println!(
-            "[Compiler::Tech] Performing Just-in-Time compilation (profiling enabled: {})."
-                .to_string(),
+            "[Compiler::Tech] Performing Just-in-Time compilation (profiling enabled: {}).",
             config.enable_profiling
         );
         // Conceptual: IR -> runtime code generation (e.g., LLVM JIT, custom JIT)
@@ -227,7 +224,7 @@ impl HybridCompilerOrchestrator {
         config: &AdaptiveOptConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
-            "[Compiler::Tech] Performing Adaptive Optimization (using model {:?}).".to_string(),
+            "[Compiler::Tech] Performing Adaptive Optimization (using model {:?}).",
             config.strategy_model.id
         );
         // Conceptual: Profile -> analyze hotspots -> re-optimize/re-JIT code sections.
@@ -243,8 +240,7 @@ impl HybridCompilerOrchestrator {
         config: &TranspilationConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
-            "[Compiler::Tech] Performing Multi-Paradigm Transpilation from {:?} to {:?}."
-                .to_string(),
+            "[Compiler::Tech] Performing Multi-Paradigm Transpilation from {:?} to {:?}.",
             config.source_paradigm.0, config.target_paradigm.0
         );
         // Conceptual: IR -> semantic transformation -> new IR for target paradigm.
@@ -261,8 +257,7 @@ impl HybridCompilerOrchestrator {
         config: &HdlSynthConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
-            "[Compiler::Tech] Performing Hardware Description Language synthesis for {:?}."
-                .to_string(),
+            "[Compiler::Tech] Performing Hardware Description Language synthesis for {:?}.",
             config.target_chip_design.0
         );
         // Conceptual: IR -> Zenith HDL -> (external tools) -> GDSII, Verilog.
@@ -278,7 +273,7 @@ impl HybridCompilerOrchestrator {
         config: &QuantumCompileConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
-            "[Compiler::Tech] Performing Quantum Compilation for QPU {:?}.".to_string(),
+            "[Compiler::Tech] Performing Quantum Compilation for QPU {:?}.",
             config.qpu_architecture.0
         );
         // Conceptual: Quantum IR -> QPU-specific instruction set (e.g., OpenQASM, Quil).
@@ -294,7 +289,7 @@ impl HybridCompilerOrchestrator {
         config: &NanoCompileConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
-            "[Compiler::Tech] Performing Nano-Compilation for NACU {:?}.".to_string(),
+            "[Compiler::Tech] Performing Nano-Compilation for NACU {:?}.",
             config.nacu_architecture.0
         );
         // Conceptual: Nano-agent behavior IR -> NACU-specific control sequences for self-assembly/function.
@@ -310,7 +305,7 @@ impl HybridCompilerOrchestrator {
         strategies: &List<CompilationStrategy>,
     ) -> Result<CompiledArtifact, String> {
         println!(
-            "[Compiler::Tech] Performing Mixed-Mode compilation with {:?} strategies.".to_string(),
+            "[Compiler::Tech] Performing Mixed-Mode compilation with {:?} strategies.",
             strategies.len()
         );
         // Conceptual: Orchestrate multiple compilation passes, potentially in parallel or sequential.

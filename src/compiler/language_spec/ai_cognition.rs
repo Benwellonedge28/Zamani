@@ -57,7 +57,7 @@ impl AiCognitionSemanticAnalyzer {
         type_checker: &mut TypeChecker,
     ) -> Result<(), String> {
         println!(
-            "[LangSpec::AICog] Performing semantic analysis for AI statement: {:?}.".to_string(),
+            "[LangSpec::AICog] Performing semantic analysis for AI statement: {:?}.",
             ast_node
         );
         // Conceptual:
@@ -75,7 +75,7 @@ pub struct AiCognitionIrGenerator;
 impl AiCognitionIrGenerator {
     pub fn generate_ir(&self, ast_node: &AiStatementAst) -> Result<Vec<IrInstruction>, String> {
         println!(
-            "[LangSpec::AICog] Generating IR for AI statement: {:?}.".to_string(),
+            "[LangSpec::AICog] Generating IR for AI statement: {:?}.",
             ast_node
         );
         // Conceptual:

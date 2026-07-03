@@ -88,7 +88,7 @@ impl AdvancedMathEngine {
         domain_hint: Identifier,
     ) -> Result<MathematicalDiscovery, String> {
         println!(
-            "[Math::Invent] Initiating autonomous mathematical invention in domain {}.".to_string(),
+            "[Math::Invent] Initiating autonomous mathematical invention in domain {}.",
             domain_hint.0
         );
 
@@ -114,7 +114,7 @@ impl AdvancedMathEngine {
         let discovery = match proof_attempt {
             ProofAttemptStatus::Proven(proof) => {
                 println!(
-                    "[Math::Invent] Conjecture {} PROVEN. Storing proof.".to_string(),
+                    "[Math::Invent] Conjecture {} PROVEN. Storing proof.",
                     conjecture.id.0
                 );
                 self.sankofa_knowledge
@@ -132,7 +132,7 @@ impl AdvancedMathEngine {
             }
             ProofAttemptStatus::Falsified(counterexample) => {
                 println!(
-                    "[Math::Invent] Conjecture {} FALSIFIED. Storing counterexample.".to_string(),
+                    "[Math::Invent] Conjecture {} FALSIFIED. Storing counterexample.",
                     conjecture.id.0
                 );
                 self.sankofa_knowledge
@@ -149,8 +149,7 @@ impl AdvancedMathEngine {
             }
             ProofAttemptStatus::Undecided => {
                 println!(
-                    "[Math::Invent] Conjecture {} UNDECIDED. Engaging meta-mathematics."
-                        .to_string(),
+                    "[Math::Invent] Conjecture {} UNDECIDED. Engaging meta-mathematics.",
                     conjecture.id.0
                 );
                 // Meta-mathematics: Explore axiom manipulation, independence checking

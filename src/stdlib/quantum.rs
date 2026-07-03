@@ -53,10 +53,7 @@ impl Qubit {
 
     /// Deallocates the qubit.
     pub fn deallocate(&self) {
-        println!(
-            "[StdLib::quantum] Deallocating Qubit {}.".to_string(),
-            self.0
-        );
+        println!("[StdLib::quantum] Deallocating Qubit {}.", self.0);
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
             let mut processor = processor_arc.lock().unwrap();
             processor.deallocate_qubit(self.0);
@@ -66,7 +63,7 @@ impl Qubit {
     // --- Single-Qubit Gates ---
     pub fn h(&mut self) {
         println!(
-            "[StdLib::quantum] Applying Hadamard gate to Qubit {}.".to_string(),
+            "[StdLib::quantum] Applying Hadamard gate to Qubit {}.",
             self.0
         );
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
@@ -76,7 +73,7 @@ impl Qubit {
     }
     pub fn x(&mut self) {
         println!(
-            "[StdLib::quantum] Applying X (Pauli-X) gate to Qubit {}.".to_string(),
+            "[StdLib::quantum] Applying X (Pauli-X) gate to Qubit {}.",
             self.0
         );
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
@@ -90,7 +87,7 @@ impl Qubit {
     /// Applies a CNOT gate to this control qubit and a target qubit.
     pub fn cnot(&mut self, target: &mut Qubit) {
         println!(
-            "[StdLib::quantum] Applying CNOT gate (Control: {}, Target: {}).".to_string(),
+            "[StdLib::quantum] Applying CNOT gate (Control: {}, Target: {}).",
             self.0, target.0
         );
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
@@ -102,7 +99,7 @@ impl Qubit {
 
     /// Measures the qubit, collapsing its superposition.
     pub fn measure(&mut self) -> bool {
-        println!("[StdLib::quantum] Measuring Qubit {}.".to_string(), self.0);
+        println!("[StdLib::quantum] Measuring Qubit {}.", self.0);
         if let Some(processor_arc) = unsafe { QUANTUM_PROCESSOR_ARC.as_ref() } {
             let mut processor = processor_arc.lock().unwrap();
             processor.measure_qubit(self.0)
@@ -148,10 +145,7 @@ pub struct QReg {
 impl QReg {
     /// Allocates a quantum register with `size` qubits.
     pub fn new(size: usize) -> Self {
-        println!(
-            "[StdLib::quantum] Allocating a QReg with {} qubits.".to_string(),
-            size
-        );
+        println!("[StdLib::quantum] Allocating a QReg with {} qubits.", size);
         let mut qubits = Vec::with_capacity(size);
         for _ in 0..size {
             qubits.push(Qubit::new());

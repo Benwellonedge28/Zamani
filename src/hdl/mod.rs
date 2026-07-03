@@ -300,7 +300,7 @@ impl CompiledHdlUnit for ZMMP_QpuBlock {
     }
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
         println!(
-            "[HDL] Z-MMP QPU: Loading microcode ({} bytes).".to_string(),
+            "[HDL] Z-MMP QPU: Loading microcode ({} bytes).",
             microcode.len()
         );
         // Conceptual: Nimbus OS HAL call to QPU firmware loader.
@@ -338,7 +338,7 @@ impl CompiledHdlUnit for ZMMP_NacuBlock {
     }
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
         println!(
-            "[HDL] Z-MMP NACU: Loading control program ({} bytes).".to_string(),
+            "[HDL] Z-MMP NACU: Loading control program ({} bytes).",
             microcode.len()
         );
         // Conceptual: Nimbus OS HAL call to NACU firmware loader.
@@ -376,7 +376,7 @@ impl CompiledHdlUnit for ZMMP_NPUBlock {
     }
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
         println!(
-            "[HDL] Z-MMP NPU: Loading neuron configurations ({} bytes).".to_string(),
+            "[HDL] Z-MMP NPU: Loading neuron configurations ({} bytes).",
             microcode.len()
         );
         Ok(())
@@ -412,7 +412,7 @@ impl CompiledHdlUnit for ZMMP_AIAccelBlock {
     }
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
         println!(
-            "[HDL] Z-MMP AI Accel: Loading tensor operations ({} bytes).".to_string(),
+            "[HDL] Z-MMP AI Accel: Loading tensor operations ({} bytes).",
             microcode.len()
         );
         Ok(())
@@ -448,7 +448,7 @@ impl CompiledHdlUnit for ZMMP_AnalogOpticalBlock {
     }
     fn load_microcode(&mut self, microcode: Vec<u8>) -> Result<(), String> {
         println!(
-            "[HDL] Z-MMP Analog/Optical: Loading configuration ({} bytes).".to_string(),
+            "[HDL] Z-MMP Analog/Optical: Loading configuration ({} bytes).",
             microcode.len()
         );
         Ok(())
@@ -487,7 +487,7 @@ pub mod external_hdl_linker {
         source_code: String,
     ) -> Result<ExternalHdlModule, String> {
         println!(
-            "[HDL] Importing {:?} module from external source...".to_string(),
+            "[HDL] Importing {:?} module from external source...",
             hdl_type
         );
         // Conceptual: This would involve:

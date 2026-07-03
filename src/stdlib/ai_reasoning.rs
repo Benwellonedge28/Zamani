@@ -39,7 +39,7 @@ impl KnowledgeGraph {
         max_depth: usize,
     ) -> Result<List<List<Fact>>, String> {
         println!(
-            "[StdLib::AI_Reasoning] Finding semantic path between {:?} and {:?}.".to_string(),
+            "[StdLib::AI_Reasoning] Finding semantic path between {:?} and {:?}.",
             start, end
         );
         Ok(List::new())
@@ -48,7 +48,7 @@ impl KnowledgeGraph {
     /// Detects emergent communities or clusters within the knowledge base.
     pub fn cluster_entities(&self, method: &str) -> Result<List<List<Entity>>, String> {
         println!(
-            "[StdLib::AI_Reasoning] Clustering entities using {}.".to_string(),
+            "[StdLib::AI_Reasoning] Clustering entities using {}.",
             method
         );
         Ok(List::new())
@@ -82,7 +82,7 @@ impl ProbabilisticModel {
         evidence: Map<Identifier, MetaValue>,
     ) -> Result<f64, String> {
         println!(
-            "[StdLib::AI_Reasoning] Querying marginal for {} given evidence.".to_string(),
+            "[StdLib::AI_Reasoning] Querying marginal for {} given evidence.",
             variable.0
         );
         Ok(0.5)
@@ -115,7 +115,7 @@ impl CausalEngine {
         target_state: FactObject,
     ) -> Result<f64, String> {
         println!(
-            "[StdLib::AI_Reasoning] Simulating causal intervention {:?}.".to_string(),
+            "[StdLib::AI_Reasoning] Simulating causal intervention {:?}.",
             action
         );
         Ok(0.8)

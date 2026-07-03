@@ -94,7 +94,7 @@ impl DateTime {
     /// Creates a DateTime from a Unix timestamp (seconds since epoch).
     pub fn from_unix_timestamp(timestamp: i64, tz: TimeZone) -> Result<Self, String> {
         println!(
-            "[StdLib::Time] Creating DateTime from Unix timestamp {}.".to_string(),
+            "[StdLib::Time] Creating DateTime from Unix timestamp {}.",
             timestamp
         );
         // Conceptual: Convert timestamp to components, apply timezone.
@@ -113,7 +113,7 @@ impl DateTime {
     /// Returns the current system date and time in a specified timezone.
     pub fn now_in(tz: TimeZone) -> Self {
         println!(
-            "[StdLib::Time] Getting current DateTime in timezone {:?}.".to_string(),
+            "[StdLib::Time] Getting current DateTime in timezone {:?}.",
             tz
         );
         // Conceptual: Combines Instant::now() with timezone conversion.
@@ -132,7 +132,7 @@ impl DateTime {
     /// Formats the DateTime into a string.
     pub fn format(&self, format_string: &str) -> String {
         println!(
-            "[StdLib::Time] Formatting DateTime with '{}'.".to_string(),
+            "[StdLib::Time] Formatting DateTime with '{}'.",
             format_string
         );
         // Conceptual: Standard formatting logic.
@@ -163,10 +163,7 @@ impl TimeZone {
     }
 
     pub fn from_id(id: &str) -> Result<Self, String> {
-        println!(
-            "[StdLib::Time] Loading TimeZone from ID '{}'.".to_string(),
-            id
-        );
+        println!("[StdLib::Time] Loading TimeZone from ID '{}'.", id);
         // Conceptual: Lookup in a system-wide timezone database provided by Nimbus OS.
         if id == "America/New_York" {
             Ok(TimeZone {
@@ -195,7 +192,7 @@ impl TemporalSync {
         target_timestamp: TimeStamp,
     ) -> Result<(), String> {
         println!(
-            "[StdLib::Time] Waiting for MTS timeline {} to reach timestamp {}.".to_string(),
+            "[StdLib::Time] Waiting for MTS timeline {} to reach timestamp {}.",
             timeline_id, target_timestamp.0
         );
         // Conceptual: Interacts with the MTS Orchestrator to block until temporal condition is met.
@@ -209,7 +206,7 @@ impl TemporalSync {
         callback: Box<dyn Fn() -> () + Send + Sync>,
     ) -> Result<(), String> {
         println!(
-            "[StdLib::Time] Registering temporal event: '{}'.".to_string(),
+            "[StdLib::Time] Registering temporal event: '{}'.",
             condition
         );
         // Conceptual: Nimbus OS's MTS hooks for event dispatch.

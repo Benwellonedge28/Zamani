@@ -256,10 +256,9 @@ impl EvasFilter {
             EvasPolicyLevel::Strict => {
                 match decision {
                     EvasDecision::Allow => EvasDecision::Allow,
-                    EvasDecision::Warn(msg) => EvasDecision::Block(format!(
-                        "Strict policy: {} (was warning).".to_string(),
-                        msg
-                    )),
+                    EvasDecision::Warn(msg) => {
+                        EvasDecision::Block(format!("Strict policy: {} (was warning).", msg))
+                    }
                     EvasDecision::Block(_)
                     | EvasDecision::HumanReviewRequired(_)
                     | EvasDecision::Modify(_, _) => decision, // Apply strict decision

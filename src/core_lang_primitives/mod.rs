@@ -93,8 +93,7 @@ impl HeapAlloc {
     /// Reallocates a block of memory on the heap.
     pub fn reallocate(ptr: *mut u8, old_size: Size, new_size: Size) -> *mut u8 {
         println!(
-            "[Core::Mem] Conceptual HeapAlloc: Reallocating from {} to {} bytes at {:p}."
-                .to_string(),
+            "[Core::Mem] Conceptual HeapAlloc: Reallocating from {} to {} bytes at {:p}.",
             old_size.0, new_size.0, ptr
         );
         ptr::null_mut() // Dummy pointer
@@ -103,7 +102,7 @@ impl HeapAlloc {
     /// Deallocates memory from the heap.
     pub fn deallocate(ptr: *mut u8, size: Size) {
         println!(
-            "[Core::Mem] Conceptual HeapAlloc: Deallocating {} bytes at {:p}.".to_string(),
+            "[Core::Mem] Conceptual HeapAlloc: Deallocating {} bytes at {:p}.",
             size.0, ptr
         );
         // Conceptual: Delegates to Nimbus OS kernel for memory deallocation
@@ -112,7 +111,7 @@ impl HeapAlloc {
     /// Allocates memory on the heap with a specific alignment.
     pub fn aligned_allocate(size: Size, alignment: Size) -> *mut u8 {
         println!(
-            "[Core::Mem] Conceptual HeapAlloc: Allocating {} bytes with alignment {}.".to_string(),
+            "[Core::Mem] Conceptual HeapAlloc: Allocating {} bytes with alignment {}.",
             size.0, alignment.0
         );
         ptr::null_mut() // Dummy pointer
@@ -133,8 +132,7 @@ impl StackAlloc {
     /// Allocates a temporary block on the stack (conceptual, compiler intrinsic).
     pub fn allocate_temp(size: Size) -> *mut u8 {
         println!(
-            "[Core::Mem] Conceptual StackAlloc: Allocating {} bytes temporarily on stack."
-                .to_string(),
+            "[Core::Mem] Conceptual StackAlloc: Allocating {} bytes temporarily on stack.",
             size.0
         );
         ptr::null_mut() // Dummy pointer
@@ -148,8 +146,7 @@ impl LinearAllocator {
     /// Allocates memory for a linear type.
     pub fn allocate(size: Size) -> *mut u8 {
         println!(
-            "[Core::Mem] Conceptual LinearAllocator: Allocating {} bytes for a linear type."
-                .to_string(),
+            "[Core::Mem] Conceptual LinearAllocator: Allocating {} bytes for a linear type.",
             size.0
         );
         // Conceptual: Allocation might involve special tracking to ensure single use.
@@ -158,7 +155,7 @@ impl LinearAllocator {
 
     /// Deallocates memory for a linear type, marking it as 'used'.
     pub fn deallocate(ptr: *mut u8, size: Size) {
-        println!("[Core::Mem] Conceptual LinearAllocator: Deallocating {} bytes for linear type at {:p}.".to_string(), size.0, ptr);
+        println!("[Core::Mem] Conceptual LinearAllocator: Deallocating {} bytes for linear type at {:p}.", size.0, ptr);
         // Conceptual: Runtime check to ensure it was used exactly once.
     }
 }
@@ -170,8 +167,7 @@ impl AffineAllocator {
     /// Allocates memory for an affine type.
     pub fn allocate(size: Size) -> *mut u8 {
         println!(
-            "[Core::Mem] Conceptual AffineAllocator: Allocating {} bytes for an affine type."
-                .to_string(),
+            "[Core::Mem] Conceptual AffineAllocator: Allocating {} bytes for an affine type.",
             size.0
         );
         // Conceptual: Allocation might involve special tracking to ensure at most one use.
@@ -180,7 +176,7 @@ impl AffineAllocator {
 
     /// Deallocates memory for an affine type, marking it as 'used' or 'dropped without use'.
     pub fn deallocate(ptr: *mut u8, size: Size) {
-        println!("[Core::Mem] Conceptual AffineAllocator: Deallocating {} bytes for affine type at {:p}.".to_string(), size.0, ptr);
+        println!("[Core::Mem] Conceptual AffineAllocator: Deallocating {} bytes for affine type at {:p}.", size.0, ptr);
         // Conceptual: Runtime check to ensure it was used at most once.
     }
 }
@@ -244,7 +240,7 @@ impl NimbusSystemCall {
     /// Conceptual: Performs a secure memory allocation via Nimbus microkernel.
     /// Can specify the memory region type (e.g., QPU-local, secure).
     pub fn secure_alloc(size: Size, region: MemoryRegion, policy_id: u64) -> *mut u8 {
-        println!("[Core::Nimbus] Conceptual SystemCall: SecureAlloc {} bytes in region {:?} with policy {}.".to_string(), size.0, region, policy_id);
+        println!("[Core::Nimbus] Conceptual SystemCall: SecureAlloc {} bytes in region {:?} with policy {}.", size.0, region, policy_id);
         // Actual call to Nimbus OS kernel via the global instance
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let mut microkernel = microkernel_arc.lock().unwrap();
@@ -256,8 +252,7 @@ impl NimbusSystemCall {
     /// Conceptual: Deallocates a secure memory region via Nimbus microkernel.
     pub fn secure_dealloc(ptr: *mut u8, size: Size, region: MemoryRegion) {
         println!(
-            "[Core::Nimbus] Conceptual SystemCall: SecureDealloc {} bytes in region {:?} at {:p}."
-                .to_string(),
+            "[Core::Nimbus] Conceptual SystemCall: SecureDealloc {} bytes in region {:?} at {:p}.",
             size.0, region, ptr
         );
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
@@ -269,7 +264,7 @@ impl NimbusSystemCall {
     /// Conceptual: Allocates a shared memory region between specified contexts.
     pub fn allocate_shared_memory(size: Size, contexts: &[NimbusContextId]) -> Result<u64, String> {
         println!(
-            "[Core::Nimbus] Conceptual SystemCall: Allocating {} bytes shared by {:?}.".to_string(),
+            "[Core::Nimbus] Conceptual SystemCall: Allocating {} bytes shared by {:?}.",
             size.0, contexts
         );
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
@@ -285,7 +280,7 @@ impl NimbusSystemCall {
         region_id: u64,
         permissions: u8,
     ) -> Result<(), String> {
-        println!("[Core::Nimbus] Conceptual SystemCall: Mapping memory region {} to context {} with permissions {}.".to_string(), region_id, context_id, permissions);
+        println!("[Core::Nimbus] Conceptual SystemCall: Mapping memory region {} to context {} with permissions {}.", region_id, context_id, permissions);
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let mut microkernel = microkernel_arc.lock().unwrap();
             // Conceptual: microkernel.map_memory_region_internal(context_id, region_id, permissions)
@@ -298,7 +293,7 @@ impl NimbusSystemCall {
         blueprint_id: Identifier,
         sandbox_policy: SandboxPolicy,
     ) -> NimbusContextId {
-        println!("[Core::Nimbus] Conceptual SystemCall: CreateIsolatedContext with blueprint {:?} and policy {:?}.".to_string(), blueprint_id, sandbox_policy);
+        println!("[Core::Nimbus] Conceptual SystemCall: CreateIsolatedContext with blueprint {:?} and policy {:?}.", blueprint_id, sandbox_policy);
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let mut microkernel = microkernel_arc.lock().unwrap();
             microkernel
@@ -315,8 +310,7 @@ impl NimbusSystemCall {
         message: &[u8],
     ) -> Result<(), String> {
         println!(
-            "[Core::Nimbus] Conceptual SystemCall: SendSecureMessage to context {} ({} bytes)."
-                .to_string(),
+            "[Core::Nimbus] Conceptual SystemCall: SendSecureMessage to context {} ({} bytes).",
             target_context_id,
             message.len()
         );
@@ -330,8 +324,7 @@ impl NimbusSystemCall {
     /// Conceptual: Receives a message via Nimbus's secure IPC channel.
     pub fn receive_secure_message(context_id: NimbusContextId) -> Result<Option<Vec<u8>>, String> {
         println!(
-            "[Core::Nimbus] Conceptual SystemCall: Receiving secure message for context {}."
-                .to_string(),
+            "[Core::Nimbus] Conceptual SystemCall: Receiving secure message for context {}.",
             context_id
         );
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
@@ -347,7 +340,7 @@ impl NimbusSystemCall {
         device_id: u64,
         command: &[u8],
     ) -> Result<Vec<u8>, String> {
-        println!("[Core::Nimbus] Conceptual SystemCall: Context {} accessing hardware device {} with command.".to_string(), context_id, device_id);
+        println!("[Core::Nimbus] Conceptual SystemCall: Context {} accessing hardware device {} with command.", context_id, device_id);
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let microkernel = microkernel_arc.lock().unwrap();
             microkernel.access_hardware(context_id, device_id, command)

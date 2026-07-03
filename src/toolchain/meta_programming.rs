@@ -61,7 +61,7 @@ impl MacroProcessor {
     /// Macro logic is stored and executed within a secure Nimbus OS context.
     pub fn register_macro(macro_def: MacroDefinition) -> Result<(), String> {
         println!(
-            "[Toolchain::MetaProg] Registering macro '{}'.".to_string(),
+            "[Toolchain::MetaProg] Registering macro '{}'.",
             macro_def.name.0
         );
         // Conceptual: Store macro definition, compile generator_logic to executable form.
@@ -75,14 +75,14 @@ impl MacroProcessor {
         args: List<MetaValue>,
     ) -> Result<ZenithCodeSnippet, String> {
         println!(
-            "[Toolchain::MetaProg] Expanding macro '{}' with args: {:?}.".to_string(),
+            "[Toolchain::MetaProg] Expanding macro '{}' with args: {:?}.",
             macro_name.0, args
         );
 
         // E.V.A.S. vetting for macro expansion, especially if it generates complex/privileged code.
         let evas_action = EvasActionContext {
             action_type: "macro_expansion".to_string(),
-            perceived_intent: format!("Generate code using macro {}.".to_string(), macro_name.0),
+            perceived_intent: format!("Generate code using macro {}.", macro_name.0),
             initiating_context_id: nimbus.os.get_current_context_id(), // Assume AGI is running in a context
             ..Default::default()
         };
@@ -92,10 +92,7 @@ impl MacroProcessor {
             .evaluate_action(evas_action)
         {
             EvasDecision::Block(reason) => {
-                return Err(format!(
-                    "E.V.A.S. blocked macro expansion: {}.".to_string(),
-                    reason
-                ))
+                return Err(format!("E.V.A.S. blocked macro expansion: {}.", reason))
             }
             _ => { /* Allow or Warn */ }
         }
@@ -129,14 +126,14 @@ impl AutonomousCodeGenerator {
         constraints: Map<String, MetaValue>,
     ) -> Result<ZenithCodeSnippet, String> {
         println!(
-            "[Toolchain::MetaProg] Autonomously generating code for goal: {:?}.".to_string(),
+            "[Toolchain::MetaProg] Autonomously generating code for goal: {:?}.",
             goal
         );
 
         // E.V.A.S. vetting for autonomous code generation, especially for sensitive domains.
         let evas_action = EvasActionContext {
             action_type: "autonomous_code_generation".to_string(),
-            perceived_intent: format!("Generate code to achieve goal {:?}.".to_string(), goal),
+            perceived_intent: format!("Generate code to achieve goal {:?}.", goal),
             initiating_context_id: nimbus.os.get_current_context_id(),
             ..Default::default()
         };
@@ -146,10 +143,7 @@ impl AutonomousCodeGenerator {
             .evaluate_action(evas_action)
         {
             EvasDecision::Block(reason) => {
-                return Err(format!(
-                    "E.V.A.S. blocked code generation: {}.".to_string(),
-                    reason
-                ))
+                return Err(format!("E.V.A.S. blocked code generation: {}.", reason))
             }
             _ => { /* Allow or Warn */ }
         }
@@ -165,7 +159,7 @@ impl AutonomousCodeGenerator {
         optimization_goal: String,
     ) -> Result<ZenithCodeSnippet, String> {
         println!(
-            "[Toolchain::MetaProg] Autonomously optimizing code for goal: '{}'.".to_string(),
+            "[Toolchain::MetaProg] Autonomously optimizing code for goal: '{}'.",
             optimization_goal
         );
         let self_evo_engine = SelfEvolutionEngine; // Dummy instantiation
@@ -185,8 +179,7 @@ impl AutonomousCodeGenerator {
         new_hardware_target: Identifier,
     ) -> Result<ZenithCodeSnippet, String> {
         println!(
-            "[Toolchain::MetaProg] Autonomously adapting code to new hardware target '{}'."
-                .to_string(),
+            "[Toolchain::MetaProg] Autonomously adapting code to new hardware target '{}'.",
             new_hardware_target.0
         );
         let transcoded_output = MetaOperations.transcode(
@@ -252,7 +245,7 @@ impl SecureMetaProgramming {
         let evas_action = EvasActionContext {
             action_type: "generated_code_deployment".to_string(),
             perceived_intent: format!(
-                "Deploy new generated code: {}.".to_string(),
+                "Deploy new generated code: {}.",
                 &code_snippet[..std::cmp::min(code_snippet.len(), 50)]
             ),
             initiating_context_id: nimbus.os.get_current_context_id(),

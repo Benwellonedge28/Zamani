@@ -96,7 +96,7 @@ impl TimeSeriesForecaster {
         horizon: usize,
     ) -> Result<Tensor<f32>, String> {
         println!(
-            "[StdLib::ML] Forecasting {} steps ahead using MTS context.".to_string(),
+            "[StdLib::ML] Forecasting {} steps ahead using MTS context.",
             horizon
         );
         Ok(Tensor::new(vec![horizon]))

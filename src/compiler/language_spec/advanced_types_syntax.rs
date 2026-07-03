@@ -73,8 +73,7 @@ impl AdvancedTypesSemanticAnalyzer {
         type_checker: &mut TypeChecker,
     ) -> Result<(), String> {
         println!(
-            "[LangSpec::AdvTypes] Performing semantic analysis for advanced type construct: {:?}."
-                .to_string(),
+            "[LangSpec::AdvTypes] Performing semantic analysis for advanced type construct: {:?}.",
             ast_node
         );
         // Conceptual:
@@ -93,7 +92,7 @@ pub struct AdvancedTypesIrGenerator;
 impl AdvancedTypesIrGenerator {
     pub fn generate_ir(&self, ast_node: &AdvancedTypeAst) -> Result<Vec<IrInstruction>, String> {
         println!(
-            "[LangSpec::AdvTypes] Generating IR for advanced type construct: {:?}.".to_string(),
+            "[LangSpec::AdvTypes] Generating IR for advanced type construct: {:?}.",
             ast_node
         );
         // Conceptual:

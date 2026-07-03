@@ -64,7 +64,7 @@ impl Arbitrary {
     /// Example: `Arbitrary::generate("i32")` or `Arbitrary::generate("List<String>")`
     pub fn generate(type_str: &str) -> MetaValue {
         println!(
-            "[Arbitrary] Generating random input for type: {}.".to_string(),
+            "[Arbitrary] Generating random input for type: {}.",
             type_str
         );
         // In a real implementation, this would dynamically generate a value

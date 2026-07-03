@@ -58,10 +58,7 @@ pub struct TcpListener;
 
 impl TcpListener {
     pub fn bind(addr: SocketAddr) -> Result<Self, String> {
-        println!(
-            "[StdLib::Net] TcpListener: Binding to {:?}.".to_string(),
-            addr
-        );
+        println!("[StdLib::Net] TcpListener: Binding to {:?}.", addr);
         // Conceptual: Nimbus OS would provide secure network capabilities.
         Ok(TcpListener)
     }
@@ -84,10 +81,7 @@ pub struct TcpStream;
 
 impl TcpStream {
     pub fn connect(addr: SocketAddr) -> Result<Self, String> {
-        println!(
-            "[StdLib::Net] TcpStream: Connecting to {:?}.".to_string(),
-            addr
-        );
+        println!("[StdLib::Net] TcpStream: Connecting to {:?}.", addr);
         // Conceptual: Initiates a connection.
         Ok(TcpStream)
     }
@@ -134,16 +128,13 @@ pub struct UdpSocket;
 
 impl UdpSocket {
     pub fn bind(addr: SocketAddr) -> Result<Self, String> {
-        println!(
-            "[StdLib::Net] UdpSocket: Binding to {:?}.".to_string(),
-            addr
-        );
+        println!("[StdLib::Net] UdpSocket: Binding to {:?}.", addr);
         Ok(UdpSocket)
     }
 
     pub fn send_to(&self, data: &[u8], addr: SocketAddr) -> Result<Size, String> {
         println!(
-            "[StdLib::Net] UdpSocket: Sending {} bytes to {:?}.".to_string(),
+            "[StdLib::Net] UdpSocket: Sending {} bytes to {:?}.",
             data.len(),
             addr
         );
@@ -152,7 +143,7 @@ impl UdpSocket {
 
     pub fn receive_from(&self, buffer: &mut [u8]) -> Result<(Size, SocketAddr), String> {
         println!(
-            "[StdLib::Net] UdpSocket: Receiving from {} byte buffer.".to_string(),
+            "[StdLib::Net] UdpSocket: Receiving from {} byte buffer.",
             buffer.len()
         );
         Ok((
@@ -196,7 +187,7 @@ impl HttpClient {
 
     pub fn send(&self, request: HttpRequest) -> Result<HttpResponse, String> {
         println!(
-            "[StdLib::Net] HttpClient: Sending {} request to {}.".to_string(),
+            "[StdLib::Net] HttpClient: Sending {} request to {}.",
             request.method, request.url
         );
         // Conceptual: Internally uses TcpStream or secure channels, potentially via NimbusSystemCall
@@ -229,7 +220,7 @@ impl SecureChannel {
         peer_context: NimbusContextId,
     ) -> Result<Self, String> {
         println!(
-            "[StdLib::Net] SecureChannel: Establishing between contexts {} and {}.".to_string(),
+            "[StdLib::Net] SecureChannel: Establishing between contexts {} and {}.",
             local_context, peer_context
         );
 
@@ -251,10 +242,7 @@ impl SecureChannel {
 
     /// Sends a message through the secure channel.
     pub fn send_message(&self, data: &[u8]) -> Result<(), String> {
-        println!(
-            "[StdLib::Net] SecureChannel: Sending {} bytes.".to_string(),
-            data.len()
-        );
+        println!("[StdLib::Net] SecureChannel: Sending {} bytes.", data.len());
         self.microkernel_instance
             .lock()
             .unwrap()
@@ -273,7 +261,7 @@ impl SecureChannel {
     /// Terminates the secure channel.
     pub fn terminate(&self) -> Result<(), String> {
         println!(
-            "[StdLib::Net] SecureChannel: Terminating channel {}.".to_string(),
+            "[StdLib::Net] SecureChannel: Terminating channel {}.",
             self.channel_id
         );
         self.microkernel_instance

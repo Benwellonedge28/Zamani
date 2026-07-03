@@ -41,7 +41,7 @@ impl IntentAnalyzer {
         context: EvasActionContext,
     ) -> Result<EvasDecision, String> {
         println!(
-            "[StdLib::Governance] Analyzing intent for idea: {:?}.".to_string(),
+            "[StdLib::Governance] Analyzing intent for idea: {:?}.",
             idea
         );
         // Conceptual: Perform high-level semantic analysis, bias detection, and safety vetting.
@@ -59,7 +59,7 @@ impl ComplianceEnforcer {
     /// Identifies a user and validates their authorization for specific AGI operations.
     pub fn identify_and_authorize_user(user_id: &str, operation: &str) -> Result<bool, String> {
         println!(
-            "[StdLib::Governance] Authorizing user '{}' for operation '{}'.".to_string(),
+            "[StdLib::Governance] Authorizing user '{}' for operation '{}'.",
             user_id, operation
         );
         Ok(true)
@@ -68,7 +68,7 @@ impl ComplianceEnforcer {
     /// Autonomously blocks a user from accessing the system due to security or ethical violations.
     pub fn block_user(user_id: &str, reason: &str) -> Result<(), String> {
         println!(
-            "[StdLib::Governance] BLOCKED user '{}'. Reason: {}.".to_string(),
+            "[StdLib::Governance] BLOCKED user '{}'. Reason: {}.",
             user_id, reason
         );
         // Conceptual: Update Nimbus OS access control lists, notify admin.
@@ -90,7 +90,7 @@ impl LegalInterface {
         regulation: &str,
     ) -> Result<String, String> {
         println!(
-            "[StdLib::Governance] Generating {} compliance notice for action {}.".to_string(),
+            "[StdLib::Governance] Generating {} compliance notice for action {}.",
             regulation, action_id.0
         );
         Ok("Zenith-Signed Legal Compliance Certificate v1.0".to_string())

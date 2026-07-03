@@ -149,7 +149,7 @@ impl AutonomousObject {
     /// optimize performance, or defend against threats.
     pub fn autonomous_cognitive_cycle(&mut self) -> Result<(), String> {
         println!(
-            "[Compiler::OOPAdv] Autonomous Object '{}' performing cognitive cycle.".to_string(),
+            "[Compiler::OOPAdv] Autonomous Object '{}' performing cognitive cycle.",
             self.base_object.get_id()
         );
         // Conceptual: The embedded AGI agent (AutonomousAgent) executes its cognitive cycle.
@@ -162,8 +162,7 @@ impl AutonomousObject {
     /// Leverages `toolchain::self_evolution`.
     pub fn self_optimize(&mut self, optimization_goal: String) -> Result<(), String> {
         println!(
-            "[Compiler::OOPAdv] Autonomous Object '{}' initiating self-optimization for goal '{}'."
-                .to_string(),
+            "[Compiler::OOPAdv] Autonomous Object '{}' initiating self-optimization for goal '{}'.",
             self.base_object.get_id(),
             optimization_goal
         );
@@ -178,7 +177,7 @@ impl AutonomousObject {
     /// Integrates with `toolchain::formal_verification`.
     pub fn self_verify(&self) -> Result<Proof, String> {
         println!(
-            "[Compiler::OOPAdv] Autonomous Object '{}' performing self-verification.".to_string(),
+            "[Compiler::OOPAdv] Autonomous Object '{}' performing self-verification.",
             self.base_object.get_id()
         );
         let verifier = FormalVerificationEngine; // Dummy instantiation
@@ -203,7 +202,7 @@ impl MetaObjectProtocol {
         new_impl: OverridePatch,
     ) -> Result<(), String> {
         println!(
-            "[Compiler::OOPAdv] Dynamically overriding method '{}' for object '{}'.".to_string(),
+            "[Compiler::OOPAdv] Dynamically overriding method '{}' for object '{}'.",
             method_name.0, object_id.0
         );
         MetaOperations.override_behavior(object_id, new_impl, Map::new()) // Use MetaOps for security vetting
@@ -216,7 +215,7 @@ impl MetaObjectProtocol {
         behavior_code: ZenithCodeSnippet,
     ) -> Result<(), String> {
         println!(
-            "[Compiler::OOPAdv] Installing custom meta-behavior for class '{}'.".to_string(),
+            "[Compiler::OOPAdv] Installing custom meta-behavior for class '{}'.",
             class_name.0
         );
         // Conceptual: Intercept method calls, field accesses for this class.
@@ -229,7 +228,7 @@ impl MetaObjectProtocol {
         object_id: Identifier,
     ) -> Result<Map<String, MetaValue>, String> {
         println!(
-            "[Compiler::OOPAdv] Reflecting structure of object '{}'.".to_string(),
+            "[Compiler::OOPAdv] Reflecting structure of object '{}'.",
             object_id.0
         );
         crate::stdlib::reflection::Reflection.get_object_info(object_id) // Conceptual call
@@ -250,7 +249,7 @@ impl SecureObjectOperations {
         public_key: PublicKey,
     ) -> Result<HomomorphicCiphertext, String> {
         println!(
-            "[Compiler::OOPAdv] Encrypting state of object '{}' homomorphically.".to_string(),
+            "[Compiler::OOPAdv] Encrypting state of object '{}' homomorphically.",
             object_id.0
         );
         let serialized_state = crate::stdlib::serialize::Serialize.to_bytes(
@@ -268,8 +267,7 @@ impl SecureObjectOperations {
         encrypted_args: List<HomomorphicCiphertext>,
     ) -> Result<HomomorphicCiphertext, String> {
         println!(
-            "[Compiler::OOPAdv] Operating on encrypted object state with operation '{}'."
-                .to_string(),
+            "[Compiler::OOPAdv] Operating on encrypted object state with operation '{}'.",
             operation.0
         );
         // Conceptual: Requires a HE-aware method dispatcher for object operations.
@@ -284,7 +282,7 @@ impl SecureObjectOperations {
         signing_key_id: Identifier,
     ) -> Result<Signature, String> {
         println!(
-            "[Compiler::OOPAdv] Signing execution trace for object '{}'.".to_string(),
+            "[Compiler::OOPAdv] Signing execution trace for object '{}'.",
             object_id.0
         );
         let kms = KeyManagementSystem; // Dummy instantiation
@@ -305,15 +303,12 @@ impl SecureObjectOperations {
         current_behavior_context: Map<String, String>,
     ) -> Result<EvasDecision, String> {
         println!(
-            "[Compiler::OOPAdv] Verifying ethical compliance for object '{}'.".to_string(),
+            "[Compiler::OOPAdv] Verifying ethical compliance for object '{}'.",
             object_id.0
         );
         let evas_action = EvasActionContext {
             action_type: "object_behavior_check".to_string(),
-            perceived_intent: format!(
-                "Verify ethical compliance of object {}.".to_string(),
-                object_id.0
-            ),
+            perceived_intent: format!("Verify ethical compliance of object {}.", object_id.0),
             initiating_context_id: nimbus.os.get_current_context_id(), // Assume AGI is running in a context
             ..Default::default()
         };
@@ -343,7 +338,7 @@ impl ZenithObject {
     }
     pub fn update_implementation(&mut self, code: ZenithCodeSnippet) {
         println!(
-            "Conceptual: Updating implementation for object {:?} with code snippet.".to_string(),
+            "Conceptual: Updating implementation for object {:?} with code snippet.",
             self.get_id()
         );
     }

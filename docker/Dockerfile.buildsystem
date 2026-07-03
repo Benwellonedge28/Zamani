@@ -1,0 +1,26 @@
+# ── Zenith Build System / Package Manager (zenith-pkg) ───────────────────────
+# Status: WORKING. Builds with `--features buildsystem`. Real Zenith.toml
+# TOML parsing + dependency-graph resolution. Registry fetch/publish and
+# multi-target codegen invocation are still simulated (logged as such) since
+# there's no real package registry or full multi-target backend yet.
+FROM rust:slim-bookworm AS builder
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG VERSION=dev
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && apt-get clean
+
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo build --release --features buildsystem --bin zenith-pkg
+
+FROM debian:bookworm-slim AS runtime
+LABEL org.opencontainers.image.title="Zenith Build System (zenith-pkg)"
+LABEL org.opencontainers.image.description="Zenith.toml manifest parsing, dependency resolution, build orchestration"
+LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zenith"
+LABEL org.opencontainers.image.version="${VERSION}"
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && apt-get clean
+WORKDIR /project
+COPY --from=builder /app/target/release/zenith-pkg /usr/local/bin/zenith-pkg
+ENTRYPOINT ["/usr/local/bin/zenith-pkg"]
+CMD ["build"]

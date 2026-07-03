@@ -97,7 +97,7 @@ impl OptimizationManager {
         context: OptimizationContext,
     ) -> Result<ZenithIR, String> {
         println!(
-            "[Compiler::OptStrat] Optimizing IR with context: {:?}.".to_string(),
+            "[Compiler::OptStrat] Optimizing IR with context: {:?}.",
             context.goal
         );
 
@@ -121,8 +121,7 @@ impl OptimizationManager {
                     {
                         EvasDecision::Block(reason) => {
                             println!(
-                                "[Compiler::OptStrat] E.V.A.S. BLOCKED optimization pass {}: {}."
-                                    .to_string(),
+                                "[Compiler::OptStrat] E.V.A.S. BLOCKED optimization pass {}: {}.",
                                 opt_pass.id.0, reason
                             );
                             continue; // Skip this pass
@@ -141,7 +140,7 @@ impl OptimizationManager {
     /// Applies a single optimization pass. Can use MTS for speculative application.
     fn apply_pass(&self, ir: ZenithIR, opt_pass: &OptimizationPass) -> Result<ZenithIR, String> {
         println!(
-            "[Compiler::OptStrat] Applying optimization pass {}.".to_string(),
+            "[Compiler::OptStrat] Applying optimization pass {}.",
             opt_pass.id.0
         );
         // Conceptual:

@@ -67,8 +67,7 @@ impl DeclarativeSystemDirectivesSemanticAnalyzer {
         type_checker: &mut TypeChecker,
     ) -> Result<(), String> {
         println!(
-            "[LangSpec::DeclSysDir] Performing semantic analysis for self_adjust statement: {:?}."
-                .to_string(),
+            "[LangSpec::DeclSysDir] Performing semantic analysis for self_adjust statement: {:?}.",
             ast_node
         );
         // Conceptual:
@@ -84,8 +83,7 @@ impl DeclarativeSystemDirectivesSemanticAnalyzer {
         type_checker: &mut TypeChecker,
     ) -> Result<(), String> {
         println!(
-            "[LangSpec::DeclSysDir] Performing semantic analysis for versioning statement: {:?}."
-                .to_string(),
+            "[LangSpec::DeclSysDir] Performing semantic analysis for versioning statement: {:?}.",
             ast_node
         );
         // Conceptual:
@@ -105,7 +103,7 @@ impl DeclarativeSystemDirectivesIrGenerator {
         ast_node: &SelfAdjustmentAst,
     ) -> Result<Vec<IrInstruction>, String> {
         println!(
-            "[LangSpec::DeclSysDir] Generating IR for self_adjust statement: {:?}.".to_string(),
+            "[LangSpec::DeclSysDir] Generating IR for self_adjust statement: {:?}.",
             ast_node
         );
         // Conceptual:
@@ -119,7 +117,7 @@ impl DeclarativeSystemDirectivesIrGenerator {
         ast_node: &VersioningAst,
     ) -> Result<Vec<IrInstruction>, String> {
         println!(
-            "[LangSpec::DeclSysDir] Generating IR for versioning statement: {:?}.".to_string(),
+            "[LangSpec::DeclSysDir] Generating IR for versioning statement: {:?}.",
             ast_node
         );
         // Conceptual:

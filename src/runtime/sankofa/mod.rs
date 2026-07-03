@@ -131,7 +131,7 @@ pub fn record_zamani_fact(
     };
     state.zamani_store.record_fact(fact);
     println!(
-        "    -> Sankofa Runtime: Recorded Zamani fact '{}' at {}.".to_string(),
+        "    -> Sankofa Runtime: Recorded Zamani fact '{}' at {}.",
         fact_id, timestamp
     );
 }
@@ -170,7 +170,7 @@ pub fn update_sasa_knowledge(
         .push(new_version.version_id);
 
     println!(
-        "    -> Sankofa Runtime: Updated Sasa knowledge '{}' to version {} at {}.".to_string(),
+        "    -> Sankofa Runtime: Updated Sasa knowledge '{}' to version {} at {}.",
         knowledge_id, new_version.version_id, timestamp
     );
     new_version
@@ -195,8 +195,7 @@ pub fn temporal_learn(
     timestamp_range_end: u64,
 ) {
     println!(
-        "    -> Sankofa Runtime: Initiating temporal learning for '{}' over range {}-{}."
-            .to_string(),
+        "    -> Sankofa Runtime: Initiating temporal learning for '{}' over range {}-{}.",
         knowledge_id, timestamp_range_start, timestamp_range_end
     );
     let state_guard = runtime_state_arc.lock().unwrap();
@@ -218,7 +217,7 @@ pub fn temporal_learn(
     }
     drop(state_guard);
     println!(
-        "    -> Sankofa Runtime: Temporal learning completed for '{}'.".to_string(),
+        "    -> Sankofa Runtime: Temporal learning completed for '{}'.",
         knowledge_id
     );
 }

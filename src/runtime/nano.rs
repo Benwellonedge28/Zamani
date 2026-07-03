@@ -82,7 +82,7 @@ impl NanoAgentOrchestrator {
         };
         self.deployed_agents.insert(id, new_agent);
         println!(
-            "    -> Nano Runtime: Assembled Nano-Agent {} (Blueprint: {}).".to_string(),
+            "    -> Nano Runtime: Assembled Nano-Agent {} (Blueprint: {}).",
             id, blueprint_id
         );
         id
@@ -107,14 +107,14 @@ impl NanoAgentOrchestrator {
                 agent.status =
                     NanoAgentStatus::Malfunction(format!("Action '{}' failed randomly.", action));
                 println!(
-                    "      -> Nano-Agent {} malfunctioned during action '{}'.".to_string(),
+                    "      -> Nano-Agent {} malfunctioned during action '{}'.",
                     agent_id, action
                 );
                 return Err(agent.status.to_string());
             }
 
             println!(
-                "    -> Nano Runtime: Agent {} performing action '{}'.".to_string(),
+                "    -> Nano Runtime: Agent {} performing action '{}'.",
                 agent_id, action
             );
             agent.status = NanoAgentStatus::Idle; // Action complete
@@ -135,8 +135,7 @@ impl NanoAgentOrchestrator {
             && self.deployed_agents.contains_key(&target_id)
         {
             println!(
-                "    -> Nano Runtime: Agent {} communicating with {} with message ({} bytes)."
-                    .to_string(),
+                "    -> Nano Runtime: Agent {} communicating with {} with message ({} bytes).",
                 sender_id,
                 target_id,
                 message.len()
@@ -163,7 +162,7 @@ impl NanoAgentOrchestrator {
             new_agent.energy_level = 0.8; // New agent starts with less energy
             self.deployed_agents.insert(new_id, new_agent);
             println!(
-                "    -> Nano Runtime: Replicated Nano-Agent {} to new Agent {}.".to_string(),
+                "    -> Nano Runtime: Replicated Nano-Agent {} to new Agent {}.",
                 agent_id, new_id
             );
             Ok(new_id)
@@ -180,10 +179,7 @@ impl NanoAgentOrchestrator {
         if let Some(agent) = self.deployed_agents.get_mut(&agent_id) {
             agent.status = NanoAgentStatus::Disassembled;
             self.deployed_agents.remove(&agent_id);
-            println!(
-                "    -> Nano Runtime: Disassembled Nano-Agent {}.".to_string(),
-                agent_id
-            );
+            println!("    -> Nano Runtime: Disassembled Nano-Agent {}.", agent_id);
         }
     }
 

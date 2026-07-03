@@ -2,7 +2,15 @@
 //! Zenith Self-Evolution — the compiler rewriting and improving itself.
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum SelfModTarget { Lexer, Parser, SemanticAnalyser, IrGenerator, Optimiser, Backend, Runtime }
+pub enum SelfModTarget {
+    Lexer,
+    Parser,
+    SemanticAnalyser,
+    IrGenerator,
+    Optimiser,
+    Backend,
+    Runtime,
+}
 
 #[derive(Debug, Clone)]
 pub struct SelfModPatch {
@@ -29,11 +37,25 @@ pub struct SelfEvolutionEngine {
 }
 
 impl SelfEvolutionEngine {
-    pub fn new() -> Self { SelfEvolutionEngine { patches: Vec::new(), next_id: 1, total_improvement: 0.0 } }
+    pub fn new() -> Self {
+        SelfEvolutionEngine {
+            patches: Vec::new(),
+            next_id: 1,
+            total_improvement: 0.0,
+        }
+    }
 
     pub fn propose_patch(&mut self, target: SelfModTarget, description: &str, delta: f32) -> u64 {
-        let id = self.next_id; self.next_id += 1;
-        self.patches.push(SelfModPatch { id, target, description: description.into(), performance_delta: delta, verified: false, applied: false });
+        let id = self.next_id;
+        self.next_id += 1;
+        self.patches.push(SelfModPatch {
+            id,
+            target,
+            description: description.into(),
+            performance_delta: delta,
+            verified: false,
+            applied: false,
+        });
         id
     }
 
@@ -64,4 +86,8 @@ impl SelfEvolutionEngine {
     }
 }
 
-impl Default for SelfEvolutionEngine { fn default() -> Self { Self::new() } }
+impl Default for SelfEvolutionEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -20,7 +20,7 @@ pub fn generate_ffi_bindings(
     zenith_declarations: &str,
     target_language: &str,
 ) -> Result<String, String> {
-    println!("[Toolchain::interop] Generating FFI bindings for '{}' from Zenith declarations (conceptual)...".to_string(), target_language);
+    println!("[Toolchain::interop] Generating FFI bindings for '{}' from Zenith declarations (conceptual)...", target_language);
     // Conceptual: Analyze Zenith function signatures and generate corresponding
     // C headers, Rust `extern "C"` blocks, Python CFFI stubs, etc.
     Ok(format!(

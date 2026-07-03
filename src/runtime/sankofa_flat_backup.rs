@@ -164,7 +164,7 @@ pub fn record_zamani_fact(runtime_state_arc: &Arc<Mutex<SankofaRuntimeState>>, f
     let mut state = runtime_state_arc.lock().unwrap();
     let fact = ZamaniFactRecord { fact_id: fact_id.clone(), content, timestamp_recorded: timestamp, provenance };
     state.zamani_store.record_fact(fact);
-    println!("    -> Sankofa Runtime: Recorded Zamani fact '{}' at {}.".to_string(), fact_id, timestamp);
+    println!("    -> Sankofa Runtime: Recorded Zamani fact '{}' at {}.", fact_id, timestamp);
 }
 
 /// Conceptual function to access a `Zamani` (immutable past) fact.
@@ -184,7 +184,7 @@ pub fn update_sasa_knowledge(runtime_state_arc: &Arc<Mutex<SankofaRuntimeState>>
     // For simplicity, just adding self for now.
     state.causality_graph.entry(new_version.version_id).or_default().push(new_version.version_id);
     
-    println!("    -> Sankofa Runtime: Updated Sasa knowledge '{}' to version {} at {}.".to_string(), knowledge_id, new_version.version_id, timestamp);
+    println!("    -> Sankofa Runtime: Updated Sasa knowledge '{}' to version {} at {}.", knowledge_id, new_version.version_id, timestamp);
     new_version
 }
 
@@ -197,7 +197,7 @@ pub fn get_sasa_knowledge_at_time(runtime_state_arc: &Arc<Mutex<SankofaRuntimeSt
 /// Conceptual function for `temporal_learn` operation.
 /// Invokes registered learning agents.
 pub fn temporal_learn(runtime_state_arc: &Arc<Mutex<SankofaRuntimeState>>, knowledge_id: &str, timestamp_range_start: u64, timestamp_range_end: u64) {
-    println!("    -> Sankofa Runtime: Initiating temporal learning for '{}' over range {}-{}.".to_string(), knowledge_id, timestamp_range_start, timestamp_range_end);
+    println!("    -> Sankofa Runtime: Initiating temporal learning for '{}' over range {}-{}.", knowledge_id, timestamp_range_start, timestamp_range_end);
     let state_guard = runtime_state_arc.lock().unwrap();
     
     if let Some(versions) = state_guard.sasa_store.knowledge_versions.get(knowledge_id) {
@@ -212,7 +212,7 @@ pub fn temporal_learn(runtime_state_arc: &Arc<Mutex<SankofaRuntimeState>>, knowl
         }
     }
     drop(state_guard);
-    println!("    -> Sankofa Runtime: Temporal learning completed for '{}'.".to_string(), knowledge_id);
+    println!("    -> Sankofa Runtime: Temporal learning completed for '{}'.", knowledge_id);
 }
 
 /// Conceptual agent that looks for simple temporal patterns.

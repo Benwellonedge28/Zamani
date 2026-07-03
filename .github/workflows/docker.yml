@@ -1,4 +1,4 @@
-name: Docker — Zenith Compiler
+name: Docker — Zenith Components
 
 on:
   push:
@@ -14,18 +14,15 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/zenith-compiler
 
 jobs:
-  # ── 1. Pre-flight: verify cargo build + test natively ────────────────────────
+  # ── 1. Pre-flight: verify cargo build + test natively ────────────────────
   cargo-verify:
     name: "🦀 Cargo Build & Test"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
-
       - uses: actions/cache@v5
         with:
           path: |
@@ -33,20 +30,38 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-docker-preflight-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build release binary
+      - name: Build release binary (default features — the compiler)
         run: cargo build --release --verbose
-
+      - name: Build LSP (--features lsp)
+        run: cargo build --release --features lsp --bin zenith-lsp --verbose
+      - name: Build build-system (--features buildsystem)
+        run: cargo build --release --features buildsystem --bin zenith-pkg --verbose
       - name: Run test suite
         run: cargo test --release -- --test-threads=4
 
-  # ── 2. Build & push Docker image ─────────────────────────────────────────────
+  # ── 2. Build & push per-component Docker images ──────────────────────────
+  # Only the components that actually compile today are built here.
+  # `runtime` and `stdlib` are intentionally excluded — see docker/README.md
+  # for why (real compile errors in that aspirational code, not a CI issue).
   docker-build:
-    name: "🐳 Build & Push Image"
+    name: "🐳 Build & Push ${{ matrix.component }} Image"
     needs: [cargo-verify]
     runs-on: ubuntu-latest
-    outputs:
-      image-digest: ${{ steps.build.outputs.digest }}
+    strategy:
+      matrix:
+        include:
+          - component: compiler
+            dockerfile: docker/Dockerfile.compiler
+            image: zenith-compiler
+            smoke_cmd: "/usr/local/bin/zenith --help"
+          - component: lsp
+            dockerfile: docker/Dockerfile.lsp
+            image: zenith-lsp
+            smoke_cmd: ""
+          - component: buildsystem
+            dockerfile: docker/Dockerfile.buildsystem
+            image: zenith-pkg
+            smoke_cmd: "/usr/local/bin/zenith-pkg deps --manifest Zenith.toml"
     steps:
       - uses: actions/checkout@v4
 
@@ -65,7 +80,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -79,47 +94,51 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             GIT_COMMIT=${{ github.sha }}
             VERSION=${{ steps.meta.outputs.version }}
 
       - name: Smoke-test image (pull requests)
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && matrix.smoke_cmd != ''
         run: |
           IMAGE=$(echo "${{ steps.meta.outputs.tags }}" | head -1)
-          docker run --rm "$IMAGE" /usr/local/bin/zenith --help && echo "✅ Smoke test passed"
+          docker run --rm "$IMAGE" ${{ matrix.smoke_cmd }} && echo "✅ ${{ matrix.component }} smoke test passed"
 
       - name: Confirm push
         if: github.event_name != 'pull_request'
-        run: echo "✅ Image pushed — digest ${{ steps.build.outputs.digest }}"
+        run: echo "✅ ${{ matrix.component }} image pushed — digest ${{ steps.build.outputs.digest }}"
 
-  # ── 3. Container security scan ───────────────────────────────────────────────
+  # ── 3. Container security scan ────────────────────────────────────────────
   trivy-scan:
-    name: "🔍 Trivy Container Scan"
+    name: "🔍 Trivy Scan — ${{ matrix.image }}"
     needs: [docker-build]
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
+    strategy:
+      matrix:
+        image: [zenith-compiler, zenith-lsp, zenith-pkg]
     steps:
       - uses: actions/checkout@v4
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:latest
           format: sarif
-          output: trivy-results.sarif
+          output: trivy-results-${{ matrix.image }}.sarif
           severity: CRITICAL,HIGH
         continue-on-error: true
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: trivy-results-${{ matrix.image }}.sarif
         continue-on-error: true

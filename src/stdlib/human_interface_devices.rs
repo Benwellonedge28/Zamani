@@ -61,7 +61,7 @@ impl HidManager {
         filter: Map<String, String>,
     ) -> Result<List<HumanInterfaceDevice>, String> {
         println!(
-            "[StdLib::HID] Discovering HID devices with filters: {:?}.".to_string(),
+            "[StdLib::HID] Discovering HID devices with filters: {:?}.",
             filter
         );
         Ok(List::new())
@@ -69,10 +69,7 @@ impl HidManager {
 
     /// Connects to a specific human interface device.
     pub fn connect_device(device_id: &Identifier) -> Result<HidConnection, String> {
-        println!(
-            "[StdLib::HID] Connecting to HID device {}.".to_string(),
-            device_id.0
-        );
+        println!("[StdLib::HID] Connecting to HID device {}.", device_id.0);
         Ok(HidConnection {
             device_id: device_id.clone(),
         })
@@ -95,7 +92,7 @@ impl HidConnection {
         args: List<MetaValue>,
     ) -> Result<(), String> {
         println!(
-            "[StdLib::HID] Sending GUI command '{}' to device {}.".to_string(),
+            "[StdLib::HID] Sending GUI command '{}' to device {}.",
             command.0, self.device_id.0
         );
         Ok(())
@@ -104,7 +101,7 @@ impl HidConnection {
     /// Receives CLI input from the user.
     pub fn read_cli_input(&self, prompt: &str) -> Result<String, String> {
         println!(
-            "[StdLib::HID] Reading CLI input from device {}: '{}'.".to_string(),
+            "[StdLib::HID] Reading CLI input from device {}: '{}'.",
             self.device_id.0, prompt
         );
         Ok("user_input_string".to_string())
@@ -113,7 +110,7 @@ impl HidConnection {
     /// Displays CLI output to the user.
     pub fn write_cli_output(&self, output: &str) -> Result<(), String> {
         println!(
-            "[StdLib::HID] Writing CLI output to device {}: '{}'.".to_string(),
+            "[StdLib::HID] Writing CLI output to device {}: '{}'.",
             self.device_id.0, output
         );
         Ok(())
@@ -144,10 +141,7 @@ impl VoiceCommandInterface {
     /// Generates spoken language output for the user.
     /// Leverages `stdlib::nlp` for text-to-speech.
     pub fn generate_voice_output(&self, text: &str) -> Result<List<u8>, String> {
-        println!(
-            "[StdLib::HID] Generating voice output: '{}'.".to_string(),
-            text
-        );
+        println!("[StdLib::HID] Generating voice output: '{}'.", text);
         Ok(List::new()) // Audio byte stream
     }
 }
@@ -178,7 +172,7 @@ impl GestureRecognition {
     /// Provides real-time feedback on recognized gestures (e.g., visual confirmation).
     pub fn provide_gesture_feedback(&self, gesture: &GestureEvent) -> Result<(), String> {
         println!(
-            "[StdLib::HID] Providing feedback for gesture: {:?}.".to_string(),
+            "[StdLib::HID] Providing feedback for gesture: {:?}.",
             gesture.gesture_type.0
         );
         Ok(())
@@ -277,7 +271,7 @@ impl TouchScreenInterface {
     /// Provides haptic feedback directly through the touch screen or a connected device.
     pub fn provide_haptic_feedback(&self, pattern: &str, intensity: f32) -> Result<(), String> {
         println!(
-            "[StdLib::HID] Providing haptic feedback: '{}' at intensity {}.".to_string(),
+            "[StdLib::HID] Providing haptic feedback: '{}' at intensity {}.",
             pattern, intensity
         );
         Ok(())

@@ -36,7 +36,7 @@ impl<
 {
     pub fn new(rows: usize, cols: usize) -> Result<Self, String> {
         println!(
-            "[StdLib::Numeric] Creating new Matrix with {} rows, {} cols.".to_string(),
+            "[StdLib::Numeric] Creating new Matrix with {} rows, {} cols.",
             rows, cols
         );
         Ok(Matrix {
@@ -90,7 +90,7 @@ impl Stats {
     /// Computes the mean of a list of numbers.
     pub fn mean(data: &List<f64>) -> Option<f64> {
         println!(
-            "[StdLib::Numeric] Computing mean of {} elements.".to_string(),
+            "[StdLib::Numeric] Computing mean of {} elements.",
             data.len()
         );
         if data.len() == 0 {
@@ -103,7 +103,7 @@ impl Stats {
     /// Computes the standard deviation of a list of numbers.
     pub fn std_dev(data: &List<f64>) -> Option<f64> {
         println!(
-            "[StdLib::Numeric] Computing standard deviation of {} elements.".to_string(),
+            "[StdLib::Numeric] Computing standard deviation of {} elements.",
             data.len()
         );
         Some(1.0) // Dummy
@@ -157,7 +157,7 @@ impl Optimizer {
     {
         // Requires `Fn` trait, which is for closures
         println!(
-            "[StdLib::Numeric] Performing gradient descent for {} iterations.".to_string(),
+            "[StdLib::Numeric] Performing gradient descent for {} iterations.",
             iterations
         );
         // Conceptual: Iteratively apply `gradient_fn`.

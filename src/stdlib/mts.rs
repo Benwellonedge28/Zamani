@@ -45,8 +45,7 @@ impl MtsSlice {
     /// Creates a new MTS slice with an initial state.
     pub fn new<T: Debug + serde_json::Serialize>(initial_state: T) -> Self {
         println!(
-            "[StdLib::mts] Creating new MTS Slice with initial state (conceptual: {:?})."
-                .to_string(),
+            "[StdLib::mts] Creating new MTS Slice with initial state (conceptual: {:?}).",
             initial_state
         );
         let content_bytes =
@@ -64,7 +63,7 @@ impl MtsSlice {
     /// Forks a new timeline from this slice at the current timestamp.
     pub fn fork(&self, new_name: &str) -> Result<Self, String> {
         println!(
-            "[StdLib::mts] Forking MtsSlice {} as '{}'.".to_string(),
+            "[StdLib::mts] Forking MtsSlice {} as '{}'.",
             self.0, new_name
         );
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
@@ -90,7 +89,7 @@ impl MtsSlice {
     ) -> T {
         // Added Default bound
         println!(
-            "[StdLib::mts] Loading state from MTS Slice {} at timestamp {}.".to_string(),
+            "[StdLib::mts] Loading state from MTS Slice {} at timestamp {}.",
             self.0, timestamp
         );
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
@@ -113,7 +112,7 @@ impl MtsSlice {
         timestamp: Timestamp,
     ) -> Result<(), String> {
         println!(
-            "[StdLib::mts] Storing state {:?} into MTS Slice {} at timestamp {}.".to_string(),
+            "[StdLib::mts] Storing state {:?} into MTS Slice {} at timestamp {}.",
             state, self.0, timestamp
         );
         let content_bytes = serde_json::to_vec(&state).expect("Failed to serialize state");
@@ -131,7 +130,7 @@ impl MtsSlice {
     /// Synchronizes (merges) this MTS slice with another slice.
     pub fn synchronize(&self, other: &MtsSlice) -> Result<Self, String> {
         println!(
-            "[StdLib::mts] Synchronizing MTS Slice {} with {}.".to_string(),
+            "[StdLib::mts] Synchronizing MTS Slice {} with {}.",
             self.0, other.0
         );
         let merge_point = chrono::Utc::now().timestamp_millis() as Timestamp; // Conceptual merge point
@@ -144,10 +143,7 @@ impl MtsSlice {
 
     /// Checks for causal consistency of this timeline.
     pub fn check_causality(&self) -> bool {
-        println!(
-            "[StdLib::mts] Checking causality for MtsSlice {}.".to_string(),
-            self.0
-        );
+        println!("[StdLib::mts] Checking causality for MtsSlice {}.", self.0);
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
             runtime_check_causality(self.0)
         } else {

@@ -42,7 +42,7 @@ impl Wasm {
     /// Loads and instantiates a WebAssembly module.
     pub fn instantiate_wasm_module(wasm_bytes: &[u8]) -> Result<WasmModule, String> {
         println!(
-            "[StdLib::Web] Instantiating WASM module ({} bytes).".to_string(),
+            "[StdLib::Web] Instantiating WASM module ({} bytes).",
             wasm_bytes.len()
         );
         // Conceptual: Nimbus OS's WASM runtime executes the module in a sandbox.
@@ -60,10 +60,7 @@ impl WasmModule {
         function_name: &str,
         args: &List<WasmValue>,
     ) -> Result<WasmValue, String> {
-        println!(
-            "[StdLib::Web] Calling WASM function '{}'.".to_string(),
-            function_name
-        );
+        println!("[StdLib::Web] Calling WASM function '{}'.", function_name);
         Ok(WasmValue::I32(0)) // Dummy result
     }
 }
@@ -87,10 +84,7 @@ pub struct Dom;
 impl Dom {
     /// Gets a conceptual DOM element by its ID.
     pub fn get_element_by_id(id: &str) -> Result<DomElement, String> {
-        println!(
-            "[StdLib::Web] Getting DOM element by ID '{}'.".to_string(),
-            id
-        );
+        println!("[StdLib::Web] Getting DOM element by ID '{}'.", id);
         Ok(DomElement {
             id: Identifier(id.to_string(), Span::dummy()),
             tag_name: "div".to_string(),
@@ -100,10 +94,7 @@ impl Dom {
 
     /// Creates a new DOM element.
     pub fn create_element(tag_name: &str) -> Result<DomElement, String> {
-        println!(
-            "[StdLib::Web] Creating new DOM element '<{}'>.".to_string(),
-            tag_name
-        );
+        println!("[StdLib::Web] Creating new DOM element '<{}'>.", tag_name);
         Ok(DomElement {
             id: Identifier("".to_string(), Span::dummy()),
             tag_name: tag_name.to_string(),
@@ -114,7 +105,7 @@ impl Dom {
     /// Appends a child element to a parent.
     pub fn append_child(parent: &DomElement, child: &DomElement) -> Result<(), String> {
         println!(
-            "[StdLib::Web] Appending child '{}' to parent '{}'.".to_string(),
+            "[StdLib::Web] Appending child '{}' to parent '{}'.",
             child.id.0, parent.id.0
         );
         Ok(())
@@ -133,7 +124,7 @@ pub struct DomElement {
 impl DomElement {
     pub fn set_attribute(&mut self, name: &str, value: &str) {
         println!(
-            "[StdLib::Web] Setting attribute '{}'='{}' for element '{}'.".to_string(),
+            "[StdLib::Web] Setting attribute '{}'='{}' for element '{}'.",
             name, value, self.id.0
         );
         self.attributes.insert(name.to_string(), value.to_string());
@@ -141,7 +132,7 @@ impl DomElement {
 
     pub fn inner_html(&mut self, html: &str) {
         println!(
-            "[StdLib::Web] Setting inner HTML for element '{}'.".to_string(),
+            "[StdLib::Web] Setting inner HTML for element '{}'.",
             self.id.0
         );
         // Conceptual: Modify inner HTML
@@ -154,7 +145,7 @@ impl DomElement {
         callback: Box<dyn Fn(Event) -> () + Send + Sync>,
     ) {
         println!(
-            "[StdLib::Web] Adding '{}' event listener to element '{}'.".to_string(),
+            "[StdLib::Web] Adding '{}' event listener to element '{}'.",
             event_type, self.id.0
         );
         // Conceptual: Register callback with browser's event loop.
@@ -177,10 +168,7 @@ pub struct WebSocket;
 impl WebSocket {
     /// Connects to a WebSocket server.
     pub fn connect(url: &str) -> Result<Self, String> {
-        println!(
-            "[StdLib::Web] Connecting to WebSocket at '{}'.".to_string(),
-            url
-        );
+        println!("[StdLib::Web] Connecting to WebSocket at '{}'.", url);
         // Conceptual: Internally uses TcpStream, possibly upgraded to WebSocket protocol.
         Ok(WebSocket)
     }
@@ -188,7 +176,7 @@ impl WebSocket {
     /// Sends a text message over the WebSocket.
     pub fn send_text(&self, message: &str) -> Result<(), String> {
         println!(
-            "[StdLib::Web] Sending WebSocket text message: '{}'.".to_string(),
+            "[StdLib::Web] Sending WebSocket text message: '{}'.",
             message
         );
         Ok(())
@@ -217,7 +205,7 @@ impl WebGraphics {
     /// Gets a conceptual rendering context for WebGL/WebGPU.
     pub fn get_rendering_context(canvas_id: &str) -> Result<GraphicsContext, String> {
         println!(
-            "[StdLib::Web] Getting WebGL/WebGPU rendering context for canvas '{}'.".to_string(),
+            "[StdLib::Web] Getting WebGL/WebGPU rendering context for canvas '{}'.",
             canvas_id
         );
         // Conceptual: Nimbus OS provides secure access to GPU resources for browser contexts.
@@ -232,7 +220,7 @@ impl GraphicsContext {
     /// Clears the canvas with a specified color.
     pub fn clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         println!(
-            "[StdLib::Web] Clearing graphics context with color ({},{},{},{}).".to_string(),
+            "[StdLib::Web] Clearing graphics context with color ({},{},{},{}).",
             r, g, b, a
         );
     }

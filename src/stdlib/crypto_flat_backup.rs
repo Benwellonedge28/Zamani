@@ -130,14 +130,14 @@ pub struct QuantumSafePrivateKey(List<u8>);
 impl Crypto {
     /// Generates a quantum-safe asymmetric key pair.
     pub fn generate_quantum_safe_keys(security_level: usize) -> Result<(QuantumSafePublicKey, QuantumSafePrivateKey), String> {
-        println!("[StdLib::Crypto] Generating quantum-safe key pair (security level {}).".to_string(), security_level);
+        println!("[StdLib::Crypto] Generating quantum-safe key pair (security level {}).", security_level);
         Ok((QuantumSafePublicKey(List::new()), QuantumSafePrivateKey(List::new())))
     }
 
     /// Performs quantum key distribution (QKD) between two QPU-enabled contexts.
     /// Leverages Z-MMP QPUs and secure Nimbus OS channels.
     pub fn quantum_key_distribution(peer_context_id: NimbusContextId) -> Result<SymmetricKey, String> {
-        println!("[StdLib::Crypto] Performing QKD with peer context {}.".to_string(), peer_context_id);
+        println!("[StdLib::Crypto] Performing QKD with peer context {}.", peer_context_id);
         // Conceptual: Involves QPU operations and secure classical communication.
         Ok(SymmetricKey(List::new()))
     }
@@ -177,14 +177,14 @@ impl SecureEnclave {
     /// Stores a key securely in a hardware enclave, inaccessible to software.
     /// Requires specific Nimbus OS capabilities.
     pub fn store_key(key_id: Identifier, key_bytes: &[u8], policy: HashMap<String, String>) -> Result<(), String> {
-        println!("[StdLib::Crypto] Storing key '{}' in secure enclave with policy {:?}.".to_string(), key_id.0, policy);
+        println!("[StdLib::Crypto] Storing key '{}' in secure enclave with policy {:?}.", key_id.0, policy);
         // Conceptual: Nimbus OS call to Z-MMP secure enclave.
         Ok(())
     }
 
     /// Uses a key from the secure enclave for an operation (e.g., signing), without exposing the key itself.
     pub fn use_key_for_operation(key_id: Identifier, operation: String, data: &[u8]) -> Result<List<u8>, String> {
-        println!("[StdLib::Crypto] Using key '{}' from enclave for operation '{}'.".to_string(), key_id.0, operation);
+        println!("[StdLib::Crypto] Using key '{}' from enclave for operation '{}'.", key_id.0, operation);
         // Conceptual: Nimbus OS call to enclave, operation performed inside hardware.
         Ok(List::new()))
     }
@@ -207,7 +207,7 @@ pub struct HomomorphicKeyPair {
 impl Crypto {
     /// Generates a homomorphic encryption key pair.
     pub fn generate_homomorphic_keys(security_level: usize) -> Result<HomomorphicKeyPair, String> {
-        println!("[StdLib::Crypto] Generating homomorphic key pair (security level {}).".to_string(), security_level);
+        println!("[StdLib::Crypto] Generating homomorphic key pair (security level {}).", security_level);
         Ok(HomomorphicKeyPair { public_key: List::new(), secret_key: List::new() })
     }
 
@@ -219,7 +219,7 @@ impl Crypto {
 
     /// Decrypts homomorphic ciphertext.
     pub fn decrypt_homomorphic(secret_key: &List<u8>, ciphertext: &HomomorphicCiphertext) -> Result<List<u8>, String> {
-        println!("[StdLib::Crypto] Decrypting homomorphic ciphertext ({} bytes).".to_string(), ciphertext.0.len());
+        println!("[StdLib::Crypto] Decrypting homomorphic ciphertext ({} bytes).", ciphertext.0.len());
         Ok(List::new()))
     }
 
@@ -315,7 +315,7 @@ impl Crypto {
     /// Allows multiple parties to compute a function on their private inputs
     /// without revealing their inputs to each other.
     pub fn secure_multi_party_compute(protocol_id: Identifier, inputs: List<List<u8>>, participant_keys: List<PublicKey>) -> Result<List<u8>, String> {
-        println!("[StdLib::Crypto] Executing Secure Multi-Party Computation protocol '{}'.".to_string(), protocol_id.0);
+        println!("[StdLib::Crypto] Executing Secure Multi-Party Computation protocol '{}'.", protocol_id.0);
         // Conceptual: Coordination via secure channels, distributed cryptographic operations.
         Ok(List::new())) // Dummy computed result
     }
@@ -330,21 +330,21 @@ pub struct KeyManagementSystem;
 impl KeyManagementSystem {
     /// Requests a new key from the secure KMS, stored securely in hardware.
     pub fn request_key(key_policy: HashMap<String, String>) -> Result<Identifier, String> {
-        println!("[StdLib::Crypto] Requesting new key from KMS with policy {:?}.".to_string(), key_policy);
+        println!("[StdLib::Crypto] Requesting new key from KMS with policy {:?}.", key_policy);
         // Conceptual: KMS validates policy, generates key in secure enclave, returns ID.
         Ok(Identifier("new_key_id".to_string(), Span::dummy()))
     }
 
     /// Rotates an existing key with a new one, securely and transparently.
     pub fn rotate_key(key_id: Identifier, new_policy: HashMap<String, String>) -> Result<Identifier, String> {
-        println!("[StdLib::Crypto] Rotating key '{}' with new policy {:?}.".to_string(), key_id.0, new_policy);
+        println!("[StdLib::Crypto] Rotating key '{}' with new policy {:?}.", key_id.0, new_policy);
         // Conceptual: Generate new key, re-encrypt data transparently, revoke old key.
         Ok(Identifier("rotated_key_id".to_string(), Span::dummy()))
     }
 
     /// Revokes a key, making it unusable for future operations.
     pub fn revoke_key(key_id: Identifier) -> Result<(), String> {
-        println!("[StdLib::Crypto] Revoking key '{}'.".to_string(), key_id.0);
+        println!("[StdLib::Crypto] Revoking key '{}'.", key_id.0);
         Ok(())
     }
 }

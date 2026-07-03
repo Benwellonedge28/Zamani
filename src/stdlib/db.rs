@@ -35,10 +35,7 @@ impl Connection {
     /// Establishes a connection to a database.
     /// Requires `CapabilityToken("db_connect:db_url")`.
     pub fn open(db_url: &str) -> Result<Self, String> {
-        println!(
-            "[StdLib::DB] Opening database connection to '{}'.".to_string(),
-            db_url
-        );
+        println!("[StdLib::DB] Opening database connection to '{}'.", db_url);
         // Conceptual: Nimbus OS mediates access, potentially connecting to remote distributed DBs.
         Ok(Connection(Identifier(db_url.to_string(), Span::dummy()))) // Dummy handle
     }
@@ -50,7 +47,7 @@ impl Connection {
         params: &HashMap<String, String>,
     ) -> Result<QueryResult, String> {
         println!(
-            "[StdLib::DB] Executing SQL query: '{}' with params {:?}.".to_string(),
+            "[StdLib::DB] Executing SQL query: '{}' with params {:?}.",
             query, params
         );
         // Conceptual: Query is routed to appropriate DB driver via Nimbus.
@@ -68,8 +65,7 @@ impl Connection {
         params: &HashMap<String, String>,
     ) -> Result<QueryResult, String> {
         println!(
-            "[StdLib::DB] Executing NoSQL query on collection '{}': '{}' with params {:?}."
-                .to_string(),
+            "[StdLib::DB] Executing NoSQL query on collection '{}': '{}' with params {:?}.",
             collection, query, params
         );
         Ok(QueryResult {
@@ -80,10 +76,7 @@ impl Connection {
 
     /// Closes the database connection.
     pub fn close(self) -> Result<(), String> {
-        println!(
-            "[StdLib::DB] Closing database connection {:?}.".to_string(),
-            self.0
-        );
+        println!("[StdLib::DB] Closing database connection {:?}.", self.0);
         Ok(())
     }
 }
@@ -165,7 +158,7 @@ impl DatabaseClient {
     /// Inserts a new model into the database.
     pub fn insert<T: ModelMapping>(&mut self, model: &T) -> Result<(), String> {
         println!(
-            "[StdLib::DB] Inserting model into '{}' table.".to_string(),
+            "[StdLib::DB] Inserting model into '{}' table.",
             T::table_name()
         );
         let record = model.to_record()?;
@@ -181,7 +174,7 @@ impl DatabaseClient {
         query_params: HashMap<String, SerializableValue>,
     ) -> Result<List<T>, String> {
         println!(
-            "[StdLib::DB] Finding models in '{}' table with params {:?}.".to_string(),
+            "[StdLib::DB] Finding models in '{}' table with params {:?}.",
             T::table_name(),
             query_params
         );
@@ -215,7 +208,7 @@ impl DistributedLedger {
         transaction_data: &[u8],
     ) -> Result<List<u8>, String> {
         println!(
-            "[StdLib::DB] Appending transaction to ledger '{}'.".to_string(),
+            "[StdLib::DB] Appending transaction to ledger '{}'.",
             ledger_id
         );
         // Conceptual: Interact with Nimbus OS for secure ledger access.
@@ -226,7 +219,7 @@ impl DistributedLedger {
     /// Verifies the integrity of a ledger up to a given block hash.
     pub fn verify_ledger(ledger_id: &str, block_hash: &[u8]) -> Result<bool, String> {
         println!(
-            "[StdLib::DB] Verifying ledger '{}' up to block hash {:?}.".to_string(),
+            "[StdLib::DB] Verifying ledger '{}' up to block hash {:?}.",
             ledger_id, block_hash
         );
         Ok(true) // Dummy
@@ -239,7 +232,7 @@ impl DistributedLedger {
         at_time: TimeStamp,
     ) -> Result<List<u8>, String> {
         println!(
-            "[StdLib::DB] Getting historical state from ledger '{}' at time {}.".to_string(),
+            "[StdLib::DB] Getting historical state from ledger '{}' at time {}.",
             ledger_id, at_time.0
         );
         // Conceptual: Bridges to Sankofa's temporal memory system.

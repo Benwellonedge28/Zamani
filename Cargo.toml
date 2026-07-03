@@ -16,6 +16,16 @@ readme = "README.md"
 name = "zenith"
 path = "src/main.rs"
 
+[[bin]]
+name = "zenith-lsp"
+path = "src/bin/zenith_lsp_main.rs"
+required-features = ["lsp"]
+
+[[bin]]
+name = "zenith-pkg"
+path = "src/bin/zenith_pkg_main.rs"
+required-features = ["buildsystem"]
+
 [lib]
 name = "zenith_compiler"
 path = "src/lib.rs"
@@ -27,6 +37,11 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
+# Lightweight, independently-buildable component features (see docker/ for
+# per-component container images). These compile standalone without pulling
+# in the rest of the aspirational `full` surface.
+lsp = []
+buildsystem = []
 full = []
 omniversal = []
 
@@ -37,6 +52,7 @@ thiserror = "2.0"
 anyhow = "1.0"
 log = "0.4"
 env_logger = "0.11"
+toml = "0.8"
 
 [dev-dependencies]
 pretty_assertions = "1.4"

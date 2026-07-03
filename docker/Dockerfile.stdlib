@@ -1,0 +1,20 @@
+# ── Zenith Standard Library ──────────────────────────────────────────────
+# Status: NOT YET BUILDABLE. `src/stdlib/` (100+ modules: ml, ai_reasoning,
+# crypto, agents, math_foundations, network, ...) is aspirational scaffolding
+# gated behind the `full` cargo feature. It currently has the largest share
+# of the ~408 remaining `full`-feature compile errors (undefined types,
+# mismatched names like `Fact`/`FactObject`/`KnowledgeBase`/`KnowledgeGraph`
+# used inconsistently across files, a few missing external crates). This is
+# real engineering debt tracked for incremental fixing — not a Docker or
+# config issue. See ../docker/README.md for the full per-file error tally.
+#
+# Left in place, correctly structured, so it starts working the moment
+# `cargo build --features stdlib` compiles: add a `stdlib` feature in
+# Cargo.toml (same pattern as `lsp`/`buildsystem`) once fixed.
+FROM rust:slim-bookworm AS builder
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN echo "BLOCKED: src/stdlib/* does not compile under --features full yet." \
+    && echo "Run 'cargo build --features full' in the repo root to see current errors." \
+    && exit 1

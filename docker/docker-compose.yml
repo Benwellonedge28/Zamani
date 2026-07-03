@@ -1,0 +1,31 @@
+# Per-component Zenith images. Only `compiler`, `lsp`, and `buildsystem` are
+# real/working today — see docker/README.md for full status and how to run
+# each one. `runtime` and `stdlib` are included for completeness but will
+# fail to build until the compile errors tracked there are fixed.
+services:
+  compiler:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.compiler
+    image: zenith/compiler:dev
+
+  lsp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.lsp
+    image: zenith/lsp:dev
+    stdin_open: true   # speaks LSP over stdio — run with `docker compose run -i lsp`
+
+  buildsystem:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.buildsystem
+    image: zenith/pkg:dev
+    volumes:
+      - ..:/project:ro
+
+  # NOT YET BUILDABLE — see docker/README.md
+  # runtime:
+  #   build: { context: .., dockerfile: docker/Dockerfile.runtime }
+  # stdlib:
+  #   build: { context: .., dockerfile: docker/Dockerfile.stdlib }

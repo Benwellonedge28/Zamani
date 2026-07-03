@@ -106,7 +106,7 @@ impl MotionPlanner {
         obstacles: List<DetectedObject>,
     ) -> Result<Trajectory, String> {
         println!(
-            "[StdLib::Robotics] Generating motion plan with {} obstacles.".to_string(),
+            "[StdLib::Robotics] Generating motion plan with {} obstacles.",
             obstacles.len()
         );
         // Conceptual: RRT*, PRM, or deep-learning based planners.
@@ -130,7 +130,7 @@ impl Robot {
     /// Performs a high-level action by generating and executing a plan.
     pub fn perform_action(&mut self, mission_plan: &Plan) -> Result<(), String> {
         println!(
-            "[StdLib::Robotics] Robot '{}' performing action based on plan.".to_string(),
+            "[StdLib::Robotics] Robot '{}' performing action based on plan.",
             self.id.0
         );
         // Conceptual: Translate Plan into motion planning and control updates.
@@ -141,7 +141,7 @@ impl Robot {
     /// Requires `CapabilityToken("actuator_control:id")`.
     pub fn execute_actuation(&self, command: &ActuatorCommand) -> Result<(), String> {
         println!(
-            "[StdLib::Robotics] Robot '{}' executing actuation command.".to_string(),
+            "[StdLib::Robotics] Robot '{}' executing actuation command.",
             self.id.0
         );
         // Conceptual: NimbusSystemCall::access_hardware(actuator_id, command_bytes);
@@ -151,7 +151,7 @@ impl Robot {
     /// Uses nano-agent swarms as specialized, bio-mimetic actuators.
     pub fn deploy_nano_actuators(&self, task: &str) -> Result<(), String> {
         println!(
-            "[StdLib::Robotics] Robot '{}' deploying nano-actuators for task '{}'.".to_string(),
+            "[StdLib::Robotics] Robot '{}' deploying nano-actuators for task '{}'.",
             self.id.0, task
         );
         // Conceptual: Deploy swarm via nano runtime to perform a physical task.

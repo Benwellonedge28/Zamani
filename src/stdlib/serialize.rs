@@ -73,7 +73,7 @@ impl Serialize {
         format: &SerializationFormat,
     ) -> Result<T, String> {
         println!(
-            "[StdLib::Serialize] Deserializing {} bytes using format {:?}.".to_string(),
+            "[StdLib::Serialize] Deserializing {} bytes using format {:?}.",
             data.len(),
             format
         );

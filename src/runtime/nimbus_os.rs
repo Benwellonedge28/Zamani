@@ -95,8 +95,7 @@ impl NimbusMicrokernel {
         };
         self.contexts.insert(id, context);
         println!(
-            "    -> Nimbus OS: Created isolated context {} for blueprint '{}' with policy '{:?}'."
-                .to_string(),
+            "    -> Nimbus OS: Created isolated context {} for blueprint '{}' with policy '{:?}'.",
             id, blueprint_id, sandbox_policy
         );
         Ok(id)
@@ -105,7 +104,7 @@ impl NimbusMicrokernel {
     /// Destroys an existing execution context, reclaiming its resources.
     pub fn destroy_context(&mut self, id: NimbusContextId) -> Result<(), String> {
         if self.contexts.remove(&id).is_some() {
-            println!("    -> Nimbus OS: Destroyed context {}.".to_string(), id);
+            println!("    -> Nimbus OS: Destroyed context {}.", id);
             Ok(())
         } else {
             Err(format!("Context {} not found.", id))
@@ -121,7 +120,7 @@ impl NimbusMicrokernel {
         if let Some(context) = self.contexts.get_mut(&context_id) {
             context.resource_limits = limits;
             println!(
-                "    -> Nimbus OS: Set resource limits for context {}: {:?}.".to_string(),
+                "    -> Nimbus OS: Set resource limits for context {}: {:?}.",
                 context_id, context.resource_limits
             );
             Ok(())
@@ -144,7 +143,7 @@ impl NimbusMicrokernel {
         self.channels
             .insert(channel_id, Arc::new(Mutex::new(VecDeque::new())));
         println!(
-            "    -> Nimbus OS: Created secure channel {} between {} and {}.".to_string(),
+            "    -> Nimbus OS: Created secure channel {} between {} and {}.",
             channel_id, context1_id, context2_id
         );
         Ok(channel_id)
@@ -153,10 +152,7 @@ impl NimbusMicrokernel {
     /// Destroys a secure communication channel.
     pub fn destroy_channel(&mut self, channel_id: ChannelId) -> Result<(), String> {
         if self.channels.remove(&channel_id).is_some() {
-            println!(
-                "    -> Nimbus OS: Destroyed channel {}.".to_string(),
-                channel_id
-            );
+            println!("    -> Nimbus OS: Destroyed channel {}.", channel_id);
             Ok(())
         } else {
             Err(format!("Channel {} not found.", channel_id))
@@ -174,15 +170,14 @@ impl NimbusMicrokernel {
             // Conceptual: Security check if sender_id is part of this channel
             channel_queue.lock().unwrap().push_back(message);
             println!(
-                "    -> Nimbus OS: Context {} sent async message on channel {} ({} bytes)."
-                    .to_string(),
+                "    -> Nimbus OS: Context {} sent async message on channel {} ({} bytes).",
                 sender_id,
                 channel_id,
                 channel_queue.lock().unwrap().len()
             );
             Ok(())
         } else {
-            Err(format!("Channel {} not found.".to_string(), channel_id))
+            Err(format!("Channel {} not found.", channel_id))
         }
     }
 
@@ -197,14 +192,13 @@ impl NimbusMicrokernel {
             let message = channel_queue.lock().unwrap().pop_front();
             if message.is_some() {
                 println!(
-                    "    -> Nimbus OS: Context {} received sync message from channel {}."
-                        .to_string(),
+                    "    -> Nimbus OS: Context {} received sync message from channel {}.",
                     receiver_id, channel_id
                 );
             }
             Ok(message)
         } else {
-            Err(format!("Channel {} not found.".to_string(), channel_id))
+            Err(format!("Channel {} not found.", channel_id))
         }
     }
 
@@ -217,7 +211,7 @@ impl NimbusMicrokernel {
         if let Some(context) = self.contexts.get_mut(&context_id) {
             context.active_capabilities.insert(capability.clone());
             println!(
-                "    -> Nimbus OS: Granted capability '{:?}' to context {}.".to_string(),
+                "    -> Nimbus OS: Granted capability '{:?}' to context {}.",
                 capability, context_id
             );
             Ok(())
@@ -235,13 +229,13 @@ impl NimbusMicrokernel {
         if let Some(context) = self.contexts.get_mut(&context_id) {
             if context.active_capabilities.remove(&capability) {
                 println!(
-                    "    -> Nimbus OS: Revoked capability '{:?}' from context {}.".to_string(),
+                    "    -> Nimbus OS: Revoked capability '{:?}' from context {}.",
                     capability, context_id
                 );
                 Ok(())
             } else {
                 Err(format!(
-                    "Capability '{:?}' not active for context {}.".to_string(),
+                    "Capability '{:?}' not active for context {}.",
                     capability, context_id
                 ))
             }
@@ -259,7 +253,7 @@ impl NimbusMicrokernel {
         self.registered_devices
             .insert(device_id, driver_name.clone());
         println!(
-            "    -> Nimbus OS: Registered device {} with driver '{}'.".to_string(),
+            "    -> Nimbus OS: Registered device {} with driver '{}'.",
             device_id, driver_name
         );
         Ok(())
@@ -268,10 +262,7 @@ impl NimbusMicrokernel {
     /// Deregisters a hardware device driver.
     pub fn deregister_device_driver(&mut self, device_id: u64) -> Result<(), String> {
         if self.registered_devices.remove(&device_id).is_some() {
-            println!(
-                "    -> Nimbus OS: Deregistered device {}.".to_string(),
-                device_id
-            );
+            println!("    -> Nimbus OS: Deregistered device {}.", device_id);
             Ok(())
         } else {
             Err(format!("Device {} not found.", device_id))
@@ -299,8 +290,7 @@ impl NimbusMicrokernel {
                 return Err(format!("Device {} is not registered.", device_id));
             }
             println!(
-                "    -> Nimbus OS: Context {} securely accessing hardware device {} ({} bytes)."
-                    .to_string(),
+                "    -> Nimbus OS: Context {} securely accessing hardware device {} ({} bytes).",
                 context_id,
                 device_id,
                 command.len()
@@ -321,7 +311,7 @@ impl NimbusMicrokernel {
         if let Some(context) = self.contexts.get_mut(&context_id) {
             context.execution_timeline_id = Some(timeline_id);
             println!(
-                "    -> Nimbus OS: Linked Context {} to MTS Timeline {}.".to_string(),
+                "    -> Nimbus OS: Linked Context {} to MTS Timeline {}.",
                 context_id, timeline_id
             );
             Ok(())
@@ -339,8 +329,7 @@ impl NimbusMicrokernel {
         if let Some(context) = self.contexts.get(&context_id) {
             if let Some(timeline_id) = context.execution_timeline_id {
                 println!(
-                    "    -> Nimbus OS: Context {} synchronizing to Timeline {} at timestamp {}."
-                        .to_string(),
+                    "    -> Nimbus OS: Context {} synchronizing to Timeline {} at timestamp {}.",
                     context_id, timeline_id, timestamp.0
                 );
                 // Conceptual: The microkernel could pause/resume context execution based on global MTS clock.

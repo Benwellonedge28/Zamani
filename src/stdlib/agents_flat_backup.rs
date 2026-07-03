@@ -106,7 +106,7 @@ pub enum AgentAction {
 
 impl AutonomousAgent {
     pub fn new(id_str: &str, role: &str) -> Result<Self, String> {
-        println!("[StdLib::Agents] Creating new Autonomous Agent '{}' with role '{}'.".to_string(), id_str, role);
+        println!("[StdLib::Agents] Creating new Autonomous Agent '{}' with role '{}'.", id_str, role);
         Ok(AutonomousAgent {
             id: Identifier(id_str.to_string(), Span::dummy()),
             role: role.to_string(),
@@ -121,7 +121,7 @@ impl AutonomousAgent {
 
     /// The agent's main cognitive cycle (Perceive -> Orient -> Decide -> Act).
     pub fn cognitive_cycle(&mut self) -> Result<(), String> {
-        println!("[StdLib::Agents] Agent '{}' entering cognitive cycle.".to_string(), self.id.0);
+        println!("[StdLib::Agents] Agent '{}' entering cognitive cycle.", self.id.0);
 
         // 1. Perceive
         let mut perceptions = List::new();
@@ -197,7 +197,7 @@ impl MultiAgentEnvironment {
 
     /// Establishes secure communication between two agents.
     pub fn establish_agent_communication(&mut self, agent_id1: Identifier, agent_id2: Identifier) -> Result<(), String> {
-        println!("[StdLib::Agents] Establishing communication between {} and {}.".to_string(), agent_id1.0, agent_id2.0);
+        println!("[StdLib::Agents] Establishing communication between {} and {}.", agent_id1.0, agent_id2.0);
         // Conceptual: Use stdlib::net::SecureChannel to create IPC.
         // Requires Nimbus OS mediation.
         Ok(())

@@ -75,7 +75,7 @@ impl ChatArchitectAgent {
     )] // Ethical vetting of intent
     pub fn process_nl_prompt(&mut self, prompt: &str) -> Result<GeneratedCodeArtifact, String> {
         println!(
-            "[StdLib::ChatArch] Processing natural language prompt: '{}'.".to_string(),
+            "[StdLib::ChatArch] Processing natural language prompt: '{}'.",
             prompt
         );
 
@@ -138,7 +138,7 @@ impl ChatArchitectAgent {
         match self.evas_filter.evaluate_action(evas_prompt_context) {
             EvasDecision::Block(reason) => {
                 return Err(format!(
-                    "E.V.A.S. BLOCKED prompt: {}.\n Generated code discarded.".to_string(),
+                    "E.V.A.S. BLOCKED prompt: {}.\n Generated code discarded.",
                     reason
                 ))
             }
@@ -208,7 +208,7 @@ impl ChatArchitectAgent {
         refinement_prompt: &str,
     ) -> Result<GeneratedCodeArtifact, String> {
         println!(
-            "[StdLib::ChatArch] Refining code based on prompt: '{}'.".to_string(),
+            "[StdLib::ChatArch] Refining code based on prompt: '{}'.",
             refinement_prompt
         );
         // Conceptual: NLP -> identify delta -> generate new plan ->
@@ -221,7 +221,7 @@ impl ChatArchitectAgent {
     /// Displays generated code and metadata in a multi-modal format in the chat interface.
     pub fn display_generated_code(&self, artifact: &GeneratedCodeArtifact) {
         println!(
-            "[StdLib::ChatArch] Displaying generated code for prompt: '{}'.".to_string(),
+            "[StdLib::ChatArch] Displaying generated code for prompt: '{}'.",
             artifact.prompt
         );
         // Conceptual: Call Tariro's generateMedia for 'code_preview' and 'diagram'

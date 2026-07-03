@@ -49,7 +49,7 @@ pub struct LedgerClient;
 impl LedgerClient {
     /// Connects to a specific blockchain network (e.g., Ethereum, Solana, Custom).
     pub fn connect(network_id: &str) -> Result<Self, String> {
-        println!("[StdLib::Ledger] Connecting to distributed ledger network '{}'.".to_string(), network_id);
+        println!("[StdLib::Ledger] Connecting to distributed ledger network '{}'.", network_id);
         Ok(LedgerClient)
     }
 
@@ -72,7 +72,7 @@ pub struct SmartContract {
 impl SmartContract {
     /// Invokes a method on a deployed smart contract.
     pub fn call_method(&self, method_name: &str, args: List<crate::stdlib::meta_ops::MetaValue>) -> Result<crate::stdlib::meta_ops::MetaValue, String> {
-        println!("[StdLib::Ledger] Calling smart contract method '{}'.".to_string(), method_name);
+        println!("[StdLib::Ledger] Calling smart contract method '{}'.", method_name);
         Ok(crate::stdlib::meta_ops::MetaValue::Null)
     }
 }

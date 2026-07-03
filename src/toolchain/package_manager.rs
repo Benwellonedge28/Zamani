@@ -9,7 +9,7 @@ use crate::zenith_project_config::ZenithToml;
 use std::collections::{HashMap, HashSet}; // Assuming Zenith.toml is parsed into a struct (conceptual)
 
 /// Represents a conceptual Zenith package in the registry.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ZenithPackage {
     pub name: String,
     pub version: String,
@@ -81,7 +81,7 @@ impl PackageRegistry {
     /// Conceptually publishes a .zpkg to the registry.
     pub fn publish_zpkg(package: &ZenithPackage, zpkg_content: Vec<u8>) -> Result<(), String> {
         println!(
-            "[Toolchain::Pkg] Publishing {}@{} to registry ({} bytes).".to_string(),
+            "[Toolchain::Pkg] Publishing {}@{} to registry ({} bytes).",
             package.name,
             package.version,
             zpkg_content.len()
@@ -111,7 +111,7 @@ impl PackageManager {
         manifest: &ZenithToml,
     ) -> Result<HashMap<String, ZenithPackage>, String> {
         println!(
-            "[Toolchain::Pkg] Resolving dependencies for project '{}'.".to_string(),
+            "[Toolchain::Pkg] Resolving dependencies for project '{}'.",
             manifest.package.name
         );
         let mut resolved_deps = HashMap::new();
@@ -160,7 +160,7 @@ impl PackageManager {
     /// Installs a given Zenith package into the project or local cache.
     pub fn install_package(&mut self, pkg: &ZenithPackage) -> Result<(), String> {
         println!(
-            "[Toolchain::Pkg] Installing package {}@{}.".to_string(),
+            "[Toolchain::Pkg] Installing package {}@{}.",
             pkg.name, pkg.version
         );
         let key = format!("{}@{}", pkg.name, pkg.version);
@@ -185,7 +185,7 @@ impl PackageManager {
     /// Creates a .zpkg archive from the current project.
     pub fn create_zpkg(&self, manifest: &ZenithToml) -> Result<Vec<u8>, String> {
         println!(
-            "[Toolchain::Pkg] Creating .zpkg for {}@{}.".to_string(),
+            "[Toolchain::Pkg] Creating .zpkg for {}@{}.",
             manifest.package.name, manifest.package.version
         );
         // Conceptual:
@@ -199,7 +199,7 @@ impl PackageManager {
     /// Publishes the current project as a .zpkg to the package registry.
     pub fn publish_project(&mut self, manifest: &ZenithToml) -> Result<(), String> {
         println!(
-            "[Toolchain::Pkg] Publishing project {}@{}.".to_string(),
+            "[Toolchain::Pkg] Publishing project {}@{}.",
             manifest.package.name, manifest.package.version
         );
         let zpkg_content = self.create_zpkg(manifest)?; // Create the .zpkg archive

@@ -28,7 +28,7 @@ pub fn start_lsp_server() {
 /// Provides detailed diagnostics for a given Zenith source file.
 pub fn get_diagnostics(file_path: &str) -> Vec<Diagnostic> {
     println!(
-        "[Toolchain::ide] Providing diagnostics for '{}'...".to_string(),
+        "[Toolchain::ide] Providing diagnostics for '{}'...",
         file_path
     );
     // Conceptual: Run lexer, parser, semantic analyzer, etc., collect errors/warnings.
@@ -48,7 +48,7 @@ pub struct Diagnostic {
 /// Conceptual function to provide auto-completion suggestions.
 pub fn get_completions(file_path: &str, cursor_span: Span) -> Vec<CompletionItem> {
     println!(
-        "[Toolchain::ide] Providing completions for '{}' at {:?}...".to_string(),
+        "[Toolchain::ide] Providing completions for '{}' at {:?}...",
         file_path, cursor_span
     );
     // Conceptual: Use symbol table, available standard library functions, context-aware suggestions.
@@ -67,7 +67,7 @@ pub struct CompletionItem {
 /// Conceptual function to provide go-to-definition for an identifier.
 pub fn go_to_definition(file_path: &str, identifier_span: Span) -> Option<Span> {
     println!(
-        "[Toolchain::ide] Go-to-definition for identifier at {:?} in '{}'...".to_string(),
+        "[Toolchain::ide] Go-to-definition for identifier at {:?} in '{}'...",
         identifier_span, file_path
     );
     // Conceptual: Resolve symbol in symbol table, find its declaration span.
@@ -77,8 +77,7 @@ pub fn go_to_definition(file_path: &str, identifier_span: Span) -> Option<Span> 
 /// Conceptual function to start a Debugger Adapter Protocol (DAP) server.
 pub fn start_dap_server(port: u16) {
     println!(
-        "[Toolchain::ide] Starting Zenith Debugger Adapter Protocol (DAP) server on port {}..."
-            .to_string(),
+        "[Toolchain::ide] Starting Zenith Debugger Adapter Protocol (DAP) server on port {}...",
         port
     );
     // Conceptual: Listen for debugger client connections, interface with zenith-dbg backend.
@@ -87,7 +86,7 @@ pub fn start_dap_server(port: u16) {
 /// Conceptual function to get live previews for multi-paradigm elements.
 pub fn get_live_preview(file_path: &str, preview_type: &str) -> Option<LivePreviewData> {
     println!(
-        "[Toolchain::ide] Generating live preview for '{}' (type: {})...".to_string(),
+        "[Toolchain::ide] Generating live preview for '{}' (type: {})...",
         file_path, preview_type
     );
     match preview_type {

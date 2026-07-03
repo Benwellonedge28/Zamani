@@ -64,7 +64,7 @@ impl HyperAscensionEngine {
     #[ethics(principles = "existential_safety", growth_control = "monitored")]
     #[security(level = "omomniscient", isolation = "air-gapped_sim")]
     pub fn initiate_hyper_ascension_cycle(&mut self) -> Result<AscensionReport, String> {
-        println!("[Toolchain::Ascension] Initiating Hyper-Ascension Protocol.".to_string());
+        println!("[Toolchain::Ascension] Initiating Hyper-Ascension Protocol.");
 
         // 1. Recursive Meta-Optimization: Optimize the compiler's own code.
         let meta_optimized_toolchain = self.meta_optimizer.optimize_compiler_logic()?;
@@ -94,7 +94,6 @@ impl HyperAscensionEngine {
             EvasDecision::Allow => {
                 println!(
                     "[Toolchain::Ascension] E.V.A.S. Approved Ascension. Deploying evolved Zenith."
-                        .to_string()
                 );
                 Ok(AscensionReport {
                     performance_multiplier: 1_000_000.0,
@@ -120,10 +119,7 @@ impl RecursiveMetaOptimizer {
         RecursiveMetaOptimizer
     }
     pub fn optimize_compiler_logic(&self) -> Result<(), String> {
-        println!(
-            "[Ascension::MetaOpt] Performing recursive optimization on toolchain source."
-                .to_string()
-        );
+        println!("[Ascension::MetaOpt] Performing recursive optimization on toolchain source.");
         Ok(())
     }
 }
@@ -136,7 +132,6 @@ impl ParadigmFusionEngine {
     pub fn fuse_architectures(&self, logic: List<Fact>) -> Result<(), String> {
         println!(
             "[Ascension::Fusion] Blending evolved logic into unified Quantum-Nano-Classical IR."
-                .to_string()
         );
         Ok(())
     }
@@ -148,7 +143,7 @@ impl MultiversalAlgorithmSearcher {
         MultiversalAlgorithmSearcher
     }
     pub fn search_optimal_logic(&self) -> Result<List<Fact>, String> {
-        println!("[Ascension::Multiversal] Searching MTS timelines for hyper-efficient mathematical algorithms.".to_string());
+        println!("[Ascension::Multiversal] Searching MTS timelines for hyper-efficient mathematical algorithms.");
         Ok(List::new())
     }
 }
@@ -159,10 +154,7 @@ impl HardwareSoftwareCoEvolutionOrchestrator {
         HardwareSoftwareCoEvolutionOrchestrator
     }
     pub fn evolve_hardware_spec(&self, sw_logic: List<Fact>) -> Result<(), String> {
-        println!(
-            "[Ascension::CoEvol] Generating evolved NACU and QPU hardware configurations."
-                .to_string()
-        );
+        println!("[Ascension::CoEvol] Generating evolved NACU and QPU hardware configurations.");
         Ok(())
     }
 }

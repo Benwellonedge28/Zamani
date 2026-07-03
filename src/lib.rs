@@ -36,9 +36,9 @@ pub mod semantic;
 pub mod source_map;
 #[cfg(feature = "full")]
 pub mod stdlib;
-#[cfg(feature = "full")]
+#[cfg(any(feature = "full", feature = "lsp", feature = "buildsystem"))]
 pub mod toolchain;
-#[cfg(feature = "full")]
+#[cfg(any(feature = "full", feature = "buildsystem"))]
 pub mod zenith_project_config;
 
 /// Initialise the Zenith Universal Trinity Runtime.

@@ -129,10 +129,7 @@ impl MultiTimelineOrchestrator {
         self.next_timeline_id += 1;
         let timeline = Timeline::new(id, name, parent_id, initial_state, initial_timestamp);
         self.timelines.insert(id, timeline);
-        println!(
-            "    -> MTS Runtime: Created Timeline {} ('{}').".to_string(),
-            id, name
-        );
+        println!("    -> MTS Runtime: Created Timeline {} ('{}').", id, name);
         id
     }
 
@@ -156,8 +153,7 @@ impl MultiTimelineOrchestrator {
                 );
                 self.timelines.insert(new_id, new_timeline);
                 println!(
-                    "    -> MTS Runtime: Forked Timeline {} ('{}') from Parent {} at {}."
-                        .to_string(),
+                    "    -> MTS Runtime: Forked Timeline {} ('{}') from Parent {} at {}.",
                     new_id, new_name, parent_id, fork_timestamp
                 );
                 Ok(new_id)
@@ -205,7 +201,7 @@ impl MultiTimelineOrchestrator {
         let t2 = t2_option.unwrap();
 
         println!(
-            "    -> MTS Runtime: Merging Timelines {} ('{}') and {} ('{}') at {}.".to_string(),
+            "    -> MTS Runtime: Merging Timelines {} ('{}') and {} ('{}') at {}.",
             t1.id, t1.name, t2.id, t2.name, merge_point
         );
 

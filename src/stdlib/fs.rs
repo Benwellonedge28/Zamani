@@ -138,13 +138,13 @@ impl Fs {
 
     /// Creates a new directory. Requires `CapabilityToken("create_dir:path")`.
     pub fn create_dir(path: &Path) -> Result<(), String> {
-        println!("[StdLib::FS] Creating directory {:?}.".to_string(), path);
+        println!("[StdLib::FS] Creating directory {:?}.", path);
         Ok(())
     }
 
     /// Reads the contents of a directory. Requires `CapabilityToken("read_dir:path")`.
     pub fn read_dir(path: &Path) -> Result<List<DirEntry>, String> {
-        println!("[StdLib::FS] Reading directory {:?}.".to_string(), path);
+        println!("[StdLib::FS] Reading directory {:?}.", path);
         let mut entries = List::new();
         entries.push(DirEntry {
             path: path.join("file1.txt"),
@@ -161,29 +161,26 @@ impl Fs {
 
     /// Removes an empty directory. Requires `CapabilityToken("delete_dir:path")`.
     pub fn remove_dir(path: &Path) -> Result<(), String> {
-        println!("[StdLib::FS] Removing directory {:?}.".to_string(), path);
+        println!("[StdLib::FS] Removing directory {:?}.", path);
         Ok(())
     }
 
     /// Removes a file. Requires `CapabilityToken("delete_file:path")`.
     pub fn remove_file(path: &Path) -> Result<(), String> {
-        println!("[StdLib::FS] Removing file {:?}.".to_string(), path);
+        println!("[StdLib::FS] Removing file {:?}.", path);
         Ok(())
     }
 
     /// Reads the entire contents of a file into a byte vector.
     pub fn read_to_bytes(path: &Path) -> Result<List<u8>, String> {
-        println!(
-            "[StdLib::FS] Reading entire file {:?} to bytes.".to_string(),
-            path
-        );
+        println!("[StdLib::FS] Reading entire file {:?} to bytes.", path);
         Ok(List::new()) // Dummy
     }
 
     /// Writes a slice of bytes to a file, creating it if necessary.
     pub fn write_bytes(path: &Path, contents: &[u8]) -> Result<(), String> {
         println!(
-            "[StdLib::FS] Writing {} bytes to file {:?}.".to_string(),
+            "[StdLib::FS] Writing {} bytes to file {:?}.",
             contents.len(),
             path
         );
@@ -216,7 +213,7 @@ pub enum FileType {
 impl Fs {
     /// Retrieves file metadata. Requires `CapabilityToken("stat_file:path")`.
     pub fn metadata(path: &Path) -> Result<FileMetadata, String> {
-        println!("[StdLib::FS] Getting metadata for {:?}.".to_string(), path);
+        println!("[StdLib::FS] Getting metadata for {:?}.", path);
         Ok(FileMetadata {
             file_type: FileType::File,
             len: Size(1024),

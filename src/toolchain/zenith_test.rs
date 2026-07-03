@@ -51,7 +51,7 @@ impl ZenithTestRunner {
         metadata: TestMetadata,
     ) -> Result<TestReport, String> {
         println!(
-            "[zenith-test::fast] Running fast tests for {}...".to_string(),
+            "[zenith-test::fast] Running fast tests for {}...",
             bytecode_path
         );
         let mut report = TestReport::new();
@@ -77,7 +77,7 @@ impl ZenithTestRunner {
         options: &BuildOptions,
     ) -> Result<TestReport, String> {
         println!(
-            "[zenith-test::full] Running full tests for {}...".to_string(),
+            "[zenith-test::full] Running full tests for {}...",
             bytecode_path
         );
         let mut report = TestReport::new();
@@ -110,7 +110,7 @@ impl ZenithTestRunner {
         iterations: u32,
     ) -> Result<SingleTestResult, String> {
         println!(
-            "[zenith-test::property] Running property: {} ({} iterations).".to_string(),
+            "[zenith-test::property] Running property: {} ({} iterations).",
             prop_info.name.0, iterations
         );
         // Simulate input generation, VM execution, and assertion check
@@ -131,7 +131,7 @@ impl ZenithTestRunner {
         iterations: u32,
     ) -> Result<SingleTestResult, String> {
         println!(
-            "[zenith-test::fuzz] Running fuzz test: {} ({} iterations).".to_string(),
+            "[zenith-test::fuzz] Running fuzz test: {} ({} iterations).",
             fuzz_info.name.0, iterations
         );
         // Simulate input generation, VM execution, and crash detection
@@ -203,7 +203,7 @@ pub struct TestInputGenerator;
 impl TestInputGenerator {
     pub fn generate_for_signature(signature: String) -> List<MetaValue> {
         println!(
-            "[TestInputGen] Generating inputs for signature: {}".to_string(),
+            "[TestInputGen] Generating inputs for signature: {}",
             signature
         );
         // Uses Zenith's type system and metadata to generate diverse inputs.

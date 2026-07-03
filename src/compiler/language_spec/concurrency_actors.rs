@@ -55,7 +55,7 @@ impl ConcurrencyActorsSemanticAnalyzer {
         type_checker: &mut TypeChecker,
     ) -> Result<(), String> {
         println!(
-            "[LangSpec::Actors] Performing semantic analysis for actor: {}.".to_string(),
+            "[LangSpec::Actors] Performing semantic analysis for actor: {}.",
             actor_def.name.0
         );
         // Conceptual:
@@ -76,7 +76,7 @@ impl ConcurrencyActorsIrGenerator {
         actor_def: &ActorDefinitionAst,
     ) -> Result<Vec<IrInstruction>, String> {
         println!(
-            "[LangSpec::Actors] Generating IR for actor: {}.".to_string(),
+            "[LangSpec::Actors] Generating IR for actor: {}.",
             actor_def.name.0
         );
         // Conceptual:

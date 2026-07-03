@@ -81,7 +81,7 @@ impl MusicLanguageEngine {
         culture: HumanCultureModel,
     ) -> Result<EnhancedMusicalAnalysisResult, String> {
         println!(
-            "[StdLib::MusLing] Interpreting performance on {} in {} context.".to_string(),
+            "[StdLib::MusLing] Interpreting performance on {} in {} context.",
             instrument_id.0, culture.name
         );
 
@@ -140,7 +140,7 @@ impl MusicLanguageEngine {
         culture: HumanCultureModel,
     ) -> Result<MusicalComposition, String> {
         println!(
-            "[StdLib::MusLing] Translating pure thought into {} performance.".to_string(),
+            "[StdLib::MusLing] Translating pure thought into {} performance.",
             target_instrument.0
         );
 
@@ -171,7 +171,7 @@ impl MusicLanguageEngine {
         target_culture: HumanCultureModel,
     ) -> Result<MusicalComposition, String> {
         println!(
-            "[StdLib::MusLing] Contextually translating performance from {} to {}.".to_string(),
+            "[StdLib::MusLing] Contextually translating performance from {} to {}.",
             source_instrument.0, target_instrument.0
         );
 
@@ -199,7 +199,7 @@ impl MusicLanguageEngine {
         intent: String,
     ) -> Result<MusicalInnovationReport, String> {
         println!(
-            "[StdLib::MusLing] Innovating musical language: {}.".to_string(),
+            "[StdLib::MusLing] Innovating musical language: {}.",
             target_language_id.0
         );
         self.innovation_engine.generate_innovation(

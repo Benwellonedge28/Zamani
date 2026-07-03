@@ -180,7 +180,7 @@ impl NimbusMicrokernel {
         self.contexts.insert(id, new_context.clone());
         self.global_scheduler.lock().unwrap().add_to_run_queue(id);
         println!(
-            "    -> Nimbus OS: Created isolated context {} for blueprint '{}'.".to_string(),
+            "    -> Nimbus OS: Created isolated context {} for blueprint '{}'.",
             id, blueprint_id
         );
         Ok(id)
@@ -193,7 +193,7 @@ impl NimbusMicrokernel {
                 .lock()
                 .unwrap()
                 .remove_from_run_queue(id);
-            println!("    -> Nimbus OS: Destroyed context {}.".to_string(), id);
+            println!("    -> Nimbus OS: Destroyed context {}.", id);
             Ok(())
         } else {
             Err(format!("Context {} not found.", id))
@@ -224,7 +224,7 @@ impl NimbusMicrokernel {
             }
             self.device_power_states.insert(device_id, state.clone());
             println!(
-                "    -> Nimbus OS: Context {} set device {} power state to {:?}.".to_string(),
+                "    -> Nimbus OS: Context {} set device {} power state to {:?}.",
                 context_id, device_id, state
             );
             Ok(())
@@ -269,8 +269,7 @@ impl NimbusMicrokernel {
                 _ => {}
             }
             println!(
-                "    -> Nimbus OS: Context {} reconfiguring hardware device {} ({} bytes)."
-                    .to_string(),
+                "    -> Nimbus OS: Context {} reconfiguring hardware device {} ({} bytes).",
                 context_id,
                 device_id,
                 configuration.len()
@@ -286,7 +285,7 @@ impl NimbusMicrokernel {
     pub fn query_hardware_topology(&self, context_id: NimbusContextId) -> Result<String, String> {
         if self.contexts.contains_key(&context_id) {
             println!(
-                "    -> Nimbus OS: Context {} querying hardware topology.".to_string(),
+                "    -> Nimbus OS: Context {} querying hardware topology.",
                 context_id
             );
             // Conceptual: Return a graph or map of available Z-MMP units
@@ -319,8 +318,7 @@ impl NimbusMicrokernel {
             }
             context.priority = Priority::RealTime(priority_level);
             println!(
-                "    -> Nimbus OS: Context {} created real-time task. P:{}, T:{:?}, D:{:?}"
-                    .to_string(),
+                "    -> Nimbus OS: Context {} created real-time task. P:{}, T:{:?}, D:{:?}",
                 context_id, priority_level, period, deadline
             );
             // Conceptual: Scheduler logic would ensure periodic execution
@@ -333,7 +331,7 @@ impl NimbusMicrokernel {
     /// Yields execution of the current context.
     pub fn yield_execution(&mut self, context_id: NimbusContextId) {
         println!(
-            "    -> Nimbus OS: Context {} yielding execution.".to_string(),
+            "    -> Nimbus OS: Context {} yielding execution.",
             context_id
         );
         // Conceptual: Force context switch via global scheduler
@@ -352,7 +350,7 @@ impl NimbusMicrokernel {
         self.channels
             .insert(channel_id, Arc::new(Mutex::new(VecDeque::new())));
         println!(
-            "    -> Nimbus OS: Created secure channel {} between {} and {}.".to_string(),
+            "    -> Nimbus OS: Created secure channel {} between {} and {}.",
             channel_id, context1_id, context2_id
         );
         Ok(channel_id)
@@ -393,8 +391,7 @@ impl NimbusMicrokernel {
                 return Err(format!("Device {} is not registered.", device_id));
             }
             println!(
-                "    -> Nimbus OS: Context {} securely accessing hardware device {}. State: {:?}"
-                    .to_string(),
+                "    -> Nimbus OS: Context {} securely accessing hardware device {}. State: {:?}",
                 context_id,
                 device_id,
                 self.device_power_states
@@ -415,7 +412,7 @@ impl NimbusMicrokernel {
         if let Some(context) = self.contexts.get_mut(&context_id) {
             context.active_capabilities.insert(capability.clone());
             println!(
-                "    -> Nimbus OS: Granted capability '{:?}' to context {}.".to_string(),
+                "    -> Nimbus OS: Granted capability '{:?}' to context {}.",
                 capability, context_id
             );
             Ok(())

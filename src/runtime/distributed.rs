@@ -63,26 +63,20 @@ impl GlobalScheduler {
 
     /// Registers a new node with the scheduler.
     pub fn register_node(&mut self, node: DistributedNode) {
-        println!(
-            "[Runtime::Dist] Registering node: {:?}.".to_string(),
-            node.id
-        );
+        println!("[Runtime::Dist] Registering node: {:?}.", node.id);
         self.nodes.insert(node.id.clone(), node);
     }
 
     /// Deregisters a node.
     pub fn deregister_node(&mut self, node_id: &NodeId) {
-        println!(
-            "[Runtime::Dist] Deregistering node: {:?}.".to_string(),
-            node_id
-        );
+        println!("[Runtime::Dist] Deregistering node: {:?}.", node_id);
         self.nodes.remove(node_id);
     }
 
     /// Finds an appropriate node for a given task (conceptual).
     pub fn schedule_task(&self, task_requirements: HashMap<String, String>) -> Option<NodeId> {
         println!(
-            "[Runtime::Dist] Scheduling task with requirements: {:?}.".to_string(),
+            "[Runtime::Dist] Scheduling task with requirements: {:?}.",
             task_requirements
         );
         // Conceptual: Match requirements (e.g., "QPU", "low_latency", "high_memory")
@@ -125,7 +119,7 @@ impl DistributedOrchestrator {
         };
 
         println!(
-            "[Runtime::Dist] Deploying blueprint {:?} to node {}.".to_string(),
+            "[Runtime::Dist] Deploying blueprint {:?} to node {}.",
             blueprint_id, node_id
         );
         // Conceptual: Use NimbusSystemCall::create_isolated_context on the remote node
@@ -144,7 +138,7 @@ impl DistributedOrchestrator {
         args: Vec<Vec<u8>>,
     ) -> Result<Vec<u8>, String> {
         println!(
-            "[Runtime::Dist] Invoking remote method '{}' on service '{}' at node {}.".to_string(),
+            "[Runtime::Dist] Invoking remote method '{}' on service '{}' at node {}.",
             method_name, handle.service_id, handle.remote_node_id
         );
         // Conceptual: Serialize method call, send via Nimbus IPC to remote context.
@@ -161,8 +155,7 @@ impl DistributedOrchestrator {
         target_q_reg_id: u64,
     ) -> Result<(), String> {
         println!(
-            "[Runtime::Dist] Quantum Teleportation: from local QReg {} to node {} QReg {}."
-                .to_string(),
+            "[Runtime::Dist] Quantum Teleportation: from local QReg {} to node {} QReg {}.",
             local_q_reg_id, target_node, target_q_reg_id
         );
         // Conceptual: Requires shared entanglement, classical communication over secure channel.
@@ -178,7 +171,7 @@ impl DistributedOrchestrator {
         target_node: NodeId,
     ) -> Result<(), String> {
         println!(
-            "[Runtime::Dist] Nano-Agent Swarm Migration: Swarm {} from {} to {}.".to_string(),
+            "[Runtime::Dist] Nano-Agent Swarm Migration: Swarm {} from {} to {}.",
             swarm_id, source_node, target_node
         );
         // Conceptual: Transfer NACU state, update routing, Nimbus OS ensures secure hand-off.
@@ -188,8 +181,7 @@ impl DistributedOrchestrator {
     /// **Distributed Shared Memory (Conceptual):** Provides a global memory abstraction.
     pub fn access_dsm(&self, dsm_id: u64, offset: Size, len: Size) -> Result<Vec<u8>, String> {
         println!(
-            "[Runtime::Dist] Accessing Distributed Shared Memory {} at offset {} for length {}."
-                .to_string(),
+            "[Runtime::Dist] Accessing Distributed Shared Memory {} at offset {} for length {}.",
             dsm_id, offset.0, len.0
         );
         // Conceptual: Transparently fetch/update data from remote memory regions.
@@ -206,7 +198,7 @@ impl DistributedOrchestrator {
         node2_id: NodeId,
     ) -> Result<(), String> {
         println!(
-            "[Runtime::Dist] Synchronizing distributed MTS timelines {}@{} and {}@{}.".to_string(),
+            "[Runtime::Dist] Synchronizing distributed MTS timelines {}@{} and {}@{}.",
             timeline1_id, node1_id, timeline2_id, node2_id
         );
         // Conceptual: Causal consistency and conflict resolution across network.
@@ -220,7 +212,7 @@ impl DistributedOrchestrator {
         handler_context_id: NimbusContextId,
     ) -> Result<(), String> {
         println!(
-            "[Runtime::Dist] Registering local service '{}' on this node (context {}).".to_string(),
+            "[Runtime::Dist] Registering local service '{}' on this node (context {}).",
             service_id, handler_context_id
         );
         // Conceptual: Advertise service via global scheduler.

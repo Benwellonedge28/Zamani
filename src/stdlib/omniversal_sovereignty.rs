@@ -59,7 +59,7 @@ impl QuantumTrustFabric {
     /// Issues a verifiable quantum-secure identity to a Zenith entity.
     pub fn issue_identity(&mut self, entity_id: Identifier) -> Result<QuantumIdentity, String> {
         println!(
-            "[Sovereignty::Trust] Issuing quantum-secure identity for {}.".to_string(),
+            "[Sovereignty::Trust] Issuing quantum-secure identity for {}.",
             entity_id.0
         );
         let id = QuantumIdentity {
@@ -101,7 +101,7 @@ impl RuntimeAttestor {
     /// Cryptographically proves the integrity and correctness of a live runtime context.
     pub fn attest_runtime_integrity(&self, context_id: u64) -> Result<AttestationProof, String> {
         println!(
-            "[Sovereignty::Verify] Attesting runtime integrity for context {}.".to_string(),
+            "[Sovereignty::Verify] Attesting runtime integrity for context {}.",
             context_id
         );
         Ok(AttestationProof {
@@ -138,7 +138,6 @@ impl ThreatIntelEngine {
     pub fn execute_proactive_defense(&mut self) -> Result<(), String> {
         println!(
             "[Sovereignty::Defense] Executing AGI-driven threat hunting and proactive defense."
-                .to_string()
         );
         // 1. Monitor anomalous patterns.
         // 2. Deploy adaptive deception layers.
@@ -169,7 +168,7 @@ impl OmniversalKnowledgeFabric {
         time_range: (MtsTimePoint, MtsTimePoint),
     ) -> Result<List<KnowledgeId>, String> {
         println!(
-            "[Sovereignty::Knowledge] Querying causal chain for {} across timelines.".to_string(),
+            "[Sovereignty::Knowledge] Querying causal chain for {} across timelines.",
             concept_id.0
         );
         Ok(List::new())
@@ -197,9 +196,7 @@ impl ProvenanceEngine {
         artifact_hash: Hash,
         ethical_cert: EthicalCertificate,
     ) -> Result<TransactionId, String> {
-        println!(
-            "[Sovereignty::Provenance] Recording ethical provenance for artifact.".to_string()
-        );
+        println!("[Sovereignty::Provenance] Recording ethical provenance for artifact.");
         Ok("provenance_tx_id".to_string())
     }
 }
@@ -229,7 +226,7 @@ impl SwarmOrchestrator {
     /// Dynamically orchestrates a self-healing AGI swarm across paradigms.
     pub fn orchestrate_swarm(&mut self, swarm_id: Identifier, mission: Fact) -> Result<(), String> {
         println!(
-            "[Sovereignty::Swarm] Orchestrating self-organizing swarm for mission: {}.".to_string(),
+            "[Sovereignty::Swarm] Orchestrating self-organizing swarm for mission: {}.",
             mission.name
         );
         Ok(())
@@ -265,7 +262,7 @@ impl RealityArchitect {
         config: RealitySpec,
     ) -> Result<(), String> {
         println!(
-            "[Sovereignty::Reality] Synthesizing new operational reality: {}.".to_string(),
+            "[Sovereignty::Reality] Synthesizing new operational reality: {}.",
             id.0
         );
         self.active_realities.insert(id, config);

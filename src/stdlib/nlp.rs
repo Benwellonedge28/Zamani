@@ -51,7 +51,7 @@ impl Nlp {
     /// Performs tokenization on an input text.
     pub fn tokenize(text: &str, language: &str) -> Result<List<Token>, String> {
         println!(
-            "[StdLib::NLP] Tokenizing text for language '{}' ({} chars).".to_string(),
+            "[StdLib::NLP] Tokenizing text for language '{}' ({} chars).",
             language,
             text.len()
         );
@@ -62,7 +62,7 @@ impl Nlp {
     /// Performs part-of-speech tagging on a list of tokens.
     pub fn pos_tag(tokens: List<Token>, language: &str) -> Result<List<Token>, String> {
         println!(
-            "[StdLib::NLP] Part-of-speech tagging {} tokens for language '{}'.".to_string(),
+            "[StdLib::NLP] Part-of-speech tagging {} tokens for language '{}'.",
             tokens.len(),
             language
         );
@@ -72,7 +72,7 @@ impl Nlp {
     /// Parses a sentence into a syntactic parse tree.
     pub fn parse_sentence(tokens: List<Token>, language: &str) -> Result<ParseTree, String> {
         println!(
-            "[StdLib::NLP] Parsing sentence with {} tokens for language '{}'.".to_string(),
+            "[StdLib::NLP] Parsing sentence with {} tokens for language '{}'.",
             tokens.len(),
             language
         );
@@ -89,7 +89,7 @@ impl Nlp {
         language: &str,
     ) -> Result<Map<String, List<String>>, String> {
         println!(
-            "[StdLib::NLP] Performing NER on text for language '{}'.".to_string(),
+            "[StdLib::NLP] Performing NER on text for language '{}'.",
             language
         );
         // Conceptual: Identify persons, organizations, locations.
@@ -119,7 +119,7 @@ impl TextGenerator {
     /// Can leverage AI accelerators for faster generation.
     pub fn generate(&self, prompt: &str, max_length: usize) -> Result<String, String> {
         println!(
-            "[StdLib::NLP] Generating text with prompt '{}' (max {} words).".to_string(),
+            "[StdLib::NLP] Generating text with prompt '{}' (max {} words).",
             prompt, max_length
         );
         // Conceptual: Convert prompt to tensor, feed to ML model, decode output.
@@ -147,7 +147,7 @@ impl Translator {
     /// Can leverage QPU for quantum-enhanced semantic understanding.
     pub fn translate(&self, text: &str) -> Result<String, String> {
         println!(
-            "[StdLib::NLP] Translating text from {} to {}.".to_string(),
+            "[StdLib::NLP] Translating text from {} to {}.",
             self.source_lang, self.target_lang
         );
         // Conceptual: Convert text to tensors, feed to ML model, decode.
@@ -168,7 +168,7 @@ impl ContextualNlp {
         context_kb: &KnowledgeId,
     ) -> Result<Map<String, String>, String> {
         println!(
-            "[StdLib::NLP] Enriching understanding of text using Sankofa KB {}.".to_string(),
+            "[StdLib::NLP] Enriching understanding of text using Sankofa KB {}.",
             context_kb.0
         );
         // Conceptual: Extract keywords/entities, query Sankofa for related facts, causal chains.
@@ -182,8 +182,7 @@ impl ContextualNlp {
         current_utterance: &str,
     ) -> Result<String, String> {
         println!(
-            "[StdLib::NLP] Generating contextual response using Sankofa conversation history {}."
-                .to_string(),
+            "[StdLib::NLP] Generating contextual response using Sankofa conversation history {}.",
             conversation_history.0
         );
         // Conceptual: Use Sankofa to reconstruct conversation context, feed to advanced LLM.

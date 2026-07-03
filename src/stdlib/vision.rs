@@ -72,7 +72,7 @@ impl ImageBuffer {
     /// Resizes an image.
     pub fn resize(&self, new_width: u32, new_height: u32) -> Result<ImageBuffer, String> {
         println!(
-            "[StdLib::Vision] Resizing image to {}x{}.".to_string(),
+            "[StdLib::Vision] Resizing image to {}x{}.",
             new_width, new_height
         );
         Ok(ImageBuffer {
@@ -98,17 +98,14 @@ pub struct Vision;
 impl Vision {
     /// Loads an image from a file.
     pub fn load_image(path: &str) -> Result<ImageBuffer, String> {
-        println!(
-            "[StdLib::Vision] Loading image from '{}'.".to_string(),
-            path
-        );
+        println!("[StdLib::Vision] Loading image from '{}'.", path);
         // Conceptual: Uses stdlib::fs to read file, then parses image format.
         Ok(ImageBuffer::new(100, 100, PixelFormat::RGB, List::new()))
     }
 
     /// Saves an image to a file.
     pub fn save_image(image: &ImageBuffer, path: &str) -> Result<(), String> {
-        println!("[StdLib::Vision] Saving image to '{}'.".to_string(), path);
+        println!("[StdLib::Vision] Saving image to '{}'.", path);
         // Conceptual: Encodes image, then uses stdlib::fs to write file.
         Ok(())
     }
@@ -143,7 +140,7 @@ impl ObjectDetector {
     /// Can leverage AI accelerators for real-time performance.
     pub fn detect_objects(&self, image: &ImageBuffer) -> Result<List<DetectedObject>, String> {
         println!(
-            "[StdLib::Vision] Detecting objects in image ({}x{}).".to_string(),
+            "[StdLib::Vision] Detecting objects in image ({}x{}).",
             image.width, image.height
         );
         // Conceptual: Convert image to tensor, feed to ML model, parse output.
@@ -165,7 +162,7 @@ impl SceneUnderstandingModel {
     /// Can leverage multi-paradigm fusion for richer interpretation.
     pub fn understand_scene(&self, image: &ImageBuffer) -> Result<Map<String, String>, String> {
         println!(
-            "[StdLib::Vision] Understanding scene from image ({}x{}).".to_string(),
+            "[StdLib::Vision] Understanding scene from image ({}x{}).",
             image.width, image.height
         );
         // Conceptual: Outputs high-level scene description.
@@ -198,8 +195,7 @@ impl MultiModalVision {
         timeline_id: &crate::runtime::mts::TimelineId,
     ) -> Result<List<DetectedObject>, String> {
         println!(
-            "[StdLib::Vision] Analyzing video stream ({:?} frames) with MTS timeline {}."
-                .to_string(),
+            "[StdLib::Vision] Analyzing video stream ({:?} frames) with MTS timeline {}.",
             video_frames.len(),
             timeline_id
         );
@@ -213,7 +209,7 @@ impl MultiModalVision {
         context_kb: &KnowledgeId,
     ) -> Result<Map<String, String>, String> {
         println!(
-            "[StdLib::Vision] Contextualizing visual data using Sankofa KB {}.".to_string(),
+            "[StdLib::Vision] Contextualizing visual data using Sankofa KB {}.",
             context_kb.0
         );
         // Conceptual: Query Sankofa for context related to detected objects/scenes.

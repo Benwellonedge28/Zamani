@@ -57,8 +57,7 @@ impl SecurityEthicsAttributesSemanticAnalyzer {
         type_checker: &mut TypeChecker,
     ) -> Result<(), String> {
         println!(
-            "[LangSpec::SecEth] Performing semantic analysis for attribute {:?} attached to {:?}."
-                .to_string(),
+            "[LangSpec::SecEth] Performing semantic analysis for attribute {:?} attached to {:?}.",
             attribute, attached_to
         );
         // Conceptual:
@@ -80,7 +79,7 @@ impl SecurityEthicsAttributesIrGenerator {
         attached_to_ir: &Vec<IrInstruction>,
     ) -> Result<Vec<IrInstruction>, String> {
         println!(
-            "[LangSpec::SecEth] Generating IR for attribute {:?} applied to IR block.".to_string(),
+            "[LangSpec::SecEth] Generating IR for attribute {:?} applied to IR block.",
             attribute
         );
         // Conceptual:

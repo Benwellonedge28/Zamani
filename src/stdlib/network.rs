@@ -106,7 +106,7 @@ impl ZenithNetworkStack {
         &mut self,
         initial_goals: List<NetworkGoal>,
     ) -> Result<(), String> {
-        println!("[Network::Loop] Starting autonomous network operation loop.".to_string());
+        println!("[Network::Loop] Starting autonomous network operation loop.");
 
         let current_goals = initial_goals;
 
@@ -151,7 +151,7 @@ impl ZenithNetworkStack {
             };
             match self.evas_filter.evaluate_action(evas_context) {
                 EvasDecision::Block(reason) => {
-                    println!("[Network::Loop] E.V.A.S. BLOCKED network plan deployment: {}. Adjusting plan.".to_string(), reason);
+                    println!("[Network::Loop] E.V.A.S. BLOCKED network plan deployment: {}. Adjusting plan.", reason);
                     // Recursive call to generate a new, compliant plan
                     continue;
                 }

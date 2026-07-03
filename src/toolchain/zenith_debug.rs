@@ -75,10 +75,7 @@ impl ZenithDebugAdapter {
 
     /// Handles `scopes` request to retrieve scopes for a stack frame.
     pub fn on_scopes(&mut self, frame_id: u64) -> Result<List<Scope>, String> {
-        println!(
-            "[zenith-debug] Retrieving scopes for frame {}.".to_string(),
-            frame_id
-        );
+        println!("[zenith-debug] Retrieving scopes for frame {}.", frame_id);
         // Dynamically inspect local variables, registers, quantum states, etc.
         Ok(List::new())
     }
@@ -86,7 +83,7 @@ impl ZenithDebugAdapter {
     /// Handles `variables` request to retrieve variables for a scope.
     pub fn on_variables(&mut self, variables_reference: u64) -> Result<List<Variable>, String> {
         println!(
-            "[zenith-debug] Retrieving variables for reference {}.".to_string(),
+            "[zenith-debug] Retrieving variables for reference {}.",
             variables_reference
         );
         // Extract concrete values, potentially including high-dimensional tensors, quantum states.
@@ -95,10 +92,7 @@ impl ZenithDebugAdapter {
 
     /// Sends debug events (stopped, exited, etc.) to the client.
     pub fn send_debug_event(&mut self, event: DebugEvent) {
-        println!(
-            "[zenith-debug] Sending debug event: {}.".to_string(),
-            event.to_string()
-        );
+        println!("[zenith-debug] Sending debug event: {}.", event.to_string());
         self.dap_client.send_event(event);
     }
 }

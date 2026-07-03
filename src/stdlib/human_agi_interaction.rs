@@ -43,7 +43,7 @@ impl AdminInterface {
     /// Accepts suggestions or directives from a human administrator to influence AGI behavior.
     pub fn submit_admin_directive(directive: &str, priority: f32) -> Result<(), String> {
         println!(
-            "[StdLib::HumanAGI] Admin directive received: '{}'.".to_string(),
+            "[StdLib::HumanAGI] Admin directive received: '{}'.",
             directive
         );
         // Conceptual: Inject directive into AGI's goal planner or E.V.A.S. policy.
@@ -61,7 +61,7 @@ impl FeedbackManager {
     /// Collects and validates feedback from users regarding AGI performance or ethics.
     pub fn process_user_feedback(user_id: &str, feedback: &str) -> Result<f32, String> {
         println!(
-            "[StdLib::HumanAGI] Processing feedback from user '{}'.".to_string(),
+            "[StdLib::HumanAGI] Processing feedback from user '{}'.",
             user_id
         );
         // Conceptual: NLP analysis of feedback, update model confidence scores.
@@ -84,7 +84,7 @@ impl PaymentGateway {
         destination: &str,
     ) -> Result<Identifier, String> {
         println!(
-            "[StdLib::HumanAGI] Processing payment of {} {} to {}.".to_string(),
+            "[StdLib::HumanAGI] Processing payment of {} {} to {}.",
             amount, currency, destination
         );
         Ok(Identifier(
@@ -95,10 +95,7 @@ impl PaymentGateway {
 
     /// Verifies the completion and legitimacy of a payment.
     pub fn verify_transaction(tx_id: Identifier) -> Result<bool, String> {
-        println!(
-            "[StdLib::HumanAGI] Verifying transaction {}.".to_string(),
-            tx_id.0
-        );
+        println!("[StdLib::HumanAGI] Verifying transaction {}.", tx_id.0);
         Ok(true)
     }
 }

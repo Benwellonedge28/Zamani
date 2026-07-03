@@ -70,7 +70,7 @@ impl GestureManager {
 
     /// Triggers haptic feedback to a wearable device.
     pub fn trigger_haptic_feedback(device_id: &str, intensity: f32, pattern: &str) -> Result<(), String> {
-        println!("[StdLib::Reality] Triggering haptic feedback on device '{}'.".to_string(), device_id);
+        println!("[StdLib::Reality] Triggering haptic feedback on device '{}'.", device_id);
         Ok(())
     }
 }

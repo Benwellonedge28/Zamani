@@ -105,7 +105,7 @@ pub struct MtsTimelineSnapshot {
 /// Conceptual function to embed debug information into a compiled artifact.
 pub fn embed_debug_info(artifact_path: &str, debug_data: DebugData) -> Result<(), String> {
     println!(
-        "[Toolchain::debug] Embedding {} lines of debug info into '{}'...".to_string(),
+        "[Toolchain::debug] Embedding {} lines of debug info into '{}'...",
         debug_data.source_map.len(),
         artifact_path
     );
@@ -116,7 +116,7 @@ pub fn embed_debug_info(artifact_path: &str, debug_data: DebugData) -> Result<()
 /// Conceptual function to load debug information from an artifact.
 pub fn load_debug_info(artifact_path: &str) -> Result<DebugData, String> {
     println!(
-        "[Toolchain::debug] Loading debug info from '{}'...".to_string(),
+        "[Toolchain::debug] Loading debug info from '{}'...",
         artifact_path
     );
     // Conceptual: Deserialize debug data.
@@ -138,8 +138,7 @@ pub fn start_debugger_session(
     mode: &str,      // "step-through", "time-travel", "observational"
 ) -> Result<(), String> {
     println!(
-        "[Toolchain::debug] Starting debugger session for '{}' on target '{}' in '{}' mode..."
-            .to_string(),
+        "[Toolchain::debug] Starting debugger session for '{}' on target '{}' in '{}' mode...",
         artifact_path, target_id, mode
     );
     // Conceptual: Connect to a classical process, quantum simulator, nano-agent emulator, or MTS visualiser.

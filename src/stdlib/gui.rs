@@ -178,10 +178,7 @@ impl Widget for Button {
         self.bounds.clone()
     }
     fn render(&self, renderer: &mut dyn Renderer) -> Result<(), String> {
-        println!(
-            "[StdLib::GUI] Rendering Button '{}'.".to_string(),
-            self.id.0
-        );
+        println!("[StdLib::GUI] Rendering Button '{}'.", self.id.0);
         renderer.draw_rect(&self.bounds, &Color::new(0, 0, 200))?;
         renderer.draw_text(
             &self.text,
@@ -197,7 +194,7 @@ impl Widget for Button {
         if let GuiEvent::MouseClick { position, button } = event {
             if self.bounds.contains(position) && button == 1 {
                 // Left click
-                println!("[StdLib::GUI] Button '{}' clicked!".to_string(), self.id.0);
+                println!("[StdLib::GUI] Button '{}' clicked!", self.id.0);
                 if let Some(callback) = &self.on_click {
                     callback();
                 }
@@ -240,7 +237,7 @@ impl Widget for Label {
         self.bounds.clone()
     }
     fn render(&self, renderer: &mut dyn Renderer) -> Result<(), String> {
-        println!("[StdLib::GUI] Rendering Label '{}'.".to_string(), self.id.0);
+        println!("[StdLib::GUI] Rendering Label '{}'.", self.id.0);
         renderer.draw_text(
             &self.text,
             &Point {
@@ -277,7 +274,7 @@ pub struct Window {
 
 impl Window {
     pub fn new(id: &str, title: &str, bounds: &Rect) -> Result<Self, String> {
-        println!("[StdLib::GUI] Creating Window '{}'.".to_string(), title);
+        println!("[StdLib::GUI] Creating Window '{}'.", title);
         // Conceptual: Nimbus OS display server allocates a secure window surface.
         // Requires CapabilityToken("display_access")
         Ok(Window {
@@ -295,7 +292,7 @@ impl Window {
     /// Runs the GUI event loop for this window.
     pub fn run_event_loop(&mut self) -> Result<(), String> {
         println!(
-            "[StdLib::GUI] Running event loop for Window '{}'.".to_string(),
+            "[StdLib::GUI] Running event loop for Window '{}'.",
             self.title
         );
         // Conceptual: Nimbus OS dispatches events to the window,
@@ -338,10 +335,7 @@ pub struct Image; // Dummy
 pub struct AudioPlayer;
 impl AudioPlayer {
     pub fn play(asset_path: &str) -> Result<(), String> {
-        println!(
-            "[StdLib::GUI] Playing audio from '{}'.".to_string(),
-            asset_path
-        );
+        println!("[StdLib::GUI] Playing audio from '{}'.", asset_path);
         // Conceptual: Nimbus OS media service handles playback.
         // Requires CapabilityToken("audio_output")
         Ok(())
@@ -352,7 +346,7 @@ pub struct VideoPlayer;
 impl VideoPlayer {
     pub fn play(asset_path: &str, target_rect: &Rect) -> Result<(), String> {
         println!(
-            "[StdLib::GUI] Playing video from '{}' in {:?}.".to_string(),
+            "[StdLib::GUI] Playing video from '{}' in {:?}.",
             asset_path, target_rect
         );
         // Conceptual: Nimbus OS media service renders video to a texture or surface.

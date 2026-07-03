@@ -94,7 +94,7 @@ impl ZamaniFact {
     /// Retrieves the content of the fact, deserializing it into type T.
     pub fn get_content<T: Debug + serde_json::de::DeserializeOwned>(&self) -> T {
         println!(
-            "[StdLib::sankofa] Getting content of Zamani fact '{}' (conceptual).".to_string(),
+            "[StdLib::sankofa] Getting content of Zamani fact '{}' (conceptual).",
             self.fact_id
         );
         serde_json::from_bytes(&self.content)
@@ -117,7 +117,7 @@ impl SasaKnowledge {
         causal_predecessors: &[u64],
     ) -> Self {
         println!(
-            "[StdLib::sankofa] Updating Sasa knowledge '{}' with content {:?}.".to_string(),
+            "[StdLib::sankofa] Updating Sasa knowledge '{}' with content {:?}.",
             knowledge_id, content
         );
         let timestamp = chrono::Utc::now().timestamp_millis() as u64; // Conceptual timestamp
@@ -144,7 +144,7 @@ impl SasaKnowledge {
     /// Accesses Sasa knowledge by ID, optionally at a specific timestamp.
     pub fn access(knowledge_id: &str, timestamp_opt: Option<u64>) -> Option<Self> {
         println!(
-            "[StdLib::sankofa] Accessing Sasa knowledge '{}' at timestamp {:?}.".to_string(),
+            "[StdLib::sankofa] Accessing Sasa knowledge '{}' at timestamp {:?}.",
             knowledge_id, timestamp_opt
         );
         let timestamp =
@@ -168,8 +168,7 @@ impl SasaKnowledge {
     /// Retrieves the content of the current version of knowledge.
     pub fn get_content<T: Debug + serde_json::de::DeserializeOwned>(&self) -> T {
         println!(
-            "[StdLib::sankofa] Getting current content of Sasa knowledge '{}' (version {})."
-                .to_string(),
+            "[StdLib::sankofa] Getting current content of Sasa knowledge '{}' (version {}).",
             self.knowledge_id, self.current_version.version_id
         );
         serde_json::from_bytes(&self.current_version.content)
@@ -189,7 +188,7 @@ impl TemporalLearner {
     /// Initiates a temporal learning process for a given knowledge ID and time range.
     pub fn learn(knowledge_id: &str, timestamp_range_start: u64, timestamp_range_end: u64) {
         println!(
-            "[StdLib::sankofa] Initiating temporal learning for '{}' over range {}-{}.".to_string(),
+            "[StdLib::sankofa] Initiating temporal learning for '{}' over range {}-{}.",
             knowledge_id, timestamp_range_start, timestamp_range_end
         );
         if let Some(runtime_state_arc) = unsafe { SANKOFA_RUNTIME_STATE_ARC.as_ref() } {
@@ -216,7 +215,7 @@ pub struct ConsensusTrue<T> {
 impl<T: Debug> ConsensusTrue<T> {
     /// Conceptually verifies a value against Sankofa's causality graph.
     pub fn verify(value: T, knowledge_id: &str, timestamp: u64) -> Result<Self, String> {
-        println!("[StdLib::sankofa] Conceptually verifying consensus for value {:?} from knowledge '{}' at {}.".to_string(), value, knowledge_id, timestamp);
+        println!("[StdLib::sankofa] Conceptually verifying consensus for value {:?} from knowledge '{}' at {}.", value, knowledge_id, timestamp);
         // This would involve complex queries to the SasaStore and causality_graph
         // For now, assume verification is always successful.
         Ok(ConsensusTrue {
@@ -250,8 +249,7 @@ pub struct InterMemory<T> {
 impl<T: Debug + serde_json::de::DeserializeOwned> InterMemory<T> {
     pub fn access(language: &str, query: &str) -> Option<T> {
         println!(
-            "[StdLib::sankofa] Accessing InterMemory for language '{}' with query '{}'."
-                .to_string(),
+            "[StdLib::sankofa] Accessing InterMemory for language '{}' with query '{}'.",
             language, query
         );
         // Conceptual: Call runtime's inter_memory_interface

@@ -45,7 +45,7 @@ impl MetaOperations {
         args: List<MetaValue>,
     ) -> Result<MetaValue, String> {
         println!(
-            "[StdLib::MetaOps] Invoking '{}.{}' with args: {:?}.".to_string(),
+            "[StdLib::MetaOps] Invoking '{}.{}' with args: {:?}.",
             target_component.0, operation_name.0, args
         );
         // Conceptual:
@@ -64,7 +64,7 @@ impl MetaOperations {
         config: Map<String, String>,
     ) -> Result<TranscodedOutput, String> {
         println!(
-            "[StdLib::MetaOps] Transcoding from {:?} to {:?} with config: {:?}.".to_string(),
+            "[StdLib::MetaOps] Transcoding from {:?} to {:?} with config: {:?}.",
             source, target_format, config
         );
 
@@ -100,7 +100,7 @@ impl MetaOperations {
         config: Map<String, String>,
     ) -> Result<(), String> {
         println!(
-            "[StdLib::MetaOps] Overriding behavior of '{}' with patch: {:?}.".to_string(),
+            "[StdLib::MetaOps] Overriding behavior of '{}' with patch: {:?}.",
             target_component.0, override_patch
         );
 
@@ -124,7 +124,7 @@ impl MetaOperations {
             }
             EvasDecision::HumanReviewRequired(reason) => {
                 return Err(format!(
-                    "E.V.A.S. requires human review for override: {}.".to_string(),
+                    "E.V.A.S. requires human review for override: {}.",
                     reason
                 ))
             }
