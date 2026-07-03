@@ -100,8 +100,8 @@ impl ZenithNetworkStack {
     }
 
     /// The core autonomous loop for network operation and self-optimization.
-    #[ethics(principles = "network_neutrality", privacy_by_design = "true")]
-    #[security(level = "omomniscient", threat_model = "zero_trust")]
+    /// [ethics: principles = "network_neutrality", privacy_by_design = "true"]
+    /// [security: level = "omomniscient", threat_model = "zero_trust"]
     pub fn run_autonomous_network_loop(
         &mut self,
         initial_goals: List<NetworkGoal>,

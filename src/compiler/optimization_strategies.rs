@@ -90,7 +90,7 @@ impl OptimizationManager {
 
     /// Selects and orchestrates a sequence of optimal optimization passes for given IR.
     /// This is an AI-driven, adaptive process, involving predictive modeling and E.V.A.S.
-    #[ethics(principles = "resource_stewardship", bias_mitigation_level = "medium")]
+    /// [ethics: principles = "resource_stewardship", bias_mitigation_level = "medium"]
     pub fn optimize_ir(
         &mut self,
         ir: ZenithIR,

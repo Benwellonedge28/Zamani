@@ -82,7 +82,7 @@ impl AdvancedMathEngine {
     }
 
     /// Main loop for autonomous mathematical invention.
-    #[ethics(principles = "mathematical_integrity", rigor_level = "formal")]
+    /// [ethics: principles = "mathematical_integrity", rigor_level = "formal"]
     pub fn invent_new_mathematics(
         &mut self,
         domain_hint: Identifier,

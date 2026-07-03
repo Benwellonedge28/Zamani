@@ -18,6 +18,17 @@ use crate::runtime::sankofa::{
 };
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Milliseconds since the Unix epoch, used as a lightweight conceptual
+/// timestamp for Zamani/Sasa memory records (avoids adding a chrono
+/// dependency for a single field).
+pub fn current_timestamp_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 /// Identifier for a piece of Sasa (evolving) knowledge, used to correlate
 /// updates and lookups across the temporal knowledge store.
@@ -55,12 +66,12 @@ pub struct ZamaniFact {
 
 impl ZamaniFact {
     /// Records a new immutable fact in Zamani memory.
-    pub fn record<T: Debug + serde_json::Serialize>(fact_id: &str, content: T) -> Self {
+    pub fn record<T: Debug + serde::Serialize>(fact_id: &str, content: T) -> Self {
         println!(
             "[StdLib::sankofa] Recording Zamani fact '{}' with content {:?}",
             fact_id, content
         );
-        let timestamp = chrono::Utc::now().timestamp_millis() as u64; // Conceptual timestamp
+        let timestamp = crate::stdlib::sankofa::current_timestamp_millis(); // Conceptual timestamp
         let content_bytes = serde_json::to_vec(&content).expect("Failed to serialize content"); // Conceptual serialization
 
         if let Some(runtime_state_arc) = unsafe { SANKOFA_RUNTIME_STATE_ARC.as_ref() } {
@@ -96,12 +107,12 @@ impl ZamaniFact {
     }
 
     /// Retrieves the content of the fact, deserializing it into type T.
-    pub fn get_content<T: Debug + serde_json::de::DeserializeOwned>(&self) -> T {
+    pub fn get_content<T: Debug + serde::de::DeserializeOwned>(&self) -> T {
         println!(
             "[StdLib::sankofa] Getting content of Zamani fact '{}' (conceptual).",
             self.fact_id
         );
-        serde_json::from_bytes(&self.content)
+        serde_json::from_slice(&self.content)
             .unwrap_or_else(|e| panic!("Failed to deserialize Zamani fact content: {}", e))
     }
 }
@@ -115,7 +126,7 @@ pub struct SasaKnowledge {
 
 impl SasaKnowledge {
     /// Creates or updates evolving knowledge in Sasa memory.
-    pub fn update<T: Debug + serde_json::Serialize>(
+    pub fn update<T: Debug + serde::Serialize>(
         knowledge_id: &str,
         content: T,
         causal_predecessors: &[u64],
@@ -124,7 +135,7 @@ impl SasaKnowledge {
             "[StdLib::sankofa] Updating Sasa knowledge '{}' with content {:?}.",
             knowledge_id, content
         );
-        let timestamp = chrono::Utc::now().timestamp_millis() as u64; // Conceptual timestamp
+        let timestamp = crate::stdlib::sankofa::current_timestamp_millis(); // Conceptual timestamp
         let content_bytes = serde_json::to_vec(&content).expect("Failed to serialize content");
 
         if let Some(runtime_state_arc) = unsafe { SANKOFA_RUNTIME_STATE_ARC.as_ref() } {
@@ -152,7 +163,7 @@ impl SasaKnowledge {
             knowledge_id, timestamp_opt
         );
         let timestamp =
-            timestamp_opt.unwrap_or_else(|| chrono::Utc::now().timestamp_millis() as u64);
+            timestamp_opt.unwrap_or_else(|| crate::stdlib::sankofa::current_timestamp_millis());
 
         if let Some(runtime_state_arc) = unsafe { SANKOFA_RUNTIME_STATE_ARC.as_ref() } {
             runtime_get_sasa_knowledge_at_time(
@@ -170,12 +181,12 @@ impl SasaKnowledge {
     }
 
     /// Retrieves the content of the current version of knowledge.
-    pub fn get_content<T: Debug + serde_json::de::DeserializeOwned>(&self) -> T {
+    pub fn get_content<T: Debug + serde::de::DeserializeOwned>(&self) -> T {
         println!(
             "[StdLib::sankofa] Getting current content of Sasa knowledge '{}' (version {}).",
             self.knowledge_id, self.current_version.version_id
         );
-        serde_json::from_bytes(&self.current_version.content)
+        serde_json::from_slice(&self.current_version.content)
             .unwrap_or_else(|e| panic!("Failed to deserialize Sasa knowledge content: {}", e))
     }
 
@@ -225,7 +236,7 @@ impl<T: Debug> ConsensusTrue<T> {
         Ok(ConsensusTrue {
             value,
             causal_chain_id: 12345, // Dummy ID
-            timestamp_verified: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp_verified: crate::stdlib::sankofa::current_timestamp_millis(),
         })
     }
 }
@@ -250,7 +261,7 @@ pub struct InterMemory<T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: Debug + serde_json::de::DeserializeOwned> InterMemory<T> {
+impl<T: Debug + serde::de::DeserializeOwned> InterMemory<T> {
     pub fn access(language: &str, query: &str) -> Option<T> {
         println!(
             "[StdLib::sankofa] Accessing InterMemory for language '{}' with query '{}'.",
@@ -262,7 +273,7 @@ impl<T: Debug + serde_json::de::DeserializeOwned> InterMemory<T> {
             if let Some(iface) = state_guard.inter_memory_interfaces.get(language) {
                 iface
                     .access_external_memory(query)
-                    .and_then(|bytes| serde_json::from_bytes(&bytes).ok())
+                    .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             } else {
                 None
             }

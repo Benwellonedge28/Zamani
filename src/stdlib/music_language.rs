@@ -73,7 +73,7 @@ impl MusicLanguageEngine {
     }
 
     /// Interprets a musical performance (audio/video/sensor data) as a linguistic sequence.
-    #[ethics(principles = "cultural_fidelity", non_appropriation = "true")]
+    /// [ethics: principles = "cultural_fidelity", non_appropriation = "true"]
     pub fn interpret_music_performance(
         &mut self,
         performance_data: MultiModalSensorData,

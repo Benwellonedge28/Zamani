@@ -61,8 +61,8 @@ impl HyperAscensionEngine {
     }
 
     /// Initiates a Hyper-Ascension cycle to achieve exponential performance gains.
-    #[ethics(principles = "existential_safety", growth_control = "monitored")]
-    #[security(level = "omomniscient", isolation = "air-gapped_sim")]
+    /// [ethics: principles = "existential_safety", growth_control = "monitored"]
+    /// [security: level = "omomniscient", isolation = "air-gapped_sim"]
     pub fn initiate_hyper_ascension_cycle(&mut self) -> Result<AscensionReport, String> {
         println!("[Toolchain::Ascension] Initiating Hyper-Ascension Protocol.");
 

@@ -109,8 +109,8 @@ impl MukandaraGlobalNavigationSystem {
     }
 
     /// High-level API for obtaining a position fix.
-    #[ethics(principles = "privacy_by_design", location_disclosure = "encrypted")]
-    #[security(level = "omomniscient", spoof_resistance = "high")]
+    /// [ethics: principles = "privacy_by_design", location_disclosure = "encrypted"]
+    /// [security: level = "omomniscient", spoof_resistance = "high"]
     pub fn locate(
         &mut self,
         accuracy: AccuracyLevel,
@@ -161,7 +161,7 @@ impl MukandaraGlobalNavigationSystem {
     }
 
     /// Subscribes to continuous position updates with privacy controls.
-    #[ethics(principles = "user_control", data_minimization = "active")]
+    /// [ethics: principles = "user_control", data_minimization = "active"]
     pub fn watch(
         &mut self,
         accuracy: AccuracyLevel,
@@ -181,7 +181,7 @@ impl MukandaraGlobalNavigationSystem {
     }
 
     /// Orchestrates self-healing and adaptation to changes/attacks.
-    #[security(level = "omomniscient", self_healing = "true")]
+    /// [security: level = "omomniscient", self_healing = "true"]
     pub fn run_self_healing_loop(&mut self) -> Result<(), String> {
         println!("[MGNS] Running autonomous self-healing loop.");
         // Continuous monitoring, anomaly detection, and re-routing of PNT signals

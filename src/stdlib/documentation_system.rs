@@ -60,8 +60,8 @@ impl DocumentationSystem {
 
     /// Generates exhaustive multi-modal documentation based on a high-level request.
     /// This function orchestrates the entire process, from understanding intent to final output.
-    #[security(level = "high", integrity_check = "content_authenticity")] // Ensure docs are genuine
-    #[ethics(principles = "unbiased_information", transparency_level = "full")] // Critical for explaining AGI
+    /// [security: level = "high", integrity_check = "content_authenticity"] // Ensure docs are genuine
+    /// [ethics: principles = "unbiased_information", transparency_level = "full"] // Critical for explaining AGI
     pub fn generate_documentation(
         &mut self,
         request: DocumentationRequest,

@@ -120,10 +120,7 @@ impl HybridCompilerOrchestrator {
 
     /// Dynamically selects the most optimal compilation strategy based on input code,
     /// target platform, and runtime characteristics.
-    #[ethics(
-        principles = "resource_efficiency",
-        safety_risk = "performance_degradation"
-    )] // Ethical vetting of compilation choice
+    /// [ethics: principles = "resource_efficiency", safety_risk = "performance_degradation"] // Ethical vetting of compilation choice
     pub fn select_optimal_strategy(
         &mut self,
         source_code_characteristics: Map<String, MetaValue>,

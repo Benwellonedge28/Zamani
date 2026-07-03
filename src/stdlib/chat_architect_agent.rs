@@ -68,11 +68,8 @@ impl ChatArchitectAgent {
 
     /// Processes a natural language prompt to generate, optimize, and verify Zenith code.
     /// This is the core "Chat-to-Code" pipeline, leveraging SIMD-like parallelism for tasks.
-    #[security(level = "critical", integrity_check = "self_attestation")] // High security for code generation
-    #[ethics(
-        principles = "responsible_agi_design",
-        bias_mitigation_level = "extreme"
-    )] // Ethical vetting of intent
+    /// [security: level = "critical", integrity_check = "self_attestation"] // High security for code generation
+    /// [ethics: principles = "responsible_agi_design", bias_mitigation_level = "extreme"] // Ethical vetting of intent
     pub fn process_nl_prompt(&mut self, prompt: &str) -> Result<GeneratedCodeArtifact, String> {
         println!(
             "[StdLib::ChatArch] Processing natural language prompt: '{}'.",
