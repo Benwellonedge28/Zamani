@@ -96,6 +96,7 @@ impl SecureCommunicationChannel {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct HomomorphicCiphertext(pub List<u8>);
 
 pub struct HomomorphicKeyPair {

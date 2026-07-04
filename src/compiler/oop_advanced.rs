@@ -23,7 +23,7 @@ use crate::stdlib::meta_ops::{
     MetaOperations, MetaValue, OverridePatch, TranscodeSource, TranscodeTarget,
 }; // For meta-object protocols
 use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For provably correct objects
-use crate::toolchain::meta_programming::AutonomousCodeGenerator; // For code generation by objects
+use crate::toolchain::meta_programming::{AutonomousCodeGenerator, ZenithCodeSnippet}; // For code generation by objects
 use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For self-optimizing objects // For Identifier creation
 
 /// Initializes the Advanced OOP Features module.
@@ -52,10 +52,13 @@ pub enum ZenithObject {
 }
 
 /// Reference to a quantum state (conceptual).
+#[derive(Debug, Clone, PartialEq)]
 pub struct QuantumStateRef;
 /// Reference to a nano-agent (conceptual).
+#[derive(Debug, Clone, PartialEq)]
 pub struct NanoAgentRef;
 /// Reference to an MTS state snapshot (conceptual).
+#[derive(Debug, Clone, PartialEq)]
 pub struct MTSStateSnapshot;
 
 /// Defines advanced class capabilities and behaviors.
@@ -87,10 +90,13 @@ pub struct MethodDefinitionAdvanced {
 }
 
 /// Conceptual Quantum Circuit Definition.
+#[derive(Debug, Clone, PartialEq)]
 pub struct QuantumCircuitDefinition;
 /// Conceptual Nano Behavior Blueprint.
+#[derive(Debug, Clone, PartialEq)]
 pub struct NanoBehaviorBlueprint;
 /// Conceptual MTS Workflow Definition.
+#[derive(Debug, Clone, PartialEq)]
 pub struct MTSWorkflowDefinition;
 
 /// Defines fine-grained access control policies for objects and methods.
@@ -179,7 +185,7 @@ impl AutonomousObject {
             "[Compiler::OOPAdv] Autonomous Object '{}' performing self-verification.",
             self.base_object.get_id()
         );
-        let verifier = FormalVerificationEngine; // Dummy instantiation
+        let verifier = crate::toolchain::formal_verification::ZenithFormalVerifier;
         verifier.verify_object_state(self.base_object.clone(), Map::new()) // Conceptual: verify object state
     }
 }
@@ -204,7 +210,7 @@ impl MetaObjectProtocol {
             "[Compiler::OOPAdv] Dynamically overriding method '{}' for object '{}'.",
             method_name.0, object_id.0
         );
-        MetaOperations.override_behavior(object_id, new_impl, Map::new()) // Use MetaOps for security vetting
+        MetaOperations::override_behavior(object_id, new_impl, Map::new()) // Use MetaOps for security vetting
     }
 
     /// Installs a custom meta-behavior (e.g., logging, aspect-oriented concerns)
@@ -230,7 +236,7 @@ impl MetaObjectProtocol {
             "[Compiler::OOPAdv] Reflecting structure of object '{}'.",
             object_id.0
         );
-        crate::stdlib::reflection::Reflection.get_object_info(object_id) // Conceptual call
+        crate::stdlib::reflection::get_object_info(object_id) // Conceptual call
     }
 }
 

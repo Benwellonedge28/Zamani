@@ -99,4 +99,16 @@ impl ZenithFormalVerifier {
             report: format!("Verified {} bytes of code.", code.len()),
         })
     }
+
+    /// Verifies the current state of a running object (e.g. an
+    /// `AutonomousObject`) against a set of correctness/security properties.
+    /// Delegates to `verify_code` using a debug-formatted snapshot of the
+    /// object's state as the artifact to check.
+    pub fn verify_object_state<T: std::fmt::Debug>(
+        &self,
+        object_state: T,
+        config: crate::stdlib::collections::Map<String, String>,
+    ) -> Result<Proof, String> {
+        self.verify_code(format!("{:?}", object_state), config)
+    }
 }

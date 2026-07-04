@@ -9,6 +9,8 @@
 use crate::ast::Identifier;
 use crate::compiler_types::{AccessModifier, FloatWidth, IntWidth, MethodModifier, Type}; // Re-using compiler types for reflection
 use crate::source_map::Span; // For span info
+use crate::stdlib::collections::Map;
+use crate::stdlib::meta_ops::MetaValue;
 use std::collections::HashMap; // For TypeInfo attributes, etc.
 
 /// Initializes the reflection standard library components.
@@ -177,4 +179,13 @@ pub fn mirror<T: 'static>(instance: &T) -> Box<dyn ObjectMirror> {
         }
     }
     Box::new(DummyMirror)
+}
+
+/// Provides a conceptual reflective lookup of an object's fields and
+/// current values by its identifier. Used by higher-level meta-object
+/// protocol code (see `compiler::oop_advanced::MetaObjectProtocol`).
+pub fn get_object_info(object_id: Identifier) -> Result<Map<String, MetaValue>, String> {
+    let mut info = Map::new();
+    info.insert("id".to_string(), MetaValue::String(object_id.0.clone()));
+    Ok(info)
 }
