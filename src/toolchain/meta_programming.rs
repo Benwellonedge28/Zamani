@@ -106,7 +106,8 @@ impl MacroProcessor {
 
 /// Represents a conceptual autonomous agent specialized in meta-programming tasks.
 /// These agents can understand requirements, generate code, optimize it, and prove its correctness.
-#[derive(Debug, Clone, PartialEq)]
+/// (No Debug/Clone/PartialEq: contains trait objects and other non-derivable
+/// fields; this struct is not currently cloned/compared/printed anywhere.)
 pub struct MetaProgrammingAgent {
     pub base_agent: AutonomousAgent,
     pub code_generation_models: List<Box<dyn Model>>, // AI models for generating Zenith code/IR/HDL
