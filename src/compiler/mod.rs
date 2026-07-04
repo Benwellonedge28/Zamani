@@ -12,6 +12,12 @@ pub mod oop_advanced; // Advanced OOP Features
 pub mod optimization_strategies;
 pub mod test_metadata; // Compiler test metadata helpers // For managing and applying diverse optimization passes
 
+/// Re-exports the front-end (lexing/parsing/semantic-analysis) stage types
+/// under a single conventional path for language-spec modules to depend on.
+pub mod frontend {
+    pub use crate::semantic::{SemanticAnalyzer, TypeChecker};
+}
+
 /// Initializes the entire Zenith UMC compiler pipeline.
 pub fn initialize_compiler() {
     println!("Initializing Zenith UMC Compiler...");

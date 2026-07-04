@@ -1208,3 +1208,35 @@ impl SemanticAnalyzer {
         }
     }
 }
+
+/// A focused type-checking pass, complementing `SemanticAnalyzer`'s broader
+/// analysis with a narrow API for querying/comparing types directly.
+pub struct TypeChecker {
+    pub errors: Vec<SemanticError>,
+}
+
+impl TypeChecker {
+    pub fn new() -> Self {
+        TypeChecker { errors: Vec::new() }
+    }
+
+    /// Checks whether `actual` is compatible with `expected`, recording a
+    /// `SemanticError` (at `span`) if not.
+    pub fn check(&mut self, expected: &Type, actual: &Type, span: Span) -> bool {
+        let analyzer = SemanticAnalyzer::new();
+        let compatible = analyzer.types_compatible(expected, actual);
+        if !compatible {
+            self.errors.push(SemanticError::new(
+                format!("type mismatch: expected {:?}, found {:?}", expected, actual),
+                span,
+            ));
+        }
+        compatible
+    }
+}
+
+impl Default for TypeChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}

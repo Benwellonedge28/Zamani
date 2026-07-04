@@ -11,8 +11,6 @@
 //! high-quality, un-shortcutting explanations.
 
 use crate::ast::Identifier; // For entity IDs, document sections
-use crate::compiler::CompilerProject; // To inspect compiler-level entities
-use crate::compiler::CompilerSnapshot; // To inspect specific versions
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For retrieving deep knowledge about Zenith
 use crate::source_map::Span;
@@ -50,7 +48,10 @@ pub struct DocumentationSystem {
 impl DocumentationSystem {
     pub fn new() -> Self {
         DocumentationSystem {
-            nlp_generator: TextGenerator::new(),
+            nlp_generator: TextGenerator::new(
+                Box::new(crate::stdlib::ml::IdentityModel),
+                List::new(),
+            ),
             nlp_processor: NaturalLanguageProcessor::new(),
             planner: Planner::new(),
             sankofa_kb: SasaKnowledge::new(),

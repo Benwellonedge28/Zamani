@@ -43,14 +43,14 @@ pub struct MtsSlice(TimelineId);
 
 impl MtsSlice {
     /// Creates a new MTS slice with an initial state.
-    pub fn new<T: Debug + serde_json::Serialize>(initial_state: T) -> Self {
+    pub fn new<T: Debug + serde::Serialize>(initial_state: T) -> Self {
         println!(
             "[StdLib::mts] Creating new MTS Slice with initial state (conceptual: {:?}).",
             initial_state
         );
         let content_bytes =
             serde_json::to_vec(&initial_state).expect("Failed to serialize initial state");
-        let timestamp = chrono::Utc::now().timestamp_millis() as Timestamp;
+        let timestamp = crate::stdlib::sankofa::current_timestamp_millis() as Timestamp;
 
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
             MtsSlice(runtime_create_timeline_slice(content_bytes, timestamp))
@@ -83,7 +83,7 @@ impl MtsSlice {
     }
 
     /// Loads the state of this MTS slice at a specific temporal timestamp.
-    pub fn load<T: Debug + serde_json::de::DeserializeOwned + Default>(
+    pub fn load<T: Debug + serde::de::DeserializeOwned + Default>(
         &self,
         timestamp: Timestamp,
     ) -> T {
@@ -94,7 +94,7 @@ impl MtsSlice {
         );
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
             runtime_load_timeline_state(self.0, timestamp)
-                .and_then(|bytes| serde_json::from_bytes(&bytes).ok())
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok())
                 .unwrap_or_else(|| { // Provide a default if deserialization fails or state not found
                     println!("  Warning: No state found or deserialization failed for MtsSlice {} at timestamp {}, returning default.", self.0, timestamp);
                     T::default()
@@ -106,7 +106,7 @@ impl MtsSlice {
     }
 
     /// Stores a new state into this MTS slice at a specific temporal timestamp.
-    pub fn store<T: Debug + serde_json::Serialize>(
+    pub fn store<T: Debug + serde::Serialize>(
         &self,
         state: T,
         timestamp: Timestamp,
@@ -133,7 +133,7 @@ impl MtsSlice {
             "[StdLib::mts] Synchronizing MTS Slice {} with {}.",
             self.0, other.0
         );
-        let merge_point = chrono::Utc::now().timestamp_millis() as Timestamp; // Conceptual merge point
+        let merge_point = crate::stdlib::sankofa::current_timestamp_millis() as Timestamp; // Conceptual merge point
         if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR_ARC.as_ref() } {
             runtime_synchronize_timelines(self.0, other.0, merge_point).map(MtsSlice)
         } else {

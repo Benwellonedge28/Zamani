@@ -213,3 +213,20 @@ pub fn init_ml_lib() {
 pub fn shutdown_ml_lib() {
     println!("  - Shutting down Zenith Machine Learning (ML) Engine...");
 }
+
+/// A minimal, always-available `Model` implementation that passes its input
+/// through unchanged. Useful as a lightweight default/placeholder wherever a
+/// concrete `Box<dyn Model>` is needed but no trained model is configured yet
+/// (e.g. a freshly constructed `TextGenerator` before a real model is loaded).
+#[derive(Debug, Clone, Default)]
+pub struct IdentityModel;
+
+impl Model for IdentityModel {
+    fn predict(&self, input: &Tensor<f32>) -> Result<Tensor<f32>, String> {
+        Ok(input.clone())
+    }
+
+    fn train(&mut self, _dataset: &dyn Dataset) -> Result<(), String> {
+        Ok(())
+    }
+}

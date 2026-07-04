@@ -127,9 +127,9 @@ impl MultiTimelineOrchestrator {
     ) -> TimelineId {
         let id = self.next_timeline_id;
         self.next_timeline_id += 1;
+        println!("    -> MTS Runtime: Created Timeline {} ('{}').", id, name);
         let timeline = Timeline::new(id, name, parent_id, initial_state, initial_timestamp);
         self.timelines.insert(id, timeline);
-        println!("    -> MTS Runtime: Created Timeline {} ('{}').", id, name);
         id
     }
 

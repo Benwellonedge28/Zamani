@@ -228,8 +228,8 @@ impl<T> Mutex<T> {
 // Nimbus OS Interaction (Conceptual System Calls)
 // -----------------------------------------------------------------------------
 
-// Import Nimbus OS types from the new dedicated module
-use crate::nimbus_os::{NimbusContextId, SandboxPolicy};
+// Import Nimbus OS types from the new dedicated module (NimbusContextId,
+// SandboxPolicy already imported at the top of this file)
 use crate::runtime::nimbus_os_interface::get_nimbus_microkernel; // For accessing the global microkernel
 
 /// Conceptual interface for low-level Nimbus OS system calls.
