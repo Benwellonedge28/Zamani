@@ -15,7 +15,6 @@
 use crate::ast::{Identifier, ZenithAstNode}; // For AST representations
 use crate::ir_gen::ZenithIR; // For Intermediate Representation
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting
-use crate::runtime::mts::MtsTimelineId; // For speculative optimization
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, Planner}; // For strategic optimization planning
 use crate::stdlib::collections::{List, Map}; // For optimization parameters, analysis results

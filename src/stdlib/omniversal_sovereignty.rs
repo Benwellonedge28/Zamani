@@ -19,7 +19,7 @@
 use crate::ast::Identifier;
 use crate::nimbus::os::security_kernel::SecureExecutionEnvironment;
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
-use crate::runtime::mts::{MtsTimePoint, MtsTimelineId};
+use crate::runtime::mts::{TimelineId as MtsTimelineId, Timestamp as MtsTimePoint};
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
 use crate::source_map::Span;
 use crate::stdlib::collections::{HashSet, List, Map};
