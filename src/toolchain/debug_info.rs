@@ -6,7 +6,8 @@
 //! step-through debugging as well as advanced time-travel and multi-paradigm views.
 
 use crate::compiler_types::Type;
-use crate::source_map::Span; // For variable types
+use crate::source_map::Span;
+use std::collections::HashMap; // For variable types
 
 /// Initializes the debug information generation components.
 pub fn init_debug_info_gen() {

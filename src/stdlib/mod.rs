@@ -158,8 +158,7 @@ pub fn shutdown_stdlib() {
     println!("Shutting down Zenith UMC Standard Library...");
     omniversal_autonomous_deployment_orchestration_secure_hardening::shutdown_omniversal_autonomous_deployment_orchestration_secure_hardening(); // Shutdown OADOSH module
                                                                                                                                                  // omniversal_living_character_narrative_evolution::shutdown (module not in tree)();
-    omniversal_rogue_prevention_alignment::shutdown_omniversal_agi_alignment_sovereign_containment(
-    );
+    omniversal_rogue_prevention_alignment::shutdown_omniversal_rogue_prevention_alignment();
     omniversal_trust_identity_management::shutdown_omniversal_trust_identity_management();
     omniversal_strategic_goal_management::shutdown_omniversal_strategic_goal_management();
     omniversal_perception_autonomous_action::shutdown_omniversal_perception_autonomous_action();
@@ -194,7 +193,7 @@ pub fn shutdown_stdlib() {
     chat_architect_agent::shutdown_chat_architect_agent();
     human_interface_devices::shutdown_hid_lib();
     iot::shutdown_iot_lib();
-    distributed_ledger::shutdown_distributed_ledger();
+    distributed_ledger::shutdown_ledger_lib();
     reality::shutdown_reality_lib();
     human_agi_interaction::shutdown_human_agi_lib();
     agi_governance::shutdown_agi_governance_lib();

@@ -80,3 +80,13 @@ pub mod ast {
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub struct Identifier(pub String, pub Span);
 }
+
+/// Initializes the Test Framework primitives module.
+pub fn init_test_framework() {
+    println!("  - Initializing Zenith Test Framework...");
+}
+
+/// Shuts down the Test Framework primitives module.
+pub fn shutdown_test_framework() {
+    println!("  - Shutting down Zenith Test Framework...");
+}
