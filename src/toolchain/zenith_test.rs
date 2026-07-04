@@ -23,14 +23,14 @@
 //! - **Daemon Mode (`zenith-testd`):** Optionally runs as a resident daemon for faster
 //!   test execution in IDEs/editors.
 
-use crate::ast::{AbstractSyntaxTree, Identifier};
+use self::runtime::vm::ZenithVM; // Or an IR interpreter
+use self::toolchain::build_orchestrator::BuildOptions;
+use crate::ast::Identifier;
 use crate::compiler::test_metadata::{FuzzTestInfo, PropertyTestInfo, TestMetadata, TestScope};
-use crate::runtime::vm::ZenithVM; // Or an IR interpreter
 use crate::source_map::Span;
-use crate::stdlib::collections::{HashSet, List, Map};
+use crate::stdlib::collections::{List, Map};
 use crate::stdlib::core::Result;
 use crate::stdlib::meta_ops::MetaValue;
-use crate::toolchain::build_orchestrator::{BuildOptions, BuildReport};
 
 pub struct ZenithTestRunner {
     pub vm: ZenithVM, // For executing bytecode/IR

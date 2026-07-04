@@ -20,9 +20,6 @@ use crate::stdlib::collections::{HashSet, List, Map};
 use crate::stdlib::core::Result;
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::ml::{Model, Tensor};
-use crate::stdlib::multidimensional::{
-    InfinityDimensionSystem, Matrix, Point, Transform, UniversalVectorSpace, Vector,
-};
 use crate::toolchain::meta_programming::CodeGenerator;
 use crate::toolchain::self_evolution::SelfEvolutionEngine;
 

@@ -6,6 +6,7 @@
 
 pub mod cloud_network_security;
 pub mod core;
+pub mod debugger;
 pub mod distributed;
 pub mod memory_manager; // Memory Allocation and Garbage Collection
 pub mod mts; // Multi-Timeline System for speculative execution
@@ -20,6 +21,7 @@ pub mod universal_runtime; // Long-term memory and learning integration
 pub fn initialize_runtime() {
     println!("Initializing Zenith Runtime...");
     memory_manager::init_memory_manager();
+    debugger::init_debugger();
     quantum::init_quantum_lib();
     nano::init_nano_runtime();
     mts::init_mts_runtime();
@@ -42,6 +44,7 @@ pub fn shutdown_runtime() {
     quantum::shutdown_quantum_lib();
     memory_manager::shutdown_memory_manager();
     universal_runtime::shutdown_universal_runtime();
+    debugger::shutdown_debugger();
     nimbus_os_interface::shutdown_nimbus_os_interface();
     nimbus_os::shutdown_nimbus_os_interface();
     distributed::shutdown_distributed_runtime();

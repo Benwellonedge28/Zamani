@@ -22,9 +22,6 @@ use crate::stdlib::math_foundations::{
 };
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::ml::{Model, Tensor};
-use crate::stdlib::multidimensional::{
-    InfinityDimensionSystem, Matrix, Point, Transform, UniversalVectorSpace, Vector,
-};
 use crate::stdlib::omniversal_simulation::OmniversalSimulationEngine;
 use crate::toolchain::self_evolution::SelfEvolutionEngine;
 

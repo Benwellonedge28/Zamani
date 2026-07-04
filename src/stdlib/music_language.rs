@@ -16,19 +16,17 @@
 use crate::ast::{AbstractSyntaxTree, Identifier};
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
 use crate::source_map::Span;
-use crate::stdlib::ai_reasoning::{CausalEngine, Fact, FactObject};
+use crate::stdlib::ai_reasoning::{Fact, FactObject};
 use crate::stdlib::collections::{HashSet, List, Map};
 use crate::stdlib::core::Result;
-use crate::stdlib::human_agi_interaction::{BrainSignal, HumanCultureModel};
-use crate::stdlib::iot::SensorData; // For instrument sensing
+use crate::stdlib::human_agi_interaction::HumanCultureModel;
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::ml::{Model, Tensor};
 use crate::stdlib::multidimensional::{
     InfinityDimensionSystem, MultidimensionalEngine, UniversalVectorSpace,
 };
 use crate::stdlib::omniversal_nlp_adv::{
-    AdvancedOmniversalNlpEngine, CognitiveLinguisticState, EnhancedNlpAnalysisResult,
-    MultimodalEmbedding,
+    AdvancedOmniversalNlpEngine, CognitiveLinguisticState, MultimodalEmbedding,
 };
 use crate::stdlib::robotics::ActuatorCommand; // For performance grounding
 use crate::stdlib::vision::MultiModalSensorData;
@@ -274,7 +272,7 @@ impl CognitiveMusicalFabric {
 pub struct InstrumentLinguisticAdapter {
     pub instrument_id: Identifier,
     pub technical_constraints: List<Fact>,
-    pub timbre_model: Model,
+    pub timbre_model: Box<dyn Model>,
 }
 impl InstrumentLinguisticAdapter {
     pub fn transcribe_to_morphemes(

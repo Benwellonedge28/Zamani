@@ -117,3 +117,12 @@ impl OwnershipManager {
         Ok(notice)
     }
 }
+
+/// A model of a human cultural context, used by modules that need to ground
+/// their output/interpretation in a specific culture (e.g. musical
+/// performance interpretation, translation between cultural "dialects").
+#[derive(Debug, Clone, PartialEq)]
+pub struct HumanCultureModel {
+    pub name: String,
+    pub dominant_language: Identifier,
+}

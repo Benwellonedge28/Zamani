@@ -216,3 +216,14 @@ impl MultiModalVision {
         Ok(Map::new()) // Dummy enriched analysis
     }
 }
+
+/// Sensor data spanning multiple modalities (e.g. audio + video + haptic),
+/// used by modules that ground perception across more than one sense (e.g.
+/// interpreting a musical performance from combined audio/video/sensor
+/// streams).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MultiModalSensorData {
+    pub audio: Vec<f32>,
+    pub video_frames: Vec<u8>,
+    pub metadata: std::collections::HashMap<String, String>,
+}

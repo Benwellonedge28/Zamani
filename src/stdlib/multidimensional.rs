@@ -84,3 +84,46 @@ impl Default for MultidimensionalEngine {
         Self::new()
     }
 }
+
+/// A conceptual space of unbounded dimensionality that higher-level modules
+/// (e.g. musical grammar's `CognitiveMusicalFabric`) can embed thoughts or
+/// concepts into, identified by a domain name and human-readable label.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InfinityDimensionSystem {
+    pub domain: crate::ast::Identifier,
+    pub label: String,
+    pub basis: Tensor,
+}
+
+impl InfinityDimensionSystem {
+    pub fn new(domain: crate::ast::Identifier, label: String) -> Self {
+        InfinityDimensionSystem {
+            domain,
+            label,
+            basis: Tensor::zeros(vec![1]),
+        }
+    }
+}
+
+/// A high-dimensional vector space used to represent grammars/concepts
+/// generically across modules (e.g. `MusicalGrammar::vector_space`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct UniversalVectorSpace {
+    pub dimensions: usize,
+    pub basis: Tensor,
+}
+
+impl UniversalVectorSpace {
+    pub fn new(dimensions: usize) -> Self {
+        UniversalVectorSpace {
+            dimensions,
+            basis: Tensor::zeros(vec![dimensions]),
+        }
+    }
+}
+
+impl Default for UniversalVectorSpace {
+    fn default() -> Self {
+        UniversalVectorSpace::new(0)
+    }
+}

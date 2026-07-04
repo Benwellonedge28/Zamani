@@ -702,3 +702,30 @@ pub struct ConsensusExpr {
     pub validators: Vec<Expression>,
     pub span: Span,
 }
+
+// ─── AbstractSyntaxTree (conceptual top-level AST handle) ───────────────────
+
+/// A conceptual, top-level Abstract Syntax Tree handle used by higher-level
+/// stdlib/toolchain modules (music language, network config synthesis, math
+/// foundations, debugging/testing tools) that construct or hold generic AST
+/// values without threading a full parsed `Program` + real `Span` through.
+/// Wraps the real `Program` type so it stays consistent with the compiler's
+/// actual AST representation rather than inventing a parallel one.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct AbstractSyntaxTree {
+    pub program: Program,
+}
+
+impl AbstractSyntaxTree {
+    pub fn new() -> Self {
+        AbstractSyntaxTree {
+            program: Program::new(Vec::new(), Span::dummy()),
+        }
+    }
+}
+
+impl Default for Program {
+    fn default() -> Self {
+        Program::new(Vec::new(), Span::dummy())
+    }
+}

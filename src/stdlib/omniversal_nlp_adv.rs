@@ -110,3 +110,25 @@ impl Default for AdvancedOmniversalNlpEngine {
         Self::new()
     }
 }
+
+/// A generic language-agnostic cognitive/thought state used by modules that
+/// exchange meaning at a conceptual level rather than as literal text (e.g.
+/// music-as-language's `speak_music_natively`).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CognitiveLinguisticState {
+    pub concepts: Vec<String>,
+    pub confidence: f32,
+}
+
+/// An embedding vector spanning multiple modalities (text, audio, gesture,
+/// etc.), used wherever a module needs to ground meaning across modalities.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MultimodalEmbedding {
+    pub vector: Vec<f32>,
+}
+
+impl MultimodalEmbedding {
+    pub fn new() -> Self {
+        MultimodalEmbedding { vector: Vec::new() }
+    }
+}

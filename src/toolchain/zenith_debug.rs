@@ -10,9 +10,7 @@
 //! super Extremely supremely autonomous infinity Advanced and secure infinitely"
 //! systems.
 
-use crate::ast::{AbstractSyntaxTree, Identifier};
-use crate::runtime::debugger::{Breakpoint, DebuggerState, StackFrame, Variable, ZenithDebugger};
-use crate::source_map::Span;
+use crate::runtime::debugger::{Breakpoint, Variable, ZenithDebugger};
 use crate::stdlib::collections::{List, Map};
 use crate::stdlib::core::Result;
 use crate::stdlib::meta_ops::MetaValue;

@@ -6,6 +6,12 @@
 
 use std::collections::HashMap; // For conceptual implementation
 
+/// Re-export of `std::collections::HashSet` — used as-is across several
+/// stdlib/toolchain modules that need real set semantics (e.g. Fact causal
+/// parents, musical concept tags). No custom wrapper is warranted here since
+/// none of those consumers need anything beyond the standard API.
+pub use std::collections::HashSet;
+
 // Re-export List and Map from core::
 // pub use crate::stdlib::core::List;
 // pub use crate::stdlib::core::Map;
