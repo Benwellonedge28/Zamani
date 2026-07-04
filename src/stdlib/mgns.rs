@@ -29,7 +29,6 @@ use crate::nimbus_os::evas::{EvasFilter, EvasPolicyLevel};
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
 use crate::stdlib::ai_reasoning::{CausalEngine, Fact};
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::crypto::PostQuantumCryptoEngine; // For quantum-resistant crypto
 use crate::stdlib::math_foundations::AdvancedMathEngine;
 use crate::stdlib::meta_ops::MetaValue;
@@ -549,7 +548,6 @@ pub mod stdlib {
     pub mod physical_hardware_control {
         use crate::runtime::sankofa::KnowledgeId;
         use crate::stdlib::ai_reasoning::Fact;
-        use crate::stdlib::core::Result;
         pub struct PermanentMemoryInterface;
         impl PermanentMemoryInterface {
             pub fn new() -> Self {

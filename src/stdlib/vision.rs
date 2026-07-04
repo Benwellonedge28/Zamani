@@ -10,7 +10,6 @@ use crate::ast::Identifier; // For model names, object classes
 use crate::core_lang_primitives::Size; // For image dimensions, data sizes
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
 use crate::stdlib::collections::{List, Map}; // For pixel data, detected objects
-use crate::stdlib::core::Result; // For error handling
 pub use crate::stdlib::gui::Point;
 use crate::stdlib::gui::{Image, Rect}; // For image representation, bounding boxes
 use crate::stdlib::ml::{Model, Tensor}; // For neural vision models // For contextual scene understanding

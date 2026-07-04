@@ -15,7 +15,6 @@ use crate::ast::Identifier;
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision};
 use crate::stdlib::ai_reasoning::FactObject;
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result;
 
 /// Initializes the AGI Governance standard library components.
 pub fn init_agi_governance_lib() {

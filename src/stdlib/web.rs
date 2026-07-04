@@ -10,7 +10,6 @@ use crate::ast::Identifier; // For DOM element IDs, event names
 use crate::core_lang_primitives::Size; // For data sizes, element dimensions
 use crate::source_map::Span;
 use crate::stdlib::collections::List; // For HTML elements, event listeners
-use crate::stdlib::core::Result; // For error handling
 use crate::stdlib::net::{NetworkConnection, TcpStream}; // For WebSockets
 use std::collections::HashMap; // For element attributes, event data // For dummy Identifier
 

@@ -19,7 +19,6 @@ use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representati
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // Underlying knowledge base
 use crate::stdlib::ai_reasoning::{Fact, FactObject, KnowledgeBase}; // AI Reasoning APIs
 use crate::stdlib::collections::List;
-use crate::stdlib::core::Result; // Zenith Result type // Zenith List type
 
 /// Initializes the AI Cognition Keywords language specification.
 pub fn init_ai_cognition_keywords() {

@@ -11,7 +11,6 @@
 use crate::ast::Identifier;
 use crate::source_map::Span;
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::numeric::Prob; // Conceptual probability type
 use crate::stdlib::sankofa::{KnowledgeId, SasaKnowledge};

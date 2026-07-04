@@ -15,7 +15,6 @@ use crate::ast::{Expression, Identifier, Parameter, Type, TypeBound, TypeParamet
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
 use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result; // Zenith Result type // Zenith List type for type arguments
 
 /// Initializes the Advanced Type System Keywords language specification.
 pub fn init_advanced_types_syntax() {

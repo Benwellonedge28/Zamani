@@ -23,7 +23,6 @@ use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPo
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, Planner}; // For adaptive compilation planning
 use crate::stdlib::collections::{List, Map}; // For compilation artifacts, metadata
-use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::meta_ops::MetaValue; // Generic data for events
 use crate::stdlib::ml::Tensor; // For AI-driven compilation models // For Identifier creation
 
@@ -358,7 +357,6 @@ pub mod optimizer {
     use super::ir_gen::ZenithIR;
     use crate::ast::Identifier;
     use crate::stdlib::collections::Map;
-    use crate::stdlib::core::Result;
 
     #[derive(Debug, Clone, PartialEq)]
     pub enum OptimizationLevel {
@@ -390,7 +388,6 @@ pub mod optimizer {
 pub mod backend {
     use super::ir_gen::ZenithIR;
     use crate::ast::Identifier;
-    use crate::stdlib::core::Result;
 
     #[derive(Debug, Clone, PartialEq)]
     pub enum TargetPlatform {

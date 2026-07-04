@@ -8,7 +8,6 @@
 
 use crate::ast::Identifier;
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::net::TcpStream;
 
 /// Initializes the IoT standard library components.

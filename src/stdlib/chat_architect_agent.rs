@@ -17,7 +17,6 @@ use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For contextual kno
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, FactObject, KnowledgeBase, Planner}; // For reasoning and goal breakdown
 use crate::stdlib::collections::{List, Map}; // For prompt context, generated file lists
-use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::external_services::{CloudPlatform, ServiceHandle}; // For deploying generated code
 use crate::stdlib::gui::Window; // For multi-modal code preview
 use crate::stdlib::human_agi_interaction::AdminPortal; // For human oversight/feedback

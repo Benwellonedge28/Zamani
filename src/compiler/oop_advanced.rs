@@ -18,7 +18,6 @@ use crate::source_map::Span;
 use crate::stdlib::agents::AutonomousAgent; // For embedding agents in objects
 use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner}; // For autonomous object intelligence
 use crate::stdlib::collections::{List, Map}; // For object state, method tables
-use crate::stdlib::core::Result; // For error handling
 use crate::stdlib::crypto::{HomomorphicCiphertext, KeyManagementSystem, PublicKey, Signature}; // For secure object states
 use crate::stdlib::meta_ops::{
     MetaOperations, MetaValue, OverridePatch, TranscodeSource, TranscodeTarget,

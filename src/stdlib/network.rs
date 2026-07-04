@@ -16,7 +16,6 @@ use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPo
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{CausalEngine, Fact, Planner};
 use crate::stdlib::collections::{HashSet, List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::math_foundations::{
     AdvancedMathEngine, EmpiricalResults, MathematicalDiscovery, Proof,
 };

@@ -10,7 +10,6 @@ use crate::core_lang_primitives::{Size, TimeStamp}; // For data sizes, timestamp
 use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure storage access
 use crate::source_map::Span;
 use crate::stdlib::collections::List; // For query results, records
-use crate::stdlib::core::Result; // For error handling
 use crate::stdlib::serialize::{Deserializable, Serializable, SerializationFormat}; // For data interchange
 use std::collections::HashMap; // For record fields, query parameters // For dummy Identifier
 

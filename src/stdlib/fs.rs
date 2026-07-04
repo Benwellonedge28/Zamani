@@ -9,7 +9,6 @@ use crate::core_lang_primitives::{Size, TimeStamp}; // For file sizes, timestamp
 use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For security
 use crate::source_map::Span;
 use crate::stdlib::collections::List; // For directory listings
-use crate::stdlib::core::Result; // For error handling // For dummy Identifier
 
 /// Initializes the file system standard library components.
 pub fn init_fs_lib() {

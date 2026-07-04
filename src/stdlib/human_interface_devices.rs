@@ -12,7 +12,6 @@
 use crate::ast::Identifier; // For device IDs, command names, gesture types
 use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure device access
 use crate::stdlib::collections::{List, Map}; // For event data, configuration
-use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::ml::{Model, Tensor}; // For pattern recognition (gestures, BCI)
 use crate::stdlib::vision::{ImageBuffer, Point}; // For gesture/eye-tracking visuals // Generic data for events

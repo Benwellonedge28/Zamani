@@ -17,7 +17,6 @@ use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stag
 use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For version history and learning
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result; // Zenith Result type
 use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For self-evolution integration // Zenith List type for rules
 
 /// Initializes the Declarative System Directives language specification.

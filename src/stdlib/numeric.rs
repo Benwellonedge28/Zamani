@@ -7,7 +7,6 @@
 
 use crate::core_lang_primitives::Size; // For matrix dimensions, array sizes
 use crate::stdlib::collections::List; // For vectors, matrices, data points
-use crate::stdlib::core::Result; // For error handling
 use crate::stdlib::ml::Tensor; // For high-dimensional data
 
 /// Initializes the numerical analysis standard library components.

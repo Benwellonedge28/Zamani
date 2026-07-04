@@ -8,7 +8,6 @@
 use crate::ast::Identifier; // For format names, type hints
 use crate::core_lang_primitives::Size; // For data sizes
 use crate::stdlib::collections::{HashSet, List};
-use crate::stdlib::core::Result; // For error handling // For byte buffers and causal parents
 
 // Import types from runtime for conceptual serialization implementations
 use crate::runtime::mts::TemporalStateSnapshot;

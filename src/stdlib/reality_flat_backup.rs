@@ -9,7 +9,6 @@
 //! Inspired by UBUNTU's `VR_AR_INTERACTION`.
 
 use crate::ast::Identifier;
-use crate::stdlib::core::Result;
 use crate::stdlib::collections::{List, Map};
 use crate::stdlib::vision::{Point, ImageBuffer};
 

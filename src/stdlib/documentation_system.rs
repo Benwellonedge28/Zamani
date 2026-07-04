@@ -17,7 +17,6 @@ use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, FactObject, KnowledgeBase, Planner}; // For reasoning about topics
 use crate::stdlib::chat_architect_agent::GeneratedCodeArtifact; // To generate docs for generated code
 use crate::stdlib::collections::{List, Map}; // For content structure, metadata
-use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::gui::Image; // For embedding images
 use crate::stdlib::meta_ops::{MetaOperations, MetaValue}; // For reflecting on Zenith's structure
 use crate::stdlib::nlp::{MultiModalContent, NaturalLanguageProcessor, TextFormat, TextGenerator}; // For text generation, multi-modal output

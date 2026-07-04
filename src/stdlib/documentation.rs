@@ -14,7 +14,6 @@ use crate::ast::Identifier;
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
 use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner};
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::gui::Window;
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::nlp::{NaturalLanguageProcessor, Summarizer};

@@ -18,7 +18,6 @@ use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPo
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, FactObject};
 use crate::stdlib::collections::{HashSet, List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::human_agi_interaction::HumanCultureModel;
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::ml::{Model, Tensor};

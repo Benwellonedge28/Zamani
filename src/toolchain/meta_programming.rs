@@ -19,7 +19,6 @@ use crate::source_map::Span;
 use crate::stdlib::agents::AutonomousAgent;
 use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner}; // For intelligent code generation
 use crate::stdlib::collections::{List, Map}; // For AST nodes, macro arguments, configurations
-use crate::stdlib::core::Result; // For error handling
 use crate::stdlib::crypto::{HomomorphicCiphertext, KeyManagementSystem, PublicKey, Signature}; // For secure meta-code
 use crate::stdlib::meta_ops::{
     MetaOperations, MetaValue, OverridePatch, TranscodeSource, TranscodeTarget, TranscodedOutput,

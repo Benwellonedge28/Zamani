@@ -10,7 +10,6 @@ use crate::core_lang_primitives::Size; // For text lengths
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For contextual understanding
 use crate::source_map::Span;
 use crate::stdlib::collections::{List, Map}; // For vocabularies, parsed trees
-use crate::stdlib::core::Result; // For error handling
 use crate::stdlib::ml::{Model, Tensor}; // For neural NLP models // For Identifier creation
 
 /// Initializes the Natural Language Processing standard library components.

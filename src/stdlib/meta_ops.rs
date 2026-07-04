@@ -16,7 +16,6 @@ use crate::nimbus_os::{CapabilityToken, NimbusContextId, NimbusMicrokernel}; // 
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For historical context of meta-operations
 use crate::source_map::Span;
 use crate::stdlib::collections::{List, Map}; // For arguments, configurations
-use crate::stdlib::core::Result; // For error handling
 use crate::toolchain::self_evolution::EvolutionProposal; // For runtime patching // For Identifier creation
 
 /// Initializes the Meta-Operations module.

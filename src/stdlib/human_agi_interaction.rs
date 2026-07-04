@@ -12,7 +12,6 @@
 
 use crate::ast::Identifier;
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::meta_ops::MetaValue;
 
 /// Initializes the Human-AGI Interaction standard library components.

@@ -14,7 +14,6 @@ use crate::core_lang_primitives::{Size, TimeStamp}; // For dimensions, animation
 use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure display access
 use crate::source_map::Span;
 use crate::stdlib::collections::List; // For lists of widgets/events
-use crate::stdlib::core::Result; // For error handling
 use std::collections::HashMap; // For styles, properties // For dummy Identifier
 
 // Import multi-paradigm types for conceptual rendering

@@ -17,7 +17,6 @@ use crate::runtime::sankofa::{ConceptualGraph, KnowledgeId, SasaKnowledge};
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{CausalEngine, Fact, FactObject, Planner};
 use crate::stdlib::collections::{HashSet, List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::ml::{Model, Tensor};
 use crate::toolchain::meta_programming::CodeGenerator;

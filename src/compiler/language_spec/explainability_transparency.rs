@@ -16,7 +16,6 @@ use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stag
 use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
 use crate::nimbus_os::evas::{EvasActionContext, EvasFilter}; // For E.V.A.S. integration
 use crate::stdlib::collections::List;
-use crate::stdlib::core::Result; // Zenith Result type // Zenith List type
 
 /// Initializes the Explainability & Transparency Keywords language specification.
 pub fn init_explainability_transparency_keywords() {

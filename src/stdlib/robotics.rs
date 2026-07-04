@@ -11,7 +11,6 @@ use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For hardware access
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Plan, Planner}; // For high-level mission planning
 use crate::stdlib::collections::{List, Map}; // For sensor data, trajectory points
-use crate::stdlib::core::Result; // For error handling
 use crate::stdlib::vision::{DetectedObject, Point}; // For visual feedback // For Identifier creation
 
 /// Initializes the Robotics and Control standard library components.

@@ -19,7 +19,6 @@ use crate::runtime::mts::MtsTimelineId; // For speculative optimization
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, Planner}; // For strategic optimization planning
 use crate::stdlib::collections::{List, Map}; // For optimization parameters, analysis results
-use crate::stdlib::core::Result; // Zenith Result type
 use crate::stdlib::meta_ops::MetaValue; // Generic data for events
 use crate::stdlib::ml::{Model, Tensor}; // For AI-driven optimization // For Identifier creation
 
@@ -174,7 +173,6 @@ pub mod compiler {
         use crate::ast::Identifier;
         use crate::ir_gen::ZenithIR;
         use crate::stdlib::collections::Map;
-        use crate::stdlib::core::Result;
 
         #[derive(Debug, Clone, PartialEq)]
         pub enum OptimizationLevel {

@@ -8,7 +8,6 @@
 
 use crate::ast::Identifier; // For agent IDs, role names
 use crate::core_lang_primitives::{Size, TimeStamp}; // For agent lifespan, task timing
-use crate::stdlib::core::Result; // For error handling
 use crate::stdlib::collections::{List, Map}; // For agent memories, task queues
 use crate::stdlib::ai_reasoning::{KnowledgeBase, Plan, FactObject, Planner}; // For agent intelligence
 use crate::stdlib::nlp::{Nlp, TextGenerator}; // For communication

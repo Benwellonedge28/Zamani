@@ -29,7 +29,6 @@ use crate::ast::Identifier;
 use crate::compiler::test_metadata::{FuzzTestInfo, PropertyTestInfo, TestMetadata, TestScope};
 use crate::source_map::Span;
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::meta_ops::MetaValue;
 
 pub struct ZenithTestRunner {

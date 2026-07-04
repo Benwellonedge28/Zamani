@@ -12,7 +12,6 @@
 
 use crate::runtime::debugger::{Breakpoint, Variable, ZenithDebugger};
 use crate::stdlib::collections::{List, Map};
-use crate::stdlib::core::Result;
 use crate::stdlib::meta_ops::MetaValue;
 
 /// Zenith Debug Adapter Protocol (DAP) Adapter.
