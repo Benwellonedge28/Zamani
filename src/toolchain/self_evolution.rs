@@ -91,3 +91,28 @@ impl Default for SelfEvolutionEngine {
         Self::new()
     }
 }
+
+/// A proposed set of code-optimization changes generated on behalf of a
+/// requesting agent/component.
+#[derive(Debug, Clone)]
+pub struct EvolutionProposal {
+    pub data: Vec<String>,
+}
+
+impl SelfEvolutionEngine {
+    /// Generates optimization proposals on behalf of `requesting_agent`,
+    /// backed by the engine's real patch-proposal machinery.
+    pub fn generate_optimization_proposals(
+        &mut self,
+        requesting_agent: crate::ast::Identifier,
+    ) -> Result<EvolutionProposal, String> {
+        let id = self.propose_patch(
+            SelfModTarget::Optimiser,
+            &format!("Optimization proposal requested by {:?}", requesting_agent),
+            0.1,
+        );
+        Ok(EvolutionProposal {
+            data: vec![format!("patch-{}", id)],
+        })
+    }
+}

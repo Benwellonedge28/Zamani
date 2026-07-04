@@ -14,7 +14,9 @@ use crate::ast::Identifier; // For macro names, code snippets, component IDs
 use crate::core_lang_primitives::{Size, TimeStamp}; // For code metrics, generation timestamps
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision}; // For ethical vetting of meta-code
 use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure execution contexts
+use crate::runtime::sankofa::KnowledgeId;
 use crate::source_map::Span;
+use crate::stdlib::agents::AutonomousAgent;
 use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner}; // For intelligent code generation
 use crate::stdlib::collections::{List, Map}; // For AST nodes, macro arguments, configurations
 use crate::stdlib::core::Result; // For error handling
@@ -22,6 +24,7 @@ use crate::stdlib::crypto::{HomomorphicCiphertext, KeyManagementSystem, PublicKe
 use crate::stdlib::meta_ops::{
     MetaOperations, MetaValue, OverridePatch, TranscodeSource, TranscodeTarget, TranscodedOutput,
 }; // Fundamental meta-ops
+use crate::stdlib::ml::Model;
 use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For proving meta-code correctness
 use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For integration with self-evolution // For Identifier creation
 
@@ -107,8 +110,8 @@ impl MacroProcessor {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MetaProgrammingAgent {
     pub base_agent: AutonomousAgent,
-    pub code_generation_models: List<Model>, // AI models for generating Zenith code/IR/HDL
-    pub optimization_planner: Planner,       // For planning code transformations
+    pub code_generation_models: List<Box<dyn Model>>, // AI models for generating Zenith code/IR/HDL
+    pub optimization_planner: Planner,                // For planning code transformations
     pub formal_verification_integrations: List<Identifier>, // Tools used for proving correctness
 }
 
@@ -154,7 +157,7 @@ impl AutonomousCodeGenerator {
             "[Toolchain::MetaProg] Autonomously optimizing code for goal: '{}'.",
             optimization_goal
         );
-        let self_evo_engine = SelfEvolutionEngine; // Dummy instantiation
+        let mut self_evo_engine = SelfEvolutionEngine::new();
         let proposal_result = self_evo_engine.generate_optimization_proposals(Identifier(
             "code_refactor_agent".to_string(),
             Span::dummy(),
@@ -204,7 +207,7 @@ impl SecureMetaProgramming {
     /// Uses `toolchain::formal_verification`.
     pub fn formally_verify_meta_code(code_to_verify: ZenithCodeSnippet) -> Result<Proof, String> {
         println!("[Toolchain::MetaProg] Formally verifying meta-code.");
-        let verifier = FormalVerificationEngine; // Dummy instantiation
+        let verifier = FormalVerificationEngine::default();
         verifier.verify_code(code_to_verify, Map::new()) // Use Map::new() for dummy config
     }
 
@@ -243,10 +246,7 @@ impl SecureMetaProgramming {
             initiating_context_id: crate::nimbus_os::get_current_context_id(),
             ..Default::default()
         };
-        Ok(nimbus
-            .os
-            .get_microkernel_evas_filter()
-            .evaluate_action(evas_action))
+        Ok(crate::nimbus_os::get_microkernel_evas_filter().evaluate_action(evas_action))
     }
 
     /// Applies homomorphic encryption to meta-programming operations or generated code
