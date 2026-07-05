@@ -371,6 +371,44 @@ impl SasaKnowledge {
             entries: crate::stdlib::collections::Map::new(),
         }
     }
+
+    /// Records a conjecture fact (from the mathematical invention engine)
+    /// into the knowledge store, keyed by its predicate.
+    pub fn store_conjecture(&mut self, fact: crate::stdlib::ai_reasoning::Fact) {
+        self.entries.insert(
+            format!("conjecture:{}", fact.predicate),
+            format!("{:?}", fact),
+        );
+    }
+
+    /// Records empirical evidence gathered while exploring a conjecture,
+    /// keyed by the conjecture's identifier.
+    pub fn store_empirical_evidence<T: std::fmt::Debug>(
+        &mut self,
+        id: crate::ast::Identifier,
+        evidence: T,
+    ) {
+        self.entries
+            .insert(format!("empirical:{}", id.0), format!("{:?}", evidence));
+    }
+
+    /// Records a completed formal proof for a conjecture.
+    pub fn store_proof<T: std::fmt::Debug>(&mut self, id: crate::ast::Identifier, proof: T) {
+        self.entries
+            .insert(format!("proof:{}", id.0), format!("{:?}", proof));
+    }
+
+    /// Records a counterexample that falsifies a conjecture.
+    pub fn store_counterexample<T: std::fmt::Debug>(
+        &mut self,
+        id: crate::ast::Identifier,
+        counterexample: T,
+    ) {
+        self.entries.insert(
+            format!("counterexample:{}", id.0),
+            format!("{:?}", counterexample),
+        );
+    }
 }
 
 /// A conceptual graph of related knowledge nodes, used for higher-order

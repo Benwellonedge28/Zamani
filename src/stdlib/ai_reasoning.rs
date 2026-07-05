@@ -307,6 +307,10 @@ impl ProbabilisticModel {
 pub struct CausalEngine;
 
 impl CausalEngine {
+    pub fn new() -> Self {
+        CausalEngine {}
+    }
+
     /// Discovers causal relationships from observational data (Causal Discovery).
     /// Leverages MTS to analyze temporal order and counterfactual dependency.
     pub fn discover_causal_graph(

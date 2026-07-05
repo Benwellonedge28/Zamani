@@ -11,6 +11,8 @@
 //! cross-domain translation, and a continuous feedback loop between computation,
 //! proof, and intuition.
 
+use self::toolchain::meta_programming::CodeGenerator;
+use self::toolchain::self_evolution::SelfEvolutionEngine;
 use crate::ast::{AbstractSyntaxTree, Identifier};
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
 use crate::runtime::sankofa::{ConceptualGraph, KnowledgeId, SasaKnowledge};
@@ -19,8 +21,6 @@ use crate::stdlib::ai_reasoning::{CausalEngine, Fact, FactObject, Planner};
 use crate::stdlib::collections::{HashSet, List, Map};
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::ml::{Model, Tensor};
-use crate::toolchain::meta_programming::CodeGenerator;
-use crate::toolchain::self_evolution::SelfEvolutionEngine;
 
 /// Initializes the Mathematical Foundations module.
 pub fn init_math_foundations() {
@@ -120,6 +120,7 @@ impl AdvancedMathEngine {
                     .cognitive_ergonomics_renderer
                     .explain_proof(proof.clone())?;
                 MathematicalDiscovery {
+                    id: conjecture.id.clone(),
                     conjecture,
                     proof: Some(proof),
                     counterexample: None,
@@ -137,6 +138,7 @@ impl AdvancedMathEngine {
                 self.failure_analysis_engine
                     .analyze_failure(conjecture.id.clone(), counterexample.clone())?;
                 MathematicalDiscovery {
+                    id: conjecture.id.clone(),
                     conjecture,
                     proof: None,
                     counterexample: Some(counterexample),
@@ -152,6 +154,7 @@ impl AdvancedMathEngine {
                 self.meta_mathematics_manager
                     .explore_foundations(conjecture.id.clone())?;
                 MathematicalDiscovery {
+                    id: conjecture.id.clone(),
                     conjecture,
                     proof: None,
                     counterexample: None,
@@ -182,7 +185,6 @@ impl AdvancedMathEngine {
             action_type: "mathematical_invention_deployment".to_string(),
             perceived_intent: format!("Deploy new mathematical discovery: {}", discovery.id.0),
             initiating_context_id: crate::nimbus_os::get_current_context_id(),
-            proposed_action_ast: Some(discovery.to_ast()), // Represent discovery as an AST
             ..Default::default()
         };
         match self.evas_filter.evaluate_action(evas_context) {
@@ -456,6 +458,19 @@ pub struct Conjecture {
     pub statement: AbstractSyntaxTree, // Mathematical statement as an AST
 }
 
+impl Conjecture {
+    /// Converts this conjecture into a generic reasoning `Fact` so it can be
+    /// tracked by the AI reasoning engine / Sankofa knowledge store alongside
+    /// other facts.
+    pub fn to_fact(&self) -> Fact {
+        Fact {
+            predicate: format!("conjecture:{}", self.id.0),
+            args: List::new(),
+            confidence: 0.5,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Proof {
     pub id: Identifier,
@@ -565,14 +580,6 @@ pub mod nimbus {
 }
 pub mod toolchain {
     pub mod self_evolution {
-        use crate::ast::Identifier;
-        use crate::stdlib::ai_reasoning::Fact;
-        use crate::stdlib::collections::List;
-        #[derive(Debug, Clone, PartialEq)]
-        pub struct TypeSystemEvolutionProposal {
-            pub id: Identifier,
-            pub new_types: List<Fact>,
-        }
         pub struct SelfEvolutionEngine;
         impl SelfEvolutionEngine {
             pub fn new() -> Self {
@@ -580,7 +587,7 @@ pub mod toolchain {
             }
             pub fn propose_type_system_change(
                 &mut self,
-                proposal: TypeSystemEvolutionProposal,
+                _proposal: super::super::TypeSystemEvolutionProposal,
             ) -> Result<(), String> {
                 Ok(())
             }
