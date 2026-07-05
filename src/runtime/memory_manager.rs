@@ -6,9 +6,9 @@
 //! It is critical for enforcing Zenith's unique memory safety and ownership models.
 
 use crate::core_lang_primitives::{
-    AffineAllocator, HeapAlloc, LinearAllocator, MemoryRegion, Size, StackAlloc,
-}; // Remove NimbusSystemCall from here
-use crate::nimbus_os::{NimbusContextId, NimbusSystemCall};
+    AffineAllocator, HeapAlloc, LinearAllocator, MemoryRegion, NimbusSystemCall, Size, StackAlloc,
+};
+use crate::nimbus_os::NimbusContextId;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex}; // Import NimbusContextId and NimbusSystemCall from new path
 
@@ -48,6 +48,13 @@ impl MarkAndSweepGC {
     }
 }
 
+// SAFETY: MarkAndSweepGC only ever stores conceptual/dummy pointers (see
+// AllocationBlock/HeapAlloc doc comments - all pointers produced in this
+// module are `ptr::null_mut()` placeholders, never real heap memory shared
+// across threads), so it is sound to mark it Send for use behind
+// `Arc<Mutex<dyn GarbageCollector + Send>>`.
+unsafe impl Send for MarkAndSweepGC {}
+
 impl GarbageCollector for MarkAndSweepGC {
     fn collect(&mut self) {
         println!("[Runtime::Mem] Conceptual GC: Starting mark-and-sweep cycle.");
@@ -67,7 +74,8 @@ impl GarbageCollector for MarkAndSweepGC {
 }
 
 /// The central memory management orchestrator for the Zenith runtime.
-#[derive(Debug, Clone)]
+/// (No Debug/Clone: embeds a `dyn GarbageCollector` trait object, which
+/// can't derive either; never printed/cloned anywhere in the codebase.)
 pub struct MemoryManager {
     allocated_blocks: HashMap<*mut u8, AllocationBlock>, // Track all allocations
     heap_allocator: HeapAlloc,
@@ -102,20 +110,19 @@ impl MemoryManager {
         is_affine: bool,
     ) -> Result<*mut u8, String> {
         let ptr = match region {
-            MemoryRegion::GeneralPurposeHeap => self.heap_allocator.allocate(size),
+            MemoryRegion::GeneralPurposeHeap => HeapAlloc::allocate(size),
             MemoryRegion::Stack => {
                 // Stack allocations are typically compiler-managed; this is for conceptual explicit stack ops.
                 StackAlloc::allocate_temp(size)
             }
             MemoryRegion::SecureRegion(policy_id) => {
-                self.nimbus_system_call
-                    .secure_alloc(size, region.clone(), policy_id)
+                NimbusSystemCall::secure_alloc(size, region.clone(), policy_id)
             }
             MemoryRegion::QpuLocalMemory(_) | MemoryRegion::NanoAgentLocalMemory(_) => {
                 // Conceptual: These would be handled by specialized runtime components or Nimbus HAL.
                 // For now, fall back to heap or error.
                 println!("[Runtime::Mem] Warning: QPU/Nano-local memory allocation conceptual only, using heap fallback.");
-                self.heap_allocator.allocate(size)
+                HeapAlloc::allocate(size)
             }
             MemoryRegion::SharedMemory(_) => {
                 // Shared memory regions must be allocated/mapped via NimbusSystemCall first.
@@ -157,14 +164,13 @@ impl MemoryManager {
             }
 
             match block.region {
-                MemoryRegion::GeneralPurposeHeap => self.heap_allocator.deallocate(ptr, block.size),
+                MemoryRegion::GeneralPurposeHeap => HeapAlloc::deallocate(ptr, block.size),
                 MemoryRegion::Stack => {
                     // Stack deallocation is typically compiler-managed.
                 }
                 MemoryRegion::SecureRegion(_) => {
                     // Use NimbusSystemCall for deallocating secure regions.
-                    self.nimbus_system_call
-                        .secure_dealloc(ptr, block.size, block.region.clone());
+                    NimbusSystemCall::secure_dealloc(ptr, block.size, block.region.clone());
                 }
                 _ => { /* other regions handled conceptually */ }
             }

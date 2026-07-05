@@ -49,7 +49,7 @@ pub trait Hashable {
 // -----------------------------------------------------------------------------
 
 /// Represents a platform-dependent size or count.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Size(pub usize);
 
 /// Represents a duration of time.
@@ -65,7 +65,7 @@ pub struct TimeStamp(pub u64); // Milliseconds from epoch, or abstract timeline 
 // -----------------------------------------------------------------------------
 
 /// Different types of conceptual memory regions.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum MemoryRegion {
     GeneralPurposeHeap,
     Stack,
@@ -76,6 +76,7 @@ pub enum MemoryRegion {
 }
 
 /// Conceptual interface for general-purpose heap allocation.
+#[derive(Debug, Clone)]
 pub struct HeapAlloc;
 
 impl HeapAlloc {
@@ -140,6 +141,7 @@ impl StackAlloc {
 }
 
 /// Conceptual allocator for Linear types (used exactly once).
+#[derive(Debug, Clone)]
 pub struct LinearAllocator;
 
 impl LinearAllocator {
@@ -161,6 +163,7 @@ impl LinearAllocator {
 }
 
 /// Conceptual allocator for Affine types (used at most once).
+#[derive(Debug, Clone)]
 pub struct AffineAllocator;
 
 impl AffineAllocator {
