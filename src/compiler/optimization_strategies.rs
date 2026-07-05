@@ -12,14 +12,14 @@
 //! to intelligently select and apply these strategies, ensuring not only
 //! speed and efficiency but also security, resource integrity, and ethical compliance.
 
-use crate::ast::{Identifier, ZenithAstNode}; // For AST representations
-use crate::ir_gen::ZenithIR; // For Intermediate Representation
+use crate::ast::Identifier; // For AST representations
+use crate::ir_gen::IrModule; // For Intermediate Representation
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting
 use crate::source_map::Span;
-use crate::stdlib::ai_reasoning::{Fact, Planner}; // For strategic optimization planning
+use crate::stdlib::ai_reasoning::{Fact, FactObject, Planner}; // For strategic optimization planning
 use crate::stdlib::collections::{List, Map}; // For optimization parameters, analysis results
 use crate::stdlib::meta_ops::MetaValue; // Generic data for events
-use crate::stdlib::ml::{Model, Tensor}; // For AI-driven optimization // For Identifier creation
+use crate::stdlib::ml::{IdentityModel, Model, Tensor}; // For AI-driven optimization // For Identifier creation
 
 /// Initializes the Optimization Strategies module.
 pub fn init_optimization_strategies() {
@@ -66,18 +66,46 @@ pub struct OptimizationPass {
 // Orchestration of Optimization Passes
 // -----------------------------------------------------------------------------
 
+/// Wraps a trainable `Box<dyn Model>` with the domain-specific decoding logic
+/// needed to turn a raw model prediction into a concrete list of optimization
+/// pass identifiers to apply.
+pub struct OptimizationAIModel {
+    pub inner: Box<dyn Model>,
+}
+
+impl OptimizationAIModel {
+    pub fn new(_id: Identifier) -> Self {
+        OptimizationAIModel {
+            inner: Box::new(IdentityModel),
+        }
+    }
+
+    /// Predicts which optimization passes are most relevant for the given
+    /// planning-step arguments and IR characteristics.
+    pub fn predict_optimal_passes(
+        &self,
+        _step_args: List<FactObject>,
+        _ir_characteristics: Map<String, MetaValue>,
+    ) -> Result<List<Identifier>, String> {
+        // Conceptual: a full implementation would encode the inputs into a
+        // Tensor, run self.inner.predict(...), and decode the output into
+        // pass identifiers. For now, no passes are speculatively selected.
+        Ok(List::new())
+    }
+}
+
 pub struct OptimizationManager {
     pub available_passes: List<OptimizationPass>,
-    pub ai_optimization_model: Model, // ML model to predict optimal sequence/combination of passes
-    pub planner: Planner,             // AI planner for complex optimization goals
-    pub evas_filter: EvasFilter,      // Reference to Nimbus OS E.V.A.S.
+    pub ai_optimization_model: OptimizationAIModel, // ML model to predict optimal sequence/combination of passes
+    pub planner: Planner,                           // AI planner for complex optimization goals
+    pub evas_filter: EvasFilter,                    // Reference to Nimbus OS E.V.A.S.
 }
 
 impl OptimizationManager {
     pub fn new() -> Self {
         OptimizationManager {
             available_passes: Self::load_all_passes(), // Conceptual: Load from config
-            ai_optimization_model: Model::new(Identifier(
+            ai_optimization_model: OptimizationAIModel::new(Identifier(
                 "opt_strategy_model".to_string(),
                 Span::dummy(),
             )),
@@ -91,9 +119,9 @@ impl OptimizationManager {
     /// [ethics: principles = "resource_stewardship", bias_mitigation_level = "medium"]
     pub fn optimize_ir(
         &mut self,
-        ir: ZenithIR,
+        ir: IrModule,
         context: OptimizationContext,
-    ) -> Result<ZenithIR, String> {
+    ) -> Result<IrModule, String> {
         println!(
             "[Compiler::OptStrat] Optimizing IR with context: {:?}.",
             context.goal
@@ -109,7 +137,7 @@ impl OptimizationManager {
         for step in plan.steps {
             let relevant_passes = self
                 .ai_optimization_model
-                .predict_optimal_passes(step.actions.clone(), context.ir_characteristics.clone())?; // Dummy
+                .predict_optimal_passes(step.args.clone(), context.ir_characteristics.clone())?; // Dummy
             for pass_id in relevant_passes {
                 if let Some(opt_pass) = self.available_passes.iter().find(|p| p.id == pass_id) {
                     // 2. E.V.A.S. Vetting for each pass
@@ -136,7 +164,7 @@ impl OptimizationManager {
     }
 
     /// Applies a single optimization pass. Can use MTS for speculative application.
-    fn apply_pass(&self, ir: ZenithIR, opt_pass: &OptimizationPass) -> Result<ZenithIR, String> {
+    fn apply_pass(&self, ir: IrModule, opt_pass: &OptimizationPass) -> Result<IrModule, String> {
         println!(
             "[Compiler::OptStrat] Applying optimization pass {}.",
             opt_pass.id.0
@@ -170,7 +198,7 @@ pub struct OptimizationContext {
 pub mod compiler {
     pub mod optimizer {
         use crate::ast::Identifier;
-        use crate::ir_gen::ZenithIR;
+        use crate::ir_gen::IrModule;
         use crate::stdlib::collections::Map;
 
         #[derive(Debug, Clone, PartialEq)]
@@ -196,9 +224,9 @@ pub mod compiler {
             }
             pub fn optimize(
                 &self,
-                ir: ZenithIR,
+                ir: IrModule,
                 level: OptimizationLevel,
-            ) -> Result<ZenithIR, String> {
+            ) -> Result<IrModule, String> {
                 Ok(ir)
             }
         }

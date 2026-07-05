@@ -33,7 +33,7 @@ pub enum EvasDecision {
 }
 
 /// Captures all relevant information about an action being evaluated by E.V.A.S.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EvasActionContext {
     pub timestamp: TimeStamp,
     pub initiating_context_id: NimbusContextId,
