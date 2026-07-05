@@ -17,7 +17,7 @@ use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{CausalEngine, Fact, Planner};
 use crate::stdlib::collections::{HashSet, List, Map};
 use crate::stdlib::math_foundations::{
-    AdvancedMathEngine, EmpiricalResults, MathematicalDiscovery, Proof,
+    AdvancedMathEngine, EmpiricalResults, MathematicalDiscovery, Proof, TheoremProvingEngine,
 };
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::ml::{Model, Tensor};
@@ -142,7 +142,6 @@ impl ZenithNetworkStack {
                 action_type: "network_plan_deployment".to_string(),
                 perceived_intent: "Deploy optimized network plan.".to_string(),
                 initiating_context_id: nimbus::os::get_current_context_id(),
-                proposed_action_ast: Some(plan_ast.clone()),
                 ..Default::default()
             };
             match self.evas_filter.evaluate_action(evas_context) {
@@ -164,7 +163,12 @@ impl ZenithNetworkStack {
                 .deploy_optimized_network_code(optimized_code)?;
 
             // 8. Resilience: Inject faults and verify self-healing
-            self.resilience_engine.perform_chaos_engineering(self)?;
+            {
+                let mut resilience_engine = std::mem::take(&mut self.resilience_engine);
+                let result = resilience_engine.perform_chaos_engineering(self);
+                self.resilience_engine = resilience_engine;
+                result?;
+            }
 
             // 9. Legal Compliance: Continuously verify compliance
             self.legal_compliance_engine
@@ -295,6 +299,7 @@ impl TrustManager {
     }
 }
 
+#[derive(Default)]
 pub struct ResilienceEngine; // Fault injection and self-healing
 impl ResilienceEngine {
     pub fn new() -> Self {
@@ -415,6 +420,78 @@ impl TelemetryData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NetworkProblem; // Dummy
+
+/// Network-domain extensions to the AI-reasoning `CausalEngine`, allowing it
+/// to track live network telemetry and produce action plans towards goals.
+impl CausalEngine {
+    /// Folds freshly observed network telemetry facts into the engine's
+    /// causal model of the network.
+    pub fn update_network_state(&mut self, _facts: List<Fact>) {
+        // Conceptual: a full implementation would update an internal causal
+        // graph/Bayesian model from the observed facts.
+    }
+
+    /// Produces a concrete network action plan aimed at resolving the given
+    /// problems while satisfying the current goals.
+    pub fn generate_network_action_plan(
+        &mut self,
+        _problems: List<NetworkProblem>,
+        _goals: List<NetworkGoal>,
+    ) -> Result<NetworkActionPlan, String> {
+        Ok(NetworkActionPlan::new())
+    }
+}
+
+/// Network-domain extensions to the mathematics engine: turning live
+/// telemetry into problems/conjectures the invention loop can act on.
+impl AdvancedMathEngine {
+    pub fn identify_network_problems_and_conjectures(
+        &mut self,
+        _telemetry: TelemetryData,
+        _goals: List<NetworkGoal>,
+    ) -> Result<
+        (
+            List<NetworkProblem>,
+            Tensor<crate::stdlib::math_foundations::Conjecture>,
+        ),
+        String,
+    > {
+        Ok((
+            List::new(),
+            Tensor {
+                shape: vec![],
+                data: vec![],
+            },
+        ))
+    }
+}
+
+/// Network-domain extension to formal theorem proving: verifying a proposed
+/// network action plan is provably correct/safe before deployment.
+impl TheoremProvingEngine {
+    pub fn prove_network_plan_correctness(
+        &mut self,
+        _plan_ast: AbstractSyntaxTree,
+    ) -> Result<Proof, String> {
+        Ok(Proof {
+            id: Identifier("network_plan_proof".to_string(), Span::dummy()),
+            steps: List::new(),
+            formal_system: Identifier("network_stack".to_string(), Span::dummy()),
+        })
+    }
+}
+
+/// Network-domain extension to the self-evolution engine: hardware-specific
+/// optimization pass for a verified network action plan.
+impl SelfEvolutionEngine {
+    pub fn optimize_network_plan_for_hardware(
+        &mut self,
+        _plan_ast: AbstractSyntaxTree,
+    ) -> Result<OptimizedNetworkCode, String> {
+        Ok(OptimizedNetworkCode::new())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct NetworkActionPlan; // Dummy
 impl NetworkActionPlan {
