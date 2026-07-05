@@ -21,7 +21,7 @@ use crate::stdlib::external_services::{CloudPlatform, ServiceHandle}; // For dep
 use crate::stdlib::gui::Window; // For multi-modal code preview
 use crate::stdlib::human_agi_interaction::AdminPortal; // For human oversight/feedback
 use crate::stdlib::meta_ops::MetaValue; // Generic data for events
-use crate::stdlib::nlp::{Intent, NaturalLanguageProcessor, Sentiment}; // For NLP capabilities
+use crate::stdlib::nlp::NaturalLanguageProcessor; // For NLP capabilities
 use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For proving generated code correctness
 use crate::toolchain::meta_programming::{
     AutonomousCodeGenerator, MacroDefinition, SecureMetaProgramming, ZenithCodeSnippet,
@@ -100,18 +100,18 @@ impl ChatArchitectAgent {
         let mut generated_code_snippets = Map::new();
 
         // Simulate parallel/concurrent generation for different aspects of the request
-        let core_logic_snippet = self.code_generator.generate_code_from_goal(
+        let core_logic_snippet = AutonomousCodeGenerator::generate_code_from_goal(
             goal.clone(),
-            constraints.clone().insert(
+            constraints.clone().with(
                 "component".to_string(),
                 MetaValue::String("core_logic".to_string()),
             ),
         )?;
         generated_code_snippets.insert("core_logic".to_string(), core_logic_snippet);
 
-        let test_suite_snippet = self.code_generator.generate_code_from_goal(
+        let test_suite_snippet = AutonomousCodeGenerator::generate_code_from_goal(
             Fact::new("generate_unit_tests".to_string(), List::new()),
-            constraints.clone().insert(
+            constraints.clone().with(
                 "for_component".to_string(),
                 MetaValue::String(goal.to_string()),
             ),
@@ -155,9 +155,10 @@ impl ChatArchitectAgent {
         let combined_code = generated_code_snippets
             .values()
             .fold("".to_string(), |acc, x| acc + x + "\n"); // Combine for compilation
-        let compilation_result = self
-            .code_generator
-            .autonomously_optimize_code(combined_code.clone(), "initial_compilation".to_string())?;
+        let compilation_result = AutonomousCodeGenerator::autonomously_optimize_code(
+            combined_code.clone(),
+            "initial_compilation".to_string(),
+        )?;
         verification_results.insert(
             "compilation_status".to_string(),
             MetaValue::String(compilation_result),
@@ -165,7 +166,7 @@ impl ChatArchitectAgent {
 
         // c. Formal Verification (for critical sections or based on #[security]/#[ethics] attributes)
         if constraints
-            .get("security_level")
+            .get(&"security_level".to_string())
             .unwrap_or(&MetaValue::String("low".to_string()))
             == &MetaValue::String("critical".to_string())
         {
@@ -180,9 +181,10 @@ impl ChatArchitectAgent {
 
         // d. Autonomous Test Execution (against generated unit tests)
         // (Conceptual: run the generated `test_suite_snippet` against the `core_logic_snippet`)
-        let test_results = self
-            .code_generator
-            .autonomously_optimize_code(test_suite_snippet.clone(), "run_tests".to_string())?; // Dummy: use optimize_code to simulate running tests
+        let test_results = AutonomousCodeGenerator::autonomously_optimize_code(
+            test_suite_snippet.clone(),
+            "run_tests".to_string(),
+        )?; // Dummy: use optimize_code to simulate running tests
         verification_results.insert("test_results".to_string(), MetaValue::String(test_results));
 
         // 4. Interaction & Refinement (Output)
@@ -192,8 +194,8 @@ impl ChatArchitectAgent {
             verification_summary: verification_results,
             initial_feedback: "Code generated and verified. Ready for review or deployment."
                 .to_string(),
-            architecture_diagram: collections::Option::None, // Placeholder
-                                                             // Optional: links to generated diagrams (using generateMedia) or simulation results (from MTS)
+            architecture_diagram: None, // Placeholder
+                                        // Optional: links to generated diagrams (using generateMedia) or simulation results (from MTS)
         })
     }
 
@@ -236,5 +238,5 @@ pub struct GeneratedCodeArtifact {
     pub generated_code: Map<String, ZenithCodeSnippet>, // e.g., "core_logic", "unit_tests", "hdl_config"
     pub verification_summary: Map<String, MetaValue>, // Compilation status, formal proof results, test results
     pub initial_feedback: String,
-    pub architecture_diagram: collections::Option<String>, // Conceptual Mermaid code or image URL
+    pub architecture_diagram: Option<String>, // Conceptual Mermaid code or image URL
 }

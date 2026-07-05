@@ -92,6 +92,12 @@ impl Fact {
     }
 }
 
+impl std::fmt::Display for Fact {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.predicate)
+    }
+}
+
 /// A simple in-memory symbolic knowledge store: a set of `Fact`s under a
 /// name, optionally backed by Sankofa's persistent temporal memory.
 pub struct KnowledgeBase {
@@ -177,6 +183,25 @@ impl Planner {
         Planner {
             id: Identifier("default_planner".to_string(), Span::dummy()),
         }
+    }
+
+    /// Conceptual high-level planning entry point: given a goal `Fact` and a
+    /// set of contextual constraints (e.g. extracted from an NL prompt),
+    /// produces a `Plan` toward that goal against a fresh in-memory
+    /// `KnowledgeBase`. Unlike `plan`, this always succeeds (wrapped in
+    /// `Result` for callers that chain it with other fallible steps).
+    pub fn generate_plan(
+        &self,
+        goal: Fact,
+        constraints: crate::stdlib::collections::Map<String, crate::stdlib::meta_ops::MetaValue>,
+    ) -> Result<Plan, String> {
+        println!(
+            "[StdLib::AI_Reasoning] Generating plan for goal '{}' with {} constraint(s).",
+            goal.predicate,
+            constraints.len()
+        );
+        let kb = KnowledgeBase::new("generate_plan_scratch_kb", false);
+        Ok(self.plan(&goal, &kb))
     }
 
     /// Conceptual planning: if the goal is already known, the plan is empty;

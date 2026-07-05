@@ -104,12 +104,23 @@ impl<T> From<Vec<T>> for List<T> {
 }
 
 /// A map (dictionary/hash table) from keys to values.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Map<K, V> {
     entries: HashMap<K, V>,
 }
 
-impl<K, V> Map<K, V> {
+// Manual PartialEq/Eq (rather than #[derive]) because HashMap<K, V> itself
+// only implements PartialEq/Eq when `K: Eq + Hash`, a bound the derive
+// macro cannot express on our behalf.
+impl<K: Eq + std::hash::Hash, V: PartialEq> PartialEq for Map<K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
+
+impl<K: Eq + std::hash::Hash, V: Eq> Eq for Map<K, V> {}
+
+impl<K: Eq + std::hash::Hash, V> Map<K, V> {
     pub fn new() -> Self {
         Map {
             entries: HashMap::new(),
@@ -118,6 +129,14 @@ impl<K, V> Map<K, V> {
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         self.entries.insert(key, value)
+    }
+
+    /// Builder-style insert: inserts the entry and returns `self`, useful for
+    /// chaining onto a freshly-cloned map (e.g. `map.clone().with(k, v)`)
+    /// without needing a separate `let mut` binding.
+    pub fn with(mut self, key: K, value: V) -> Self {
+        self.insert(key, value);
+        self
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
@@ -149,7 +168,7 @@ impl<K, V> Map<K, V> {
     }
 }
 
-impl<K, V> Default for Map<K, V> {
+impl<K: Eq + std::hash::Hash, V> Default for Map<K, V> {
     fn default() -> Self {
         Self::new()
     }

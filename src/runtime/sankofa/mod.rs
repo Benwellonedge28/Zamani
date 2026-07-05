@@ -46,7 +46,7 @@ pub struct ZamaniFactRecord {
     pub provenance: String, // Source of the fact (e.g., "observer_A", "quantum_measurement_device")
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SasaKnowledgeVersion {
     pub version_id: u64, // Unique ID for this version
     pub knowledge_id: String,
@@ -356,7 +356,7 @@ impl LearningAgent for CausalInferenceEngine {
 
 /// Identifies a single stored piece of Sankofa knowledge.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct KnowledgeId {}
+pub struct KnowledgeId(pub String);
 
 /// A high-level, queryable handle onto the evolving Sasa (present) knowledge
 /// store, distinct from the lower-level `SasaStore` record cache.

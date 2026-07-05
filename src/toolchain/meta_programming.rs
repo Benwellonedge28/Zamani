@@ -17,7 +17,7 @@ use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure executio
 use crate::runtime::sankofa::KnowledgeId;
 use crate::source_map::Span;
 use crate::stdlib::agents::AutonomousAgent;
-use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner}; // For intelligent code generation
+use crate::stdlib::ai_reasoning::{Fact, KnowledgeBase, Planner}; // For intelligent code generation
 use crate::stdlib::collections::{List, Map}; // For AST nodes, macro arguments, configurations
 use crate::stdlib::crypto::{HomomorphicCiphertext, KeyManagementSystem, PublicKey, Signature}; // For secure meta-code
 use crate::stdlib::meta_ops::{
@@ -118,10 +118,15 @@ pub struct MetaProgrammingAgent {
 pub struct AutonomousCodeGenerator;
 
 impl AutonomousCodeGenerator {
+    /// Constructs a fresh code generator instance.
+    pub fn new() -> Self {
+        Self
+    }
+
     /// Autonomously generates Zenith code (or IR, HDL, etc.) based on high-level goals.
     /// Leverages AI models for creativity, AI Reasoning for logic, and Sankofa for knowledge.
     pub fn generate_code_from_goal(
-        goal: FactObject,
+        goal: Fact,
         constraints: Map<String, MetaValue>,
     ) -> Result<ZenithCodeSnippet, String> {
         println!(

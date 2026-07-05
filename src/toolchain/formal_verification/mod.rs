@@ -111,4 +111,16 @@ impl ZenithFormalVerifier {
     ) -> Result<Proof, String> {
         self.verify_code(format!("{:?}", object_state), config)
     }
+
+    /// Constructs a fresh verifier instance.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Convenience entry point for verifying autonomously-generated
+    /// "meta code" (e.g. from the Chat Architect Agent or meta-programming
+    /// pipelines) with a default (empty) property configuration.
+    pub fn formally_verify_meta_code(&self, code: String) -> Result<Proof, String> {
+        self.verify_code(code, crate::stdlib::collections::Map::new())
+    }
 }

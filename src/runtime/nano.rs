@@ -48,7 +48,7 @@ pub struct NanoEnvironment {
 /// Manages all deployed nano-agents and their interaction with the environment.
 #[derive(Debug, Clone)]
 pub struct NanoAgentOrchestrator {
-    deployed_agents: HashMap<usize, NanoAgentInstance>,
+    pub deployed_agents: HashMap<usize, NanoAgentInstance>,
     next_agent_id: usize,
     environment: NanoEnvironment,
 }

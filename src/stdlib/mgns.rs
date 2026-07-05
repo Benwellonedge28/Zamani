@@ -77,6 +77,7 @@ pub struct MukandaraGlobalNavigationSystem {
     pub nlp_engine: AdvancedOmniversalNlpEngine, // For understanding high-level requests
     pub evas_filter: EvasFilter,
     pub compiler_policies: MgnsCompilerPolicies, // Enforces privacy at compile time
+    pub permanent_memory_interface: PermanentMemoryInterface, // Sankofa-backed audit log for critical operations
 }
 
 impl MukandaraGlobalNavigationSystem {
@@ -98,6 +99,7 @@ impl MukandaraGlobalNavigationSystem {
             nlp_engine: AdvancedOmniversalNlpEngine::new(),
             evas_filter: EvasFilter::new(EvasPolicyLevel::Strict),
             compiler_policies: MgnsCompilerPolicies::new(),
+            permanent_memory_interface: PermanentMemoryInterface::new(),
         }
     }
 
@@ -212,9 +214,12 @@ impl MukandaraGlobalNavigationSystem {
     /// Helper for recording critical operations in Sankofa
     fn permanent_memory_record(&mut self, operation_type: String, mode_used: String, data: Fact) {
         println!("[MGNS] Recording operation: {}", operation_type);
-        self.permanent_memory_interface
-            .record_mgns_log(operation_type, mode_used, data)
-            .unwrap_or_else(|e| println!("Failed to record MGNS log: {}", e));
+        if let Err(e) =
+            self.permanent_memory_interface
+                .record_mgns_log(operation_type, mode_used, data)
+        {
+            println!("Failed to record MGNS log: {}", e);
+        }
     }
 
     /// Determines the trust threshold based on operational mode.
@@ -355,7 +360,7 @@ impl PermanentMemoryInterface {
         mode_used: String,
         data: Fact,
     ) -> Result<KnowledgeId, String> {
-        Ok(KnowledgeId {})
+        Ok(KnowledgeId(String::new()))
     }
 }
 
@@ -380,7 +385,7 @@ pub enum AccuracyLevel {
     Meter,
     Obfuscated,
 } // Dummy
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MgnsMode {
     Auto,
     LowPower,
@@ -440,7 +445,7 @@ impl Position {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct TrustScore(pub f64); // 0.0 to 1.0
 impl TrustScore {
     pub fn new() -> Self {
@@ -559,7 +564,7 @@ pub mod stdlib {
                 mode_used: String,
                 data: Fact,
             ) -> Result<KnowledgeId, String> {
-                Ok(KnowledgeId {})
+                Ok(KnowledgeId(String::new()))
             }
         }
     }

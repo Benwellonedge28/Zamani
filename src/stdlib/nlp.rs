@@ -188,3 +188,52 @@ impl ContextualNlp {
         Ok("Contextually generated response.".to_string())
     }
 }
+
+/// Result of a full `NaturalLanguageProcessor::analyze_text` pass: the
+/// primary detected intent plus any extracted entities/constraints, in a
+/// form ready to feed into goal-directed planning (e.g. the Chat Architect
+/// Agent's NL-to-code pipeline).
+pub struct NlpAnalysisResult {
+    pub primary_intent: String,
+    pub extracted_entities: Map<String, crate::stdlib::meta_ops::MetaValue>,
+}
+
+impl NlpAnalysisResult {
+    pub fn get_primary_intent(&self) -> String {
+        self.primary_intent.clone()
+    }
+
+    pub fn get_extracted_entities(&self) -> Map<String, crate::stdlib::meta_ops::MetaValue> {
+        self.extracted_entities.clone()
+    }
+}
+
+/// A higher-level, stateful NLP processor facade (as opposed to the
+/// stateless `Nlp` associated-function API): performs end-to-end intent
+/// extraction and entity recognition on a raw prompt in a single call.
+#[derive(Default)]
+pub struct NaturalLanguageProcessor;
+
+impl NaturalLanguageProcessor {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Conceptual: tokenizes, then extracts a primary intent (derived from
+    /// the first token/word for now) and an entities map from the given text.
+    pub fn analyze_text(&self, text: &str) -> Result<NlpAnalysisResult, String> {
+        println!(
+            "[StdLib::NLP] Analyzing text for intent/entities: '{}'.",
+            text
+        );
+        let primary_intent = text
+            .split_whitespace()
+            .next()
+            .unwrap_or("unknown")
+            .to_lowercase();
+        Ok(NlpAnalysisResult {
+            primary_intent,
+            extracted_entities: Map::new(),
+        })
+    }
+}

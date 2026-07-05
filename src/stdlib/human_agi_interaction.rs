@@ -32,7 +32,7 @@ pub fn shutdown_human_agi_lib() {
 
 pub struct AdminPortal;
 
-impl AdminInterface {
+impl AdminPortal {
     /// Displays a real-time log of autonomous changes and self-evolution events.
     pub fn monitor_system_changes() -> Result<List<Map<String, String>>, String> {
         println!("[StdLib::HumanAGI] Fetching system evolution logs for display.");
