@@ -328,6 +328,7 @@ impl Font {
 } // Dummy
 
 /// Represents a conceptual image asset.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Image; // Dummy
 
 /// Multimedia Playback

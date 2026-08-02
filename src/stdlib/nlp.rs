@@ -100,6 +100,24 @@ impl Nlp {
 // Neural NLP Models (Leveraging stdlib::ml)
 // -----------------------------------------------------------------------------
 
+/// Format specification for generated text output.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TextFormat {
+    Concise,
+    Standard,
+    Exhaustive,
+}
+
+/// Type of multi-modal content to generate.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MultiModalContent {
+    Diagram,
+    Image,
+    Video,
+    Audio,
+    Interactive,
+}
+
 /// A conceptual neural network model for text generation (e.g., a Transformer).
 pub struct TextGenerator {
     pub ml_model: Box<dyn Model>, // Can be ml::Transformer or custom
@@ -123,6 +141,35 @@ impl TextGenerator {
         );
         // Conceptual: Convert prompt to tensor, feed to ML model, decode output.
         Ok("Generated text output.".to_string())
+    }
+
+    /// Generates formatted text based on a prompt with an optional context hint.
+    pub fn generate_text(
+        &self,
+        prompt: &str,
+        _format: &TextFormat,
+        _context: Option<String>,
+    ) -> Result<String, String> {
+        println!(
+            "[StdLib::NLP] Generating formatted text for prompt '{}' with context.",
+            prompt
+        );
+        // Conceptual: Uses format spec to control output length/style.
+        self.generate(prompt, 500)
+    }
+
+    /// Generates a multi-modal content artifact (e.g. diagram, image) from a prompt.
+    pub fn generate_multi_modal(
+        &self,
+        prompt: &str,
+        content_type: &MultiModalContent,
+    ) -> Result<String, String> {
+        println!(
+            "[StdLib::NLP] Generating {:?} content for prompt '{}'.",
+            content_type, prompt
+        );
+        // Conceptual: Returns a URL or Mermaid code for the generated artifact.
+        Ok(format!("generated_{:?}_for_{}", content_type, prompt))
     }
 }
 

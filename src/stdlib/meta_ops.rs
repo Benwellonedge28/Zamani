@@ -126,6 +126,48 @@ impl MetaOperations {
         // Integrates with `toolchain::self_evolution` for applying `EvolutionProposal`s.
         Ok(())
     }
+
+    /// Reflects on the Zenith compiler's internal structure, returning a map
+    /// of component names to their descriptions. Used by the documentation system.
+    pub fn reflect_compiler_structure() -> Result<Map<String, MetaValue>, String> {
+        println!("[StdLib::MetaOps] Reflecting on compiler structure...");
+        let mut info = Map::new();
+        info.insert(
+            "lexer".to_string(),
+            MetaValue::String("Tokenizer phase".to_string()),
+        );
+        info.insert(
+            "parser".to_string(),
+            MetaValue::String("AST construction phase".to_string()),
+        );
+        info.insert(
+            "semantic".to_string(),
+            MetaValue::String("Semantic analysis phase".to_string()),
+        );
+        info.insert(
+            "ir_gen".to_string(),
+            MetaValue::String("IR generation phase".to_string()),
+        );
+        info.insert(
+            "optimizer".to_string(),
+            MetaValue::String("Optimization phase".to_string()),
+        );
+        info.insert(
+            "backend".to_string(),
+            MetaValue::String("Code generation phase".to_string()),
+        );
+        Ok(info)
+    }
+
+    /// Reflects on the list of modules within a given subsystem (e.g. "stdlib",
+    /// "toolchain"), returning a List of module name MetaValues.
+    pub fn reflect_module_list(_subsystem: String) -> Result<List<MetaValue>, String> {
+        println!(
+            "[StdLib::MetaOps] Reflecting on module list for subsystem '{}'...",
+            _subsystem
+        );
+        Ok(List::new())
+    }
 }
 
 // -----------------------------------------------------------------------------

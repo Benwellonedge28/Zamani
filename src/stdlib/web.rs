@@ -23,6 +23,24 @@ pub fn shutdown_web_lib() {
     println!("  - Shutting down StdLib Web and Browser Integration Module...");
 }
 
+/// Represents HTML content for web-based documentation output.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HtmlContent {
+    pub html: String,
+    pub stylesheets: crate::stdlib::collections::List<String>,
+    pub scripts: crate::stdlib::collections::List<String>,
+}
+
+impl Default for HtmlContent {
+    fn default() -> Self {
+        HtmlContent {
+            html: String::new(),
+            stylesheets: crate::stdlib::collections::List::new(),
+            scripts: crate::stdlib::collections::List::new(),
+        }
+    }
+}
+
 // -----------------------------------------------------------------------------
 // WebAssembly (WASM) Integration (Conceptual)
 // -----------------------------------------------------------------------------

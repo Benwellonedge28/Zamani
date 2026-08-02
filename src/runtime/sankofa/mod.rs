@@ -409,6 +409,55 @@ impl SasaKnowledge {
             format!("{:?}", counterexample),
         );
     }
+
+    /// Retrieves knowledge entries relevant to a topic keyword, returning up
+    /// to `limit` matches as a Map of key->value.  Used by the documentation
+    /// system for RAG-style context gathering.
+    pub fn retrieve_relevant_knowledge(
+        &self,
+        topic: &str,
+        limit: usize,
+    ) -> Result<crate::stdlib::collections::Map<String, crate::stdlib::meta_ops::MetaValue>, String>
+    {
+        let mut results = crate::stdlib::collections::Map::new();
+        let mut count = 0;
+        for (key, value) in &self.entries.data {
+            if key.contains(topic) || value.contains(topic) {
+                results.insert(
+                    key.clone(),
+                    crate::stdlib::meta_ops::MetaValue::String(value.clone()),
+                );
+                count += 1;
+                if count >= limit {
+                    break;
+                }
+            }
+        }
+        Ok(results)
+    }
+
+    /// Retrieves stored knowledge entries whose key starts with the given
+    /// prefix, returning up to `limit` matches as a List of MetaValue.
+    pub fn retrieve_knowledge(
+        &self,
+        prefix: &str,
+        limit: usize,
+    ) -> Option<crate::stdlib::collections::List<crate::stdlib::meta_ops::MetaValue>> {
+        let mut results = crate::stdlib::collections::List::new();
+        for (key, value) in &self.entries.data {
+            if key.starts_with(prefix) {
+                results.push(crate::stdlib::meta_ops::MetaValue::String(value.clone()));
+                if results.len() >= limit {
+                    break;
+                }
+            }
+        }
+        if results.is_empty() {
+            None
+        } else {
+            Some(results)
+        }
+    }
 }
 
 /// A conceptual graph of related knowledge nodes, used for higher-order
