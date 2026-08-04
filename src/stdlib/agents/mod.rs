@@ -95,3 +95,10 @@ pub struct MultiAgentEnvironment {
     pub communication_channels: Map<Identifier, List<crate::nimbus_os::ChannelId>>,
     pub shared_knowledge_bases: Map<Identifier, KnowledgeBase>,
 }
+
+impl AutonomousAgent {
+    pub fn cognitive_cycle(&mut self) -> Result<(), String> {
+        // Conceptual: Perceive -> Plan -> Act loop
+        Ok(())
+    }
+}

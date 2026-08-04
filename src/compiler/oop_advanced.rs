@@ -257,12 +257,9 @@ impl SecureObjectOperations {
             "[Compiler::OOPAdv] Encrypting state of object '{}' homomorphically.",
             object_id.0
         );
-        let serialized_state = crate::stdlib::serialize::Serialize.to_bytes(
-            &object_state,
-            crate::stdlib::serialize::SerializationFormat::Json,
-        )?; // Assuming Serialize is available
-        crate::stdlib::crypto::Crypto
-            .encrypt_homomorphic(&public_key.0, serialized_state.as_bytes()) // Assumes public key is raw bytes
+        let serialized_state = List::from_vec(format!("{:?}", object_state).into_bytes());
+        crate::stdlib::crypto::Crypto::encrypt_homomorphic(&public_key.0, &serialized_state)
+        // Assumes public key is raw bytes
     }
 
     /// Computes directly on encrypted object states without decryption.
@@ -276,8 +273,10 @@ impl SecureObjectOperations {
             operation.0
         );
         // Conceptual: Requires a HE-aware method dispatcher for object operations.
-        crate::stdlib::crypto::Crypto
-            .homomorphic_add(&encrypted_object_state, &encrypted_args.data[0]) // Dummy op
+        crate::stdlib::crypto::Crypto::homomorphic_add(
+            &encrypted_object_state,
+            &encrypted_args.get(0).unwrap(),
+        ) // Dummy op
     }
 
     /// Digitally signs an object's state or a method's execution trace for auditability.
@@ -291,13 +290,11 @@ impl SecureObjectOperations {
             object_id.0
         );
         let kms = KeyManagementSystem; // Dummy instantiation
-        let private_key_ref = kms.request_key(Map::from([(
-            "key_id".to_string(),
-            signing_key_id.0.to_string(),
-        )]))?; // Dummy request
-        crate::stdlib::crypto::Crypto.sign(
+        let private_key_ref =
+            kms.request_key(Map::new().with("key_id".to_string(), signing_key_id.0.to_string()))?; // Dummy request
+        crate::stdlib::crypto::Crypto::sign(
             &crate::stdlib::crypto::PrivateKey(List::new()),
-            trace_data.as_bytes(),
+            &trace_data,
         ) // Use as_bytes() for List<u8>
     }
 

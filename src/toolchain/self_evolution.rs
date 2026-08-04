@@ -94,7 +94,7 @@ impl Default for SelfEvolutionEngine {
 
 /// A proposed set of code-optimization changes generated on behalf of a
 /// requesting agent/component.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EvolutionProposal {
     pub data: Vec<String>,
 }
