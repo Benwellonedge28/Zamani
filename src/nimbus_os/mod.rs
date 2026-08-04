@@ -452,7 +452,46 @@ impl NimbusMicrokernel {
         self.channels
             .insert(channel_id, Arc::new(Mutex::new(VecDeque::new())));
         println!(
-            "    -> Nimbus OS: Created secure channel {} between {} and {}.",
+            "    -> Nimbus OS: Created secure channel {}
+
+    /// Sends an async message on a channel.
+    pub fn send_async_message(
+        &mut self,
+        channel_id: ChannelId,
+        _context_id: NimbusContextId,
+        data: Vec<u8>,
+    ) -> Result<(), String> {
+        let channel = self
+            .channels
+            .get(&channel_id)
+            .ok_or_else(|| format!("Channel {} not found.", channel_id))?;
+        channel.lock().unwrap().push_back(data);
+        Ok(())
+    }
+
+    /// Receives a sync message from a channel (non-blocking, returns None if empty).
+    pub fn receive_sync_message(
+        &mut self,
+        channel_id: ChannelId,
+        _context_id: NimbusContextId,
+    ) -> Result<Option<Vec<u8>>, String> {
+        let channel = self
+            .channels
+            .get(&channel_id)
+            .ok_or_else(|| format!("Channel {} not found.", channel_id))?;
+        Ok(channel.lock().unwrap().pop_front())
+    }
+
+    /// Destroys a channel.
+    pub fn destroy_channel(&mut self, channel_id: ChannelId) -> Result<(), String> {
+        if self.channels.remove(&channel_id).is_some() {
+            println!("    -> Nimbus OS: Channel {} destroyed.", channel_id);
+            Ok(())
+        } else {
+            Err(format!("Channel {} not found.", channel_id))
+        }
+    }
+ between {} and {}.",
             channel_id, context1_id, context2_id
         );
         Ok(channel_id)

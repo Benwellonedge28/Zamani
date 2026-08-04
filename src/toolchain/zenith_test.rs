@@ -55,7 +55,7 @@ impl ZenithTestRunner {
         );
         let mut report = TestReport::new();
         // In a real implementation, this would load bytecode and run a limited number of iterations.
-        for prop_info in metadata.properties.data {
+        for prop_info in metadata.properties.into_vec() {
             // Run N_FAST_ITERATIONS iterations
             let result = self.run_property_test(prop_info, &bytecode_path, 20)?; // 20 iterations for fast checks
             report.add_result(result);
@@ -81,12 +81,12 @@ impl ZenithTestRunner {
         );
         let mut report = TestReport::new();
 
-        for prop_info in metadata.properties.data {
+        for prop_info in metadata.properties.into_vec() {
             let result = self.run_property_test(prop_info, &bytecode_path, 500)?; // 500+ iterations for full checks
             report.add_result(result);
         }
 
-        for fuzz_info in metadata.fuzz_tests.data {
+        for fuzz_info in metadata.fuzz_tests.into_vec() {
             let result = self.run_fuzz_test(fuzz_info, &bytecode_path, 10_000)?; // 10,000+ iterations for fuzzing
             report.add_result(result);
         }

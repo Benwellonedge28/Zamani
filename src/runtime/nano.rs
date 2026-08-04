@@ -11,7 +11,6 @@
 //! - **Blueprint Interpretation:** Translating high-level blueprints into nano-scale actions.
 //! - **Malfunction Reporting:** Detecting and propagating nano-agent failures.
 
-use rand::Rng;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex}; // For conceptual random events
 
@@ -27,12 +26,23 @@ pub struct NanoAgentInstance {
     pub status: NanoAgentStatus,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Debug, Clone)]
 pub enum NanoAgentStatus {
     Idle,
     ExecutingAction(String),
     Malfunction(String),
     Disassembled,
+}
+
+impl std::fmt::Display for NanoAgentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NanoAgentStatus::Idle => write!(f, "Idle"),
+            NanoAgentStatus::ExecutingAction(a) => write!(f, "ExecutingAction({})", a),
+            NanoAgentStatus::Malfunction(m) => write!(f, "Malfunction({})", m),
+            NanoAgentStatus::Disassembled => write!(f, "Disassembled"),
+        }
+    }
 }
 
 /// Represents the conceptual nano-environment where agents operate.
@@ -101,8 +111,13 @@ impl NanoAgentOrchestrator {
             agent.energy_level -= 0.05; // Conceptual energy cost
 
             // Simulate action success/failure based on environment/agent state
-            let mut rng = rand::thread_rng();
-            if rng.gen_bool(0.01) {
+            if std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                % 100
+                == 0
+            {
                 // 1% chance of malfunction
                 agent.status =
                     NanoAgentStatus::Malfunction(format!("Action '{}' failed randomly.", action));
