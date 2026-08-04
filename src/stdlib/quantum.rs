@@ -5,15 +5,11 @@
 //! with the underlying quantum runtime and hardware.
 
 use crate::runtime::quantum::{
-    // Import specific runtime components
-    get_quantum_processor,
-    QuantumProcessor,
-    QubitState,
+    get_quantum_processor, init_quantum_runtime, QuantumProcessor, QubitState,
 };
 use std::fmt::{self, Debug};
 use std::sync::{Arc, Mutex};
 
-// Global conceptual runtime state reference (managed by init/shutdown of the runtime)
 static mut QUANTUM_PROCESSOR_ARC: Option<Arc<Mutex<QuantumProcessor>>> = None;
 
 /// Initializes the quantum standard library components.

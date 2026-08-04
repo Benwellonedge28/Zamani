@@ -4,14 +4,110 @@
 //! quantum computing concepts within Zenith programs. It simplifies interaction
 //! with the underlying quantum runtime and hardware.
 
-use crate::runtime::quantum::{
-    // Import specific runtime components
-    get_quantum_processor,
-    QuantumProcessor,
-    QubitState,
-};
+use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::sync::{Arc, Mutex};
+
+/// Represents the conceptual state of a qubit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QubitState {
+    Zero,
+    One,
+    Superposition,
+    Mixed,
+}
+
+/// Internal representation of an allocated qubit in the processor.
+pub(crate) struct AllocatedQubit {
+    pub(crate) state: QubitState,
+    pub(crate) entangled_with: Vec<usize>,
+}
+
+/// A conceptual quantum processor that tracks allocated qubits.
+pub struct QuantumProcessor {
+    pub(crate) allocated_qubits: HashMap<usize, AllocatedQubit>,
+    pub(crate) next_qubit_id: usize,
+}
+
+impl QuantumProcessor {
+    pub fn new() -> Self {
+        QuantumProcessor {
+            allocated_qubits: HashMap::new(),
+            next_qubit_id: 0,
+        }
+    }
+
+    pub fn allocate_qubit(&mut self) -> usize {
+        let id = self.next_qubit_id;
+        self.next_qubit_id += 1;
+        self.allocated_qubits.insert(
+            id,
+            AllocatedQubit {
+                state: QubitState::Zero,
+                entangled_with: Vec::new(),
+            },
+        );
+        id
+    }
+
+    pub fn deallocate_qubit(&mut self, id: usize) {
+        self.allocated_qubits.remove(&id);
+    }
+
+    pub fn apply_single_qubit_gate(&mut self, id: usize, gate: &str) {
+        if let Some(qubit) = self.allocated_qubits.get_mut(&id) {
+            match gate {
+                "H" => qubit.state = QubitState::Superposition,
+                "X" => {
+                    qubit.state = match qubit.state {
+                        QubitState::Zero => QubitState::One,
+                        QubitState::One => QubitState::Zero,
+                        other => other,
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    pub fn apply_cnot_gate(&mut self, control: usize, target: usize) {
+        if let Some(q) = self.allocated_qubits.get_mut(&control) {
+            q.entangled_with.push(target);
+        }
+        if let Some(q) = self.allocated_qubits.get_mut(&target) {
+            q.entangled_with.push(control);
+        }
+    }
+
+    pub fn measure_qubit(&mut self, id: usize) -> bool {
+        if let Some(qubit) = self.allocated_qubits.get_mut(&id) {
+            let result = match qubit.state {
+                QubitState::One => true,
+                QubitState::Zero => false,
+                _ => rand() < 0.5,
+            };
+            qubit.state = if result {
+                QubitState::One
+            } else {
+                QubitState::Zero
+            };
+            result
+        } else {
+            false
+        }
+    }
+}
+
+/// Initializes the quantum runtime and returns a QuantumProcessor.
+pub fn init_quantum_runtime() -> Arc<Mutex<QuantumProcessor>> {
+    println!("[Runtime::quantum] Initializing quantum runtime.");
+    Arc::new(Mutex::new(QuantumProcessor::new()))
+}
+
+/// Returns a reference to the global quantum processor (conceptual).
+pub fn get_quantum_processor() -> Option<&'static Arc<Mutex<QuantumProcessor>>> {
+    unsafe { QUANTUM_PROCESSOR_ARC.as_ref() }
+}
 
 // Global conceptual runtime state reference (managed by init/shutdown of the runtime)
 static mut QUANTUM_PROCESSOR_ARC: Option<Arc<Mutex<QuantumProcessor>>> = None;
@@ -171,7 +267,12 @@ impl QReg {
     }
 }
 
-// Helper for conceptual random function
+// Helper for conceptual pseudo-random function
 fn rand() -> f64 {
-    rand::random::<f64>()
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as f64)
+        .unwrap_or(0.0);
+    (nanos / 1_000_000_000.0).fract()
 }

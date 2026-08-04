@@ -52,7 +52,7 @@ pub fn shutdown_crypto_lib() {
     println!("  - Shutting down StdLib Cryptography Module...");
 }
 
-use crate::stdlib::collections::List;
+use crate::stdlib::collections::{List, Map};
 
 /// A symmetric-cipher key backed by raw key bytes.
 pub struct SymmetricKey(pub List<u8>);
