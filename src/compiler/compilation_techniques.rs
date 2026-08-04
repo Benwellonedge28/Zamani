@@ -104,7 +104,7 @@ pub struct HybridCompilerOrchestrator {
 impl HybridCompilerOrchestrator {
     pub fn new() -> Self {
         HybridCompilerOrchestrator {
-            current_strategy: CompilationStrategy::Aot(AotConfig {
+            current_strategy: CompilationStrategy::AheadOfTime(AotConfig {
                 optimization_level: OptimizationLevel::O2,
                 target: TargetPlatform::X86_64,
             }),
@@ -195,9 +195,9 @@ impl HybridCompilerOrchestrator {
         );
         // Conceptual: IR -> Optimizer -> Backend (e.g., LLVM, GCC)
         let optimized_ir =
-            self::optimizer::Optimizer::new().optimize(ir, config.optimization_level)?;
+            self::optimizer::Optimizer::new().optimize(ir, config.optimization_level.clone())?;
         let compiled_binary =
-            self::backend::Backend::new().generate_code(optimized_ir, config.target)?; // Call generate_code from Backend
+            self::backend::Backend::new().generate_code(optimized_ir, config.target.clone())?; // Call generate_code from Backend
         Ok(CompiledArtifact::Binary(compiled_binary))
     }
 
@@ -311,7 +311,7 @@ impl HybridCompilerOrchestrator {
     // --- Helper function (Conceptual) ---
     fn interpret_prediction(&self, prediction: Tensor<f32>) -> CompilationStrategy {
         // Dummy: Always return AOT for now
-        CompilationStrategy::Aot(AotConfig {
+        CompilationStrategy::AheadOfTime(AotConfig {
             optimization_level: OptimizationLevel::O2,
             target: TargetPlatform::X86_64,
         })
@@ -399,6 +399,7 @@ pub mod backend {
         NACU,
         Custom(Identifier),
     }
+    #[derive(Debug, Clone, PartialEq)]
     pub struct CompiledBinary {
         pub data: crate::stdlib::collections::List<u8>,
         pub format: String,
