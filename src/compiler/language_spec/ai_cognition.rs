@@ -84,20 +84,34 @@ impl AiCognitionIrGenerator {
             AiStatementAst::Infer(expr) => {
                 // Example: IR for 'infer "is_malicious(input_data)" from kb;'
                 Ok(List::from(vec![
-                    IrInstruction::LoadLiteral(IrValue::String(format!("infer_query:{:?}", expr))),
-                    IrInstruction::CallBuiltin(
+                    IrInstruction::Load(
+                        crate::ir_gen::IrRegister(
+                            "tmp".to_string(),
+                            crate::ir_gen::IrType::Opaque("str".to_string()),
+                        ),
+                        IrValue::ConstStr(format!("infer_query:{:?}", expr)),
+                    ),
+                    IrInstruction::Call(
+                        None,
                         "stdlib::ai_reasoning::KnowledgeBase::infer".to_string(),
-                        List::new(),
+                        Vec::new(),
                     ), // Dummy args
                 ]))
             }
             AiStatementAst::Assert(expr) => {
                 // Example: IR for 'assert "fact(subject, predicate, object)" into kb;'
                 Ok(List::from(vec![
-                    IrInstruction::LoadLiteral(IrValue::String(format!("assert_fact:{:?}", expr))),
-                    IrInstruction::CallBuiltin(
+                    IrInstruction::Load(
+                        crate::ir_gen::IrRegister(
+                            "tmp".to_string(),
+                            crate::ir_gen::IrType::Opaque("str".to_string()),
+                        ),
+                        IrValue::ConstStr(format!("assert_fact:{:?}", expr)),
+                    ),
+                    IrInstruction::Call(
+                        None,
                         "stdlib::ai_reasoning::KnowledgeBase::add_fact".to_string(),
-                        List::new(),
+                        Vec::new(),
                     ), // Dummy args
                 ]))
             }

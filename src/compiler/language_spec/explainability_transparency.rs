@@ -81,11 +81,24 @@ impl ExplainabilityIrGenerator {
             ExplainabilityStatementAst::Explain(expr, reason) => {
                 // Example: IR to call E.V.A.S. to record an explanation for a decision.
                 Ok(List::from(vec![
-                    IrInstruction::LoadLiteral(IrValue::String(format!("decision:{:?}", expr))),
-                    IrInstruction::LoadLiteral(IrValue::String(format!("reason:{:?}", reason))),
-                    IrInstruction::CallBuiltin(
+                    IrInstruction::Load(
+                        crate::ir_gen::IrRegister(
+                            "tmp".to_string(),
+                            crate::ir_gen::IrType::Opaque("str".to_string()),
+                        ),
+                        IrValue::ConstStr(format!("decision:{:?}", expr)),
+                    ),
+                    IrInstruction::Load(
+                        crate::ir_gen::IrRegister(
+                            "tmp".to_string(),
+                            crate::ir_gen::IrType::Opaque("str".to_string()),
+                        ),
+                        IrValue::ConstStr(format!("reason:{:?}", reason)),
+                    ),
+                    IrInstruction::Call(
+                        None,
                         "nimbus_os::evas::record_explanation".to_string(),
-                        List::new(),
+                        Vec::new(),
                     ),
                 ]))
             }
