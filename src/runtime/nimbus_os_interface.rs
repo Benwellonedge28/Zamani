@@ -75,7 +75,7 @@ pub fn create_thread_via_interface(
 ) -> Result<ThreadId, String> {
     if let Some(microkernel_arc) = get_nimbus_microkernel() {
         let mut microkernel = microkernel_arc.lock().unwrap();
-        microkernel.create_thread(context_id, entry_point_fn_ptr, stack_size)
+        microkernel.create_thread(context_id, entry_point_fn_ptr, stack_size.0)
     } else {
         Err("Nimbus Microkernel not initialized.".to_string())
     }

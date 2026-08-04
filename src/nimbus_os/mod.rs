@@ -215,6 +215,93 @@ impl NimbusMicrokernel {
         }
     }
 
+    /// Creates a new thread within a context.
+    pub fn create_thread(
+        &mut self,
+        context_id: NimbusContextId,
+        _entry_point: u64,
+        _stack_size: usize,
+    ) -> Result<ThreadId, String> {
+        let ctx = self
+            .contexts
+            .get_mut(&context_id)
+            .ok_or_else(|| format!("Context {} not found.", context_id))?;
+        let tid = ctx.next_thread_id;
+        ctx.next_thread_id += 1;
+        ctx.threads.insert(tid, ThreadState::Ready);
+        println!(
+            "    -> Nimbus OS: Created thread {} in context {}.",
+            tid, context_id
+        );
+        Ok(tid)
+    }
+
+    /// Starts a thread (Ready -> Running).
+    pub fn start_thread(
+        &mut self,
+        context_id: NimbusContextId,
+        thread_id: ThreadId,
+    ) -> Result<(), String> {
+        let ctx = self
+            .contexts
+            .get_mut(&context_id)
+            .ok_or_else(|| format!("Context {} not found.", context_id))?;
+        match ctx.threads.get_mut(&thread_id) {
+            Some(state) => {
+                *state = ThreadState::Running;
+                Ok(())
+            }
+            None => Err(format!(
+                "Thread {} not found in context {}.",
+                thread_id, context_id
+            )),
+        }
+    }
+
+    /// Suspends a thread (Running -> Blocked).
+    pub fn suspend_thread(
+        &mut self,
+        context_id: NimbusContextId,
+        thread_id: ThreadId,
+    ) -> Result<(), String> {
+        let ctx = self
+            .contexts
+            .get_mut(&context_id)
+            .ok_or_else(|| format!("Context {} not found.", context_id))?;
+        match ctx.threads.get_mut(&thread_id) {
+            Some(state) => {
+                *state = ThreadState::Blocked;
+                Ok(())
+            }
+            None => Err(format!(
+                "Thread {} not found in context {}.",
+                thread_id, context_id
+            )),
+        }
+    }
+
+    /// Terminates a thread.
+    pub fn terminate_thread(
+        &mut self,
+        context_id: NimbusContextId,
+        thread_id: ThreadId,
+    ) -> Result<(), String> {
+        let ctx = self
+            .contexts
+            .get_mut(&context_id)
+            .ok_or_else(|| format!("Context {} not found.", context_id))?;
+        match ctx.threads.get_mut(&thread_id) {
+            Some(state) => {
+                *state = ThreadState::Terminated;
+                Ok(())
+            }
+            None => Err(format!(
+                "Thread {} not found in context {}.",
+                thread_id, context_id
+            )),
+        }
+    }
+
     // --- Expanded Microkernel System Calls ---
 
     /// Sets the power state of a registered hardware device.

@@ -163,6 +163,10 @@ impl<K: Eq + std::hash::Hash, V> Map<K, V> {
         self.entries.values()
     }
 
+    pub fn values_mut(&mut self) -> std::collections::hash_map::ValuesMut<'_, K, V> {
+        self.entries.values_mut()
+    }
+
     pub fn keys(&self) -> std::collections::hash_map::Keys<'_, K, V> {
         self.entries.keys()
     }
