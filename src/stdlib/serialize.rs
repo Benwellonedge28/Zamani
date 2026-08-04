@@ -8,10 +8,11 @@
 use crate::ast::Identifier; // For format names, type hints
 use crate::core_lang_primitives::Size; // For data sizes
 use crate::stdlib::collections::{HashSet, List};
+use std::collections::HashMap;
 
 // Import types from runtime for conceptual serialization implementations
 use crate::runtime::mts::TemporalStateSnapshot;
-use crate::runtime::nano::NanoAgent;
+use crate::runtime::nano::NanoAgentInstance;
 use crate::runtime::quantum::QReg;
 
 /// Initializes the serialization standard library components.
@@ -83,7 +84,7 @@ impl Serialize {
     pub fn to_json<T: Serializable>(value: &T) -> Result<String, String> {
         println!("[StdLib::Serialize] Converting value to JSON string.");
         let bytes = value.serialize(&SerializationFormat::Json)?; // Assuming successful serialization
-        String::from_utf8(bytes.data).map_err(|e| format!("Invalid UTF-8: {}", e))
+        String::from_utf8(bytes.into_vec()).map_err(|e| format!("Invalid UTF-8: {}", e))
     }
 
     /// Parses a JSON string into a deserializable object.
@@ -132,7 +133,7 @@ impl Deserializable for QReg {
 }
 
 // Example: How Nano-Agent Config might be serialized
-impl Serializable for NanoAgent {
+impl Serializable for NanoAgentInstance {
     fn serialize(&self, format: &SerializationFormat) -> Result<List<u8>, String> {
         match format {
             SerializationFormat::NanoConfig => {
@@ -149,17 +150,21 @@ impl Serializable for NanoAgent {
     }
 }
 
-impl Deserializable for NanoAgent {
+impl Deserializable for NanoAgentInstance {
     fn deserialize(data: &[u8], format: &SerializationFormat) -> Result<Self, String> {
         match format {
             SerializationFormat::NanoConfig => {
                 println!("[StdLib::Serialize] Deserializing NanoAgent from NanoConfig format.");
                 // Conceptual: Parse nano config data and reconstruct NanoAgent.
-                Ok(NanoAgent {
+                Ok(NanoAgentInstance {
                     id: 0,
-                    blueprint: "dummy".to_string(),
-                    state: HashMap::new(),
-                }) // Dummy agent
+                    blueprint_id: "dummy".to_string(),
+                    components: Vec::new(),
+                    energy_level: 1.0,
+                    current_location: (0.0, 0.0, 0.0),
+                    payload: None,
+                    status: crate::runtime::nano::NanoAgentStatus::Idle,
+                })
             }
             _ => Err(format!(
                 "Unsupported deserialization format for NanoAgent: {:?}",
@@ -179,7 +184,7 @@ impl Serializable for TemporalStateSnapshot {
                 );
                 // Conceptual: Convert snapshot content, timestamp, causal parents into a format
                 // for storage or transfer across timelines/nodes.
-                Ok(self.content.clone()) // Directly use content for conceptual
+                Ok(List::from_vec(self.content.clone())) // Directly use content for conceptual
             }
             _ => Err(format!(
                 "Unsupported serialization format for TemporalStateSnapshot: {:?}",
@@ -197,7 +202,7 @@ impl Deserializable for TemporalStateSnapshot {
                 // Conceptual: Reconstruct snapshot from data.
                 Ok(TemporalStateSnapshot {
                     content: data.to_vec(),
-                    captured_at: TimeStamp(0),
+                    captured_at: 0,
                     causal_parents: HashSet::new(),
                 }) // Dummy snapshot
             }
