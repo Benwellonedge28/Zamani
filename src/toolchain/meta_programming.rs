@@ -182,12 +182,12 @@ impl AutonomousCodeGenerator {
             "[Toolchain::MetaProg] Autonomously adapting code to new hardware target '{}'.",
             new_hardware_target.0
         );
-        let transcoded_output = MetaOperations.transcode(
+        let transcoded_output = MetaOperations::transcode(
             TranscodeSource::SourceCode(
                 code_snippet,
                 Identifier("Zenith".to_string(), Span::dummy()),
             ),
-            TranscodeTarget::HardwareConfiguration(new_hardware_target),
+            TranscodeTarget::HardwareConfiguration(new_hardware_target.clone()),
             Map::new(),
         )?; // Ensure MetaOperations is handled
         if let TranscodedOutput::Bytes(config_bytes) = transcoded_output {
@@ -225,15 +225,16 @@ impl SecureMetaProgramming {
         println!("[Toolchain::MetaProg] Signing generated code.");
         // Conceptual: Use KMS to retrieve signing key from secure enclave and sign.
         let kms = KeyManagementSystem; // Dummy instantiation
-        let private_key_ref = kms.request_key(Map::from([(
-            "key_id".to_string(),
-            signing_key_id.0.to_string(),
-        )]))?; // Dummy request
-               // Need to convert private_key_ref (Identifier) to actual PrivateKey object to pass to crypto.sign.
-               // For now, assume a direct crypto.sign call with a dummy key and dummy data conversion.
-        crate::stdlib::crypto::Crypto.sign(
+        let private_key_ref = kms.request_key({
+            let mut m = Map::new();
+            m.insert("key_id".to_string(), signing_key_id.0.to_string());
+            m
+        })?; // Dummy request
+             // Need to convert private_key_ref (Identifier) to actual PrivateKey object to pass to crypto.sign.
+             // For now, assume a direct crypto.sign call with a dummy key and dummy data conversion.
+        crate::stdlib::crypto::Crypto::sign(
             &crate::stdlib::crypto::PrivateKey(List::new()),
-            code_to_sign.as_bytes(),
+            &List::from_vec(code_to_sign.into_bytes()),
         ) // Use as_bytes() for code_to_sign
     }
 
@@ -263,7 +264,7 @@ impl SecureMetaProgramming {
         println!("[Toolchain::MetaProg] Performing homomorphic meta-computation.");
         // Conceptual: Execute encrypted generated code on encrypted data.
         // This implies a HE-compatible compiler and runtime.
-        crate::stdlib::crypto::Crypto.homomorphic_multiply(&encrypted_code, &encrypted_data)
+        crate::stdlib::crypto::Crypto::homomorphic_multiply(&encrypted_code, &encrypted_data)
         // Dummy: assumes multiply for computation
     }
 }

@@ -167,6 +167,19 @@ impl Crypto {
         Ok(HomomorphicCiphertext(List::from_vec(result)))
     }
 
+    /// Multiplies two homomorphic ciphertexts together (homomorphic multiplication).
+    pub fn homomorphic_multiply(
+        a: &HomomorphicCiphertext,
+        b: &HomomorphicCiphertext,
+    ) -> Result<HomomorphicCiphertext, String> {
+        println!("[StdLib::Crypto] Performing homomorphic multiplication on ciphertexts.");
+        let mut result = Vec::new();
+        for (x, y) in a.0.iter().zip(b.0.iter()) {
+            result.push(*x * *y);
+        }
+        Ok(HomomorphicCiphertext(List::from_vec(result)))
+    }
+
     /// Digitally signs data with a private key.
     pub fn sign(_private_key: &PrivateKey, data: &List<u8>) -> Result<Signature, String> {
         println!("[StdLib::Crypto] Signing {} bytes of data.", data.len());

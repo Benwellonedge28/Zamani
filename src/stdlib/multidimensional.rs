@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 //! Zenith stdlib — Multidimensional Computing (tensors, manifolds)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Tensor {
     pub shape: Vec<usize>,
     pub data: Vec<f64>,
