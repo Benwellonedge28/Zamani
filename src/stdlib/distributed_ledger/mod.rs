@@ -8,6 +8,9 @@ pub mod data_provenance; // Data Provenance & Ethical AI
 pub mod ledger_client; // Client for interacting with Zenith ledgers
 pub mod transaction_manager; // Transaction creation, signing, and submission // Zenith Smart Contract execution environment
 
+use crate::stdlib::collections::{List, Map};
+use crate::stdlib::crypto::{Hash, PublicKey, Signature};
+
 /// Initializes all distributed ledger components.
 pub fn init_ledger() {
     println!("Initializing Zenith Distributed Ledger Module...");
@@ -55,6 +58,13 @@ pub struct Transaction {
 }
 
 pub struct LedgerClient;
+
+impl LedgerClient {
+    pub fn connect(_chain_name: &str) -> Result<LedgerClient, String> {
+        println!("[StdLib::Ledger] Connecting to ledger chain.");
+        Ok(LedgerClient)
+    }
+}
 
 pub struct SmartContract {
     pub contract_address: String,

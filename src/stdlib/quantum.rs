@@ -173,5 +173,12 @@ impl QReg {
 
 // Helper for conceptual random function
 fn rand() -> f64 {
-    rand::random::<f64>()
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos() as f64)
+            .unwrap_or(0.0);
+        (nanos / 1_000_000_000.0).fract()
+    }
 }
