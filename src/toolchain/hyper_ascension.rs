@@ -18,7 +18,6 @@ use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, Planner};
 use crate::stdlib::collections::{List, Map};
 use crate::stdlib::ml::{Model, Tensor};
-use crate::stdlib::resource_management::ResourceOrchestrator;
 use crate::toolchain::formal_verification::FormalVerificationEngine;
 use crate::toolchain::meta_programming::AutonomousCodeGenerator;
 use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine};
@@ -96,7 +95,7 @@ impl HyperAscensionEngine {
                 Ok(AscensionReport {
                     performance_multiplier: 1_000_000.0,
                     efficiency_gain: 1_000_000.0,
-                    new_capabilities: List::from(&[
+                    new_capabilities: List::from(vec![
                         "Quantum-Nano Unified Compute".to_string(),
                         "Recursive Self-Optimization".to_string(),
                     ]),
@@ -151,7 +150,7 @@ impl HardwareSoftwareCoEvolutionOrchestrator {
     pub fn new() -> Self {
         HardwareSoftwareCoEvolutionOrchestrator
     }
-    pub fn evolve_hardware_spec(&self, sw_logic: List<Fact>) -> Result<(), String> {
+    pub fn evolve_hardware_spec(&self, _sw_logic: ()) -> Result<(), String> {
         println!("[Ascension::CoEvol] Generating evolved NACU and QPU hardware configurations.");
         Ok(())
     }
@@ -227,7 +226,7 @@ pub mod stdlib {
                 self.data.extend(other.data);
             }
         }
-        #[derive(Debug, Clone, PartialEq)]
+        #[derive(Debug, Clone)]
         pub struct Map<K, V> {
             pub data: HashMap<K, V>,
         }
@@ -260,6 +259,7 @@ pub mod stdlib {
         }
     }
     pub mod ai_reasoning {
+        use super::meta_ops::MetaValue;
         use crate::ast::Identifier;
         use crate::stdlib::collections::List;
         #[derive(Debug, Clone, PartialEq)]
@@ -309,7 +309,8 @@ pub mod toolchain {
         }
     }
     pub mod hyper_ascension {
-        pub struct HyperAscensionEngine; // Dummy
+        use crate::stdlib::collections::List;
+        pub struct HyperAscensionEngine;
         impl HyperAscensionEngine {
             pub fn new() -> Self {
                 HyperAscensionEngine {}
@@ -322,7 +323,11 @@ pub mod toolchain {
                 })
             }
         }
-        pub struct AscensionReport; // Dummy
+        pub struct AscensionReport {
+            pub performance_multiplier: f32,
+            pub efficiency_gain: f32,
+            pub new_capabilities: List<String>,
+        }
     }
 }
 
@@ -350,7 +355,6 @@ pub mod runtime {
 
 pub mod ast {
     use crate::source_map::Span;
-    use crate::stdlib::core::String;
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub struct Identifier(pub String, pub Span);
 }
