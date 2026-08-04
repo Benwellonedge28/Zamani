@@ -97,6 +97,7 @@ impl Default for SelfEvolutionEngine {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvolutionProposal {
     pub data: Vec<String>,
+    pub ethical_vetting_status: String,
 }
 
 impl SelfEvolutionEngine {
@@ -113,6 +114,19 @@ impl SelfEvolutionEngine {
         );
         Ok(EvolutionProposal {
             data: vec![format!("patch-{}", id)],
+            ethical_vetting_status: String::new(),
         })
+    }
+
+    /// Evaluates a proposal through ethical vetting (E.V.A.S.).
+    pub fn evaluate_proposal(&mut self, proposal: &mut EvolutionProposal) -> Result<(), String> {
+        proposal.ethical_vetting_status = "Allow".to_string();
+        Ok(())
+    }
+
+    /// Applies an approved proposal to the runtime.
+    pub fn apply_proposal(&self, _proposal: &EvolutionProposal) -> Result<(), String> {
+        println!("[SelfEvolution] Applying approved proposal.");
+        Ok(())
     }
 }

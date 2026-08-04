@@ -102,3 +102,24 @@ impl AutonomousAgent {
         Ok(())
     }
 }
+
+impl MultiAgentEnvironment {
+    pub fn new() -> Self {
+        MultiAgentEnvironment {
+            agents: Map::new(),
+            communication_channels: Map::new(),
+            shared_knowledge_bases: Map::new(),
+        }
+    }
+
+    pub fn add_agent(&mut self, agent: AutonomousAgent) {
+        self.agents.insert(agent.id.clone(), agent);
+    }
+
+    pub fn step_simulation(&mut self) -> Result<(), String> {
+        for agent in self.agents.values_mut() {
+            agent.cognitive_cycle()?;
+        }
+        Ok(())
+    }
+}

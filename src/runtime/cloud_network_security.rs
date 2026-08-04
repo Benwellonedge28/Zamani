@@ -90,16 +90,14 @@ impl CloudNetworkOrchestrator {
             anomaly_report
         );
         // Conceptual: The SelfEvolutionEngine would identify, propose, and apply patches to the runtime or deployed apps.
-        let evolution_engine = SelfEvolutionEngine;
-        let proposals = evolution_engine.generate_optimization_proposals(Identifier(
+        let mut evolution_engine = SelfEvolutionEngine::new();
+        let mut proposal = evolution_engine.generate_optimization_proposals(Identifier(
             "cloud_runtime_component".to_string(),
             Span::dummy(),
         ))?; // Dummy target
-        for mut proposal in proposals.data.into_iter() {
-            evolution_engine.evaluate_proposal(&mut proposal)?; // E.V.A.S. vetting happens here
-            if proposal.ethical_vetting_status == format!("{:?}", evas::EvasDecision::Allow) {
-                evolution_engine.apply_proposal(&proposal)?; // Apply if approved
-            }
+        evolution_engine.evaluate_proposal(&mut proposal)?; // E.V.A.S. vetting happens here
+        if proposal.ethical_vetting_status == format!("{:?}", evas::EvasDecision::Allow) {
+            evolution_engine.apply_proposal(&proposal)?; // Apply if approved
         }
         Ok(())
     }
@@ -113,7 +111,7 @@ impl CloudNetworkOrchestrator {
 /// These agents are themselves advanced Zenith AGIs, leveraging all available paradigms.
 pub struct CybersecurityAgent {
     pub base_agent: AutonomousAgent,
-    pub threat_prediction_model: Model, // ML model for predicting future threats
+    pub threat_prediction_model: Box<dyn Model>, // ML model for predicting future threats
     pub quantum_defense_capabilities: List<String>, // QKD, Q-resistant encryption modules
     pub current_threat_landscape_kb: KnowledgeBase, // Real-time knowledge of threats
 }
@@ -133,7 +131,7 @@ impl CyberDefenseSwarm {
         agent_blueprints: List<CybersecurityAgent>,
     ) -> Result<(), String> {
         println!("[Runtime::CloudNetSec] Deploying {} cybersecurity agents forming a self-organizing defense swarm.", agent_blueprints.len());
-        for agent in agent_blueprints.data.into_iter() {
+        for agent in agent_blueprints.into_vec().into_iter() {
             self.0.add_agent(agent.base_agent);
         }
         Ok(())
