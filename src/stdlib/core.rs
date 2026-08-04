@@ -28,11 +28,17 @@ impl<T> List<T> {
     }
 
     pub fn pop(&mut self) -> Option<T> {
-        self.elements.pop()
+        match self.elements.pop() {
+            Some(v) => Option::Some(v),
+            None => Option::None,
+        }
     }
 
     pub fn get(&self, index: usize) -> Option<&T> {
-        self.elements.get(index)
+        match self.elements.get(index) {
+            Some(v) => Option::Some(v),
+            None => Option::None,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -45,12 +51,12 @@ impl<T> List<T> {
 }
 
 /// A map (dictionary/hash table) from keys to values.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Map<K, V> {
     entries: HashMap<K, V>,
 }
 
-impl<K, V> Map<K, V> {
+impl<K: Eq + std::hash::Hash, V> Map<K, V> {
     pub fn new() -> Self {
         Map {
             entries: HashMap::new(),
@@ -58,15 +64,24 @@ impl<K, V> Map<K, V> {
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        self.entries.insert(key, value)
+        match self.entries.insert(key, value) {
+            Some(v) => Option::Some(v),
+            None => Option::None,
+        }
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
-        self.entries.get(key)
+        match self.entries.get(key) {
+            Some(v) => Option::Some(v),
+            None => Option::None,
+        }
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        self.entries.remove(key)
+        match self.entries.remove(key) {
+            Some(v) => Option::Some(v),
+            None => Option::None,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -125,7 +140,19 @@ pub fn max<T: PartialOrd>(a: T, b: T) -> T {
 
 /// Returns a random float between 0.0 and 1.0 (exclusive).
 pub fn rand() -> f64 {
-    rand::random::<f64>()
+    // Simple deterministic pseudo-random using system time
+    // (rand crate not available; this is conceptual anyway)
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as f64)
+        .unwrap_or(0.0);
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as f64)
+        .unwrap_or(1.0);
+    let val = (nanos / 1_000_000_000.0) + secs.fract();
+    val.fract()
 }
 
 // --- Type Conversion (Conceptual) ---
