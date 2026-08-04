@@ -76,7 +76,7 @@ impl ZamaniFact {
 
         if let Some(runtime_state_arc) = unsafe { SANKOFA_RUNTIME_STATE_ARC.as_ref() } {
             runtime_record_zamani_fact(
-                Arc::clone(runtime_state_arc),
+                &Arc::clone(runtime_state_arc),
                 fact_id.to_string(),
                 content_bytes.clone(),
                 timestamp,
@@ -94,7 +94,7 @@ impl ZamaniFact {
     pub fn access(fact_id: &str) -> Option<Self> {
         println!("[StdLib::sankofa] Accessing Zamani fact '{}'.", fact_id);
         if let Some(runtime_state_arc) = unsafe { SANKOFA_RUNTIME_STATE_ARC.as_ref() } {
-            runtime_access_zamani_fact(Arc::clone(runtime_state_arc), fact_id).map(|rec| {
+            runtime_access_zamani_fact(&Arc::clone(runtime_state_arc), fact_id).map(|rec| {
                 ZamaniFact {
                     fact_id: rec.fact_id,
                     content: rec.content,
@@ -140,7 +140,7 @@ impl SasaKnowledge {
 
         if let Some(runtime_state_arc) = unsafe { SANKOFA_RUNTIME_STATE_ARC.as_ref() } {
             let new_version = runtime_update_sasa_knowledge(
-                Arc::clone(runtime_state_arc),
+                &Arc::clone(runtime_state_arc),
                 knowledge_id.to_string(),
                 content_bytes,
                 timestamp,
@@ -167,7 +167,7 @@ impl SasaKnowledge {
 
         if let Some(runtime_state_arc) = unsafe { SANKOFA_RUNTIME_STATE_ARC.as_ref() } {
             runtime_get_sasa_knowledge_at_time(
-                Arc::clone(runtime_state_arc),
+                &Arc::clone(runtime_state_arc),
                 knowledge_id,
                 timestamp,
             )
@@ -208,7 +208,7 @@ impl TemporalLearner {
         );
         if let Some(runtime_state_arc) = unsafe { SANKOFA_RUNTIME_STATE_ARC.as_ref() } {
             runtime_temporal_learn(
-                Arc::clone(runtime_state_arc),
+                &Arc::clone(runtime_state_arc),
                 knowledge_id,
                 timestamp_range_start,
                 timestamp_range_end,
@@ -273,7 +273,7 @@ impl<T: Debug + serde::de::DeserializeOwned> InterMemory<T> {
             if let Some(iface) = state_guard.inter_memory_interfaces.get(language) {
                 iface
                     .access_external_memory(query)
-                    .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+                    .and_then(|bytes| serde_json::from_slice(&bytes[..]).ok())
             } else {
                 None
             }

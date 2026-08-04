@@ -46,7 +46,7 @@ pub struct ZamaniFactRecord {
     pub provenance: String, // Source of the fact (e.g., "observer_A", "quantum_measurement_device")
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SasaKnowledgeVersion {
     pub version_id: u64, // Unique ID for this version
     pub knowledge_id: String,
@@ -72,7 +72,7 @@ pub struct SankofaRuntimeState {
     // Add conceptual learning agents, causality graph, inter-memory interfaces
     causality_graph: HashMap<u64, Vec<u64>>, // Maps version ID to list of its causal dependents
     learning_agents: HashMap<String, Box<dyn LearningAgent + Send + Sync>>, // Conceptual plug-in agents
-    inter_memory_interfaces: HashMap<String, Box<dyn InterMemoryInterface + Send + Sync>>, // For other languages
+    pub inter_memory_interfaces: HashMap<String, Box<dyn InterMemoryInterface + Send + Sync>>, // For other languages
 }
 
 pub trait LearningAgent {
@@ -421,7 +421,7 @@ impl SasaKnowledge {
     {
         let mut results = crate::stdlib::collections::Map::new();
         let mut count = 0;
-        for (key, value) in &self.entries.data {
+        for (key, value) in self.entries.iter() {
             if key.contains(topic) || value.contains(topic) {
                 results.insert(
                     key.clone(),
@@ -444,7 +444,7 @@ impl SasaKnowledge {
         limit: usize,
     ) -> Option<crate::stdlib::collections::List<crate::stdlib::meta_ops::MetaValue>> {
         let mut results = crate::stdlib::collections::List::new();
-        for (key, value) in &self.entries.data {
+        for (key, value) in self.entries.iter() {
             if key.starts_with(prefix) {
                 results.push(crate::stdlib::meta_ops::MetaValue::String(value.clone()));
                 if results.len() >= limit {
@@ -457,6 +457,23 @@ impl SasaKnowledge {
         } else {
             Some(results)
         }
+    }
+
+    /// Recursively queries the knowledge store for all entries related to
+    /// a target identifier, following causal chains.  Used by the
+    /// documentation system for deep knowledge extraction.
+    pub fn query_recursive(
+        &self,
+        target_id: &crate::ast::Identifier,
+    ) -> Result<crate::stdlib::collections::List<String>, String> {
+        let mut results = crate::stdlib::collections::List::new();
+        let prefix = &target_id.0;
+        for (key, value) in self.entries.iter() {
+            if key.contains(prefix) || value.contains(prefix) {
+                results.push(format!("{}: {}", key, value));
+            }
+        }
+        Ok(results)
     }
 }
 

@@ -16,7 +16,7 @@ use crate::stdlib::ai_reasoning::{FactObject, KnowledgeBase, Planner};
 use crate::stdlib::collections::{List, Map};
 use crate::stdlib::gui::Window;
 use crate::stdlib::meta_ops::MetaValue;
-use crate::stdlib::nlp::{NaturalLanguageProcessor, Summarizer};
+use crate::stdlib::nlp::NaturalLanguageProcessor;
 use crate::toolchain::meta_programming::ZenithCodeSnippet;
 
 /// Initializes the Omni-Documentation module.
@@ -78,7 +78,7 @@ impl OmniDocEngine {
         // 3. Exhaustive Writing (No shortcuts)
         // AGI-driven synthesis of high-quality prose explaining fundamentality.
         let mut artifacts = List::new();
-        for chapter in doc_plan.sections.data {
+        for chapter in doc_plan.sections.into_vec() {
             let content = self.synthesize_detailed_prose(&chapter, &raw_knowledge)?;
 
             // 4. Multi-modal Integration
@@ -98,10 +98,83 @@ impl OmniDocEngine {
         Ok(artifacts)
     }
 
+    fn plan_exhaustive_book(&self, target_id: &Identifier, _knowledge: &List<String>) -> DocPlan {
+        println!(
+            "[StdLib::Doc] Planning exhaustive book for: {}.",
+            target_id.0
+        );
+        DocPlan {
+            target_name: target_id.0.clone(),
+            sections: List::from_vec(vec![
+                DocSection {
+                    title: "Part I: Foundations".to_string(),
+                    level: 0,
+                    keywords: List::new(),
+                },
+                DocSection {
+                    title: "Part II: Architecture".to_string(),
+                    level: 0,
+                    keywords: List::new(),
+                },
+                DocSection {
+                    title: "Part III: Applications".to_string(),
+                    level: 0,
+                    keywords: List::new(),
+                },
+            ]),
+        }
+    }
+
+    fn plan_scientific_journal(
+        &self,
+        target_id: &Identifier,
+        _knowledge: &List<String>,
+    ) -> DocPlan {
+        println!(
+            "[StdLib::Doc] Planning scientific journal for: {}.",
+            target_id.0
+        );
+        DocPlan {
+            target_name: target_id.0.clone(),
+            sections: List::from_vec(vec![
+                DocSection {
+                    title: "Abstract".to_string(),
+                    level: 0,
+                    keywords: List::new(),
+                },
+                DocSection {
+                    title: "Methodology".to_string(),
+                    level: 0,
+                    keywords: List::new(),
+                },
+                DocSection {
+                    title: "Results".to_string(),
+                    level: 0,
+                    keywords: List::new(),
+                },
+            ]),
+        }
+    }
+
+    fn plan_standard_report(&self, target_id: &Identifier, _knowledge: &List<String>) -> DocPlan {
+        println!(
+            "[StdLib::Doc] Planning standard report for: {}.",
+            target_id.0
+        );
+        DocPlan {
+            target_name: target_id.0.clone(),
+            sections: List::from_vec(vec![DocSection {
+                title: "Overview".to_string(),
+                level: 0,
+                keywords: List::new(),
+            }]),
+        }
+    }
+
     fn synthesize_detailed_prose(
         &self,
         section: &DocSection,
-        knowledge: &FactObject,
+        _knowledge: &List<String>,
     ) -> Result<String, String> {
         // Conceptual: Use internal AGI models to write long-form content.
         // It explains "Why" things are designed this way, not just "What".
