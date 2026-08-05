@@ -1,8 +1,8 @@
-//! Minimal real Zenith Language Server (stdio, LSP-framed JSON-RPC).
+//! Minimal real Zamani Language Server (stdio, LSP-framed JSON-RPC).
 //!
 //! Implements just enough of the protocol (`initialize`, `textDocument/didOpen`,
 //! `textDocument/didChange`) to be a genuinely useful editor backend: every time
-//! a document is opened/changed it is run through the REAL Zenith lexer +
+//! a document is opened/changed it is run through the REAL Zamani lexer +
 //! parser (not a mock), and any parse errors are published as LSP diagnostics.
 //! This is intentionally small in scope but not a stub — it reflects the
 //! actual compiler frontend's behavior.
@@ -11,9 +11,9 @@ use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::sync::Arc;
 
-use zenith_compiler::lexer::Lexer;
-use zenith_compiler::parser::Parser;
-use zenith_compiler::source_map::SourceFile;
+use zamani_compiler::lexer::Lexer;
+use zamani_compiler::parser::Parser;
+use zamani_compiler::source_map::SourceFile;
 
 fn read_message(stdin: &mut impl Read) -> Option<String> {
     let mut content_length: Option<usize> = None;
@@ -49,7 +49,7 @@ fn write_message(stdout: &mut impl Write, body: &str) {
 /// diagnostics (0-indexed line/character) for every parser error found.
 fn diagnostics_for_source(uri: &str, source: &str) -> Vec<serde_json::Value> {
     let source_file = Arc::new(SourceFile::new(uri.to_string(), source.to_string()));
-    let lexer = Lexer::new(zenith_compiler::source_map::FileId::new(0), source_file);
+    let lexer = Lexer::new(zamani_compiler::source_map::FileId::new(0), source_file);
     let mut parser = Parser::new(lexer);
     let _program = parser.parse_program();
 
@@ -67,7 +67,7 @@ fn diagnostics_for_source(uri: &str, source: &str) -> Vec<serde_json::Value> {
                     "end": {"line": line, "character": end_col}
                 },
                 "severity": 1,
-                "source": "zenith-lsp",
+                "source": "zamani-lsp",
                 "message": e.message
             })
         })
@@ -85,7 +85,7 @@ fn publish_diagnostics(stdout: &mut impl Write, uri: &str, source: &str) {
 }
 
 fn main() {
-    eprintln!("[zenith-lsp] starting stdio LSP server (real lexer/parser backend)");
+    eprintln!("[zamani-lsp] starting stdio LSP server (real lexer/parser backend)");
     let mut stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut open_docs: HashMap<String, String> = HashMap::new();
@@ -108,7 +108,7 @@ fn main() {
                             "textDocumentSync": 1,
                             "diagnosticProvider": {"interFileDependencies": false, "workspaceDiagnostics": false}
                         },
-                        "serverInfo": {"name": "zenith-lsp", "version": env!("CARGO_PKG_VERSION")}
+                        "serverInfo": {"name": "zamani-lsp", "version": env!("CARGO_PKG_VERSION")}
                     }
                 });
                 write_message(&mut stdout, &resp.to_string());
@@ -158,5 +158,5 @@ fn main() {
             _ => {}
         }
     }
-    eprintln!("[zenith-lsp] shutting down");
+    eprintln!("[zamani-lsp] shutting down");
 }

@@ -1,12 +1,12 @@
-//! Zenith Standard Library: Mathematical Foundations Module
+//! Zamani Standard Library: Mathematical Foundations Module
 //!
-//! This module provides Zenith with its core capabilities for high-computational
+//! This module provides Zamani with its core capabilities for high-computational
 //! advanced mathematics and autonomous invention of new mathematical concepts.
-//! it enables Zenith to manipulate mathematical structures symbolically, prove
+//! it enables Zamani to manipulate mathematical structures symbolically, prove
 //! theorems, generate conjectures, and leverage high-performance computational
 //! backends for rigorous exploration.
 //!
-//! This goes beyond mere numerical computation; Zenith treats mathematical objects
+//! This goes beyond mere numerical computation; Zamani treats mathematical objects
 //! as first-class citizens, allowing for formal verification, meta-mathematics,
 //! cross-domain translation, and a continuous feedback loop between computation,
 //! proof, and intuition.
@@ -24,12 +24,12 @@ use crate::stdlib::ml::{Model, Tensor};
 
 /// Initializes the Mathematical Foundations module.
 pub fn init_math_foundations() {
-    println!("  - Initializing Zenith Mathematical Foundations (Symbolic, Proof, Invention)...");
+    println!("  - Initializing Zamani Mathematical Foundations (Symbolic, Proof, Invention)...");
 }
 
 /// Shuts down the Mathematical Foundations module.
 pub fn shutdown_math_foundations() {
-    println!("  - Shutting down Zenith Mathematical Foundations...");
+    println!("  - Shutting down Zamani Mathematical Foundations...");
 }
 
 // -----------------------------------------------------------------------------

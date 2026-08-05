@@ -1,4 +1,4 @@
-# ── Zenith Compiler (ZUTC) ───────────────────────────────────────────────────
+# ── Zamani Compiler (ZUTC) ───────────────────────────────────────────────────
 # Status: WORKING. Builds with default cargo features (lexer, parser,
 # semantic, ir_gen, optimizer, backend + CLI). 196 tests pass.
 FROM rust:slim-bookworm AS builder
@@ -11,19 +11,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libs
 COPY Cargo.toml Cargo.lock ./
 COPY benches ./benches
 RUN mkdir -p src && printf 'fn main() {}\n' > src/main.rs && printf 'pub fn _p(){}\n' > src/lib.rs \
-    && cargo build --release --bin zenith 2>&1; rm src/main.rs src/lib.rs
+    && cargo build --release --bin zamani 2>&1; rm src/main.rs src/lib.rs
 
 COPY src ./src
 COPY tests ./tests
-RUN touch src/main.rs src/lib.rs && cargo build --release --bin zenith
+RUN touch src/main.rs src/lib.rs && cargo build --release --bin zamani
 
 FROM debian:bookworm-slim AS runtime
-LABEL org.opencontainers.image.title="Zenith Compiler"
-LABEL org.opencontainers.image.description="Zenith Universal Meta-Compiler (ZUTC) CLI"
-LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zenith"
+LABEL org.opencontainers.image.title="Zamani Compiler"
+LABEL org.opencontainers.image.description="Zamani Universal Meta-Compiler (ZUTC) CLI"
+LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zamani"
 LABEL org.opencontainers.image.version="${VERSION}"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && apt-get clean
-WORKDIR /zenith
-COPY --from=builder /app/target/release/zenith /usr/local/bin/zenith
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD ["/usr/local/bin/zenith", "--help"]
-CMD ["/usr/local/bin/zenith", "--help"]
+WORKDIR /zamani
+COPY --from=builder /app/target/release/zamani /usr/local/bin/zamani
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD ["/usr/local/bin/zamani", "--help"]
+CMD ["/usr/local/bin/zamani", "--help"]

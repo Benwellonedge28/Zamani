@@ -1,7 +1,7 @@
-//! Zenith Toolchain: Debug Information Generation and Consumption
+//! Zamani Toolchain: Debug Information Generation and Consumption
 //!
 //! This module provides conceptual functionalities for generating and utilizing
-//! debug information, enabling robust debugging for Zenith programs across
+//! debug information, enabling robust debugging for Zamani programs across
 //! all paradigms (classical, quantum, nano, MTS). It supports traditional
 //! step-through debugging as well as advanced time-travel and multi-paradigm views.
 

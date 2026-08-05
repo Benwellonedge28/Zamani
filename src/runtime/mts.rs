@@ -1,4 +1,4 @@
-//! Zenith UMC Multi-Timeline System (MTS) Runtime
+//! Zamani UMC Multi-Timeline System (MTS) Runtime
 //!
 //! This module defines the conceptual runtime components for managing and executing
 //! computations across multiple timelines. It handles the creation, synchronization,

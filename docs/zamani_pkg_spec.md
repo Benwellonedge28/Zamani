@@ -1,7 +1,7 @@
 
-# Zenith Package Specification (`.zpkg`)
+# Zamani Package Specification (`.zpkg`)
 
-This document outlines the conceptual structure and contents of a Zenith Package (`.zpkg`) file. A `.zpkg` is the standard distribution format for Zenith libraries, applications, quantum circuits, nano-agent blueprints, and MTS simulations. It is a self-contained archive designed for easy distribution, installation, and dependency management by the `zenith-pkg` toolchain component.
+This document outlines the conceptual structure and contents of a Zamani Package (`.zpkg`) file. A `.zpkg` is the standard distribution format for Zamani libraries, applications, quantum circuits, nano-agent blueprints, and MTS simulations. It is a self-contained archive designed for easy distribution, installation, and dependency management by the `zamani-pkg` toolchain component.
 
 ## 1. Archive Format
 
@@ -13,7 +13,7 @@ Upon extraction, a `.zpkg` archive will always contain a single top-level direct
 
 ```
 my_package-1.0.0/
-├── Zenith.toml                  # Project manifest (REQUIRED)
+├── Zamani.toml                  # Project manifest (REQUIRED)
 ├── src/                         # Source code
 │   ├── main.zn
 │   ├── lib.zn
@@ -44,15 +44,15 @@ my_package-1.0.0/
 │   ├── knowledge_schemas.json   # JSON schemas for Sasa knowledge
 │   └── facts_preloaded.zam      # Pre-packaged Zamani facts
 ├── Nimbus_OS_Bindings/          # Conceptual: Low-level bindings or drivers for Nimbus OS (OPTIONAL)
-│   └── nimbus_api_v1.zn         # Zenith declarations for Nimbus system calls
+│   └── nimbus_api_v1.zn         # Zamani declarations for Nimbus system calls
 └── README.md                    # General package information (OPTIONAL)
 ```
 
 ## 3. Key Components Explained
 
-### 3.1. `Zenith.toml` (REQUIRED)
+### 3.1. `Zamani.toml` (REQUIRED)
 
-This is the central manifest file, identical to the `Zenith.toml` described in the project's build specification. It contains:
+This is the central manifest file, identical to the `Zamani.toml` described in the project's build specification. It contains:
 *   `[package]` metadata (name, version, authors, description, license, etc.).
 *   `[dependencies]` specifying other `.zpkg` files required by this package.
 *   `[features]` defining conditional compilation flags.
@@ -61,9 +61,9 @@ This is the central manifest file, identical to the `Zenith.toml` described in t
 
 ### 3.2. `src/` (REQUIRED for source-based packages)
 
-Contains all source files necessary to build the package. Zenith supports various file extensions:
-*   `.zn`: Standard Zenith source code.
-*   `.zq`: Zenith Quantum language extensions (e.g., explicit quantum circuit definitions).
+Contains all source files necessary to build the package. Zamani supports various file extensions:
+*   `.zn`: Standard Zamani source code.
+*   `.zq`: Zamani Quantum language extensions (e.g., explicit quantum circuit definitions).
 *   `.na`: Nano-Agent blueprint definitions or specific control logic.
 *   `.mts`: Multi-Timeline System configuration or timeline interaction scripts.
 *   Other files relevant to the project (e.g., `.cfg`, `.json` for data definitions).
@@ -82,11 +82,11 @@ For packages that are designed to interact heavily with Sankofa memory, this dir
 
 If a package requires or exposes low-level interactions with the Nimbus OS microkernel or specific hardware abstractions, relevant bindings or interface definitions would reside here. This facilitates direct access to Nimbus's unique capabilities like secure communication channels or advanced scheduling policies.
 
-## 4. `zenith-pkg` Interaction
+## 4. `zamani-pkg` Interaction
 
-The `zenith-pkg` toolchain component will be responsible for:
+The `zamani-pkg` toolchain component will be responsible for:
 *   **Creating `.zpkg` files:** Bundling a project's assets into the specified archive format.
 *   **Extracting `.zpkg` files:** Unpacking packages and validating their structure.
-*   **Resolving dependencies:** Reading `Zenith.toml` to fetch and install required packages.
-*   **Building packages:** Invoking the Zenith compiler (`zenithc`) with configurations from `Zenith.toml`.
-*   **Publishing packages:** Uploading `.zpkg` files to a central Zenith package registry.
+*   **Resolving dependencies:** Reading `Zamani.toml` to fetch and install required packages.
+*   **Building packages:** Invoking the Zamani compiler (`zamanic`) with configurations from `Zamani.toml`.
+*   **Publishing packages:** Uploading `.zpkg` files to a central Zamani package registry.

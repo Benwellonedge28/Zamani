@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Autonomous Workflow & Agent Orchestration
+//! Zamani stdlib — Autonomous Workflow & Agent Orchestration
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum WfStatus {

@@ -1,18 +1,18 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut)]
 
-//! Zenith Standard Library: Data Provenance & Ethical AI Module
+//! Zamani Standard Library: Data Provenance & Ethical AI Module
 //!
-//! This module defines Zenith's framework for Verifiable Data Provenance and
+//! This module defines Zamani's framework for Verifiable Data Provenance and
 //! Ethical AI. It provides an immutable, transparent, and auditable record
-//! of the origin, transformation, and usage of all data within the Zenith
+//! of the origin, transformation, and usage of all data within the Zamani
 //! ecosystem, rooted in a distributed ledger.
 //!
 //! By ensuring a verifiable chain of custody and an explicit ethical lineage
-//! for every datum, Zenith promotes accountability, trust, and compliance
+//! for every datum, Zamani promotes accountability, trust, and compliance
 //! with privacy and ethical standards throughout the AGI lifecycle.
 
 use crate::ast::Identifier; // For record IDs, entity IDs, transaction IDs
-use crate::stdlib::core::Result; // Zenith Result type
+use crate::stdlib::core::Result; // Zamani Result type
 use crate::stdlib::collections::{List, Map, HashSet, Option}; // For provenance graphs, audit trails
 use crate::stdlib::crypto::{Crypto, Signature, PublicKey, Hash}; // Cryptographic primitives for provenance
 use crate::stdlib::crypto::quantum_identity::{QuantumIdentity, IdentityManager}; // For authenticating data sources and handlers
@@ -92,7 +92,7 @@ impl ProvenanceManager {
 
         let provenance_tx = Transaction {
             sender: nimbus.os::get_current_agi_public_key(), 
-            receiver: Identifier("Zenith_Provenance_Anchor".to_string(), Span::dummy()),
+            receiver: Identifier("Zamani_Provenance_Anchor".to_string(), Span::dummy()),
             amount: 0.0,
             signature: self.crypto_engine.sign_provenance_hash(&record_hash)?, // Dummy sign
             metadata: tx_metadata,
@@ -100,7 +100,7 @@ impl ProvenanceManager {
         let tx_id = self.ledger_client.submit_transaction(provenance_tx)?; 
 
         let record = ProvenanceRecord {
-            id: Identifier(format!("provenance:zenith:{}", record_hash.0), Span::dummy()),
+            id: Identifier(format!("provenance:zamani:{}", record_hash.0), Span::dummy()),
             content: record_content,
             ledger_tx_id: tx_id,
             source_signature: Option::Some(source_signature),

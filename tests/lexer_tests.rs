@@ -7,10 +7,10 @@
     unused_comparisons
 )]
 
-//! Lexer integration tests for Zenith.
+//! Lexer integration tests for Zamani.
 
-use zenith_compiler::lexer::{Lexer, TokenType};
-use zenith_compiler::source_map::FileId;
+use zamani_compiler::lexer::{Lexer, TokenType};
+use zamani_compiler::source_map::FileId;
 
 fn tokenize(source: &str) -> Vec<TokenType> {
     let mut lexer = Lexer::from_str(FileId::new(1), source);
@@ -45,11 +45,11 @@ fn test_lexer_basic_tokens() {
 }
 
 #[test]
-fn test_lexer_zenith_keywords() {
+fn test_lexer_zamani_keywords() {
     let tokens = tokenize("quantum circuit");
     assert!(
         tokens.contains(&TokenType::KeywordQuantum) || !tokens.is_empty(),
-        "Zenith keywords should tokenize"
+        "Zamani keywords should tokenize"
     );
 }
 

@@ -1,11 +1,11 @@
-//! Zenith Compiler: Test Metadata Module
+//! Zamani Compiler: Test Metadata Module
 //!
-//! This module defines the structure for test metadata that the `zenithc` compiler
-//! emits during compilation. This metadata is crucial for `zenith-test` to generate
+//! This module defines the structure for test metadata that the `zamanic` compiler
+//! emits during compilation. This metadata is crucial for `zamani-test` to generate
 //! and run tests efficiently without re-parsing or re-typechecking the source code.
 //!
 //! The metadata captures information about `#[property]`, `#[fuzz]`, `#[pure]`,
-//! `#[linear]` annotated functions and other testable aspects of the Zenith IR/bytecode.
+//! `#[linear]` annotated functions and other testable aspects of the Zamani IR/bytecode.
 
 use crate::ast::Identifier;
 use crate::stdlib::collections::{List, Map};

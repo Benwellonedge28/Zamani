@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Nano-Agent APIs
+//! Zamani Standard Library: Nano-Agent APIs
 //!
 //! This module provides high-level abstractions and APIs for programming
-//! and interacting with nano-agents within Zenith programs.
+//! and interacting with nano-agents within Zamani programs.
 
 use crate::runtime::nano::{
     // Import specific runtime components

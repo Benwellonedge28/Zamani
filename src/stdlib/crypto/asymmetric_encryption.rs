@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — asymmetric_encryption module
+//! Zamani — asymmetric_encryption module
 
 /// Initialize asymmetric_encryption
 pub fn init_asymmetric_encryption() {}

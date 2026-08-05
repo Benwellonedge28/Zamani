@@ -1,10 +1,10 @@
-//! Zenith Universal Meta-Compiler (UMC): Advanced Object-Oriented Programming Features
+//! Zamani Universal Meta-Compiler (UMC): Advanced Object-Oriented Programming Features
 //!
-//! This module defines the conceptual framework for Zenith's "very extra super
+//! This module defines the conceptual framework for Zamani's "very extra super
 //! Extremely supremely autonomous infinity Advanced and secure infinitely and
 //! ready for production" Object-Oriented Programming features.
 //!
-//! Zenith's OOP is not merely about classes and inheritance, but extends to
+//! Zamani's OOP is not merely about classes and inheritance, but extends to
 //! multi-paradigm objects (Classical, Quantum, Nano, MTS), autonomous object
 //! behaviors, inherent security, and advanced meta-object protocols, all
 //! designed for AGI-level complexity and production readiness.
@@ -23,26 +23,26 @@ use crate::stdlib::meta_ops::{
     MetaOperations, MetaValue, OverridePatch, TranscodeSource, TranscodeTarget,
 }; // For meta-object protocols
 use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For provably correct objects
-use crate::toolchain::meta_programming::{AutonomousCodeGenerator, ZenithCodeSnippet}; // For code generation by objects
+use crate::toolchain::meta_programming::{AutonomousCodeGenerator, ZamaniCodeSnippet}; // For code generation by objects
 use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For self-optimizing objects // For Identifier creation
 
 /// Initializes the Advanced OOP Features module.
 pub fn init_oop_advanced() {
-    println!("  - Initializing Zenith Advanced OOP Features (Multi-Paradigm, Autonomous, Secure, Meta-Objects)...");
+    println!("  - Initializing Zamani Advanced OOP Features (Multi-Paradigm, Autonomous, Secure, Meta-Objects)...");
 }
 
 /// Shuts down the Advanced OOP Features module.
 pub fn shutdown_oop_advanced() {
-    println!("  - Shutting down Zenith Advanced OOP Features...");
+    println!("  - Shutting down Zamani Advanced OOP Features...");
 }
 
 // -----------------------------------------------------------------------------
 // Core Advanced Object Concepts
 // -----------------------------------------------------------------------------
 
-/// Represents a conceptual Zenith object, which can encompass various paradigms.
+/// Represents a conceptual Zamani object, which can encompass various paradigms.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ZenithObject {
+pub enum ZamaniObject {
     ClassicalObject(Identifier, Map<Identifier, MetaValue>), // Standard object with fields
     QuantumObject(Identifier, List<QuantumStateRef>),        // Object with quantum state properties
     NanoObject(Identifier, NanoAgentRef), // Object backed by a swarm of nano-agents
@@ -81,7 +81,7 @@ pub struct MethodDefinitionAdvanced {
     pub name: Identifier,
     pub parameters: Map<Identifier, Type>,
     pub return_type: Type,
-    pub classical_impl: Option<ZenithCodeSnippet>,
+    pub classical_impl: Option<ZamaniCodeSnippet>,
     pub quantum_impl: Option<QuantumCircuitDefinition>, // QPU-accelerated logic
     pub nano_impl: Option<NanoBehaviorBlueprint>,       // Nano-agent orchestrated behavior
     pub temporal_impl: Option<MTSWorkflowDefinition>,   // MTS-coordinated logic
@@ -145,7 +145,7 @@ pub enum SelfHealingPolicy {
 // -----------------------------------------------------------------------------
 
 pub struct AutonomousObject {
-    pub base_object: ZenithObject,
+    pub base_object: ZamaniObject,
     pub cognitive_agent: AutonomousAgent, // Each object can have its own AGI agent
 }
 
@@ -171,7 +171,7 @@ impl AutonomousObject {
             self.base_object.get_id(),
             optimization_goal
         );
-        let current_code = self.base_object.get_zenith_code_representation(); // Conceptual
+        let current_code = self.base_object.get_zamani_code_representation(); // Conceptual
         let optimized_code =
             AutonomousCodeGenerator::autonomously_optimize_code(current_code, optimization_goal)?; // Assuming AutonomousCodeGenerator is in scope
         self.base_object.update_implementation(optimized_code); // Conceptual
@@ -185,7 +185,7 @@ impl AutonomousObject {
             "[Compiler::OOPAdv] Autonomous Object '{}' performing self-verification.",
             self.base_object.get_id()
         );
-        let verifier = crate::toolchain::formal_verification::ZenithFormalVerifier;
+        let verifier = crate::toolchain::formal_verification::ZamaniFormalVerifier;
         verifier.verify_object_state(self.base_object.clone(), Map::new()) // Conceptual: verify object state
     }
 }
@@ -217,7 +217,7 @@ impl MetaObjectProtocol {
     /// for all instances of a class.
     pub fn install_custom_meta_behavior(
         class_name: Identifier,
-        behavior_code: ZenithCodeSnippet,
+        behavior_code: ZamaniCodeSnippet,
     ) -> Result<(), String> {
         println!(
             "[Compiler::OOPAdv] Installing custom meta-behavior for class '{}'.",
@@ -319,23 +319,23 @@ impl SecureObjectOperations {
 }
 
 // -----------------------------------------------------------------------------
-// Conceptual Extensions to Zenith.base_object (dummy) - to be implemented elsewhere
+// Conceptual Extensions to Zamani.base_object (dummy) - to be implemented elsewhere
 // -----------------------------------------------------------------------------
 
-impl ZenithObject {
+impl ZamaniObject {
     pub fn get_id(&self) -> Identifier {
         match self {
-            ZenithObject::ClassicalObject(id, _) => id.clone(),
-            ZenithObject::QuantumObject(id, _) => id.clone(),
-            ZenithObject::NanoObject(id, _) => id.clone(),
-            ZenithObject::MTSObject(id, _) => id.clone(),
-            ZenithObject::HomomorphicObject(id, _) => id.clone(),
+            ZamaniObject::ClassicalObject(id, _) => id.clone(),
+            ZamaniObject::QuantumObject(id, _) => id.clone(),
+            ZamaniObject::NanoObject(id, _) => id.clone(),
+            ZamaniObject::MTSObject(id, _) => id.clone(),
+            ZamaniObject::HomomorphicObject(id, _) => id.clone(),
         }
     }
-    pub fn get_zenith_code_representation(&self) -> ZenithCodeSnippet {
-        format!("// Zenith code representation for object {:?}", self)
+    pub fn get_zamani_code_representation(&self) -> ZamaniCodeSnippet {
+        format!("// Zamani code representation for object {:?}", self)
     }
-    pub fn update_implementation(&mut self, code: ZenithCodeSnippet) {
+    pub fn update_implementation(&mut self, code: ZamaniCodeSnippet) {
         println!(
             "Conceptual: Updating implementation for object {:?} with code snippet.",
             self.get_id()

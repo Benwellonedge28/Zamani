@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the Zenith Universal Meta-Compiler (ZUTC) are documented here.
+All notable changes to the Zamani Universal Meta-Compiler (ZUTC) are documented here.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 - Full module coverage: all 193 .rs source files wired into the build graph
 - Standard library integration: stdlib, runtime, toolchain, nimbus, nimbus_os, hdl
-- Zenith-native source preservation strategy using `.zn` files + `include_str!`
+- Zamani-native source preservation strategy using `.zn` files + `include_str!`
 - Bench harness: `compiler_bench` registered in Cargo.toml
 - Fuzz targets: lexer, parser, and full pipeline
 - CI/CD pipeline: formatting, linting, multi-platform testing, security audit, Docker

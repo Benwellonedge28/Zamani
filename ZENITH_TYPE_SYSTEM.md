@@ -1,4 +1,4 @@
-# Zenith Type System
+# Zamani Type System
 
 ## Primitive Types
 
@@ -32,8 +32,8 @@
 
 ## Type Inference
 
-Zenith uses bidirectional type inference. Type annotations are optional for local bindings but required for function signatures.
+Zamani uses bidirectional type inference. Type annotations are optional for local bindings but required for function signatures.
 
 ## Subtyping
 
-Zenith uses structural subtyping for interfaces and nominal subtyping for classes.
+Zamani uses structural subtyping for interfaces and nominal subtyping for classes.

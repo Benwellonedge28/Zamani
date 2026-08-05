@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Meta-Programming & Self-Modification
+//! Zamani stdlib — Meta-Programming & Self-Modification
 pub struct MetaTransform {
     pub pattern: String,
     pub replacement: String,

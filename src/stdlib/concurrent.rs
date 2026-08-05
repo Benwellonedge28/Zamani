@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Concurrency
+//! Zamani Standard Library: Concurrency
 //!
 //! This module provides conceptual primitives and utilities for concurrent and
-//! parallel programming within Zenith, supporting various concurrency models.
+//! parallel programming within Zamani, supporting various concurrency models.
 
 /// Initializes the concurrency standard library components.
 pub fn init_concurrent_lib() {

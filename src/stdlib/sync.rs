@@ -1,4 +1,4 @@
-//! Zenith Standard Library: Concurrency Utilities Module
+//! Zamani Standard Library: Concurrency Utilities Module
 //!
 //! This module provides conceptual APIs for high-level concurrency primitives,
 //! building upon the low-level atomics and mutexes provided in `core_lang_primitives`.

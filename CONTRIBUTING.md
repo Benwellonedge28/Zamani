@@ -1,11 +1,11 @@
-# Contributing to Zenith
+# Contributing to Zamani
 
-Thank you for your interest in contributing to the Zenith Universal Meta-Compiler!
+Thank you for your interest in contributing to the Zamani Universal Meta-Compiler!
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/<your-username>/Zenith`
+2. Clone your fork: `git clone https://github.com/<your-username>/Zamani`
 3. Install Rust: https://rustup.rs
 4. Build: `cargo build`
 5. Run tests: `cargo test`

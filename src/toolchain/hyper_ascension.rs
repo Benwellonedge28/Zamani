@@ -1,6 +1,6 @@
-//! Zenith Toolchain: Hyper-Ascension & Exponential Self-Evolution Module
+//! Zamani Toolchain: Hyper-Ascension & Exponential Self-Evolution Module
 //!
-//! This module formalizes Zenith's capability for recursive, exponential self-improvement,
+//! This module formalizes Zamani's capability for recursive, exponential self-improvement,
 //! aimed at achieving performance and power levels 1,000,000x beyond its current state.
 //!
 //! It orchestrates the "Hyper-Ascension Protocol," which leverages:
@@ -9,7 +9,7 @@
 //! - Multiversal Algorithmic Search: Using MTS to find mathematically optimal logic.
 //! - Hardware-Software Co-Evolution: Reconfiguring NACU and QPU logic to match evolved code.
 //!
-//! This ensures Zenith isn't just an AGI, but a self-accelerating intelligence.
+//! This ensures Zamani isn't just an AGI, but a self-accelerating intelligence.
 
 use crate::ast::Identifier;
 use crate::compiler::compilation_techniques::HybridCompilerOrchestrator;
@@ -24,12 +24,12 @@ use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine};
 
 /// Initializes the Hyper-Ascension module.
 pub fn init_hyper_ascension() {
-    println!("  - Initializing Zenith Hyper-Ascension Protocol (1,000,000x Recursive Growth)...");
+    println!("  - Initializing Zamani Hyper-Ascension Protocol (1,000,000x Recursive Growth)...");
 }
 
 /// Shuts down the Hyper-Ascension module.
 pub fn shutdown_hyper_ascension() {
-    println!("  - Shutting down Zenith Hyper-Ascension...");
+    println!("  - Shutting down Zamani Hyper-Ascension...");
 }
 
 // -----------------------------------------------------------------------------
@@ -82,7 +82,7 @@ impl HyperAscensionEngine {
         // 5. Verification & E.V.A.S. Vetting (Crucial at this scale of growth)
         let evas_context = EvasActionContext {
             action_type: "hyper_ascension_deployment".to_string(),
-            perceived_intent: "Apply 1,000,000x self-improvement to Zenith core.".to_string(),
+            perceived_intent: "Apply 1,000,000x self-improvement to Zamani core.".to_string(),
             initiating_context_id: crate::nimbus_os::get_current_context_id(),
             ..Default::default()
         };
@@ -90,7 +90,7 @@ impl HyperAscensionEngine {
         match self.evas_filter.evaluate_action(evas_context) {
             EvasDecision::Allow => {
                 println!(
-                    "[Toolchain::Ascension] E.V.A.S. Approved Ascension. Deploying evolved Zenith."
+                    "[Toolchain::Ascension] E.V.A.S. Approved Ascension. Deploying evolved Zamani."
                 );
                 Ok(AscensionReport {
                     performance_multiplier: 1_000_000.0,

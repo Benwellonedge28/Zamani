@@ -7,13 +7,13 @@
     unused_comparisons
 )]
 
-//! Zenith IR Generator — Comprehensive Integration Tests
+//! Zamani IR Generator — Comprehensive Integration Tests
 
 use std::sync::Arc;
-use zenith_compiler::ir_gen::{CmpOp, IrGenerator, IrInstruction, IrModule, IrRegister, IrValue};
-use zenith_compiler::lexer::Lexer;
-use zenith_compiler::parser::Parser;
-use zenith_compiler::source_map::{FileId, SourceFile};
+use zamani_compiler::ir_gen::{CmpOp, IrGenerator, IrInstruction, IrModule, IrRegister, IrValue};
+use zamani_compiler::lexer::Lexer;
+use zamani_compiler::parser::Parser;
+use zamani_compiler::source_map::{FileId, SourceFile};
 
 fn gen_ir(source: &str) -> IrModule {
     let sf = Arc::new(SourceFile::new("<test>".to_string(), source.to_string()));
@@ -184,7 +184,7 @@ fn test_function_call_generates_call() {
     ));
 }
 
-// ── Zenith-specific IR ────────────────────────────────────────────────────────
+// ── Zamani-specific IR ────────────────────────────────────────────────────────
 
 #[test]
 fn test_quantum_circuit_generates_quantum_gate() {

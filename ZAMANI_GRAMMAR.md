@@ -1,4 +1,4 @@
-# Grammar File: NIMBUS Grammar v2.0 — UNIVERSAL TRINITY EDITION — ANTLR4 format. Inherits all 847 original rules PLUS absorbs ALL Zenith features PLUS adds Sankofa memory features. NEW RULES ADDED FROM ZENITH:
+# Grammar File: NIMBUS Grammar v2.0 — UNIVERSAL TRINITY EDITION — ANTLR4 format. Inherits all 847 original rules PLUS absorbs ALL Zamani features PLUS adds Sankofa memory features. NEW RULES ADDED FROM ZAMANI:
 
 - quantum_circuit_decl (top-level quantum circuit syntax)
 - quantum_lit: '|' QUBIT_STATE '⟩' (Dirac notation literals)
@@ -32,4 +32,4 @@
 - inter_memory: 'InterMemory' '<' lang_id ',' type '>'
 - sankofa_observe: '@observe' '(' scope ')'
 - living_doc: '@living_doc' '(' update_policy ')'
-- temporal_learn: '@temporal_learn' '(' span ')' TOTAL RULES: ~1,100 (NIMBUS v2.0 Trinity Edition) KEYWORDS: 140 total (95 original + 25 from Zenith + 20 from Sankofa) ALL paradigms: 80 (original 71 + 9 new Sankofa paradigms)
+- temporal_learn: '@temporal_learn' '(' span ')' TOTAL RULES: ~1,100 (NIMBUS v2.0 Trinity Edition) KEYWORDS: 140 total (95 original + 25 from Zamani + 20 from Sankofa) ALL paradigms: 80 (original 71 + 9 new Sankofa paradigms)

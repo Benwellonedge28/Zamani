@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — reality_definition module
+//! Zamani — reality_definition module
 
 /// Initialize reality_definition
 pub fn init_reality_definition() {}

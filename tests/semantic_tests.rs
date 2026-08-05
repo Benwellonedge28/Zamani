@@ -7,14 +7,14 @@
     unused_comparisons
 )]
 
-//! Zenith Semantic Analyser — Comprehensive Integration Tests
+//! Zamani Semantic Analyser — Comprehensive Integration Tests
 
 use std::sync::Arc;
-use zenith_compiler::ast::{FloatWidth, IntWidth, Type};
-use zenith_compiler::lexer::Lexer;
-use zenith_compiler::parser::Parser;
-use zenith_compiler::semantic::SemanticAnalyzer;
-use zenith_compiler::source_map::{FileId, SourceFile};
+use zamani_compiler::ast::{FloatWidth, IntWidth, Type};
+use zamani_compiler::lexer::Lexer;
+use zamani_compiler::parser::Parser;
+use zamani_compiler::semantic::SemanticAnalyzer;
+use zamani_compiler::source_map::{FileId, SourceFile};
 
 fn analyze(source: &str) -> (Vec<String>, SemanticAnalyzer) {
     let sf = Arc::new(SourceFile::new("<test>".to_string(), source.to_string()));
@@ -53,7 +53,7 @@ fn analyze_err(source: &str) -> Vec<String> {
 fn test_infer_integer_literal() {
     let sem = analyze_ok("let x = 42;");
     match sem.symbols.lookup("x") {
-        Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
+        Some(zamani_compiler::semantic::Symbol::Variable(ty)) => {
             assert_eq!(*ty, Type::Int(IntWidth::I64));
         }
         _ => panic!("Expected variable x with Int type"),
@@ -64,7 +64,7 @@ fn test_infer_integer_literal() {
 fn test_infer_float_literal() {
     let sem = analyze_ok("let f = 3.14;");
     match sem.symbols.lookup("f") {
-        Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
+        Some(zamani_compiler::semantic::Symbol::Variable(ty)) => {
             assert_eq!(*ty, Type::Float(FloatWidth::F64));
         }
         _ => panic!("Expected float variable"),
@@ -75,7 +75,7 @@ fn test_infer_float_literal() {
 fn test_infer_boolean_literal() {
     let sem = analyze_ok("let flag = true;");
     match sem.symbols.lookup("flag") {
-        Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
+        Some(zamani_compiler::semantic::Symbol::Variable(ty)) => {
             assert_eq!(*ty, Type::Bool);
         }
         _ => panic!("Expected bool variable"),
@@ -86,7 +86,7 @@ fn test_infer_boolean_literal() {
 fn test_infer_string_literal() {
     let sem = analyze_ok(r#"let s = "hello";"#);
     match sem.symbols.lookup("s") {
-        Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
+        Some(zamani_compiler::semantic::Symbol::Variable(ty)) => {
             assert_eq!(*ty, Type::String);
         }
         _ => panic!("Expected string variable"),
@@ -99,7 +99,7 @@ fn test_infer_string_literal() {
 fn test_int_addition_type() {
     let sem = analyze_ok("let r = 1 + 2;");
     match sem.symbols.lookup("r") {
-        Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
+        Some(zamani_compiler::semantic::Symbol::Variable(ty)) => {
             assert!(ty.is_numeric(), "Expected numeric result");
         }
         _ => panic!("Expected numeric variable r"),
@@ -110,7 +110,7 @@ fn test_int_addition_type() {
 fn test_bool_comparison_type() {
     let sem = analyze_ok("let b = 1 == 1;");
     match sem.symbols.lookup("b") {
-        Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
+        Some(zamani_compiler::semantic::Symbol::Variable(ty)) => {
             assert_eq!(*ty, Type::Bool);
         }
         _ => panic!("Expected bool result"),
@@ -132,10 +132,10 @@ fn test_undefined_symbol_error() {
 
 #[test]
 fn test_symbol_shadowing() {
-    // Variables can be re-bound in Zenith
+    // Variables can be re-bound in Zamani
     let sem = analyze_ok("let x = 1; let x = 2;");
     match sem.symbols.lookup("x") {
-        Some(zenith_compiler::semantic::Symbol::Variable(_)) => {}
+        Some(zamani_compiler::semantic::Symbol::Variable(_)) => {}
         _ => panic!("Expected x to be defined"),
     }
 }
@@ -146,7 +146,7 @@ fn test_symbol_shadowing() {
 fn test_function_registered_in_scope() {
     let sem = analyze_ok("fn greet() { let x = 1; }");
     match sem.symbols.lookup("greet") {
-        Some(zenith_compiler::semantic::Symbol::Function(_, _)) => {}
+        Some(zamani_compiler::semantic::Symbol::Function(_, _)) => {}
         s => panic!("Expected Function symbol, got {:?}", s),
     }
 }
@@ -158,13 +158,13 @@ fn test_builtin_print_available() {
     assert!(sem.errors.is_empty());
 }
 
-// ── Zenith-specific semantics ─────────────────────────────────────────────────
+// ── Zamani-specific semantics ─────────────────────────────────────────────────
 
 #[test]
 fn test_quantum_circuit_registered() {
     let sem = analyze_ok("quantum circuit Bell { let q = 1; }");
     match sem.symbols.lookup("Bell") {
-        Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
+        Some(zamani_compiler::semantic::Symbol::Variable(ty)) => {
             assert!(matches!(ty, Type::Quantum), "Expected Quantum type");
         }
         _ => panic!("Expected Bell quantum circuit in scope"),
@@ -176,7 +176,7 @@ fn test_sankofa_memory_type() {
     // Sankofa `remember` bindings carry the type of their underlying value
     let sem = analyze_ok("remember mem_ancient = 42;");
     match sem.symbols.lookup("mem_ancient") {
-        Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
+        Some(zamani_compiler::semantic::Symbol::Variable(ty)) => {
             assert!(
                 ty.is_numeric(),
                 "Expected numeric type for remembered value"
@@ -190,7 +190,7 @@ fn test_sankofa_memory_type() {
 fn test_nano_agent_registered() {
     let sem = analyze_ok("agent Scout { let x = 1; }");
     match sem.symbols.lookup("Scout") {
-        Some(zenith_compiler::semantic::Symbol::Variable(ty)) => {
+        Some(zamani_compiler::semantic::Symbol::Variable(ty)) => {
             assert!(
                 matches!(ty, Type::Named(n) if n == "NanoAgent"),
                 "Expected NanoAgent type"

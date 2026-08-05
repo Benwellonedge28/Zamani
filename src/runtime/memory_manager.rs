@@ -1,9 +1,9 @@
-//! Zenith UMC Runtime: Memory Manager
+//! Zamani UMC Runtime: Memory Manager
 //!
-//! This module defines the conceptual memory management subsystem of the Zenith
+//! This module defines the conceptual memory management subsystem of the Zamani
 //! runtime. It orchestrates various allocation strategies (heap, stack, linear, affine),
 //! interfaces with the Nimbus OS for secure memory, and manages the Garbage Collector (GC).
-//! It is critical for enforcing Zenith's unique memory safety and ownership models.
+//! It is critical for enforcing Zamani's unique memory safety and ownership models.
 
 use crate::core_lang_primitives::{
     AffineAllocator, HeapAlloc, LinearAllocator, MemoryRegion, NimbusSystemCall, Size, StackAlloc,
@@ -73,7 +73,7 @@ impl GarbageCollector for MarkAndSweepGC {
     }
 }
 
-/// The central memory management orchestrator for the Zenith runtime.
+/// The central memory management orchestrator for the Zamani runtime.
 /// (No Debug/Clone: embeds a `dyn GarbageCollector` trait object, which
 /// can't derive either; never printed/cloned anywhere in the codebase.)
 pub struct MemoryManager {

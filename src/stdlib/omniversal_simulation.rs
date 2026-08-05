@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Simulation Engine
+//! Zamani stdlib — Omniversal Simulation Engine
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]

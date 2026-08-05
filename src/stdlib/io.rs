@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Input/Output
+//! Zamani Standard Library: Input/Output
 //!
 //! This module provides conceptual APIs for performing input and output operations,
-//! allowing Zenith programs to interact with external systems and users.
+//! allowing Zamani programs to interact with external systems and users.
 
 /// Initializes the I/O standard library components.
 pub fn init_io_lib() {

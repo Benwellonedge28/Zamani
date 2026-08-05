@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — System Design (architecture blueprints, formal verification)
+//! Zamani stdlib — System Design (architecture blueprints, formal verification)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ArchPattern {
     Microservices,

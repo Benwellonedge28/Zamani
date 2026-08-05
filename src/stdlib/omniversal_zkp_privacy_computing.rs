@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal ZKP & Privacy-Preserving Computing (OZKPPC)
+//! Zamani stdlib — Omniversal ZKP & Privacy-Preserving Computing (OZKPPC)
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ZkProofType {

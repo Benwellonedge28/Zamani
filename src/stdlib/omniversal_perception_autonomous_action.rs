@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Perception & Autonomous Action
+//! Zamani stdlib — Omniversal Perception & Autonomous Action
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Modality {

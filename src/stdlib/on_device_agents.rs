@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — On-Device Agents (constrained hardware, edge, mobile)
+//! Zamani stdlib — On-Device Agents (constrained hardware, edge, mobile)
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum AgentConstraint {

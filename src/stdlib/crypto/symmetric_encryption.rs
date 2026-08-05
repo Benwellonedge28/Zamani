@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — symmetric_encryption module
+//! Zamani — symmetric_encryption module
 
 /// Initialize symmetric_encryption
 pub fn init_symmetric_encryption() {}

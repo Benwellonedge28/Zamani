@@ -1,7 +1,7 @@
 
-# Zenith Multi-Modal Processor (Z-MMP) Hardware Interface Specification
+# Zamani Multi-Modal Processor (Z-MMP) Hardware Interface Specification
 
-This document details the conceptual interface and interaction model between the Zenith Universal Meta-Compiler (UMC) and a hypothetical "Zenith Multi-Modal Processor" (Z-MMP). The Z-MMP represents an advanced, integrated hardware platform capable of directly executing quantum circuits, controlling nano-agent swarms, and interacting with classical computation units under the secure orchestration of Nimbus OS.
+This document details the conceptual interface and interaction model between the Zamani Universal Meta-Compiler (UMC) and a hypothetical "Zamani Multi-Modal Processor" (Z-MMP). The Z-MMP represents an advanced, integrated hardware platform capable of directly executing quantum circuits, controlling nano-agent swarms, and interacting with classical computation units under the secure orchestration of Nimbus OS.
 
 ## 1. Z-MMP Hardware Overview (Conceptual)
 
@@ -23,23 +23,23 @@ The Z-MMP is envisioned as a heterogeneous computing platform featuring:
     *   **Memory:** Shared memory pools with hardware-enforced isolation.
 *   **Nimbus OS Microkernel:** Resides on the CCU, providing secure arbitration, resource management, and inter-unit communication (IUC) between all components.
 
-## 2. Zenith Language Constructs for Z-MMP Interaction
+## 2. Zamani Language Constructs for Z-MMP Interaction
 
-Zenith's multi-paradigm language directly maps to Z-MMP capabilities:
+Zamani's multi-paradigm language directly maps to Z-MMP capabilities:
 
 *   **`quantum circuit MyCircuit(...) { ... }`**: Compiles to QPU microcode.
-    *   Zenith's quantum gates (H, CX, Rx, etc.) directly translate to Z-MMP native gate operations.
+    *   Zamani's quantum gates (H, CX, Rx, etc.) directly translate to Z-MMP native gate operations.
     *   `QReg` management maps to QPU qubit allocation and deallocation.
     *   `measure` translates to QPU measurement instructions.
 *   **`nano agent MySwarm(...) { ... }`**: Compiles to NACU control sequences.
-    *   Zenith's nano-agent actions (`perform_action`, `communicate`, `replicate`) map to NACU actuation signals and communication protocols.
+    *   Zamani's nano-agent actions (`perform_action`, `communicate`, `replicate`) map to NACU actuation signals and communication protocols.
     *   Nano-agent states (e.g., location, energy) are managed by the NACU's internal state tracking.
 *   **Classical Code**: Executes on the CCU, orchestrating quantum and nano operations.
     *   Can initiate QPU computations, wait for results, and based on classical logic, deploy or reconfigure nano-agent swarms.
 
 ## 3. Runtime Interaction Model
 
-The Zenith runtime (specifically `runtime/quantum.rs`, `runtime/nano.rs`, `runtime/nimbus_os.rs`) serves as the primary abstraction layer for interacting with the Z-MMP.
+The Zamani runtime (specifically `runtime/quantum.rs`, `runtime/nano.rs`, `runtime/nimbus_os.rs`) serves as the primary abstraction layer for interacting with the Z-MMP.
 
 ### 3.1. Quantum Unit Interface (`runtime/quantum.rs`)
 
@@ -65,14 +65,14 @@ The Nimbus OS microkernel running on the CCU arbitrates all access to the QPU an
 
 *   **Secure Device Access:** All `runtime/quantum.rs` and `runtime/nano.rs` operations conceptually translate into `NimbusSystemCall::hardware_access` calls.
 *   **Capability-Based Access:** A `CapabilityToken("qpu_access")` or `CapabilityToken("nano_control")` is required for contexts to interact with the respective Z-MMP units.
-*   **Resource Partitioning:** Nimbus dynamically partitions QPU qubits, NACU processing time, and shared memory regions among different Zenith contexts.
+*   **Resource Partitioning:** Nimbus dynamically partitions QPU qubits, NACU processing time, and shared memory regions among different Zamani contexts.
 *   **Inter-Unit Communication (IUC):** Nimbus manages high-bandwidth, low-latency data transfer between the QPU, NACU, and CCU, abstracting the complex interconnect. This could involve direct memory access (DMA) or specialized IUC channels.
 
 ## 4. FFI Integration for Low-Level Control
 
-For advanced users or vendor-specific optimizations, Zenith's FFI can bypass the standard runtime abstractions to interact directly with Z-MMP firmware or SDKs.
+For advanced users or vendor-specific optimizations, Zamani's FFI can bypass the standard runtime abstractions to interact directly with Z-MMP firmware or SDKs.
 
-```zenith
+```zamani
 extern "qpu_z_mmp_native" { // Direct Z-MMP QPU microcode interface
     fn z_mmp_qpu_execute_raw_sequence(program: *const u8, len: u64);
     fn z_mmp_qpu_read_qubit_register(register_id: u32) -> u64; // Direct register read
@@ -94,8 +94,8 @@ fn main() {
 
 Nimbus OS plays a critical role in securing Z-MMP interactions:
 
-*   **Hardware Isolation:** Nimbus ensures that multiple Zenith contexts sharing the Z-MMP (e.g., different applications using the QPU) are securely isolated from each other.
-*   **Policy Enforcement:** `Zenith.toml`'s `[nimbus.os]` section can define policies (e.g., `qpu_time_units`, `nano_energy_budget`) that Nimbus enforces at the hardware level.
+*   **Hardware Isolation:** Nimbus ensures that multiple Zamani contexts sharing the Z-MMP (e.g., different applications using the QPU) are securely isolated from each other.
+*   **Policy Enforcement:** `Zamani.toml`'s `[nimbus.os]` section can define policies (e.g., `qpu_time_units`, `nano_energy_budget`) that Nimbus enforces at the hardware level.
 *   **Attestation:** Nimbus provides hardware-rooted attestation for the Z-MMP's state, guaranteeing the integrity of quantum computations and nano-agent operations.
 
-This detailed conceptual interface specification for the Z-MMP showcases Zenith's ability to seamlessly program and manage highly advanced multi-modal hardware.
+This detailed conceptual interface specification for the Z-MMP showcases Zamani's ability to seamlessly program and manage highly advanced multi-modal hardware.

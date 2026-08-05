@@ -1,38 +1,38 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-//! Zenith Language Specification: Concurrency with Actors
+//! Zamani Language Specification: Concurrency with Actors
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
-//! actor-based concurrency within the Zenith programming language. The `actor`
+//! actor-based concurrency within the Zamani programming language. The `actor`
 //! keyword provides native, high-level support for building concurrent, distributed,
 //! and fault-tolerant AGI systems.
 //!
 //! Inspired by UBUNTU's `CONCURRENCY_WITH_ACTORS`, this construct integrates
-//! with Zenith's Multi-Timeline System (MTS) for scheduling, Nimbus OS for
+//! with Zamani's Multi-Timeline System (MTS) for scheduling, Nimbus OS for
 //! secure isolated execution, and `stdlib::sync` for message passing.
 
-use crate::ast::{Identifier, Statement, Type}; // Zenith AST elements
+use crate::ast::{Identifier, Statement, Type}; // Zamani AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
-use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
+use crate::ir_gen::{IrInstruction, IrValue}; // Zamani Intermediate Representation
 use crate::nimbus_os::{CapabilityToken, NimbusContextId};
 use crate::runtime::mts::{ActorId, MtsActorRuntime}; // Underlying MTS Actor Runtime
-use crate::stdlib::collections::{List, Map}; // Zenith List type
+use crate::stdlib::collections::{List, Map}; // Zamani List type
 
 /// Initializes the Concurrency with Actors language specification.
 pub fn init_concurrency_actors_keywords() {
-    println!("    - Initializing Zenith Concurrency with Actors Keywords (actor)...");
+    println!("    - Initializing Zamani Concurrency with Actors Keywords (actor)...");
 }
 
 /// Shuts down the Concurrency with Actors language specification.
 pub fn shutdown_concurrency_actors_keywords() {
-    println!("    - Shutting down Zenith Concurrency with Actors Keywords...");
+    println!("    - Shutting down Zamani Concurrency with Actors Keywords...");
 }
 
 // -----------------------------------------------------------------------------
 // Conceptual Syntax and Semantics
 // -----------------------------------------------------------------------------
 
-/// Conceptual representation of Zenith's AST nodes for actor declarations.
+/// Conceptual representation of Zamani's AST nodes for actor declarations.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActorDefinitionAst {
     pub name: Identifier,

@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use zenith_compiler::{lexer::Lexer, parser::Parser, source_map::{FileId, SourceFile}};
+use zamani_compiler::{lexer::Lexer, parser::Parser, source_map::{FileId, SourceFile}};
 use std::sync::Arc;
 
 fuzz_target!(|data: &[u8]| {

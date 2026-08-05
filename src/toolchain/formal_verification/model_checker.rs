@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Model Checker — temporal logic and state-space exhaustive verification.
+//! Zamani Model Checker — temporal logic and state-space exhaustive verification.
 use std::collections::HashSet;
 
 #[derive(Debug, Clone)]

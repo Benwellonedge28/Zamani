@@ -1,11 +1,11 @@
-//! Zenith Standard Library: Mukandara Global Navigation System (MGNS) Module
+//! Zamani Standard Library: Mukandara Global Navigation System (MGNS) Module
 //!
 //! This module implements the Mukandara Global Navigation System (MGNS),
 //! a hybrid, self-healing, privacy-first Positioning, Navigation, and Timing (PNT)
 //! system designed to be "very extra super Extremely supremely autonomous
 //! infinity Advanced and secure infinitely." MGNS transcends traditional PNT
 //! by fundamentally integrating encrypted compute, verifiable data integrity,
-//! and multi-layered resilience directly into Zenith.
+//! and multi-layered resilience directly into Zamani.
 //!
 //! MGNS prioritizes:
 //! - **Encrypted Compute, Never-Decrypted Data:** Utilizing Homomorphic Encryption (HE),
@@ -20,7 +20,7 @@
 //!   post-quantum lattice cryptography from inception.
 //! - **Self-Healing & Energy-Aware:** Dynamically rebalances and adapts to failures
 //!   or energy constraints.
-//! - **Privacy by Design (Compiler Enforced):** The Zenith compiler enforces privacy
+//! - **Privacy by Design (Compiler Enforced):** The Zamani compiler enforces privacy
 //!   policies for location data, making leakage by default impossible without explicit,
 //!   auditable developer action.
 
@@ -33,7 +33,7 @@ use crate::stdlib::crypto::PostQuantumCryptoEngine; // For quantum-resistant cry
 use crate::stdlib::math_foundations::AdvancedMathEngine;
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::multidimensional::MultidimensionalEngine;
-use crate::stdlib::network::ZenithNetworkStack; // For integration with network capabilities
+use crate::stdlib::network::ZamaniNetworkStack; // For integration with network capabilities
 use crate::stdlib::omniversal_nlp_adv::AdvancedOmniversalNlpEngine;
 use crate::stdlib::omniversal_simulation::OmniversalSimulationEngine; // For digital twin / testing
                                                                       // NOTE: AbstractSyntaxTree, EvasActionContext, EvasDecision, Span, HashSet,
@@ -48,12 +48,12 @@ use crate::stdlib::omniversal_simulation::OmniversalSimulationEngine; // For dig
 
 /// Initializes the Mukandara Global Navigation System (MGNS) module.
 pub fn init_mgns() {
-    println!("  - Initializing Zenith Mukandara Global Navigation System (MGNS)...");
+    println!("  - Initializing Zamani Mukandara Global Navigation System (MGNS)...");
 }
 
 /// Shuts down the Mukandara Global Navigation System (MGNS) module.
 pub fn shutdown_mgns() {
-    println!("  - Shutting down Zenith Mukandara Global Navigation System...");
+    println!("  - Shutting down Zamani Mukandara Global Navigation System...");
 }
 
 // -----------------------------------------------------------------------------
@@ -70,7 +70,7 @@ pub struct MukandaraGlobalNavigationSystem {
     pub zero_knowledge_proof_engine: ZeroKnowledgeProofEngine,
     pub federated_learning_client: FederatedLearningClient,
     pub post_quantum_crypto_engine: PostQuantumCryptoEngine,
-    pub network_stack: ZenithNetworkStack,
+    pub network_stack: ZamaniNetworkStack,
     pub simulation_engine: OmniversalSimulationEngine,
     pub math_engine: AdvancedMathEngine,
     pub multidim_engine: MultidimensionalEngine,
@@ -92,7 +92,7 @@ impl MukandaraGlobalNavigationSystem {
             zero_knowledge_proof_engine: ZeroKnowledgeProofEngine::new(),
             federated_learning_client: FederatedLearningClient::new(),
             post_quantum_crypto_engine: PostQuantumCryptoEngine::new(),
-            network_stack: ZenithNetworkStack::new(),
+            network_stack: ZamaniNetworkStack::new(),
             simulation_engine: OmniversalSimulationEngine::new(),
             math_engine: AdvancedMathEngine::new(),
             multidim_engine: MultidimensionalEngine::new(),
@@ -543,10 +543,10 @@ pub mod stdlib {
         use crate::stdlib::math_foundations::AdvancedMathEngine;
         use crate::toolchain::self_evolution::SelfEvolutionEngine;
         #[derive(Debug, Clone, PartialEq)]
-        pub struct ZenithNetworkStack;
-        impl ZenithNetworkStack {
+        pub struct ZamaniNetworkStack;
+        impl ZamaniNetworkStack {
             pub fn new() -> Self {
-                ZenithNetworkStack {}
+                ZamaniNetworkStack {}
             }
         }
     }

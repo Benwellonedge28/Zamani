@@ -1,12 +1,12 @@
-//! Zenith Standard Library: Human Interface Devices (HID) Module
+//! Zamani Standard Library: Human Interface Devices (HID) Module
 //!
-//! This module provides conceptual APIs for Zenith AGI to interact with a wide
+//! This module provides conceptual APIs for Zamani AGI to interact with a wide
 //! array of human interface devices and modalities. It covers traditional inputs
 //! like GUI/CLI, and extends to advanced and accessible methods such as Voice
 //! Command Interfaces (VCI), gesture recognition (including specific support for
 //! deaf communication), Brain-Computer Interfaces (BCI), eye-tracking, and touch screens.
 //!
-//! This enables Zenith AGI to perceive and respond to human intent through rich,
+//! This enables Zamani AGI to perceive and respond to human intent through rich,
 //! multi-modal channels, facilitating seamless human-AGI collaboration and control.
 
 use crate::ast::Identifier; // For device IDs, command names, gesture types

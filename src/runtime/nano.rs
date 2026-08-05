@@ -1,4 +1,4 @@
-//! Zenith UMC Nano-Agent Runtime
+//! Zamani UMC Nano-Agent Runtime
 //!
 //! This module defines the conceptual runtime components for orchestrating
 //! and managing nano-agents. It provides an interface for their assembly,

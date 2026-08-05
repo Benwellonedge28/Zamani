@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Multi-Timeline System (MTS) APIs
+//! Zamani Standard Library: Multi-Timeline System (MTS) APIs
 //!
 //! This module provides high-level abstractions and APIs for managing and
-//! interacting with multi-timeline systems within Zenith programs.
+//! interacting with multi-timeline systems within Zamani programs.
 
 use crate::runtime::mts::{
     check_causality as runtime_check_causality,

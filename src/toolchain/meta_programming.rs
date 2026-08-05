@@ -1,12 +1,12 @@
-//! Zenith Universal Meta-Compiler (UMC): Autonomous Meta-Programming & Macros Module
+//! Zamani Universal Meta-Compiler (UMC): Autonomous Meta-Programming & Macros Module
 //!
-//! This module defines the conceptual framework for Zenith's "very extra super Extremely
+//! This module defines the conceptual framework for Zamani's "very extra super Extremely
 //! supremely autonomous infinity Advanced and secure infinitely and ready for production
-//! Meta programming and macros". It empowers Zenith to not only understand, execute, and
+//! Meta programming and macros". It empowers Zamani to not only understand, execute, and
 //! transform code across paradigms, but also to autonomously generate, optimize, and secure
 //! its own code and the code of deployed applications at a meta-level.
 //!
-//! It integrates deeply with Zenith's self-evolution capabilities, AI reasoning, and
+//! It integrates deeply with Zamani's self-evolution capabilities, AI reasoning, and
 //! Nimbus OS's security mechanisms to ensure that all meta-programming actions are
 //! safe, ethical, and performant, even in highly dynamic and adversarial environments.
 
@@ -29,37 +29,37 @@ use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; 
 
 /// Initializes the Autonomous Meta-Programming & Macros module.
 pub fn init_meta_programming() {
-    println!("  - Initializing Zenith Autonomous Meta-Programming & Macros Module (Self-Generating, Secure, Multi-Paradigm)...");
+    println!("  - Initializing Zamani Autonomous Meta-Programming & Macros Module (Self-Generating, Secure, Multi-Paradigm)...");
 }
 
 /// Shuts down the Autonomous Meta-Programming & Macros module.
 pub fn shutdown_meta_programming() {
-    println!("  - Shutting down Zenith Autonomous Meta-Programming & Macros Module...");
+    println!("  - Shutting down Zamani Autonomous Meta-Programming & Macros Module...");
 }
 
 // -----------------------------------------------------------------------------
 // Advanced Macro System
 // -----------------------------------------------------------------------------
 
-/// Represents a conceptual macro definition in Zenith.
-/// Zenith macros are not just text-based, but operate directly on the AST/IR,
+/// Represents a conceptual macro definition in Zamani.
+/// Zamani macros are not just text-based, but operate directly on the AST/IR,
 /// enabling powerful, multi-paradigm code generation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MacroDefinition {
     pub name: Identifier,
     pub input_pattern: List<Identifier>, // Pattern for matching macro invocation
-    pub generator_logic: ZenithCodeSnippet, // Zenith code that generates AST/IR
+    pub generator_logic: ZamaniCodeSnippet, // Zamani code that generates AST/IR
     pub context_constraints: Map<String, String>, // e.g., "requires_qpu", "target_nacu_v2"
     pub security_policy_ref: Option<KnowledgeId>, // Link to Sankofa for macro-specific security
 }
 
-/// A conceptual snippet of Zenith code, usable in various contexts.
-pub type ZenithCodeSnippet = String;
+/// A conceptual snippet of Zamani code, usable in various contexts.
+pub type ZamaniCodeSnippet = String;
 
 pub struct MacroProcessor;
 
 impl MacroProcessor {
-    /// Registers a new meta-programming macro with the Zenith compiler.
+    /// Registers a new meta-programming macro with the Zamani compiler.
     /// Macro logic is stored and executed within a secure Nimbus OS context.
     pub fn register_macro(macro_def: MacroDefinition) -> Result<(), String> {
         println!(
@@ -75,7 +75,7 @@ impl MacroProcessor {
     pub fn expand_macro(
         macro_name: Identifier,
         args: List<MetaValue>,
-    ) -> Result<ZenithCodeSnippet, String> {
+    ) -> Result<ZamaniCodeSnippet, String> {
         println!(
             "[Toolchain::MetaProg] Expanding macro '{}' with args: {:?}.",
             macro_name.0, args
@@ -110,7 +110,7 @@ impl MacroProcessor {
 /// fields; this struct is not currently cloned/compared/printed anywhere.)
 pub struct MetaProgrammingAgent {
     pub base_agent: AutonomousAgent,
-    pub code_generation_models: List<Box<dyn Model>>, // AI models for generating Zenith code/IR/HDL
+    pub code_generation_models: List<Box<dyn Model>>, // AI models for generating Zamani code/IR/HDL
     pub optimization_planner: Planner,                // For planning code transformations
     pub formal_verification_integrations: List<Identifier>, // Tools used for proving correctness
 }
@@ -123,12 +123,12 @@ impl AutonomousCodeGenerator {
         Self
     }
 
-    /// Autonomously generates Zenith code (or IR, HDL, etc.) based on high-level goals.
+    /// Autonomously generates Zamani code (or IR, HDL, etc.) based on high-level goals.
     /// Leverages AI models for creativity, AI Reasoning for logic, and Sankofa for knowledge.
     pub fn generate_code_from_goal(
         goal: Fact,
         constraints: Map<String, MetaValue>,
-    ) -> Result<ZenithCodeSnippet, String> {
+    ) -> Result<ZamaniCodeSnippet, String> {
         println!(
             "[Toolchain::MetaProg] Autonomously generating code for goal: {:?}.",
             goal
@@ -149,15 +149,15 @@ impl AutonomousCodeGenerator {
         }
 
         // Conceptual: AI Reasoning Planner generates a plan; ML models execute the plan to generate code.
-        Ok("// Autonomously generated Zenith code".to_string())
+        Ok("// Autonomously generated Zamani code".to_string())
     }
 
-    /// Autonomously refactors and optimizes existing Zenith code.
+    /// Autonomously refactors and optimizes existing Zamani code.
     /// Leverages `toolchain::self_evolution` for iterative improvement.
     pub fn autonomously_optimize_code(
-        code_snippet: ZenithCodeSnippet,
+        code_snippet: ZamaniCodeSnippet,
         optimization_goal: String,
-    ) -> Result<ZenithCodeSnippet, String> {
+    ) -> Result<ZamaniCodeSnippet, String> {
         println!(
             "[Toolchain::MetaProg] Autonomously optimizing code for goal: '{}'.",
             optimization_goal
@@ -169,15 +169,15 @@ impl AutonomousCodeGenerator {
         ));
         let proposal = proposal_result?.data[0].clone(); // Dummy: taking first proposal
                                                          // Apply proposal etc.
-        Ok("// Optimized Zenith code".to_string())
+        Ok("// Optimized Zamani code".to_string())
     }
 
     /// Autonomously adapts code to new or changing multi-paradigm hardware targets.
-    /// Uses `stdlib::meta_ops::transcode` and Zenith HDL knowledge.
+    /// Uses `stdlib::meta_ops::transcode` and Zamani HDL knowledge.
     pub fn adapt_code_to_new_hardware(
-        code_snippet: ZenithCodeSnippet,
+        code_snippet: ZamaniCodeSnippet,
         new_hardware_target: Identifier,
-    ) -> Result<ZenithCodeSnippet, String> {
+    ) -> Result<ZamaniCodeSnippet, String> {
         println!(
             "[Toolchain::MetaProg] Autonomously adapting code to new hardware target '{}'.",
             new_hardware_target.0
@@ -185,7 +185,7 @@ impl AutonomousCodeGenerator {
         let transcoded_output = MetaOperations::transcode(
             TranscodeSource::SourceCode(
                 code_snippet,
-                Identifier("Zenith".to_string(), Span::dummy()),
+                Identifier("Zamani".to_string(), Span::dummy()),
             ),
             TranscodeTarget::HardwareConfiguration(new_hardware_target.clone()),
             Map::new(),
@@ -210,7 +210,7 @@ pub struct SecureMetaProgramming;
 impl SecureMetaProgramming {
     /// Formally verifies the correctness and security of generated or metaprogrammed code/macros.
     /// Uses `toolchain::formal_verification`.
-    pub fn formally_verify_meta_code(code_to_verify: ZenithCodeSnippet) -> Result<Proof, String> {
+    pub fn formally_verify_meta_code(code_to_verify: ZamaniCodeSnippet) -> Result<Proof, String> {
         println!("[Toolchain::MetaProg] Formally verifying meta-code.");
         let verifier = FormalVerificationEngine::default();
         verifier.verify_code(code_to_verify, Map::new()) // Use Map::new() for dummy config
@@ -219,7 +219,7 @@ impl SecureMetaProgramming {
     /// Digitally signs generated code/macros to ensure authenticity and integrity.
     /// Uses `stdlib::crypto::sign`.
     pub fn sign_generated_code(
-        code_to_sign: ZenithCodeSnippet,
+        code_to_sign: ZamaniCodeSnippet,
         signing_key_id: Identifier,
     ) -> Result<Signature, String> {
         println!("[Toolchain::MetaProg] Signing generated code.");
@@ -240,7 +240,7 @@ impl SecureMetaProgramming {
 
     /// Ensures generated code adheres to ethical guidelines using E.V.A.S. filter.
     pub fn ethical_vetting_of_generated_code(
-        code_snippet: ZenithCodeSnippet,
+        code_snippet: ZamaniCodeSnippet,
     ) -> Result<EvasDecision, String> {
         println!("[Toolchain::MetaProg] Ethically vetting generated code.");
         let evas_action = EvasActionContext {

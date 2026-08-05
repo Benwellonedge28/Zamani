@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Core Utilities
+//! Zamani Standard Library: Core Utilities
 //!
 //! This module provides foundational and universally applicable utilities
-//! for all Zenith programs, regardless of paradigm. It includes basic data
+//! for all Zamani programs, regardless of paradigm. It includes basic data
 //! structures, common mathematical operations, string manipulation, and
 //! essential input/output functions.
 

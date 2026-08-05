@@ -1,16 +1,16 @@
-//! Zenith Toolchain: Package Manager (`zenith-pkg`)
+//! Zamani Toolchain: Package Manager (`zamani-pkg`)
 //!
-//! This module defines conceptual functionalities for Zenith's package manager,
+//! This module defines conceptual functionalities for Zamani's package manager,
 //! handling dependency resolution, package publishing, and library management
-//! across all paradigms. It interacts with the `Zenith.toml` manifest file
+//! across all paradigms. It interacts with the `Zamani.toml` manifest file
 //! and a conceptual remote package registry.
 
-use crate::zenith_project_config::ZenithToml;
-use std::collections::{HashMap, HashSet}; // Assuming Zenith.toml is parsed into a struct (conceptual)
+use crate::zamani_project_config::ZamaniToml;
+use std::collections::{HashMap, HashSet}; // Assuming Zamani.toml is parsed into a struct (conceptual)
 
-/// Represents a conceptual Zenith package in the registry.
+/// Represents a conceptual Zamani package in the registry.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ZenithPackage {
+pub struct ZamaniPackage {
     pub name: String,
     pub version: String,
     pub dependencies: HashMap<String, String>, // name -> version
@@ -18,53 +18,53 @@ pub struct ZenithPackage {
                                                // Add other metadata like features, target compatibility, etc.
 }
 
-/// Conceptual interface for a remote Zenith package registry.
+/// Conceptual interface for a remote Zamani package registry.
 pub struct PackageRegistry;
 
 impl PackageRegistry {
     /// Conceptually fetches package metadata from the registry.
-    pub fn fetch_package_metadata(name: &str, version: &str) -> Option<ZenithPackage> {
+    pub fn fetch_package_metadata(name: &str, version: &str) -> Option<ZamaniPackage> {
         println!(
             "[Toolchain::Pkg] Fetching metadata for {}@{} from registry.",
             name, version
         );
         // Simulate a lookup
         if name == "sankofa_std" && version == "0.1.0" {
-            Some(ZenithPackage {
+            Some(ZamaniPackage {
                 name: "sankofa_std".to_string(),
                 version: "0.1.0".to_string(),
                 dependencies: HashMap::new(),
-                download_url: "https://registry.zenith-lang.org/sankofa_std-0.1.0.zpkg".to_string(),
+                download_url: "https://registry.zamani-lang.org/sankofa_std-0.1.0.zpkg".to_string(),
             })
         } else if name == "quantum_sdk" && version == "0.2.0" {
-            Some(ZenithPackage {
+            Some(ZamaniPackage {
                 name: "quantum_sdk".to_string(),
                 version: "0.2.0".to_string(),
                 dependencies: HashMap::new(),
-                download_url: "https://registry.zenith-lang.org/quantum_sdk-0.2.0.zpkg".to_string(),
+                download_url: "https://registry.zamani-lang.org/quantum_sdk-0.2.0.zpkg".to_string(),
             })
         } else if name == "nano_swarm_lib" && version == "0.1.1" {
-            Some(ZenithPackage {
+            Some(ZamaniPackage {
                 name: "nano_swarm_lib".to_string(),
                 version: "0.1.1".to_string(),
                 dependencies: HashMap::new(),
-                download_url: "https://registry.zenith-lang.org/nano_swarm_lib-0.1.1.zpkg"
+                download_url: "https://registry.zamani-lang.org/nano_swarm_lib-0.1.1.zpkg"
                     .to_string(),
             })
         } else if name == "mts_simulation_utils" && version == "0.1.0" {
-            Some(ZenithPackage {
+            Some(ZamaniPackage {
                 name: "mts_simulation_utils".to_string(),
                 version: "0.1.0".to_string(),
                 dependencies: HashMap::new(),
-                download_url: "https://registry.zenith-lang.org/mts_simulation_utils-0.1.0.zpkg"
+                download_url: "https://registry.zamani-lang.org/mts_simulation_utils-0.1.0.zpkg"
                     .to_string(),
             })
-        } else if name == "zenith_json" && version == "0.1.0" {
-            Some(ZenithPackage {
-                name: "zenith_json".to_string(),
+        } else if name == "zamani_json" && version == "0.1.0" {
+            Some(ZamaniPackage {
+                name: "zamani_json".to_string(),
                 version: "0.1.0".to_string(),
                 dependencies: HashMap::new(),
-                download_url: "https://registry.zenith-lang.org/zenith_json-0.1.0.zpkg".to_string(),
+                download_url: "https://registry.zamani-lang.org/zamani_json-0.1.0.zpkg".to_string(),
             })
         } else {
             None
@@ -79,7 +79,7 @@ impl PackageRegistry {
     }
 
     /// Conceptually publishes a .zpkg to the registry.
-    pub fn publish_zpkg(package: &ZenithPackage, zpkg_content: Vec<u8>) -> Result<(), String> {
+    pub fn publish_zpkg(package: &ZamaniPackage, zpkg_content: Vec<u8>) -> Result<(), String> {
         println!(
             "[Toolchain::Pkg] Publishing {}@{} to registry ({} bytes).",
             package.name,
@@ -93,9 +93,9 @@ impl PackageRegistry {
 
 /// Manages local package cache and project dependencies.
 pub struct PackageManager {
-    local_cache: HashMap<String, ZenithPackage>, // Map "name@version" to ZenithPackage
+    local_cache: HashMap<String, ZamaniPackage>, // Map "name@version" to ZamaniPackage
                                                  // Path to local .zpkg cache directory
-                                                 // Configuration from Zenith.toml
+                                                 // Configuration from Zamani.toml
 }
 
 impl PackageManager {
@@ -108,8 +108,8 @@ impl PackageManager {
     /// Resolves all direct and transitive dependencies for a given project.
     pub fn resolve_dependencies(
         &mut self,
-        manifest: &ZenithToml,
-    ) -> Result<HashMap<String, ZenithPackage>, String> {
+        manifest: &ZamaniToml,
+    ) -> Result<HashMap<String, ZamaniPackage>, String> {
         println!(
             "[Toolchain::Pkg] Resolving dependencies for project '{}'.",
             manifest.package.name
@@ -157,8 +157,8 @@ impl PackageManager {
         Ok(resolved_deps)
     }
 
-    /// Installs a given Zenith package into the project or local cache.
-    pub fn install_package(&mut self, pkg: &ZenithPackage) -> Result<(), String> {
+    /// Installs a given Zamani package into the project or local cache.
+    pub fn install_package(&mut self, pkg: &ZamaniPackage) -> Result<(), String> {
         println!(
             "[Toolchain::Pkg] Installing package {}@{}.",
             pkg.name, pkg.version
@@ -172,7 +172,7 @@ impl PackageManager {
         let zpkg_content = PackageRegistry::download_zpkg(&pkg.download_url)?; // Download the .zpkg
                                                                                // Conceptual:
                                                                                // - Extract zpkg_content to appropriate location (e.g., target/deps/)
-                                                                               // - Read its Zenith.toml (potentially for further nested deps or build scripts)
+                                                                               // - Read its Zamani.toml (potentially for further nested deps or build scripts)
                                                                                // - Potentially compile it if target-specific binaries are needed and not included in zpkg
         self.local_cache.insert(key.clone(), pkg.clone());
         println!(
@@ -183,27 +183,27 @@ impl PackageManager {
     }
 
     /// Creates a .zpkg archive from the current project.
-    pub fn create_zpkg(&self, manifest: &ZenithToml) -> Result<Vec<u8>, String> {
+    pub fn create_zpkg(&self, manifest: &ZamaniToml) -> Result<Vec<u8>, String> {
         println!(
             "[Toolchain::Pkg] Creating .zpkg for {}@{}.",
             manifest.package.name, manifest.package.version
         );
         // Conceptual:
         // - Collect all source files from `src/`
-        // - Include `Zenith.toml`
+        // - Include `Zamani.toml`
         // - Optionally include `target/` pre-compiled artifacts
         // - Bundle into a compressed archive (e.g., zip or tar.gz)
         Ok(vec![0xAA, 0xBB, 0xCC]) // Dummy zpkg content
     }
 
     /// Publishes the current project as a .zpkg to the package registry.
-    pub fn publish_project(&mut self, manifest: &ZenithToml) -> Result<(), String> {
+    pub fn publish_project(&mut self, manifest: &ZamaniToml) -> Result<(), String> {
         println!(
             "[Toolchain::Pkg] Publishing project {}@{}.",
             manifest.package.name, manifest.package.version
         );
         let zpkg_content = self.create_zpkg(manifest)?; // Create the .zpkg archive
-        let package = ZenithPackage {
+        let package = ZamaniPackage {
             name: manifest.package.name.clone(),
             version: manifest.package.version.clone(),
             dependencies: manifest
@@ -218,7 +218,7 @@ impl PackageManager {
                 })
                 .collect(),
             download_url: format!(
-                "https://registry.zenith-lang.org/{}-{}.zpkg",
+                "https://registry.zamani-lang.org/{}-{}.zpkg",
                 manifest.package.name, manifest.package.version
             ),
         };
@@ -228,7 +228,7 @@ impl PackageManager {
 
 /// Initializes the package manager components.
 pub fn init_package_manager() {
-    println!("  - Initializing Toolchain Package Manager (`zenith-pkg`)... ");
+    println!("  - Initializing Toolchain Package Manager (`zamani-pkg`)... ");
 }
 
 /// Shuts down the package manager components.

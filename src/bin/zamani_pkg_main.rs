@@ -1,6 +1,6 @@
-//! `zenith-pkg` — the Zenith build-system / package-manager CLI.
+//! `zamani-pkg` — the Zamani build-system / package-manager CLI.
 //!
-//! Wraps `Zenith.toml` manifest parsing, dependency resolution, and the
+//! Wraps `Zamani.toml` manifest parsing, dependency resolution, and the
 //! (currently conceptual/simulated) build + registry operations in
 //! `toolchain::{build, package_manager}`. Real today: manifest parsing and
 //! dependency-graph resolution. Simulated today, clearly logged as such:
@@ -12,26 +12,26 @@ use std::env;
 use std::fs;
 use std::process::ExitCode;
 
-use zenith_compiler::toolchain::build;
-use zenith_compiler::toolchain::package_manager::PackageManager;
-use zenith_compiler::zenith_project_config::ZenithToml;
+use zamani_compiler::toolchain::build;
+use zamani_compiler::toolchain::package_manager::PackageManager;
+use zamani_compiler::zamani_project_config::ZamaniToml;
 
 fn usage() -> ! {
-    eprintln!("zenith-pkg — Zenith build system & package manager");
+    eprintln!("zamani-pkg — Zamani build system & package manager");
     eprintln!();
     eprintln!("USAGE:");
-    eprintln!("    zenith-pkg build [--manifest Zenith.toml] [--target <t>]");
-    eprintln!("    zenith-pkg deps  [--manifest Zenith.toml]");
-    eprintln!("    zenith-pkg clean [<project-path>]");
+    eprintln!("    zamani-pkg build [--manifest Zamani.toml] [--target <t>]");
+    eprintln!("    zamani-pkg deps  [--manifest Zamani.toml]");
+    eprintln!("    zamani-pkg clean [<project-path>]");
     std::process::exit(2);
 }
 
-fn load_manifest(manifest_path: &str) -> ZenithToml {
+fn load_manifest(manifest_path: &str) -> ZamaniToml {
     let content = fs::read_to_string(manifest_path).unwrap_or_else(|e| {
         eprintln!("error: could not read '{manifest_path}': {e}");
         std::process::exit(1);
     });
-    ZenithToml::parse_from_str(&content).unwrap_or_else(|e| {
+    ZamaniToml::parse_from_str(&content).unwrap_or_else(|e| {
         eprintln!("error: {e}");
         std::process::exit(1);
     })
@@ -42,7 +42,7 @@ fn manifest_arg(args: &[String]) -> String {
         .position(|a| a == "--manifest")
         .and_then(|i| args.get(i + 1))
         .cloned()
-        .unwrap_or_else(|| "Zenith.toml".to_string())
+        .unwrap_or_else(|| "Zamani.toml".to_string())
 }
 
 fn main() -> ExitCode {

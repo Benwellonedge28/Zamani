@@ -1,16 +1,16 @@
-//! Zenith Universal Meta-Compiler (UMC): Hardware Description Language (HDL) Module
+//! Zamani Universal Meta-Compiler (UMC): Hardware Description Language (HDL) Module
 //!
-//! This module conceptually defines Zenith's integrated Hardware Description Language (HDL).
+//! This module conceptually defines Zamani's integrated Hardware Description Language (HDL).
 //! It allows for direct, low-level programming and configuration of heterogeneous hardware
 //! units, particularly the Z-MMP's Classical, Quantum, and Nano-Agent components, using
-//! Zenith's unified syntax. This provides maximum control for hardware engineers and system
+//! Zamani's unified syntax. This provides maximum control for hardware engineers and system
 //! architects to craft highly optimized and specialized hardware designs.
 //!
-//! Crucially, Zenith's HDL also supports integration with *existing* hardware description
+//! Crucially, Zamani's HDL also supports integration with *existing* hardware description
 //! languages (Verilog, VHDL, Chisel, etc.) or alternatives (e.g., custom DSLs), allowing
 //! for a hybrid design approach and leveraging existing IP.
 //!
-//! This expanded vision aims for Zenith HDL to cover *any and all* hardware paradigms,
+//! This expanded vision aims for Zamani HDL to cover *any and all* hardware paradigms,
 //! including Neuromorphic, AI chips, Analog, Optical, and custom co-processors, enabling
 //! developers to target diverse silicon architectures within a single codebase.
 
@@ -23,12 +23,12 @@ use std::collections::HashMap; // For state maps // For lists of expressions, co
 
 /// Initializes the HDL module.
 pub fn init_hdl() {
-    println!("  - Initializing Zenith HDL Module (for universal hardware targeting)...");
+    println!("  - Initializing Zamani HDL Module (for universal hardware targeting)...");
 }
 
 /// Shuts down the HDL module.
 pub fn shutdown_hdl() {
-    println!("  - Shutting down Zenith HDL Module...");
+    println!("  - Shutting down Zamani HDL Module...");
 }
 
 // -----------------------------------------------------------------------------
@@ -481,7 +481,7 @@ pub mod external_hdl_linker {
         pub parameters: HashMap<String, String>, // Generics/parameters
     }
 
-    /// Conceptually imports and translates an external HDL module into Zenith's internal representation.
+    /// Conceptually imports and translates an external HDL module into Zamani's internal representation.
     pub fn import_hdl(
         hdl_type: HdlImportType,
         source_code: String,
@@ -493,7 +493,7 @@ pub mod external_hdl_linker {
         // Conceptual: This would involve:
         // 1. Parsing the external HDL source (e.g., Verilog parser).
         // 2. Performing semantic analysis on the external HDL.
-        // 3. Translating its components (wires, registers, modules) into Zenith HDL's conceptual IR.
+        // 3. Translating its components (wires, registers, modules) into Zamani HDL's conceptual IR.
         // 4. Extracting port definitions and parameters.
         Ok(ExternalHdlModule {
             name: "ExternalModule".to_string(),
@@ -504,14 +504,14 @@ pub mod external_hdl_linker {
         })
     }
 
-    /// Conceptually links Zenith HDL with an imported external HDL module.
+    /// Conceptually links Zamani HDL with an imported external HDL module.
     pub fn link_hdl_modules(
-        zenith_hdl_unit: &HdlStatement,
+        zamani_hdl_unit: &HdlStatement,
         external_modules: &[ExternalHdlModule],
     ) -> Result<Vec<IrInstruction>, String> {
-        println!("[HDL] Linking Zenith HDL unit with external HDL modules...");
+        println!("[HDL] Linking Zamani HDL unit with external HDL modules...");
         // Conceptual:
-        // 1. Resolve connections between Zenith HDL ports and external HDL module ports.
+        // 1. Resolve connections between Zamani HDL ports and external HDL module ports.
         // 2. Generate a combined IR that represents the complete hardware design.
         // 3. Perform cross-HDL optimization passes.
         // This output IR would then be fed to the ZmmpHdlGenerator.

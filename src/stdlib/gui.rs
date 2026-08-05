@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Graphical User Interface (GUI) Module
+//! Zamani Standard Library: Graphical User Interface (GUI) Module
 //!
 //! This module provides conceptual APIs for building graphical user interfaces
-//! in Zenith programs. It offers high-level abstractions for common UI elements,
+//! in Zamani programs. It offers high-level abstractions for common UI elements,
 //! event handling, and rendering, leveraging Nimbus OS's secure display server
 //! and multimedia capabilities.
 //!

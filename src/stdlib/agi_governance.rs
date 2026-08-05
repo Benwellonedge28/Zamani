@@ -1,7 +1,7 @@
-//! Zenith Standard Library: AGI Governance and Compliance Module
+//! Zamani Standard Library: AGI Governance and Compliance Module
 //!
 //! This module provides conceptual APIs for ensuring that AGI systems developed
-//! in Zenith remain safe, ethical, and legally compliant. It bridges language-level
+//! in Zamani remain safe, ethical, and legally compliant. It bridges language-level
 //! directives (like #[ethics]) with runtime enforcement (E.V.A.S.) and external
 //! regulatory frameworks.
 //!
@@ -92,7 +92,7 @@ impl LegalInterface {
             "[StdLib::Governance] Generating {} compliance notice for action {}.",
             regulation, action_id.0
         );
-        Ok("Zenith-Signed Legal Compliance Certificate v1.0".to_string())
+        Ok("Zamani-Signed Legal Compliance Certificate v1.0".to_string())
     }
 
     /// Initiates a conceptual 'legal proceeding' within the AGI governance framework

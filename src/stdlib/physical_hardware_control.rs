@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Physical Hardware Control
+//! Zamani stdlib — Physical Hardware Control
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum HwType {

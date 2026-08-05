@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Verifier — unified formal verification entry point.
+//! Zamani Verifier — unified formal verification entry point.
 use super::model_checker::ModelChecker;
 use super::theorem_prover::{ProofStrategy, TheoremProver};
 

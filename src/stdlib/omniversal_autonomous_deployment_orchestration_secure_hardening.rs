@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Autonomous Deployment, Orchestration & Secure Hardening (OADOSH)
+//! Zamani stdlib — Omniversal Autonomous Deployment, Orchestration & Secure Hardening (OADOSH)
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeployTarget {

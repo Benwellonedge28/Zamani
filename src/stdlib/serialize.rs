@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Serialization Module
+//! Zamani Standard Library: Serialization Module
 //!
 //! This module provides conceptual APIs for data serialization and deserialization,
-//! enabling Zenith programs to convert structured data into byte streams and vice-versa.
+//! enabling Zamani programs to convert structured data into byte streams and vice-versa.
 //! It supports common data formats and emphasizes efficient, multi-paradigm-aware
 //! serialization (e.g., for quantum states, nano-agent configurations, MTS snapshots).
 
@@ -44,7 +44,7 @@ pub trait Deserializable: Sized {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SerializationFormat {
     Json,
-    Binary, // Zenith's custom efficient binary format
+    Binary, // Zamani's custom efficient binary format
     MessagePack,
     QuantumState,       // Specialized format for QPU states
     NanoConfig,         // Specialized format for nano-agent blueprints/configurations

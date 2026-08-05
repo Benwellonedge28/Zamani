@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Nano Runtime Primitives
-//! Provides the core types for nano-scale agent programming in Zenith.
+//! Zamani Nano Runtime Primitives
+//! Provides the core types for nano-scale agent programming in Zamani.
 
 use std::collections::HashMap;
 

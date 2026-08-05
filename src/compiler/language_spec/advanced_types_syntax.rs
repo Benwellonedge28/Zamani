@@ -1,36 +1,36 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-//! Zenith Language Specification: Advanced Type System Keywords
+//! Zamani Language Specification: Advanced Type System Keywords
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
-//! advanced type system features within the Zenith programming language.
+//! advanced type system features within the Zamani programming language.
 //! These include dependent types, linear types, type classes, higher-kinded types,
 //! and other constructs essential for building provably correct, robust, and
 //! highly expressive AGI systems.
 //!
 //! Inspired by UBUNTU's extensive advanced type system features, these integrate
-//! deeply with Zenith's formal verification engine and compiler's semantic analysis.
+//! deeply with Zamani's formal verification engine and compiler's semantic analysis.
 
-use crate::ast::{Expression, Identifier, Parameter, Type, TypeBound, TypeParameter}; // Zenith AST elements
+use crate::ast::{Expression, Identifier, Parameter, Type, TypeBound, TypeParameter}; // Zamani AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
-use crate::ir_gen::{CmpOp, IrInstruction, IrRegister, IrType, IrValue}; // Zenith Intermediate Representation
+use crate::ir_gen::{CmpOp, IrInstruction, IrRegister, IrType, IrValue}; // Zamani Intermediate Representation
 use crate::stdlib::collections::{List, Map};
 
 /// Initializes the Advanced Type System Keywords language specification.
 pub fn init_advanced_types_syntax() {
-    println!("    - Initializing Zenith Advanced Type System Keywords (dependent, linear, type classes, HKTs)...");
+    println!("    - Initializing Zamani Advanced Type System Keywords (dependent, linear, type classes, HKTs)...");
 }
 
 /// Shuts down the Advanced Type System Keywords language specification.
 pub fn shutdown_advanced_types_syntax() {
-    println!("    - Shutting down Zenith Advanced Type System Keywords...");
+    println!("    - Shutting down Zamani Advanced Type System Keywords...");
 }
 
 // -----------------------------------------------------------------------------
 // Conceptual Syntax and Semantics
 // -----------------------------------------------------------------------------
 
-/// Conceptual representation of Zenith's AST nodes for advanced type constructs.
+/// Conceptual representation of Zamani's AST nodes for advanced type constructs.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AdvancedTypeAst {
     DependentType(Type, Vec<Parameter>), // e.g., List(size: N) of int;

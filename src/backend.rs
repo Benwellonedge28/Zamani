@@ -1,4 +1,4 @@
-//! Zenith Code Generation Backend
+//! Zamani Code Generation Backend
 //!
 //! Translates the optimized IR into target-specific output.
 //! Supported targets:
@@ -318,7 +318,7 @@ impl Backend for WasmBackend {
     fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
         let mut out = String::new();
         out.push_str(&format!("(module ;; {}\n", module.name));
-        out.push_str("  (import \"env\" \"zenith_println\" (func $zenith_println (param i32)))\n");
+        out.push_str("  (import \"env\" \"zamani_println\" (func $zamani_println (param i32)))\n");
         out.push_str("  (memory 1)\n");
         out.push_str("  (export \"memory\" (memory 0))\n\n");
 
@@ -419,7 +419,7 @@ impl Backend for QasmBackend {
         let mut out = String::new();
         out.push_str("OPENQASM 2.0;\n");
         out.push_str("include \"qelib1.inc\";\n\n");
-        out.push_str(&format!("// Zenith module: {}\n\n", module.name));
+        out.push_str(&format!("// Zamani module: {}\n\n", module.name));
 
         let mut qubit_count = 0usize;
         let mut cbit_count = 0usize;
@@ -502,7 +502,7 @@ impl Backend for RiscVBackend {
         let mut out = String::new();
         out.push_str("    .text\n");
         out.push_str("    .option nopic\n\n");
-        out.push_str(&format!("    # Zenith RISC-V module: {}\n\n", module.name));
+        out.push_str(&format!("    # Zamani RISC-V module: {}\n\n", module.name));
 
         for func in &module.functions {
             if func.is_external {
@@ -600,7 +600,7 @@ impl Backend for NanoBackend {
 
     fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
         let mut out = String::new();
-        out.push_str(&format!("# Zenith NanoControl — module: {}\n", module.name));
+        out.push_str(&format!("# Zamani NanoControl — module: {}\n", module.name));
         out.push_str("nano_version: 1.0\n\n");
         for func in &module.functions {
             if func.is_external {
@@ -650,7 +650,7 @@ impl Backend for MtsBackend {
     fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
         let mut out = String::new();
         out.push_str(&format!(
-            "// MTS Bytecode — Zenith module: {}\n",
+            "// MTS Bytecode — Zamani module: {}\n",
             module.name
         ));
         out.push_str("timeline main {\n");

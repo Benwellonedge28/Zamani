@@ -1,16 +1,16 @@
 
-# Zenith.toml - Zenith Project Manifest
-# This file describes a Zenith project, its metadata, dependencies,
+# Zamani.toml - Zamani Project Manifest
+# This file describes a Zamani project, its metadata, dependencies,
 # and how it should be built, optimized, and deployed across various paradigms.
 
 [package]
-name = "zenith_therapeutic_system"
+name = "zamani_therapeutic_system"
 version = "0.1.0"
 authors = ["Samuel Mukandara <samuelmukandara@gmail.com>"]
-edition = "2026" # Refers to a Zenith language edition, e.g., features enabled
-description = "A quantum-enhanced nano-therapeutic system developed in Zenith."
-homepage = "https://zenith-lang.org/therapeutic-system"
-repository = "https://github.com/Benwellonedge28/Zenith" # Points to the example's repo
+edition = "2026" # Refers to a Zamani language edition, e.g., features enabled
+description = "A quantum-enhanced nano-therapeutic system developed in Zamani."
+homepage = "https://zamani-lang.org/therapeutic-system"
+repository = "https://github.com/Benwellonedge28/Zamani" # Points to the example's repo
 license = "Apache-2.0/MIT" # Example licenses
 
 # Project type defines the primary target output/purpose
@@ -19,12 +19,12 @@ type = "application"
 
 [dependencies]
 # Dependencies are specified as paths to .zpkg files or registry entries
-# This demonstrates Zenith's conceptual package manager
+# This demonstrates Zamani's conceptual package manager
 sankofa_std = { version = "0.1.0" }
 quantum_sdk = { version = "0.2.0" }
 nano_swarm_lib = { version = "0.1.1" }
 mts_simulation_utils = { version = "0.1.0" }
-zenith_json = { version = "0.1.0" } # For serialization/deserialization
+zamani_json = { version = "0.1.0" } # For serialization/deserialization
 
 # Dependencies can also be local paths for development
 local_diagnostic_module = { path = "./modules/diagnostic" }
@@ -40,7 +40,7 @@ secure_logging = [] # Feature for enhanced logging with Nimbus security
 # Build-specific configurations
 target = "nimbus-vm" # Default target for the project (e.g., nimbus-vm, wasm, x86_64, qpu_ibm, qpu_google)
 optimization_level = "aggressive" # "none", "basic", "aggressive", "quantum-aware"
-debug_info = true # Whether to emit debug information (e.g., for zenith-dbg)
+debug_info = true # Whether to emit debug information (e.g., for zamani-dbg)
 codegen_backend = "unified-llvm-qiskit-nanoasm" # Backend selection (conceptual)
 
 # Environment variables to pass to the build process (e.g., for Nimbus OS configuration)

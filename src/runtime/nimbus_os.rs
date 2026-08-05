@@ -1,9 +1,9 @@
-//! Zenith UMC Nimbus OS Runtime Interface
+//! Zamani UMC Nimbus OS Runtime Interface
 //!
-//! This module defines the conceptual interface between the Zenith runtime
+//! This module defines the conceptual interface between the Zamani runtime
 //! and the underlying Nimbus Operating System microkernel. It exposes Nimbus's
 //! core capabilities for secure isolation, multi-context management, inter-process
-//! communication (IPC), and capability-based security directly to the Zenith runtime.
+//! communication (IPC), and capability-based security directly to the Zamani runtime.
 //!
 //! Nimbus OS is a microkernel-based, hyper-secure, and temporally-aware operating system
 //! designed for universal, multi-paradigm computing.

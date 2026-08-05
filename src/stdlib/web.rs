@@ -1,8 +1,8 @@
-//! Zenith Standard Library: Web and Browser Integration Module
+//! Zamani Standard Library: Web and Browser Integration Module
 //!
 //! This module provides conceptual APIs for interacting with web technologies,
 //! including WebAssembly (WASM) compilation, browser DOM manipulation,
-//! WebGL/WebGPU graphics, and WebSockets. It enables Zenith programs to function
+//! WebGL/WebGPU graphics, and WebSockets. It enables Zamani programs to function
 //! as high-performance, secure web applications, leveraging Nimbus OS's capabilities
 //! for browser sandboxing and multi-paradigm web execution.
 
@@ -48,11 +48,11 @@ impl Default for HtmlContent {
 pub struct Wasm;
 
 impl Wasm {
-    /// Compiles Zenith code to WebAssembly bytecode.
+    /// Compiles Zamani code to WebAssembly bytecode.
     /// This would typically be a compiler backend feature, but exposed here as a runtime concept.
-    pub fn compile_zenith_to_wasm(zenith_code: &str) -> Result<List<u8>, String> {
-        println!("[StdLib::Web] Compiling Zenith code to WebAssembly.");
-        // Conceptual: Invoke Zenith compiler backend for WASM target.
+    pub fn compile_zamani_to_wasm(zamani_code: &str) -> Result<List<u8>, String> {
+        println!("[StdLib::Web] Compiling Zamani code to WebAssembly.");
+        // Conceptual: Invoke Zamani compiler backend for WASM target.
         Ok(List::new()) // Dummy WASM bytes
     }
 

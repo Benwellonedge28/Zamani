@@ -1,4 +1,4 @@
-//! Zenith Standard Library: Database and Data Persistence Module
+//! Zamani Standard Library: Database and Data Persistence Module
 //!
 //! This module provides conceptual APIs for interacting with various data persistence
 //! mechanisms, including traditional databases, distributed ledgers, and specialized

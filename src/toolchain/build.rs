@@ -1,7 +1,7 @@
-//! Zenith Toolchain: Build System Integration
+//! Zamani Toolchain: Build System Integration
 //!
-//! This module provides conceptual interfaces for Zenith's build system,
-//! managing how Zenith projects are compiled, linked, and assembled for deployment.
+//! This module provides conceptual interfaces for Zamani's build system,
+//! managing how Zamani projects are compiled, linked, and assembled for deployment.
 
 /// Initializes the build system integration components.
 pub fn init_build_system() {
@@ -13,10 +13,10 @@ pub fn shutdown_build_system() {
     println!("  - Shutting down Toolchain Build System...");
 }
 
-/// Conceptual function to compile a Zenith project.
+/// Conceptual function to compile a Zamani project.
 pub fn compile_project(project_path: &str, target: &str) -> Result<(), String> {
     println!(
-        "[Toolchain::build] Compiling Zenith project at '{}' for target '{}'...",
+        "[Toolchain::build] Compiling Zamani project at '{}' for target '{}'...",
         project_path, target
     );
     // Conceptual: Invoke the UMC compiler pipeline (lexer -> parser -> semantic -> ir_gen -> optimizer -> backend)

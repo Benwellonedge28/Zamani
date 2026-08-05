@@ -1,4 +1,4 @@
-# ── Zenith Language Server (zenith-lsp) ──────────────────────────────────────
+# ── Zamani Language Server (zamani-lsp) ──────────────────────────────────────
 # Status: WORKING. Builds with `--features lsp`. Real stdio LSP server backed
 # by the actual lexer/parser (diagnostics reflect genuine parse errors, not a
 # stub). Speaks LSP-framed JSON-RPC over stdin/stdout, so this image is meant
@@ -13,14 +13,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libs
 COPY Cargo.toml Cargo.lock ./
 COPY benches ./benches
 COPY src ./src
-RUN cargo build --release --features lsp --bin zenith-lsp
+RUN cargo build --release --features lsp --bin zamani-lsp
 
 FROM debian:bookworm-slim AS runtime
-LABEL org.opencontainers.image.title="Zenith Language Server"
-LABEL org.opencontainers.image.description="Zenith LSP (real lexer/parser diagnostics over stdio)"
-LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zenith"
+LABEL org.opencontainers.image.title="Zamani Language Server"
+LABEL org.opencontainers.image.description="Zamani LSP (real lexer/parser diagnostics over stdio)"
+LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zamani"
 LABEL org.opencontainers.image.version="${VERSION}"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && apt-get clean
-WORKDIR /zenith
-COPY --from=builder /app/target/release/zenith-lsp /usr/local/bin/zenith-lsp
-ENTRYPOINT ["/usr/local/bin/zenith-lsp"]
+WORKDIR /zamani
+COPY --from=builder /app/target/release/zamani-lsp /usr/local/bin/zamani-lsp
+ENTRYPOINT ["/usr/local/bin/zamani-lsp"]

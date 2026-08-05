@@ -1,16 +1,16 @@
 #![allow(unused_imports, dead_code, unused_variables, unused_mut)]
-//! Zenith Native Constructs — Comprehensive Tests
-//! Tests for all grammar spec constructs, Zenith-native keywords,
+//! Zamani Native Constructs — Comprehensive Tests
+//! Tests for all grammar spec constructs, Zamani-native keywords,
 //! extended type system, and full compiler pipeline.
 
 use std::sync::Arc;
-use zenith_compiler::ast::{Expression, Literal, Program, Statement, TypeExpr};
-use zenith_compiler::ir_gen::IrGenerator;
-use zenith_compiler::lexer::{Lexer, TokenType};
-use zenith_compiler::optimizer::Optimizer;
-use zenith_compiler::parser::Parser;
-use zenith_compiler::semantic::SemanticAnalyzer;
-use zenith_compiler::source_map::{FileId, SourceFile};
+use zamani_compiler::ast::{Expression, Literal, Program, Statement, TypeExpr};
+use zamani_compiler::ir_gen::IrGenerator;
+use zamani_compiler::lexer::{Lexer, TokenType};
+use zamani_compiler::optimizer::Optimizer;
+use zamani_compiler::parser::Parser;
+use zamani_compiler::semantic::SemanticAnalyzer;
+use zamani_compiler::source_map::{FileId, SourceFile};
 
 fn make_parser(src: &str) -> Parser {
     let sf = Arc::new(SourceFile::new("<test>".into(), src.into()));
@@ -30,7 +30,7 @@ fn parse_ok(src: &str) -> Program {
     prog
 }
 
-fn parse_and_ir(src: &str) -> zenith_compiler::ir_gen::IrModule {
+fn parse_and_ir(src: &str) -> zamani_compiler::ir_gen::IrModule {
     let prog = parse_ok(src);
     let mut gen = IrGenerator::new();
     gen.generate(&prog)
@@ -481,7 +481,7 @@ fn test_ir_from_sankofa() {
     let has_sankofa = top.body.iter().any(|ins| {
         matches!(
             ins,
-            zenith_compiler::ir_gen::IrInstruction::SankofaRemember(_, _)
+            zamani_compiler::ir_gen::IrInstruction::SankofaRemember(_, _)
         )
     });
     assert!(has_sankofa, "Expected SankofaRemember in IR");
@@ -494,7 +494,7 @@ fn test_ir_while_loop() {
     let has_cond_jump = top.body.iter().any(|ins| {
         matches!(
             ins,
-            zenith_compiler::ir_gen::IrInstruction::CondJump(_, _, _)
+            zamani_compiler::ir_gen::IrInstruction::CondJump(_, _, _)
         )
     });
     assert!(has_cond_jump, "Expected CondJump in IR for while loop");
@@ -505,7 +505,7 @@ fn test_ir_while_loop() {
 #[test]
 fn test_optimizer_constant_folding() {
     let module = parse_and_ir("let r = 2 + 3;");
-    let mut opt = Optimizer::new(zenith_compiler::optimizer::OptimizationConfig::default());
+    let mut opt = Optimizer::new(zamani_compiler::optimizer::OptimizationConfig::default());
     let optimized = opt.optimize(&module);
     assert!(!optimized.functions.is_empty());
 }
@@ -513,7 +513,7 @@ fn test_optimizer_constant_folding() {
 #[test]
 fn test_optimizer_dead_code_elimination() {
     let module = parse_and_ir("let x = 1; let y = 2; let z = 3;");
-    let mut opt = Optimizer::new(zenith_compiler::optimizer::OptimizationConfig::default());
+    let mut opt = Optimizer::new(zamani_compiler::optimizer::OptimizationConfig::default());
     let optimized = opt.optimize(&module);
     assert!(!optimized.functions.is_empty());
 }
@@ -521,7 +521,7 @@ fn test_optimizer_dead_code_elimination() {
 // ── Multiple programs ─────────────────────────────────────────────────────────
 
 #[test]
-fn test_full_zenith_program() {
+fn test_full_zamani_program() {
     let src = r#"
         effect QuantumError;
         type PatientId = String;

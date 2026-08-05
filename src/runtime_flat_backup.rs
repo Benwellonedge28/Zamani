@@ -1,8 +1,8 @@
-//! Zenith Universal Trinity Runtime (POCO-REAF) Core
+//! Zamani Universal Trinity Runtime (POCO-REAF) Core
 //!
-//! This module implements the core components of the Zenith POCO-REAF (Persistent, Omni-Cognitive,
+//! This module implements the core components of the Zamani POCO-REAF (Persistent, Omni-Cognitive,
 //! Reactive, Event-driven, Adaptive, Self-healing) Runtime. It provides the execution environment
-//! for Zenith programs, managing memory, concurrency, I/O, and specialized features
+//! for Zamani programs, managing memory, concurrency, I/O, and specialized features
 //! for quantum and nano computations.
 
 use crate::ir::UMCIR;
@@ -35,7 +35,7 @@ impl PocoReafRuntime {
 
     /// Executes the compiled UMC IR within the POCO-REAF environment.
     pub fn execute(&mut self, program_ir: UMCIR) -> Result<(), String> {
-        println!("Executing Zenith program on POCO-REAF Runtime...");
+        println!("Executing Zamani program on POCO-REAF Runtime...");
 
         // Load the program into memory
         let entry_point = self.memory_manager.load_program(program_ir)?;
@@ -68,8 +68,8 @@ pub mod quantum_execution { pub struct QuantumProcessor; impl QuantumProcessor {
 pub mod nano_orchestrator { pub struct NanoOrchestrator; impl NanoOrchestrator { pub fn new() -> Self { NanoOrchestrator } } }
 pub mod effects { pub struct EffectDispatcher; impl EffectDispatcher { pub fn new() -> Self { EffectDispatcher } pub fn dispatch(&mut self, _effect: &str) {} } }
 
-/// Initialise the Zenith runtime environment.
+/// Initialise the Zamani runtime environment.
 /// Called once at compiler startup.
 pub fn init_runtime() {
-    println!("[Runtime] Zenith Universal Runtime initialised.");
+    println!("[Runtime] Zamani Universal Runtime initialised.");
 }

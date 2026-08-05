@@ -1,4 +1,4 @@
-//! Zenith UMC Nimbus OS Microkernel Core Definitions
+//! Zamani UMC Nimbus OS Microkernel Core Definitions
 //!
 //! This module contains the foundational definitions for the Nimbus Operating
 //! System's microkernel, including its core components for secure isolation,

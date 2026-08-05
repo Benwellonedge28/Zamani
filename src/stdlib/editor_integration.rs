@@ -1,13 +1,13 @@
-//! Zenith Standard Library: Editor Integration Interfaces
+//! Zamani Standard Library: Editor Integration Interfaces
 //!
 //! This module defines common interfaces and data structures used for seamless
-//! integration between Zenith applications/runtime and editor toolchains (LSP,
-//! DAP). It ensures that complex, advanced Zenith features are visible and
+//! integration between Zamani applications/runtime and editor toolchains (LSP,
+//! DAP). It ensures that complex, advanced Zamani features are visible and
 //! interactable directly within the developer's environment.
 //!
 //! These interfaces facilitate:
 //! - Custom diagnostics and warnings beyond standard language errors.
-//! - Rich inline information for Zenith's unique types (const generics, linear types).
+//! - Rich inline information for Zamani's unique types (const generics, linear types).
 //! - Interactive previews of specialized backend DSLs (Video, Graphics, Quantum circuits).
 //! - User commands for triggering toolchain actions (e.g., running property tests).
 
@@ -23,7 +23,7 @@ pub struct EditorDiagnostic {
     pub message: String,
     pub range: EditorRange,
     pub code: Option<String>,
-    pub source: String,          // e.g., "zenithc", "zenith-test", "zenith-lsp"
+    pub source: String,          // e.g., "zamanic", "zamani-test", "zamani-lsp"
     pub data: Option<MetaValue>, // Additional structured data for advanced diagnostics
 }
 
@@ -45,7 +45,7 @@ pub struct EditorPosition {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EditorCommand {
     pub title: String,
-    pub command_id: String, // Unique ID for the command (e.g., "zenith.runProperty")
+    pub command_id: String, // Unique ID for the command (e.g., "zamani.runProperty")
     pub arguments: List<MetaValue>, // Arguments for the command
 }
 
@@ -78,10 +78,10 @@ impl CustomEditorDisplay {
 
 /// Initializes the Editor Integration module.
 pub fn init_editor_integration() {
-    println!("  - Initializing Zenith StdLib Editor Integration Interfaces...");
+    println!("  - Initializing Zamani StdLib Editor Integration Interfaces...");
 }
 
 /// Shuts down the Editor Integration module.
 pub fn shutdown_editor_integration() {
-    println!("  - Shutting down Zenith StdLib Editor Integration Interfaces...");
+    println!("  - Shutting down Zamani StdLib Editor Integration Interfaces...");
 }

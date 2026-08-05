@@ -1,8 +1,8 @@
-# Zenith Runtime Specification
+# Zamani Runtime Specification
 
 ## Overview
 
-The Zenith Universal Trinity Runtime (ZUTR) supports three execution modes: native binary, WASM, and interpreted VM.
+The Zamani Universal Trinity Runtime (ZUTR) supports three execution modes: native binary, WASM, and interpreted VM.
 
 ## Runtime Layers
 
@@ -27,4 +27,4 @@ The Zenith Universal Trinity Runtime (ZUTR) supports three execution modes: nati
 
 - `native` — x86_64, ARM64
 - `wasm32-unknown-unknown` — WebAssembly
-- `zenith-vm` — interpreted mode for tooling/REPL
+- `zamani-vm` — interpreted mode for tooling/REPL

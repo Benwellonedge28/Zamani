@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Strategic Goal Management
+//! Zamani stdlib — Omniversal Strategic Goal Management
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]

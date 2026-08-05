@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Alignment Orchestration & Global Immutable Nexus (OAOGIN)
+//! Zamani stdlib — Omniversal Alignment Orchestration & Global Immutable Nexus (OAOGIN)
 use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct NexusRecord {

@@ -1,4 +1,4 @@
-# Zenith Standard Library Specification
+# Zamani Standard Library Specification
 
 ## Core Modules
 

@@ -1,33 +1,33 @@
 [package]
-name = "zenith"
+name = "zamani"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.70"
 authors = ["Samuel Mukandara <samuelmukandara@gmail.com>"]
-description = "Zenith: The Omniversal AGI Language & Operating Intelligence"
-repository = "https://github.com/Benwellonedge28/Zenith"
+description = "Zamani: The Omniversal AGI Language & Operating Intelligence"
+repository = "https://github.com/Benwellonedge28/Zamani"
 categories = ["compilers", "development-tools", "command-line-utilities"]
-keywords = ["compiler", "programming-language", "agi", "zenith", "zutc"]
-homepage = "https://github.com/Benwellonedge28/Zenith"
+keywords = ["compiler", "programming-language", "agi", "zamani", "zutc"]
+homepage = "https://github.com/Benwellonedge28/Zamani"
 license = "Apache-2.0 OR MIT"
 readme = "README.md"
 
 [[bin]]
-name = "zenith"
+name = "zamani"
 path = "src/main.rs"
 
 [[bin]]
-name = "zenith-lsp"
-path = "src/bin/zenith_lsp_main.rs"
+name = "zamani-lsp"
+path = "src/bin/zamani_lsp_main.rs"
 required-features = ["lsp"]
 
 [[bin]]
-name = "zenith-pkg"
-path = "src/bin/zenith_pkg_main.rs"
+name = "zamani-pkg"
+path = "src/bin/zamani_pkg_main.rs"
 required-features = ["buildsystem"]
 
 [lib]
-name = "zenith_compiler"
+name = "zamani_compiler"
 path = "src/lib.rs"
 
 

@@ -1,4 +1,4 @@
-name: Release — Zenith Compiler
+name: Release — Zamani Compiler
 
 on:
   push:
@@ -53,20 +53,20 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: zenith-linux-x86_64
+            artifact: zamani-linux-x86_64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact: zenith-linux-arm64
+            artifact: zamani-linux-arm64
             cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: zenith-macos-x86_64
+            artifact: zamani-macos-x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: zenith-macos-arm64
+            artifact: zamani-macos-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: zenith-windows-x86_64.exe
+            artifact: zamani-windows-x86_64.exe
     steps:
       - uses: actions/checkout@v4
 
@@ -95,17 +95,17 @@ jobs:
 
       - name: Strip binary (Linux/macOS)
         if: runner.os != 'Windows'
-        run: strip target/${{ matrix.target }}/release/zenith || true
+        run: strip target/${{ matrix.target }}/release/zamani || true
 
       - name: Package artifact
         shell: bash
         run: |
           mkdir -p dist
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp target/${{ matrix.target }}/release/zenith.exe dist/${{ matrix.artifact }}
+            cp target/${{ matrix.target }}/release/zamani.exe dist/${{ matrix.artifact }}
           else
-            cp target/${{ matrix.target }}/release/zenith dist/${{ matrix.artifact }} 2>/dev/null || \
-            cp target/${{ matrix.target }}/release/libzenith_compiler.rlib dist/${{ matrix.artifact }}.rlib 2>/dev/null || true
+            cp target/${{ matrix.target }}/release/zamani dist/${{ matrix.artifact }} 2>/dev/null || \
+            cp target/${{ matrix.target }}/release/libzamani_compiler.rlib dist/${{ matrix.artifact }}.rlib 2>/dev/null || true
           fi
           ls -la dist/
 
@@ -151,7 +151,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name || github.event.inputs.tag }}
-          name: "Zenith ${{ needs.validate.outputs.version }}"
+          name: "Zamani ${{ needs.validate.outputs.version }}"
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: ${{ contains(needs.validate.outputs.version, '-') }}

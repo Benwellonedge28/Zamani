@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Hyper-Evolution — meta-level compiler self-improvement engine.
+//! Zamani Hyper-Evolution — meta-level compiler self-improvement engine.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

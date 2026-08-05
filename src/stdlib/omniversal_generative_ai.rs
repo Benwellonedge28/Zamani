@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Generative AI Engine
+//! Zamani stdlib — Omniversal Generative AI Engine
 
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
@@ -66,7 +66,7 @@ impl GenAiEngine {
         let harm = req.prompt.to_lowercase().contains("harm");
         GenOutput {
             content: format!(
-                "[Zenith GenAI: {}]",
+                "[Zamani GenAI: {}]",
                 &req.prompt[..req.prompt.len().min(40)]
             ),
             tokens_used: req.max_tokens / 2,

@@ -1,7 +1,7 @@
-//! Zenith Standard Library: File System Module
+//! Zamani Standard Library: File System Module
 //!
 //! This module provides conceptual APIs for interacting with the underlying file system,
-//! enabling Zenith programs to perform file and directory operations securely.
+//! enabling Zamani programs to perform file and directory operations securely.
 //! All file system access is mediated by Nimbus OS's security policies and capabilities.
 
 use crate::ast::Identifier; // For file/path names

@@ -1,12 +1,12 @@
-//! Zenith Standard Library: Time and Date Module
+//! Zamani Standard Library: Time and Date Module
 //!
 //! This module provides conceptual APIs for handling time, dates, and durations
-//! in Zenith programs. It supports various time representations, time zone
+//! in Zamani programs. It supports various time representations, time zone
 //! awareness, and precise temporal synchronization, leveraging Nimbus OS's
 //! Multi-Timeline System (MTS) for advanced temporal consistency.
 
 use crate::ast::Identifier; // For time zone IDs
-use crate::core_lang_primitives::TimeStamp; // Zenith's core TimeStamp
+use crate::core_lang_primitives::TimeStamp; // Zamani's core TimeStamp
 use crate::source_map::Span;
 use std::collections::HashMap; // For time zone rules // For dummy Identifier
 

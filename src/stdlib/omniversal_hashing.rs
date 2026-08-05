@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Hashing (quantum-resistant & classical)
+//! Zamani stdlib — Omniversal Hashing (quantum-resistant & classical)
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HashAlgorithm {

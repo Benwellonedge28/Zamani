@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut)]
 
-//! Zenith Runtime: Sankofa - Omniversal Knowledge Fabric Module
+//! Zamani Runtime: Sankofa - Omniversal Knowledge Fabric Module
 //!
 //! This module elevates Sankofa to be a truly Omniversal, Hyper-Dimensional
 //! Knowledge Fabric. It provides a living, evolving, and self-organizing
@@ -13,7 +13,7 @@
 //! data sovereignty.
 
 use crate::ast::Identifier; // For concept IDs, entity IDs, event IDs
-use crate::stdlib::core::Result; // Zenith Result type
+use crate::stdlib::core::Result; // Zamani Result type
 use crate::stdlib::collections::{List, Map, HashSet, Option}; // For managing the graph, caches
 use crate::stdlib::ml::{Model, Tensor}; // For knowledge embedding, relationship extraction
 use crate::stdlib::ai_reasoning::{Planner, Fact, FactObject, CausalEngine}; // For reasoning over the fabric, causality discovery

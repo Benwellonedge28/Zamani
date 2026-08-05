@@ -1,15 +1,15 @@
-//! Zenith Universal Meta-Compiler (UMC) Project Configuration
+//! Zamani Universal Meta-Compiler (UMC) Project Configuration
 //!
 //! This module defines the data structures for parsing and representing
-//! the `Zenith.toml` project manifest file. This manifest is central
-//! to how `zenith-pkg` and the Zenith compiler understand and manage
+//! the `Zamani.toml` project manifest file. This manifest is central
+//! to how `zamani-pkg` and the Zamani compiler understand and manage
 //! projects, their dependencies, build configurations, and deployment strategies.
 
 use std::collections::HashMap;
 
-/// Represents the parsed content of a `Zenith.toml` file.
+/// Represents the parsed content of a `Zamani.toml` file.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ZenithToml {
+pub struct ZamaniToml {
     pub package: PackageSection,
     pub dependencies: HashMap<String, DependencyConfig>,
     // Extend with other sections as needed:
@@ -20,7 +20,7 @@ pub struct ZenithToml {
     // pub sankofa_memory: SankofaMemorySection,
 }
 
-/// Represents the `[package]` section in `Zenith.toml`.
+/// Represents the `[package]` section in `Zamani.toml`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PackageSection {
     pub name: String,
@@ -42,20 +42,20 @@ pub struct DependencyConfig {
     pub features: Option<Vec<String>>, // Optional features to enable for this dependency
 }
 
-impl ZenithToml {
-    /// Parses a real `Zenith.toml` manifest string into a `ZenithToml` struct.
+impl ZamaniToml {
+    /// Parses a real `Zamani.toml` manifest string into a `ZamaniToml` struct.
     ///
     /// This performs an actual TOML parse (via the `toml` crate) of the
     /// `[package]` and `[dependencies]` tables rather than returning a fixed
-    /// example — any valid Zenith.toml manifest works, not just the sample
+    /// example — any valid Zamani.toml manifest works, not just the sample
     /// shipped at the repo root.
     pub fn parse_from_str(content: &str) -> Result<Self, String> {
         let doc: toml::Value =
-            toml::from_str(content).map_err(|e| format!("Zenith.toml parse error: {e}"))?;
+            toml::from_str(content).map_err(|e| format!("Zamani.toml parse error: {e}"))?;
 
         let pkg = doc
             .get("package")
-            .ok_or_else(|| "Zenith.toml missing [package] table".to_string())?;
+            .ok_or_else(|| "Zamani.toml missing [package] table".to_string())?;
 
         let as_str = |v: &toml::Value| v.as_str().unwrap_or_default().to_string();
         let opt_str = |v: Option<&toml::Value>| v.and_then(|v| v.as_str()).map(|s| s.to_string());
@@ -107,7 +107,7 @@ impl ZenithToml {
             }
         }
 
-        Ok(ZenithToml {
+        Ok(ZamaniToml {
             package,
             dependencies,
         })

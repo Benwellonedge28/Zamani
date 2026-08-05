@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Advanced Data Structures
+//! Zamani stdlib — Omniversal Advanced Data Structures
 use std::collections::{BTreeMap, HashSet};
 
 #[derive(Debug, Clone)]

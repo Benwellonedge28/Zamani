@@ -7,20 +7,20 @@
     unused_comparisons
 )]
 
-//! Zenith Compiler Pipeline — End-to-End Integration Tests
+//! Zamani Compiler Pipeline — End-to-End Integration Tests
 //!
 //! Tests the full pipeline: source → lex → parse → semantic → IR → optimize → codegen.
 
 use std::sync::Arc;
-use zenith_compiler::backend::{Backend, CodeGenerator, LlvmIrBackend};
-use zenith_compiler::compiler_types::{CompilationTarget, CompilerConfig, OptimizationLevel};
-use zenith_compiler::ir_gen::IrGenerator;
-use zenith_compiler::lexer::Lexer;
-use zenith_compiler::optimizer::Optimizer;
-use zenith_compiler::parser::Parser;
-use zenith_compiler::semantic::SemanticAnalyzer;
-use zenith_compiler::source_map::{FileId, SourceFile};
-use zenith_compiler::{compile, initialize_runtime, VERSION};
+use zamani_compiler::backend::{Backend, CodeGenerator, LlvmIrBackend};
+use zamani_compiler::compiler_types::{CompilationTarget, CompilerConfig, OptimizationLevel};
+use zamani_compiler::ir_gen::IrGenerator;
+use zamani_compiler::lexer::Lexer;
+use zamani_compiler::optimizer::Optimizer;
+use zamani_compiler::parser::Parser;
+use zamani_compiler::semantic::SemanticAnalyzer;
+use zamani_compiler::source_map::{FileId, SourceFile};
+use zamani_compiler::{compile, initialize_runtime, VERSION};
 
 fn full_pipeline(source: &str) -> Result<String, Vec<String>> {
     compile(source).map(|module| {
@@ -177,7 +177,7 @@ fn test_function_decl_produces_named_function_in_ir() {
 #[test]
 fn test_optimize_then_codegen() {
     let module = compile("let r = 3 + 4;").unwrap();
-    let mut opt = Optimizer::new(zenith_compiler::optimizer::OptimizationConfig::default());
+    let mut opt = Optimizer::new(zamani_compiler::optimizer::OptimizationConfig::default());
     let optimized = opt.optimize(&module);
     let out = LlvmIrBackend.generate(&optimized).unwrap();
     assert!(
@@ -189,7 +189,7 @@ fn test_optimize_then_codegen() {
 #[test]
 fn test_constant_folding_in_pipeline() {
     let module = compile("let a = 6 * 7; let b = a + 1;").unwrap();
-    let mut opt = Optimizer::new(zenith_compiler::optimizer::OptimizationConfig::default());
+    let mut opt = Optimizer::new(zamani_compiler::optimizer::OptimizationConfig::default());
     opt.optimize(&module);
     // 6*7 should be folded to 42
     assert!(

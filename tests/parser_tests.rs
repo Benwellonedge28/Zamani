@@ -7,13 +7,13 @@
     unused_comparisons
 )]
 
-//! Zenith Parser — Comprehensive Integration Tests
+//! Zamani Parser — Comprehensive Integration Tests
 
 use std::sync::Arc;
-use zenith_compiler::ast::{Expression, Literal, Program, Statement};
-use zenith_compiler::lexer::{Lexer, TokenType};
-use zenith_compiler::parser::Parser;
-use zenith_compiler::source_map::{FileId, SourceFile};
+use zamani_compiler::ast::{Expression, Literal, Program, Statement};
+use zamani_compiler::lexer::{Lexer, TokenType};
+use zamani_compiler::parser::Parser;
+use zamani_compiler::source_map::{FileId, SourceFile};
 
 fn make_parser(source: &str) -> Parser {
     let sf = Arc::new(SourceFile::new("<test>".to_string(), source.to_string()));
@@ -210,7 +210,7 @@ fn test_parse_break_continue() {
     assert!(matches!(prog.statements[1], Statement::Continue(_)));
 }
 
-// ── Zenith-specific ───────────────────────────────────────────────────────────
+// ── Zamani-specific ───────────────────────────────────────────────────────────
 
 #[test]
 fn test_parse_quantum_circuit() {

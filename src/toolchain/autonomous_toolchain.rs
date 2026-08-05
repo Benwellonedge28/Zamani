@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Autonomous Toolchain — self-evolving build and packaging system.
+//! Zamani Autonomous Toolchain — self-evolving build and packaging system.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]

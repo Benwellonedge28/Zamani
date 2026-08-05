@@ -1,8 +1,8 @@
-//! Zenith Standard Library: Meta-Operations Module
+//! Zamani Standard Library: Meta-Operations Module
 //!
 //! This module provides conceptual APIs for performing advanced meta-operations
-//! within Zenith, such as dynamic invocation, cross-paradigm transcoding, and
-//! runtime behavior overriding. These operations are fundamental to Zenith's
+//! within Zamani, such as dynamic invocation, cross-paradigm transcoding, and
+//! runtime behavior overriding. These operations are fundamental to Zamani's
 //! meta-compilation capabilities, self-evolution, and heterogeneous system orchestration.
 //!
 //! Inspired by concepts like QUEEN's INVOKE, TRANSCODE, and OVERRIDE, this module
@@ -55,7 +55,7 @@ impl MetaOperations {
     }
 
     /// Transcodes data, code, or a component from one representation to another.
-    /// This is a core Zenith meta-compilation feature, enabling cross-paradigm translation.
+    /// This is a core Zamani meta-compilation feature, enabling cross-paradigm translation.
     /// Analogous to QUEEN's 'TRANSCODE'.
     pub fn transcode(
         source: TranscodeSource,
@@ -127,7 +127,7 @@ impl MetaOperations {
         Ok(())
     }
 
-    /// Reflects on the Zenith compiler's internal structure, returning a map
+    /// Reflects on the Zamani compiler's internal structure, returning a map
     /// of component names to their descriptions. Used by the documentation system.
     pub fn reflect_compiler_structure() -> Result<Map<String, MetaValue>, String> {
         println!("[StdLib::MetaOps] Reflecting on compiler structure...");
@@ -194,9 +194,9 @@ pub enum MetaValue {
 pub enum TranscodeSource {
     SourceCode(String, Identifier),       // Code string, language ID
     CompiledBinary(List<u8>, Identifier), // Binary data, target architecture ID
-    DataStructure(MetaValue, Identifier), // Zenith data structure, schema ID
+    DataStructure(MetaValue, Identifier), // Zamani data structure, schema ID
     HdlDescription(String, Identifier),   // HDL code, HDL dialect ID
-    IrRepresentation(List<IrInstruction>, Identifier), // Zenith IR, IR version ID
+    IrRepresentation(List<IrInstruction>, Identifier), // Zamani IR, IR version ID
 }
 
 /// Represents the target format or type for a transcoding operation.
@@ -226,7 +226,7 @@ pub enum TranscodedOutput {
 /// Represents a patch or new implementation for an override operation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum OverridePatch {
-    ZenithCode(String), // New Zenith source code for the overridden function/module
+    ZamaniCode(String), // New Zamani source code for the overridden function/module
     CompiledBinary(List<u8>), // Pre-compiled binary patch
     IrPatch(List<IrInstruction>), // Patch at the Intermediate Representation level
     HdlPatch(String),   // New HDL description for a hardware component

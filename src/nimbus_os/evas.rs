@@ -1,9 +1,9 @@
-//! Zenith UMC Nimbus OS: E.V.A.S. Filter
+//! Zamani UMC Nimbus OS: E.V.A.S. Filter
 //!
 //! This module defines the conceptual Ethical, Verifiable, Autonomous, Secure (E.V.A.S.) Filter.
 //! E.V.A.S. is an AI-driven, continuously learning ethical and safety safeguard that operates
 //! within the Nimbus OS microkernel. Its purpose is to monitor, evaluate, and mediate the
-//! actions of autonomous Zenith programs and nano-agents to ensure they adhere to predefined
+//! actions of autonomous Zamani programs and nano-agents to ensure they adhere to predefined
 //! ethical guidelines and safety protocols, providing a crucial layer of trusted autonomy.
 
 use crate::core_lang_primitives::TimeStamp;

@@ -1,4 +1,4 @@
-//! Zenith Parser — Full recursive-descent / Pratt implementation
+//! Zamani Parser — Full recursive-descent / Pratt implementation
 //! Covers: let/const/fn/struct/enum/trait/impl/class/interface/
 //!         module/import/use/while/for/match/if/block/closure/
 //!         async/await/spawn/try/try-catch/quantum/nano/sankofa/
@@ -901,7 +901,7 @@ impl Parser {
         ))
     }
 
-    // ── Zenith-specific statements ────────────────────────────────────────────
+    // ── Zamani-specific statements ────────────────────────────────────────────
     fn parse_quantum_circuit(&mut self) -> Option<Statement> {
         let span = self.advance().span;
         // Support both `quantum circuit Name { ... }` and `circuit Name { ... }`

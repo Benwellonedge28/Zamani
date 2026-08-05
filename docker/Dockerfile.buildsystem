@@ -1,5 +1,5 @@
-# ── Zenith Build System / Package Manager (zenith-pkg) ───────────────────────
-# Status: WORKING. Builds with `--features buildsystem`. Real Zenith.toml
+# ── Zamani Build System / Package Manager (zamani-pkg) ───────────────────────
+# Status: WORKING. Builds with `--features buildsystem`. Real Zamani.toml
 # TOML parsing + dependency-graph resolution. Registry fetch/publish and
 # multi-target codegen invocation are still simulated (logged as such) since
 # there's no real package registry or full multi-target backend yet.
@@ -13,15 +13,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libs
 COPY Cargo.toml Cargo.lock ./
 COPY benches ./benches
 COPY src ./src
-RUN cargo build --release --features buildsystem --bin zenith-pkg
+RUN cargo build --release --features buildsystem --bin zamani-pkg
 
 FROM debian:bookworm-slim AS runtime
-LABEL org.opencontainers.image.title="Zenith Build System (zenith-pkg)"
-LABEL org.opencontainers.image.description="Zenith.toml manifest parsing, dependency resolution, build orchestration"
-LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zenith"
+LABEL org.opencontainers.image.title="Zamani Build System (zamani-pkg)"
+LABEL org.opencontainers.image.description="Zamani.toml manifest parsing, dependency resolution, build orchestration"
+LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zamani"
 LABEL org.opencontainers.image.version="${VERSION}"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && apt-get clean
 WORKDIR /project
-COPY --from=builder /app/target/release/zenith-pkg /usr/local/bin/zenith-pkg
-ENTRYPOINT ["/usr/local/bin/zenith-pkg"]
+COPY --from=builder /app/target/release/zamani-pkg /usr/local/bin/zamani-pkg
+ENTRYPOINT ["/usr/local/bin/zamani-pkg"]
 CMD ["build"]

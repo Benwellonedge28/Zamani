@@ -1,5 +1,5 @@
 
-//! Zenith Standard Library: Cryptography Module
+//! Zamani Standard Library: Cryptography Module
 //!
 //! This module provides conceptual APIs for various cryptographic operations,
 //! including symmetric and asymmetric encryption, hashing, digital signatures,

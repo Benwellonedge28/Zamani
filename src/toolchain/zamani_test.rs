@@ -1,11 +1,11 @@
-//! Zenith Toolchain: Zenith Test Runner (`zenith-test`)
+//! Zamani Toolchain: Zamani Test Runner (`zamani-test`)
 //!
-//! This module defines the standalone `zenith-test` tool, responsible for running
-//! various tiers of tests (fast, full, fuzzing) for Zenith applications.
-//! It operates asynchronously from the main `zenithc` compiler to maintain fast
+//! This module defines the standalone `zamani-test` tool, responsible for running
+//! various tiers of tests (fast, full, fuzzing) for Zamani applications.
+//! It operates asynchronously from the main `zamanic` compiler to maintain fast
 //! compilation times while providing comprehensive verification capabilities.
 //!
-//! `zenith-test` reads bytecode and test metadata emitted by `zenithc` to generate
+//! `zamani-test` reads bytecode and test metadata emitted by `zamanic` to generate
 //! and execute tests, ensuring that the actual compiled code meets specified
 //! properties, contracts, and safety guarantees across different backends (LLVM,
 //! WASM, Quantum simulators, etc.).
@@ -18,12 +18,12 @@
 //! - **Fuzz Testing:** Performs coverage-guided fuzzing for `#[fuzz]`-annotated functions.
 //! - **Post-Compile Verification:** Tests the actual compiled bytecode/binary, catching
 //!   backend-specific issues.
-//! - **Metadata-Driven:** Relies on test metadata embedded by `zenithc` during compilation
+//! - **Metadata-Driven:** Relies on test metadata embedded by `zamanic` during compilation
 //!   to avoid re-parsing and re-typechecking.
-//! - **Daemon Mode (`zenith-testd`):** Optionally runs as a resident daemon for faster
+//! - **Daemon Mode (`zamani-testd`):** Optionally runs as a resident daemon for faster
 //!   test execution in IDEs/editors.
 
-use self::runtime::vm::ZenithVM; // Or an IR interpreter
+use self::runtime::vm::ZamaniVM; // Or an IR interpreter
 use self::toolchain::build_orchestrator::BuildOptions;
 use crate::ast::Identifier;
 use crate::compiler::test_metadata::{FuzzTestInfo, PropertyTestInfo, TestMetadata, TestScope};
@@ -31,26 +31,26 @@ use crate::source_map::Span;
 use crate::stdlib::collections::{List, Map};
 use crate::stdlib::meta_ops::MetaValue;
 
-pub struct ZenithTestRunner {
-    pub vm: ZenithVM, // For executing bytecode/IR
+pub struct ZamaniTestRunner {
+    pub vm: ZamaniVM, // For executing bytecode/IR
 }
 
-impl ZenithTestRunner {
+impl ZamaniTestRunner {
     pub fn new() -> Self {
-        ZenithTestRunner {
-            vm: ZenithVM::new(),
+        ZamaniTestRunner {
+            vm: ZamaniVM::new(),
         }
     }
 
     /// Runs fast, lightweight property and contract checks.
-    /// Typically executed in an editor's LSP on save, or by `zenith build` asynchronously.
+    /// Typically executed in an editor's LSP on save, or by `zamani build` asynchronously.
     pub fn run_fast_tests(
         &mut self,
         bytecode_path: String,
         metadata: TestMetadata,
     ) -> Result<TestReport, String> {
         println!(
-            "[zenith-test::fast] Running fast tests for {}...",
+            "[zamani-test::fast] Running fast tests for {}...",
             bytecode_path
         );
         let mut report = TestReport::new();
@@ -68,7 +68,7 @@ impl ZenithTestRunner {
     }
 
     /// Runs full, exhaustive property, fuzz, and cross-backend tests.
-    /// Typically executed in CI or with `zenith build --full-tests`.
+    /// Typically executed in CI or with `zamani build --full-tests`.
     pub fn run_full_tests(
         &mut self,
         bytecode_path: String,
@@ -76,7 +76,7 @@ impl ZenithTestRunner {
         options: &BuildOptions,
     ) -> Result<TestReport, String> {
         println!(
-            "[zenith-test::full] Running full tests for {}...",
+            "[zamani-test::full] Running full tests for {}...",
             bytecode_path
         );
         let mut report = TestReport::new();
@@ -94,7 +94,7 @@ impl ZenithTestRunner {
         // If options include cross-backend testing, execute tests on different VMs/targets
         if options.enable_cross_backend_tests {
             // e.g., run tests on WASM target, then quantum simulator target
-            println!("[zenith-test::full] Running cross-backend tests...");
+            println!("[zamani-test::full] Running cross-backend tests...");
             // ... simulate running tests on different VM instances/backends ...
         }
 
@@ -109,7 +109,7 @@ impl ZenithTestRunner {
         iterations: u32,
     ) -> Result<SingleTestResult, String> {
         println!(
-            "[zenith-test::property] Running property: {} ({} iterations).",
+            "[zamani-test::property] Running property: {} ({} iterations).",
             prop_info.name.0, iterations
         );
         // Simulate input generation, VM execution, and assertion check
@@ -130,7 +130,7 @@ impl ZenithTestRunner {
         iterations: u32,
     ) -> Result<SingleTestResult, String> {
         println!(
-            "[zenith-test::fuzz] Running fuzz test: {} ({} iterations).",
+            "[zamani-test::fuzz] Running fuzz test: {} ({} iterations).",
             fuzz_info.name.0, iterations
         );
         // Simulate input generation, VM execution, and crash detection
@@ -144,14 +144,14 @@ impl ZenithTestRunner {
     }
 }
 
-pub struct ZenithTestDaemon;
-impl ZenithTestDaemon {
+pub struct ZamaniTestDaemon;
+impl ZamaniTestDaemon {
     pub fn new() -> Self {
-        ZenithTestDaemon {}
+        ZamaniTestDaemon {}
     }
     pub fn start(&self) -> Result<(), String> {
-        println!("Starting zenith-testd daemon...");
-        // This daemon would listen for build events/requests from `zenith build`
+        println!("Starting zamani-testd daemon...");
+        // This daemon would listen for build events/requests from `zamani build`
         // and orchestrate the `run_fast_tests` and `run_full_tests` calls asynchronously.
         Ok(())
     }
@@ -205,7 +205,7 @@ impl TestInputGenerator {
             "[TestInputGen] Generating inputs for signature: {}",
             signature
         );
-        // Uses Zenith's type system and metadata to generate diverse inputs.
+        // Uses Zamani's type system and metadata to generate diverse inputs.
         // For `MGNS::EncryptedPosition`, ensures opaque nature is respected.
         List::new()
     }
@@ -271,10 +271,10 @@ pub mod compiler {
 }
 pub mod runtime {
     pub mod vm {
-        pub struct ZenithVM;
-        impl ZenithVM {
+        pub struct ZamaniVM;
+        impl ZamaniVM {
             pub fn new() -> Self {
-                ZenithVM {}
+                ZamaniVM {}
             }
         }
     }

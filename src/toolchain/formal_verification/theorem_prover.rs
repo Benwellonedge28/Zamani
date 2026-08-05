@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Theorem Prover — automated proof of program properties.
+//! Zamani Theorem Prover — automated proof of program properties.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

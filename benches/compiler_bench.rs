@@ -1,4 +1,4 @@
-//! Zenith Compiler — Benchmark Suite
+//! Zamani Compiler — Benchmark Suite
 //!
 //! Run with: cargo bench
 
@@ -6,8 +6,8 @@ use std::hint::black_box;
 
 fn lex_simple(source: &str) {
     use std::sync::Arc;
-    use zenith_compiler::lexer::{Lexer, TokenType};
-    use zenith_compiler::source_map::{FileId, SourceFile};
+    use zamani_compiler::lexer::{Lexer, TokenType};
+    use zamani_compiler::source_map::{FileId, SourceFile};
     let sf = Arc::new(SourceFile::new("<bench>".to_string(), source.to_string()));
     let mut lex = Lexer::new(FileId::new(1), sf);
     loop {
@@ -20,7 +20,7 @@ fn lex_simple(source: &str) {
 
 fn parse_simple(source: &str) {
     use std::sync::Arc;
-    use zenith_compiler::{
+    use zamani_compiler::{
         lexer::Lexer,
         parser::Parser,
         source_map::{FileId, SourceFile},
@@ -32,7 +32,7 @@ fn parse_simple(source: &str) {
 }
 
 fn compile_full(source: &str) {
-    black_box(zenith_compiler::compile(source).ok());
+    black_box(zamani_compiler::compile(source).ok());
 }
 
 fn main() {

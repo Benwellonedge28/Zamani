@@ -1,5 +1,5 @@
 [package]
-name = "zenith-fuzz"
+name = "zamani-fuzz"
 version = "0.0.1"
 edition = "2021"
 publish = false
@@ -30,4 +30,4 @@ doc = false
 
 [dependencies]
 libfuzzer-sys = "0.4"
-zenith_compiler = { path = ".." }
+zamani_compiler = { path = ".." }

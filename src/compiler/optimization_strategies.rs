@@ -1,14 +1,14 @@
-//! Zenith Universal Meta-Compiler (UMC): Optimization Strategies Module
+//! Zamani Universal Meta-Compiler (UMC): Optimization Strategies Module
 //!
 //! This module defines and categorizes the exhaustive set of optimization
-//! strategies available within the Zenith UMC. Building upon the core
+//! strategies available within the Zamani UMC. Building upon the core
 //! `compiler::optimizer` and integrated with `compiler::compilation_techniques`,
 //! this module orchestrates low-level code transformations, high-level algorithmic
 //! improvements, and multi-paradigm-specific optimizations to achieve
 //! "infinity Advanced and secure infinitely and ready for production" performance
 //! across all target platforms.
 //!
-//! Zenith leverages AI-driven decision-making and ethical vetting (E.V.A.S.)
+//! Zamani leverages AI-driven decision-making and ethical vetting (E.V.A.S.)
 //! to intelligently select and apply these strategies, ensuring not only
 //! speed and efficiency but also security, resource integrity, and ethical compliance.
 
@@ -24,13 +24,13 @@ use crate::stdlib::ml::{IdentityModel, Model, Tensor}; // For AI-driven optimiza
 /// Initializes the Optimization Strategies module.
 pub fn init_optimization_strategies() {
     println!(
-        "  - Initializing Zenith Optimization Strategies (Comprehensive, Adaptive, Secure)..."
+        "  - Initializing Zamani Optimization Strategies (Comprehensive, Adaptive, Secure)..."
     );
 }
 
 /// Shuts down the Optimization Strategies module.
 pub fn shutdown_optimization_strategies() {
-    println!("  - Shutting down Zenith Optimization Strategies...");
+    println!("  - Shutting down Zamani Optimization Strategies...");
 }
 
 // -----------------------------------------------------------------------------
@@ -47,7 +47,7 @@ pub enum OptimizationCategory {
     RuntimeAdaptive,            // JIT / Dynamic optimization
     ArchitectureSpecific,       // CPU, GPU, QPU, NACU, HDL
     AlgorithmicDesign,          // High-level algorithm & data structure choices
-    ZenithMetaOptimization,     // AI-driven, self-evolutionary, E.V.A.S. guided
+    ZamaniMetaOptimization,     // AI-driven, self-evolutionary, E.V.A.S. guided
 }
 
 /// Represents a specific optimization pass or transformation.
@@ -175,7 +175,7 @@ impl OptimizationManager {
         Ok(ir) // Dummy
     }
 
-    /// Loads all known optimization passes from Zenith's knowledge base.
+    /// Loads all known optimization passes from Zamani's knowledge base.
     fn load_all_passes() -> List<OptimizationPass> {
         // Conceptual: This would load from a configuration or dynamic discovery.
         List::new() // Dummy

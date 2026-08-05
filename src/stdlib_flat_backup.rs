@@ -1,8 +1,8 @@
-//! Zenith Universal Trinity Standard Library (core)
+//! Zamani Universal Trinity Standard Library (core)
 //!
 //! This module serves as the main entry point and conceptual overview
-//! for the Zenith Universal Trinity Standard Library v2.0. It encompasses
-//! the core functionalities from Zenith, NIMBUS, and Sankofa, providing
+//! for the Zamani Universal Trinity Standard Library v2.0. It encompasses
+//! the core functionalities from Zamani, NIMBUS, and Sankofa, providing
 //! a unified and extensive set of modules for diverse programming paradigms
 //! and target platforms.
 
@@ -33,7 +33,7 @@ pub mod archaeve; // For historical data and wisdom
 pub mod effect_system;
 pub mod umc_interop;
 
-// Cognitive and AGI-related modules (from NIMBUS and Zenith)
+// Cognitive and AGI-related modules (from NIMBUS and Zamani)
 pub mod si_cognition;
 pub mod si_agency;
 pub mod si_security;
@@ -60,9 +60,9 @@ pub mod category_theory;
 // pub mod sankofa_wisdom;
 // ... (many more would be declared here)
 
-/// Initializes the Zenith Standard Library.
+/// Initializes the Zamani Standard Library.
 pub fn initialize_stdlib() {
-    println!("Zenith Universal Trinity Standard Library initialized.");
+    println!("Zamani Universal Trinity Standard Library initialized.");
     core::init();
     collections::init();
     // ... further initialization for all relevant modules

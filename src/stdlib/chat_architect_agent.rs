@@ -1,9 +1,9 @@
-//! Zenith Standard Library: Chat Architect Agent Module
+//! Zamani Standard Library: Chat Architect Agent Module
 //!
-//! This module provides the conceptual framework for Zenith's "Chat Architect Agent,"
+//! This module provides the conceptual framework for Zamani's "Chat Architect Agent,"
 //! an AGI interface that transforms natural language prompts into high-quality,
-//! production-ready Zenith code. It acts as the primary conversational entry point
-//! for Zenith's autonomous code generation capabilities.
+//! production-ready Zamani code. It acts as the primary conversational entry point
+//! for Zamani's autonomous code generation capabilities.
 //!
 //! Leveraging SIMD-like efficiency (applying a single high-level intent to multiple
 //! generation and verification tasks), this agent is designed to be "very extra super
@@ -24,7 +24,7 @@ use crate::stdlib::meta_ops::MetaValue; // Generic data for events
 use crate::stdlib::nlp::NaturalLanguageProcessor; // For NLP capabilities
 use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For proving generated code correctness
 use crate::toolchain::meta_programming::{
-    AutonomousCodeGenerator, MacroDefinition, SecureMetaProgramming, ZenithCodeSnippet,
+    AutonomousCodeGenerator, MacroDefinition, SecureMetaProgramming, ZamaniCodeSnippet,
 }; // For core code generation
 use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For adapting generation strategies // For Identifier creation
 
@@ -65,7 +65,7 @@ impl ChatArchitectAgent {
         }
     }
 
-    /// Processes a natural language prompt to generate, optimize, and verify Zenith code.
+    /// Processes a natural language prompt to generate, optimize, and verify Zamani code.
     /// This is the core "Chat-to-Code" pipeline, leveraging SIMD-like parallelism for tasks.
     /// [security: level = "critical", integrity_check = "self_attestation"] // High security for code generation
     /// [ethics: principles = "responsible_agi_design", bias_mitigation_level = "extreme"] // Ethical vetting of intent
@@ -84,7 +84,7 @@ impl ChatArchitectAgent {
             MetaValue::String(intent.to_string()),
         );
 
-        let goal = Fact::new(format!("generate_code_for_{}", intent), List::new()); // Convert intent to a Zenith Fact/Goal
+        let goal = Fact::new(format!("generate_code_for_{}", intent), List::new()); // Convert intent to a Zamani Fact/Goal
         let plan = self
             .planner
             .generate_plan(goal.clone(), constraints.clone())?; // Break down into actionable steps
@@ -235,7 +235,7 @@ impl ChatArchitectAgent {
 #[derive(Debug, Clone, PartialEq)]
 pub struct GeneratedCodeArtifact {
     pub prompt: String,
-    pub generated_code: Map<String, ZenithCodeSnippet>, // e.g., "core_logic", "unit_tests", "hdl_config"
+    pub generated_code: Map<String, ZamaniCodeSnippet>, // e.g., "core_logic", "unit_tests", "hdl_config"
     pub verification_summary: Map<String, MetaValue>, // Compilation status, formal proof results, test results
     pub initial_feedback: String,
     pub architecture_diagram: Option<String>, // Conceptual Mermaid code or image URL

@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Collections
+//! Zamani Standard Library: Collections
 //!
 //! This module defines fundamental collection data structures that are
-//! universally available in Zenith programs. These are paradigm-agnostic
+//! universally available in Zamani programs. These are paradigm-agnostic
 //! and provide common ways to store and manage groups of elements.
 
 use std::collections::HashMap; // For conceptual implementation

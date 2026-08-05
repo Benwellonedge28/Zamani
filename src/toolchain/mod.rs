@@ -1,7 +1,7 @@
-//! Zenith Universal Meta-Compiler (UMC) Toolchain Components
+//! Zamani Universal Meta-Compiler (UMC) Toolchain Components
 //!
 //! This module aggregates and manages all toolchain-related components
-//! for Zenith, including code generation, self-evolution, and hardware
+//! for Zamani, including code generation, self-evolution, and hardware
 //! description language (HDL) integration.
 
 // Components with dedicated, lighter-weight feature flags so they can be
@@ -12,7 +12,7 @@ pub mod build;
 #[cfg(any(feature = "buildsystem", feature = "full"))]
 pub mod package_manager;
 #[cfg(any(feature = "lsp", feature = "full"))]
-pub mod zenith_lsp;
+pub mod zamani_lsp;
 
 // Everything below is only wired in under the full aspirational build.
 #[cfg(feature = "full")]
@@ -36,21 +36,21 @@ pub mod meta_programming;
 #[cfg(feature = "full")]
 pub mod self_evolution;
 #[cfg(feature = "full")]
-pub mod zbe_connector;
+pub mod zamani_debug;
 #[cfg(feature = "full")]
-pub mod zenith_debug;
+pub mod zamani_test;
 #[cfg(feature = "full")]
-pub mod zenith_test; // Autonomous Code Generation // New: For 1,000,000x recursive self-improvement
+pub mod zbe_connector; // Autonomous Code Generation // New: For 1,000,000x recursive self-improvement
 
 /// Initializes all toolchain components.
 ///
 /// Components exposing free-standing `init_*`/`shutdown_*` functions are
 /// initialized here directly; components that model themselves as structs
-/// (e.g. `ZenithLsp::new()`, `AutonomousToolchain::new()`) are constructed
+/// (e.g. `ZamaniLsp::new()`, `AutonomousToolchain::new()`) are constructed
 /// by their own callers on demand instead, since they carry per-session
 /// state that doesn't belong in a single global instance.
 pub fn initialize_toolchain() {
-    println!("Initializing Zenith Toolchain...");
+    println!("Initializing Zamani Toolchain...");
     #[cfg(feature = "full")]
     {
         meta_programming::init_meta_programming();
@@ -65,12 +65,12 @@ pub fn initialize_toolchain() {
         build::init_build_system();
         package_manager::init_package_manager();
     }
-    println!("Zenith Toolchain initialized.");
+    println!("Zamani Toolchain initialized.");
 }
 
 /// Shuts down all toolchain components.
 pub fn shutdown_toolchain() {
-    println!("Shutting down Zenith Toolchain...");
+    println!("Shutting down Zamani Toolchain...");
     #[cfg(feature = "full")]
     {
         formal_verification::shutdown_formal_verification();
@@ -84,5 +84,5 @@ pub fn shutdown_toolchain() {
         package_manager::shutdown_package_manager();
         build::shutdown_build_system();
     }
-    println!("Zenith Toolchain shut down.");
+    println!("Zamani Toolchain shut down.");
 }

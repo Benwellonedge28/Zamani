@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Bio-Nano OS
+//! Zamani stdlib — Omniversal Bio-Nano OS
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BioSubstrate {

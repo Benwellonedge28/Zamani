@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Advanced Data Science & Mining (OADSM)
+//! Zamani stdlib — Omniversal Advanced Data Science & Mining (OADSM)
 use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Dataset {

@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Runtime Governance
+//! Zamani stdlib — Runtime Governance
 use std::collections::VecDeque;
 #[derive(Debug, Clone)]
 pub struct Policy {

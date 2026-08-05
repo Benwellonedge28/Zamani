@@ -1,6 +1,6 @@
-//! Zenith Runtime: Core Runtime Components
+//! Zamani Runtime: Core Runtime Components
 //!
-//! This module aggregates and manages the core runtime components for Zenith,
+//! This module aggregates and manages the core runtime components for Zamani,
 //! providing essential services for application execution, memory management,
 //! and concurrency.
 
@@ -19,7 +19,7 @@ pub mod universal_runtime; // Long-term memory and learning integration
 
 /// Initializes all runtime components.
 pub fn initialize_runtime() {
-    println!("Initializing Zenith Runtime...");
+    println!("Initializing Zamani Runtime...");
     memory_manager::init_memory_manager();
     debugger::init_debugger();
     quantum::init_quantum_lib();
@@ -32,12 +32,12 @@ pub fn initialize_runtime() {
     nimbus_os::init_nimbus_os_interface();
     nimbus_os_interface::init_nimbus_os_interface();
     universal_runtime::init_universal_runtime();
-    println!("Zenith Runtime initialized.");
+    println!("Zamani Runtime initialized.");
 }
 
 /// Shuts down all runtime components.
 pub fn shutdown_runtime() {
-    println!("Shutting down Zenith Runtime..."); // Shutdown Universal Runtime
+    println!("Shutting down Zamani Runtime..."); // Shutdown Universal Runtime
     sankofa::shutdown_sankofa_integration();
     mts::shutdown_mts_runtime();
     nano::shutdown_nano_runtime();
@@ -50,7 +50,7 @@ pub fn shutdown_runtime() {
     distributed::shutdown_distributed_runtime();
     core::shutdown_core_runtime();
     cloud_network_security::shutdown_cloud_network_security();
-    println!("Zenith Runtime shut down.");
+    println!("Zamani Runtime shut down.");
 }
 
 // ── merged from flat_backup ────
@@ -178,5 +178,5 @@ impl Default for PocoReafRuntime {
 }
 
 pub fn init_runtime() {
-    println!("[Runtime] Zenith Universal Runtime initialised.");
+    println!("[Runtime] Zamani Universal Runtime initialised.");
 }

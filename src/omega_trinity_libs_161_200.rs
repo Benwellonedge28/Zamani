@@ -1,8 +1,8 @@
-//! Zenith OMEGA Trinity Libraries 161-200
+//! Zamani OMEGA Trinity Libraries 161-200
 //! Models, Enums, Traits, and Async Runtimes for the Omniversal runtime.
 
 /// Placeholder module for OMEGA Trinity library components 161-200.
-/// These will be expanded as the Zenith stdlib grows.
+/// These will be expanded as the Zamani stdlib grows.
 
 pub mod omega_models {
     /// Represents a high-level cognitive model within the OMEGA framework.

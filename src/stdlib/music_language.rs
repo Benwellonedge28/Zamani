@@ -1,11 +1,11 @@
-//! Zenith Standard Library: Music as Language (MusLing) Module
+//! Zamani Standard Library: Music as Language (MusLing) Module
 //!
 //! This module formalizes music as a communicative and structured linguistic system.
 //! It treats musical patterns, performances, and instruments as "languages" with
 //! their own grammars, semantics, and cultural contexts.
 //!
-//! By integrating with Zenith's Advanced ONLP and Multidimensional engines,
-//! this module allows Zenith to:
+//! By integrating with Zamani's Advanced ONLP and Multidimensional engines,
+//! this module allows Zamani to:
 //! - Interpret musical performances as "speech" conveying intent and emotion.
 //! - Translate between musical "dialects" (styles, instruments, traditions).
 //! - "Think" in musical concepts natively via the Cognitive Musical Fabric.
@@ -32,12 +32,12 @@ use crate::stdlib::vision::MultiModalSensorData;
 
 /// Initializes the Music as Language (MusLing) module.
 pub fn init_music_language() {
-    println!("  - Initializing Zenith Music as Language Engine (MusLing)...");
+    println!("  - Initializing Zamani Music as Language Engine (MusLing)...");
 }
 
 /// Shuts down the Music as Language module.
 pub fn shutdown_music_language() {
-    println!("  - Shutting down Zenith Music as Language Engine...");
+    println!("  - Shutting down Zamani Music as Language Engine...");
 }
 
 // -----------------------------------------------------------------------------

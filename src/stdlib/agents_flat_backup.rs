@@ -1,8 +1,8 @@
 
-//! Zenith Standard Library: Agent Systems Module
+//! Zamani Standard Library: Agent Systems Module
 //!
 //! This module provides conceptual APIs for designing, building, and deploying
-//! autonomous, goal-oriented agents within Zenith. It integrates capabilities
+//! autonomous, goal-oriented agents within Zamani. It integrates capabilities
 //! from AI Reasoning, NLP, Vision, Robotics, and Multi-Paradigm runtimes
 //! to enable agents to perceive, decide, act, and learn in complex environments.
 

@@ -1,24 +1,24 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-//! Zenith Language Specification: Security & Ethics Attributes
+//! Zamani Language Specification: Security & Ethics Attributes
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
-//! security and ethics attributes within the Zenith programming language.
+//! security and ethics attributes within the Zamani programming language.
 //! These attributes (`#[safety]`, `#[security]`, `#[ethics]`, `#[governance]`)
 //! provide native language-level mechanisms to declare and enforce critical
 //! policies directly within the code, ensuring inherent security, ethical
 //! compliance, and responsible AGI development.
 //!
 //! Inspired by UBUNTU's `SAFETY`, `SECURITY`, `ETHICS`, `GOVERNANCE` constructs,
-//! these integrate directly with Zenith's Nimbus OS E.V.A.S. filter, formal
+//! these integrate directly with Zamani's Nimbus OS E.V.A.S. filter, formal
 //! verification engine, and cryptographic capabilities.
 
-use crate::ast::{Identifier, Statement}; // Zenith AST elements
+use crate::ast::{Identifier, Statement}; // Zamani AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
-use crate::ir_gen::{IrInstruction, IrRegister, IrType, IrValue}; // Zenith Intermediate Representation
+use crate::ir_gen::{IrInstruction, IrRegister, IrType, IrValue}; // Zamani Intermediate Representation
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For E.V.A.S. integration
 use crate::stdlib::collections::{List, Map};
-use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For formal verification integration // Zenith List type for policies
+use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof}; // For formal verification integration // Zamani List type for policies
 
 /// A key-value argument for a security/ethics attribute (e.g. `level="critical"`).
 #[derive(Debug, Clone, PartialEq)]
@@ -29,19 +29,19 @@ pub struct AttributeArgument {
 
 /// Initializes the Security & Ethics Attributes language specification.
 pub fn init_security_ethics_attributes() {
-    println!("    - Initializing Zenith Security & Ethics Attributes (#safety], #security], #ethics], #governance])...");
+    println!("    - Initializing Zamani Security & Ethics Attributes (#safety], #security], #ethics], #governance])...");
 }
 
 /// Shuts down the Security & Ethics Attributes language specification.
 pub fn shutdown_security_ethics_attributes() {
-    println!("    - Shutting down Zenith Security & Ethics Attributes...");
+    println!("    - Shutting down Zamani Security & Ethics Attributes...");
 }
 
 // -----------------------------------------------------------------------------
 // Conceptual Syntax and Semantics
 // -----------------------------------------------------------------------------
 
-/// Conceptual representation of Zenith's AST for Security & Ethics attributes.
+/// Conceptual representation of Zamani's AST for Security & Ethics attributes.
 /// These attributes would be attached to various language constructs (modules, classes, functions, fields).
 #[derive(Debug, Clone, PartialEq)]
 pub enum SecurityEthicsAttributeAst {

@@ -1,4 +1,4 @@
-# ── Zenith Standard Library ──────────────────────────────────────────────
+# ── Zamani Standard Library ──────────────────────────────────────────────
 # Status: NOT YET BUILDABLE. `src/stdlib/` (100+ modules: ml, ai_reasoning,
 # crypto, agents, math_foundations, network, ...) is aspirational scaffolding
 # gated behind the `full` cargo feature. It currently has the largest share

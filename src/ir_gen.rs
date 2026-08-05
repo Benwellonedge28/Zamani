@@ -1,4 +1,4 @@
-//! Zenith Intermediate Representation Generator
+//! Zamani Intermediate Representation Generator
 //!
 //! Translates the AST into a typed, SSA-like IR used by the optimizer
 //! and all code-generation backends.
@@ -218,7 +218,7 @@ pub enum IrInstruction {
     FpTrunc(IrRegister, IrValue, IrType),
     SIToFP(IrRegister, IrValue, IrType),
     FPToSI(IrRegister, IrValue, IrType),
-    // Zenith-specific
+    // Zamani-specific
     QuantumGate(IrRegister, String, Vec<IrValue>),
     NanoOp(IrRegister, String, Vec<IrValue>),
     SankofaRecall(IrRegister, IrValue),
@@ -610,7 +610,7 @@ impl IrModule {
 
     pub fn to_ir_string(&self) -> String {
         let mut out = String::new();
-        out.push_str(&format!("; Zenith LLVM IR — module: {}\n", self.name));
+        out.push_str(&format!("; Zamani LLVM IR — module: {}\n", self.name));
         out.push_str(&format!("target triple = \"{}\"\n", self.target_triple));
         out.push_str(&format!("target datalayout = \"{}\"\n\n", self.data_layout));
 
@@ -683,10 +683,10 @@ impl IrGenerator {
     }
 
     pub fn generate(&mut self, program: &Program) -> IrModule {
-        let mut module = IrModule::new("zenith_module");
+        let mut module = IrModule::new("zamani_module");
         // Add runtime externs
         let mut ext_print = IrFunction::new(
-            "zenith_println",
+            "zamani_println",
             vec![("s".into(), IrType::Ptr(Box::new(IrType::I8)))],
             IrType::Void,
         );
@@ -694,7 +694,7 @@ impl IrGenerator {
         module.add_function(ext_print);
 
         let mut main_fn = IrFunction::new("main", vec![], IrType::I32);
-        main_fn.push(IrInstruction::Comment("Zenith entry point".into()));
+        main_fn.push(IrInstruction::Comment("Zamani entry point".into()));
 
         for stmt in &program.statements {
             self.emit_statement(stmt, &mut main_fn, &mut module);
@@ -717,7 +717,7 @@ impl IrGenerator {
         //   - if the synthetic wrapper DOES carry real top-level
         //     statements (loose code outside of any function) as well as
         //     a user-defined `main`, keep both by renaming the synthetic
-        //     wrapper to `__zenith_start` rather than dropping code.
+        //     wrapper to `__zamani_start` rather than dropping code.
         let user_defined_main = module.functions.iter().any(|f| f.name == "main");
         let synthetic_is_empty = main_fn.body.len() <= 2; // entry comment + trailing ret
         if user_defined_main {
@@ -725,7 +725,7 @@ impl IrGenerator {
                 // Nothing of value in the synthetic wrapper; the user's
                 // own `main` is the entry point.
             } else {
-                main_fn.name = "__zenith_start".to_string();
+                main_fn.name = "__zamani_start".to_string();
                 module.add_function(main_fn);
             }
         } else {
@@ -995,7 +995,7 @@ impl IrGenerator {
                 if let Expression::Identifier(id) = callee.as_ref() {
                     let ret_reg = self.fresh_reg(IrType::I64);
                     if id.0 == "println" || id.0 == "print" {
-                        func.push(IrInstruction::Call(None, "zenith_println".into(), arg_vals));
+                        func.push(IrInstruction::Call(None, "zamani_println".into(), arg_vals));
                         return IrValue::Void;
                     }
                     func.push(IrInstruction::Call(

@@ -1,42 +1,42 @@
 // src/apps/UCO.zn
 // universal_cognitive_orchestrator
-// A Zenith AGI application for autonomous environmental monitoring and adaptive intervention.
+// A Zamani AGI application for autonomous environmental monitoring and adaptive intervention.
 
-// Import necessary Zenith Standard Library modules and Runtime interfaces
-extern Zenith.stdlib.core;
-extern Zenith.stdlib.collections;
-extern Zenith.stdlib.net;
-extern Zenith.stdlib.fs;
-extern Zenith.stdlib.ml;
-extern Zenith.stdlib.db;
-extern Zenith.stdlib.sync;
-extern Zenith.stdlib.time;
-extern Zenith.stdlib.numeric;
-extern Zenith.stdlib.serialize;
-extern Zenith.stdlib.gui;
-extern Zenith.runtime.quantum;
-extern Zenith.runtime.nano;
-extern Zenith.runtime.mts;
-extern Zenith.runtime.sankofa;
-extern Zenith.nimbus.os; // Direct Nimbus OS interaction for low-level control
-extern Zenith.toolchain.hdl; // For HDL related operations
-extern Zenith.stdlib.ai_reasoning; // For advanced AI reasoning, causal inference
-extern Zenith.stdlib.nlp; // For natural language processing
-extern Zenith.stdlib.vision; // For advanced computer vision
-extern Zenith.stdlib.agi_governance; // For malicious idea detection, user blocking, legal action
-extern Zenith.stdlib.human_agi_interaction; // For admin, feedback, payments, IP
-extern Zenith.stdlib.external_services; // For cloud and DevOps integration
-extern Zenith.stdlib.reality; // For VR/AR interaction
-extern Zenith.stdlib.distributed_ledger; // For blockchain integration
-extern Zenith.stdlib.iot; // For IoT device management
-extern Zenith.toolchain.meta_programming; // For autonomous code generation
-extern Zenith.toolchain.self_evolution; // For autonomous self-adjustment
-extern Zenith.stdlib.human_interface_devices; // For diverse human interaction (GUI, VCI, BCI)
-extern Zenith.stdlib.chat_architect_agent; // For conversational code synthesis
-extern Zenith.stdlib.documentation_system; // For autonomous, multi-modal documentation
-extern Zenith.stdlib.omniversal_simulation; // For simulating and sandboxing actions
-extern Zenith.stdlib.on_device_agents; // For deploying robust agents on edge devices
-extern Zenith.stdlib.resource_management; // For hyper-efficient resource & energy management
+// Import necessary Zamani Standard Library modules and Runtime interfaces
+extern Zamani.stdlib.core;
+extern Zamani.stdlib.collections;
+extern Zamani.stdlib.net;
+extern Zamani.stdlib.fs;
+extern Zamani.stdlib.ml;
+extern Zamani.stdlib.db;
+extern Zamani.stdlib.sync;
+extern Zamani.stdlib.time;
+extern Zamani.stdlib.numeric;
+extern Zamani.stdlib.serialize;
+extern Zamani.stdlib.gui;
+extern Zamani.runtime.quantum;
+extern Zamani.runtime.nano;
+extern Zamani.runtime.mts;
+extern Zamani.runtime.sankofa;
+extern Zamani.nimbus.os; // Direct Nimbus OS interaction for low-level control
+extern Zamani.toolchain.hdl; // For HDL related operations
+extern Zamani.stdlib.ai_reasoning; // For advanced AI reasoning, causal inference
+extern Zamani.stdlib.nlp; // For natural language processing
+extern Zamani.stdlib.vision; // For advanced computer vision
+extern Zamani.stdlib.agi_governance; // For malicious idea detection, user blocking, legal action
+extern Zamani.stdlib.human_agi_interaction; // For admin, feedback, payments, IP
+extern Zamani.stdlib.external_services; // For cloud and DevOps integration
+extern Zamani.stdlib.reality; // For VR/AR interaction
+extern Zamani.stdlib.distributed_ledger; // For blockchain integration
+extern Zamani.stdlib.iot; // For IoT device management
+extern Zamani.toolchain.meta_programming; // For autonomous code generation
+extern Zamani.toolchain.self_evolution; // For autonomous self-adjustment
+extern Zamani.stdlib.human_interface_devices; // For diverse human interaction (GUI, VCI, BCI)
+extern Zamani.stdlib.chat_architect_agent; // For conversational code synthesis
+extern Zamani.stdlib.documentation_system; // For autonomous, multi-modal documentation
+extern Zamani.stdlib.omniversal_simulation; // For simulating and sandboxing actions
+extern Zamani.stdlib.on_device_agents; // For deploying robust agents on edge devices
+extern Zamani.stdlib.resource_management; // For hyper-efficient resource & energy management
 
 // Define application-specific data structures
 class MissionGoal {
@@ -69,10 +69,10 @@ type TransactionId = String;
 
 // Main AGI orchestrator logic
 fn main() -> i32 {
-    core.println("Zenith Universal Cognitive Orchestrator AGI starting...");
+    core.println("Zamani Universal Cognitive Orchestrator AGI starting...");
 
     // 1. Initialize core system components and new comprehensive modules
-    Zenith.runtime.initialize_runtime(); // Conceptual call to init all runtimes
+    Zamani.runtime.initialize_runtime(); // Conceptual call to init all runtimes
 
     let mut current_mission: collections.Option<MissionGoal> = collections.Option::None;
     let mut agi_code_version = "v1.0.0".to_string(); // Current AGI logic version
@@ -154,7 +154,7 @@ fn main() -> i32 {
             id: Identifier("environmental_sensor_agent".to_string(), Span::dummy()),
             name: "EnvironmentalSensorAgent".to_string(),
             description: "Agent for local environmental data collection".to_string(),
-            core_logic_ir: ir_gen::ZenithIR::new(), // Dummy IR
+            core_logic_ir: ir_gen::ZamaniIR::new(), // Dummy IR
             on_device_models: collections::List::new(),
             required_capabilities: collections::List::new(),
             minimum_device_specs: collections::Map::new(),
@@ -239,7 +239,7 @@ fn main() -> i32 {
         // 5. Distributed Ledger for Data Integrity (Before Decision-Making)
         #[governance(compliance="DataIntegrityStandardV1")]
         let report_bytes = serialize::Serialize.to_bytes(&report, serialize::SerializationFormat.Json)?;
-        let ledger_client = distributed_ledger::LedgerClient::connect("ZenithAuditChain")?;
+        let ledger_client = distributed_ledger::LedgerClient::connect("ZamaniAuditChain")?;
         let transaction = distributed_ledger::Transaction {
             sender: crypto::PublicKey::new("AGI_Orchestrator_Key"),
             receiver: crypto::PublicKey::new("Audit_Node_Key"),
@@ -298,7 +298,7 @@ fn main() -> i32 {
 
                         // Dynamically reconfigure NACU for optimal cleanup pattern (via HDL)
                         let cleanup_hdl_config_bytes = fs::File::open_read(fs::Path::new("cleanup_nac_hdl.zn"))?.read_to_bytes()?;
-                        let compiled_nac_config = toolchain::hdl::ZMMP_HDL_Generator::new().generate_from_zenith_hdl(cleanup_hdl_config_bytes.data)?;
+                        let compiled_nac_config = toolchain::hdl::ZMMP_HDL_Generator::new().generate_from_zamani_hdl(cleanup_hdl_config_bytes.data)?;
                         nimbus.os::get_microkernel().reconfigure_hardware(nimbus.os::get_current_context_id(), nimbus.os::NACU_ID, compiled_nac_config);
 
                         // Activate IoT devices for physical barriers/support
@@ -360,7 +360,7 @@ fn main() -> i32 {
             core::println("Critical anomaly: Scaling up QPU resources.");
             external_services::CloudPlatform::new().provision_compute_instance(
                 external_services::ServiceHandle { id: Identifier::new("AWS_QPU_Region") },
-                "qpu.large".to_string(), "ZenithOS_QPU_Image".to_string(), 0
+                "qpu.large".to_string(), "ZamaniOS_QPU_Image".to_string(), 0
             )?;
             mission.max_resource_budget.insert("cloud_qpu".to_string(), 100.0);
         }
@@ -380,8 +380,8 @@ fn main() -> i32 {
         time::Thread::sleep(time::Duration::from_minutes(10));
     }
 
-    core::println("Zenith Universal Cognitive Orchestrator AGI shutting down.");
-    Zenith.runtime.shutdown_runtime();
+    core::println("Zamani Universal Cognitive Orchestrator AGI shutting down.");
+    Zamani.runtime.shutdown_runtime();
     return 0;
 }
 
@@ -510,8 +510,8 @@ extension nimbus::os {
 // Dummy for toolchain.hdl.ZMMP_HDL_Generator
 extension toolchain::hdl::ZMMP_HDL_Generator {
     fn new() -> Self { toolchain::hdl::ZMMP_HDL_Generator {} }
-    fn generate_from_zenith_hdl(hdl_bytes: collections::List<u8>) -> collections::List<u8> {
-        core::println("Conceptual HDL generation from Zenith HDL.");
+    fn generate_from_zamani_hdl(hdl_bytes: collections::List<u8>) -> collections::List<u8> {
+        core::println("Conceptual HDL generation from Zamani HDL.");
         collections::List::new() // Dummy
     }
 }
@@ -709,8 +709,8 @@ pub mod documentation_system {
     }
     #[derive(Debug, Clone, PartialEq)]
     pub enum DocumentationScope {
-        ZenithCore,
-        ZenithEcosystem,
+        ZamaniCore,
+        ZamaniEcosystem,
         ProductCode(chat_architect_agent::GeneratedCodeArtifact),
         CustomTopic(String),
     }
@@ -759,7 +759,7 @@ pub mod documentation_system {
                 format: request.output_format,
                 sections: List::new(),
                 creation_timestamp: time::DateTime::now_in(time::TimeZone::utc()),
-                author_agi: Identifier("Zenith_DocGen_AGI".to_string(), Span::dummy()),
+                author_agi: Identifier("Zamani_DocGen_AGI".to_string(), Span::dummy()),
             })
         }
     }
@@ -876,7 +876,7 @@ pub mod on_device_agents {
     use crate::stdlib::meta_ops::MetaValue;
     use crate::nimbus::os::NimbusContextId;
     use crate::runtime::mts::MtsTimelineId;
-    use crate::ir_gen::ZenithIR;
+    use crate::ir_gen::ZamaniIR;
     use crate::compiler::compilation_techniques::CompiledArtifact;
     use crate::ml::Model;
     use crate::nimbus::os::EvasActionContext;
@@ -887,7 +887,7 @@ pub mod on_device_agents {
         pub id: Identifier,
         pub name: String,
         pub description: String,
-        pub core_logic_ir: ZenithIR,
+        pub core_logic_ir: ZamaniIR,
         pub on_device_models: List<Model>,
         pub required_capabilities: List<Identifier>,
         pub minimum_device_specs: Map<String, MetaValue>,
@@ -908,7 +908,7 @@ pub mod on_device_agents {
     #[derive(Debug, Clone, PartialEq)]
     pub enum AgentStatus { Deploying, Running, Paused, SelfOptimizing, Error(String), Quarantined, }
     #[derive(Debug, Clone, PartialEq)]
-    pub enum AgentCommand { Start, Stop, Pause, Resume, UpdateLogic(ZenithIR), RequestSelfOptimization, ReportStatus, Quarantine, }
+    pub enum AgentCommand { Start, Stop, Pause, Resume, UpdateLogic(ZamaniIR), RequestSelfOptimization, ReportStatus, Quarantine, }
 
     pub struct OnDeviceAgentManager {}
     impl OnDeviceAgentManager {
@@ -988,11 +988,11 @@ pub mod resource_management {
     }
 }
 
-// Dummy for ir_gen::ZenithIR
+// Dummy for ir_gen::ZamaniIR
 pub mod ir_gen {
     #[derive(Debug, Clone, PartialEq)]
-    pub struct ZenithIR;
-    impl ZenithIR { pub fn new() -> Self { ZenithIR{} } }
+    pub struct ZamaniIR;
+    impl ZamaniIR { pub fn new() -> Self { ZamaniIR{} } }
 }
 
 // Dummy for runtime::cloud_network_security::CloudResource
@@ -1004,7 +1004,7 @@ pub mod runtime {
             pub id: Identifier,
             pub resource_type: String,
             pub current_status: String,
-            pub deployed_zenith_app: Option<Identifier>,
+            pub deployed_zamani_app: Option<Identifier>,
             pub allocated_capabilities: List<Identifier>,
         }
     }

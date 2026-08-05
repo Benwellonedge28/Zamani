@@ -1,5 +1,5 @@
 
-//! Zenith UMC Sankofa Memory Runtime
+//! Zamani UMC Sankofa Memory Runtime
 //!
 //! This module defines the conceptual runtime components for interacting with
 //! Sankofa's persistent, temporal memory system. This includes managing

@@ -1,6 +1,6 @@
-//! Zenith Standard Library: Internet of Things (IoT) Module
+//! Zamani Standard Library: Internet of Things (IoT) Module
 //!
-//! This module provides conceptual APIs for Zenith to interact with and
+//! This module provides conceptual APIs for Zamani to interact with and
 //! manage a mesh of IoT devices. It enables AGI systems to perceive and
 //! act upon the physical world through distributed sensors and actuators.
 //!

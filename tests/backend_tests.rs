@@ -7,14 +7,14 @@
     unused_comparisons
 )]
 
-//! Zenith Backend — Comprehensive Integration Tests
+//! Zamani Backend — Comprehensive Integration Tests
 
-use zenith_compiler::backend::{
+use zamani_compiler::backend::{
     Backend, CodeGenerator, LlvmIrBackend, MtsBackend, NanoBackend, QasmBackend, RiscVBackend,
     WasmBackend, X86Backend,
 };
-use zenith_compiler::compiler_types::{CompilationTarget, CompilerConfig, OptimizationLevel};
-use zenith_compiler::ir_gen::{IrFunction, IrInstruction, IrModule, IrRegister, IrType, IrValue};
+use zamani_compiler::compiler_types::{CompilationTarget, CompilerConfig, OptimizationLevel};
+use zamani_compiler::ir_gen::{IrFunction, IrInstruction, IrModule, IrRegister, IrType, IrValue};
 
 fn make_module(instructions: Vec<IrInstruction>) -> IrModule {
     let mut func = IrFunction::new("main", vec![], IrType::Void);

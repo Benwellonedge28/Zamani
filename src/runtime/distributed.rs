@@ -1,7 +1,7 @@
-//! Zenith UMC Runtime: Distributed Computing
+//! Zamani UMC Runtime: Distributed Computing
 //!
 //! This module defines the conceptual framework for distributed computing within
-//! the Zenith ecosystem. It enables Zenith programs to seamlessly span and utilize
+//! the Zamani ecosystem. It enables Zamani programs to seamlessly span and utilize
 //! resources across heterogeneous networks of Z-MMP devices, cloud clusters,
 //! quantum networks, and edge nodes, all orchestrated under the secure Nimbus OS.
 
@@ -21,7 +21,7 @@ pub type ServiceId = String;
 /// Enum representing the types of nodes in the distributed network.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeType {
-    ZMmp,               // Zenith Multi-Modal Processor (integrated QPU, NACU, CCU)
+    ZMmp,               // Zamani Multi-Modal Processor (integrated QPU, NACU, CCU)
     CloudCluster,       // Traditional cloud computing cluster (e.g., CPU/GPU)
     EdgeDevice,         // Limited resource device
     QuantumNetworkNode, // Dedicated quantum network router/switch
@@ -86,7 +86,7 @@ impl GlobalScheduler {
     }
 }
 
-/// The central orchestrator for distributed Zenith applications.
+/// The central orchestrator for distributed Zamani applications.
 pub struct DistributedOrchestrator {
     scheduler: GlobalScheduler,
     nimbus_system_call: NimbusSystemCall, // For inter-node secure communication
@@ -101,7 +101,7 @@ impl DistributedOrchestrator {
         }
     }
 
-    /// Deploys a Zenith blueprint (program, nano-agent) to a specific or dynamically selected node.
+    /// Deploys a Zamani blueprint (program, nano-agent) to a specific or dynamically selected node.
     pub fn deploy_blueprint(
         &mut self,
         blueprint_id: Identifier,

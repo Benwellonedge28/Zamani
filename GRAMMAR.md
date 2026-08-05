@@ -1,6 +1,6 @@
-# Zenith Language Grammar
+# Zamani Language Grammar
 
-This document is the formal grammar reference for Zenith, derived directly
+This document is the formal grammar reference for Zamani, derived directly
 from the reference implementation (`src/lexer.rs`, `src/parser.rs`,
 `src/ast/mod.rs`). It describes exactly what the compiler (`ZUTC`) accepts
 today, so it stays in sync with the code rather than aspirational syntax.
@@ -39,7 +39,7 @@ BOOLEAN  = "true" | "false" ;
 NIL      = "nil" | "null" ;
 ```
 
-### 1.4 Zenith-native literals
+### 1.4 Zamani-native literals
 ```
 QUANTUM_LITERAL = "|" ("0" | "1" | "+" | "-") "⟩" ;        e.g. |0⟩  |+⟩
 NANO_ANNOTATION = "@" IDENT [ "(" ... ")" ] ;               e.g. @atom  @molecule(x)
@@ -82,7 +82,7 @@ Effects & safety:
 Concurrency:
 `async  await  spawn`
 
-Zenith-native (quantum / nano / sankofa / dependent types):
+Zamani-native (quantum / nano / sankofa / dependent types):
 `quantum  circuit  nano  agent  remember  recall  learn  infer  wisdom
 zamani  sasa  ancestor  linear  affine  language  is  and  or  sizeof
 len  print  println  assert  panic  Pi (Π)  Sigma (Σ)  switch  case  then`
@@ -226,9 +226,9 @@ UnsafeBlock = "unsafe" [IDENT] BlockExpr ;
 
 ---
 
-## 3. Zenith-Native Constructs
+## 3. Zamani-Native Constructs
 
-Zenith extends a conventional imperative/OO core with first-class support
+Zamani extends a conventional imperative/OO core with first-class support
 for quantum computing, nano-scale agents, and "Sankofa" ancestral-memory
 semantics (learn from the past to inform the present).
 
@@ -271,7 +271,7 @@ HandleStmt  = "handle" IDENT BlockExpr ["with" BlockExpr] ;
 
 ### 3.5 Language Pragma
 ```
-LanguageDecl = "language" IDENT [STRING] [";"] ;      -- e.g. language Zenith "1.0";
+LanguageDecl = "language" IDENT [STRING] [";"] ;      -- e.g. language Zamani "1.0";
 ```
 
 ---
@@ -375,7 +375,7 @@ TypeExpr =
   ;
 ```
 
-Zenith-specific type qualifiers exist in the AST (`TypeExpr::Quantum`,
+Zamani-specific type qualifiers exist in the AST (`TypeExpr::Quantum`,
 `Linear`, `Affine`, `Temporal`, `Optional`, `Result`, `Never`) as semantic
 targets; surface syntax for some of these (e.g. `T?` optional sugar) is
 planned but not yet exposed through `parse_type_expr` — use the explicit
@@ -389,14 +389,14 @@ types lands.
 Current `match` arms in the parser accept any `Expression` on the left-hand
 side of `=>` (literal patterns, identifiers as bindings, etc.). Structural
 destructuring patterns (tuple/struct/enum patterns) are a planned extension
-tracked in the roadmap — see `ZENITH_LANGUAGE_SPEC` docs.
+tracked in the roadmap — see `ZAMANI_LANGUAGE_SPEC` docs.
 
 ---
 
 ## 7. Complete Example
 
-```zenith
-language Zenith "1.0";
+```zamani
+language Zamani "1.0";
 
 import stdlib.math;
 use quantum::gates::*;
@@ -470,4 +470,4 @@ fn plan(patient: Patient) -> Int {
 
 This file should be updated whenever the parser or lexer's accepted syntax
 changes, so it always reflects what actually compiles — not just what is
-aspirationally documented elsewhere in the `ZENITH_*.md` specs.
+aspirationally documented elsewhere in the `ZAMANI_*.md` specs.

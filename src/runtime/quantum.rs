@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Quantum Computing APIs
+//! Zamani Standard Library: Quantum Computing APIs
 //!
 //! This module provides high-level abstractions and APIs for working with
-//! quantum computing concepts within Zenith programs. It simplifies interaction
+//! quantum computing concepts within Zamani programs. It simplifies interaction
 //! with the underlying quantum runtime and hardware.
 
 use std::collections::HashMap;

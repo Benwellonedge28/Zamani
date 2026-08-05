@@ -1,8 +1,8 @@
-//! Zenith Standard Library: Numerical Analysis and Scientific Computing Module
+//! Zamani Standard Library: Numerical Analysis and Scientific Computing Module
 //!
 //! This module provides conceptual APIs for high-performance numerical operations,
 //! linear algebra, statistical analysis, and scientific computing. It is designed
-//! to leverage Zenith's multi-paradigm strengths, including potential QPU
+//! to leverage Zamani's multi-paradigm strengths, including potential QPU
 //! acceleration for complex numerical problems and nano-scale simulations.
 
 use crate::core_lang_primitives::Size; // For matrix dimensions, array sizes

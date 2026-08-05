@@ -1,11 +1,11 @@
 
-# Zenith Universal Meta-Compiler (UMC) End-to-End Flow Simulation
+# Zamani Universal Meta-Compiler (UMC) End-to-End Flow Simulation
 
-This document provides a conceptual simulation of the entire compilation and execution flow for a Zenith multi-paradigm program. It traces a sample program from source code through the UMC pipeline (Lexing, Parsing, Semantic Analysis, IR Generation, Optimization, Backend Code Generation) and into the Zenith Runtime, demonstrating how all the previously defined conceptual modules interoperate.
+This document provides a conceptual simulation of the entire compilation and execution flow for a Zamani multi-paradigm program. It traces a sample program from source code through the UMC pipeline (Lexing, Parsing, Semantic Analysis, IR Generation, Optimization, Backend Code Generation) and into the Zamani Runtime, demonstrating how all the previously defined conceptual modules interoperate.
 
-## 1. The Sample Zenith Program (Conceptual `my_multi_modal_app.zn`)
+## 1. The Sample Zamani Program (Conceptual `my_multi_modal_app.zn`)
 
-Consider a Zenith program that:
+Consider a Zamani program that:
 *   Defines an OOP `Sensor` class.
 *   Uses a quantum circuit to perform a sensitive measurement.
 *   Deploys nano-agents based on the quantum measurement outcome.
@@ -13,9 +13,9 @@ Consider a Zenith program that:
 *   Persists findings in Sankofa memory.
 *   Calls an external C library for high-performance data processing.
 
-```zenith
+```zamani
 // my_multi_modal_app.zn
-// Zenith.toml defines project metadata, dependencies, and build targets (e.g., Nimbus-VM)
+// Zamani.toml defines project metadata, dependencies, and build targets (e.g., Nimbus-VM)
 
 extern "C" { // FFI to a C library
     fn process_classical_data(data: *const i32, len: u64) -> f64;
@@ -119,9 +119,9 @@ quantum circuit MyQCircuit() -> QReg[1] {
 }
 ```
 
-## 2. Compilation Flow (Zenith UMC)
+## 2. Compilation Flow (Zamani UMC)
 
-The `zenithc` compiler orchestrates the entire process, consuming `my_multi_modal_app.zn` and its `Zenith.toml`.
+The `zamanic` compiler orchestrates the entire process, consuming `my_multi_modal_app.zn` and its `Zamani.toml`.
 
 ### 2.1. Lexical Analysis (`src/lexer.rs`)
 
@@ -136,7 +136,7 @@ The `zenithc` compiler orchestrates the entire process, consuming `my_multi_moda
 ### 2.2. Parsing (`src/parser.rs`)
 
 *   **Input:** `Vec<Token>` from the Lexer.
-*   **Process:** The `Parser` applies Zenith's grammar rules to construct an Abstract Syntax Tree (`AST`).
+*   **Process:** The `Parser` applies Zamani's grammar rules to construct an Abstract Syntax Tree (`AST`).
     *   **`extern "C" { ... }`**: Parsed into an `extern` block, recording FFI function signatures.
     *   **`interface MeasurementProvider { ... }`**: Parsed into `Statement::Interface` with `MethodSignature`s.
     *   **`class QuantumSensor implements MeasurementProvider { ... }`**: Parsed into `Statement::Class`, recognizing `implements` and members.
@@ -157,7 +157,7 @@ The `zenithc` compiler orchestrates the entire process, consuming `my_multi_moda
         *   `my_sensor = new QuantumSensor()`: Verified that `QuantumSensor` is a non-abstract class and a constructor is available.
         *   `my_sensor.perform_measurement()`: `object_expr` (`my_sensor`) is resolved to `Type::Class { name: QuantumSensor }`. `perform_measurement` is looked up in `QuantumSensor`'s method table, ensuring correct arguments and return type. Access modifiers (e.g., `public`) are checked.
         *   `this.sensor_id`: `this` is resolved to `QuantumSensor` instance, `sensor_id` lookup and access checks (`private`) performed.
-        *   FFI function signatures (e.g., `process_classical_data`) are checked for type compatibility with Zenith types.
+        *   FFI function signatures (e.g., `process_classical_data`) are checked for type compatibility with Zamani types.
         *   Multi-paradigm types (`QReg`, `nano agent`, `MtsSlice`) are validated.
     *   **Pass 3 (Body Analysis):** Method and function bodies are analyzed, ensuring type consistency for all expressions and statements. `current_function_return_type` and `current_class_context` are used to ensure correct usage of `return`, `this`, and `super`.
     *   **Effect Checking:** Ensures `perform QuantumDecoherence` is allowed within the `with effects { QuantumDecoherence }` declaration of `perform_measurement`.
@@ -178,8 +178,8 @@ The `zenithc` compiler orchestrates the entire process, consuming `my_multi_moda
 
 ### 2.5. Formal Verification (`src/toolchain/formal_verification.rs`)
 
-*   **Input:** `AST`, `Vec<IrInstruction>`, configured `VerificationProperty`s (from `Zenith.toml`).
-*   **Process:** The `ZenithFormalVerifier` applies verification passes.
+*   **Input:** `AST`, `Vec<IrInstruction>`, configured `VerificationProperty`s (from `Zamani.toml`).
+*   **Process:** The `ZamaniFormalVerifier` applies verification passes.
     *   For the Quantum part: Checks `VerificationProperty::EntanglementPurity` on the `QGate` instructions.
     *   For MTS: Checks `VerificationProperty::CausalConsistency` on `MTSStore`/`MTSLoad` sequences.
     *   For Nano-agents: Checks `VerificationProperty::NanoResourceGuarantee` on `NanoAction`/`NanoAssemble` related IR.
@@ -211,7 +211,7 @@ The `zenithc` compiler orchestrates the entire process, consuming `my_multi_moda
     *   `MTS_RuntimeBytecode_Generator`: Generates specific bytecode for the MTS runtime.
 *   **Output:** Target-specific executables/firmware: CCU binary, QPU microcode, NACU control programs. These are packaged into a deployable artifact (e.g., a Nimbus OS image or a `.zpkg`).
 
-## 3. Execution Flow (Zenith Runtime on Z-MMP/Nimbus OS)
+## 3. Execution Flow (Zamani Runtime on Z-MMP/Nimbus OS)
 
 The generated artifact is deployed and executed on the Z-MMP under the supervision of Nimbus OS.
 
@@ -222,7 +222,7 @@ The generated artifact is deployed and executed on the Z-MMP under the supervisi
 *   `nimbus_os::init_nimbus_os_interface()`: Initializes the Nimbus Microkernel.
     *   Registers device drivers for the Z-MMP's QPU and NACU.
     *   Establishes initial security contexts.
-*   `memory_manager::init_memory_manager()`: Initializes Zenith's Memory Manager, which will interact with Nimbus for `secure_alloc` and manage GC/Linear/Affine types.
+*   `memory_manager::init_memory_manager()`: Initializes Zamani's Memory Manager, which will interact with Nimbus for `secure_alloc` and manage GC/Linear/Affine types.
 *   `quantum::init_quantum_runtime()`, `nano::init_nano_runtime()`, `mts::init_mts_runtime()`, `sankofa::init_sankofa_runtime()`: Initialize multi-paradigm-specific runtimes, interfacing with the Nimbus Microkernel.
 *   `stdlib::initialize_stdlib()`: Sets up core utilities, collections, reflection, etc.
 
@@ -233,9 +233,9 @@ The generated artifact is deployed and executed on the Z-MMP under the supervisi
     *   The `init` method of `QuantumSensor` is invoked.
 2.  **`my_sensor.perform_measurement()`**:
     *   The `CallMethod` IR for `perform_measurement` triggers a dynamic dispatch.
-    *   `runtime/quantum.rs` translates Zenith's `QAlloc` to `NimbusSystemCall::hardware_access` to reserve qubits on the Z-MMP's QPU.
+    *   `runtime/quantum.rs` translates Zamani's `QAlloc` to `NimbusSystemCall::hardware_access` to reserve qubits on the Z-MMP's QPU.
     *   Quantum gates are sent as `NimbusSystemCall::hardware_access` commands to the QPU.
-    *   The `handle QuantumDecoherence` block watches for the `QuantumDecoherence` effect. If `perform QuantumDecoherence` is executed by the QPU (e.g., if Z-MMP reports high error rates), the Zenith runtime intercepts the effect and executes the `with { ... }` handler.
+    *   The `handle QuantumDecoherence` block watches for the `QuantumDecoherence` effect. If `perform QuantumDecoherence` is executed by the QPU (e.g., if Z-MMP reports high error rates), the Zamani runtime intercepts the effect and executes the `with { ... }` handler.
     *   `quantum_result_handle[0].measure()`: A QPU measurement is triggered via Nimbus, and the classical result is returned to the CCU.
 3.  **Nano-Agent Deployment (`nano agent RepairSwarm(...)`)**:
     *   `runtime/nano.rs` translates `NanoAssemble` IR to `NimbusSystemCall::hardware_access` instructions for the Z-MMP's NACU, deploying the `RepairSwarm` nano-agents.
@@ -248,11 +248,11 @@ The generated artifact is deployed and executed on the Z-MMP under the supervisi
     *   `runtime/sankofa.rs` interacts with the persistent Sankofa memory system (potentially a distributed ledger or a specialized database).
     *   The Nimbus OS ensures secure access to this memory resource.
 6.  **FFI Call (`process_classical_data(...)`)**:
-    *   The Zenith runtime prepares arguments for the C FFI.
+    *   The Zamani runtime prepares arguments for the C FFI.
     *   Nimbus OS might facilitate loading of the external C library into a secure execution context, enforcing sandbox policies.
     *   The C function `process_classical_data` is invoked on the CCU.
-    *   Memory management for `my_data` (Zenith `List`) passed to C function is handled according to FFI rules (e.g., Zenith manages, C operates on raw pointer).
-7.  **Resource & Security Monitoring**: Throughout execution, Nimbus OS actively monitors resource usage (CPU, QPU time, nano-energy) for all contexts and enforces `SandboxPolicy` constraints defined in `Zenith.toml`. Any violations trigger alerts or termination.
+    *   Memory management for `my_data` (Zamani `List`) passed to C function is handled according to FFI rules (e.g., Zamani manages, C operates on raw pointer).
+7.  **Resource & Security Monitoring**: Throughout execution, Nimbus OS actively monitors resource usage (CPU, QPU time, nano-energy) for all contexts and enforces `SandboxPolicy` constraints defined in `Zamani.toml`. Any violations trigger alerts or termination.
 8.  **Reflection (if used)**: If the program uses `stdlib::reflection::mirror()`, the runtime generates metadata about types/objects on-the-fly or accesses pre-generated tables, allowing dynamic manipulation.
 
 ### 3.3. Runtime Shutdown
@@ -260,4 +260,4 @@ The generated artifact is deployed and executed on the Z-MMP under the supervisi
 *   `shutdown_runtime()` is called.
 *   Multi-paradigm runtimes, Memory Manager, Nimbus Microkernel, and core primitives are shut down in a safe, ordered manner, releasing all resources and ensuring system integrity.
 
-This simulation illustrates the comprehensive, multi-layered interaction model of the Zenith UMC and Runtime, leveraging Nimbus OS to provide a secure and efficient platform for universal computing.
+This simulation illustrates the comprehensive, multi-layered interaction model of the Zamani UMC and Runtime, leveraging Nimbus OS to provide a secure and efficient platform for universal computing.

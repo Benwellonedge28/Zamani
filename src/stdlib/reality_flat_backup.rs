@@ -1,7 +1,7 @@
 
-//! Zenith Standard Library: Mixed Reality (XR) Interaction Module
+//! Zamani Standard Library: Mixed Reality (XR) Interaction Module
 //!
-//! This module provides conceptual APIs for integrating Zenith applications
+//! This module provides conceptual APIs for integrating Zamani applications
 //! with Virtual Reality (VR), Augmented Reality (AR), and Mixed Reality (MR)
 //! environments. It enables AGI agents to perceive and interact within
 //! simulated and overlaid digital-physical spaces.

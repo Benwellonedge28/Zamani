@@ -1,15 +1,15 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut)]
 
-//! Zenith Standard Library: Quantum-Secure Identity & Trust Fabric Module
+//! Zamani Standard Library: Quantum-Secure Identity & Trust Fabric Module
 //!
-//! This module defines the conceptual framework for Zenith's Quantum-Secure Identity
+//! This module defines the conceptual framework for Zamani's Quantum-Secure Identity
 //! and Trust Fabric. It establishes a verifiable, quantum-resistant digital identity
-//! for all Zenith entities—AGIs, modules, data, users, and devices—rooted in a
+//! for all Zamani entities—AGIs, modules, data, users, and devices—rooted in a
 //! distributed ledger. This ensures uncompromisable integrity and trust throughout
-//! the Zenith Omniverse.
+//! the Zamani Omniverse.
 
 use crate::ast::Identifier; // For entity IDs, public keys
-use crate::stdlib::core::Result; // Zenith Result type
+use crate::stdlib::core::Result; // Zamani Result type
 use crate::stdlib::collections::{List, Map, HashSet, Option}; // For managing identities, credentials
 use crate::stdlib::crypto::{QuantumKey, Signature, PublicKey, Crypto, ZeroKnowledgeProof, SecureCommunicationChannel}; // Core quantum crypto primitives
 use crate::stdlib::distributed_ledger::{LedgerClient, Transaction, TransactionId}; // For rooting identities in a distributed ledger
@@ -47,7 +47,7 @@ impl IdentityManager {
         }
     }
 
-    /// Registers a new Zenith entity (AGI, module, device, user) and issues it a
+    /// Registers a new Zamani entity (AGI, module, device, user) and issues it a
     /// quantum-resistant Decentralized Identifier (DID) and associated credentials.
     #[security(level="critical", quantum_resistant="true")]
     #[ethics(principles="privacy_by_design", consent_required="true")]
@@ -59,7 +59,7 @@ impl IdentityManager {
         let public_key = quantum_key_pair.public_key();
 
         // 2. Create Decentralized Identifier (DID)
-        let did = Identifier(format!("did:zenith:{}", public_key.to_string()), Span::dummy());
+        let did = Identifier(format!("did:zamani:{}", public_key.to_string()), Span::dummy());
 
         // 3. E.V.A.S. Vetting for Identity Issuance
         let evas_context = EvasActionContext {
@@ -83,7 +83,7 @@ impl IdentityManager {
 
         let genesis_tx = Transaction {
             sender: public_key.clone(),
-            receiver: Identifier("Zenith_Identity_Anchor".to_string(), Span::dummy()), // Conceptual anchor
+            receiver: Identifier("Zamani_Identity_Anchor".to_string(), Span::dummy()), // Conceptual anchor
             amount: 0.0, // No monetary value for identity registration
             signature: self.crypto_engine.sign(&quantum_key_pair, &metadata.values().fold(List::new(), |mut acc, v| { acc.push(v.clone().inner.into_bytes().into()); acc }).data.iter().flatten().cloned().collect())?, // Dummy signing
             metadata,
@@ -128,7 +128,7 @@ impl IdentityManager {
         let signature = self.crypto_engine.sign(&issuer_identity.private_key, &claims_hash.to_string().into_bytes().into())?; // Dummy signing with claims hash
 
         let vc = VerifiableCredential {
-            id: Identifier(format!("vc:zenith:{}", self.crypto_engine.hash(&claims_hash.to_string().into_bytes().into())?.to_string()), Span::dummy()), // Dummy ID
+            id: Identifier(format!("vc:zamani:{}", self.crypto_engine.hash(&claims_hash.to_string().into_bytes().into())?.to_string()), Span::dummy()), // Dummy ID
             issuer: issuer_identity.did.clone(),
             subject: subject_did.clone(),
             claims,
@@ -188,10 +188,10 @@ impl IdentityManager {
 // Data Structures for Quantum Identity & Trust
 // -----------------------------------------------------------------------------
 
-/// Represents a quantum-resistant digital identity for any Zenith entity.
+/// Represents a quantum-resistant digital identity for any Zamani entity.
 #[derive(Debug, Clone, PartialEq)]
 pub struct QuantumIdentity {
-    pub did: Identifier, // Decentralized Identifier (e.g., "did:zenith:...")
+    pub did: Identifier, // Decentralized Identifier (e.g., "did:zamani:...")
     pub entity_name: Identifier,
     pub entity_type: EntityType,
     pub public_key: PublicKey, // Quantum-resistant public key
@@ -201,7 +201,7 @@ pub struct QuantumIdentity {
     pub verified: bool, // Initially verified status
 }
 
-/// Types of entities that can possess a Zenith Quantum Identity.
+/// Types of entities that can possess a Zamani Quantum Identity.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EntityType {
     AGICore,

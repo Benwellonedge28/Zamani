@@ -1,7 +1,7 @@
-//! Zenith Standard Library: AI Reasoning and Knowledge Representation Module
+//! Zamani Standard Library: AI Reasoning and Knowledge Representation Module
 //!
 //! This module provides conceptual APIs for symbolic AI, knowledge representation,
-//! logical inference, and advanced reasoning capabilities within Zenith.
+//! logical inference, and advanced reasoning capabilities within Zamani.
 //!
 //! Expanded with features from UBUNTU:
 //! - Advanced Knowledge Graphs
@@ -339,10 +339,10 @@ impl CausalEngine {
 
 /// Initializes the AI Reasoning and Knowledge Representation module.
 pub fn init_ai_reasoning_lib() {
-    println!("  - Initializing Zenith AI Reasoning Engine...");
+    println!("  - Initializing Zamani AI Reasoning Engine...");
 }
 
 /// Shuts down the AI Reasoning and Knowledge Representation module.
 pub fn shutdown_ai_reasoning_lib() {
-    println!("  - Shutting down Zenith AI Reasoning Engine...");
+    println!("  - Shutting down Zamani AI Reasoning Engine...");
 }

@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Robotics and Control Module
+//! Zamani Standard Library: Robotics and Control Module
 //!
 //! This module provides conceptual APIs for perceiving, planning for, and controlling
-//! robotic systems and autonomous agents within Zenith. It integrates perception
+//! robotic systems and autonomous agents within Zamani. It integrates perception
 //! (from Vision/Sensing), high-level planning (from AI Reasoning), and low-level
 //! actuation (leveraging Nano-agents and Nimbus OS hardware interfaces).
 

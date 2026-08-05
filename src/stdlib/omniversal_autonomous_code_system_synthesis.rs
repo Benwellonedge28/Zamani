@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Autonomous Code & System Synthesis (OACSS)
+//! Zamani stdlib — Omniversal Autonomous Code & System Synthesis (OACSS)
 #[derive(Debug, Clone, PartialEq)]
 pub enum TargetSystem {
     Library,

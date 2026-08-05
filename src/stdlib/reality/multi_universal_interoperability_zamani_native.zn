@@ -1,9 +1,9 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut)]
 
-//! Zenith Standard Library: Multi-Universal Interoperability Module
+//! Zamani Standard Library: Multi-Universal Interoperability Module
 //!
-//! This module defines Zenith's capabilities for Multi-Universal Interoperability.
-//! It enables Zenith to understand, operate within, and seamlessly bridge diverse
+//! This module defines Zamani's capabilities for Multi-Universal Interoperability.
+//! It enables Zamani to understand, operate within, and seamlessly bridge diverse
 //! simulated or emergent realities, going beyond the confines of a single universe.
 //!
 //! The module provides tools for defining and managing different realities,
@@ -11,7 +11,7 @@
 //! and state synchronization, laying the foundation for true omniversal presence.
 
 use crate::ast::Identifier; // For reality IDs, entity IDs, event IDs
-use crate::stdlib::core::Result; // Zenith Result type
+use crate::stdlib::core::Result; // Zamani Result type
 use crate::stdlib::collections::{List, Map, HashSet, Option}; // For reality states, entity mappings
 use crate::stdlib::ai_reasoning::{Planner, Fact, FactObject}; // For AGI planning across realities
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of cross-reality interactions

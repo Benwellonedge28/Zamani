@@ -1,4 +1,4 @@
-//! Zenith Universal Meta-Compiler (UMC) Standard Library: Reality Module
+//! Zamani Universal Meta-Compiler (UMC) Standard Library: Reality Module
 //!
 //! This module aggregates and manages all components for interacting with,
 //! defining, and synthesizing realities, from virtual environments to mixed reality overlays.
@@ -11,20 +11,20 @@ pub mod reality_synthesis; // Synthesis of Reality Elements
 
 /// Initializes all Reality components.
 pub fn init_reality_lib() {
-    println!("Initializing Zenith Reality Module...");
+    println!("Initializing Zamani Reality Module...");
     reality_definition::init_reality_definition();
     reality_synthesis::init_reality_synthesis(); // Initialize Multi-Universal Interoperability
     multi_universal_interoperability::init_multi_universal_interoperability();
-    println!("Zenith Reality Module initialized.");
+    println!("Zamani Reality Module initialized.");
 }
 
 /// Shuts down all Reality components.
 pub fn shutdown_reality_lib() {
-    println!("Shutting down Zenith Reality Module...");
+    println!("Shutting down Zamani Reality Module...");
     multi_universal_interoperability::shutdown_multi_universal_interoperability(); // Shutdown Multi-Universal Interoperability
     reality_synthesis::shutdown_reality_synthesis();
     reality_definition::shutdown_reality_definition();
-    println!("Zenith Reality Module shut down.");
+    println!("Zamani Reality Module shut down.");
 }
 
 // ── merged from flat_backup ────

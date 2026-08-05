@@ -1,8 +1,8 @@
-//! Zenith UMC Runtime: Nimbus OS Interface
+//! Zamani UMC Runtime: Nimbus OS Interface
 //!
-//! This module provides the interface layer for the Zenith runtime to interact
+//! This module provides the interface layer for the Zamani runtime to interact
 //! with the underlying Nimbus Operating System microkernel. It re-exports
-//! core Nimbus types and functions, acting as the bridge for Zenith programs.
+//! core Nimbus types and functions, acting as the bridge for Zamani programs.
 
 use std::sync::{Arc, Mutex};
 // Updated import to reflect changes in mod.rs for ThreadId, ThreadState, GlobalScheduler

@@ -1,4 +1,4 @@
-//! Zenith UMC Error Reporting System
+//! Zamani UMC Error Reporting System
 //!
 //! Centralised diagnostics for all compiler phases.
 //! Extended error types (parser, semantic, ir_gen, etc.) will be added

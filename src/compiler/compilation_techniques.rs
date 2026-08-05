@@ -1,22 +1,22 @@
 #![cfg(feature = "full")]
 #![allow(dead_code, unused_imports, unused_variables)]
 
-//! Zenith Universal Meta-Compiler (UMC): Compilation Techniques Module
+//! Zamani Universal Meta-Compiler (UMC): Compilation Techniques Module
 //!
 //! This module conceptually defines and orchestrates the diverse range of
-//! compilation techniques employed by the Zenith UMC. Zenith operates as a
+//! compilation techniques employed by the Zamani UMC. Zamani operates as a
 //! "hybrid compiled language," dynamically selecting and combining strategies
 //! such as Ahead-of-Time (AOT), Just-in-Time (JIT), Adaptive Optimization,
 //! Multi-Paradigm Transpilation, and AI-Driven Synthesis.
 //!
-//! This versatility allows Zenith to efficiently target and optimize code for
+//! This versatility allows Zamani to efficiently target and optimize code for
 //! heterogeneous execution environments, including classical CPUs/GPUs, Quantum
 //! Processing Units (QPUs), Nano-Agent Control Units (NACUs), and custom HDL
 //! targets, ensuring "infinity Advanced and secure infinitely and ready for production"
 //! performance across the entire Omniverse.
 
 use self::backend::{CompiledBinary, TargetPlatform}; // For specific hardware backends
-use self::ir_gen::{IrInstruction, ZenithIR}; // For Intermediate Representation
+use self::ir_gen::{IrInstruction, ZamaniIR}; // For Intermediate Representation
 use self::optimizer::OptimizationLevel; // For various optimization strategies
 use crate::ast::Identifier; // For AST representations
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of compilation choices
@@ -29,20 +29,20 @@ use crate::stdlib::ml::Tensor; // For AI-driven compilation models // For Identi
 /// Initializes the Compilation Techniques module.
 pub fn init_compilation_techniques() {
     println!(
-        "  - Initializing Zenith Compilation Techniques (Hybrid, Adaptive, Multi-Paradigm)..."
+        "  - Initializing Zamani Compilation Techniques (Hybrid, Adaptive, Multi-Paradigm)..."
     );
 }
 
 /// Shuts down the Compilation Techniques module.
 pub fn shutdown_compilation_techniques() {
-    println!("  - Shutting down Zenith Compilation Techniques...");
+    println!("  - Shutting down Zamani Compilation Techniques...");
 }
 
 // -----------------------------------------------------------------------------
 // Core Compilation Technique Enumeration
 // -----------------------------------------------------------------------------
 
-/// Enumerates the primary compilation strategies Zenith can employ.
+/// Enumerates the primary compilation strategies Zamani can employ.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompilationStrategy {
     AheadOfTime(AotConfig),
@@ -92,7 +92,7 @@ pub struct NanoCompileConfig {
 }
 
 // -----------------------------------------------------------------------------
-// Zenith UMC Compiler Orchestrator
+// Zamani UMC Compiler Orchestrator
 // -----------------------------------------------------------------------------
 
 pub struct HybridCompilerOrchestrator {
@@ -158,7 +158,7 @@ impl HybridCompilerOrchestrator {
     }
 
     /// Executes the chosen compilation strategy, coordinating various ZUMC components.
-    pub fn execute_compilation(&self, source_ir: ZenithIR) -> Result<CompiledArtifact, String> {
+    pub fn execute_compilation(&self, source_ir: ZamaniIR) -> Result<CompiledArtifact, String> {
         println!(
             "[Compiler::Tech] Executing compilation using strategy: {:?}.",
             self.current_strategy
@@ -188,7 +188,7 @@ impl HybridCompilerOrchestrator {
 
     // --- Private/Internal Compilation Method Implementations (Conceptual) ---
 
-    fn aot_compile(&self, ir: ZenithIR, config: &AotConfig) -> Result<CompiledArtifact, String> {
+    fn aot_compile(&self, ir: ZamaniIR, config: &AotConfig) -> Result<CompiledArtifact, String> {
         println!(
             "[Compiler::Tech] Performing Ahead-of-Time compilation for target {:?}.",
             config.target
@@ -201,7 +201,7 @@ impl HybridCompilerOrchestrator {
         Ok(CompiledArtifact::Binary(compiled_binary))
     }
 
-    fn jit_compile(&self, ir: ZenithIR, config: &JitConfig) -> Result<CompiledArtifact, String> {
+    fn jit_compile(&self, ir: ZamaniIR, config: &JitConfig) -> Result<CompiledArtifact, String> {
         println!(
             "[Compiler::Tech] Performing Just-in-Time compilation (profiling enabled: {}).",
             config.enable_profiling
@@ -215,7 +215,7 @@ impl HybridCompilerOrchestrator {
 
     fn adaptive_compile(
         &self,
-        ir: ZenithIR,
+        ir: ZamaniIR,
         config: &AdaptiveOptConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
@@ -231,7 +231,7 @@ impl HybridCompilerOrchestrator {
 
     fn transpile(
         &self,
-        ir: ZenithIR,
+        ir: ZamaniIR,
         config: &TranspilationConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
@@ -240,7 +240,7 @@ impl HybridCompilerOrchestrator {
         );
         // Conceptual: IR -> semantic transformation -> new IR for target paradigm.
         // E.g., classical loop to quantum phase estimation, or classical to nano-swarm behavior.
-        Ok(CompiledArtifact::ZenithIR(ZenithIR::new(Identifier(
+        Ok(CompiledArtifact::ZamaniIR(ZamaniIR::new(Identifier(
             "transpiled_ir".to_string(),
             Span::dummy(),
         ))))
@@ -248,14 +248,14 @@ impl HybridCompilerOrchestrator {
 
     fn hdl_synthesize(
         &self,
-        ir: ZenithIR,
+        ir: ZamaniIR,
         config: &HdlSynthConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
             "[Compiler::Tech] Performing Hardware Description Language synthesis for {:?}.",
             config.target_chip_design.0
         );
-        // Conceptual: IR -> Zenith HDL -> (external tools) -> GDSII, Verilog.
+        // Conceptual: IR -> Zamani HDL -> (external tools) -> GDSII, Verilog.
         Ok(CompiledArtifact::HardwareDescription(Identifier(
             "generated_hdl".to_string(),
             Span::dummy(),
@@ -264,7 +264,7 @@ impl HybridCompilerOrchestrator {
 
     fn quantum_compile(
         &self,
-        ir: ZenithIR,
+        ir: ZamaniIR,
         config: &QuantumCompileConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
@@ -280,7 +280,7 @@ impl HybridCompilerOrchestrator {
 
     fn nano_compile(
         &self,
-        ir: ZenithIR,
+        ir: ZamaniIR,
         config: &NanoCompileConfig,
     ) -> Result<CompiledArtifact, String> {
         println!(
@@ -296,7 +296,7 @@ impl HybridCompilerOrchestrator {
 
     fn mixed_mode_compile(
         &self,
-        ir: ZenithIR,
+        ir: ZamaniIR,
         strategies: &List<CompilationStrategy>,
     ) -> Result<CompiledArtifact, String> {
         println!(
@@ -329,7 +329,7 @@ pub enum CompiledArtifact {
     HardwareDescription(Identifier), // Reference to generated HDL
     QuantumCircuit(Identifier),      // Reference to compiled quantum program
     NanoAssemblyInstructions(Identifier), // Reference to nano-agent control
-    ZenithIR(ZenithIR),              // Optimized/transpiled IR
+    ZamaniIR(ZamaniIR),              // Optimized/transpiled IR
     RuntimeCodeRef(Identifier),      // Reference to JIT'd code in memory
     Mixed(List<CompiledArtifact>),   // For mixed-mode compilation outputs
 }
@@ -354,7 +354,7 @@ impl AiStrategyModel {
 // Dummy structures needed for compilation techniques module
 // Should ideally come from other compiler modules
 pub mod optimizer {
-    use super::ir_gen::ZenithIR;
+    use super::ir_gen::ZamaniIR;
     use crate::ast::Identifier;
     use crate::stdlib::collections::Map;
 
@@ -379,14 +379,14 @@ pub mod optimizer {
                 ),
             }
         }
-        pub fn optimize(&self, ir: ZenithIR, level: OptimizationLevel) -> Result<ZenithIR, String> {
+        pub fn optimize(&self, ir: ZamaniIR, level: OptimizationLevel) -> Result<ZamaniIR, String> {
             Ok(ir)
         }
     }
 }
 
 pub mod backend {
-    use super::ir_gen::ZenithIR;
+    use super::ir_gen::ZamaniIR;
     use crate::ast::Identifier;
 
     #[derive(Debug, Clone, PartialEq)]
@@ -418,7 +418,7 @@ pub mod backend {
         }
         pub fn generate_code(
             &self,
-            ir: ZenithIR,
+            ir: ZamaniIR,
             target: TargetPlatform,
         ) -> Result<CompiledBinary, String> {
             Ok(CompiledBinary {
@@ -436,13 +436,13 @@ pub mod ir_gen {
     #[derive(Debug, Clone, PartialEq)]
     pub struct IrInstruction; // Dummy
     #[derive(Debug, Clone, PartialEq)]
-    pub struct ZenithIR {
+    pub struct ZamaniIR {
         pub id: Identifier,
         pub instructions: crate::stdlib::collections::List<IrInstruction>,
     }
-    impl ZenithIR {
+    impl ZamaniIR {
         pub fn new(id: Identifier) -> Self {
-            ZenithIR {
+            ZamaniIR {
                 id,
                 instructions: crate::stdlib::collections::List::new(),
             }
@@ -463,7 +463,7 @@ pub mod nlp {
     // Define other necessary structs/enums if needed by other modules
 }
 
-// ZENITH_SYNTAX: extension ml {
+// ZAMANI_SYNTAX: extension ml {
 //     pub struct Model { pub id: Identifier }
 //     impl Model {
 //         pub fn new(id: Identifier) -> Self { Model { id } }
@@ -476,13 +476,13 @@ pub mod nlp {
 //     }
 // }
 
-// ZENITH_SYNTAX: extension ai_reasoning {
+// ZAMANI_SYNTAX: extension ai_reasoning {
 //     pub struct Planner { pub id: Identifier }
 //     impl Planner {
 //         pub fn new() -> Self { Planner { id: Identifier("default_planner".to_string(), Span::dummy()) } }
 //     }
 // }
 
-// ZENITH_SYNTAX: extension nimbus::os {
+// ZAMANI_SYNTAX: extension nimbus::os {
 //     fn get_current_context_id() -> NimbusContextId { 0 }
 // }

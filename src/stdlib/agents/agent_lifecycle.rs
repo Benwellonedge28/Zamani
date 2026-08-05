@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — agent_lifecycle module
+//! Zamani — agent_lifecycle module
 
 /// Initialize agent_lifecycle
 pub fn init_agent_lifecycle() {}

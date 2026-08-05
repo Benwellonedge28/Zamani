@@ -1,24 +1,24 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut)]
 //!
-//! NOTE: Full Zenith-native implementation preserved below as documentation.
+//! NOTE: Full Zamani-native implementation preserved below as documentation.
 //! Compiled stub is used by the CI build graph until ZUTC pipeline is active.
 
 // ============================================================
-// ORIGINAL ZENITH-NATIVE SOURCE (preserved, not compiled):
+// ORIGINAL ZAMANI-NATIVE SOURCE (preserved, not compiled):
 // // 
 // //! Nimbus OS: Security Kernel - Autonomous Threat Intelligence Module
 // //!
-// //! This module defines the conceptual framework for Zenith's Autonomous Threat
+// //! This module defines the conceptual framework for Zamani's Autonomous Threat
 // //! Intelligence. It enables Nimbus OS's security kernel to move beyond reactive
 // //! defense, autonomously predicting, detecting, and neutralizing threats, even
 // //! from novel or previously unknown attack vectors.
 // //!
 // //! Leveraging AGI-driven analysis, predictive modeling, and quantum-enhanced
 // //! capabilities, this module ensures the uncompromisable security and integrity
-// //! of Zenith and its applications across all operational environments.
+// //! of Zamani and its applications across all operational environments.
 // 
 // use crate::ast::Identifier; // For threat IDs, actor IDs, component IDs
-// use crate::stdlib::core::Result; // Zenith Result type
+// use crate::stdlib::core::Result; // Zamani Result type
 // use crate::stdlib::collections::{List, Map, HashSet, Option}; // For threat models, intelligence data
 // use crate::stdlib::ml::{Model, Tensor}; // For predictive threat modeling, anomaly detection
 // use crate::stdlib::ai_reasoning::{Planner, Fact, FactObject}; // For AGI-driven causal analysis, response planning
@@ -70,14 +70,14 @@
 //         }
 //     }
 // 
-//     /// Continuously monitors Nimbus OS and Zenith applications for threats, vulnerabilities,
+//     /// Continuously monitors Nimbus OS and Zamani applications for threats, vulnerabilities,
 //     /// and anomalous behavior, employing predictive and proactive strategies.
 //     #[security(level="critical", self_healing="true", zero_day_detection="true")]
 //     pub fn start_autonomous_threat_monitoring(&mut self) -> Result<(), String> {
 //         println!("[Nimbus::ThreatIntel] Starting autonomous threat monitoring.".to_string());
 // 
 //         loop { // Conceptual continuous monitoring loop
-//             // 1. Collect Telemetry from Nimbus OS and Zenith applications
+//             // 1. Collect Telemetry from Nimbus OS and Zamani applications
 //             let system_telemetry = self.security_kernel.collect_system_telemetry()?; // Dummy
 //             let app_behavior_logs = self.security_kernel.collect_app_behavior_logs()?; // Dummy
 // 
@@ -191,7 +191,7 @@
 //     pub affected_versions: List<Identifier>,
 // }
 // 
-// /// Enumerates various threat events Zenith can encounter.
+// /// Enumerates various threat events Zamani can encounter.
 // #[derive(Debug, Clone, PartialEq)]
 // pub enum ThreatEvent {
 //     AnomalyDetected(Anomaly),

@@ -1,4 +1,4 @@
-//! Zenith Abstract Syntax Tree
+//! Zamani Abstract Syntax Tree
 //!
 //! Full AST covering every language construct: expressions, statements,
 //! types, patterns, items, attributes.  Every node carries a `Span` so
@@ -48,7 +48,7 @@ pub enum Statement {
     Use(Span, UsePath),
     Class(Span, Identifier, Vec<Identifier>, Vec<ClassMember>),
     Interface(Span, Identifier, Vec<Identifier>, Vec<InterfaceMember>),
-    // Zenith-native
+    // Zamani-native
     QuantumCircuit(Span, String, Expression),
     NanoAgent(Span, String, Expression),
     SankofaMemory(Span, String, Expression),
@@ -251,7 +251,7 @@ pub enum Expression {
     Spawn(Span, Box<Expression>),
     // Object creation
     New(Span, Identifier, Vec<Expression>),
-    // Zenith-native
+    // Zamani-native
     QuantumOp(Span, String, Vec<Expression>),
     NanoOp(Span, String, Vec<Expression>),
     Recall(Span, Box<Expression>),
@@ -394,7 +394,7 @@ pub enum TypeExpr {
     Never,
     Unit,
     SelfType,
-    // Zenith-specific
+    // Zamani-specific
     Quantum(Box<TypeExpr>),
     Linear(Box<TypeExpr>),
     Affine(Box<TypeExpr>),

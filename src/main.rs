@@ -1,8 +1,8 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-//! Zenith Universal Meta-Compiler (UMC) - Main Entry Point
+//! Zamani Universal Meta-Compiler (UMC) - Main Entry Point
 //!
-//! Entry point for the Zenith compiler CLI. Reads a `.zn` source file,
+//! Entry point for the Zamani compiler CLI. Reads a `.zn` source file,
 //! runs it through the real compiler pipeline (lex -> parse -> semantic
 //! analysis -> IR generation -> optimization -> codegen), and either
 //! writes the generated output to disk or reports diagnostics with
@@ -14,15 +14,15 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::time::Instant;
 
-use zenith_compiler::backend::CodeGenerator;
-use zenith_compiler::compiler_types::{CompilationTarget, CompilerConfig, OptimizationLevel};
-use zenith_compiler::ir_gen::IrGenerator;
-use zenith_compiler::lexer::Lexer;
-use zenith_compiler::optimizer::Optimizer;
-use zenith_compiler::parser::Parser;
-use zenith_compiler::semantic::SemanticAnalyzer;
-use zenith_compiler::source_map::{FileId, SourceFile};
-use zenith_compiler::VERSION;
+use zamani_compiler::backend::CodeGenerator;
+use zamani_compiler::compiler_types::{CompilationTarget, CompilerConfig, OptimizationLevel};
+use zamani_compiler::ir_gen::IrGenerator;
+use zamani_compiler::lexer::Lexer;
+use zamani_compiler::optimizer::Optimizer;
+use zamani_compiler::parser::Parser;
+use zamani_compiler::semantic::SemanticAnalyzer;
+use zamani_compiler::source_map::{FileId, SourceFile};
+use zamani_compiler::VERSION;
 
 struct Args {
     source_file: String,
@@ -35,18 +35,18 @@ struct Args {
 
 fn print_banner() {
     println!("╔══════════════════════════════════════════════════╗");
-    println!("║  Zenith Universal Meta-Compiler (UMC) v{:<10}║", VERSION);
+    println!("║  Zamani Universal Meta-Compiler (UMC) v{:<10}║", VERSION);
     println!("║  The Omniversal AGI Language & Operating Intel.   ║");
     println!("╚══════════════════════════════════════════════════╝");
     println!();
 }
 
 fn print_help() {
-    println!("Zenith UMC — Usage:");
+    println!("Zamani UMC — Usage:");
     println!();
-    println!("  zenith <file.zn> [options]   Compile a Zenith source file");
-    println!("  zenith --version             Print version information");
-    println!("  zenith --help                Show this help message");
+    println!("  zamani <file.zn> [options]   Compile a Zamani source file");
+    println!("  zamani --version             Print version information");
+    println!("  zamani --help                Show this help message");
     println!();
     println!("Options:");
     println!("  -o, --output <path>          Write generated code to <path>");
@@ -294,15 +294,15 @@ fn main() {
 
     if raw_args.is_empty() {
         print_banner();
-        eprintln!("Usage: zenith <source_file.zn> [options]");
-        eprintln!("       zenith --version");
-        eprintln!("       zenith --help");
+        eprintln!("Usage: zamani <source_file.zn> [options]");
+        eprintln!("       zamani --version");
+        eprintln!("       zamani --help");
         process::exit(1);
     }
 
     match raw_args[0].as_str() {
         "--version" | "-V" => {
-            println!("zenith {} (edition 2026)", VERSION);
+            println!("zamani {} (edition 2026)", VERSION);
             return;
         }
         "--help" | "-h" => {
@@ -320,8 +320,8 @@ fn main() {
         Err(msg) => {
             eprintln!("error: {}", msg);
             eprintln!();
-            eprintln!("Usage: zenith <source_file.zn> [options]");
-            eprintln!("Run `zenith --help` for details.");
+            eprintln!("Usage: zamani <source_file.zn> [options]");
+            eprintln!("Run `zamani --help` for details.");
             process::exit(1);
         }
     };

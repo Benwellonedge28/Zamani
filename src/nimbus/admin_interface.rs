@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! NIMBUS Admin Interface — runtime management console for Zenith AGI systems.
+//! NIMBUS Admin Interface — runtime management console for Zamani AGI systems.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

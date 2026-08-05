@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal NLP
+//! Zamani stdlib — Omniversal NLP
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum PoS {

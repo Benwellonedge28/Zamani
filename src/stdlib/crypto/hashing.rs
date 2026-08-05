@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — hashing module
+//! Zamani — hashing module
 
 /// Initialize hashing
 pub fn init_hashing() {}

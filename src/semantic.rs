@@ -1,7 +1,7 @@
-//! Zenith Semantic Analyser
+//! Zamani Semantic Analyser
 //!
 //! Full type inference, scope management, symbol resolution,
-//! borrow-lint hints, and error reporting for the Zenith language.
+//! borrow-lint hints, and error reporting for the Zamani language.
 
 use crate::ast::*;
 use crate::lexer::TokenType;
@@ -238,7 +238,7 @@ impl SemanticAnalyzer {
             self.symbols
                 .define(name.to_string(), Symbol::TypeAlias(ty.clone()));
         }
-        // Zenith-specific builtins
+        // Zamani-specific builtins
         self.symbols.define(
             "recall".into(),
             Symbol::Function(vec![Type::Unknown], Type::Unknown),

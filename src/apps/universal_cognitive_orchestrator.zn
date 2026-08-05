@@ -1,36 +1,36 @@
 // src/apps/UCO.zn
 // universal_cognitive_orchestrator
-// A Zenith AGI application for autonomous environmental monitoring and adaptive intervention.
+// A Zamani AGI application for autonomous environmental monitoring and adaptive intervention.
 
-// Import necessary Zenith Standard Library modules and Runtime interfaces
-extern Zenith.stdlib.core;
-extern Zenith.stdlib.collections;
-extern Zenith.stdlib.net;
-extern Zenith.stdlib.fs;
-extern Zenith.stdlib.ml;
-extern Zenith.stdlib.db;
-extern Zenith.stdlib.sync;
-extern Zenith.stdlib.time;
-extern Zenith.stdlib.numeric;
-extern Zenith.stdlib.serialize;
-extern Zenith.stdlib.gui;
-extern Zenith.runtime.quantum;
-extern Zenith.runtime.nano;
-extern Zenith.runtime.mts;
-extern Zenith.runtime.sankofa;
-extern Zenith.nimbus.os; // Direct Nimbus OS interaction for low-level control
-extern Zenith.toolchain.hdl; // For HDL related operations
-extern Zenith.stdlib.ai_reasoning; // For advanced AI reasoning, causal inference
-extern Zenith.stdlib.nlp; // For natural language processing
-extern Zenith.stdlib.vision; // For advanced computer vision
-extern Zenith.stdlib.agi_governance; // For malicious idea detection, user blocking, legal action
-extern Zenith.stdlib.human_agi_interaction; // For admin, feedback, payments, IP
-extern Zenith.stdlib.external_services; // For cloud and DevOps integration
-extern Zenith.stdlib.reality; // For VR/AR interaction
-extern Zenith.stdlib.distributed_ledger; // For blockchain integration
-extern Zenith.stdlib.iot; // For IoT device management
-extern Zenith.toolchain.meta_programming; // For autonomous code generation
-extern Zenith.toolchain.self_evolution; // For autonomous self-adjustment
+// Import necessary Zamani Standard Library modules and Runtime interfaces
+extern Zamani.stdlib.core;
+extern Zamani.stdlib.collections;
+extern Zamani.stdlib.net;
+extern Zamani.stdlib.fs;
+extern Zamani.stdlib.ml;
+extern Zamani.stdlib.db;
+extern Zamani.stdlib.sync;
+extern Zamani.stdlib.time;
+extern Zamani.stdlib.numeric;
+extern Zamani.stdlib.serialize;
+extern Zamani.stdlib.gui;
+extern Zamani.runtime.quantum;
+extern Zamani.runtime.nano;
+extern Zamani.runtime.mts;
+extern Zamani.runtime.sankofa;
+extern Zamani.nimbus.os; // Direct Nimbus OS interaction for low-level control
+extern Zamani.toolchain.hdl; // For HDL related operations
+extern Zamani.stdlib.ai_reasoning; // For advanced AI reasoning, causal inference
+extern Zamani.stdlib.nlp; // For natural language processing
+extern Zamani.stdlib.vision; // For advanced computer vision
+extern Zamani.stdlib.agi_governance; // For malicious idea detection, user blocking, legal action
+extern Zamani.stdlib.human_agi_interaction; // For admin, feedback, payments, IP
+extern Zamani.stdlib.external_services; // For cloud and DevOps integration
+extern Zamani.stdlib.reality; // For VR/AR interaction
+extern Zamani.stdlib.distributed_ledger; // For blockchain integration
+extern Zamani.stdlib.iot; // For IoT device management
+extern Zamani.toolchain.meta_programming; // For autonomous code generation
+extern Zamani.toolchain.self_evolution; // For autonomous self-adjustment
 
 // Define application-specific data structures
 class MissionGoal {
@@ -63,10 +63,10 @@ type TransactionId = String;
 
 // Main AGI orchestrator logic
 fn main() -> i32 {
-    core.println("Zenith Universal Cognitive Orchestrator AGI starting...");
+    core.println("Zamani Universal Cognitive Orchestrator AGI starting...");
 
     // 1. Initialize core system components
-    Zenith.runtime.initialize_runtime(); // Conceptual call to init all runtimes
+    Zamani.runtime.initialize_runtime(); // Conceptual call to init all runtimes
 
     let mut current_mission: collections.Option<MissionGoal> = collections.Option::None;
     let mut agi_code_version = "v1.0.0".to_string(); // Current AGI logic version
@@ -183,7 +183,7 @@ fn main() -> i32 {
         // 5. Distributed Ledger for Data Integrity (Before Decision-Making)
         #[governance(compliance="DataIntegrityStandardV1")]
         let report_bytes = serialize.Serialize.to_bytes(&report, serialize.SerializationFormat.Json)?;
-        let ledger_client = distributed_ledger.LedgerClient.connect("ZenithAuditChain")?;
+        let ledger_client = distributed_ledger.LedgerClient.connect("ZamaniAuditChain")?;
         let transaction = distributed_ledger.Transaction {
             sender: crypto.PublicKey.new("AGI_Orchestrator_Key"), // Dummy
             receiver: crypto.PublicKey.new("Audit_Node_Key"), // Dummy
@@ -230,7 +230,7 @@ fn main() -> i32 {
 
                     // Dynamically reconfigure NACU for optimal cleanup pattern (via HDL)
                     let cleanup_hdl_config_bytes = fs.File.open_read(fs.Path.new("cleanup_nac_hdl.zn"))?.read_to_bytes()?;
-                    let compiled_nac_config = toolchain.hdl.ZMMP_HDL_Generator.new().generate_from_zenith_hdl(cleanup_hdl_config_bytes.data)?;
+                    let compiled_nac_config = toolchain.hdl.ZMMP_HDL_Generator.new().generate_from_zamani_hdl(cleanup_hdl_config_bytes.data)?;
                     nimbus.os.get_microkernel().reconfigure_hardware(nimbus.os.get_current_context_id(), nimbus.os.NACU_ID, compiled_nac_config);
 
                     // Activate IoT devices for physical barriers/support
@@ -315,7 +315,7 @@ fn main() -> i32 {
             core.println("Critical anomaly: Scaling up QPU resources.");
             external_services.CloudPlatform.new().provision_compute_instance( // Dummy handle
                 external_services.ServiceHandle { id: Identifier.new("AWS_QPU_Region") }, // Dummy
-                "qpu.large".to_string(), "ZenithOS_QPU_Image".to_string(), 0
+                "qpu.large".to_string(), "ZamaniOS_QPU_Image".to_string(), 0
             )?;
             // Update resource budget in mission
             mission.max_resource_budget.insert("cloud_qpu".to_string(), 100.0);
@@ -325,8 +325,8 @@ fn main() -> i32 {
         time.Thread.sleep(time.Duration.from_minutes(10));
     }
 
-    core.println("Zenith Universal Cognitive Orchestrator AGI shutting down.");
-    Zenith.runtime.shutdown_runtime();
+    core.println("Zamani Universal Cognitive Orchestrator AGI shutting down.");
+    Zamani.runtime.shutdown_runtime();
     return 0;
 }
 
@@ -417,8 +417,8 @@ extension nimbus.os {
 // Dummy for toolchain.hdl.ZMMP_HDL_Generator
 extension toolchain.hdl.ZMMP_HDL_Generator {
     fn new() -> Self { toolchain.hdl.ZMMP_HDL_Generator {} }
-    fn generate_from_zenith_hdl(hdl_bytes: collections.List<u8>) -> collections.List<u8> {
-        core.println("Conceptual HDL generation from Zenith HDL.");
+    fn generate_from_zamani_hdl(hdl_bytes: collections.List<u8>) -> collections.List<u8> {
+        core.println("Conceptual HDL generation from Zamani HDL.");
         collections.List::new() // Dummy
     }
 }
@@ -571,7 +571,7 @@ extension external_services.CloudPlatform {
             id: Identifier.new("new_vm"),
             resource_type: "VM".to_string(),
             current_status: "provisioning".to_string(),
-            deployed_zenith_app: collections.Option::None,
+            deployed_zamani_app: collections.Option::None,
             allocated_capabilities: collections.List::new(),
         })
     }

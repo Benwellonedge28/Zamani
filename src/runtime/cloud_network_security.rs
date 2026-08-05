@@ -1,11 +1,11 @@
-//! Zenith Universal Meta-Compiler (UMC): Autonomous Cloud & Network Security Module
+//! Zamani Universal Meta-Compiler (UMC): Autonomous Cloud & Network Security Module
 //!
-//! This module defines the conceptual framework for Zenith's autonomous and infinitely
+//! This module defines the conceptual framework for Zamani's autonomous and infinitely
 //! secure cloud and network computing capabilities. It orchestrates the deployment,
-//! continuous self-optimization, and hyper-advanced defense of Zenith-powered
+//! continuous self-optimization, and hyper-advanced defense of Zamani-powered
 //! infrastructures against all threats, existing and future.
 //!
-//! It leverages Zenith's multi-paradigm AI, nano-agents, quantum cryptography,
+//! It leverages Zamani's multi-paradigm AI, nano-agents, quantum cryptography,
 //! and self-evolutionary mechanisms to create a truly resilient and intelligent
 //! cloud/network environment.
 
@@ -24,12 +24,12 @@ use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; 
 
 /// Initializes the Autonomous Cloud & Network Security module.
 pub fn init_cloud_network_security() {
-    println!("  - Initializing Zenith Autonomous Cloud & Network Security Module (Hyper-Secure, Self-Evolving, AGI-Driven)...");
+    println!("  - Initializing Zamani Autonomous Cloud & Network Security Module (Hyper-Secure, Self-Evolving, AGI-Driven)...");
 }
 
 /// Shuts down the Autonomous Cloud & Network Security module.
 pub fn shutdown_cloud_network_security() {
-    println!("  - Shutting down Zenith Autonomous Cloud & Network Security Module...");
+    println!("  - Shutting down Zamani Autonomous Cloud & Network Security Module...");
 }
 
 // -----------------------------------------------------------------------------
@@ -42,7 +42,7 @@ pub struct CloudResource {
     pub id: Identifier,
     pub resource_type: String, // e.g., "VM", "QPU_slice", "NACU_cluster", "NetworkSegment"
     pub current_status: String,
-    pub deployed_zenith_app: Option<Identifier>,
+    pub deployed_zamani_app: Option<Identifier>,
     pub allocated_capabilities: List<CapabilityToken>, // From Nimbus OS
 }
 
@@ -57,14 +57,14 @@ pub struct ManagementPolicy {
 pub struct CloudNetworkOrchestrator;
 
 impl CloudNetworkOrchestrator {
-    /// Deploys a Zenith application across heterogeneous cloud/network resources.
+    /// Deploys a Zamani application across heterogeneous cloud/network resources.
     /// Optimizes deployment based on performance, cost, and security policies.
-    pub fn deploy_zenith_application(
+    pub fn deploy_zamani_application(
         app_id: Identifier,
         policy: ManagementPolicy,
     ) -> Result<List<CloudResource>, String> {
         println!(
-            "[Runtime::CloudNetSec] Deploying Zenith app '{}' with policy '{}'.",
+            "[Runtime::CloudNetSec] Deploying Zamani app '{}' with policy '{}'.",
             app_id.0, policy.name.0
         );
         // Conceptual: Uses Nimbus OS's distributed capabilities, consults Planner, ML for optimization.
@@ -108,7 +108,7 @@ impl CloudNetworkOrchestrator {
 // -----------------------------------------------------------------------------
 
 /// Represents a conceptual, hyper-autonomous cybersecurity agent.
-/// These agents are themselves advanced Zenith AGIs, leveraging all available paradigms.
+/// These agents are themselves advanced Zamani AGIs, leveraging all available paradigms.
 pub struct CybersecurityAgent {
     pub base_agent: AutonomousAgent,
     pub threat_prediction_model: Box<dyn Model>, // ML model for predicting future threats

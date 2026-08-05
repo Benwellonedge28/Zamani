@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Design Principles (SOLID, DRY, ethical-by-design)
+//! Zamani stdlib — Design Principles (SOLID, DRY, ethical-by-design)
 #[derive(Debug, Clone, PartialEq)]
 pub enum DesignPrinciple {
     Solid,

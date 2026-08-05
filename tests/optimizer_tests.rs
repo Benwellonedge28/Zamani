@@ -7,12 +7,12 @@
     unused_comparisons
 )]
 
-//! Zenith Optimizer — Comprehensive Integration Tests
+//! Zamani Optimizer — Comprehensive Integration Tests
 
-use zenith_compiler::ir_gen::{
+use zamani_compiler::ir_gen::{
     CmpOp, IrFunction, IrInstruction, IrModule, IrRegister, IrType, IrValue,
 };
-use zenith_compiler::optimizer::{OptimizationConfig, Optimizer};
+use zamani_compiler::optimizer::{OptimizationConfig, Optimizer};
 
 fn make_module_with_instructions(instructions: Vec<IrInstruction>) -> IrModule {
     let mut func = IrFunction::new("test_fn", vec![], IrType::Void);

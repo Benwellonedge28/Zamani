@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Knowledge Graph & Semantic Reasoning
+//! Zamani stdlib — Omniversal Knowledge Graph & Semantic Reasoning
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

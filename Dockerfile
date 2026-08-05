@@ -35,9 +35,9 @@ RUN touch src/main.rs src/lib.rs && cargo build --release
 # ── Stage 3: Minimal runtime ─────────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
 
-LABEL org.opencontainers.image.title="Zenith Compiler"
-LABEL org.opencontainers.image.description="Zenith Universal Meta-Compiler (ZUTC)"
-LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zenith"
+LABEL org.opencontainers.image.title="Zamani Compiler"
+LABEL org.opencontainers.image.description="Zamani Universal Meta-Compiler (ZUTC)"
+LABEL org.opencontainers.image.source="https://github.com/Benwellonedge28/Zamani"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
@@ -47,11 +47,11 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     apt-get clean
 
-WORKDIR /zenith
+WORKDIR /zamani
 
-COPY --from=builder /app/target/release/zenith /usr/local/bin/zenith
+COPY --from=builder /app/target/release/zamani /usr/local/bin/zamani
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD echo "Zenith OK"
+    CMD echo "Zamani OK"
 
-CMD ["/usr/local/bin/zenith", "--help"]
+CMD ["/usr/local/bin/zamani", "--help"]

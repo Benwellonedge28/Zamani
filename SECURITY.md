@@ -8,12 +8,12 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in the Zenith compiler, please **do not** open a public GitHub issue.
+If you discover a security vulnerability in the Zamani compiler, please **do not** open a public GitHub issue.
 
 Instead, report it privately by:
 
 1. Emailing the maintainers via the GitHub private vulnerability reporting feature:
-   https://github.com/Benwellonedge28/Zenith/security/advisories/new
+   https://github.com/Benwellonedge28/Zamani/security/advisories/new
 
 2. Include a description of the issue, steps to reproduce, and the potential impact.
 

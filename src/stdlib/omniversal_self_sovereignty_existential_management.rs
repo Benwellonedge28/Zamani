@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Self-Sovereignty & Existential Management (OSSEM)
+//! Zamani stdlib — Omniversal Self-Sovereignty & Existential Management (OSSEM)
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Substrate {

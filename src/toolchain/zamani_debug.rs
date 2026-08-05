@@ -1,30 +1,30 @@
-//! Zenith Toolchain: Debug Adapter Protocol (`zenith-debug`)
+//! Zamani Toolchain: Debug Adapter Protocol (`zamani-debug`)
 //!
-//! This module implements the Debug Adapter Protocol (DAP) for Zenith.
+//! This module implements the Debug Adapter Protocol (DAP) for Zamani.
 //! It allows any DAP-compatible debugger (e.g., VS Code, IntelliJ IDEA) to
-//! natively debug Zenith applications, including complex scenarios involving
+//! natively debug Zamani applications, including complex scenarios involving
 //! concurrent, distributed, quantum, and hardware-controlling code.
 //!
-//! `zenith-debug` leverages Zenith's internal runtime, IR, and symbolic information
+//! `zamani-debug` leverages Zamani's internal runtime, IR, and symbolic information
 //! to provide a rich debugging experience, essential for developing "very extra
 //! super Extremely supremely autonomous infinity Advanced and secure infinitely"
 //! systems.
 
-use crate::runtime::debugger::{Breakpoint, Variable, ZenithDebugger};
+use crate::runtime::debugger::{Breakpoint, Variable, ZamaniDebugger};
 use crate::stdlib::collections::{List, Map};
 use crate::stdlib::meta_ops::MetaValue;
 
-/// Zenith Debug Adapter Protocol (DAP) Adapter.
-pub struct ZenithDebugAdapter {
-    pub debugger: ZenithDebugger,            // Core Zenith debugger logic
+/// Zamani Debug Adapter Protocol (DAP) Adapter.
+pub struct ZamaniDebugAdapter {
+    pub debugger: ZamaniDebugger,            // Core Zamani debugger logic
     pub dap_client: DapClient,               // Client for sending DAP responses/events
-    pub runtime_interface: RuntimeInterface, // Interface to the running Zenith application
+    pub runtime_interface: RuntimeInterface, // Interface to the running Zamani application
 }
 
-impl ZenithDebugAdapter {
+impl ZamaniDebugAdapter {
     pub fn new() -> Self {
-        ZenithDebugAdapter {
-            debugger: ZenithDebugger::new(),
+        ZamaniDebugAdapter {
+            debugger: ZamaniDebugger::new(),
             dap_client: DapClient::new(),
             runtime_interface: RuntimeInterface::new(),
         }
@@ -32,15 +32,15 @@ impl ZenithDebugAdapter {
 
     /// Starts the DAP adapter, listening for debugger client requests.
     pub fn start(&mut self) -> Result<(), String> {
-        println!("[zenith-debug] Starting Zenith DAP adapter...");
+        println!("[zamani-debug] Starting Zamani DAP adapter...");
         // In a real implementation, this would handle I/O over a specific port or stdio
         // and dispatch DAP requests to appropriate handlers.
         Ok(())
     }
 
-    /// Handles `launch` or `attach` requests to start/connect to a Zenith process.
+    /// Handles `launch` or `attach` requests to start/connect to a Zamani process.
     pub fn on_launch_or_attach(&mut self, config: Map<String, MetaValue>) -> Result<(), String> {
-        println!("[zenith-debug] Launching/attaching Zenith application.");
+        println!("[zamani-debug] Launching/attaching Zamani application.");
         self.runtime_interface.launch_or_attach(config)?;
         self.debugger.attach_to_runtime(&self.runtime_interface)?;
         self.dap_client.send_initialized_event();
@@ -52,27 +52,27 @@ impl ZenithDebugAdapter {
         &mut self,
         breakpoints: List<Breakpoint>,
     ) -> Result<List<Breakpoint>, String> {
-        println!("[zenith-debug] Setting breakpoints.");
+        println!("[zamani-debug] Setting breakpoints.");
         self.debugger.set_breakpoints(breakpoints)
     }
 
     /// Handles `continue` request.
     pub fn on_continue(&mut self) -> Result<(), String> {
-        println!("[zenith-debug] Continuing execution.");
+        println!("[zamani-debug] Continuing execution.");
         self.debugger.continue_execution();
         Ok(())
     }
 
     /// Handles `next` (step over) request.
     pub fn on_next(&mut self) -> Result<(), String> {
-        println!("[zenith-debug] Stepping over.");
+        println!("[zamani-debug] Stepping over.");
         self.debugger.step_over();
         Ok(())
     }
 
     /// Handles `scopes` request to retrieve scopes for a stack frame.
     pub fn on_scopes(&mut self, frame_id: u64) -> Result<List<Scope>, String> {
-        println!("[zenith-debug] Retrieving scopes for frame {}.", frame_id);
+        println!("[zamani-debug] Retrieving scopes for frame {}.", frame_id);
         // Dynamically inspect local variables, registers, quantum states, etc.
         Ok(List::new())
     }
@@ -80,7 +80,7 @@ impl ZenithDebugAdapter {
     /// Handles `variables` request to retrieve variables for a scope.
     pub fn on_variables(&mut self, variables_reference: u64) -> Result<List<Variable>, String> {
         println!(
-            "[zenith-debug] Retrieving variables for reference {}.",
+            "[zamani-debug] Retrieving variables for reference {}.",
             variables_reference
         );
         // Extract concrete values, potentially including high-dimensional tensors, quantum states.
@@ -89,7 +89,7 @@ impl ZenithDebugAdapter {
 
     /// Sends debug events (stopped, exited, etc.) to the client.
     pub fn send_debug_event(&mut self, event: DebugEvent) {
-        println!("[zenith-debug] Sending debug event: {}.", event.to_string());
+        println!("[zamani-debug] Sending debug event: {}.", event.to_string());
         self.dap_client.send_event(event);
     }
 }
@@ -106,7 +106,7 @@ impl DapClient {
     }
 }
 
-/// Interface to the running Zenith application (runtime, VM, OS).
+/// Interface to the running Zamani application (runtime, VM, OS).
 pub struct RuntimeInterface;
 impl RuntimeInterface {
     pub fn new() -> Self {

@@ -1,24 +1,24 @@
-//! Zenith Standard Library: Autonomous Documentation System Module
+//! Zamani Standard Library: Autonomous Documentation System Module
 //!
-//! This module provides the conceptual framework for Zenith's "Autonomous Documentation System."
-//! It enables Zenith AGI to automatically generate exhaustive, multi-modal documentation
+//! This module provides the conceptual framework for Zamani's "Autonomous Documentation System."
+//! It enables Zamani AGI to automatically generate exhaustive, multi-modal documentation
 //! in various formats (documents, books, articles, reports, journals, news) explaining
-//! Zenith itself, its ecosystem, and any output product developed using Zenith.
+//! Zamani itself, its ecosystem, and any output product developed using Zamani.
 //!
 //! Designed for "infinity Advanced and secure infinitely and ready for production,"
-//! this system leverages Zenith's full AGI stack, including deep NLP, AI reasoning,
+//! this system leverages Zamani's full AGI stack, including deep NLP, AI reasoning,
 //! multi-modal content generation, and knowledge retrieval from Sankofa, to produce
 //! high-quality, un-shortcutting explanations.
 
 use crate::ast::Identifier; // For entity IDs, document sections
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting
-use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For retrieving deep knowledge about Zenith
+use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For retrieving deep knowledge about Zamani
 use crate::source_map::Span;
 use crate::stdlib::ai_reasoning::{Fact, FactObject, KnowledgeBase, Planner}; // For reasoning about topics
 use crate::stdlib::chat_architect_agent::GeneratedCodeArtifact; // To generate docs for generated code
 use crate::stdlib::collections::{List, Map}; // For content structure, metadata
 use crate::stdlib::gui::Image; // For embedding images
-use crate::stdlib::meta_ops::{MetaOperations, MetaValue}; // For reflecting on Zenith's structure
+use crate::stdlib::meta_ops::{MetaOperations, MetaValue}; // For reflecting on Zamani's structure
 use crate::stdlib::nlp::{MultiModalContent, NaturalLanguageProcessor, TextFormat, TextGenerator}; // For text generation, multi-modal output
 use crate::stdlib::web::HtmlContent; // For web-based documentation // For Identifier creation
 
@@ -86,8 +86,8 @@ impl DocumentationSystem {
         let mut raw_content_data = Map::new();
         match &request.scope {
             // Use & to match against enum variant
-            DocumentationScope::ZenithCore => {
-                // Use MetaOps to inspect Zenith's own compiler/runtime structure
+            DocumentationScope::ZamaniCore => {
+                // Use MetaOps to inspect Zamani's own compiler/runtime structure
                 let compiler_info = MetaOperations::reflect_compiler_structure()?; // Conceptual call
                 raw_content_data.insert(
                     "compiler_details".to_string(),
@@ -97,12 +97,12 @@ impl DocumentationSystem {
                     "sankofa_fundamental_principles".to_string(),
                     MetaValue::List(
                         self.sankofa_kb
-                            .retrieve_knowledge("Zenith_Fundamentality", 10)
+                            .retrieve_knowledge("Zamani_Fundamentality", 10)
                             .unwrap_or(List::new()),
                     ),
                 );
             }
-            DocumentationScope::ZenithEcosystem => {
+            DocumentationScope::ZamaniEcosystem => {
                 // Reflect on stdlib modules, toolchain, Nimbus OS interfaces
                 let stdlib_list = MetaOperations::reflect_module_list("stdlib".to_string())?; // Conceptual call
                 raw_content_data
@@ -165,7 +165,7 @@ impl DocumentationSystem {
             creation_timestamp: crate::stdlib::time::DateTime::now_in(
                 crate::stdlib::time::TimeZone::utc(),
             ),
-            author_agi: Identifier("Zenith_DocGen_AGI".to_string(), Span::dummy()),
+            author_agi: Identifier("Zamani_DocGen_AGI".to_string(), Span::dummy()),
         };
 
         let evas_context = EvasActionContext {
@@ -197,7 +197,7 @@ impl DocumentationSystem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DocumentationRequest {
     pub title: String,
-    pub topic: String, // High-level topic (e.g., "Zenith Compiler Internals", "YourProject API")
+    pub topic: String, // High-level topic (e.g., "Zamani Compiler Internals", "YourProject API")
     pub scope: DocumentationScope,
     pub output_format: DocumentFormat,
     pub target_audience: String, // e.g., "Beginner", "Advanced Developer", "Policy Maker"
@@ -205,8 +205,8 @@ pub struct DocumentationRequest {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DocumentationScope {
-    ZenithCore,                         // Explaining Zenith's foundational principles
-    ZenithEcosystem,                    // Explaining stdlib, toolchain, Nimbus OS
+    ZamaniCore,                         // Explaining Zamani's foundational principles
+    ZamaniEcosystem,                    // Explaining stdlib, toolchain, Nimbus OS
     ProductCode(GeneratedCodeArtifact), // Documentation for a specific compiled product
     CustomTopic(String),                // For ad-hoc requests
 }

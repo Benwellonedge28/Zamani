@@ -1,6 +1,6 @@
-//! Zenith Standard Library: Networking Module
+//! Zamani Standard Library: Networking Module
 //!
-//! This module provides conceptual APIs for network communication, enabling Zenith
+//! This module provides conceptual APIs for network communication, enabling Zamani
 //! programs to build robust, secure, and distributed applications. It abstracts
 //! various network protocols and leverages Nimbus OS's secure communication channels.
 
@@ -193,7 +193,7 @@ impl HttpClient {
         Ok(HttpResponse {
             status: 200,
             headers: HashMap::new(),
-            body: "<html><body>Hello Zenith!</body></html>"
+            body: "<html><body>Hello Zamani!</body></html>"
                 .as_bytes()
                 .to_vec(),
         })

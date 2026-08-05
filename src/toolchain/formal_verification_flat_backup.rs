@@ -1,9 +1,9 @@
 
-//! Zenith Toolchain: Formal Verification
+//! Zamani Toolchain: Formal Verification
 //!
 //! This module defines the conceptual framework for integrating formal methods
-//! and automated verification tools into the Zenith compilation and development
-//! workflow. Zenith's design principles, particularly for quantum, nano, MTS,
+//! and automated verification tools into the Zamani compilation and development
+//! workflow. Zamani's design principles, particularly for quantum, nano, MTS,
 //! and Sankofa paradigms, necessitate strong guarantees beyond traditional testing.
 
 use crate::ir_gen::IrInstruction; // For verifying IR
@@ -64,10 +64,10 @@ pub struct CounterExample {
     pub related_span: Option<Span>,
 }
 
-/// Conceptual interface to Zenith's formal verifier tools.
-pub struct ZenithFormalVerifier;
+/// Conceptual interface to Zamani's formal verifier tools.
+pub struct ZamaniFormalVerifier;
 
-impl ZenithFormalVerifier {
+impl ZamaniFormalVerifier {
     /// Runs a formal verification check on the AST (high-level properties).
     pub fn verify_ast(program_ast: &Program, property: VerificationProperty) -> VerificationResult {
         println!("[Toolchain::Verify] Verifying AST for property: {:?}...", property);
@@ -136,7 +136,7 @@ impl ZenithFormalVerifier {
         let mut results = Vec::new();
         for prop in properties {
             // Depending on property, choose AST or IR verification
-            results.push(ZenithFormalVerifier::verify_ir(ir_code, prop.clone()));
+            results.push(ZamaniFormalVerifier::verify_ir(ir_code, prop.clone()));
         }
         results
     }

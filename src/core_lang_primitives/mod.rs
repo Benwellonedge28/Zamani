@@ -1,10 +1,10 @@
-//! Zenith Universal Meta-Compiler (UMC) Core Language Primitives
+//! Zamani Universal Meta-Compiler (UMC) Core Language Primitives
 //!
 //! This module defines fundamental traits, types, and interfaces that are
-//! intrinsic to the Zenith programming language and form the bedrock upon
+//! intrinsic to the Zamani programming language and form the bedrock upon
 //! which the standard library and all multi-paradigm extensions are built.
 //! These are "core" concepts, meaning they are often compiler-intrinsics
-//! or directly supported by the Zenith runtime/Nimbus OS.
+//! or directly supported by the Zamani runtime/Nimbus OS.
 
 use crate::ast::Identifier;
 use std::collections::HashMap; // For conceptual use in NimbusSystemCall
@@ -24,7 +24,7 @@ pub trait Printable {
 }
 
 /// Trait for types that can be duplicated (deep or shallow copy).
-/// Enforces resource management in Zenith's ownership model.
+/// Enforces resource management in Zamani's ownership model.
 pub trait Cloneable {
     fn clone(&self) -> Self;
 }
@@ -236,7 +236,7 @@ impl<T> Mutex<T> {
 use crate::runtime::nimbus_os_interface::get_nimbus_microkernel; // For accessing the global microkernel
 
 /// Conceptual interface for low-level Nimbus OS system calls.
-/// This would be exposed to Zenith's runtime for direct interaction.
+/// This would be exposed to Zamani's runtime for direct interaction.
 pub struct NimbusSystemCall;
 
 impl NimbusSystemCall {
@@ -355,10 +355,10 @@ impl NimbusSystemCall {
 
 /// Initializes the core language primitives.
 pub fn init_core_lang_primitives() {
-    println!("  - Initializing Zenith Core Language Primitives (Memory, Concurrency, Nimbus Syscalls)...");
+    println!("  - Initializing Zamani Core Language Primitives (Memory, Concurrency, Nimbus Syscalls)...");
 }
 
 /// Shuts down the core language primitives.
 pub fn shutdown_core_lang_primitives() {
-    println!("  - Shutting down Zenith Core Language Primitives...");
+    println!("  - Shutting down Zamani Core Language Primitives...");
 }

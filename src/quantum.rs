@@ -1,4 +1,4 @@
-// Zenith Quantum Computing Module
+// Zamani Quantum Computing Module
 //
 // This module provides native support for quantum circuit definitions,
 // quantum data types, and integration with quantum hardware/simulators.

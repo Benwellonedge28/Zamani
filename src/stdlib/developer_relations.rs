@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Developer Relations (SDK gen, docs, telemetry)
+//! Zamani stdlib — Developer Relations (SDK gen, docs, telemetry)
 use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct SdkSpec {
@@ -28,7 +28,7 @@ impl DevRelEngine {
     pub fn generate_sdk(&mut self, spec: &SdkSpec) -> String {
         self.sdks += 1;
         format!(
-            "// Zenith SDK {} v{}
+            "// Zamani SDK {} v{}
 // includes: {}",
             spec.language,
             spec.version,

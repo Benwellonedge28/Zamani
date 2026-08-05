@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — agent_interface module
+//! Zamani — agent_interface module
 
 /// Initialize agent_interface
 pub fn init_agent_interface() {}

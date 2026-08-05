@@ -1,4 +1,4 @@
-//! Zenith UMC Compiler Types
+//! Zamani UMC Compiler Types
 //! Shared types used across all compiler phases.
 
 use crate::source_map::Span;
@@ -60,7 +60,7 @@ pub enum FloatWidth {
     F128,
 }
 
-/// Fully-resolved Zenith type.
+/// Fully-resolved Zamani type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Unit,

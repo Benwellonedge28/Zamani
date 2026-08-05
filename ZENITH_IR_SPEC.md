@@ -1,8 +1,8 @@
-# Zenith IR Specification
+# Zamani IR Specification
 
 ## Overview
 
-The Zenith Intermediate Representation (IR) is a typed, SSA-form low-level language used as the bridge between the frontend AST and target code generation.
+The Zamani Intermediate Representation (IR) is a typed, SSA-form low-level language used as the bridge between the frontend AST and target code generation.
 
 ## IR Instruction Set
 

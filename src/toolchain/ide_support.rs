@@ -1,7 +1,7 @@
-//! Zenith Toolchain: IDE Support
+//! Zamani Toolchain: IDE Support
 //!
 //! This module defines conceptual interfaces and protocols for enabling rich
-//! Integrated Development Environment (IDE) features for Zenith, such as
+//! Integrated Development Environment (IDE) features for Zamani, such as
 //! language services (LSP), debugging (DAP), and code intelligence.
 //! It focuses on providing a multi-paradigm-aware development experience.
 
@@ -18,14 +18,14 @@ pub fn shutdown_ide_support() {
     println!("  - Shutting down Toolchain IDE Support...");
 }
 
-/// Conceptual function to start a Language Server Protocol (LSP) server for Zenith.
+/// Conceptual function to start a Language Server Protocol (LSP) server for Zamani.
 pub fn start_lsp_server() {
-    println!("[Toolchain::ide] Starting Zenith Language Server Protocol (LSP) server...");
+    println!("[Toolchain::ide] Starting Zamani Language Server Protocol (LSP) server...");
     // Conceptual: Listen for LSP client connections, provide features like
     // diagnostics, autocompletion, go-to-definition, refactoring.
 }
 
-/// Provides detailed diagnostics for a given Zenith source file.
+/// Provides detailed diagnostics for a given Zamani source file.
 pub fn get_diagnostics(file_path: &str) -> Vec<Diagnostic> {
     println!(
         "[Toolchain::ide] Providing diagnostics for '{}'...",
@@ -77,10 +77,10 @@ pub fn go_to_definition(file_path: &str, identifier_span: Span) -> Option<Span> 
 /// Conceptual function to start a Debugger Adapter Protocol (DAP) server.
 pub fn start_dap_server(port: u16) {
     println!(
-        "[Toolchain::ide] Starting Zenith Debugger Adapter Protocol (DAP) server on port {}...",
+        "[Toolchain::ide] Starting Zamani Debugger Adapter Protocol (DAP) server on port {}...",
         port
     );
-    // Conceptual: Listen for debugger client connections, interface with zenith-dbg backend.
+    // Conceptual: Listen for debugger client connections, interface with zamani-dbg backend.
 }
 
 /// Conceptual function to get live previews for multi-paradigm elements.

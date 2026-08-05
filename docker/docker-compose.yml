@@ -1,4 +1,4 @@
-# Per-component Zenith images. Only `compiler`, `lsp`, and `buildsystem` are
+# Per-component Zamani images. Only `compiler`, `lsp`, and `buildsystem` are
 # real/working today — see docker/README.md for full status and how to run
 # each one. `runtime` and `stdlib` are included for completeness but will
 # fail to build until the compile errors tracked there are fixed.
@@ -7,20 +7,20 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.compiler
-    image: zenith/compiler:dev
+    image: zamani/compiler:dev
 
   lsp:
     build:
       context: ..
       dockerfile: docker/Dockerfile.lsp
-    image: zenith/lsp:dev
+    image: zamani/lsp:dev
     stdin_open: true   # speaks LSP over stdio — run with `docker compose run -i lsp`
 
   buildsystem:
     build:
       context: ..
       dockerfile: docker/Dockerfile.buildsystem
-    image: zenith/pkg:dev
+    image: zamani/pkg:dev
     volumes:
       - ..:/project:ro
 

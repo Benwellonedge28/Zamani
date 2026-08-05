@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Rogue Prevention & AGI Alignment Engine
+//! Zamani stdlib — Omniversal Rogue Prevention & AGI Alignment Engine
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone, PartialEq)]

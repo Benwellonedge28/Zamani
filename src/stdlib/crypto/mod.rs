@@ -1,6 +1,6 @@
-//! Zenith Universal Meta-Compiler (UMC) Standard Library: Cryptography Module
+//! Zamani Universal Meta-Compiler (UMC) Standard Library: Cryptography Module
 //!
-//! This module aggregates and manages all cryptography-related components for Zenith.
+//! This module aggregates and manages all cryptography-related components for Zamani.
 
 pub mod asymmetric_encryption;
 pub mod hashing;
@@ -18,7 +18,7 @@ pub mod tls;
 
 /// Initializes all cryptography components.
 pub fn init_crypto() {
-    println!("Initializing Zenith Cryptography Module...");
+    println!("Initializing Zamani Cryptography Module...");
     symmetric_encryption::init_symmetric_encryption();
     asymmetric_encryption::init_asymmetric_encryption();
     hashing::init_hashing();
@@ -26,12 +26,12 @@ pub fn init_crypto() {
     tls::init_tls();
     quantum_safe_primitives::init_quantum_safe_primitives(); // Initialize Quantum Identity
     quantum_identity::init_quantum_identity();
-    println!("Zenith Cryptography Module initialized.");
+    println!("Zamani Cryptography Module initialized.");
 }
 
 /// Shuts down all cryptography components.
 pub fn shutdown_crypto() {
-    println!("Shutting down Zenith Cryptography Module...");
+    println!("Shutting down Zamani Cryptography Module...");
     quantum_identity::shutdown_quantum_identity(); // Shutdown Quantum Identity
     quantum_safe_primitives::shutdown_quantum_safe_primitives();
     tls::shutdown_tls();
@@ -39,7 +39,7 @@ pub fn shutdown_crypto() {
     hashing::shutdown_hashing();
     asymmetric_encryption::shutdown_asymmetric_encryption();
     symmetric_encryption::shutdown_symmetric_encryption();
-    println!("Zenith Cryptography Module shut down.");
+    println!("Zamani Cryptography Module shut down.");
 }
 
 // ── merged from flat_backup ────

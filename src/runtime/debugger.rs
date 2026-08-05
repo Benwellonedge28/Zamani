@@ -1,7 +1,7 @@
-//! Zenith Runtime: Debugger
+//! Zamani Runtime: Debugger
 //!
 //! A minimal, real implementation of the core debugger primitives consumed
-//! by the `toolchain::zenith_debug` Debug Adapter Protocol (DAP) front-end:
+//! by the `toolchain::zamani_debug` Debug Adapter Protocol (DAP) front-end:
 //! breakpoint tracking and basic execution-control state (continue/step).
 
 use crate::stdlib::collections::List;
@@ -32,22 +32,22 @@ pub struct Variable {
     pub type_name: String,
 }
 
-/// Core Zenith debugger: tracks breakpoints and drives execution control
+/// Core Zamani debugger: tracks breakpoints and drives execution control
 /// over an attached runtime.
-pub struct ZenithDebugger {
+pub struct ZamaniDebugger {
     pub breakpoints: List<Breakpoint>,
     pub attached: bool,
 }
 
-impl ZenithDebugger {
+impl ZamaniDebugger {
     pub fn new() -> Self {
-        ZenithDebugger {
+        ZamaniDebugger {
             breakpoints: List::new(),
             attached: false,
         }
     }
 
-    /// Attaches this debugger to a running Zenith application, given a
+    /// Attaches this debugger to a running Zamani application, given a
     /// handle to the runtime interface. The interface is generic (`?Sized`
     /// via reference) so callers can pass their own runtime-interface type.
     pub fn attach_to_runtime<T>(&mut self, _runtime_interface: &T) -> Result<(), String> {
@@ -73,16 +73,16 @@ impl ZenithDebugger {
     }
 }
 
-impl Default for ZenithDebugger {
+impl Default for ZamaniDebugger {
     fn default() -> Self {
         Self::new()
     }
 }
 
 pub fn init_debugger() {
-    println!("  - Initializing Zenith Runtime Debugger...");
+    println!("  - Initializing Zamani Runtime Debugger...");
 }
 
 pub fn shutdown_debugger() {
-    println!("  - Shutting down Zenith Runtime Debugger...");
+    println!("  - Shutting down Zamani Runtime Debugger...");
 }

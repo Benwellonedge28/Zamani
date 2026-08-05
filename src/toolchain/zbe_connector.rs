@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Backend Emitter (ZBE) Connector — bridges IR to multiple native backends.
+//! Zamani Backend Emitter (ZBE) Connector — bridges IR to multiple native backends.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,11 +45,11 @@ impl ZbeConnector {
     pub fn emit(&mut self, ir: &str, target: BackendTarget) -> EmittedCode {
         self.emissions += 1;
         let code = match &target {
-            BackendTarget::LlvmIr => format!("; LLVM IR generated from Zenith IR\n; {} instructions\ndefine void @main() {{\n  ret void\n}}", ir.lines().count()),
-            BackendTarget::Wasm32 => format!("(module\n  ;; Zenith → WASM32\n  ;; {} IR lines\n  (func $main (export \"main\")))", ir.lines().count()),
-            BackendTarget::X86_64 => format!("; x86-64 assembly\n; Zenith compiled\nsection .text\nglobal _start\n_start:\n  ret"),
-            BackendTarget::QuantumQasm => format!("OPENQASM 2.0;\ninclude \"qelib1.inc\";\n// Zenith quantum circuit"),
-            _ => format!("// Zenith compiled to {:?}\n{}", target, ir),
+            BackendTarget::LlvmIr => format!("; LLVM IR generated from Zamani IR\n; {} instructions\ndefine void @main() {{\n  ret void\n}}", ir.lines().count()),
+            BackendTarget::Wasm32 => format!("(module\n  ;; Zamani → WASM32\n  ;; {} IR lines\n  (func $main (export \"main\")))", ir.lines().count()),
+            BackendTarget::X86_64 => format!("; x86-64 assembly\n; Zamani compiled\nsection .text\nglobal _start\n_start:\n  ret"),
+            BackendTarget::QuantumQasm => format!("OPENQASM 2.0;\ninclude \"qelib1.inc\";\n// Zamani quantum circuit"),
+            _ => format!("// Zamani compiled to {:?}\n{}", target, ir),
         };
         let size = code.len();
         let emitted = EmittedCode {

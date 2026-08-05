@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — signature module
+//! Zamani — signature module
 
 /// Initialize signature
 pub fn init_signature() {}

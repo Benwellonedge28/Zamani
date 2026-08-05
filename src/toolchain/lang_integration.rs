@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Language Integration — interop with Rust, Python, C, WASM, and more.
+//! Zamani Language Integration — interop with Rust, Python, C, WASM, and more.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,7 +21,7 @@ pub enum ForeignLang {
 pub struct FfiBinding {
     pub lang: ForeignLang,
     pub function_name: String,
-    pub zenith_signature: String,
+    pub zamani_signature: String,
     pub foreign_signature: String,
     pub safe: bool,
 }
@@ -71,7 +71,7 @@ impl LangIntegrationEngine {
 
     pub fn generate_glue(&self, lang: &ForeignLang) -> String {
         format!(
-            "// Auto-generated Zenith ↔ {:?} glue code\n// {} bindings registered",
+            "// Auto-generated Zamani ↔ {:?} glue code\n// {} bindings registered",
             lang,
             self.bindings.len()
         )

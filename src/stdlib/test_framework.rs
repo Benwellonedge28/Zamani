@@ -1,9 +1,9 @@
-//! Zenith Standard Library: Test Framework Primitives
+//! Zamani Standard Library: Test Framework Primitives
 //!
-//! This module provides the core primitives and attributes for Zenith's integrated
+//! This module provides the core primitives and attributes for Zamani's integrated
 //! testing framework. It defines the syntax for declaring various types of tests
-//! that are then processed by the `zenithc` compiler and executed by the
-//! `zenith-test` tool.
+//! that are then processed by the `zamanic` compiler and executed by the
+//! `zamani-test` tool.
 
 use crate::ast::Identifier;
 use crate::source_map::Span;
@@ -82,10 +82,10 @@ pub mod ast {
 
 /// Initializes the Test Framework primitives module.
 pub fn init_test_framework() {
-    println!("  - Initializing Zenith Test Framework...");
+    println!("  - Initializing Zamani Test Framework...");
 }
 
 /// Shuts down the Test Framework primitives module.
 pub fn shutdown_test_framework() {
-    println!("  - Shutting down Zenith Test Framework...");
+    println!("  - Shutting down Zamani Test Framework...");
 }

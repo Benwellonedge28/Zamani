@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Hallucination Prevention & RAG Engine
+//! Zamani stdlib — Omniversal Hallucination Prevention & RAG Engine
 use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Document {

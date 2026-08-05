@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Language Server Protocol (LSP) implementation.
+//! Zamani Language Server Protocol (LSP) implementation.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -54,14 +54,14 @@ pub struct HoverInfo {
     pub content: String,
 }
 
-pub struct ZenithLsp {
+pub struct ZamaniLsp {
     diagnostics: HashMap<String, Vec<Diagnostic>>,
     requests_served: u64,
 }
 
-impl ZenithLsp {
+impl ZamaniLsp {
     pub fn new() -> Self {
-        ZenithLsp {
+        ZamaniLsp {
             diagnostics: HashMap::new(),
             requests_served: 0,
         }
@@ -127,7 +127,7 @@ impl ZenithLsp {
             .map(|&kw| CompletionItem {
                 label: kw.to_string(),
                 kind: CompletionKind::Keyword,
-                detail: Some(format!("Zenith keyword: {}", kw)),
+                detail: Some(format!("Zamani keyword: {}", kw)),
                 documentation: None,
             })
             .collect()
@@ -164,7 +164,7 @@ impl ZenithLsp {
     }
 }
 
-impl Default for ZenithLsp {
+impl Default for ZamaniLsp {
     fn default() -> Self {
         Self::new()
     }

@@ -1,9 +1,9 @@
-//! Zenith Standard Library: Reflection API
+//! Zamani Standard Library: Reflection API
 //!
-//! This module provides a conceptual runtime reflection API for Zenith programs.
+//! This module provides a conceptual runtime reflection API for Zamani programs.
 //! It allows programs to inspect and manipulate their own structure, types,
 //! and object instances at runtime. This is crucial for dynamic metaprogramming,
-//! serialization, ORMs, and other advanced scenarios, particularly in Zenith's
+//! serialization, ORMs, and other advanced scenarios, particularly in Zamani's
 //! multi-paradigm and self-modifying context.
 
 use crate::ast::Identifier;
@@ -43,7 +43,7 @@ pub enum TypeKind {
     Other(String),
 }
 
-/// Provides detailed metadata about a Zenith type at runtime.
+/// Provides detailed metadata about a Zamani type at runtime.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeInfo {
     pub name: String,
@@ -86,7 +86,7 @@ pub struct ParameterInfo {
 }
 
 /// Conceptual API to reflect on an object instance at runtime.
-/// Zenith objects would conceptually implement this to expose their internals.
+/// Zamani objects would conceptually implement this to expose their internals.
 pub trait ObjectMirror {
     /// Returns the TypeInfo for this object's concrete type.
     fn get_type_info(&self) -> TypeInfo;
@@ -124,7 +124,7 @@ pub fn reflect<T: 'static>() -> TypeInfo {
     );
     // In a real compiler, this would generate TypeInfo based on T's static type.
     TypeInfo {
-        name: std::any::type_name::<T>().to_string(), // Placeholder, actual Zenith type name
+        name: std::any::type_name::<T>().to_string(), // Placeholder, actual Zamani type name
         kind: TypeKind::Other("unknown".to_string()),
         full_type: Type::Unknown, // Dummy
         fields: Vec::new(),

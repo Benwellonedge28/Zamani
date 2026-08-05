@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — reality_synthesis module
+//! Zamani — reality_synthesis module
 
 /// Initialize reality_synthesis
 pub fn init_reality_synthesis() {}

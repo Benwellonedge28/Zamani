@@ -1,9 +1,9 @@
-//! Zenith Standard Library: Computer Vision Module
+//! Zamani Standard Library: Computer Vision Module
 //!
 //! This module provides conceptual APIs for processing and understanding visual data
-//! (images and video) within Zenith applications. It includes functionalities for
+//! (images and video) within Zamani applications. It includes functionalities for
 //! image manipulation, feature extraction, object detection, scene understanding,
-//! and multi-modal fusion, leveraging Zenith's multi-paradigm compute for efficiency
+//! and multi-modal fusion, leveraging Zamani's multi-paradigm compute for efficiency
 //! and advanced cognitive perception.
 
 use crate::ast::Identifier; // For model names, object classes

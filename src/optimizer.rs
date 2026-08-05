@@ -1,4 +1,4 @@
-//! Zenith IR Optimizer
+//! Zamani IR Optimizer
 //!
 //! Real optimization passes over the IrModule:
 //! - Constant folding & propagation

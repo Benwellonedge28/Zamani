@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Resource Management
+//! Zamani stdlib — Resource Management
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResourceType {

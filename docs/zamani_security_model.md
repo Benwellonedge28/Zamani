@@ -1,9 +1,9 @@
 
-# Zenith Universal Meta-Compiler (UMC) and Nimbus OS Security Model
+# Zamani Universal Meta-Compiler (UMC) and Nimbus OS Security Model
 
-This document outlines the comprehensive, multi-layered security model of the Zenith Universal Meta-Compiler (UMC) and its foundational operating system, Nimbus OS. Zenith's core philosophy is "Bug-Free by Nature/Default," which extends to an unassailable security posture designed to ensure the integrity, confidentiality, and availability of all computations, especially across its multi-paradigm (classical, quantum, nano, MTS, Sankofa) and distributed execution environments.
+This document outlines the comprehensive, multi-layered security model of the Zamani Universal Meta-Compiler (UMC) and its foundational operating system, Nimbus OS. Zamani's core philosophy is "Bug-Free by Nature/Default," which extends to an unassailable security posture designed to ensure the integrity, confidentiality, and availability of all computations, especially across its multi-paradigm (classical, quantum, nano, MTS, Sankofa) and distributed execution environments.
 
-## 1. Core Principles of Zenith Security
+## 1. Core Principles of Zamani Security
 
 *   **Root of Trust:** Nimbus OS Microkernel provides the hardware-rooted foundation of security.
 *   **Least Privilege:** All components and contexts operate with the minimum necessary permissions.
@@ -31,9 +31,9 @@ Nimbus OS implements a fine-grained capability-based security model, replacing t
 
 ## 4. Sandboxing and Execution Policies
 
-Zenith programs run within `NimbusContext`s, which are governed by `SandboxPolicy`s.
+Zamani programs run within `NimbusContext`s, which are governed by `SandboxPolicy`s.
 
-*   **`SandboxPolicy`**: Defined in `Zenith.toml`, these policies specify:
+*   **`SandboxPolicy`**: Defined in `Zamani.toml`, these policies specify:
     *   **Resource Limits:** Max CPU time, memory, QPU cycles, nano-agent energy budget.
     *   **Network Access:** Allowed IP ranges, protocols, ports.
     *   **IPC Restrictions:** Which other contexts a context can communicate with.
@@ -43,20 +43,20 @@ Zenith programs run within `NimbusContext`s, which are governed by `SandboxPolic
 
 ## 5. Formal Verification: Mathematical Guarantees
 
-Zenith leverages advanced formal verification at compile-time to provide mathematical proofs of security properties, significantly reducing the surface for bugs and vulnerabilities.
+Zamani leverages advanced formal verification at compile-time to provide mathematical proofs of security properties, significantly reducing the surface for bugs and vulnerabilities.
 
-*   **Property-Based Verification**: Using `zenith-fv`, properties like:
+*   **Property-Based Verification**: Using `zamani-fv`, properties like:
     *   **Memory Safety**: Proof that there are no buffer overflows, use-after-free, or null-pointer dereferences (eliminating entire classes of vulnerabilities).
     *   **Non-Interference**: Proof that sensitive data cannot influence public outputs (preventing covert channels).
     *   **Causal Consistency**: Proof that MTS operations uphold temporal order and prevent paradoxes or unauthorized timeline manipulation.
     *   **Entanglement Purity**: Proof that quantum circuits achieve the desired entanglement state and maintain isolation.
     *   **Resource Bounds**: Proof that nano-agents operate within their defined energy and spatial limits.
     *   **Effect Guarantees**: Proof that specified effects (e.g., `QuantumDecoherence`) are properly handled or declared.
-*   **`unsafe` Blocks**: Code marked `unsafe` in Zenith requires explicit developer attention and can be subject to stricter formal verification rules or human review. `Zenith.toml` policies can mandate verification for all `unsafe` FFI calls.
+*   **`unsafe` Blocks**: Code marked `unsafe` in Zamani requires explicit developer attention and can be subject to stricter formal verification rules or human review. `Zamani.toml` policies can mandate verification for all `unsafe` FFI calls.
 
 ## 6. E.V.A.S. (Ethical, Verifiable, Autonomous, Secure) Filter
 
-The E.V.A.S. Filter is an AI-driven, continuously learning ethical and safety safeguard that operates at the Nimbus OS level, mediating and monitoring highly autonomous Zenith applications (e.g., those controlling nano-agents, or making critical decisions with Sankofa knowledge).
+The E.V.A.S. Filter is an AI-driven, continuously learning ethical and safety safeguard that operates at the Nimbus OS level, mediating and monitoring highly autonomous Zamani applications (e.g., those controlling nano-agents, or making critical decisions with Sankofa knowledge).
 
 *   **Real-time Monitoring**: Analyzes behavior of contexts against predefined ethical guidelines and safety protocols.
 *   **Mediation**: Can pause, modify, or terminate actions deemed unsafe or unethical.
@@ -65,7 +65,7 @@ The E.V.A.S. Filter is an AI-driven, continuously learning ethical and safety sa
 
 ## 7. Multi-Paradigm Security Considerations
 
-Zenith's unique paradigms introduce specific security challenges:
+Zamani's unique paradigms introduce specific security challenges:
 
 *   **Quantum Security**: 
     *   **Decoherence Control**: Ensuring QPU isolation and environment control against quantum noise.
@@ -84,18 +84,18 @@ Zenith's unique paradigms introduce specific security challenges:
 
 ## 8. FFI Security
 
-FFI is a potential vector for vulnerabilities. Zenith's FFI mitigates this through:
+FFI is a potential vector for vulnerabilities. Zamani's FFI mitigates this through:
 
 *   **Explicit `unsafe`:** Developers are forced to acknowledge potential risks.
 *   **Sandbox Segregation:** Foreign libraries can be loaded into distinct `NimbusContext`s with highly restrictive `SandboxPolicy`s, limiting their blast radius.
 *   **Formal Verification:** Specific FFI wrappers can be formally verified to ensure they uphold safety invariants.
 
-## 9. Zenith.toml Policy Declarations
+## 9. Zamani.toml Policy Declarations
 
-Security policies are declared within the `Zenith.toml` manifest, making them part of the project's verifiable configuration:
+Security policies are declared within the `Zamani.toml` manifest, making them part of the project's verifiable configuration:
 
 ```toml
-# Zenith.toml snippet for security configuration
+# Zamani.toml snippet for security configuration
 [nimbus.os]
 default_sandbox_policy = "strict_isolated_container"
 allowed_ipc_peers = ["sensor_context_id", "actuator_service"]
@@ -112,4 +112,4 @@ active = true
 policy_level = "strict" # "strict", "advisory", "off"
 ```
 
-This comprehensive security model ensures that Zenith programs, from conception to deployment, operate with the highest levels of trustworthiness and resilience against threats in a complex multi-paradigm world.
+This comprehensive security model ensures that Zamani programs, from conception to deployment, operate with the highest levels of trustworthiness and resilience against threats in a complex multi-paradigm world.

@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 //! NIMBUS — Networked Intelligence Multi-Base Universal System
-//! The distributed runtime substrate for Zenith AGI instances.
+//! The distributed runtime substrate for Zamani AGI instances.
 
 pub mod admin_interface;
 pub mod os;

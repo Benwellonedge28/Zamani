@@ -1,8 +1,8 @@
 
-//! Zenith Standard Library: Distributed Ledger Module
+//! Zamani Standard Library: Distributed Ledger Module
 //!
 //! This module provides conceptual APIs for interacting with blockchain
-//! technologies and decentralized networks. It enables Zenith AGI systems
+//! technologies and decentralized networks. It enables Zamani AGI systems
 //! to participate in trustless economic activities, execute smart contracts,
 //! and maintain secure, immutable records.
 //!

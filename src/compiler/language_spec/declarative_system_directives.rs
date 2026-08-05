@@ -1,46 +1,46 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-//! Zenith Language Specification: Declarative System Directives
+//! Zamani Language Specification: Declarative System Directives
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
-//! declarative system directives within the Zenith programming language. These
+//! declarative system directives within the Zamani programming language. These
 //! keywords, `self_adjust` and `version`, provide native language-level
 //! support for defining autonomous self-evolution and integrated versioning
-//! of Zenith applications and AGI components.
+//! of Zamani applications and AGI components.
 //!
 //! Inspired by UBUNTU's `SELF_ADJUSTMENT` and `SELF_VERSIONING` constructs,
-//! these integrate directly with Zenith's `toolchain::self_evolution` engine
+//! these integrate directly with Zamani's `toolchain::self_evolution` engine
 //! and the Sankofa memory system for managing system changes and historical records.
 
-use crate::ast::{Expression, Identifier, Statement}; // Zenith AST elements
+use crate::ast::{Expression, Identifier, Statement}; // Zamani AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
-use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
+use crate::ir_gen::{IrInstruction, IrValue}; // Zamani Intermediate Representation
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // For version history and learning
 use crate::stdlib::collections::{List, Map};
-use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For self-evolution integration // Zenith List type for rules
+use crate::toolchain::self_evolution::{EvolutionProposal, SelfEvolutionEngine}; // For self-evolution integration // Zamani List type for rules
 
 /// Initializes the Declarative System Directives language specification.
 pub fn init_declarative_system_directives_keywords() {
-    println!("    - Initializing Zenith Declarative System Directives (self_adjust, version)...");
+    println!("    - Initializing Zamani Declarative System Directives (self_adjust, version)...");
 }
 
 /// Shuts down the Declarative System Directives language specification.
 pub fn shutdown_declarative_system_directives_keywords() {
-    println!("    - Shutting down Zenith Declarative System Directives...");
+    println!("    - Shutting down Zamani Declarative System Directives...");
 }
 
 // -----------------------------------------------------------------------------
 // Conceptual Syntax and Semantics
 // -----------------------------------------------------------------------------
 
-/// Conceptual representation of Zenith's AST nodes for self-adjustment statements.
+/// Conceptual representation of Zamani's AST nodes for self-adjustment statements.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelfAdjustmentAst {
     SelfAdjust(Identifier, Vec<AdjustmentRuleAst>), // e.g., self_adjust MyComponent { ... rules ... }
     AdjustmentRule(Expression, Statement),          // when condition then action
 }
 
-/// Conceptual representation of Zenith's AST nodes for versioning statements.
+/// Conceptual representation of Zamani's AST nodes for versioning statements.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VersionRecordAst {
     pub version: String,

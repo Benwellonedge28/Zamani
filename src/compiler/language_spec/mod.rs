@@ -1,8 +1,8 @@
-//! Zenith Universal Meta-Compiler (UMC): Language Specification Modules
+//! Zamani Universal Meta-Compiler (UMC): Language Specification Modules
 //!
 //! This module aggregates and manages all conceptual language specification components
-//! for Zenith. It defines new keywords, declarative syntax, and attributes that extend
-//! Zenith's core language to directly support advanced AGI capabilities, multi-paradigm
+//! for Zamani. It defines new keywords, declarative syntax, and attributes that extend
+//! Zamani's core language to directly support advanced AGI capabilities, multi-paradigm
 //! constructs, and inherent security/ethics.
 //!
 //! Inspired by the UBUNTU grammar, this layer elevates many runtime and library features
@@ -15,26 +15,26 @@ pub mod declarative_system_directives; // For self_adjust, version blocks
 pub mod explainability_transparency; // For explain, transparent keywords
 pub mod security_ethics_attributes; // For #[safety], #[ethics] attributes // For dependent, linear types syntax
 
-/// Initializes all Zenith language specification modules.
+/// Initializes all Zamani language specification modules.
 pub fn init_language_spec() {
-    println!("  - Initializing Zenith Language Specification Modules...");
+    println!("  - Initializing Zamani Language Specification Modules...");
     ai_cognition::init_ai_cognition_keywords();
     concurrency_actors::init_concurrency_actors_keywords();
     explainability_transparency::init_explainability_transparency_keywords();
     declarative_system_directives::init_declarative_system_directives_keywords();
     security_ethics_attributes::init_security_ethics_attributes();
     advanced_types_syntax::init_advanced_types_syntax(); // Initialize Advanced Type System Syntax module
-    println!("  - Zenith Language Specification Modules initialized.");
+    println!("  - Zamani Language Specification Modules initialized.");
 }
 
-/// Shuts down all Zenith language specification modules.
+/// Shuts down all Zamani language specification modules.
 pub fn shutdown_language_spec() {
-    println!("  - Shutting down Zenith Language Specification Modules...");
+    println!("  - Shutting down Zamani Language Specification Modules...");
     advanced_types_syntax::shutdown_advanced_types_syntax(); // Shutdown Advanced Type System Syntax module
     security_ethics_attributes::shutdown_security_ethics_attributes();
     declarative_system_directives::shutdown_declarative_system_directives_keywords();
     explainability_transparency::shutdown_explainability_transparency_keywords();
     concurrency_actors::shutdown_concurrency_actors_keywords();
     ai_cognition::shutdown_ai_cognition_keywords();
-    println!("  - Zenith Language Specification Modules shut down.");
+    println!("  - Zamani Language Specification Modules shut down.");
 }

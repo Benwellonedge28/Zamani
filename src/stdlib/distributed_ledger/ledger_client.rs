@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — ledger_client module
+//! Zamani — ledger_client module
 
 /// Initialize ledger_client
 pub fn init_ledger_client() {}

@@ -1,5 +1,5 @@
 #![allow(unused_imports, dead_code, unused_variables)]
-//! Zenith — agent_communication module
+//! Zamani — agent_communication module
 
 /// Initialize agent_communication
 pub fn init_agent_communication() {}

@@ -1,6 +1,6 @@
-//! Zenith UMC Core Language Runtime
+//! Zamani UMC Core Language Runtime
 //!
-//! This module defines the conceptual core components of the Zenith runtime
+//! This module defines the conceptual core components of the Zamani runtime
 //! that are fundamental to any classical programming language, providing
 //! essential services for memory management, concurrency, and error handling.
 

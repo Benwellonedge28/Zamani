@@ -1,7 +1,7 @@
-//! Zenith Omniversal Language Compiler — Core Library
+//! Zamani Omniversal Language Compiler — Core Library
 #![allow(static_mut_refs)]
 //!
-//! Exposes the full Zenith compiler pipeline:
+//! Exposes the full Zamani compiler pipeline:
 //! source_map → lexer → AST → parser → semantic → ir_gen → optimizer → backend
 
 #![allow(unused_imports)]
@@ -40,11 +40,11 @@ pub mod stdlib;
 #[cfg(any(feature = "full", feature = "lsp", feature = "buildsystem"))]
 pub mod toolchain;
 #[cfg(any(feature = "full", feature = "buildsystem"))]
-pub mod zenith_project_config;
+pub mod zamani_project_config;
 
-/// Initialise the Zenith Universal Trinity Runtime.
+/// Initialise the Zamani Universal Trinity Runtime.
 pub fn initialize_runtime() {
-    eprintln!("[Zenith] Universal Trinity Runtime initialised.");
+    eprintln!("[Zamani] Universal Trinity Runtime initialised.");
 }
 
 /// Version string.

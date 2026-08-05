@@ -1,13 +1,13 @@
-//! Zenith Standard Library: External Services Integration Module
+//! Zamani Standard Library: External Services Integration Module
 //!
-//! This module provides conceptual APIs for Zenith AGI to securely and autonomously
+//! This module provides conceptual APIs for Zamani AGI to securely and autonomously
 //! interact with a wide range of external services and platforms, including cloud
 //! providers (AWS, Azure, GCP), containerization technologies (Docker), DevOps tools
 //! (Jenkins, Git, Ansible), databases, and HTTP web services.
 //!
 //! Inspired by QUEEN's explicit definitions for these external integrations, this
-//! module formalizes Zenith's ability to orchestrate complex operations across
-//! heterogeneous external environments, all managed with Zenith's advanced security
+//! module formalizes Zamani's ability to orchestrate complex operations across
+//! heterogeneous external environments, all managed with Zamani's advanced security
 //! and autonomous capabilities.
 
 use crate::ast::Identifier; // For service IDs, resource names
@@ -173,12 +173,12 @@ impl CloudPlatform {
             id: Identifier("new_vm".to_string(), Span::dummy()),
             resource_type: "VM".to_string(),
             current_status: "provisioning".to_string(),
-            deployed_zenith_app: None,
+            deployed_zamani_app: None,
             allocated_capabilities: List::new(),
         })
     }
 
-    /// Deploy a Zenith application container to a managed container service.
+    /// Deploy a Zamani application container to a managed container service.
     pub fn deploy_containerized_app(
         handle: ServiceHandle,
         container_image_id: Identifier,

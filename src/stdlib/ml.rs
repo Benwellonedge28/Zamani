@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Machine Learning (ML) Module
+//! Zamani Standard Library: Machine Learning (ML) Module
 //!
 //! This module provides the conceptual framework for integrating Machine Learning (ML)
-//! capabilities directly into Zenith programs.
+//! capabilities directly into Zamani programs.
 //!
 //! Expanded with features from UBUNTU:
 //! - Transfer Learning
@@ -205,12 +205,12 @@ impl TimeSeriesForecaster {
 
 /// Initializes the Machine Learning (ML) module.
 pub fn init_ml_lib() {
-    println!("  - Initializing Zenith Machine Learning (ML) Engine...");
+    println!("  - Initializing Zamani Machine Learning (ML) Engine...");
 }
 
 /// Shuts down the Machine Learning (ML) module.
 pub fn shutdown_ml_lib() {
-    println!("  - Shutting down Zenith Machine Learning (ML) Engine...");
+    println!("  - Shutting down Zamani Machine Learning (ML) Engine...");
 }
 
 /// A minimal, always-available `Model` implementation that passes its input

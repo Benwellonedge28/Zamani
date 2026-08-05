@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Web Development (routing, templating, WebAssembly)
+//! Zamani stdlib — Web Development (routing, templating, WebAssembly)
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum HttpMethod {

@@ -1,6 +1,6 @@
-//! Zenith Universal Meta-Compiler (UMC) Standard Library
+//! Zamani Universal Meta-Compiler (UMC) Standard Library
 //!
-//! This module aggregates and manages all standard library components for Zenith.
+//! This module aggregates and manages all standard library components for Zamani.
 
 pub mod agents;
 pub mod agi_governance;
@@ -83,7 +83,7 @@ pub mod web_development;
 
 /// Initializes all standard library components.
 pub fn initialize_stdlib() {
-    println!("Initializing Zenith UMC Standard Library...");
+    println!("Initializing Zamani UMC Standard Library...");
     core::init_core_lib();
     collections::init_collections_lib();
     quantum::init_quantum_lib();
@@ -150,12 +150,12 @@ pub fn initialize_stdlib() {
     omniversal_rogue_prevention_alignment::init_omniversal_rogue_prevention_alignment();
     // omniversal_living_character_narrative_evolution::init (module not in tree)();
     omniversal_autonomous_deployment_orchestration_secure_hardening::init_omniversal_autonomous_deployment_orchestration_secure_hardening(); // Initialize OADOSH module
-    println!("Zenith UMC Standard Library initialized.");
+    println!("Zamani UMC Standard Library initialized.");
 }
 
 /// Shuts down all standard library components.
 pub fn shutdown_stdlib() {
-    println!("Shutting down Zenith UMC Standard Library...");
+    println!("Shutting down Zamani UMC Standard Library...");
     omniversal_autonomous_deployment_orchestration_secure_hardening::shutdown_omniversal_autonomous_deployment_orchestration_secure_hardening(); // Shutdown OADOSH module
                                                                                                                                                  // omniversal_living_character_narrative_evolution::shutdown (module not in tree)();
     omniversal_rogue_prevention_alignment::shutdown_omniversal_rogue_prevention_alignment();
@@ -222,5 +222,5 @@ pub fn shutdown_stdlib() {
     quantum::shutdown_quantum_lib();
     collections::shutdown_collections_lib();
     core::shutdown_core_lib();
-    println!("Zenith UMC Standard Library shut down.");
+    println!("Zamani UMC Standard Library shut down.");
 }

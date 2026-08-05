@@ -1,9 +1,9 @@
-//! Zenith Standard Library: Natural Language Processing (NLP) Module
+//! Zamani Standard Library: Natural Language Processing (NLP) Module
 //!
 //! This module provides conceptual APIs for processing, understanding, and generating
-//! human language within Zenith applications. It includes functionalities for tokenization,
+//! human language within Zamani applications. It includes functionalities for tokenization,
 //! parsing, semantic analysis, text generation, and machine translation, leveraging
-//! Zenith's multi-paradigm compute capabilities for efficiency and contextual understanding.
+//! Zamani's multi-paradigm compute capabilities for efficiency and contextual understanding.
 
 use crate::ast::Identifier; // For language IDs, model names
 use crate::core_lang_primitives::Size; // For text lengths

@@ -1,9 +1,9 @@
 #![cfg(feature = "full")]
 
-//! Zenith Standard Library: Omniversal Sovereignty & Infinite Scalability Module
+//! Zamani Standard Library: Omniversal Sovereignty & Infinite Scalability Module
 //!
-//! This module defines the "final touches" for Zenith's "infinity Advanced and
-//! secure infinitely and ready for production" architecture. it cements Zenith's
+//! This module defines the "final touches" for Zamani's "infinity Advanced and
+//! secure infinitely and ready for production" architecture. it cements Zamani's
 //! foundational integrity, data sovereignty, and ability to manage infinite
 //! complexity across any scale and reality.
 //!
@@ -31,12 +31,12 @@ use crate::toolchain::formal_verification::{FormalVerificationEngine, Proof};
 
 /// Initializes the Omniversal Sovereignty module.
 pub fn init_omniversal_sovereignty() {
-    println!("  - Initializing Zenith Omniversal Sovereignty (Quantum-Secure, Verifiable, Infinite Scale)...");
+    println!("  - Initializing Zamani Omniversal Sovereignty (Quantum-Secure, Verifiable, Infinite Scale)...");
 }
 
 /// Shuts down the Omniversal Sovereignty module.
 pub fn shutdown_omniversal_sovereignty() {
-    println!("  - Shutting down Zenith Omniversal Sovereignty...");
+    println!("  - Shutting down Zamani Omniversal Sovereignty...");
 }
 
 // -----------------------------------------------------------------------------
@@ -51,12 +51,12 @@ pub struct QuantumTrustFabric {
 impl QuantumTrustFabric {
     pub fn new() -> Self {
         QuantumTrustFabric {
-            ledger: LedgerClient::connect("ZenithTrustChain").unwrap(),
+            ledger: LedgerClient::connect("ZamaniTrustChain").unwrap(),
             identity_registry: Map::new(),
         }
     }
 
-    /// Issues a verifiable quantum-secure identity to a Zenith entity.
+    /// Issues a verifiable quantum-secure identity to a Zamani entity.
     pub fn issue_identity(&mut self, entity_id: Identifier) -> Result<QuantumIdentity, String> {
         println!(
             "[Sovereignty::Trust] Issuing quantum-secure identity for {}.",

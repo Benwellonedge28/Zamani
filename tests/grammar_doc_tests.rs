@@ -5,9 +5,9 @@
 //! match a new, intentional syntax change. Keep them in sync.
 
 use std::sync::Arc;
-use zenith_compiler::lexer::Lexer;
-use zenith_compiler::parser::Parser;
-use zenith_compiler::source_map::{FileId, SourceFile};
+use zamani_compiler::lexer::Lexer;
+use zamani_compiler::parser::Parser;
+use zamani_compiler::source_map::{FileId, SourceFile};
 
 fn parse_src(src: &str) -> (usize, Vec<String>) {
     let sf = Arc::new(SourceFile::new("<grammar-doc-example>".into(), src.into()));
@@ -25,7 +25,7 @@ fn parse_src(src: &str) -> (usize, Vec<String>) {
 #[test]
 fn grammar_md_complete_example_parses_without_errors() {
     let src = r#"
-language Zenith "1.0";
+language Zamani "1.0";
 
 import stdlib.math;
 use quantum::gates::*;

@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Self-Evolution — the compiler rewriting and improving itself.
+//! Zamani Self-Evolution — the compiler rewriting and improving itself.
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelfModTarget {

@@ -1,4 +1,4 @@
-name: Docker — Zenith Components
+name: Docker — Zamani Components
 
 on:
   push:
@@ -33,9 +33,9 @@ jobs:
       - name: Build release binary (default features — the compiler)
         run: cargo build --release --verbose
       - name: Build LSP (--features lsp)
-        run: cargo build --release --features lsp --bin zenith-lsp --verbose
+        run: cargo build --release --features lsp --bin zamani-lsp --verbose
       - name: Build build-system (--features buildsystem)
-        run: cargo build --release --features buildsystem --bin zenith-pkg --verbose
+        run: cargo build --release --features buildsystem --bin zamani-pkg --verbose
       - name: Run test suite
         run: cargo test --release -- --test-threads=4
 
@@ -52,16 +52,16 @@ jobs:
         include:
           - component: compiler
             dockerfile: docker/Dockerfile.compiler
-            image: zenith-compiler
-            smoke_cmd: "/usr/local/bin/zenith --help"
+            image: zamani-compiler
+            smoke_cmd: "/usr/local/bin/zamani --help"
           - component: lsp
             dockerfile: docker/Dockerfile.lsp
-            image: zenith-lsp
+            image: zamani-lsp
             smoke_cmd: ""
           - component: buildsystem
             dockerfile: docker/Dockerfile.buildsystem
-            image: zenith-pkg
-            smoke_cmd: "/usr/local/bin/zenith-pkg deps --manifest Zenith.toml"
+            image: zamani-pkg
+            smoke_cmd: "/usr/local/bin/zamani-pkg deps --manifest Zamani.toml"
     steps:
       - uses: actions/checkout@v4
 
@@ -125,7 +125,7 @@ jobs:
     if: github.event_name != 'pull_request'
     strategy:
       matrix:
-        image: [zenith-compiler, zenith-lsp, zenith-pkg]
+        image: [zamani-compiler, zamani-lsp, zamani-pkg]
     steps:
       - uses: actions/checkout@v4
       - name: Run Trivy vulnerability scanner

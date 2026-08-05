@@ -1,37 +1,37 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-//! Zenith Language Specification: Explainability & Transparency Keywords
+//! Zamani Language Specification: Explainability & Transparency Keywords
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
-//! explainability and transparency keywords within the Zenith programming language.
+//! explainability and transparency keywords within the Zamani programming language.
 //! These keywords, `explain` and `transparent`, provide native language-level
 //! support for building auditable, accountable, and transparent AGI systems.
 //!
 //! Inspired by UBUNTU's `EXPLAINABILITY` and `TRANSPARENCY` constructs, these
-//! integrate directly with Zenith's E.V.A.S. filter in Nimbus OS and the
+//! integrate directly with Zamani's E.V.A.S. filter in Nimbus OS and the
 //! Sankofa memory system for automated decision logging and justification.
 
-use crate::ast::{Expression, Identifier, Statement}; // Zenith AST elements
+use crate::ast::{Expression, Identifier, Statement}; // Zamani AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
-use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
+use crate::ir_gen::{IrInstruction, IrValue}; // Zamani Intermediate Representation
 use crate::nimbus_os::evas::{EvasActionContext, EvasFilter}; // For E.V.A.S. integration
 use crate::stdlib::collections::List;
 
 /// Initializes the Explainability & Transparency Keywords language specification.
 pub fn init_explainability_transparency_keywords() {
-    println!("    - Initializing Zenith Explainability & Transparency Keywords (explain, transparent)...");
+    println!("    - Initializing Zamani Explainability & Transparency Keywords (explain, transparent)...");
 }
 
 /// Shuts down the Explainability & Transparency Keywords language specification.
 pub fn shutdown_explainability_transparency_keywords() {
-    println!("    - Shutting down Zenith Explainability & Transparency Keywords...");
+    println!("    - Shutting down Zamani Explainability & Transparency Keywords...");
 }
 
 // -----------------------------------------------------------------------------
 // Conceptual Syntax and Semantics
 // -----------------------------------------------------------------------------
 
-/// Conceptual representation of Zenith's AST nodes for explainability statements.
+/// Conceptual representation of Zamani's AST nodes for explainability statements.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExplainabilityStatementAst {
     Explain(Expression, Option<Expression>), // e.g., explain "action_result" with reason "logic_desc";

@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Reality Synthesizer & Metaphysical Engineering (ORSME)
+//! Zamani stdlib — Omniversal Reality Synthesizer & Metaphysical Engineering (ORSME)
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RealityLayer {

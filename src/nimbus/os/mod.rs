@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! NIMBUS OS — Omniversal operating system kernel for Zenith AGI.
+//! NIMBUS OS — Omniversal operating system kernel for Zamani AGI.
 //! Provides process management, IPC, security kernel, and hardware abstraction.
 
 pub mod security_kernel;

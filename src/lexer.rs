@@ -1,13 +1,13 @@
-//! Zenith Universal Meta-Compiler (UMC) Lexer
+//! Zamani Universal Meta-Compiler (UMC) Lexer
 //!
-//! This module implements the lexical analysis phase of the Zenith compiler.
-//! It takes a raw Zenith source code string and breaks it down into a stream
+//! This module implements the lexical analysis phase of the Zamani compiler.
+//! It takes a raw Zamani source code string and breaks it down into a stream
 //! of tokens (lexemes), each representing a meaningful unit in the language.
 //!
 //! The lexer is responsible for:
 //! - Recognizing keywords, identifiers, operators, and literals.
 //! - Handling whitespace and comments.
-//! - Identifying special Zenith-specific tokens (e.g., quantum literals, nano annotations).
+//! - Identifying special Zamani-specific tokens (e.g., quantum literals, nano annotations).
 //! - Reporting lexical errors (e.g., illegal characters, unclosed strings).
 //! - Attaching source location information (Span) to each token for precise error reporting.
 
@@ -145,7 +145,7 @@ pub enum TokenType {
     KeywordZamani,
     KeywordPi, // For dependent types: Π
 
-    // Special Zenith/Sankofa/Nimbus tokens
+    // Special Zamani/Sankofa/Nimbus tokens
     SigmaSymbol, // Σ
     PiSymbol,    // Π
 

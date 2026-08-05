@@ -1,6 +1,6 @@
-//! Zenith Runtime: Sankofa - Long-Term Learning and Memory Integration
+//! Zamani Runtime: Sankofa - Long-Term Learning and Memory Integration
 //!
-//! This module aggregates and manages all components for Sankofa, Zenith's
+//! This module aggregates and manages all components for Sankofa, Zamani's
 //! system for long-term learning, memory, and cultural knowledge integration.
 
 use std::collections::HashMap;

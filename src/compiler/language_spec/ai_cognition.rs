@@ -1,40 +1,40 @@
 #![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-//! Zenith Language Specification: AI Cognition Keywords
+//! Zamani Language Specification: AI Cognition Keywords
 //!
 //! This module defines the conceptual syntax and semantic interpretation for
-//! AI/Cognitive keywords within the Zenith programming language. These keywords
+//! AI/Cognitive keywords within the Zamani programming language. These keywords
 //! elevate operations like inference, learning, assertion, and retraction from
 //! library calls to first-class language statements, providing native support
 //! for AGI development.
 //!
 //! Inspired by UBUNTU's `REASONING_KEYWORD` (`infer`, `deduce`), `LEARNING_KEYWORD`
 //! (`learn`, `adapt`), and `KNOWLEDGE_KEYWORD` (`assert`, `retract`), these constructs
-//! enable direct interaction with Zenith's `stdlib::ai_reasoning` module and the
+//! enable direct interaction with Zamani's `stdlib::ai_reasoning` module and the
 //! Sankofa memory system.
 
-use crate::ast::{Expression, Identifier}; // Zenith AST elements
+use crate::ast::{Expression, Identifier}; // Zamani AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
-use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
+use crate::ir_gen::{IrInstruction, IrValue}; // Zamani Intermediate Representation
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge}; // Underlying knowledge base
 use crate::stdlib::ai_reasoning::{Fact, FactObject, KnowledgeBase}; // AI Reasoning APIs
 use crate::stdlib::collections::List;
 
 /// Initializes the AI Cognition Keywords language specification.
 pub fn init_ai_cognition_keywords() {
-    println!("    - Initializing Zenith AI Cognition Keywords (infer, learn, assert, etc.)...");
+    println!("    - Initializing Zamani AI Cognition Keywords (infer, learn, assert, etc.)...");
 }
 
 /// Shuts down the AI Cognition Keywords language specification.
 pub fn shutdown_ai_cognition_keywords() {
-    println!("    - Shutting down Zenith AI Cognition Keywords...");
+    println!("    - Shutting down Zamani AI Cognition Keywords...");
 }
 
 // -----------------------------------------------------------------------------
 // Conceptual Syntax and Semantics
 // -----------------------------------------------------------------------------
 
-/// Conceptual representation of Zenith's AST nodes for AI statements.
+/// Conceptual representation of Zamani's AST nodes for AI statements.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AiStatementAst {
     Infer(Expression),   // e.g., infer "is_malicious(input_data)" from kb;

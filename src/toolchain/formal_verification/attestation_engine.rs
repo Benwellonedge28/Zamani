@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith Attestation Engine — cryptographic proof of correctness for deployment.
+//! Zamani Attestation Engine — cryptographic proof of correctness for deployment.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zenith stdlib — Omniversal Prompt Firewall
+//! Zamani stdlib — Omniversal Prompt Firewall
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ThreatLevel {

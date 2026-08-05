@@ -1,4 +1,4 @@
-name: CI — Zenith Compiler
+name: CI — Zamani Compiler
 
 on:
   push:

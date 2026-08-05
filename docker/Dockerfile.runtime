@@ -1,4 +1,4 @@
-# ── Zenith Runtime ────────────────────────────────────────────────────────
+# ── Zamani Runtime ────────────────────────────────────────────────────────
 # Status: NOT YET BUILDABLE. `src/runtime/` (universal_runtime, sankofa
 # memory, quantum runtime, nimbus_os, mts, distributed, etc.) is aspirational
 # scaffolding gated behind the `full` cargo feature, which currently has

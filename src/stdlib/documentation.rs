@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Omni-Documentation & Multi-Modal Content Engine
+//! Zamani Standard Library: Omni-Documentation & Multi-Modal Content Engine
 //!
 //! This module provides a supremely autonomous documentation system capable of
-//! generating exhaustive, high-fidelity content explaining Zenith, its ecosystem,
+//! generating exhaustive, high-fidelity content explaining Zamani, its ecosystem,
 //! and any product compiled within it.
 //!
 //! It produces books, journals, news articles, technical reports, and multi-modal
@@ -17,7 +17,7 @@ use crate::stdlib::collections::{List, Map};
 use crate::stdlib::gui::Window;
 use crate::stdlib::meta_ops::MetaValue;
 use crate::stdlib::nlp::NaturalLanguageProcessor;
-use crate::toolchain::meta_programming::ZenithCodeSnippet;
+use crate::toolchain::meta_programming::ZamaniCodeSnippet;
 
 /// Initializes the Omni-Documentation module.
 pub fn init_documentation_lib() {
@@ -51,7 +51,7 @@ impl OmniDocEngine {
     }
 
     /// Triggers the automatic generation of an exhaustive documentation suite.
-    /// This method performs recursive introspection of the entire Zenith ecosystem
+    /// This method performs recursive introspection of the entire Zamani ecosystem
     /// or a specific compiled target.
     pub fn generate_exhaustive_suite(
         &mut self,
@@ -179,7 +179,7 @@ impl OmniDocEngine {
         // Conceptual: Use internal AGI models to write long-form content.
         // It explains "Why" things are designed this way, not just "What".
         Ok(format!(
-            "## {}\n Exhaustive explanation of Zenith logic...",
+            "## {}\n Exhaustive explanation of Zamani logic...",
             section.title
         ))
     }
@@ -217,9 +217,9 @@ impl MultiModalGenerator {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DocFormat {
-    Book,           // "The Complete Zenith Compendium"
-    Journal,        // "Zenith Meta-Compilation Quarterly"
-    News,           // "Zenith Ecosystem Updates"
+    Book,           // "The Complete Zamani Compendium"
+    Journal,        // "Zamani Meta-Compilation Quarterly"
+    News,           // "Zamani Ecosystem Updates"
     Report,         // "Technical Specification & Performance Audit"
     Article,        // "Fundamental Principles of Autonomous AGI"
     MultiModalFeed, // Explanatory video series/interactive tutorial

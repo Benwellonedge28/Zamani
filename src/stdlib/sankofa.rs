@@ -1,7 +1,7 @@
-//! Zenith Standard Library: Sankofa Memory APIs
+//! Zamani Standard Library: Sankofa Memory APIs
 //!
 //! This module provides high-level abstractions and APIs for interacting with
-//! Sankofa's persistent, temporal memory system within Zenith programs.
+//! Sankofa's persistent, temporal memory system within Zamani programs.
 //! It offers a developer-friendly interface to Zamani (immutable facts)
 //! and Sasa (evolving knowledge), as well as temporal learning and causality.
 
@@ -80,7 +80,7 @@ impl ZamaniFact {
                 fact_id.to_string(),
                 content_bytes.clone(),
                 timestamp,
-                "Zenith_Program".to_string(),
+                "Zamani_Program".to_string(),
             );
         }
         ZamaniFact {

@@ -1,4 +1,4 @@
-//! Zenith Universal Meta-Compiler (UMC) Source Map and Spans
+//! Zamani Universal Meta-Compiler (UMC) Source Map and Spans
 //!
 //! This module provides fundamental data structures for tracking source code
 //! locations (spans) and managing source file information (source maps).
