@@ -20,7 +20,7 @@ jobs:
     name: "🔒 Cargo Audit (CVE scan)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-audit
         run: cargo install cargo-audit --quiet
@@ -41,7 +41,7 @@ jobs:
     name: "📋 License & Ban Policy (cargo-deny)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
@@ -57,7 +57,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
@@ -76,7 +76,7 @@ jobs:
     name: "📦 Generate SBOM (CycloneDX)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx --quiet
@@ -96,7 +96,7 @@ jobs:
     name: "⚠️ Unsafe Code Audit"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Count unsafe blocks
         run: |
@@ -122,7 +122,7 @@ jobs:
     name: "🔐 Secret Scan (gitleaks)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Run Gitleaks
@@ -136,7 +136,7 @@ jobs:
     name: "🎯 Fuzz Target Validation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
       - name: Check fuzz targets exist
         run: |
