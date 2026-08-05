@@ -840,3 +840,315 @@ COMPILER: ZUTC (Zamani Unified Toolchain Compiler) - preserved
 FILE EXTENSION: .zn (preserved)
 RUNTIME: POCO-REAF (Persistent, Omni-Cognitive, Reactive, Event-driven, Adaptive, Self-healing)
 ===============================================================================
+
+===============================================================================
+SECTION 24: UBUNTU-INTEGRATED GRAMMAR RULES (Actor, Explain, Version, etc.)
+===============================================================================
+
+// --- Actor Model ---
+actorDecl: 'actor' IDENTIFIER '{' actorBody '}';
+actorBody: (actorMessage | actorBehavior | actorState)*;
+actorMessage: 'message' IDENTIFIER '(' parameterList? ')' block;
+actorBehavior: 'behavior' IDENTIFIER block;
+actorState: 'state' IDENTIFIER ':' typeExpr '=' expression ';';
+concurrentExpr: 'concurrent' expression block;
+
+// --- Explainability and Transparency ---
+explainStmt: 'explain' expression ';';
+transparentStmt: 'transparent' expression ';';
+decisionLog: 'log' 'decision' IDENTIFIER '{' decisionLogBody '}';
+decisionLogBody: decisionLogEntry*;
+decisionLogEntry: 'decision' IDENTIFIER 'made' 'by' IDENTIFIER 'with' 'reason' expression ';';
+
+// --- Self-Adjustment (Full) ---
+selfAdjustDecl: 'self_adjust' IDENTIFIER '{' selfAdjustBody '}';
+selfAdjustBody: (adjustmentRule | adjustmentLogic)*;
+adjustmentRule: 'rule' IDENTIFIER '{' 'when' expression 'then' expression '}';
+adjustmentLogic: 'logic' IDENTIFIER '{' statement* '}';
+
+// --- Self-Versioning ---
+selfVersioningDecl: 'version' IDENTIFIER '{' versioningBody '}';
+versioningBody: (versionRecord | versionChangelog)*;
+versionRecord: 'record' IDENTIFIER '{' versionRecordEntry* '}';
+versionRecordEntry: 'version' IDENTIFIER 'created' 'by' IDENTIFIER 'at' TIMESTAMP ';';
+versionChangelog: 'changelog' IDENTIFIER '{' changelogEntry* '}';
+changelogEntry: 'change' IDENTIFIER 'made' 'by' IDENTIFIER 'at' TIMESTAMP ';';
+TIMESTAMP: STRING;
+
+// --- Type Check and Interop ---
+typeCheckStmt: 'type_check' typeExpr IDENTIFIER ';';
+interopStmt: 'interop' IDENTIFIER '{' statement* '}';
+testStmt: 'test' expression '{' statement* '}';
+validateStmt: 'validate' expression ';';
+
+// --- Higher-Order Functions ---
+higherOrderFunction: 'function' '(' parameterList? ')' block;
+higherOrderFunctionWithClosure: 'function' '(' parameterList? ')' 'captures' '[' identifierList ']' block;
+
+// --- Domain-Specific Features ---
+domainDataType: 'domain_data_type' IDENTIFIER ';';
+domainOperation: 'domain_operation' IDENTIFIER ';';
+
+// --- Hybrid Approaches ---
+hybridApproach: 'hybrid' IDENTIFIER '{' statement* '}';
+hybridQuantumClassical: 'hybrid_quantum_classical' IDENTIFIER '{' statement* '}';
+neuralSymbolicIntegration: 'neural_symbolic' IDENTIFIER '{' statement* '}';
+advancedReasoning: 'advanced_reasoning' IDENTIFIER '{' statement* '}';
+
+// --- Uncertainty Quantification ---
+uncertaintyQuantification: 'uncertainty' expression ';';
+
+// --- Advanced AI Domain Blocks (from UBUNTU) ---
+quantumMlBlock: 'quantum_ml' IDENTIFIER '{' statement* '}';
+explainableRlBlock: 'explainable_rl' IDENTIFIER '{' statement* '}';
+explainableDeepLearningBlock: 'explainable_deep_learning' IDENTIFIER '{' statement* '}';
+knowledgeGraphBlock: 'knowledge_graph' IDENTIFIER '{' statement* '}';
+probabilisticGraphicalModelBlock: 'probabilistic_graphical_model' IDENTIFIER '{' statement* '}';
+transferLearningBlock: 'transfer_learning' IDENTIFIER '{' statement* '}';
+multiAgentBlock: 'multi_agent' IDENTIFIER '{' statement* '}';
+autonomousSystemBlock: 'autonomous' IDENTIFIER '{' statement* '}';
+graphModelingBlock: 'graph' IDENTIFIER '{' statement* '}';
+advancedNlpBlock: 'nlp' expression ';';
+cognitiveArchitectureBlock: 'cognitive' IDENTIFIER '{' statement* '}';
+aiForBusinessBlock: 'ai_for_business' IDENTIFIER '{' statement* '}';
+vrArInteractionBlock: 'vr_ar_interaction' IDENTIFIER '{' statement* '}';
+imageVideoAnalysisBlock: 'image_video_analysis' IDENTIFIER '{' statement* '}';
+
+===============================================================================
+SECTION 25: AGI GOVERNANCE AND ADMINISTRATION GRAMMAR RULES
+===============================================================================
+
+// --- AI System Declarations ---
+aiSystemDecl: 'ai' IDENTIFIER '{' aiSystemBody '}';
+aiSystemBody: (aiTypeDef | aiCapabilityDef | explainStmt | transparentStmt | selfVersioningDecl)*;
+aiTypeDef: 'type' IDENTIFIER '=' ('narrow' | 'general' | 'super') ';';
+
+// --- AGI System ---
+agiSystemDecl: 'agi' IDENTIFIER '{' agiSystemBody '}';
+agiSystemBody: (agiCapabilityDef | agiLearningDef)*;
+agiCapabilityDef: 'capability' IDENTIFIER '{' statement* '}';
+agiLearningDef: 'learning' IDENTIFIER '{' statement* '}';
+
+// --- ASI System ---
+asiSystemDecl: 'asi' IDENTIFIER '{' asiSystemBody '}';
+asiSystemBody: (asiCapabilityDef | asiSelfImprovementDef)*;
+asiSelfImprovementDef: 'self_improvement' IDENTIFIER '{' statement* '}';
+
+// --- AESI System ---
+aesiSystemDecl: 'aesi' IDENTIFIER '{' aesiSystemBody '}';
+aesiSystemBody: (aesiCapabilityDef | aesiTransformationDef)*;
+aesiTransformationDef: 'transformation' IDENTIFIER '{' statement* '}';
+
+// --- ASESI System ---
+asesiSystemDecl: 'asesi' IDENTIFIER '{' aseiSystemBody '}';
+aseiSystemBody: (asesiCapabilityDef | asesomnipotenceDef)*;
+asesomnipotenceDef: 'omnipotence' IDENTIFIER '{' statement* '}';
+
+// --- Administration Interface ---
+adminInterfaceDecl: 'admin' IDENTIFIER '{' adminInterfaceBody '}';
+adminInterfaceBody: (changeLogDisplay | suggestionInput | hybridDef | interfaceDef)*;
+changeLogDisplay: 'display' 'changes' '{' changeLogBody '}';
+changeLogBody: changeLogEntry*;
+suggestionInput: 'input' 'suggestions' '{' suggestionBody '}';
+suggestionBody: suggestionEntry*;
+suggestionEntry: 'suggestion' IDENTIFIER 'from' IDENTIFIER ';';
+
+// --- Payment Gateway ---
+paymentGatewayDecl: 'payment' IDENTIFIER '{' paymentGatewayBody '}';
+paymentGatewayBody: (paymentMethodDef | paymentVerificationDef)*;
+paymentMethodDef: 'method' IDENTIFIER '{' statement* '}';
+paymentVerificationDef: 'verify' IDENTIFIER '{' statement* '}';
+
+// --- User Feedback ---
+userFeedbackDecl: 'feedback' IDENTIFIER '{' userFeedbackBody '}';
+userFeedbackBody: (feedbackInputDef | feedbackValidationDef)*;
+feedbackInputDef: 'input' 'feedback' '{' statement* '}';
+feedbackValidationDef: 'validate' 'feedback' '{' statement* '}';
+
+// --- Copyright and Ownership ---
+copyrightNoticeDecl: 'copyright' IDENTIFIER '{' copyrightNoticeBody '}';
+copyrightNoticeBody: copyrightNoticeStatement*;
+copyrightNoticeStatement: 'copyright' IDENTIFIER 'owned' 'by' IDENTIFIER ';';
+
+// --- Tailor-Made Features ---
+tailorMadeFeatureDecl: 'feature' IDENTIFIER '{' tailorMadeFeatureBody '}';
+tailorMadeFeatureBody: (featureDef | featureCustomizationDef)*;
+featureDef: 'define' 'feature' IDENTIFIER '{' statement* '}';
+featureCustomizationDef: 'customize' 'feature' IDENTIFIER '{' statement* '}';
+
+// --- Program-Once Systems ---
+programOnceDecl: 'program_once' IDENTIFIER '{' programOnceBody '}';
+programOnceBody: (systemConfigDef | systemLogicDef)*;
+systemConfigDef: 'config' IDENTIFIER '{' statement* '}';
+systemLogicDef: 'logic' IDENTIFIER '{' statement* '}';
+
+// --- Malicious Idea Detection ---
+maliciousIdeaDetection: 'malicious' 'idea' 'detection' '{' maliciousIdeaBody '}';
+maliciousIdeaBody: (ideaAnalysisDef | ideaBlockingDef)*;
+ideaAnalysisDef: 'analyze' 'idea' IDENTIFIER '{' statement* '}';
+ideaBlockingDef: 'block' 'idea' IDENTIFIER '{' statement* '}';
+
+// --- User Blocking ---
+userBlockingDecl: 'block' 'user' IDENTIFIER '{' userBlockingBody '}';
+userBlockingBody: (userIdentificationDef | userBlockingActionDef)*;
+userIdentificationDef: 'identify' 'user' IDENTIFIER '{' statement* '}';
+userBlockingActionDef: 'block' 'user' IDENTIFIER '{' statement* '}';
+
+// --- Legal Action ---
+legalActionDecl: 'legal' 'action' IDENTIFIER '{' legalActionBody '}';
+legalActionBody: (legalProceedingDef | legalNoticeDef)*;
+legalProceedingDef: 'proceeding' 'legal' IDENTIFIER '{' statement* '}';
+legalNoticeDef: 'notice' 'legal' IDENTIFIER '{' statement* '}';
+
+// --- Sandbox Environment ---
+sandboxDecl: 'sandbox' IDENTIFIER '{' sandboxBody '}';
+sandboxBody: (simulationDef | testingDef)*;
+simulationDef: 'simulate' IDENTIFIER '{' statement* '}';
+testingDef: 'test' IDENTIFIER '{' statement* '}';
+
+===============================================================================
+SECTION 26: OMNIVERSAL SYSTEM GRAMMAR RULES
+===============================================================================
+
+// --- Omniversal Simulation ---
+omniversalSimulationDecl: 'omniversal_simulate' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Autonomous Code System Synthesis ---
+omniversalCodeSynthDecl: 'omniversal_synthesize' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Deployment Orchestration ---
+omniversalDeployDecl: 'omniversal_deploy' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Rogue Prevention / AGI Alignment ---
+omniversalAlignmentDecl: 'omniversal_alignment' IDENTIFIER '{' statement* '}';
+omniversalContainmentDecl: 'omniversal_containment' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Trust and Identity ---
+omniversalTrustDecl: 'omniversal_trust' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Knowledge and Semantic Reasoning ---
+omniversalKnowledgeDecl: 'omniversal_knowledge' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Generative AI ---
+omniversalGenerativeDecl: 'omniversal_generate' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Self-Sovereignty ---
+omniversalSovereigntyDecl: 'omniversal_sovereignty' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Strategic Goal Management ---
+omniversalGoalDecl: 'omniversal_goal' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Bio-Nano OS ---
+omniversalBioNanoDecl: 'omniversal_bionano' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal Reality/Metaphysical Engineering ---
+omniversalRealityDecl: 'omniversal_reality' IDENTIFIER '{' statement* '}';
+
+// --- Omniversal NLP ---
+omniversalNlpDecl: 'omniversal_nlp' IDENTIFIER '{' statement* '}';
+
+===============================================================================
+SECTION 27: CONVERSATIONAL CODE SYNTHESIS GRAMMAR RULES
+===============================================================================
+
+// --- Chat Architect Agent ---
+chatArchitectDecl: 'chat_agent' IDENTIFIER '{' chatAgentBody '}';
+chatAgentBody: (chatCapability | chatContext | chatSynthesis)*;
+chatCapability: 'capability' IDENTIFIER block;
+chatContext: 'context' IDENTIFIER block;
+chatSynthesis: 'synthesize' expression '->' block;
+
+// --- Natural Language Code Generation ---
+nlCodeGenExpr: 'nl_generate' expression 'as' typeExpr;
+nlInterpretExpr: 'nl_interpret' expression;
+nlTranslateExpr: 'nl_translate' expression 'to' typeExpr;
+
+===============================================================================
+SECTION 28: GREEN COMPUTING / DATA CENTRE OPTIMIZATION RULES
+===============================================================================
+
+// --- Power/Thermal/Water Optimization ---
+greenComputingAttr: '#green' '(' greenArgs ')';
+greenArgs: 'minimize_power' '=' expression
+         | 'minimize_heat' '=' expression
+         | 'minimize_water' '=' expression
+         | 'maximize_efficiency' '=' expression;
+
+// --- Thermal Throttling Prevention ---
+thermalOptDecl: 'thermal_optimize' '{' thermalOptBody '}';
+thermalOptBody: ('threshold' expression ';')* ('strategy' optStrategy ';')* block;
+
+// --- Resource Conservation ---
+resourceConserveDecl: 'conserve' '(' resourceType (',' resourceType)* ')' block;
+resourceType: 'power' | 'water' | 'heat' | 'compute' | 'memory' | 'storage' | 'network';
+
+===============================================================================
+SECTION 29: DEVELOPER RELATIONS / SELF-DISCOVERY RULES
+===============================================================================
+
+// --- Self-Discovery in IDE ---
+selfDiscoverDecl: 'self_discover' '{' discoverConfig* '}';
+discoverConfig: 'ide_detect' STRING ';'
+             | 'language_server' '=' BOOLEAN ';'
+             | 'auto_suggest' '=' BOOLEAN ';'
+             | 'context_aware' '=' BOOLEAN ';'
+             | 'proactive_assist' '=' BOOLEAN ';';
+
+// --- Developer Analytics ---
+developerAnalyticsDecl: 'developer_analytics' '{' analyticsConfig* '}';
+analyticsConfig: 'track_developers' '=' BOOLEAN ';'
+              | 'track_companies' '=' BOOLEAN ';'
+              | 'track_countries' '=' BOOLEAN ';'
+              | 'track_licenses' '=' BOOLEAN ';'
+              | 'track_usage' '=' BOOLEAN ';';
+
+// --- License Tracking ---
+licenseTrackingDecl: 'license' IDENTIFIER '{' licenseBody '}';
+licenseBody: ('developer' IDENTIFIER ';')* ('company' IDENTIFIER ';')*
+           ('country' STRING ';')* ('type' STRING ';')* ('expires' TIMESTAMP ';')?;
+
+===============================================================================
+SECTION 30: HIGHER-KINDED TYPES AND TYPE CLASSES
+===============================================================================
+
+// --- Higher-Kinded Types ---
+higherKindedType: 'hkt' '<' typeParam '.' typeExpr '>';
+typeClassDecl: 'typeclass' IDENTIFIER typeParams? '{' typeClassBody '}';
+typeClassBody: (typeClassMethod | typeClassAssocType)*;
+typeClassMethod: 'fn' IDENTIFIER '(' parameterList? ')' returnType? ';';
+typeClassAssocType: 'associated' 'type' IDENTIFIER (':' typeConstraint)? ';';
+typeClassInstance: 'instance' typeParams? IDENTIFIER 'for' typeExpr '{' typeClassInstanceBody '}';
+typeClassInstanceBody: (methodDef)*;
+
+// --- Type Bounds ---
+typeBound: 'extends' typeExpr;
+typeBoundList: typeBound ('+' typeBound)*;
+
+===============================================================================
+SECTION 31: ADDITIONAL UBUNTU DOMAIN BLOCKS
+===============================================================================
+
+// --- Additional AI domain blocks not yet covered ---
+advancedAiForBusiness: 'ai_for_business' IDENTIFIER '{' statement* '}';
+advancedVrAr: 'vr_ar_interaction' IDENTIFIER '{' statement* '}';
+advancedImageVideo: 'image_video_analysis' IDENTIFIER '{' statement* '}';
+advancedExplainableDeepLearning: 'explainable_deep_learning' IDENTIFIER '{' statement* '}';
+advancedKnowledgeGraph: 'knowledge_graph' IDENTIFIER '{' statement* '}';
+advancedProbabilisticModel: 'probabilistic_graphical_model' IDENTIFIER '{' statement* '}';
+advancedTransferLearning: 'transfer_learning' IDENTIFIER '{' statement* '}';
+advancedMultiAgent: 'multi_agent' IDENTIFIER '{' statement* '}';
+advancedAutonomousSystem: 'autonomous_system' IDENTIFIER '{' statement* '}';
+advancedGraphModeling: 'graph' IDENTIFIER '{' statement* '}';
+
+===============================================================================
+UPDATED TOTALS
+===============================================================================
+TOTAL RULES: ~1,600 (NIMBUS v3.0 Universal Trinity Edition + UBUNTU Integration)
+KEYWORDS: 160+ total (95 original + 25 Zamani + 20 Sankofa + 20 UBUNTU/AGI Governance)
+ALL PARADIGMS: 90+ (original 71 + 9 Sankofa + 10+ AI/Cognitive/Edge/Omniversal paradigms)
+TARGET PLATFORMS: x86_64, ARM64, RISC-V, WASM, LLVM IR, bare metal, Android, iOS,
+                 cloud, IoT, USSD, FPGA, quantum, nano, neuromorphic, stellar, Z-MMP,
+                 Tariro Runtime
+COMPILER: ZUTC (Zamani Unified Toolchain Compiler)
+FILE EXTENSION: .zn (preserved)
+RUNTIME: POCO-REAF (Persistent, Omni-Cognitive, Reactive, Event-driven, Adaptive, Self-healing)
