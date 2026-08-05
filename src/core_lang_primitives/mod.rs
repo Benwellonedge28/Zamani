@@ -221,7 +221,7 @@ impl<T> Mutex<T> {
     }
 
     /// Conceptually acquires the mutex lock.
-    pub fn lock(&self) -> std::sync::MutexGuard<T> {
+    pub fn lock<'a>(&'a self) -> std::sync::MutexGuard<'a, T> {
         println!("[Core::Concurrency] Conceptual Mutex: Acquiring lock.");
         self.0.lock().unwrap()
     }

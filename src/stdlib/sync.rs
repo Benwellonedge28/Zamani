@@ -154,7 +154,7 @@ impl Barrier {
             self.condvar.notify_all(); // All threads reached, release
             *current = 0; // Reset for next use
         } else {
-            current = self.condvar.wait(current).unwrap(); // Wait for others
+            drop(self.condvar.wait(current).unwrap()); // Wait for others
         }
     }
 }

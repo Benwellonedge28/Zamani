@@ -77,7 +77,7 @@ pub struct CallStackFrame {
 #[derive(Debug, Clone)]
 pub struct QuantumStateSnapshot {
     pub timestamp: u64,
-    pub QPU_id: usize,
+    pub qpu_id: usize,
     pub qubit_states: HashMap<usize, String>, // Qubit ID -> String representation of its state
     pub entangled_pairs: Vec<(usize, usize)>,
     pub measurement_results: HashMap<usize, bool>, // Measured qubit -> result

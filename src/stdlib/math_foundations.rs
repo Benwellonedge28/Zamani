@@ -198,7 +198,8 @@ impl AdvancedMathEngine {
         }
 
         // 8. Mathematical Memory: Compress and store efficiently
-        self.mathematical_memory_manager
+        let _ = self
+            .mathematical_memory_manager
             .store_discovery(discovery.clone());
 
         Ok(discovery)

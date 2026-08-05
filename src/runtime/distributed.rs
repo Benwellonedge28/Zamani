@@ -21,7 +21,7 @@ pub type ServiceId = String;
 /// Enum representing the types of nodes in the distributed network.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeType {
-    Z_MMP,              // Zenith Multi-Modal Processor (integrated QPU, NACU, CCU)
+    ZMmp,               // Zenith Multi-Modal Processor (integrated QPU, NACU, CCU)
     CloudCluster,       // Traditional cloud computing cluster (e.g., CPU/GPU)
     EdgeDevice,         // Limited resource device
     QuantumNetworkNode, // Dedicated quantum network router/switch

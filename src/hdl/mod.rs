@@ -115,7 +115,7 @@ pub enum HdlComponent {
     // === Neuromorphic/AI Chip Elements ===
     NeuronLayer(Span, Identifier, NeuronType, usize, List<HdlExpression>), // `@neuron_layer InputLayer(type: Spiking, size: 1024, inputs: SensorData)`
     SynapseArray(Span, Identifier, Identifier, Identifier), // `@synapse_array L1_L2(from: InputLayer, to: HiddenLayer)`
-    AxiomProcessor(Span, Identifier, AxiomProcessorType), // `@axiom_proc TensorCore(type: FP_Accel)`
+    AxiomProcessor(Span, Identifier, AxiomProcessorType), // `@axiom_proc TensorCore(type: FpAccel)`
     MemoryHierarchy(Span, Identifier, MemoryHierarchyType, List<HdlExpression>), // `@mem_hierarchy CacheBlock(level: L1, size: 32KB)`
 
     // === Analog/Mixed-Signal Elements ===
@@ -180,7 +180,7 @@ pub enum NeuronType {
 pub enum AxiomProcessorType {
     TensorCore,
     DSP,
-    FP_Accel,
+    FpAccel,
     Custom(String),
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -247,9 +247,9 @@ pub enum BitwiseOpType {
 
 /// Conceptual Generator for Z-MMP Microcode from HDL AST/IR.
 /// This would be part of the `src/backend` module.
-pub struct ZMMP_HDL_Generator;
+pub struct ZmmpHdlGenerator;
 
-impl ZMMP_HDL_Generator {
+impl ZmmpHdlGenerator {
     pub fn generate(&self, hdl_ir: &[IrInstruction]) -> Result<Vec<u8>, String> {
         println!("[HDL Backend] Generating Z-MMP Microcode/Bitstream from HDL IR for Universal Hardware Targets...");
         // This is where a highly specialized backend would translate HDL-specific IR
@@ -280,18 +280,18 @@ pub trait CompiledHdlUnit {
 }
 
 /// Conceptual representation of a Z-MMP QPU hardware block.
-pub struct ZMMP_QpuBlock {
+pub struct ZmmpQpuBlock {
     id: Identifier,
     // Direct hardware interface via Nimbus OS HAL.
 }
 
-impl ZMMP_QpuBlock {
+impl ZmmpQpuBlock {
     pub fn new(id: Identifier) -> Self {
-        ZMMP_QpuBlock { id }
+        ZmmpQpuBlock { id }
     }
 }
 
-impl CompiledHdlUnit for ZMMP_QpuBlock {
+impl CompiledHdlUnit for ZmmpQpuBlock {
     fn get_id(&self) -> Identifier {
         self.id.clone()
     }
@@ -318,18 +318,18 @@ impl CompiledHdlUnit for ZMMP_QpuBlock {
 }
 
 /// Conceptual representation of a Z-MMP Nano-Agent Control Unit.
-pub struct ZMMP_NacuBlock {
+pub struct ZmmpNacuBlock {
     id: Identifier,
     // Direct hardware interface via Nimbus OS HAL.
 }
 
-impl ZMMP_NacuBlock {
+impl ZmmpNacuBlock {
     pub fn new(id: Identifier) -> Self {
-        ZMMP_NacuBlock { id }
+        ZmmpNacuBlock { id }
     }
 }
 
-impl CompiledHdlUnit for ZMMP_NacuBlock {
+impl CompiledHdlUnit for ZmmpNacuBlock {
     fn get_id(&self) -> Identifier {
         self.id.clone()
     }
@@ -356,18 +356,18 @@ impl CompiledHdlUnit for ZMMP_NacuBlock {
 }
 
 /// Conceptual representation of a Z-MMP Neuromorphic Processing Unit.
-pub struct ZMMP_NPUBlock {
+pub struct ZmmpNpuBlock {
     id: Identifier,
     // Direct hardware interface via Nimbus OS HAL.
 }
 
-impl ZMMP_NPUBlock {
+impl ZmmpNpuBlock {
     pub fn new(id: Identifier) -> Self {
-        ZMMP_NPUBlock { id }
+        ZmmpNpuBlock { id }
     }
 }
 
-impl CompiledHdlUnit for ZMMP_NPUBlock {
+impl CompiledHdlUnit for ZmmpNpuBlock {
     fn get_id(&self) -> Identifier {
         self.id.clone()
     }
@@ -392,18 +392,18 @@ impl CompiledHdlUnit for ZMMP_NPUBlock {
 }
 
 /// Conceptual representation of a Z-MMP AI Accelerator Unit.
-pub struct ZMMP_AIAccelBlock {
+pub struct ZmmpAiAccelBlock {
     id: Identifier,
     // Direct hardware interface via Nimbus OS HAL.
 }
 
-impl ZMMP_AIAccelBlock {
+impl ZmmpAiAccelBlock {
     pub fn new(id: Identifier) -> Self {
-        ZMMP_AIAccelBlock { id }
+        ZmmpAiAccelBlock { id }
     }
 }
 
-impl CompiledHdlUnit for ZMMP_AIAccelBlock {
+impl CompiledHdlUnit for ZmmpAiAccelBlock {
     fn get_id(&self) -> Identifier {
         self.id.clone()
     }
@@ -428,18 +428,18 @@ impl CompiledHdlUnit for ZMMP_AIAccelBlock {
 }
 
 /// Conceptual representation of a Z-MMP Analog/Optical Processor.
-pub struct ZMMP_AnalogOpticalBlock {
+pub struct ZmmpAnalogOpticalBlock {
     id: Identifier,
     // Direct hardware interface via Nimbus OS HAL.
 }
 
-impl ZMMP_AnalogOpticalBlock {
+impl ZmmpAnalogOpticalBlock {
     pub fn new(id: Identifier) -> Self {
-        ZMMP_AnalogOpticalBlock { id }
+        ZmmpAnalogOpticalBlock { id }
     }
 }
 
-impl CompiledHdlUnit for ZMMP_AnalogOpticalBlock {
+impl CompiledHdlUnit for ZmmpAnalogOpticalBlock {
     fn get_id(&self) -> Identifier {
         self.id.clone()
     }
@@ -514,7 +514,7 @@ pub mod external_hdl_linker {
         // 1. Resolve connections between Zenith HDL ports and external HDL module ports.
         // 2. Generate a combined IR that represents the complete hardware design.
         // 3. Perform cross-HDL optimization passes.
-        // This output IR would then be fed to the ZMMP_HDL_Generator.
+        // This output IR would then be fed to the ZmmpHdlGenerator.
         Ok(Vec::new()) // Dummy IR
     }
 }

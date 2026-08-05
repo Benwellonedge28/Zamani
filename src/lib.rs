@@ -1,4 +1,5 @@
 //! Zenith Omniversal Language Compiler — Core Library
+#![allow(static_mut_refs)]
 //!
 //! Exposes the full Zenith compiler pipeline:
 //! source_map → lexer → AST → parser → semantic → ir_gen → optimizer → backend
