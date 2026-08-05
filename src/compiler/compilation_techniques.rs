@@ -78,325 +78,363 @@ pub struct TranspilationConfig {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HdlSynthConfig {
     pub target_chip_design: Identifier,
+    pub clock_speed_mhz: f32,
     pub power_budget_mw: f32,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct QuantumCompileConfig {
-    pub qpu_architecture: Identifier,
-    pub error_correction_level: f32,
+    pub qubit_count: u32,
+    pub error_correction_scheme: Identifier,
+    pub target_qpu_architecture: Identifier,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct NanoCompileConfig {
-    pub nacu_architecture: Identifier,
-    pub self_assembly_protocol: Identifier,
+    pub agent_swarm_size: u32,
+    pub target_nacu_version: Identifier,
+    pub bio_compatibility_mode: bool,
 }
 
 // -----------------------------------------------------------------------------
-// Zamani UMC Compiler Orchestrator
+// AI-Driven Compilation Strategy Model
 // -----------------------------------------------------------------------------
 
-pub struct HybridCompilerOrchestrator {
-    pub current_strategy: CompilationStrategy,
-    pub ai_compiler_model: AiStrategyModel, // ML model to predict optimal strategy
-    pub planner: Planner,                   // AI planner for complex compilation tasks
+/// Conceptual AI model that guides adaptive compilation choices.
+/// Trained on performance data, ethical constraints, and target environment profiles.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AiStrategyModel {
+    pub model_id: Identifier,
+    pub performance_profile: Map<String, Tensor<f32>>,
+    pub ethical_constraints: List<EvasPolicyLevel>,
 }
 
-impl HybridCompilerOrchestrator {
-    pub fn new() -> Self {
-        HybridCompilerOrchestrator {
-            current_strategy: CompilationStrategy::AheadOfTime(AotConfig {
-                optimization_level: OptimizationLevel::O2,
-                target: TargetPlatform::X86_64,
-            }),
-            ai_compiler_model: AiStrategyModel::new(Identifier(
-                "adaptive_compiler_model".to_string(),
-                Span::dummy(),
-            )),
-            planner: Planner::new(),
+impl AiStrategyModel {
+    pub fn new(model_id: Identifier) -> Self {
+        AiStrategyModel {
+            model_id,
+            performance_profile: Map::new(),
+            ethical_constraints: List::new(),
+        }
+    }
+    /// Conceptually predicts the best compilation strategy for a given code segment.
+    pub fn predict_strategy(
+        &self,
+        code_segment_ir: &ZamaniIR,
+        target_env: &TargetPlatform,
+    ) -> Result<CompilationStrategy, String> {
+        println!(
+            "[CompTech::AiModel] Predicting optimal compilation strategy for IR segment {:?} targeting {:?}.",
+            code_segment_ir.id, target_env
+        );
+        // Conceptual: Use the AI model (e.g., a neural network) to analyze the IR,
+        // consider the target environment's capabilities and ethical constraints,
+        // and output the most suitable CompilationStrategy.
+        // For now, defaults to AOT with basic optimization.
+        Ok(CompilationStrategy::AheadOfTime(AotConfig {
+            optimization_level: OptimizationLevel::Basic,
+            target: target_env.clone(),
+        }))
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Compilation Orchestrator
+// -----------------------------------------------------------------------------
+
+/// The central orchestrator for Zamani's compilation process.
+/// Manages the selection, execution, and ethical vetting of compilation techniques.
+pub struct CompilationOrchestrator {
+    pub current_strategy: Option<CompilationStrategy>,
+    pub ai_model: AiStrategyModel,
+    pub evas_filter: EvasFilter,
+    pub compilation_log: List<CompilationEvent>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompilationEvent {
+    pub timestamp: u64,
+    pub event_type: String,
+    pub details: Map<String, MetaValue>,
+}
+
+impl CompilationOrchestrator {
+    pub fn new(ai_model: AiStrategyModel, evas_filter: EvasFilter) -> Self {
+        CompilationOrchestrator {
+            current_strategy: None,
+            ai_model,
+            evas_filter,
+            compilation_log: List::new(),
         }
     }
 
-    /// Dynamically selects the most optimal compilation strategy based on input code,
-    /// target platform, and runtime characteristics.
-    /// [ethics: principles = "resource_efficiency", safety_risk = "performance_degradation"] // Ethical vetting of compilation choice
-    pub fn select_optimal_strategy(
+    /// Compiles a Zamani AST program into an executable binary or intermediate form.
+    /// This is the main entry point for the UMC's compilation pipeline.
+    pub fn compile_program(
         &mut self,
-        source_code_characteristics: Map<String, MetaValue>,
-        deployment_context: Map<String, MetaValue>,
-    ) -> Result<CompilationStrategy, String> {
-        println!("[Compiler::Tech] Dynamically selecting optimal compilation strategy.");
+        ast_program: crate::ast::Program,
+        target: TargetPlatform,
+    ) -> Result<CompiledBinary, String> {
+        println!(
+            "[CompTech::Orchestrator] Starting compilation for target {:?}.",
+            target
+        );
 
-        // 1. AI-Driven Prediction: Use ML model to predict best strategy
-        let input_tensor = Tensor::new_from_map(source_code_characteristics.clone()); // Dummy
-        let prediction = self.ai_compiler_model.predict(&input_tensor)?; // Use & to pass by reference
-        let predicted_strategy = self.interpret_prediction(prediction);
-
-        // 2. E.V.A.S. Vetting: Ensure the chosen strategy is ethically compliant and safe
-        let evas_context = EvasActionContext {
-            action_type: "compilation_strategy_selection".to_string(),
-            perceived_intent: format!(
-                "Optimize code for performance and resource usage: {:?}",
-                predicted_strategy
-            ),
+        // 1. Ethical Vetting of Compilation Intent
+        let compile_intent = EvasActionContext {
+            action_type: "compilation".to_string(),
+            perceived_intent: format!("Compile program for target {:?}.", target),
             initiating_context_id: crate::nimbus_os::get_current_context_id(),
-            // ... add deployment context, code characteristics ...
             ..Default::default()
         };
-        match EvasFilter::new(EvasPolicyLevel::Strict).evaluate_action(evas_context) {
-            // Dummy
-            EvasDecision::Block(reason) => {
-                return Err(format!(
-                    "E.V.A.S. BLOCKED compilation strategy: {}.\n",
-                    reason
-                ))
-            }
-            _ => println!("[Compiler::Tech] E.V.A.S. approved compilation strategy."),
+        let evas_decision = self.evas_filter.evaluate_action(compile_intent);
+        if !evas_decision.is_permitted() {
+            return Err(format!(
+                "Compilation ethically vetoed by E.V.A.S.: {:?}",
+                evas_decision
+            ));
         }
 
-        self.current_strategy = predicted_strategy.clone();
-        Ok(predicted_strategy)
-    }
+        // 2. Strategy Selection (AI-driven or manual)
+        let strategy = if let Some(ref strat) = self.current_strategy {
+            strat.clone()
+        } else {
+            // Conceptual: Convert AST to a minimal IR for AI prediction
+            let dummy_ir = ZamaniIR::new(Identifier(
+                "dummy_ast_ir".to_string(),
+                Span::dummy(),
+            ));
+            self.ai_model.predict_strategy(&dummy_ir, &target)?
+        };
 
-    /// Executes the chosen compilation strategy, coordinating various ZUMC components.
-    pub fn execute_compilation(&self, source_ir: ZamaniIR) -> Result<CompiledArtifact, String> {
-        println!(
-            "[Compiler::Tech] Executing compilation using strategy: {:?}.",
-            self.current_strategy
-        );
+        self.log_event("strategy_selected", Map::new());
 
-        match &self.current_strategy {
-            CompilationStrategy::AheadOfTime(config) => self.aot_compile(source_ir, config),
-            CompilationStrategy::JustInTime(config) => self.jit_compile(source_ir, config),
+        // 3. Execute Compilation based on Strategy
+        let compiled_binary = match strategy {
+            CompilationStrategy::AheadOfTime(config) => {
+                self.compile_aot(ast_program, config)
+            }
+            CompilationStrategy::JustInTime(config) => {
+                self.compile_jit(ast_program, config)
+            }
             CompilationStrategy::AdaptiveOptimization(config) => {
-                self.adaptive_compile(source_ir, config)
+                self.compile_adaptive(ast_program, config)
             }
             CompilationStrategy::MultiParadigmTranspilation(config) => {
-                self.transpile(source_ir, config)
+                self.compile_transpile(ast_program, config)
             }
             CompilationStrategy::HardwareSynthesis(config) => {
-                self.hdl_synthesize(source_ir, config)
+                self.compile_hdl(ast_program, config)
             }
             CompilationStrategy::QuantumCompilation(config) => {
-                self.quantum_compile(source_ir, config)
+                self.compile_quantum(ast_program, config)
             }
-            CompilationStrategy::NanoCompilation(config) => self.nano_compile(source_ir, config),
+            CompilationStrategy::NanoCompilation(config) => {
+                self.compile_nano(ast_program, config)
+            }
             CompilationStrategy::MixedMode(strategies) => {
-                self.mixed_mode_compile(source_ir, strategies)
+                self.compile_mixed_mode(ast_program, strategies, target)
             }
-        }
+        }?;
+
+        self.log_event("compilation_complete", Map::new());
+        Ok(compiled_binary)
     }
 
-    // --- Private/Internal Compilation Method Implementations (Conceptual) ---
-
-    fn aot_compile(&self, ir: ZamaniIR, config: &AotConfig) -> Result<CompiledArtifact, String> {
-        println!(
-            "[Compiler::Tech] Performing Ahead-of-Time compilation for target {:?}.",
-            config.target
-        );
-        // Conceptual: IR -> Optimizer -> Backend (e.g., LLVM, GCC)
-        let optimized_ir =
-            self::optimizer::Optimizer::new().optimize(ir, config.optimization_level.clone())?;
-        let compiled_binary =
-            self::backend::Backend::new().generate_code(optimized_ir, config.target.clone())?; // Call generate_code from Backend
-        Ok(CompiledArtifact::Binary(compiled_binary))
+    fn log_event(&mut self, event_type: &str, details: Map<String, MetaValue>) {
+        self.compilation_log.push(CompilationEvent {
+            timestamp: 0, // Conceptual: use actual time
+            event_type: event_type.to_string(),
+            details,
+        });
     }
 
-    fn jit_compile(&self, ir: ZamaniIR, config: &JitConfig) -> Result<CompiledArtifact, String> {
-        println!(
-            "[Compiler::Tech] Performing Just-in-Time compilation (profiling enabled: {}).",
-            config.enable_profiling
-        );
-        // Conceptual: IR -> runtime code generation (e.g., LLVM JIT, custom JIT)
-        Ok(CompiledArtifact::RuntimeCodeRef(Identifier(
-            "jit_handle".to_string(),
-            Span::dummy(),
-        )))
-    }
+    // --- Specific Compilation Technique Implementations (Conceptual) ---
 
-    fn adaptive_compile(
+    fn compile_aot(
         &self,
-        ir: ZamaniIR,
-        config: &AdaptiveOptConfig,
-    ) -> Result<CompiledArtifact, String> {
+        program: crate::ast::Program,
+        config: AotConfig,
+    ) -> Result<CompiledBinary, String> {
         println!(
-            "[Compiler::Tech] Performing Adaptive Optimization (using model {:?}).",
-            config.strategy_model.id
+            "[CompTech::AOT] Compiling program AOT for target {:?} at optimization level {:?}.",
+            config.target, config.optimization_level
         );
-        // Conceptual: Profile -> analyze hotspots -> re-optimize/re-JIT code sections.
-        Ok(CompiledArtifact::RuntimeCodeRef(Identifier(
-            "adaptive_jit_handle".to_string(),
-            Span::dummy(),
-        )))
+        // Conceptual:
+        // 1. Full program analysis and IR generation.
+        // 2. Extensive optimization passes.
+        // 3. Code generation for the specific target platform.
+        // 4. Linking and packaging into a native binary.
+        Ok(CompiledBinary {
+            data: List::new(),
+            format: "elf".to_string(),
+        })
     }
 
-    fn transpile(
+    fn compile_jit(
         &self,
-        ir: ZamaniIR,
-        config: &TranspilationConfig,
-    ) -> Result<CompiledArtifact, String> {
+        program: crate::ast::Program,
+        config: JitConfig,
+    ) -> Result<CompiledBinary, String> {
         println!(
-            "[Compiler::Tech] Performing Multi-Paradigm Transpilation from {:?} to {:?}.",
-            config.source_paradigm.0, config.target_paradigm.0
+            "[CompTech::JIT] Compiling program JIT with profiling={} and recompile_threshold={}.",
+            config.enable_profiling, config.recompile_threshold
         );
-        // Conceptual: IR -> semantic transformation -> new IR for target paradigm.
-        // E.g., classical loop to quantum phase estimation, or classical to nano-swarm behavior.
-        Ok(CompiledArtifact::ZamaniIR(ZamaniIR::new(Identifier(
-            "transpiled_ir".to_string(),
-            Span::dummy(),
-        ))))
+        // Conceptual:
+        // 1. Generate initial unoptimized code quickly.
+        // 2. Instrument code for profiling if enabled.
+        // 3. Monitor execution hotspots.
+        // 4. Recompile hotspots with higher optimization when threshold is met.
+        Ok(CompiledBinary {
+            data: List::new(),
+            format: "jit_cache".to_string(),
+        })
     }
 
-    fn hdl_synthesize(
+    fn compile_adaptive(
         &self,
-        ir: ZamaniIR,
-        config: &HdlSynthConfig,
-    ) -> Result<CompiledArtifact, String> {
+        program: crate::ast::Program,
+        config: AdaptiveOptConfig,
+    ) -> Result<CompiledBinary, String> {
         println!(
-            "[Compiler::Tech] Performing Hardware Description Language synthesis for {:?}.",
-            config.target_chip_design.0
+            "[CompTech::Adaptive] Compiling with adaptive optimization using model {:?} (learning_rate={}).",
+            config.strategy_model.model_id, config.learning_rate
         );
-        // Conceptual: IR -> Zamani HDL -> (external tools) -> GDSII, Verilog.
-        Ok(CompiledArtifact::HardwareDescription(Identifier(
-            "generated_hdl".to_string(),
-            Span::dummy(),
-        )))
+        // Conceptual:
+        // 1. Initial compilation with baseline optimizations.
+        // 2. Continuous feedback loop from runtime performance.
+        // 3. AI model re-evaluates and suggests new optimization strategies.
+        // 4. Code is progressively re-optimized and patched.
+        Ok(CompiledBinary {
+            data: List::new(),
+            format: "adaptive_module".to_string(),
+        })
     }
 
-    fn quantum_compile(
+    fn compile_transpile(
         &self,
-        ir: ZamaniIR,
-        config: &QuantumCompileConfig,
-    ) -> Result<CompiledArtifact, String> {
+        program: crate::ast::Program,
+        config: TranspilationConfig,
+    ) -> Result<CompiledBinary, String> {
         println!(
-            "[Compiler::Tech] Performing Quantum Compilation for QPU {:?}.",
-            config.qpu_architecture.0
+            "[CompTech::Transpile] Transpiling from paradigm {:?} to paradigm {:?}.",
+            config.source_paradigm, config.target_paradigm
         );
-        // Conceptual: Quantum IR -> QPU-specific instruction set (e.g., OpenQASM, Quil).
-        Ok(CompiledArtifact::QuantumCircuit(Identifier(
-            "compiled_q_circuit".to_string(),
-            Span::dummy(),
-        )))
+        // Conceptual:
+        // 1. Parse source paradigm code.
+        // 2. Convert to an intermediate, paradigm-agnostic representation.
+        // 3. Generate target paradigm code (e.g., functional to imperative).
+        // 4. Ensure semantic equivalence through formal verification.
+        Ok(CompiledBinary {
+            data: List::new(),
+            format: "transpiled_source".to_string(),
+        })
     }
 
-    fn nano_compile(
+    fn compile_hdl(
         &self,
-        ir: ZamaniIR,
-        config: &NanoCompileConfig,
-    ) -> Result<CompiledArtifact, String> {
+        program: crate::ast::Program,
+        config: HdlSynthConfig,
+    ) -> Result<CompiledBinary, String> {
         println!(
-            "[Compiler::Tech] Performing Nano-Compilation for NACU {:?}.",
-            config.nacu_architecture.0
+            "[CompTech::HDL] Synthesizing hardware for chip design {:?} ({} MHz, {} mW).",
+            config.target_chip_design, config.clock_speed_mhz, config.power_budget_mw
         );
-        // Conceptual: Nano-agent behavior IR -> NACU-specific control sequences for self-assembly/function.
-        Ok(CompiledArtifact::NanoAssemblyInstructions(Identifier(
-            "compiled_nano_inst".to_string(),
-            Span::dummy(),
-        )))
+        // Conceptual:
+        // 1. High-level synthesis (HLS) from Zamani code to RTL (Register Transfer Level).
+        // 2. Optimization for power, area, and timing.
+        // 3. Generation of Verilog/VHDL or custom HDL.
+        // 4. Verification against hardware specifications.
+        Ok(CompiledBinary {
+            data: List::new(),
+            format: "rtl_verilog".to_string(),
+        })
     }
 
-    fn mixed_mode_compile(
+    fn compile_quantum(
         &self,
-        ir: ZamaniIR,
-        strategies: &List<CompilationStrategy>,
-    ) -> Result<CompiledArtifact, String> {
+        program: crate::ast::Program,
+        config: QuantumCompileConfig,
+    ) -> Result<CompiledBinary, String> {
         println!(
-            "[Compiler::Tech] Performing Mixed-Mode compilation with {:?} strategies.",
-            strategies.len()
+            "[CompTech::Quantum] Compiling for QPU with {} qubits, error correction {:?}, architecture {:?}.",
+            config.qubit_count, config.error_correction_scheme, config.target_qpu_architecture
         );
-        // Conceptual: Orchestrate multiple compilation passes, potentially in parallel or sequential.
-        // E.g., AOT for core logic, JIT for hot paths, Quantum for specific functions.
-        Ok(CompiledArtifact::Mixed(List::new()))
+        // Conceptual:
+        // 1. Quantum circuit synthesis from Zamani quantum constructs.
+        // 2. Qubit mapping and routing for the target architecture.
+        // 3. Error correction code insertion.
+        // 4. Generation of QASM or native QPU instructions.
+        Ok(CompiledBinary {
+            data: List::new(),
+            format: "qasm".to_string(),
+        })
     }
 
-    // --- Helper function (Conceptual) ---
-    fn interpret_prediction(&self, prediction: Tensor<f32>) -> CompilationStrategy {
-        // Dummy: Always return AOT for now
-        CompilationStrategy::AheadOfTime(AotConfig {
-            optimization_level: OptimizationLevel::O2,
-            target: TargetPlatform::X86_64,
+    fn compile_nano(
+        &self,
+        program: crate::ast::Program,
+        config: NanoCompileConfig,
+    ) -> Result<CompiledBinary, String> {
+        println!(
+            "[CompTech::Nano] Compiling for NACU swarm of {} agents (version {:?}, bio_compat={}).",
+            config.agent_swarm_size, config.target_nacu_version, config.bio_compatibility_mode
+        );
+        // Conceptual:
+        // 1. Decompose program into nano-agent specific tasks.
+        // 2. Generate NanoControl bytecode or biological instructions.
+        // 3. Swarm coordination logic injection.
+        // 4. Bio-compatibility checks if enabled.
+        Ok(CompiledBinary {
+            data: List::new(),
+            format: "nano_control".to_string(),
+        })
+    }
+
+    fn compile_mixed_mode(
+        &self,
+        program: crate::ast::Program,
+        strategies: List<CompilationStrategy>,
+        target: TargetPlatform,
+    ) -> Result<CompiledBinary, String> {
+        println!(
+            "[CompTech::MixedMode] Compiling using {} combined strategies for target {:?}.",
+            strategies.len(),
+            target
+        );
+        // Conceptual:
+        // 1. Partition the program into segments suitable for different strategies.
+        // 2. Compile each segment with its assigned strategy.
+        // 3. Generate glue code for inter-segment communication.
+        // 4. Package into a unified executable.
+        Ok(CompiledBinary {
+            data: List::new(),
+            format: "mixed_module".to_string(),
         })
     }
 }
 
 // -----------------------------------------------------------------------------
-// Compilation Artifacts
+// Dummy sub-modules for compilation pipeline components
 // -----------------------------------------------------------------------------
 
-/// Represents the various outputs of the compilation process.
-#[derive(Debug, Clone, PartialEq)]
-pub enum CompiledArtifact {
-    Binary(CompiledBinary),
-    HardwareDescription(Identifier), // Reference to generated HDL
-    QuantumCircuit(Identifier),      // Reference to compiled quantum program
-    NanoAssemblyInstructions(Identifier), // Reference to nano-agent control
-    ZamaniIR(ZamaniIR),              // Optimized/transpiled IR
-    RuntimeCodeRef(Identifier),      // Reference to JIT'd code in memory
-    Mixed(List<CompiledArtifact>),   // For mixed-mode compilation outputs
-}
-
-/// A concrete, instantiable AI model used to predict optimal compilation
-/// strategies. (This module needs a concrete model to store as a struct
-/// field and construct directly, unlike the object-safe `ml::Model` trait
-/// used by higher-level pluggable-model consumers elsewhere in stdlib.)
-#[derive(Debug, Clone, PartialEq)]
-pub struct AiStrategyModel {
-    pub id: Identifier,
-}
-impl AiStrategyModel {
-    pub fn new(id: Identifier) -> Self {
-        AiStrategyModel { id }
-    }
-    pub fn predict(&self, input: &Tensor<f32>) -> Result<Tensor<f32>, String> {
-        Ok(Tensor::from_data(input.shape.clone(), input.data.clone()))
-    }
-}
-
-// Dummy structures needed for compilation techniques module
-// Should ideally come from other compiler modules
 pub mod optimizer {
-    use super::ir_gen::ZamaniIR;
-    use crate::ast::Identifier;
-    use crate::stdlib::collections::Map;
-
     #[derive(Debug, Clone, PartialEq)]
     pub enum OptimizationLevel {
-        O0,
-        O1,
-        O2,
-        O3,
-        Os,
-        Oz,
-    }
-    pub struct Optimizer {
-        pub id: Identifier,
-    }
-    impl Optimizer {
-        pub fn new() -> Self {
-            Optimizer {
-                id: Identifier(
-                    "default_optimizer".to_string(),
-                    crate::source_map::Span::dummy(),
-                ),
-            }
-        }
-        pub fn optimize(&self, ir: ZamaniIR, level: OptimizationLevel) -> Result<ZamaniIR, String> {
-            Ok(ir)
-        }
+        None,
+        Basic,
+        Aggressive,
+        Ultra,
     }
 }
 
 pub mod backend {
-    use super::ir_gen::ZamaniIR;
     use crate::ast::Identifier;
-
     #[derive(Debug, Clone, PartialEq)]
     pub enum TargetPlatform {
         X86_64,
-        ARM64,
-        WASM,
-        LLVMIR,
-        QPU,
-        NACU,
+        Arm64,
+        Wasm32,
+        QpuGeneric,
+        NacuGeneric,
         Custom(Identifier),
     }
     #[derive(Debug, Clone, PartialEq)]
@@ -447,6 +485,71 @@ pub mod ir_gen {
                 instructions: crate::stdlib::collections::List::new(),
             }
         }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ENHANCED: ParadigmRouter — Omni-Paradigm Dispatch
+// ═══════════════════════════════════════════════════════════════════════════════
+
+use std::collections::HashMap;
+use crate::ast::{ParadigmBlock, Span};
+
+/// Compilation strategy for a specific paradigm.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParadigmStrategy {
+    Imperative,    // Standard IR → LLVM
+    Functional,    // CPS transform → graph reduction
+    Quantum,       // QASM emission
+    Nano,          // NanoControl bytecode
+    Biological,    // Bio-sim DSL
+    Actor,         // Erlang-style process spawn
+    Metaphysical,  // Reserved for ORSME integration
+}
+
+/// Maps `paradigm_block (ParadigmType) { ... }` AST nodes to backend strategies.
+#[derive(Debug, Clone, Default)]
+pub struct ParadigmRouter {
+    handlers: HashMap<String, ParadigmStrategy>,
+}
+
+impl ParadigmRouter {
+    pub fn new() -> Self {
+        let mut router = Self::default();
+        router.handlers.insert("imperative".into(), ParadigmStrategy::Imperative);
+        router.handlers.insert("functional".into(), ParadigmStrategy::Functional);
+        router.handlers.insert("quantum".into(), ParadigmStrategy::Quantum);
+        router.handlers.insert("nano".into(), ParadigmStrategy::Nano);
+        router.handlers.insert("actor".into(), ParadigmStrategy::Actor);
+        router.handlers.insert("biological".into(), ParadigmStrategy::Biological);
+        router.handlers.insert("metaphysical".into(), ParadigmStrategy::Metaphysical);
+        router
+    }
+
+    /// Resolve a `paradigm_block (ParadigmType) { ... }` to its compilation strategy.
+    pub fn resolve(&self, block: &ParadigmBlock) -> Result<ParadigmStrategy, String> {
+        let key = block.paradigm.to_lowercase();
+        self.handlers.get(&key).cloned().ok_or_else(|| {
+            format!(
+                "Unknown paradigm: '{}' at {:?}. Available: {:?}",
+                block.paradigm,
+                block.span,
+                self.available_paradigms()
+            )
+        })
+    }
+
+    /// Register a custom paradigm handler at compile time.
+    pub fn register(&mut self, name: &str, strategy: ParadigmStrategy) {
+        self.handlers.insert(name.to_lowercase(), strategy);
+    }
+
+    pub fn available_paradigms(&self) -> Vec<String> {
+        self.handlers.keys().cloned().collect()
+    }
+
+    pub fn count(&self) -> usize {
+        self.handlers.len()
     }
 }
 
