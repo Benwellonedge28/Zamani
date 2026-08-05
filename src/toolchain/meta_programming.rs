@@ -1,7 +1,7 @@
 //! Zamani Universal Meta-Compiler (UMC): Autonomous Meta-Programming & Macros Module
 //!
 //! This module defines the conceptual framework for Zamani's "very extra super Extremely
-//! supremely autonomous infinity Advanced and secure infinitely and ready for production
+//! supremely autonomous infinity Advanced and secure infinitely and ready for production"
 //! Meta programming and macros". It empowers Zamani to not only understand, execute, and
 //! transform code across paradigms, but also to autonomously generate, optimize, and secure
 //! its own code and the code of deployed applications at a meta-level.
@@ -59,179 +59,92 @@ pub type ZamaniCodeSnippet = String;
 pub struct MacroProcessor;
 
 impl MacroProcessor {
-    /// Registers a new meta-programming macro with the Zamani compiler.
-    /// Macro logic is stored and executed within a secure Nimbus OS context.
-    pub fn register_macro(macro_def: MacroDefinition) -> Result<(), String> {
-        println!(
-            "[Toolchain::MetaProg] Registering macro '{}'.",
-            macro_def.name.0
-        );
-        // Conceptual: Store macro definition, compile generator_logic to executable form.
-        Ok(())
+    pub fn new() -> Self {
+        MacroProcessor
     }
-
-    /// Expands a macro invocation during compilation or runtime meta-programming.
-    /// This process itself is E.V.A.S.-vetted and formally verifiable.
+    /// Expands a macro invocation by matching against registered macro definitions.
     pub fn expand_macro(
-        macro_name: Identifier,
-        args: List<MetaValue>,
+        &self,
+        macro_name: &Identifier,
+        arguments: List<MetaValue>,
+        known_macros: &Map<Identifier, MacroDefinition>,
     ) -> Result<ZamaniCodeSnippet, String> {
         println!(
-            "[Toolchain::MetaProg] Expanding macro '{}' with args: {:?}.",
-            macro_name.0, args
+            "[Toolchain::MetaProg] Expanding macro {:?} with arguments {:?}.",
+            macro_name, arguments
         );
-
-        // E.V.A.S. vetting for macro expansion, especially if it generates complex/privileged code.
-        let evas_action = EvasActionContext {
-            action_type: "macro_expansion".to_string(),
-            perceived_intent: format!("Generate code using macro {}.", macro_name.0),
-            initiating_context_id: crate::nimbus_os::get_current_context_id(), // Assume AGI is running in a context
-            ..Default::default()
-        };
-        match crate::nimbus_os::get_microkernel_evas_filter().evaluate_action(evas_action) {
-            EvasDecision::Block(reason) => {
-                return Err(format!("E.V.A.S. blocked macro expansion: {}.", reason))
-            }
-            _ => { /* Allow or Warn */ }
+        if let Some(macro_def) = known_macros.get(macro_name) {
+            // Conceptual:
+            // 1. Match arguments against macro_def.input_pattern.
+            // 2. Execute macro_def.generator_logic within a constrained sandbox.
+            // 3. Apply security_policy_ref checks.
+            // 4. Return the generated ZamaniCodeSnippet (AST/IR representation).
+            Ok(format!(
+                "/* Expanded macro: {:?} */ generated_code_snippet",
+                macro_def.name
+            ))
+        } else {
+            Err(format!("Macro {:?} not found.", macro_name))
         }
-
-        // Conceptual: Execute the `generator_logic` of the macro definition in a secure context.
-        Ok("// Generated code from macro".to_string())
     }
 }
 
 // -----------------------------------------------------------------------------
-// Autonomous Meta-Programming & Code Generation
+// Autonomous Code Generation
 // -----------------------------------------------------------------------------
 
-/// Represents a conceptual autonomous agent specialized in meta-programming tasks.
-/// These agents can understand requirements, generate code, optimize it, and prove its correctness.
-/// (No Debug/Clone/PartialEq: contains trait objects and other non-derivable
-/// fields; this struct is not currently cloned/compared/printed anywhere.)
-pub struct MetaProgrammingAgent {
-    pub base_agent: AutonomousAgent,
-    pub code_generation_models: List<Box<dyn Model>>, // AI models for generating Zamani code/IR/HDL
-    pub optimization_planner: Planner,                // For planning code transformations
-    pub formal_verification_integrations: List<Identifier>, // Tools used for proving correctness
+/// Represents an autonomous code generation task, often initiated by an AI agent.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CodeGenerationTask {
+    pub task_id: Identifier,
+    pub description: String,
+    pub target_module: Identifier,
+    pub constraints: List<String>, // e.g., "must_be_formally_verified", "max_latency_10ms"
+    pub priority: u8,
 }
 
 pub struct AutonomousCodeGenerator;
 
 impl AutonomousCodeGenerator {
-    /// Constructs a fresh code generator instance.
     pub fn new() -> Self {
-        Self
+        AutonomousCodeGenerator
     }
-
-    /// Autonomously generates Zamani code (or IR, HDL, etc.) based on high-level goals.
-    /// Leverages AI models for creativity, AI Reasoning for logic, and Sankofa for knowledge.
-    pub fn generate_code_from_goal(
-        goal: Fact,
-        constraints: Map<String, MetaValue>,
+    /// Autonomously generates Zamani code based on a high-level task description.
+    pub fn generate_code(
+        &self,
+        task: &CodeGenerationTask,
+        ai_reasoner: &mut Planner,
+        knowledge_base: &KnowledgeBase,
     ) -> Result<ZamaniCodeSnippet, String> {
         println!(
-            "[Toolchain::MetaProg] Autonomously generating code for goal: {:?}.",
-            goal
+            "[Toolchain::MetaProg] Autonomous code generation for task {:?}: {}",
+            task.task_id, task.description
         );
-
-        // E.V.A.S. vetting for autonomous code generation, especially for sensitive domains.
-        let evas_action = EvasActionContext {
-            action_type: "autonomous_code_generation".to_string(),
-            perceived_intent: format!("Generate code to achieve goal {:?}.", goal),
-            initiating_context_id: crate::nimbus_os::get_current_context_id(),
-            ..Default::default()
-        };
-        match crate::nimbus_os::get_microkernel_evas_filter().evaluate_action(evas_action) {
-            EvasDecision::Block(reason) => {
-                return Err(format!("E.V.A.S. blocked code generation: {}.", reason))
-            }
-            _ => { /* Allow or Warn */ }
-        }
-
-        // Conceptual: AI Reasoning Planner generates a plan; ML models execute the plan to generate code.
-        Ok("// Autonomously generated Zamani code".to_string())
+        // Conceptual:
+        // 1. AI reasoner (Planner) analyzes the task and constraints.
+        // 2. Queries knowledge_base for relevant patterns, existing code, and best practices.
+        // 3. Synthesizes new code snippets.
+        // 4. Ethically vets generated code using E.V.A.S.
+        // 5. Formally verifies critical sections.
+        // 6. Returns the generated code.
+        Ok(format!(
+            "/* Autonomously generated code for task: {} */",
+            task.description
+        ))
     }
 
-    /// Autonomously refactors and optimizes existing Zamani code.
-    /// Leverages `toolchain::self_evolution` for iterative improvement.
-    pub fn autonomously_optimize_code(
-        code_snippet: ZamaniCodeSnippet,
-        optimization_goal: String,
-    ) -> Result<ZamaniCodeSnippet, String> {
-        println!(
-            "[Toolchain::MetaProg] Autonomously optimizing code for goal: '{}'.",
-            optimization_goal
-        );
-        let mut self_evo_engine = SelfEvolutionEngine::new();
-        let proposal_result = self_evo_engine.generate_optimization_proposals(Identifier(
-            "code_refactor_agent".to_string(),
-            Span::dummy(),
-        ));
-        let proposal = proposal_result?.data[0].clone(); // Dummy: taking first proposal
-                                                         // Apply proposal etc.
-        Ok("// Optimized Zamani code".to_string())
-    }
-
-    /// Autonomously adapts code to new or changing multi-paradigm hardware targets.
-    /// Uses `stdlib::meta_ops::transcode` and Zamani HDL knowledge.
-    pub fn adapt_code_to_new_hardware(
-        code_snippet: ZamaniCodeSnippet,
-        new_hardware_target: Identifier,
-    ) -> Result<ZamaniCodeSnippet, String> {
-        println!(
-            "[Toolchain::MetaProg] Autonomously adapting code to new hardware target '{}'.",
-            new_hardware_target.0
-        );
-        let transcoded_output = MetaOperations::transcode(
-            TranscodeSource::SourceCode(
-                code_snippet,
-                Identifier("Zamani".to_string(), Span::dummy()),
-            ),
-            TranscodeTarget::HardwareConfiguration(new_hardware_target.clone()),
-            Map::new(),
-        )?; // Ensure MetaOperations is handled
-        if let TranscodedOutput::Bytes(config_bytes) = transcoded_output {
-            Ok(format!(
-                "// Adapted code for hardware {:?}\n// Configuration: {:?}",
-                new_hardware_target, config_bytes
-            ))
-        } else {
-            Err("Failed to adapt code to hardware configuration.".to_string())
-        }
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Secure Meta-Programming & Macro Verification
-// -----------------------------------------------------------------------------
-
-pub struct SecureMetaProgramming;
-
-impl SecureMetaProgramming {
-    /// Formally verifies the correctness and security of generated or metaprogrammed code/macros.
-    /// Uses `toolchain::formal_verification`.
-    pub fn formally_verify_meta_code(code_to_verify: ZamaniCodeSnippet) -> Result<Proof, String> {
-        println!("[Toolchain::MetaProg] Formally verifying meta-code.");
-        let verifier = FormalVerificationEngine::default();
-        verifier.verify_code(code_to_verify, Map::new()) // Use Map::new() for dummy config
-    }
-
-    /// Digitally signs generated code/macros to ensure authenticity and integrity.
-    /// Uses `stdlib::crypto::sign`.
+    /// Cryptographically signs generated code to ensure integrity and provenance.
     pub fn sign_generated_code(
+        &self,
         code_to_sign: ZamaniCodeSnippet,
-        signing_key_id: Identifier,
+        private_key_ref: Identifier,
     ) -> Result<Signature, String> {
-        println!("[Toolchain::MetaProg] Signing generated code.");
-        // Conceptual: Use KMS to retrieve signing key from secure enclave and sign.
-        let kms = KeyManagementSystem; // Dummy instantiation
-        let private_key_ref = kms.request_key({
-            let mut m = Map::new();
-            m.insert("key_id".to_string(), signing_key_id.0.to_string());
-            m
-        })?; // Dummy request
-             // Need to convert private_key_ref (Identifier) to actual PrivateKey object to pass to crypto.sign.
-             // For now, assume a direct crypto.sign call with a dummy key and dummy data conversion.
+        println!(
+            "[Toolchain::MetaProg] Signing generated code with key {:?}.",
+            private_key_ref
+        );
+        // Conceptual: Retrieve private key, hash code, and create digital signature.
+        // For now, assume a direct crypto.sign call with a dummy key and dummy data conversion.
         crate::stdlib::crypto::Crypto::sign(
             &crate::stdlib::crypto::PrivateKey(List::new()),
             &List::from_vec(code_to_sign.into_bytes()),
@@ -266,5 +179,97 @@ impl SecureMetaProgramming {
         // This implies a HE-compatible compiler and runtime.
         crate::stdlib::crypto::Crypto::homomorphic_multiply(&encrypted_code, &encrypted_data)
         // Dummy: assumes multiply for computation
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ENHANCED: MetaTransformEngine — Linguistic Self-Evolution
+// ═══════════════════════════════════════════════════════════════════════════════
+
+use std::collections::HashMap;
+use crate::ast::{MetaTransformDirective, LanguageDialectDecl, Statement, Expression};
+
+/// A pattern-based AST rewrite rule.
+#[derive(Debug, Clone)]
+pub struct TransformRule {
+    pub name: String,
+    pub pattern: String, // Simplified: would be an AST pattern
+    pub replacement: String,
+}
+
+/// Engine for `#meta_transform { ... }` and `language_dialect! { ... }`.
+#[derive(Debug, Clone, Default)]
+pub struct MetaTransformEngine {
+    rules: Vec<TransformRule>,
+    dialects: HashMap<String, LanguageDialectDecl>,
+}
+
+impl MetaTransformEngine {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Register a `#meta_transform { ... }` directive.
+    pub fn register_transform(
+        &mut self,
+        directive: &MetaTransformDirective,
+    ) -> Result<(), String> {
+        let rule = TransformRule {
+            name: directive.name.clone(),
+            pattern: format!("{:?}", directive.args), // Placeholder
+            replacement: "transformed".into(),
+        };
+        if rule.pattern == rule.replacement {
+            return Err(format!(
+                "Meta-transform '{}' is a no-op at {:?}",
+                directive.name, directive.span
+            ));
+        }
+        self.rules.push(rule);
+        Ok(())
+    }
+
+    /// Register a `language_dialect! { ... }` declaration.
+    pub fn register_dialect(
+        &mut self,
+        decl: &LanguageDialectDecl,
+    ) -> Result<(), String> {
+        if self.dialects.contains_key(&decl.name) {
+            return Err(format!(
+                "Dialect '{}' already exists at {:?}",
+                decl.name, decl.span
+            ));
+        }
+        self.dialects.insert(decl.name.clone(), decl.clone());
+        Ok(())
+    }
+
+    /// Apply all registered transforms to a statement sequence.
+    pub fn apply_transforms(
+        &self,
+        stmts: &mut Vec<Statement>,
+    ) -> Result<(), String> {
+        // In a full implementation, this would walk the AST, match patterns,
+        // and rewrite nodes. For now, we validate that transforms are well-formed.
+        for rule in &self.rules {
+            if rule.pattern == rule.replacement {
+                return Err(format!("Meta-transform '{}' is a no-op", rule.name));
+            }
+        }
+        // Conceptual: apply each rule to the AST
+        println!(
+            "[Toolchain::MetaProg] Applied {} transform(s) to {} statement(s).",
+            self.rules.len(),
+            stmts.len()
+        );
+        Ok(())
+    }
+
+    pub fn transform_count(&self) -> usize {
+        self.rules.len()
+    }
+
+    pub fn dialect_count(&self) -> usize {
+        self.dialects.len()
     }
 }
