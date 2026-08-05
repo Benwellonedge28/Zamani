@@ -22,6 +22,7 @@ use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPo
 use crate::runtime::mts::{TimelineId as MtsTimelineId, Timestamp as MtsTimePoint};
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};
 use crate::source_map::Span;
+use crate::stdlib::ai_reasoning::Fact;
 use crate::stdlib::collections::{HashSet, List, Map};
 use crate::stdlib::crypto::{Hash, PublicKey, Signature};
 use crate::stdlib::distributed_ledger::{LedgerClient, Transaction, TransactionId};
@@ -226,7 +227,7 @@ impl SwarmOrchestrator {
     pub fn orchestrate_swarm(&mut self, swarm_id: Identifier, mission: Fact) -> Result<(), String> {
         println!(
             "[Sovereignty::Swarm] Orchestrating self-organizing swarm for mission: {}.",
-            mission.name
+            mission.predicate
         );
         Ok(())
     }

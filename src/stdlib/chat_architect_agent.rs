@@ -116,7 +116,7 @@ impl ChatArchitectAgent {
                 MetaValue::String(goal.to_string()),
             ),
         )?;
-        generated_code_snippets.insert("unit_tests".to_string(), test_suite_snippet);
+        generated_code_snippets.insert("unit_tests".to_string(), test_suite_snippet.clone());
 
         // (SIMD-like for documentation generation, HDL generation, etc. could be added here)
 

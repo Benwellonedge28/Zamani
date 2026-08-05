@@ -12,14 +12,14 @@
 use crate::ast::Identifier; // For widget IDs, event names
 use crate::core_lang_primitives::{Size, TimeStamp}; // For dimensions, animation timing
 use crate::nimbus_os::{CapabilityToken, NimbusContextId}; // For secure display access
+use crate::runtime::nano::NanoAgentInstance as NanoAgent;
+use crate::runtime::quantum::QuantumCircuit as QCircuit;
 use crate::source_map::Span;
 use crate::stdlib::collections::List; // For lists of widgets/events
 use std::collections::HashMap; // For styles, properties // For dummy Identifier
 
 // Import multi-paradigm types for conceptual rendering
 use crate::runtime::mts::TimelineId;
-use crate::runtime::nano::NanoAgent; // For drawing nano swarms
-use crate::runtime::quantum::QCircuit; // For drawing quantum circuits // For drawing MTS timelines
 
 /// Initializes the GUI standard library components.
 pub fn init_gui_lib() {
@@ -191,7 +191,7 @@ impl Widget for Button {
     }
     fn handle_event(&mut self, event: &GuiEvent) -> Result<(), String> {
         if let GuiEvent::MouseClick { position, button } = event {
-            if self.bounds.contains(position) && button == 1 {
+            if self.bounds.contains(position) && *button == 1 {
                 // Left click
                 println!("[StdLib::GUI] Button '{}' clicked!", self.id.0);
                 if let Some(callback) = &self.on_click {

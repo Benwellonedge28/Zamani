@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 /// Unique identifier for a timeline or a specific state within a timeline.
 pub type TimelineId = u64;
+pub type ActorId = u64;
 pub type Timestamp = u64; // Logical or physical time
 
 /// Represents a conceptual snapshot of state at a specific point in time.
@@ -332,5 +333,19 @@ pub fn check_causality(slice_id: TimelineId) -> bool {
             .map_or(false, |t| t.check_causality())
     } else {
         false
+    }
+}
+
+/// Conceptual MTS Actor Runtime for concurrency/actor model.
+#[derive(Debug, Clone, Default)]
+pub struct MtsActorRuntime {
+    pub actors: std::collections::HashMap<ActorId, String>,
+}
+
+impl MtsActorRuntime {
+    pub fn new() -> Self {
+        Self {
+            actors: std::collections::HashMap::new(),
+        }
     }
 }

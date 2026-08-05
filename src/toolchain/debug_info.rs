@@ -150,6 +150,12 @@ pub fn start_debugger_session(
 /// Conceptual API for a cross-paradigm breakpoint manager.
 pub struct BreakpointManager;
 
+#[derive(Debug, Clone, Default)]
+pub struct SemanticHighlightingInfo {
+    pub token_type: String,
+    pub range: (usize, usize),
+}
+
 impl BreakpointManager {
     pub fn set_code_breakpoint(file_id: usize, line: u32, condition: Option<String>) {
         println!(

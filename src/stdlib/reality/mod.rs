@@ -3,6 +3,8 @@
 //! This module aggregates and manages all components for interacting with,
 //! defining, and synthesizing realities, from virtual environments to mixed reality overlays.
 
+use crate::ast::Identifier;
+use crate::stdlib::vision::Point;
 pub mod multi_universal_interoperability; // Multi-Universal Interoperability
 pub mod reality_definition; // Definition of Reality Constructs
 pub mod reality_synthesis; // Synthesis of Reality Elements

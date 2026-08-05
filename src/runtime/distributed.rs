@@ -10,6 +10,7 @@ use crate::core_lang_primitives::{MemoryRegion, NimbusSystemCall, Size, TimeStam
 use crate::nimbus_os::{NimbusContextId, SandboxPolicy}; // Re-using Nimbus OS types
 use crate::runtime::mts::TimelineId;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex}; // Re-using MTS types
 
 /// Unique identifier for a node in the distributed system.
@@ -124,9 +125,8 @@ impl DistributedOrchestrator {
         );
         // Conceptual: Use NimbusSystemCall::create_isolated_context on the remote node
         // Requires inter-node Nimbus OS communication.
-        let remote_context_id = self
-            .nimbus_system_call
-            .create_isolated_context(blueprint_id.clone(), sandbox_policy);
+        let remote_context_id =
+            NimbusSystemCall::create_isolated_context(blueprint_id.clone(), sandbox_policy);
         Ok(remote_context_id)
     }
 

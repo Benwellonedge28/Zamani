@@ -84,12 +84,9 @@ impl ConcurrencyActorsIrGenerator {
         // 3. Generate IR to register the actor with the MTS Actor Runtime,
         //    including its Nimbus OS context requirements.
         // 4. Create secure communication channels via Nimbus OS.
-        Ok(List::from(vec![
-            IrInstruction::CallBuiltin(
-                "runtime::mts::MtsActorRuntime::register_actor".to_string(),
-                List::new(),
-            ),
+        Ok(vec![
+            IrInstruction::Call(None, "runtime_mts_register_actor".to_string(), Vec::new()),
             // ... more IR instructions for actor creation, state, handlers
-        ]))
+        ])
     }
 }

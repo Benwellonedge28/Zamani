@@ -173,7 +173,7 @@ impl CloudPlatform {
             id: Identifier("new_vm".to_string(), Span::dummy()),
             resource_type: "VM".to_string(),
             current_status: "provisioning".to_string(),
-            deployed_zenith_app: collections::Option::None,
+            deployed_zenith_app: None,
             allocated_capabilities: List::new(),
         })
     }
@@ -231,7 +231,7 @@ impl DevOpsTools {
         script_id: Identifier,
         target_hosts: List<String>,
     ) -> Result<(), String> {
-        println!("[StdLib::ExternalServices] Executing automation script '{}' on hosts {:?} via service '{}'.", script_id.0, target_hosts.data, handle.id.0);
+        println!("[StdLib::ExternalServices] Executing automation script '{}' on hosts {:?} via service '{}'.", script_id.0, target_hosts.into_vec(), handle.id.0);
         Ok(())
     }
 }

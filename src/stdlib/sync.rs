@@ -55,7 +55,7 @@ impl Thread {
 
         let mut microkernel = microkernel_instance.lock().unwrap();
         let thread_id =
-            microkernel.create_thread(current_context_id, entry_point_fn_ptr, stack_size)?;
+            microkernel.create_thread(current_context_id, entry_point_fn_ptr, stack_size.0)?;
         microkernel.start_thread(current_context_id, thread_id)?; // Start immediately
 
         Ok(Thread {
@@ -95,7 +95,7 @@ pub struct Receiver<T>(Arc<Mutex<VecDeque<T>>>, Arc<Condvar>);
 impl<T: Send + 'static> Sender<T> {
     pub fn send(&self, message: T) -> Result<(), String> {
         println!("[StdLib::Sync] Sender: Sending message.");
-        let mut queue = self.0.lock().unwrap();
+        let mut queue = self.0.lock();
         queue.push_back(message);
         self.1.notify_one(); // Notify receiver
         Ok(())
@@ -105,7 +105,7 @@ impl<T: Send + 'static> Sender<T> {
 impl<T: Send + 'static> Receiver<T> {
     pub fn receive(&self) -> Result<T, String> {
         println!("[StdLib::Sync] Receiver: Waiting for message.");
-        let mut queue = self.0.lock().unwrap();
+        let mut queue = self.0.lock();
         while queue.is_empty() {
             queue = self.1.wait(queue).unwrap(); // Wait until notified
         }
@@ -148,13 +148,13 @@ impl Barrier {
     /// Blocks the current thread until all other threads (up to `count`) have also reached the barrier.
     pub fn wait(&self) {
         println!("[StdLib::Sync] Thread reached Barrier.");
-        let mut current = self.current.lock().unwrap();
+        let mut current = self.current.lock();
         *current += 1;
         if *current == self.count {
             self.condvar.notify_all(); // All threads reached, release
             *current = 0; // Reset for next use
         } else {
-            let _ = self.condvar.wait(current).unwrap(); // Wait for others
+            current = self.condvar.wait(current).unwrap(); // Wait for others
         }
     }
 }

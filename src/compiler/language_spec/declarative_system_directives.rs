@@ -42,6 +42,18 @@ pub enum SelfAdjustmentAst {
 
 /// Conceptual representation of Zenith's AST nodes for versioning statements.
 #[derive(Debug, Clone, PartialEq)]
+pub struct VersionRecordAst {
+    pub version: String,
+    pub changes: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChangeLogEntryAst {
+    pub entry: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum VersioningAst {
     Version(Identifier, Vec<VersionRecordAst>), // e.g., version MyModule { ... records ... }
     VersionRecord(Identifier, Identifier, Identifier, Expression), // record 1.0 created by Admin at timestamp

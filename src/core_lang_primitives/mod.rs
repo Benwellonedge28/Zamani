@@ -221,7 +221,7 @@ impl<T> Mutex<T> {
     }
 
     /// Conceptually acquires the mutex lock.
-    pub fn lock(&self) -> std::sync::MutexGuard<'_', T> {
+    pub fn lock(&self) -> std::sync::MutexGuard<T> {
         println!("[Core::Concurrency] Conceptual Mutex: Acquiring lock.");
         self.0.lock().unwrap()
     }
@@ -346,7 +346,7 @@ impl NimbusSystemCall {
         println!("[Core::Nimbus] Conceptual SystemCall: Context {} accessing hardware device {} with command.", context_id, device_id);
         if let Some(microkernel_arc) = get_nimbus_microkernel() {
             let microkernel = microkernel_arc.lock().unwrap();
-            microkernel.access_hardware(context_id, device_id, command)
+            microkernel.access_hardware(context_id, device_id, command.to_vec())
         } else {
             Err("Nimbus Microkernel not initialized.".to_string())
         }

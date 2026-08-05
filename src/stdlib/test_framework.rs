@@ -76,7 +76,6 @@ impl Arbitrary {
 // --- Dummy/Simplified Definitions for Conceptual Compilation --- //
 pub mod ast {
     use crate::source_map::Span;
-    use crate::stdlib::core::String;
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub struct Identifier(pub String, pub Span);
 }

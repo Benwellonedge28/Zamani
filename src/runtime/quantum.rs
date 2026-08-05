@@ -132,7 +132,14 @@ pub fn shutdown_quantum_lib() {
 
 /// A conceptual qubit.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
-pub struct Qubit(usize); // Represents an ID from the quantum runtime
+pub struct Qubit(usize);
+
+/// A quantum circuit representation for GUI/drawing purposes.
+#[derive(Debug, Clone, Default)]
+pub struct QuantumCircuit {
+    pub gates: Vec<String>,
+    pub num_qubits: usize,
+} // Represents an ID from the quantum runtime
 
 impl Qubit {
     /// Allocates a new qubit in the |0> state.

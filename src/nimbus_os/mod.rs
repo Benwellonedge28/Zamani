@@ -451,8 +451,9 @@ impl NimbusMicrokernel {
         self.next_channel_id += 1;
         self.channels
             .insert(channel_id, Arc::new(Mutex::new(VecDeque::new())));
-        println!(
-            "    -> Nimbus OS: Created secure channel {}
+        println!("    -> Nimbus OS: Created secure channel {}", channel_id);
+        Ok(channel_id)
+    }
 
     /// Sends an async message on a channel.
     pub fn send_async_message(
@@ -490,11 +491,6 @@ impl NimbusMicrokernel {
         } else {
             Err(format!("Channel {} not found.", channel_id))
         }
-    }
- between {} and {}.",
-            channel_id, context1_id, context2_id
-        );
-        Ok(channel_id)
     }
 
     pub fn access_hardware(

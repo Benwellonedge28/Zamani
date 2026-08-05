@@ -80,7 +80,7 @@ impl ExplainabilityIrGenerator {
         match ast_node {
             ExplainabilityStatementAst::Explain(expr, reason) => {
                 // Example: IR to call E.V.A.S. to record an explanation for a decision.
-                Ok(List::from(vec![
+                Ok(vec![
                     IrInstruction::Load(
                         crate::ir_gen::IrRegister(
                             "tmp".to_string(),
@@ -100,7 +100,7 @@ impl ExplainabilityIrGenerator {
                         "nimbus_os::evas::record_explanation".to_string(),
                         Vec::new(),
                     ),
-                ]))
+                ])
             }
             _ => Err(
                 "IR generation for this explainability statement not yet fully conceptualized."

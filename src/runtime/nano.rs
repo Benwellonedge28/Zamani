@@ -26,7 +26,7 @@ pub struct NanoAgentInstance {
     pub status: NanoAgentStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NanoAgentStatus {
     Idle,
     ExecutingAction(String),

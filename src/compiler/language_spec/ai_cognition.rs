@@ -83,7 +83,7 @@ impl AiCognitionIrGenerator {
         match ast_node {
             AiStatementAst::Infer(expr) => {
                 // Example: IR for 'infer "is_malicious(input_data)" from kb;'
-                Ok(List::from(vec![
+                Ok(vec![
                     IrInstruction::Load(
                         crate::ir_gen::IrRegister(
                             "tmp".to_string(),
@@ -96,11 +96,11 @@ impl AiCognitionIrGenerator {
                         "stdlib::ai_reasoning::KnowledgeBase::infer".to_string(),
                         Vec::new(),
                     ), // Dummy args
-                ]))
+                ])
             }
             AiStatementAst::Assert(expr) => {
                 // Example: IR for 'assert "fact(subject, predicate, object)" into kb;'
-                Ok(List::from(vec![
+                Ok(vec![
                     IrInstruction::Load(
                         crate::ir_gen::IrRegister(
                             "tmp".to_string(),
@@ -113,7 +113,7 @@ impl AiCognitionIrGenerator {
                         "stdlib::ai_reasoning::KnowledgeBase::add_fact".to_string(),
                         Vec::new(),
                     ), // Dummy args
-                ]))
+                ])
             }
             _ => {
                 Err("IR generation for this AI statement not yet fully conceptualized.".to_string())

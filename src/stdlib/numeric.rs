@@ -100,7 +100,7 @@ impl Stats {
         if data.len() == 0 {
             None
         } else {
-            Some(data.data.iter().sum::<f64>() / data.len() as f64)
+            Some(data.iter().sum::<f64>() / data.len() as f64)
         } // Dummy sum
     }
 

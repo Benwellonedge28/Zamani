@@ -49,6 +49,8 @@ pub struct Block {
     pub nonce: u64,
 }
 
+pub type TransactionId = String;
+
 pub struct Transaction {
     pub sender: PublicKey,
     pub receiver: PublicKey,

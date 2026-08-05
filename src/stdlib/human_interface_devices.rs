@@ -227,7 +227,7 @@ impl EyeTrackingInterface {
         println!("[StdLib::HID] Tracking user gaze.");
         // Conceptual: `stdlib::vision` for eye detection, calibration.
         Ok(GazeData {
-            focal_point: Point { x: 0.5, y: 0.5 },
+            focal_point: Point { x: 0, y: 0 },
             attention_score: 0.9,
         })
     }

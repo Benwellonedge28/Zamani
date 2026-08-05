@@ -142,11 +142,22 @@ pub fn mirror<T: 'static>(instance: &T) -> Box<dyn ObjectMirror> {
         std::any::type_name::<T>()
     );
     // In a real compiler, this would return a dynamic object capable of introspection.
-    // For now, a dummy implementation.
-    struct DummyMirror;
+    // For now, a dummy implementation using type-erased info.
+    struct DummyMirror {
+        type_name: &'static str,
+    }
     impl ObjectMirror for DummyMirror {
         fn get_type_info(&self) -> TypeInfo {
-            reflect::<T>()
+            TypeInfo {
+                name: self.type_name.to_string(),
+                kind: crate::stdlib::reflection::TypeKind::Primitive,
+                full_type: crate::compiler_types::Type::Unit,
+                fields: Vec::new(),
+                methods: Vec::new(),
+                generics: Vec::new(),
+                parent_types: Vec::new(),
+                attributes: std::collections::HashMap::new(),
+            }
         }
         fn get_field_value(&self, _field_name: &str) -> Option<Box<dyn std::any::Any>> {
             None
@@ -178,7 +189,9 @@ pub fn mirror<T: 'static>(instance: &T) -> Box<dyn ObjectMirror> {
             None
         }
     }
-    Box::new(DummyMirror)
+    Box::new(DummyMirror {
+        type_name: std::any::type_name::<T>(),
+    })
 }
 
 /// Provides a conceptual reflective lookup of an object's fields and

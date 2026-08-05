@@ -13,7 +13,7 @@
 
 use crate::ast::{Expression, Identifier, Parameter, Type, TypeBound, TypeParameter}; // Zenith AST elements
 use crate::compiler::frontend::{SemanticAnalyzer, TypeChecker}; // Compiler stages
-use crate::ir_gen::{IrInstruction, IrValue}; // Zenith Intermediate Representation
+use crate::ir_gen::{CmpOp, IrInstruction, IrRegister, IrType, IrValue}; // Zenith Intermediate Representation
 use crate::stdlib::collections::{List, Map};
 
 /// Initializes the Advanced Type System Keywords language specification.
@@ -99,20 +99,26 @@ impl AdvancedTypesIrGenerator {
         // or provides metadata for the backend/optimizer. For type classes, generate IR for
         // method dispatch tables. For dependent types, embed proofs or runtime assertions.
         match ast_node {
-            AdvancedTypeAst::DependentType(base_type, params) => {
-                Ok(List::from(vec![
-                    IrInstruction::TypeCheck(base_type.clone(), List::new()), // Dummy IR
-                    IrInstruction::RuntimeAssert(format!(
+            AdvancedTypeAst::DependentType(base_type, params) => Ok(vec![
+                IrInstruction::Cmp(
+                    IrRegister::new("typecheck", IrType::Opaque("type".to_string())),
+                    CmpOp::Eq,
+                    IrValue::ConstStr(format!("{:?}", base_type)),
+                    IrValue::ConstNull,
+                ),
+                IrInstruction::Call(
+                    None,
+                    "runtime_assert".to_string(),
+                    vec![IrValue::ConstStr(format!(
                         "validate_dependent_params({:?})",
                         params
-                    )),
-                ]))
-            }
-            AdvancedTypeAst::LinearType(typ) => {
-                Ok(List::from(vec![
-                    IrInstruction::TrackResourceLinearity(typ.clone()), // Dummy IR
-                ]))
-            }
+                    ))],
+                ),
+            ]),
+            AdvancedTypeAst::LinearType(typ) => Ok(vec![IrInstruction::Store(
+                IrValue::ConstStr(format!("{:?}", typ)),
+                IrValue::ConstNull,
+            )]),
             _ => Err(
                 "IR generation for this advanced type construct not yet fully conceptualized."
                     .to_string(),
