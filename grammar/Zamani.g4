@@ -1,5 +1,5 @@
 /*
- * Zenith.g4 — ANTLR4 combined grammar for the Zenith language.
+ * Zamani.g4 — ANTLR4 combined grammar for the Zenith language.
  *
  * This is a formal, machine-checkable grammar derived directly from the
  * reference implementation (src/lexer.rs, src/parser.rs, src/ast/mod.rs)
@@ -21,11 +21,11 @@
  *     reference parser; use `Optional<T>` / `Result<T, E>` generic forms.
  *
  * Build with (requires the ANTLR4 tool + your target's runtime, e.g.):
- *   antlr4 -Dlanguage=Python3 -visitor -o generated grammar/Zenith.g4
- *   antlr4 -Dlanguage=Java    -visitor -o generated grammar/Zenith.g4
+ *   antlr4 -Dlanguage=Python3 -visitor -o generated grammar/Zamani.g4
+ *   antlr4 -Dlanguage=Java    -visitor -o generated grammar/Zamani.g4
  */
 
-grammar Zenith;
+grammar Zamani;
 
 // ═══════════════════════════════════════════════════════════════════════
 // Parser rules
@@ -563,7 +563,7 @@ with open(output_path, 'w', encoding='utf-8') as f:
 // This grammar unifies all documented features from:
 //   - GRAMMAR.md (reference implementation)
 //   - ZAMANI_GRAMMAR.md (NIMBUS v3.0 Universal Trinity + UBUNTU + OOP + Omniversal)
-//   - Zenith.g4 (ANTLR4 baseline)
+//   - Zamani.g4 (ANTLR4 baseline)
 //
 // It covers: core language, OOP, quantum, nano, MTS, Sankofa, algebraic effects,
 // dependent types, session types, meta-programming, HDL, distributed/cloud computing,
