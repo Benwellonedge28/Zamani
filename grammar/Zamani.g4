@@ -478,6 +478,80 @@ typeExpr
     ;
 
 // ═══════════════════════════════════════════════════════════════════════
+
+// --- Missing Rules from ZAMANI_GRAMMAR.md ---
+transitionStmt
+    : 'transition' 'from' identLike 'to' identLike 'on' expression ';'
+    ;
+
+actorDefinition
+    : 'actor' identLike '{' actorBody '}'
+    ;
+
+actorBody
+    : actorMember*
+    ;
+
+actorMember
+    : messageHandlerDefinition | propertyDefinition | methodDefinition
+    ;
+
+messageHandlerDefinition
+    : 'handler' identLike '(' params? ')' blockExpr
+    ;
+
+propertyDefinition
+    : modifiers? typeExpr identLike ('=' expression)? ';'
+    ;
+
+methodDefinition
+    : modifiers? 'fn' identLike typeParams? '(' params? ')' returnType? blockExpr
+    ;
+
+nestedEnumDefinition
+    : 'enum' identLike '{' enumBody '}'
+    ;
+
+enumBody
+    : enumMember*
+    ;
+
+enumMember
+    : identLike ('(' args? ')')? ','?
+    ;
+
+typeClassDefinition
+    : 'class' typeParam '{' typeClassBody '}'
+    ;
+
+typeClassBody
+    : (methodDefinition | associatedType | constantDef)*
+    ;
+
+associatedType
+    : 'type' identLike (':' typeConstraint)? ';'
+    ;
+
+constantDef
+    : 'const' identLike ':' typeExpr '=' expression ';'
+    ;
+
+contextDependentTypeWithAspectWeaving
+    : typeExpr '[' identLike ']' 'aspect' identLike
+    ;
+
+functionalDependencyWithTypeProviders
+    : typeParam '->' typeParam 'provider' identLike
+    ;
+
+extensionIndexerDefinition
+    : 'extension' 'this' '[' params ']' '{' 'get' blockExpr ';' 'set' blockExpr ';' '}'
+    ;
+
+ioExpr
+    : 'io' '(' expression ')'
+    ;
+
 // Lexer rules
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -3418,3 +3492,6 @@ LINE_COMMENT: '//' ~[\r\n]* -> skip;
 BLOCK_COMMENT: '/*' .*? '*/' -> skip;
 DOC_COMMENT: '///' ~[\r\n]* -> skip;
 WS: [ \t\r\n]+ -> skip;
+// --- Globalization / CJK ---
+fragment CJK_CHARACTER: [\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF];
+GLOBAL_IDENT: (IDENT | CJK_CHARACTER) (IDENT | [0-9] | CJK_CHARACTER)*;

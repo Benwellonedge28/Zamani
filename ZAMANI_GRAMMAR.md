@@ -2162,7 +2162,7 @@ SECTION 37: CONVERSATIONAL CODE SYNTHESIS & DOCUMENTATION GRAMMAR
 ===============================================================================
 
 // --- Chat Architect Agent: Natural Language Code Generation ---
-// Allows natural language prompts in a chat interface to generate Zenith code
+// Allows natural language prompts in a chat interface to generate Zamani code
 nl_code_generation : 'generate_code' IDENTIFIER '{' nl_code_body '}' ;
 nl_code_body : nl_spec_block nl_code_body | /* epsilon */ ;
 nl_spec_block : nl_type_spec | nl_endpoint_spec | nl_encryption_spec | nl_governance_spec | nl_target_spec ;
@@ -2174,7 +2174,7 @@ nl_target_spec : 'latency_target' '=' STRING ;
 
 // --- Documentation System ---
 // Generates documents, books, articles, reports, journals, news, and
-// multi-modal content explaining Zenith and its ecosystem
+// multi-modal content explaining Zamani and its ecosystem
 documentation_generation : 'document' IDENTIFIER '{' documentation_body '}' ;
 documentation_body : doc_format_spec | doc_content_spec | doc_modal_spec ;
 doc_format_spec : 'format' '=' ('document' | 'book' | 'article' | 'report' | 'journal' | 'news' | 'interactive_web') ;
@@ -2381,7 +2381,7 @@ graphics_body : 'render' '=' STRING | 'shader' '=' STRING | 'frame' '=' INTEGER 
 video_decl : 'video' IDENTIFIER '{' video_body '}' ;
 video_body : 'codec' '=' STRING | 'resolution' '=' STRING | 'fps' '=' INTEGER ;
 
-// --- Zenith Compiler Self-Reference ---
+// --- Zamani Compiler Self-Reference ---
 zenith_compiler_ref : 'zenith_compiler' '{' compiler_body '}' ;
 compiler_body : 'version' '=' STRING | 'target' '=' STRING | 'optimize' '=' STRING ;
 
