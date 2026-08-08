@@ -5,7 +5,8 @@
  * incorporating all features from the core language, NIMBUS legacy rules,
  * Quantum computing, Nano-agent swarms, Sankofa memory, Algebraic effects,
  * Advanced OOP, Meta-programming, HDL, Distributed systems, Globalization,
- * and all common modern programming language features.
+ * and all common/advanced modern programming language features (Null-safety,
+ * FFI, Extension blocks, Complex types, and more).
  */
 
 grammar Zamani;
@@ -15,7 +16,11 @@ grammar Zamani;
 // ===========================================================================
 
 program
-    : declaration* EOF
+    : (pragma | declaration)* EOF
+    ;
+
+pragma
+    : '#' '!' '[' (identLike | STRING | INTEGER | '=' | ',' | '(' | ')')* ']'
     ;
 
 declaration
@@ -59,6 +64,10 @@ declarationInner
     | domainSpecificLanguageDecl
     | aspectDecl
     | typeProviderDecl
+    | extensionDecl
+    | externBlock
+    | testDecl
+    | benchDecl
     | statement
     ;
 
@@ -99,7 +108,7 @@ param
 modifiers
     : ( 'public' | 'private' | 'protected' | 'static' | 'const' | 'async' 
       | 'unsafe' | 'inline' | 'override' | 'final' | 'abstract' | 'virtual'
-      | 'sealed' | 'partial' | 'file' | 'required' | 'init' | 'mut'
+      | 'sealed' | 'partial' | 'file' | 'required' | 'init' | 'mut' | 'extern'
       )*
     ;
 
@@ -121,6 +130,7 @@ statement
     | continueStmt
     | deferStmt
     | yieldStmt
+    | selectStmt
     | expressionStmt
     | blockExpr
     | unsafeBlock
@@ -183,6 +193,7 @@ matchStmt
 
 matchCase
     : ('case' | pattern) ('when' expression)? ('=>' | '->') (blockExpr | expression) ','?
+    | 'default' ('=>' | '->') (blockExpr | expression) ','?
     ;
 
 breakStmt
@@ -199,6 +210,15 @@ deferStmt
 
 yieldStmt
     : 'yield' expression? ';'?
+    ;
+
+selectStmt
+    : 'select' '{' selectCase* '}'
+    ;
+
+selectCase
+    : ('case' | pattern) ('=>' | '->') statement
+    | 'default' ('=>' | '->') statement
     ;
 
 expressionStmt
@@ -235,15 +255,16 @@ expression
     ;
 
 assignmentExpr
-    : rangeExpr (assignOp assignmentExpr)?
+    : nullCoalescingExpr (assignOp assignmentExpr)?
     ;
 
 assignOp
     : '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>='
+    | '||=' | '&&=' | '??='
     ;
 
-rangeExpr
-    : logicalOrExpr (('..' | '..=') logicalOrExpr)?
+nullCoalescingExpr
+    : logicalOrExpr ('??' logicalOrExpr)*
     ;
 
 logicalOrExpr
@@ -283,7 +304,7 @@ additiveExpr
     ;
 
 multiplicativeExpr
-    : castExpr (('*' | '/' | '%') castExpr)*
+    : castExpr (('*' | '/' | '%' | '**') castExpr)*
     ;
 
 castExpr
@@ -296,7 +317,17 @@ unaryExpr
     ;
 
 postfixExpr
-    : primaryExpr ('.' identLike | '[' expression ']' | '(' args? ')' | '?' | '!')*
+    : primaryExpr (postfixOp)*
+    ;
+
+postfixOp
+    : '.' identLike ('(' args? ')')?
+    | '?.' identLike ('(' args? ')')?
+    | '[' expression ']'
+    | '?[' expression ']'
+    | '(' args? ')'
+    | '?'
+    | '!'
     ;
 
 primaryExpr
@@ -324,9 +355,14 @@ primaryExpr
     | matchStmt
     | yieldExpr
     | ioExpr
+    | typeofExpr
     | 'async' expression
     | 'await' expression
     | 'spawn' expression
+    ;
+
+typeofExpr
+    : 'typeof' expression
     ;
 
 args
@@ -334,7 +370,11 @@ args
     ;
 
 arrayLit
-    : '[' (expression (',' expression)*)? ']'
+    : '[' (arrayElement (',' arrayElement)*)? ']'
+    ;
+
+arrayElement
+    : '...'? expression
     ;
 
 tupleLit
@@ -342,11 +382,16 @@ tupleLit
     ;
 
 structLit
-    : identLike '{' (identLike ':' expression (',' identLike ':' expression)*)? '}'
+    : identLike '{' (structFieldLit (',' structFieldLit)*)? '}'
+    ;
+
+structFieldLit
+    : identLike (':' expression)?
+    | '...' expression
     ;
 
 structLiteralTail
-    : '{' (identLike ':' expression ','?)* '}'
+    : '{' (structFieldLit (',' structFieldLit)*)? '}'
     ;
 
 mapLit
@@ -374,6 +419,7 @@ pattern
     | wildcardPattern
     | literalPattern
     | unionPattern
+    | rangePattern
     ;
 
 identPattern : 'mut'? identLike ;
@@ -384,6 +430,7 @@ enumPattern : identLike ('(' (pattern (',' pattern)*)? ')' | '{' (fieldPattern (
 wildcardPattern : '_' ;
 literalPattern : literal ;
 unionPattern : pattern '|' pattern ;
+rangePattern : literal ('..' | '..=') literal ;
 
 // --- Literals ---
 literal
@@ -440,6 +487,9 @@ typeExpr
     | boxedType
     | unionType
     | intersectionType
+    | typeofType
+    | conditionalType
+    | mappedType
     | '(' typeExpr ')'
     ;
 
@@ -485,6 +535,18 @@ unionType
 
 intersectionType
     : typeExpr '&' typeExpr
+    ;
+
+typeofType
+    : 'typeof' expression
+    ;
+
+conditionalType
+    : typeExpr 'extends' typeExpr '?' typeExpr ':' typeExpr
+    ;
+
+mappedType
+    : '{' '[' identLike 'in' typeExpr ']' ':' typeExpr '}'
     ;
 
 typeParams
@@ -809,6 +871,10 @@ typeProviderDecl
     ;
 
 // --- OOP Features ---
+extensionDecl
+    : 'extension' typeParams? typeExpr ('for' typeExpr)? '{' classMember* '}'
+    ;
+
 classDecl
     : modifiers? 'class' identLike typeParams? extendsClause? implementsClause? permitsClause? '{' classBody '}'
     ;
@@ -898,7 +964,7 @@ enumVariant
     ;
 
 enumVariantKind
-    : '(' typeExpr (',' typeExpr)* ')'
+    : '(' typeExpr (',' typeExpr)* )
     | '{' structField* '}'
     ;
 
@@ -1090,6 +1156,21 @@ transitionStmt
     : 'transition' 'from' identLike 'to' identLike 'on' expression ';'
     ;
 
+// --- Extern / FFI ---
+externBlock
+    : 'extern' STRING? '{' declaration* '}'
+    | 'extern' functionDecl
+    ;
+
+// --- Testing ---
+testDecl
+    : 'test' STRING? blockExpr
+    ;
+
+benchDecl
+    : 'bench' STRING? blockExpr
+    ;
+
 // --- Helper Rules ---
 identLike
     : IDENT
@@ -1099,7 +1180,7 @@ identLike
     | LEARN | INFER | WISDOM | ZAMANI | SASA | ANCESTOR | LINEAR | AFFINE
     | LANGUAGE | MTS_KW | LEN | PRINT | PRINTLN | ASSERT | PANIC
     | PI_KW | SIGMA_KW | AS | IS | AND_KW | OR_KW | NOT_KW
-    | LOOP | DEFER | YIELD
+    | LOOP | DEFER | YIELD | TEST | BENCH | EXTERN
     ;
 
 additiveOp
@@ -1107,7 +1188,7 @@ additiveOp
     ;
 
 multiplicativeOp
-    : '*' | '/' | '%'
+    : '*' | '/' | '%' | '**'
     ;
 
 blockExpr
@@ -1123,7 +1204,7 @@ LET: 'let'; VAR: 'var'; CONST: 'const'; MUT: 'mut'; FN: 'fn'; RETURN: 'return';
 IF: 'if'; ELSE: 'else'; WHILE: 'while'; FOR: 'for'; IN: 'in'; LOOP: 'loop';
 BREAK: 'break'; CONTINUE: 'continue'; MATCH: 'match'; WITH: 'with';
 TRUE: 'true'; FALSE: 'false'; NIL_KW: 'nil'; NULL_KW: 'null';
-DEFER: 'defer'; YIELD: 'yield';
+DEFER: 'defer'; YIELD: 'yield'; TEST: 'test'; BENCH: 'bench'; EXTERN: 'extern';
 
 STRUCT: 'struct'; ENUM: 'enum'; TRAIT: 'trait'; IMPL: 'impl'; CLASS: 'class';
 INTERFACE: 'interface'; EXTENDS: 'extends'; IMPLEMENTS: 'implements'; PERMITS: 'permits';
@@ -1290,6 +1371,13 @@ PLUS_EQ: '+='; MINUS_EQ: '-='; STAR_EQ: '*='; SLASH_EQ: '/='; PERCENT_EQ: '%=';
 AMP_EQ: '&='; PIPE_EQ: '|='; CARET_EQ: '^='; LSHIFT_EQ: '<<='; RSHIFT_EQ: '>>=';
 DOTDOT: '..'; DOTDOTEQ: '..=';
 INC: '++'; DEC: '--';
+POWER: '**';
+NULL_COALESCE: '??';
+SAFE_NAV: '?.';
+SAFE_INDEX: '?[';
+OR_ASSIGN: '||=';
+AND_ASSIGN: '&&=';
+NULL_ASSIGN: '??=';
 
 // --- Basic Lexical Units ---
 INTEGER: [0-9]+ ('_' [0-9]+)*;
