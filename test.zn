@@ -1,0 +1,59 @@
+/// Sample Zamani Source File
+/// Demonstrating the Universal Trinity Edition features.
+
+module core::examples;
+
+import std::quantum;
+import std::ai;
+
+#[version("1.0.0")]
+#[author("Zamani Team")]
+struct Developer {
+    name: string,
+    id: int,
+    #[cognitive]
+    state: CognitiveState,
+}
+
+/// The main entry point for the simulation.
+pub fn main() -> int {
+    let mut dev = Developer {
+        name: "Zamani",
+        id: 42,
+        state: CognitiveState::Active,
+    };
+
+    // Sankofa temporal logic
+    zamani {
+        println("Accessing ancestral wisdom...");
+        remember dev.name;
+    }
+
+    sasa {
+        println("Operating in the present moment.");
+        
+        // Quantum operation
+        quantum H(0);
+        let q_state = measure(0);
+        
+        match q_state {
+            0 => println("State is Zero"),
+            1 => println("State is One"),
+            _ => panic("Quantum decoherence!"),
+        }
+    }
+
+    // Nano-agent swarm orchestration
+    nano agent Swarm1(count: 1000) {
+        assemble(dev.state);
+        deploy(core::targets::Mainnet);
+    }
+
+    // AI System Declaration
+    ai system Oracle {
+        learn from data::history;
+        explain Oracle::predictions;
+    }
+
+    return 0;
+}

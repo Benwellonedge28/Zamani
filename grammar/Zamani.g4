@@ -228,7 +228,14 @@ learnExpr : ('learn' | 'infer') 'from'? expression ('with' 'weight' expression)?
 performExpr : 'perform' expression ;
 zamaniExpr : 'zamani' (blockExpr | expression) ;
 sasaExpr : 'sasa' (blockExpr | expression) ;
-quantumOpExpr : 'quantum' ident ('(' args? ')')? | 'superpose' '(' expression (',' expression)* ')' | 'entangle' '(' ident ',' ident ')' ;
+quantumOpExpr 
+    : 'quantum' ident ('(' args? ')')? 
+    | 'superpose' '(' expression (',' expression)* ')' 
+    | 'entangle' '(' ident ',' ident ')' 
+    | 'measure' '(' args? ')'
+    | 'reset' '(' args? ')'
+    | 'barrier' '(' args? ')'
+    ;
 nanoExpr : nanoLit | 'assemble' '(' expression ')' | 'deploy' '(' expression ')' ;
 mtsExpr : mtsLit | 'parallel' '(' blockExpr ')' | 'speculative' '(' blockExpr ')' | 'counterfactual' '(' expression ',' blockExpr ')' ;
 consensusExpr : 'consensus' '[' exprList ']' 'vote' expression ;
