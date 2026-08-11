@@ -52,6 +52,7 @@ pub enum Statement {
     QuantumCircuit(Span, String, Box<Expression>),
     NoiseModel(Span, String, Vec<(String, String)>),
     FidelityCheck(Span, String),
+    SurfaceCode(Span, String, Vec<(String, String)>),
     NanoAgent(Span, String, Box<Expression>),
     SankofaMemory(Span, String, Expression),
     EffectDeclaration(Span, Identifier),

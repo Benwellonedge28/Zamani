@@ -1,0 +1,22 @@
+// Zamani Quantum Error Correction Benchmark
+// Evaluating surface code patches and fault-tolerant logical qubits
+
+omniversal simulate FaultTolerantQPU {
+    surface code SurfacePatch7x7 {
+        dimension(7);
+        distance(3);
+        logical qubit L1;
+        logical qubit L2;
+    }
+
+    quantum circuit ErrorCorrectedCircuit {
+        let q1 = |0>;
+        let q2 = |0>;
+        H(q1);
+        entangle(q1, q2);
+    }
+}
+
+fn main() {
+    println("Surface Code Simulation Initialized.");
+}

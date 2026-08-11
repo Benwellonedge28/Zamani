@@ -899,6 +899,10 @@ impl IrGenerator {
                 func.push(IrInstruction::Comment(format!("Noise Model: {} with params {:?}", name, params)));
             }
 
+            Statement::SurfaceCode(_, name, props) => {
+                func.push(IrInstruction::Comment(format!("Surface Code Patch: {} with properties {:?}", name, props)));
+            }
+
             Statement::FidelityCheck(_, name) => {
                 func.push(IrInstruction::Comment(format!("Fidelity Check for: {}", name)));
             }

@@ -120,6 +120,7 @@ pub enum TokenType {
     KeywordPrivate,
     KeywordPublic,
     KeywordQuantum,
+    KeywordQubit,
     KeywordRecall,
     KeywordRemember,
     KeywordReturn,
@@ -147,6 +148,10 @@ pub enum TokenType {
     KeywordEntangle,
     KeywordNoise,
     KeywordFidelity,
+    KeywordSurface,
+    KeywordCode,
+    KeywordLogical,
+    KeywordParity,
     KeywordPi, // For dependent types: Π
 
     // Special Zamani/Sankofa/Nimbus tokens
@@ -328,6 +333,7 @@ impl Lexer {
         
         // --- Zamani-native & Domain Specific ---
         map.insert("quantum".to_string(), TokenType::KeywordQuantum);
+        map.insert("qubit".to_string(), TokenType::KeywordQubit);
         map.insert("circuit".to_string(), TokenType::KeywordCircuit);
         map.insert("nano".to_string(), TokenType::KeywordNano);
         map.insert("agent".to_string(), TokenType::KeywordAgent);
@@ -340,6 +346,10 @@ impl Lexer {
         map.insert("entangle".to_string(), TokenType::KeywordEntangle);
         map.insert("noise".to_string(), TokenType::KeywordNoise);
         map.insert("fidelity".to_string(), TokenType::KeywordFidelity);
+        map.insert("surface".to_string(), TokenType::KeywordSurface);
+        map.insert("code".to_string(), TokenType::KeywordCode);
+        map.insert("logical".to_string(), TokenType::KeywordLogical);
+        map.insert("parity".to_string(), TokenType::KeywordParity);
         map.insert("sasa".to_string(), TokenType::KeywordSasa);
         map.insert("ancestor".to_string(), TokenType::KeywordAncestor);
         map.insert("linear".to_string(), TokenType::KeywordLinear);

@@ -492,3 +492,8 @@ fragment ESC: '\\' [nrt0"'\\];
 noiseModelDecl : 'noise' 'model' ident '{' noiseParam* '}' ;
 noiseParam : ident '(' (ident | number | string) ')' ';' ;
 fidelityCheck : 'fidelity' '(' ident ')' ';' ;
+
+surfaceCodeDecl : 'surface' 'code' ident '{' surfaceCodeProp* '}' ;
+surfaceCodeProp : ( 'dimension' | 'distance' | 'logical' 'qubit' ) '(' (ident | number) ')' ';' ;
+parityCheck : 'parity' 'check' ident ';' ;
+logicalQubitDecl : 'logical' 'qubit' ident ';' ;

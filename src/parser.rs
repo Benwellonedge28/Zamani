@@ -168,6 +168,7 @@ impl Parser {
             KeywordUse => self.parse_use(),
             KeywordQuantum | KeywordCircuit => self.parse_quantum_circuit(),
             KeywordNoise => self.parse_noise_model(),
+            KeywordSurface => self.parse_surface_code(),
             KeywordNano | KeywordAgent => self.parse_nano_agent(),
             KeywordRemember => self.parse_sankofa_remember(),
             KeywordEffect => self.parse_effect_decl(),
@@ -962,6 +963,36 @@ impl Parser {
         }
         self.expect(TokenType::RBrace)?;
         Some(Statement::NoiseModel(span, name, params))
+    }
+
+    fn parse_surface_code(&mut self) -> Option<Statement> {
+        let span = self.advance().span; // consume 'surface'
+        if self.current_is(TokenType::KeywordCode) || self.current_is(TokenType::Identifier) {
+            self.advance(); // consume 'code' if present
+        }
+        let name = self.current.literal.clone();
+        self.advance();
+        self.expect(TokenType::LBrace)?;
+        let mut props = vec![];
+        while !self.current_is(TokenType::RBrace) && !self.current_is(TokenType::EOF) {
+            let pk = self.current.literal.clone();
+            self.advance();
+            if self.current_is(TokenType::KeywordQubit) || self.current_is(TokenType::Identifier) {
+                // handle 'logical qubit'
+                let _sub = self.current.literal.clone();
+                self.advance();
+            }
+            self.expect(TokenType::LParen)?;
+            let pv = self.current.literal.clone();
+            self.advance();
+            self.expect(TokenType::RParen)?;
+            if self.current_is(TokenType::Semicolon) {
+                self.advance();
+            }
+            props.push((pk, pv));
+        }
+        self.expect(TokenType::RBrace)?;
+        Some(Statement::SurfaceCode(span, name, props))
     }
     fn parse_nano_agent(&mut self) -> Option<Statement> {
         let span = self.advance().span;
