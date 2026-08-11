@@ -140,9 +140,7 @@ declaration
     | fileScopedType
     | attributeDecl
     | statement
-    
     );
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Module System
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -526,7 +524,7 @@ literal
     ;
 
 quantumLit
-    : '|' ('0' | '1' | '+' | '-' | ident) '\u27E9'
+    : '|' ('0' | '1' | '+' | '-' | ident) '\\u27E9'
     ;
 
 nanoLit
@@ -612,11 +610,11 @@ typeArgs
     ;
 
 piType
-    : ('\u03A0' | 'Pi') '(' ident ':' typeExpr ')' typeExpr
+    : ('\\u03A0' | 'Pi') '(' ident ':' typeExpr ')' typeExpr
     ;
 
 sigmaType
-    : ('\u03A3' | 'Sigma') '(' ident ':' typeExpr ')' typeExpr
+    : ('\\u03A3' | 'Sigma') '(' ident ':' typeExpr ')' typeExpr
     ;
 
 identityType
@@ -1812,13 +1810,6 @@ testingDef
     ;
 
 
-docComment
-    : DOC_COMMENT+
-    ;
-// ═══════════════════════════════════════════════════════════════════════════════
-// Lexer Rules
-// ═══════════════════════════════════════════════════════════════════════════════
-
 ADVANCED_NLP_FOR_LANGUAGE_TRANSLATION: 'advanced_nlp_for_language_translation';
 ADVANCED_MACHINE_LEARNING_FOR_TIME_SERIES_DATA: 'advanced_machine_learning_for_time_series_data';
 ADVANCED_MACHINE_LEARNING_FOR_TIME_SERIES_FORECASTING: 'advanced_machine_learning_for_time_series_forecasting';
@@ -1945,21 +1936,28 @@ UNSIZED2: 'unsized'; VIRTUAL2: 'virtual'; YIELD2: 'yield'; BOX2: 'box'; UNION2: 
 
 // ── Literals ────────────────────────────────────────────────────────────
 BOOLEAN: TRUE | FALSE;
-NIL: 'nil' | 'null';
+NIL: NIL_KW | NULL_KW;
 
-INTEGER: [0-9]+ | '0x' [0-9a-fA-F]+ | '0b' [01]+ | '0o' [0-7]+;
-FLOAT: [0-9]+ '.' [0-9]+ ('e' ('+' | '-')? [0-9]+)?;
+INTEGER: DIGIT+ | '0x' HEX_DIGIT+ | '0b' BIN_DIGIT+ | '0o' OCT_DIGIT+;
+FLOAT: DIGIT+ '.' DIGIT+ ('e' ('+' | '-')? DIGIT+)?;
 
-STRING: '"' ( '\\' [nrt0"'\\] | ~["\\] )* '"';
-CHAR: '\'' ( '\\' [nrt0"'\\] | ~['\\] ) '\'';
+STRING: '"' (ESC | ~["\\])* '"';
+CHAR: '\'' (ESC | ~['\\]) '\'';
+
+fragment ESC: '\\' [nrt0"'\\];
+fragment DIGIT: [0-9];
+fragment HEX_DIGIT: [0-9a-fA-F];
+fragment BIN_DIGIT: [01];
+fragment OCT_DIGIT: [0-7];
+fragment ALPHA: [a-zA-Z_];
 
 // Zenith-native literals
 QUANTUM_LITERAL: '|' ('0' | '1' | '+' | '-') '\\u27E9';
 NANO_ANNOTATION: '@' IDENT ('(' ~[)]* ')')?;
-MTS_LITERAL: 'mts' '[' ~[\]]* ']';
+MTS_LITERAL: 'mts' '[' ~[\\]]* ']';
 
 // ── Identifiers ─────────────────────────────────────────────────────────
-IDENT: [a-zA-Z_] [a-zA-Z0-9_]*;
+IDENT: ALPHA (ALPHA | DIGIT)*;
 
 // ── Punctuation & operators ─────────────────────────────────────────────
 LPAREN: '('; RPAREN: ')'; LBRACE: '{'; RBRACE: '}'; LBRACK: '['; RBRACK: ']';
