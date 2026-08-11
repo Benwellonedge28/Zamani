@@ -59,6 +59,8 @@ pub fn initialize_toolchain() {
         debug_info::init_debug_info_gen();
         ide_support::init_ide_support();
         interoperability::init_interoperability_layer();
+        zamani_lsp::init_lsp();
+        zamani_debug::init_debugger();
     }
     #[cfg(any(feature = "buildsystem", feature = "full"))]
     {
@@ -78,6 +80,8 @@ pub fn shutdown_toolchain() {
         interoperability::shutdown_interoperability_layer();
         ide_support::shutdown_ide_support();
         debug_info::shutdown_debug_info_gen();
+        zamani_debug::shutdown_debugger();
+        zamani_lsp::shutdown_lsp();
     }
     #[cfg(any(feature = "buildsystem", feature = "full"))]
     {

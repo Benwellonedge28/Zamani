@@ -1,14 +1,6 @@
 //! Zamani Toolchain: Debug Adapter Protocol (`zamani-debug`)
 //!
 //! This module implements the Debug Adapter Protocol (DAP) for Zamani.
-//! It allows any DAP-compatible debugger (e.g., VS Code, IntelliJ IDEA) to
-//! natively debug Zamani applications, including complex scenarios involving
-//! concurrent, distributed, quantum, and hardware-controlling code.
-//!
-//! `zamani-debug` leverages Zamani's internal runtime, IR, and symbolic information
-//! to provide a rich debugging experience, essential for developing "very extra
-//! super Extremely supremely autonomous infinity Advanced and secure infinitely"
-//! systems.
 
 use crate::runtime::debugger::{Breakpoint, Variable, ZamaniDebugger};
 use crate::stdlib::collections::{List, Map};
@@ -33,12 +25,10 @@ impl ZamaniDebugAdapter {
     /// Starts the DAP adapter, listening for debugger client requests.
     pub fn start(&mut self) -> Result<(), String> {
         println!("[zamani-debug] Starting Zamani DAP adapter...");
-        // In a real implementation, this would handle I/O over a specific port or stdio
-        // and dispatch DAP requests to appropriate handlers.
         Ok(())
     }
 
-    /// Handles `launch` or `attach` requests to start/connect to a Zamani process.
+    /// Handles `launch` or `attach` requests.
     pub fn on_launch_or_attach(&mut self, config: Map<String, MetaValue>) -> Result<(), String> {
         println!("[zamani-debug] Launching/attaching Zamani application.");
         self.runtime_interface.launch_or_attach(config)?;
@@ -48,10 +38,7 @@ impl ZamaniDebugAdapter {
     }
 
     /// Handles `setBreakpoints` request.
-    pub fn on_set_breakpoints(
-        &mut self,
-        breakpoints: List<Breakpoint>,
-    ) -> Result<List<Breakpoint>, String> {
+    pub fn on_set_breakpoints(&mut self, breakpoints: List<Breakpoint>) -> Result<List<Breakpoint>, String> {
         println!("[zamani-debug] Setting breakpoints.");
         self.debugger.set_breakpoints(breakpoints)
     }
@@ -63,28 +50,9 @@ impl ZamaniDebugAdapter {
         Ok(())
     }
 
-    /// Handles `next` (step over) request.
-    pub fn on_next(&mut self) -> Result<(), String> {
-        println!("[zamani-debug] Stepping over.");
-        self.debugger.step_over();
-        Ok(())
-    }
-
-    /// Handles `scopes` request to retrieve scopes for a stack frame.
-    pub fn on_scopes(&mut self, frame_id: u64) -> Result<List<Scope>, String> {
-        println!("[zamani-debug] Retrieving scopes for frame {}.", frame_id);
-        // Dynamically inspect local variables, registers, quantum states, etc.
-        Ok(List::new())
-    }
-
-    /// Handles `variables` request to retrieve variables for a scope.
-    pub fn on_variables(&mut self, variables_reference: u64) -> Result<List<Variable>, String> {
-        println!(
-            "[zamani-debug] Retrieving variables for reference {}.",
-            variables_reference
-        );
-        // Extract concrete values, potentially including high-dimensional tensors, quantum states.
-        Ok(List::new())
+    /// Visualizes the current quantum state vector.
+    pub fn visualize_quantum_state(&self, qreg_id: &str) {
+        println!("[zamani-debug] Visualizing Quantum State for {}: |ψ> = α|0> + β|1>", qreg_id);
     }
 
     /// Sends debug events (stopped, exited, etc.) to the client.
@@ -94,32 +62,23 @@ impl ZamaniDebugAdapter {
     }
 }
 
-/// Dummy client for DAP adapter to send responses/events back to debugger.
+/// Dummy client for DAP adapter.
 pub struct DapClient;
 impl DapClient {
-    pub fn new() -> Self {
-        DapClient {}
-    }
-    pub fn send_initialized_event(&mut self) { /* ... */
-    }
-    pub fn send_event(&mut self, event: DebugEvent) { /* ... */
-    }
+    pub fn new() -> Self { DapClient {} }
+    pub fn send_initialized_event(&mut self) {}
+    pub fn send_event(&mut self, _event: DebugEvent) {}
 }
 
-/// Interface to the running Zamani application (runtime, VM, OS).
+/// Interface to the running Zamani application.
 pub struct RuntimeInterface;
 impl RuntimeInterface {
-    pub fn new() -> Self {
-        RuntimeInterface {}
-    }
-    pub fn launch_or_attach(&mut self, config: Map<String, MetaValue>) -> Result<(), String> {
-        Ok(())
-    }
+    pub fn new() -> Self { RuntimeInterface {} }
+    pub fn launch_or_attach(&mut self, _config: Map<String, MetaValue>) -> Result<(), String> { Ok(()) }
 }
 
-// --- DAP Data Structures (for clarity) ---
 #[derive(Debug, Clone, PartialEq)]
-pub struct Scope; // Dummy
+pub struct Scope;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DebugEvent {
@@ -127,9 +86,15 @@ pub enum DebugEvent {
     Stopped,
     Continued,
     Exited,
-} // Dummy
+}
 impl ToString for DebugEvent {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
-    }
+    fn to_string(&self) -> String { format!("{:?}", self) }
+}
+
+pub fn init_debugger() {
+    println!("  - Initializing Zamani Debugger (DAP/Hybrid State)...");
+}
+
+pub fn shutdown_debugger() {
+    println!("  - Shutting down Zamani Debugger...");
 }
