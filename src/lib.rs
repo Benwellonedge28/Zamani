@@ -19,9 +19,12 @@ pub mod compiler_types;
 pub mod core_lang_primitives;
 pub mod error_reporting;
 #[cfg(feature = "full")]
+pub mod ai;
+pub mod distributed;
 pub mod hdl;
 pub mod ir_gen;
 pub mod lexer;
+pub mod quantum;
 pub mod nano; // Nano runtime primitives
 #[cfg(feature = "full")]
 pub mod nimbus;
