@@ -451,14 +451,16 @@ impl IrInstruction {
                 )
             }
             IrInstruction::QuantumGate(r, gate, args) => {
+                let args_str = args
+                    .iter()
+                    .map(|a| format!("{} {}", a.ty().ir_name(), a.to_ir_string()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!(
-                    "  ; quantum_gate {} {} [{}]",
-                    gate,
+                    "  %{} = call i64 @__quantum_rt_{}({})",
                     r.0,
-                    args.iter()
-                        .map(|a| a.to_ir_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    gate.to_lowercase(),
+                    args_str
                 )
             }
             IrInstruction::NanoOp(r, op, args) => {
