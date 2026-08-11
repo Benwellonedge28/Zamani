@@ -20,8 +20,9 @@
 
 grammar Zamani;
 
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// Parser Rules — Program Structure
+// Parser Rules
 // ═══════════════════════════════════════════════════════════════════════════════
 
 program
@@ -141,9 +142,6 @@ declaration
     | attributeDecl
     | statement
     );
-// ═══════════════════════════════════════════════════════════════════════════════
-// Module System
-// ═══════════════════════════════════════════════════════════════════════════════
 
 moduleDecl
     : 'module' ident ('::' ident)* blockExpr
@@ -179,10 +177,6 @@ globalUsing
     : 'global' 'using' ident ';'
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Functions & Control Flow
-// ═══════════════════════════════════════════════════════════════════════════════
-
 functionDecl
     : modifiers? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('with' effectList)? blockExpr
     ;
@@ -207,16 +201,13 @@ modifier
     ;
 
 returnStmt
-    : 'return' expression? ';'?
-    ;
+    : 'return' expression? ';
 
 breakStmt
-    : 'break' ';'?
-    ;
+    : 'break' ';
 
 continueStmt
-    : 'continue' ';'?
-    ;
+    : 'continue' ';
 
 whileStmt
     : 'while' expression blockExpr
@@ -264,8 +255,7 @@ unsafeBlock
     ;
 
 throwStmt
-    : 'throw' expression ';'?
-    ;
+    : 'throw' expression ';
 
 tryCatchStmt
     : 'try' blockExpr catchClause* finallyClause?
@@ -283,25 +273,14 @@ blockExpr
     : '{' statement* '}'
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Variable Declarations
-// ═══════════════════════════════════════════════════════════════════════════════
-
 letStmt
-    : ('let' | 'var') 'mut'? ident (':' typeExpr)? '=' expression ';'?
-    ;
+    : ('let' | 'var') 'mut'? ident (':' typeExpr)? '=' expression ';
 
 constStmt
-    : 'const' ident (':' typeExpr)? '=' expression ';'?
-    ;
+    : 'const' ident (':' typeExpr)? '=' expression ';
 
 constDecl
-    : 'const' ident (':' typeExpr)? '=' expression ';'?
-    ;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Expressions (Precedence Climbing)
-// ═══════════════════════════════════════════════════════════════════════════════
+    : 'const' ident (':' typeExpr)? '=' expression ';
 
 expression
     : assignmentExpr
@@ -476,13 +455,11 @@ consensusExpr
     ;
 
 ancestorCall
-    : 'ancestral' ident '(' args? ')' ';'?
-    ;
+    : 'ancestral' ident '(' args? ')' ';
 
 withExpr
     : expression 'with' '[' effectList ']'
-    | expression 'with' '{' (ident ':' expression ';'?)* '}'
-    ;
+    | expression 'with' '{' (ident ':' expression ';
 
 mopExpr
     : 'reflect' '(' expression ')'
@@ -502,12 +479,7 @@ exprList
     ;
 
 expressionStmt
-    : expression ';'?
-    ;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Literals
-// ═══════════════════════════════════════════════════════════════════════════════
+    : expression ';
 
 literal
     : INTEGER
@@ -548,10 +520,6 @@ utf8StringLit
     : 'u8' STRING
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Types
-// ═══════════════════════════════════════════════════════════════════════════════
-
 typeExpr
     : baseType ('<' typeExpr (',' typeExpr)* '>')?   # namedType
     | '(' ')'                                         # unitType
@@ -561,29 +529,7 @@ typeExpr
     | '&' 'mut'? '[' typeExpr ']'                     # sliceRefType
     | '&' 'mut'? typeExpr                             # refType
     | '*' 'mut'? typeExpr                             # rawPtrType
-    | '[' typeExpr (';' expression)? ']'              # arrayType
-    | 'Self' | 'self'                                 # selfType
-    | typeExpr '?'                                    # nullableType
-    | 'Box' '<' typeExpr '>'                          # boxedType
-    | 'linear' typeExpr                               # linearType
-    | 'affine' typeExpr                               # affineType
-    | 'session' '{' sessionOp* '}'                    # sessionType
-    | piType                                          # piTypeExpr
-    | sigmaType                                       # sigmaTypeExpr
-    | identityType                                    # identityTypeExpr
-    | 'Type_0' | 'Type_1' | 'Type_2' | 'Type_N'      # universeType
-    | 'Kind' | 'Sort' | 'Prop'                        # metaType
-    | quantumType                                     # quantumTypeExpr
-    | nanoType                                        # nanoTypeExpr
-    | mtsType                                         # mtsTypeExpr
-    | sankofaType                                     # sankofaTypeExpr
-    | cognitiveType                                   # cognitiveTypeExpr
-    | typeExpr 'with' 'effects' '{' effectName (',' effectName)* '}' # effectfulType
-    | 'hkt' '<' typeParam '.' typeExpr '>'            # higherKindedTypeExpr
-    | 'exists' typeParam '.' typeExpr                 # existentialType
-    | 'singleton' typeExpr                            # singletonType
-    | typeExpr '.' ident                              # pathDepType
-    ;
+    | '[' typeExpr (';
 
 baseType
     : 'void' | 'int' | 'float' | 'bool' | 'string' | 'char' | 'bytes'
@@ -669,10 +615,6 @@ cognitiveType
     | 'NarrowAI' | 'AGI' | 'ASI' | 'AESI' | 'ASESI'
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Structs, Enums, Traits, Impls
-// ═══════════════════════════════════════════════════════════════════════════════
-
 structDecl
     : 'struct' ident typeParams? '{' structField* '}'
     ;
@@ -705,16 +647,13 @@ traitItem
     ;
 
 traitMethod
-    : 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? (blockExpr | ';')
-    ;
+    : 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? (blockExpr | ';
 
 traitAssocType
-    : 'type' ident (':' typeExpr)? ';'
-    ;
+    : 'type' ident (':' typeExpr)? ';
 
 constantDef
-    : 'const' ident ':' typeExpr '=' expression ';'
-    ;
+    : 'const' ident ':' typeExpr '=' expression ';
 
 implDecl
     : 'impl' typeParams? typeExpr ('for' typeExpr)? '{' implItem* '}'
@@ -727,12 +666,7 @@ implItem
     ;
 
 typeAliasDecl
-    : 'type' ident typeParams? '=' typeExpr ';'?
-    ;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// OOP — Classes, Interfaces, Records
-// ═══════════════════════════════════════════════════════════════════════════════
+    : 'type' ident typeParams? '=' typeExpr ';
 
 classDecl
     : modifiers? 'class' ident typeParams?
@@ -759,31 +693,7 @@ permitsClause
     ;
 
 classMember
-    : modifiers? typeExpr ident ('=' expression)? ';'                    # propertyDef
-    | modifiers? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('with' effectList)? blockExpr # methodDef
-    | 'new' '(' params? ')' blockExpr                                    # constructorDef
-    | 'static' modifiers? typeExpr ident ('=' expression)? ';'           # staticPropertyDef
-    | 'static' modifiers? 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr # staticMethodDef
-    | 'abstract' 'fn' ident '(' params? ')' ('->' typeExpr)? ';'         # abstractMethodDef
-    | 'abstract' modifiers? typeExpr ident ';'                           # abstractPropertyDef
-    | 'operator' OPERATOR '(' params? ')' blockExpr                      # operatorOverload
-    | 'explicit' 'operator' typeExpr '(' params? ')' blockExpr           # explicitOperatorOverload
-    | 'implicit' 'operator' typeExpr '(' params? ')' blockExpr           # implicitOperatorOverload
-    | 'event' typeExpr ident ';'                                         # eventDef
-    | 'delegate' ('->' typeExpr)? ident '(' params? ')' ';'              # delegateDef
-    | 'this' '[' params? ']' '{' getter ';' setter? ';' '}'             # indexerDef
-    | 'static' 'this' '[' params? ']' '{' getter ';' setter? ';' '}'    # staticIndexerDef
-    | 'async' 'this' '[' params? ']' '{' getter ';' setter? ';' '}'     # asyncIndexerDef
-    | 'init' modifiers? typeExpr ident ';'                               # initOnlyProperty
-    | 'required' modifiers? typeExpr ident ';'                           # requiredProperty
-    | 'class' ident '{' classMember* '}'                                 # innerClassDef
-    | 'async' modifiers? 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr # asyncMethodDef
-    | 'async' modifiers? typeExpr ident ';'                              # asyncPropertyDef
-    | 'async' 'stream' typeExpr ';'                                      # asyncStream
-    | 'async' 'iterator' typeExpr ';'                                    # asyncIterator
-    | 'async' 'dispose' blockExpr                                        # asyncDispose
-    | 'fn' ident '(' params? ')' ('->' typeExpr)? '=>' expression        # exprBodiedMember
-    ;
+    : modifiers? typeExpr ident ('=' expression)? ';
 
 getter
     : 'get' blockExpr
@@ -799,12 +709,7 @@ interfaceDecl
     ;
 
 interfaceMember
-    : 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? (blockExpr | ';') # interfaceMethod
-    | 'default' 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr            # defaultInterfaceMethod
-    | 'static' 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr             # staticInterfaceMethod
-    | 'private' 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr            # privateInterfaceMethod
-    | 'async' 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr              # asyncInterfaceMethod
-    ;
+    : 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? (blockExpr | ';
 
 recordDecl
     : 'record' ident typeParams? '(' params? ')' extendsClause? implementsClause? '{' recordBody? '}'
@@ -815,29 +720,19 @@ recordBody
     : classMember*
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Extension Methods / Properties / Indexers / Operators
-// ═══════════════════════════════════════════════════════════════════════════════
-
 extensionMethodDecl
     : 'extension' 'fn' ident '(' params? ')' ('->' typeExpr)? ('where' typeConstraint)? blockExpr
     ;
 
 extensionPropertyDecl
-    : 'extension' typeExpr ident '{' getter ';' setter? ';' '}'
-    ;
+    : 'extension' typeExpr ident '{' getter ';
 
 extensionIndexerDecl
-    : 'extension' typeExpr 'this' '[' params? ']' '{' getter ';' setter? ';' '}'
-    ;
+    : 'extension' typeExpr 'this' '[' params? ']' '{' getter ';
 
 extensionOperatorDecl
     : 'extension' 'operator' OPERATOR '(' params? ')' ('where' typeConstraint)? blockExpr
     ;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Quantum Computing
-// ═══════════════════════════════════════════════════════════════════════════════
 
 quantumCircuitDecl
     : ('quantum' 'circuit' | 'circuit' | 'quantum') ident '(' params? ')' blockExpr
@@ -867,10 +762,6 @@ quantumBarrier
     : 'barrier' (ident (',' ident)*)?
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Nano-Agent Computing
-// ═══════════════════════════════════════════════════════════════════════════════
-
 nanoAgentDecl
     : ('nano' 'agent' | 'agent' | 'nano') ident '{' nanoAgentBody '}'
     ;
@@ -895,10 +786,6 @@ protocolRule
     : 'on' ident '->' blockExpr
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Multi-Timeline System (MTS)
-// ═══════════════════════════════════════════════════════════════════════════════
-
 mtsDecl
     : 'mts' 'timeline' ident '{' mtsBody '}'
     ;
@@ -918,10 +805,6 @@ mtsOperation
     | 'rewind' '(' INTEGER ')'
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Sankofa Memory System
-// ═══════════════════════════════════════════════════════════════════════════════
-
 sankofaDecl
     : memoryDecl
     | wisdomDecl
@@ -931,8 +814,7 @@ sankofaDecl
     ;
 
 memoryDecl
-    : 'remember' ident ':' typeExpr '=' expression ';'?
-    ;
+    : 'remember' ident ':' typeExpr '=' expression ';
 
 wisdomDecl
     : 'wisdom' ident '{' wisdomBody '}'
@@ -943,16 +825,14 @@ wisdomBody
     ;
 
 premiseDecl
-    : 'premise' ident ':' typeExpr '=' expression ';'
-    ;
+    : 'premise' ident ':' typeExpr '=' expression ';
 
 inferenceRule
     : 'rule' ident '(' params? ')' '->' blockExpr
     ;
 
 wisdomStmt
-    : 'conclude' expression ';'
-    ;
+    : 'conclude' expression ';
 
 historyDecl
     : 'history' ident '{' statement* '}'
@@ -967,20 +847,13 @@ interMemoryDecl
     ;
 
 sankofaRememberStmt
-    : 'remember' ident (':' typeExpr)? '=' expression ';'?
-    ;
+    : 'remember' ident (':' typeExpr)? '=' expression ';
 
 learnStmt
-    : 'learn' 'from' expression ('with' 'weight' expression)? ';'
-    ;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Algebraic Effects
-// ═══════════════════════════════════════════════════════════════════════════════
+    : 'learn' 'from' expression ('with' 'weight' expression)? ';
 
 effectDecl
-    : 'effect' ident typeParams? '(' params? ')' ('->' typeExpr)? ';'?
-    ;
+    : 'effect' ident typeParams? '(' params? ')' ('->' typeExpr)? ';
 
 effectList
     : '[' effectName (',' effectName)* ']'
@@ -998,29 +871,21 @@ effectHandler
     : 'case' effectName '(' params? ')' '->' blockExpr
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Meta-Programming
-// ═══════════════════════════════════════════════════════════════════════════════
-
 languageDecl
-    : 'language' ident ('=' STRING)? ('{' grammarRule* '}')? ';'?
-    ;
+    : 'language' ident ('=' STRING)? ('{' grammarRule* '}')? ';
 
 grammarRule
-    : ident ':' STRING ';'
-    ;
+    : ident ':' STRING ';
 
 metaBlock
     : 'meta' '{' statement* '}'
     ;
 
 invokeStmt
-    : 'invoke' modulePath '(' args? ')' ';'?
-    ;
+    : 'invoke' modulePath '(' args? ')' ';
 
 transcodeStmt
-    : 'transcode' ident '::' STRING 'to' ident ';'?
-    ;
+    : 'transcode' ident '::' STRING 'to' ident ';
 
 overrideStmt
     : 'override' ident '::' ident '(' params? ')' blockExpr
@@ -1035,8 +900,7 @@ pluginStmt
     ;
 
 pluginDefinition
-    : ('language' | 'transpiler') ident ';'
-    ;
+    : ('language' | 'transpiler') ident ';
 
 macroDecl
     : 'macro' ident '(' params? ')' blockExpr
@@ -1053,10 +917,6 @@ aspectDecl
 typeProviderDecl
     : 'provider' ident '(' typeParams? ')' '{' statement* '}' ('cache' ident)? ('inject' ident)? ('metadata' typeExpr)? ('aspect' ident)?
     ;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// HDL (Hardware Description Language)
-// ═══════════════════════════════════════════════════════════════════════════════
 
 hdlModuleDecl
     : 'hdl' 'module' ident '{' hdlBody '}'
@@ -1100,8 +960,7 @@ hdlSignal
     ;
 
 hdlAssignment
-    : 'assign' ident '=' hdlExpression ';'
-    ;
+    : 'assign' ident '=' hdlExpression ';
 
 hdlExpression
     : ident
@@ -1118,10 +977,6 @@ externalHdlLink
     : 'link_hdl' '(' ident ',' ident ')'
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Distributed & Cloud Computing
-// ═══════════════════════════════════════════════════════════════════════════════
-
 distributedDecl
     : 'distributed' 'node' ident '{' distributedBody '}'
     ;
@@ -1135,8 +990,7 @@ serviceHandle
     ;
 
 remoteCall
-    : 'remote' ident '::' ident '(' args? ')' ';'?
-    ;
+    : 'remote' ident '::' ident '(' args? ')' ';
 
 distributedOperation
     : 'teleport' '(' ident ',' STRING ')'
@@ -1154,46 +1008,32 @@ cloudDecl
     ;
 
 cloudPlatform
-    : ('AWS' | 'Azure' | 'GCP') '::' ident '(' args? ')' ';'?
-    ;
+    : ('AWS' | 'Azure' | 'GCP') '::' ident '(' args? ')' ';
 
 container
-    : 'Docker' '::' ident '(' args? ')' ';'?
-    ;
+    : 'Docker' '::' ident '(' args? ')' ';
 
 devOpsTool
-    : 'Jenkins' '::' ident '(' args? ')' ';'?
-    | 'Git' '::' ident '(' args? ')' ';'?
-    | 'Ansible' '::' ident '(' args? ')' ';'?
-    ;
+    : 'Jenkins' '::' ident '(' args? ')' ';
 
 databaseOp
-    : 'Database' '::' ident '(' args? ')' ';'?
-    ;
+    : 'Database' '::' ident '(' args? ')' ';
 
 webService
-    : 'HTTP' '::' ident '(' args? ')' ';'?
-    ;
+    : 'HTTP' '::' ident '(' args? ')' ';
 
 dataStmt
-    : ('serialize' | 'deserialize') expression ('to' | 'from') dataFormat ';'?
-    ;
+    : ('serialize' | 'deserialize') expression ('to' | 'from') dataFormat ';
 
 dataFormat
     : 'json' | 'xml' | 'messagepack' | 'protobuf' | 'cbor'
     ;
 
 streamingData
-    : 'stream' expression 'pipe' expression ';'
-    ;
+    : 'stream' expression 'pipe' expression ';
 
 foreignFunctionCall
-    : 'foreign' ident '::' ident '(' args? ')' ';'?
-    ;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Cryptography
-// ═══════════════════════════════════════════════════════════════════════════════
+    : 'foreign' ident '::' ident '(' args? ')' ';
 
 cryptoExpr
     : 'encrypt' '(' expression ',' cryptoAlgo ')'
@@ -1232,10 +1072,6 @@ keyManagement
     | 'revoke_key' '(' ident ')'
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// On-Device / Edge AI
-// ═══════════════════════════════════════════════════════════════════════════════
-
 onDeviceAgentDecl
     : 'on_device' 'agent' ident '{' onDeviceAgentBody '}'
     | 'on_device_agent' ident '{' onDeviceAgentBody '}'
@@ -1246,8 +1082,7 @@ onDeviceAgentBody
     ;
 
 deviceConstraint
-    : 'requires' deviceSpec (',' deviceSpec)* ';'
-    ;
+    : 'requires' deviceSpec (',' deviceSpec)* ';
 
 deviceSpec
     : 'memory' '>=' expression
@@ -1293,10 +1128,6 @@ lifecycleAction
     : ('monitor' | 'update' | 'manage') ident
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Self-Evolving / Autonomous Features
-// ═══════════════════════════════════════════════════════════════════════════════
-
 selfEvolveDecl
     : 'self_evolve' '{' evolveBody '}'
     ;
@@ -1333,17 +1164,12 @@ autoVerify
     : 'autonomously_verify' '(' expression ')' '->' blockExpr
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Optimization & Compilation Targets
-// ═══════════════════════════════════════════════════════════════════════════════
-
 optPassDecl
     : 'optimization' 'pass' ident '{' optPassBody '}'
     ;
 
 optPassBody
-    : ('target' optTarget ';'?)* ('strategy' optStrategy ';'?)* blockExpr?
-    ;
+    : ('target' optTarget ';
 
 optTarget
     : 'classical' | 'quantum' | 'nano' | 'neuromorphic' | 'GPU' | 'FPGA'
@@ -1368,22 +1194,12 @@ platformSpec
     | 'Tariro_Runtime' | 'Z_MMP'
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Runtime Features (POCO-REAF)
-// ═══════════════════════════════════════════════════════════════════════════════
-
 runtimeDecl
     : 'runtime' 'configure' '{' runtimeConfig* '}'
     ;
 
 runtimeConfig
-    : 'gc' '=' ('enabled' | 'disabled' | 'hybrid') ';'?
-    | 'self_heal' '=' BOOLEAN ';'?
-    | 'quantum_sim' '=' BOOLEAN ';'?
-    | 'nano_orchestration' '=' BOOLEAN ';'?
-    | 'effect_dispatch' '=' ('eager' | 'lazy' | 'batched') ';'?
-    | 'scheduler' '=' ('preemptive' | 'cooperative' | 'quantum') ';'?
-    ;
+    : 'gc' '=' ('enabled' | 'disabled' | 'hybrid') ';
 
 spawnExpr
     : 'spawn' blockExpr
@@ -1400,10 +1216,6 @@ selectStmt
 selectCase
     : 'case' expression '->' blockExpr
     ;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Actor Model
-// ═══════════════════════════════════════════════════════════════════════════════
 
 actorDecl
     : 'actor' ident '{' actorBody '}'
@@ -1422,16 +1234,11 @@ actorBehavior
     ;
 
 actorState
-    : 'state' ident ':' typeExpr '=' expression ';'
-    ;
+    : 'state' ident ':' typeExpr '=' expression ';
 
 concurrentExpr
     : 'concurrent' expression blockExpr
     ;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// AI / Cognitive / AGI Governance
-// ═══════════════════════════════════════════════════════════════════════════════
 
 cognitiveBlock
     : 'cognitive_architecture' ident '{' statement* '}'
@@ -1490,12 +1297,10 @@ agentBody
     ;
 
 agentGoal
-    : 'goal' expression ';'
-    ;
+    : 'goal' expression ';
 
 agentConstraint
-    : 'constraint' expression ';'
-    ;
+    : 'constraint' expression ';
 
 agentType
     : 'NarrowAI' | 'AGI' | 'ASI' | 'AESI' | 'ASESI'
@@ -1514,8 +1319,7 @@ aiSystemBody
     ;
 
 aiTypeDef
-    : 'type' ident '=' ('narrow' | 'general' | 'super') ';'
-    ;
+    : 'type' ident '=' ('narrow' | 'general' | 'super') ';
 
 aiCapabilityDef
     : 'capability' ident '{' statement* '}'
@@ -1573,10 +1377,6 @@ asesiOmnipotenceDef
     : 'omnipotence' ident '{' statement* '}'
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Safety / Security / Ethics / Governance Attributes
-// ═══════════════════════════════════════════════════════════════════════════════
-
 evasCert
     : 'unsafe' '!' '(' 'evas' ':' expression ')' blockExpr
     ;
@@ -1633,10 +1433,6 @@ annotationArg
     : ident '=' expression
     ;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Administration & Governance Blocks
-// ═══════════════════════════════════════════════════════════════════════════════
-
 adminInterfaceDecl
     : 'admin' ident '{' adminInterfaceBody '}'
     ;
@@ -1654,8 +1450,7 @@ changeLogBody
     ;
 
 changeLogEntry
-    : 'change' ident 'made' 'by' ident ';'
-    ;
+    : 'change' ident 'made' 'by' ident ';
 
 suggestionInput
     : 'input' 'suggestions' '{' suggestionBody '}'
@@ -1666,8 +1461,7 @@ suggestionBody
     ;
 
 suggestionEntry
-    : 'suggestion' ident 'from' ident ';'
-    ;
+    : 'suggestion' ident 'from' ident ';
 
 paymentGatewayDecl
     : 'payment' ident '{' paymentGatewayBody '}'
@@ -1710,8 +1504,7 @@ copyrightNoticeBody
     ;
 
 copyrightNoticeStatement
-    : 'copyright' ident 'owned' 'by' ident ';'
-    ;
+    : 'copyright' ident 'owned' 'by' ident ';
 
 tailorMadeFeatureDecl
     : 'feature' ident '{' tailorMadeFeatureBody '}'
@@ -1809,171 +1602,265 @@ testingDef
     : 'test' ident '{' statement* '}'
     ;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Lexer Rules
+// ═══════════════════════════════════════════════════════════════════════════════
 
 ADVANCED_NLP_FOR_LANGUAGE_TRANSLATION: 'advanced_nlp_for_language_translation';
+
 ADVANCED_MACHINE_LEARNING_FOR_TIME_SERIES_DATA: 'advanced_machine_learning_for_time_series_data';
+
 ADVANCED_MACHINE_LEARNING_FOR_TIME_SERIES_FORECASTING: 'advanced_machine_learning_for_time_series_forecasting';
+
 ADVANCED_MACHINE_LEARNING_FOR_TIME_SERIES_ANALYSIS: 'advanced_machine_learning_for_time_series_analysis';
-GOAL_KW: 'goal'; CONSTRAINT: 'constraint'; CAPABILITY: 'capability';
-EXPLAIN: 'explain'; TRANSPARENT: 'transparent'; DECISION: 'decision'; MADE: 'made'; BY: 'by'; REASON: 'reason';
-LOG: 'log'; NARROW: 'narrow'; GENERAL: 'general'; SUPER: 'super'; LEARNING: 'learning';
-SELF_IMPROVEMENT: 'self_improvement'; TRANSFORMATION: 'transformation'; OMNIPOTENCE: 'omnipotence';
 
-// Safety / Governance
-EVAS: 'evas'; SAFETY: 'safety'; SECURITY: 'security'; ETHICS: 'ethics'; GOVERNANCE: 'governance';
-COMPLIANCE: 'compliance'; STANDARD: 'standard'; CERTIFIED_BY: 'certified_by';
-GREEN: 'green'; MINIMIZE_POWER: 'minimize_power'; MINIMIZE_HEAT: 'minimize_heat';
-MINIMIZE_WATER: 'minimize_water'; MAXIMIZE_EFFICIENCY: 'maximize_efficiency';
+GOAL_KW: 'goal';
 
-// Administration
-ADMIN: 'admin'; DISPLAY: 'display'; CHANGES: 'changes'; INPUT: 'input'; SUGGESTIONS: 'suggestions';
-SUGGESTION: 'suggestion'; PAYMENT: 'payment'; METHOD: 'method'; VERIFY: 'verify'; FEEDBACK: 'feedback';
-VALIDATE: 'validate'; COPYRIGHT: 'copyright'; OWNED: 'owned'; FEATURE: 'feature'; DEFINE: 'define';
-CUSTOMIZE: 'customize'; PROGRAM_ONCE: 'program_once'; SYSTEM_CONFIG: 'config'; SYSTEM_LOGIC: 'logic';
-MALICIOUS: 'malicious'; IDEA: 'idea'; DETECTION: 'detection'; ANALYZE: 'analyze'; BLOCK: 'block';
-USER: 'user'; IDENTIFY: 'identify'; LEGAL: 'legal'; ACTION: 'action'; PROCEEDING: 'proceeding';
-NOTICE: 'notice'; SANDBOX: 'sandbox'; SIMULATE: 'simulate'; TEST: 'test';
+EXPLAIN: 'explain';
 
-// Omniversal
-OMNIVERSAL_SIMULATE: 'omniversal_simulate'; OMNIVERSAL_SYNTHESIZE: 'omniversal_synthesize';
-OMNIVERSAL_DEPLOY: 'omniversal_deploy'; OMNIVERSAL_ALIGNMENT: 'omniversal_alignment';
-OMNIVERSAL_CONTAINMENT: 'omniversal_containment'; OMNIVERSAL_TRUST: 'omniversal_trust';
-OMNIVERSAL_KNOWLEDGE: 'omniversal_knowledge'; OMNIVERSAL_GENERATE: 'omniversal_generate';
-OMNIVERSAL_SOVEREIGNTY: 'omniversal_sovereignty'; OMNIVERSAL_GOAL: 'omniversal_goal';
-OMNIVERSAL_BIONANO: 'omniversal_bionano'; OMNIVERSAL_REALITY: 'omniversal_reality';
-OMNIVERSAL_NLP: 'omniversal_nlp'; MULTIVERSE: 'multiverse'; UNIVERSES: 'universes';
-UNIVERSE: 'universe'; PHYSICS: 'physics'; RULES: 'rules'; INITIAL_STATE: 'initial_state';
+LOG: 'log';
 
-// Conversational / NL
-CHAT_AGENT: 'chat_agent'; CONTEXT: 'context'; SYNTHESIZE: 'synthesize';
-NL_GENERATE: 'nl_generate'; NL_INTERPRET: 'nl_interpret'; NL_TRANSLATE: 'nl_translate';
-DOCUMENT: 'document'; FORMAT: 'format'; BOOK: 'book'; ARTICLE: 'article'; REPORT: 'report';
-JOURNAL: 'journal'; NEWS: 'news'; INTERACTIVE_WEB: 'interactive_web'; CONTENT: 'content';
-MULTIMODAL: 'multimodal'; DIAGRAMS: 'diagrams'; IMAGES: 'images'; VIDEO: 'video'; INTERACTIVE: 'interactive';
+SELF_IMPROVEMENT: 'self_improvement';
 
-// Green / Energy
-THERMAL_OPTIMIZE: 'thermal_optimize'; THERMAL: 'thermal'; THRESHOLD: 'threshold';
-MAX_TEMP: 'max_temp'; PREVENT_THROTTLING: 'prevent_throttling'; CONSERVE: 'conserve';
-CARBON_FOOTPRINT: 'carbon_footprint'; ENERGY_AWARE: 'energy_aware'; MINIMIZE_CARBON: 'minimize_carbon';
-AOT: 'AOT'; JIT: 'JIT'; NANO_COMPILE: 'nano_compile'; EDGE_COMPILE: 'edge_compile';
-DVFS: 'dvfs'; CLOCK: 'clock'; VOLTAGE: 'voltage'; CLOUD_ENERGY: 'cloud_energy';
-RENEWABLE: 'renewable'; PUE: 'pue'; DATA_CENTER: 'data_center'; MATCH_RESOURCES: 'match_resources';
-QPU: 'QPU'; NACU: 'NACU';
+EVAS: 'evas';
 
-// Developer Relations
-SELF_DISCOVER: 'self_discover'; IDE_DETECT: 'ide_detect'; LANGUAGE_SERVER: 'language_server';
-AUTO_SUGGEST: 'auto_suggest'; CONTEXT_AWARE: 'context_aware'; PROACTIVE_ASSIST: 'proactive_assist';
-DETECT_IDE: 'detect_ide'; VSCODE: 'VSCode'; INTELLIJ: 'IntelliJ'; VIM: 'Vim'; EMACS: 'Emacs'; ECLIPSE: 'Eclipse'; ZBE: 'ZBE';
-INTRODUCE: 'introduce'; ASSIST: 'assist'; TRIGGER: 'trigger'; FILE_TYPE: 'file_type'; PROJECT_STRUCTURE: 'project_structure';
-DEVELOPER_ANALYTICS: 'developer_analytics'; ANALYTICS: 'analytics'; TRACK_DEVELOPERS: 'track_developers';
-TRACK_COMPANIES: 'track_companies'; TRACK_COUNTRIES: 'track_countries'; TRACK_LICENSES: 'track_licenses';
-TRACK_USAGE: 'track_usage'; DEVELOPERS: 'developers'; COMPANIES: 'companies'; COUNTRIES: 'countries';
-LICENSES: 'licenses'; VERSIONS: 'versions'; DEPLOYED: 'deployed'; DEPLOY: 'deploy'; RELEASE: 'release';
-CHANGELOG: 'changelog'; ROLLBACK: 'rollback'; LSP: 'lsp'; COMPLETION: 'completion'; DIAGNOSTICS: 'diagnostics';
-GO_TO_DEF: 'go_to_def'; REFACTORING: 'refactoring'; HOVER: 'hover'; EXPIRES: 'expires';
+COMPLIANCE: 'compliance';
 
-// Higher-kinded / Type Classes
-TYPECLASS: 'typeclass'; ASSOCIATED: 'associated'; INSTANCE: 'instance'; FOR: 'for';
+GREEN: 'green';
 
-// Self-adjustment
-SELF_ADJUST: 'self_adjust'; WHEN: 'when'; THEN: 'then'; SELF_VERSION: 'self_version';
-CREATED: 'created'; ON: 'on'; AT: 'at'; RECORD: 'record';
+MINIMIZE_WATER: 'minimize_water';
 
-// Additional
-TENSOR: 'tensor'; MATRIX: 'matrix'; VECTOR: 'vector'; VECTOR_SPACE: 'vector_space';
-MODEL: 'model'; TRAIN: 'train'; EVALUATE: 'evaluate'; TRANSFORM: 'transform';
-MUSIC: 'music'; MELODY: 'melody'; HARMONY: 'harmony'; TEMPO: 'tempo'; KEY: 'key';
-ROBOT: 'robot'; ACTUATOR: 'actuator'; SENSOR: 'sensor'; CONTROL_LOOP: 'control_loop';
-DL: 'dl'; NN: 'nn'; LAYER: 'layer'; ACTIVATION: 'activation'; NEURONS: 'neurons'; DROPOUT: 'dropout';
-GRAPHICS: 'graphics'; RENDER: 'render'; SHADER: 'shader'; FRAME: 'frame'; CODEC: 'codec';
-RESOLUTION: 'resolution'; FPS: 'fps'; HIGH_DIMENSIONAL: 'high_dimensional';
-DIM: 'dim'; DIMENSION: 'dimension'; DIMENSIONS: 'dimensions';
-INFINITY: 'infinity'; INFINITE: 'infinite'; PRECISION: 'precision'; SCALE: 'scale';
-GENERATION: 'generation'; GENERATE: 'generate'; CODE: 'code'; TARGET: 'target';
-PERFORM: 'perform'; TASK: 'task'; OPERATION: 'operation'; PRIORITY: 'priority'; DEADLINE: 'deadline';
-ADD: 'add'; SUBTRACT: 'subtract'; MULTIPLY: 'multiply'; DIVIDE: 'divide';
-INSERT: 'insert'; DELETE: 'delete'; CONNECT: 'connect'; TO: 'to'; RESUME: 'resume'; COORDINATE: 'coordinate';
-VAR: 'var'; ARRAY: 'array'; LIST: 'list'; OBJECT: 'object'; PROPERTY: 'property'; HANDLER: 'handler';
-POINT: 'point'; X: 'x'; Y: 'y'; ELEMENT: 'element'; BASIS: 'basis';
-FILE_SCOPED: 'file'; REQUIRED: 'required'; INIT: 'init'; PARTIAL: 'partial'; SEALED: 'sealed';
-FINAL: 'final'; EXPLICIT: 'explicit'; IMPLICIT: 'implicit'; EVENT: 'event'; DELEGATE: 'delegate';
-GET: 'get'; SET: 'set'; OUT: 'out'; IN_KW: 'in'; DEFAULT: 'default'; WHERE: 'where';
-FILE: 'file'; GLOBAL: 'global'; AS: 'as'; IS: 'is'; HAS: 'has'; REF: 'ref'; MOVE: 'move'; BOX: 'box';
-TYPEOF: 'typeof'; SIZEOF: 'sizeof'; ALIGNOF: 'alignof'; OFFSETOF: 'offsetof'; INSTANCEOF: 'instanceof';
-SIZE: 'size'; ALIGN: 'align'; OFFSET: 'offset'; TYPE_LEVEL: 'type'; KIND_KW: 'kind';
-LINEARIZATION: 'linearization'; VARIANCE: 'variance'; MEMOIZE: 'memoize';
-PATH_DEPENDENT: 'path'; EXISTENTIAL: 'existential'; TYPE_CONSTRUCTOR: 'type_constructor';
-TYPE_FAMILY: 'type_family'; ASSOCIATED_TYPE: 'associated_type'; SELF_RECURSIVE: 'self_recursive';
-BOUNDED_RECURSION: 'bounded_recursion'; BOUNDED: 'bounded'; RECURSION: 'recursion';
-CONTEXT_DEPENDENT: 'context_dependent'; FUNCTIONAL_DEPENDENCY: 'functional_dependency';
-TYPE_PROVIDER: 'type_provider'; TYPE_SAFE: 'type_safe'; METAPROGRAMMING: 'metaprogramming';
-SQL: 'sql'; IMMUTABLE: 'immutable'; SAFE: 'safe'; POINTER: 'pointer'; VALUE: 'value';
-DATA_STRUCTURE: 'data_structure'; PARALLEL: 'parallel'; CONCURRENT: 'concurrent';
-MESSAGE_HANDLER: 'message_handler'; FUNCTION_COMPOSITION: 'function_composition';
-DATA_INTERCHANGE: 'data_interchange'; SERIALIZE: 'serialize'; DESERIALIZE: 'deserialize';
-RAW_PTR: 'raw_ptr'; SLICE: 'slice'; UNIT: 'unit'; NEVER: 'never'; OPTION: 'Option'; RESULT: 'Result';
-OWNED: 'owned'; BORROWED: 'borrowed'; SHARED: 'shared'; UNIQUE: 'unique'; PIN: 'Pin';
-FUTURE: 'Future'; STREAM: 'stream'; ITERATOR: 'iterator'; INTO_ITER: 'IntoIter';
-FROM: 'from'; INTO: 'into'; TRY_FROM: 'try_from'; TRY_INTO: 'try_into'; DEFAULT_KW: 'default';
-CLONE: 'clone'; COPY: 'copy'; DROP: 'drop'; SEND: 'Send'; SYNC: 'Sync'; STATIC_LIFETIME: 'static';
-CONST_KW: 'const'; LET: 'let'; MUT: 'mut'; STATIC: 'static'; EXTERN: 'extern'; CRATE: 'crate';
-SUPER: 'super'; SELF: 'self'; TRUE: 'true'; FALSE: 'false'; MATCH: 'match';
-IF: 'if'; ELSE: 'else'; WHILE: 'while'; FOR: 'for'; LOOP: 'loop'; RETURN: 'return';
-BREAK: 'break'; CONTINUE: 'continue'; YIELD: 'yield'; AWAIT: 'await'; ASYNC: 'async';
-TRY: 'try'; CATCH: 'catch'; THROW: 'throw'; PANIC: 'panic'; ASSERT: 'assert';
-UNSAFE: 'unsafe'; MOD: 'mod'; USE: 'use'; PUB: 'pub'; PRIV: 'priv'; PRIV2: 'private';
-PROC: 'proc'; MACRO_RULES: 'macro_rules'; UNION: 'union'; TYPE: 'type'; ENUM: 'enum';
-STRUCT: 'struct'; TRAIT: 'trait'; IMPL: 'impl'; FN: 'fn'; CONST: 'const'; STATIC: 'static';
-LET: 'let'; REF: 'ref'; MUT: 'mut'; WHERE: 'where'; AS: 'as'; MOVE: 'move';
-DYN: 'dyn'; ABSTRACT: 'abstract'; BECOME: 'become'; DO: 'do'; FINAL: 'final';
-OVERRIDE: 'override'; PRIV: 'priv'; PRIV2: 'private'; PUB: 'pub'; TYPEOF: 'typeof';
-UNSIZED: 'unsized'; VIRTUAL: 'virtual'; YIELD: 'yield'; BOX: 'box'; UNION: 'union';
-TRAIT2: 'trait'; IMPL2: 'impl'; FN2: 'fn'; CONST2: 'const'; STATIC2: 'static';
-LET2: 'let'; REF2: 'ref'; MUT2: 'mut'; WHERE2: 'where'; AS2: 'as'; MOVE2: 'move';
-DYN2: 'dyn'; ABSTRACT2: 'abstract'; BECOME2: 'become'; DO2: 'do'; FINAL2: 'final';
-OVERRIDE2: 'override'; PRIV3: 'priv'; PRIV4: 'private'; PUB2: 'pub'; TYPEOF2: 'typeof';
-UNSIZED2: 'unsized'; VIRTUAL2: 'virtual'; YIELD2: 'yield'; BOX2: 'box'; UNION2: 'union';
+ADMIN: 'admin';
 
-// ── Literals ────────────────────────────────────────────────────────────
+SUGGESTION: 'suggestion';
+
+VALIDATE: 'validate';
+
+CUSTOMIZE: 'customize';
+
+MALICIOUS: 'malicious';
+
+USER: 'user';
+
+NOTICE: 'notice';
+
+OMNIVERSAL_SIMULATE: 'omniversal_simulate';
+
+OMNIVERSAL_DEPLOY: 'omniversal_deploy';
+
+OMNIVERSAL_CONTAINMENT: 'omniversal_containment';
+
+OMNIVERSAL_KNOWLEDGE: 'omniversal_knowledge';
+
+OMNIVERSAL_SOVEREIGNTY: 'omniversal_sovereignty';
+
+OMNIVERSAL_BIONANO: 'omniversal_bionano';
+
+OMNIVERSAL_NLP: 'omniversal_nlp';
+
+UNIVERSE: 'universe';
+
+CHAT_AGENT: 'chat_agent';
+
+NL_GENERATE: 'nl_generate';
+
+DOCUMENT: 'document';
+
+JOURNAL: 'journal';
+
+MULTIMODAL: 'multimodal';
+
+THERMAL_OPTIMIZE: 'thermal_optimize';
+
+MAX_TEMP: 'max_temp';
+
+CARBON_FOOTPRINT: 'carbon_footprint';
+
+AOT: 'AOT';
+
+DVFS: 'dvfs';
+
+RENEWABLE: 'renewable';
+
+QPU: 'QPU';
+
+SELF_DISCOVER: 'self_discover';
+
+AUTO_SUGGEST: 'auto_suggest';
+
+DETECT_IDE: 'detect_ide';
+
+INTRODUCE: 'introduce';
+
+DEVELOPER_ANALYTICS: 'developer_analytics';
+
+TRACK_COMPANIES: 'track_companies';
+
+TRACK_USAGE: 'track_usage';
+
+LICENSES: 'licenses';
+
+CHANGELOG: 'changelog';
+
+GO_TO_DEF: 'go_to_def';
+
+TYPECLASS: 'typeclass';
+
+SELF_ADJUST: 'self_adjust';
+
+CREATED: 'created';
+
+TENSOR: 'tensor';
+
+MODEL: 'model';
+
+MUSIC: 'music';
+
+ROBOT: 'robot';
+
+DL: 'dl';
+
+GRAPHICS: 'graphics';
+
+RESOLUTION: 'resolution';
+
+DIM: 'dim';
+
+INFINITY: 'infinity';
+
+GENERATION: 'generation';
+
+PERFORM: 'perform';
+
+ADD: 'add';
+
+INSERT: 'insert';
+
+VAR: 'var';
+
+POINT: 'point';
+
+FILE_SCOPED: 'file';
+
+FINAL: 'final';
+
+GET: 'get';
+
+FILE: 'file';
+
+TYPEOF: 'typeof';
+
+SIZE: 'size';
+
+LINEARIZATION: 'linearization';
+
+PATH_DEPENDENT: 'path';
+
+TYPE_FAMILY: 'type_family';
+
+BOUNDED_RECURSION: 'bounded_recursion';
+
+CONTEXT_DEPENDENT: 'context_dependent';
+
+TYPE_PROVIDER: 'type_provider';
+
+SQL: 'sql';
+
+DATA_STRUCTURE: 'data_structure';
+
+MESSAGE_HANDLER: 'message_handler';
+
+DATA_INTERCHANGE: 'data_interchange';
+
+RAW_PTR: 'raw_ptr';
+
+OWNED: 'owned';
+
+FUTURE: 'Future';
+
+FROM: 'from';
+
+CLONE: 'clone';
+
+CONST_KW: 'const';
+
+SUPER: 'super';
+
+IF: 'if';
+
+BREAK: 'break';
+
+TRY: 'try';
+
+UNSAFE: 'unsafe';
+
+PROC: 'proc';
+
+STRUCT: 'struct';
+
+LET: 'let';
+
+DYN: 'dyn';
+
+OVERRIDE: 'override';
+
+UNSIZED: 'unsized';
+
+TRAIT2: 'trait';
+
+LET2: 'let';
+
+DYN2: 'dyn';
+
+OVERRIDE2: 'override';
+
+UNSIZED2: 'unsized';
+
 BOOLEAN: TRUE | FALSE;
+
 NIL: NIL_KW | NULL_KW;
 
 INTEGER: DIGIT+ | '0x' HEX_DIGIT+ | '0b' BIN_DIGIT+ | '0o' OCT_DIGIT+;
+
 FLOAT: DIGIT+ '.' DIGIT+ ('e' ('+' | '-')? DIGIT+)?;
 
 STRING: '"' (ESC | ~["\\])* '"';
+
 CHAR: '\'' (ESC | ~['\\]) '\'';
 
-fragment ESC: '\\' [nrt0"'\\];
-fragment DIGIT: [0-9];
-fragment HEX_DIGIT: [0-9a-fA-F];
-fragment BIN_DIGIT: [01];
-fragment OCT_DIGIT: [0-7];
-fragment ALPHA: [a-zA-Z_];
-
-// Zenith-native literals
 QUANTUM_LITERAL: '|' ('0' | '1' | '+' | '-') '\\u27E9';
+
 NANO_ANNOTATION: '@' IDENT ('(' ~[)]* ')')?;
+
 MTS_LITERAL: 'mts' '[' ~[\\]]* ']';
 
-// ── Identifiers ─────────────────────────────────────────────────────────
 IDENT: ALPHA (ALPHA | DIGIT)*;
 
-// ── Punctuation & operators ─────────────────────────────────────────────
-LPAREN: '('; RPAREN: ')'; LBRACE: '{'; RBRACE: '}'; LBRACK: '['; RBRACK: ']';
-COMMA: ','; DOT: '.'; SEMI: ';'; COLON: ':'; ARROW: '->'; FATARROW: '=>';
-COLONCOLON: '::'; TILDE: '~'; HASH: '#'; AT: '@'; BANG: '!';
+LPAREN: '(';
 
-PLUS: '+'; MINUS: '-'; STAR: '*'; SLASH: '/'; PERCENT: '%'; ASSIGN: '=';
-EQ: '=='; NEQ: '!='; LT: '<'; GT: '>'; LE: '<='; GE: '>=';
-ANDAND: '&&'; OROR: '||'; AMP: '&'; PIPE: '|'; CARET: '^';
-SHL: '<<'; SHR: '>>'; SHRU: '>>>';
-PLUSEQ: '+='; MINUSEQ: '-='; STAREQ: '*='; SLASHEQ: '/=';
-DOTDOT: '..'; DOTDOTEQ: '..=';
-QUESTION: '?'; DOLLAR: '$';
+COMMA: ',';
 
-// ── Whitespace & comments ───────────────────────────────────────────────
+COLONCOLON: '::';
+
+PLUS: '+';
+
+EQ: '==';
+
+ANDAND: '&&';
+
+SHL: '<<';
+
+PLUSEQ: '+=';
+
+DOTDOT: '..';
+
+QUESTION: '?';
+
 LINE_COMMENT: '//' ~[\r\n]* -> skip;
+
 BLOCK_COMMENT: '/*' .*? '*/' -> skip;
+
 DOC_COMMENT: '///' ~[\r\n]*;
+
 WS: [ \t\r\n]+ -> skip;
+
