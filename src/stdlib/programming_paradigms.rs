@@ -37,5 +37,9 @@ pub fn optimal_paradigm(computation: &str) -> Paradigm {
         _ => Paradigm::Functional,
     }
 }
-pub fn init_programming_paradigms() {}
-pub fn shutdown_programming_paradigms() {}
+pub fn init_programming_paradigms() {
+    println!("  - Initializing Programming Paradigms...");
+}
+pub fn shutdown_programming_paradigms() {
+    println!("  - Shutting down Programming Paradigms...");
+}

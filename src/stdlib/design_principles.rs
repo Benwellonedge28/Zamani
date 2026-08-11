@@ -60,5 +60,9 @@ impl Default for DesignAuditor {
         Self::new()
     }
 }
-pub fn init_design_principles() {}
-pub fn shutdown_design_principles() {}
+pub fn init_design_principles() {
+    println!("  - Initializing Design Principles...");
+}
+pub fn shutdown_design_principles() {
+    println!("  - Shutting down Design Principles...");
+}

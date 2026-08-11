@@ -80,5 +80,9 @@ impl Default for OrsmEngine {
         Self::new()
     }
 }
-pub fn init_omniversal_reality_metaphysical_engineering() {}
-pub fn shutdown_omniversal_reality_metaphysical_engineering() {}
+pub fn init_omniversal_reality_metaphysical_engineering() {
+    println!("  - Initializing Omniversal Reality Metaphysical Engineering...");
+}
+pub fn shutdown_omniversal_reality_metaphysical_engineering() {
+    println!("  - Shutting down Omniversal Reality Metaphysical Engineering...");
+}

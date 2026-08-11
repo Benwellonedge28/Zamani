@@ -2,8 +2,12 @@
 //! Zamani — quantum safe primitives module implementation
 //! Provides abstractions for NIST post-quantum algorithms (Kyber, Dilithium).
 
-pub fn init_quantum_safe_primitives() {}
-pub fn shutdown_quantum_safe_primitives() {}
+pub fn init_quantum_safe_primitives() {
+    println!("  - Initializing Quantum Safe Primitives...");
+}
+pub fn shutdown_quantum_safe_primitives() {
+    println!("  - Shutting down Quantum Safe Primitives...");
+}
 
 /// Post-quantum Key Encapsulation Mechanism (KEM) - e.g., Kyber
 pub mod kem {

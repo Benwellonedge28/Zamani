@@ -4,8 +4,12 @@
 use rsa::{RsaPrivateKey, RsaPublicKey, Pkcs1v15Encrypt};
 use rand::thread_rng;
 
-pub fn init_asymmetric_encryption() {}
-pub fn shutdown_asymmetric_encryption() {}
+pub fn init_asymmetric_encryption() {
+    println!("  - Initializing Asymmetric Encryption...");
+}
+pub fn shutdown_asymmetric_encryption() {
+    println!("  - Shutting down Asymmetric Encryption...");
+}
 
 pub fn generate_rsa_keys(bits: usize) -> Result<(RsaPrivateKey, RsaPublicKey), String> {
     let mut rng = thread_rng();

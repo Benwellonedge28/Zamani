@@ -106,5 +106,9 @@ impl Default for KnowledgeGraph {
         Self::new()
     }
 }
-pub fn init_omniversal_knowledge_semantic_reasoning() {}
-pub fn shutdown_omniversal_knowledge_semantic_reasoning() {}
+pub fn init_omniversal_knowledge_semantic_reasoning() {
+    println!("  - Initializing Omniversal Knowledge Semantic Reasoning...");
+}
+pub fn shutdown_omniversal_knowledge_semantic_reasoning() {
+    println!("  - Shutting down Omniversal Knowledge Semantic Reasoning...");
+}

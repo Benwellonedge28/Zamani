@@ -82,5 +82,9 @@ impl Default for BioNanoKernel {
         Self::new()
     }
 }
-pub fn init_omniversal_bionano_os() {}
-pub fn shutdown_omniversal_bionano_os() {}
+pub fn init_omniversal_bionano_os() {
+    println!("  - Initializing Omniversal Bionano Os...");
+}
+pub fn shutdown_omniversal_bionano_os() {
+    println!("  - Shutting down Omniversal Bionano Os...");
+}

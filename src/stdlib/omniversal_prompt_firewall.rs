@@ -78,5 +78,9 @@ impl Default for PromptFirewall {
         Self::new()
     }
 }
-pub fn init_omniversal_prompt_firewall() {}
-pub fn shutdown_omniversal_prompt_firewall() {}
+pub fn init_omniversal_prompt_firewall() {
+    println!("  - Initializing Omniversal Prompt Firewall...");
+}
+pub fn shutdown_omniversal_prompt_firewall() {
+    println!("  - Shutting down Omniversal Prompt Firewall...");
+}

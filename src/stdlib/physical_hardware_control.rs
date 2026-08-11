@@ -65,5 +65,9 @@ impl Default for HwController {
         Self::new()
     }
 }
-pub fn init_physical_hardware_control() {}
-pub fn shutdown_physical_hardware_control() {}
+pub fn init_physical_hardware_control() {
+    println!("  - Initializing Physical Hardware Control...");
+}
+pub fn shutdown_physical_hardware_control() {
+    println!("  - Shutting down Physical Hardware Control...");
+}

@@ -104,5 +104,9 @@ impl Default for GenAiEngine {
         Self::new()
     }
 }
-pub fn init_omniversal_generative_ai() {}
-pub fn shutdown_omniversal_generative_ai() {}
+pub fn init_omniversal_generative_ai() {
+    println!("  - Initializing Omniversal Generative Ai...");
+}
+pub fn shutdown_omniversal_generative_ai() {
+    println!("  - Shutting down Omniversal Generative Ai...");
+}

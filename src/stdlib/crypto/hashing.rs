@@ -4,8 +4,12 @@
 use sha2::{Sha256, Sha512, Digest};
 use sha3::{Sha3_256, Sha3_512};
 
-pub fn init_hashing() {}
-pub fn shutdown_hashing() {}
+pub fn init_hashing() {
+    println!("  - Initializing Hashing...");
+}
+pub fn shutdown_hashing() {
+    println!("  - Shutting down Hashing...");
+}
 
 pub fn hash_sha256(data: &[u8]) -> Vec<u8> {
     let mut hasher = Sha256::new();

@@ -131,5 +131,9 @@ impl Default for AlignmentEngine {
         Self::new()
     }
 }
-pub fn init_omniversal_rogue_prevention_alignment() {}
-pub fn shutdown_omniversal_rogue_prevention_alignment() {}
+pub fn init_omniversal_rogue_prevention_alignment() {
+    println!("  - Initializing Omniversal Rogue Prevention Alignment...");
+}
+pub fn shutdown_omniversal_rogue_prevention_alignment() {
+    println!("  - Shutting down Omniversal Rogue Prevention Alignment...");
+}

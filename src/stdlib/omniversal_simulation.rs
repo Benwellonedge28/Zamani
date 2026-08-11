@@ -69,8 +69,12 @@ impl SimEngine {
         self.time = to_tick as f64 * self.dt;
     }
 }
-pub fn init_omniversal_simulation() {}
-pub fn shutdown_omniversal_simulation() {}
+pub fn init_omniversal_simulation() {
+    println!("  - Initializing Omniversal Simulation...");
+}
+pub fn shutdown_omniversal_simulation() {
+    println!("  - Shutting down Omniversal Simulation...");
+}
 
 /// A higher-level, "omniversal" digital-twin simulation engine that wraps the
 /// core `SimEngine` for cross-domain (physical + informational) scenario

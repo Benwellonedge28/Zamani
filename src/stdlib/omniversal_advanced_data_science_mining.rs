@@ -71,5 +71,9 @@ impl Default for DataScienceEngine {
         Self::new()
     }
 }
-pub fn init_omniversal_advanced_data_science_mining() {}
-pub fn shutdown_omniversal_advanced_data_science_mining() {}
+pub fn init_omniversal_advanced_data_science_mining() {
+    println!("  - Initializing Omniversal Advanced Data Science Mining...");
+}
+pub fn shutdown_omniversal_advanced_data_science_mining() {
+    println!("  - Shutting down Omniversal Advanced Data Science Mining...");
+}

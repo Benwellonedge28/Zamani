@@ -60,5 +60,9 @@ impl Default for OmniversalHasher {
         Self::new(HashAlgorithm::Blake3)
     }
 }
-pub fn init_omniversal_hashing() {}
-pub fn shutdown_omniversal_hashing() {}
+pub fn init_omniversal_hashing() {
+    println!("  - Initializing Omniversal Hashing...");
+}
+pub fn shutdown_omniversal_hashing() {
+    println!("  - Shutting down Omniversal Hashing...");
+}

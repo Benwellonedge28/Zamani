@@ -81,5 +81,9 @@ impl Default for ResourceManager {
         Self::new()
     }
 }
-pub fn init_resource_management() {}
-pub fn shutdown_resource_management() {}
+pub fn init_resource_management() {
+    println!("  - Initializing Resource Management...");
+}
+pub fn shutdown_resource_management() {
+    println!("  - Shutting down Resource Management...");
+}

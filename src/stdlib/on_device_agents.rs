@@ -46,5 +46,9 @@ impl Default for EdgeRuntime {
         Self::new()
     }
 }
-pub fn init_on_device_agents() {}
-pub fn shutdown_on_device_agents() {}
+pub fn init_on_device_agents() {
+    println!("  - Initializing On Device Agents...");
+}
+pub fn shutdown_on_device_agents() {
+    println!("  - Shutting down On Device Agents...");
+}

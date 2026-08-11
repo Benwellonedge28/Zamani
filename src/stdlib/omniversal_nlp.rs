@@ -79,5 +79,9 @@ impl Default for NlpPipeline {
         Self::new(768)
     }
 }
-pub fn init_omniversal_nlp() {}
-pub fn shutdown_omniversal_nlp() {}
+pub fn init_omniversal_nlp() {
+    println!("  - Initializing Omniversal Nlp...");
+}
+pub fn shutdown_omniversal_nlp() {
+    println!("  - Shutting down Omniversal Nlp...");
+}

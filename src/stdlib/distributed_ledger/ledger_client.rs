@@ -3,8 +3,12 @@
 
 use std::collections::HashMap;
 
-pub fn init_ledger_client() {}
-pub fn shutdown_ledger_client() {}
+pub fn init_ledger_client() {
+    println!("  - Initializing Ledger Client...");
+}
+pub fn shutdown_ledger_client() {
+    println!("  - Shutting down Ledger Client...");
+}
 
 #[derive(Debug, Clone)]
 pub struct Transaction {

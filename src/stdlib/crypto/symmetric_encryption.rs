@@ -5,8 +5,12 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use aes_gcm::aead::{Aead, AeadCore, KeyInit};
 use rand::RngCore;
 
-pub fn init_symmetric_encryption() {}
-pub fn shutdown_symmetric_encryption() {}
+pub fn init_symmetric_encryption() {
+    println!("  - Initializing Symmetric Encryption...");
+}
+pub fn shutdown_symmetric_encryption() {
+    println!("  - Shutting down Symmetric Encryption...");
+}
 
 pub fn aes_256_gcm_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>), String> {
     let cipher_key = Key::<Aes256Gcm>::from_slice(key);

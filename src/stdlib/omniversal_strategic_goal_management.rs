@@ -96,5 +96,9 @@ impl Default for GoalTree {
         Self::new()
     }
 }
-pub fn init_omniversal_strategic_goal_management() {}
-pub fn shutdown_omniversal_strategic_goal_management() {}
+pub fn init_omniversal_strategic_goal_management() {
+    println!("  - Initializing Omniversal Strategic Goal Management...");
+}
+pub fn shutdown_omniversal_strategic_goal_management() {
+    println!("  - Shutting down Omniversal Strategic Goal Management...");
+}

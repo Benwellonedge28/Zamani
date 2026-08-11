@@ -59,8 +59,12 @@ impl Tensor {
         })
     }
 }
-pub fn init_multidimensional() {}
-pub fn shutdown_multidimensional() {}
+pub fn init_multidimensional() {
+    println!("  - Initializing Multidimensional...");
+}
+pub fn shutdown_multidimensional() {
+    println!("  - Shutting down Multidimensional...");
+}
 
 /// A higher-level engine coordinating multidimensional tensor/manifold
 /// operations for modules (e.g. MGNS) that need N-dimensional math primitives.

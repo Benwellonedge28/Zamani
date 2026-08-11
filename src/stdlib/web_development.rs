@@ -60,5 +60,9 @@ impl Default for WebRouter {
         Self::new()
     }
 }
-pub fn init_web_development() {}
-pub fn shutdown_web_development() {}
+pub fn init_web_development() {
+    println!("  - Initializing Web Development...");
+}
+pub fn shutdown_web_development() {
+    println!("  - Shutting down Web Development...");
+}

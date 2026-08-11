@@ -4,8 +4,12 @@
 use ed25519_dalek::{Keypair, Signer, Verifier, Signature, PublicKey, SecretKey};
 use rand::rngs::OsRng;
 
-pub fn init_signature() {}
-pub fn shutdown_signature() {}
+pub fn init_signature() {
+    println!("  - Initializing Signature...");
+}
+pub fn shutdown_signature() {
+    println!("  - Shutting down Signature...");
+}
 
 pub fn generate_ed25519_keypair() -> Keypair {
     let mut csprng = OsRng;

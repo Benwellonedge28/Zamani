@@ -93,5 +93,9 @@ impl Default for RagEngine {
         Self::new()
     }
 }
-pub fn init_omniversal_hallucination_rag() {}
-pub fn shutdown_omniversal_hallucination_rag() {}
+pub fn init_omniversal_hallucination_rag() {
+    println!("  - Initializing Omniversal Hallucination Rag...");
+}
+pub fn shutdown_omniversal_hallucination_rag() {
+    println!("  - Shutting down Omniversal Hallucination Rag...");
+}

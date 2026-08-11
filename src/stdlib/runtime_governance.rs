@@ -79,5 +79,9 @@ impl Default for RuntimeGovernor {
         Self::new()
     }
 }
-pub fn init_runtime_governance() {}
-pub fn shutdown_runtime_governance() {}
+pub fn init_runtime_governance() {
+    println!("  - Initializing Runtime Governance...");
+}
+pub fn shutdown_runtime_governance() {
+    println!("  - Shutting down Runtime Governance...");
+}

@@ -56,5 +56,9 @@ impl Default for DevRelEngine {
         Self::new()
     }
 }
-pub fn init_developer_relations() {}
-pub fn shutdown_developer_relations() {}
+pub fn init_developer_relations() {
+    println!("  - Initializing Developer Relations...");
+}
+pub fn shutdown_developer_relations() {
+    println!("  - Shutting down Developer Relations...");
+}

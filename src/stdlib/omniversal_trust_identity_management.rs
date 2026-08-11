@@ -65,5 +65,9 @@ impl Default for TrustEngine {
         Self::new()
     }
 }
-pub fn init_omniversal_trust_identity_management() {}
-pub fn shutdown_omniversal_trust_identity_management() {}
+pub fn init_omniversal_trust_identity_management() {
+    println!("  - Initializing Omniversal Trust Identity Management...");
+}
+pub fn shutdown_omniversal_trust_identity_management() {
+    println!("  - Shutting down Omniversal Trust Identity Management...");
+}

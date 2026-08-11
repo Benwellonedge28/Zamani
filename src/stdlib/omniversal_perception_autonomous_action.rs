@@ -79,5 +79,9 @@ impl PerceptionActionLoop {
         self.execute(plan)
     }
 }
-pub fn init_omniversal_perception_autonomous_action() {}
-pub fn shutdown_omniversal_perception_autonomous_action() {}
+pub fn init_omniversal_perception_autonomous_action() {
+    println!("  - Initializing Omniversal Perception Autonomous Action...");
+}
+pub fn shutdown_omniversal_perception_autonomous_action() {
+    println!("  - Shutting down Omniversal Perception Autonomous Action...");
+}

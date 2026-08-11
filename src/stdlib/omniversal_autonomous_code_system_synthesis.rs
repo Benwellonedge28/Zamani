@@ -67,5 +67,9 @@ impl Default for OacssEngine {
         Self::new()
     }
 }
-pub fn init_omniversal_autonomous_code_system_synthesis() {}
-pub fn shutdown_omniversal_autonomous_code_system_synthesis() {}
+pub fn init_omniversal_autonomous_code_system_synthesis() {
+    println!("  - Initializing Omniversal Autonomous Code System Synthesis...");
+}
+pub fn shutdown_omniversal_autonomous_code_system_synthesis() {
+    println!("  - Shutting down Omniversal Autonomous Code System Synthesis...");
+}

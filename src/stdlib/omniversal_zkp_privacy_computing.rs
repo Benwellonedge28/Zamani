@@ -113,5 +113,9 @@ impl Default for OzkppcEngine {
         Self::new(1.0)
     }
 }
-pub fn init_omniversal_zkp_privacy_computing() {}
-pub fn shutdown_omniversal_zkp_privacy_computing() {}
+pub fn init_omniversal_zkp_privacy_computing() {
+    println!("  - Initializing Omniversal Zkp Privacy Computing...");
+}
+pub fn shutdown_omniversal_zkp_privacy_computing() {
+    println!("  - Shutting down Omniversal Zkp Privacy Computing...");
+}

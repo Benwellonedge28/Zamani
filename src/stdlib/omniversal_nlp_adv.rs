@@ -90,8 +90,12 @@ impl Default for AdvNlp {
         Self::new()
     }
 }
-pub fn init_omniversal_nlp_adv() {}
-pub fn shutdown_omniversal_nlp_adv() {}
+pub fn init_omniversal_nlp_adv() {
+    println!("  - Initializing Omniversal Nlp Adv...");
+}
+pub fn shutdown_omniversal_nlp_adv() {
+    println!("  - Shutting down Omniversal Nlp Adv...");
+}
 
 /// An advanced, "omniversal" NLP engine wrapping the core `AdvNlp` pipeline
 /// for higher-level consumers (e.g. MGNS) that need entity/sentiment analysis.

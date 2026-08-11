@@ -64,5 +64,9 @@ impl Default for MetaEngine {
         Self::new()
     }
 }
-pub fn init_meta_programming_self_mod() {}
-pub fn shutdown_meta_programming_self_mod() {}
+pub fn init_meta_programming_self_mod() {
+    println!("  - Initializing Meta Programming Self Mod...");
+}
+pub fn shutdown_meta_programming_self_mod() {
+    println!("  - Shutting down Meta Programming Self Mod...");
+}

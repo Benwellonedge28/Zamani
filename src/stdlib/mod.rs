@@ -150,6 +150,21 @@ pub fn initialize_stdlib() {
     omniversal_rogue_prevention_alignment::init_omniversal_rogue_prevention_alignment();
     // omniversal_living_character_narrative_evolution::init (module not in tree)();
     omniversal_autonomous_deployment_orchestration_secure_hardening::init_omniversal_autonomous_deployment_orchestration_secure_hardening(); // Initialize OADOSH module
+    omniversal_advanced_data_science_mining::init_omniversal_advanced_data_science_mining();
+    omniversal_alignment_orchestration_global_immutable_nexus::init_omniversal_alignment_orchestration_global_immutable_nexus();
+    omniversal_autonomous_code_system_synthesis::init_omniversal_autonomous_code_system_synthesis();
+    omniversal_bionano_os::init_omniversal_bionano_os();
+    omniversal_hallucination_rag::init_omniversal_hallucination_rag();
+    omniversal_reality_metaphysical_engineering::init_omniversal_reality_metaphysical_engineering();
+    omniversal_self_sovereignty_existential_management::init_omniversal_self_sovereignty_existential_management();
+    omniversal_zkp_privacy_computing::init_omniversal_zkp_privacy_computing();
+    crypto::asymmetric_encryption::init_asymmetric_encryption();
+    crypto::hashing::init_hashing();
+    crypto::quantum_safe_primitives::init_quantum_safe_primitives();
+    crypto::signature::init_signature();
+    crypto::symmetric_encryption::init_symmetric_encryption();
+    crypto::tls::init_tls();
+    distributed_ledger::ledger_client::init_ledger_client();
     println!("Zamani UMC Standard Library initialized.");
 }
 
@@ -222,5 +237,20 @@ pub fn shutdown_stdlib() {
     quantum::shutdown_quantum_lib();
     collections::shutdown_collections_lib();
     core::shutdown_core_lib();
+    omniversal_advanced_data_science_mining::shutdown_omniversal_advanced_data_science_mining();
+    omniversal_alignment_orchestration_global_immutable_nexus::shutdown_omniversal_alignment_orchestration_global_immutable_nexus();
+    omniversal_autonomous_code_system_synthesis::shutdown_omniversal_autonomous_code_system_synthesis();
+    omniversal_bionano_os::shutdown_omniversal_bionano_os();
+    omniversal_hallucination_rag::shutdown_omniversal_hallucination_rag();
+    omniversal_reality_metaphysical_engineering::shutdown_omniversal_reality_metaphysical_engineering();
+    omniversal_self_sovereignty_existential_management::shutdown_omniversal_self_sovereignty_existential_management();
+    omniversal_zkp_privacy_computing::shutdown_omniversal_zkp_privacy_computing();
+    crypto::asymmetric_encryption::shutdown_asymmetric_encryption();
+    crypto::hashing::shutdown_hashing();
+    crypto::quantum_safe_primitives::shutdown_quantum_safe_primitives();
+    crypto::signature::shutdown_signature();
+    crypto::symmetric_encryption::shutdown_symmetric_encryption();
+    crypto::tls::shutdown_tls();
+    distributed_ledger::ledger_client::shutdown_ledger_client();
     println!("Zamani UMC Standard Library shut down.");
 }

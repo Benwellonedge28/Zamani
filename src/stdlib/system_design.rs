@@ -59,5 +59,9 @@ impl Default for SystemDesigner {
         Self::new()
     }
 }
-pub fn init_system_design() {}
-pub fn shutdown_system_design() {}
+pub fn init_system_design() {
+    println!("  - Initializing System Design...");
+}
+pub fn shutdown_system_design() {
+    println!("  - Shutting down System Design...");
+}

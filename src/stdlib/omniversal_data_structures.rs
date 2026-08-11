@@ -88,5 +88,9 @@ impl Default for HyperGraph {
         Self::new()
     }
 }
-pub fn init_omniversal_data_structures() {}
-pub fn shutdown_omniversal_data_structures() {}
+pub fn init_omniversal_data_structures() {
+    println!("  - Initializing Omniversal Data Structures...");
+}
+pub fn shutdown_omniversal_data_structures() {
+    println!("  - Shutting down Omniversal Data Structures...");
+}
