@@ -264,3 +264,58 @@ impl MetaTransformEngine {
         self.dialects.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{MetaTransformDirective, LanguageDialectDecl, Statement};
+    use crate::source_map::Span;
+
+    #[test]
+    fn test_macro_processor_expansion() {
+        let processor = MacroProcessor::new();
+        let mut macros = Map::new();
+        let macro_def = MacroDefinition {
+            name: "test_macro".to_string(),
+            input_pattern: List::new(),
+            generator_logic: "generated_snippet".to_string(),
+            context_constraints: Map::new(),
+            security_policy_ref: None,
+        };
+        macros.insert("test_macro".to_string(), macro_def);
+
+        let result = processor.expand_macro(&"test_macro".to_string(), List::new(), &macros);
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("Expanded macro"));
+
+        let not_found = processor.expand_macro(&"unknown".to_string(), List::new(), &macros);
+        assert!(not_found.is_err());
+    }
+
+    #[test]
+    fn test_meta_transform_engine() {
+        let mut engine = MetaTransformEngine::new();
+        let directive = MetaTransformDirective {
+            name: "inline_loops".to_string(),
+            args: vec!["for".to_string()],
+            span: Span::default(),
+        };
+
+        assert!(engine.register_transform(&directive).is_ok());
+        assert_eq!(engine.transform_count(), 1);
+
+        let dialect = LanguageDialectDecl {
+            name: "quantum_ext".to_string(),
+            span: Span::default(),
+        };
+
+        assert!(engine.register_dialect(&dialect).is_ok());
+        assert_eq!(engine.dialect_count(), 1);
+
+        // Duplicate dialect should fail
+        assert!(engine.register_dialect(&dialect).is_err());
+
+        let mut stmts = Vec::new();
+        assert!(engine.apply_transforms(&mut stmts).is_ok());
+    }
+}
