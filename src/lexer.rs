@@ -143,6 +143,7 @@ pub enum TokenType {
     KeywordWisdom,
     KeywordYield,
     KeywordZamani,
+    KeywordEntangle,
     KeywordPi, // For dependent types: Π
 
     // Special Zamani/Sankofa/Nimbus tokens
@@ -332,6 +333,7 @@ impl Lexer {
         map.insert("infer".to_string(), TokenType::KeywordInfer);
         map.insert("wisdom".to_string(), TokenType::KeywordWisdom);
         map.insert("zamani".to_string(), TokenType::KeywordZamani);
+        map.insert("entangle".to_string(), TokenType::KeywordEntangle);
         map.insert("sasa".to_string(), TokenType::KeywordSasa);
         map.insert("ancestor".to_string(), TokenType::KeywordAncestor);
         map.insert("linear".to_string(), TokenType::KeywordLinear);

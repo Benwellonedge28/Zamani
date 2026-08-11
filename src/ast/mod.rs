@@ -267,6 +267,7 @@ pub enum Expression {
     New(Span, Identifier, Vec<Expression>),
     // Zamani-native
     QuantumOp(Span, String, Vec<Expression>),
+    Entangle(Span, Box<Expression>, Box<Expression>),
     NanoOp(Span, String, Vec<Expression>),
     Recall(Span, Box<Expression>),
     Remember(Span, String, Box<Expression>),
@@ -309,6 +310,7 @@ impl Expression {
             | Expression::Spawn(s, _)
             | Expression::New(s, _, _)
             | Expression::QuantumOp(s, _, _)
+            | Expression::Entangle(s, _, _)
             | Expression::NanoOp(s, _, _)
             | Expression::Recall(s, _)
             | Expression::Remember(s, _, _)

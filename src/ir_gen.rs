@@ -1222,6 +1222,18 @@ impl IrGenerator {
                 IrValue::Reg(r)
             }
 
+            Expression::Entangle(_, q1, q2) => {
+                let v1 = self.emit_expression(q1, func, module);
+                let v2 = self.emit_expression(q2, func, module);
+                let r = self.fresh_reg(IrType::Quantum);
+                func.push(IrInstruction::QuantumGate(
+                    r.clone(),
+                    "CNOT".into(),
+                    vec![v1, v2],
+                ));
+                IrValue::Reg(r)
+            }
+
             Expression::NanoOp(_, op, args) => {
                 let arg_vals: Vec<IrValue> = args
                     .iter()

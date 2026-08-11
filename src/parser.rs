@@ -1296,6 +1296,15 @@ impl Parser {
                 let i = self.parse_expression(Precedence::Lowest)?;
                 Some(Expression::Async(s, Box::new(i)))
             }
+            KeywordEntangle => {
+                let s = self.advance().span;
+                self.expect(LParen)?;
+                let q1 = self.parse_expression(Precedence::Lowest)?;
+                self.expect(Comma)?;
+                let q2 = self.parse_expression(Precedence::Lowest)?;
+                self.expect(RParen)?;
+                Some(Expression::Entangle(s, Box::new(q1), Box::new(q2)))
+            }
             KeywordAwait => {
                 let s = self.advance().span;
                 let i = self.parse_expression(Precedence::Lowest)?;
