@@ -1,6 +1,9 @@
 #![allow(dead_code, unused_variables, unused_imports)]
+
 //! Zamani Autonomous Toolchain — self-evolving build and packaging system.
+
 use std::collections::HashMap;
+use crate::toolchain::self_evolution::SelfEvolutionEngine;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToolchainState {
@@ -45,6 +48,7 @@ pub struct AutonomousToolchain {
     targets: HashMap<String, BuildTarget>,
     build_history: Vec<BuildResult>,
     evolution_generation: u32,
+    evolution_engine: SelfEvolutionEngine,
 }
 
 impl AutonomousToolchain {
@@ -54,6 +58,7 @@ impl AutonomousToolchain {
             targets: HashMap::new(),
             build_history: Vec::new(),
             evolution_generation: 1,
+            evolution_engine: SelfEvolutionEngine::new(),
         }
     }
 
@@ -61,25 +66,49 @@ impl AutonomousToolchain {
         self.targets.insert(target.name.clone(), target);
     }
 
+    /// Performs an autonomous build of the specified target.
     pub fn build(&mut self, target_name: &str) -> BuildResult {
         self.state = ToolchainState::Building;
+        println!("[AutonomousToolchain] Building target: {} (Generation {})", target_name, self.evolution_generation);
+        
+        // Simulate compiler pipeline invocation
+        let success = !target_name.contains("error");
         let result = BuildResult {
             target: target_name.to_string(),
-            success: true,
-            artifacts: vec![format!("{}.zbin", target_name)],
+            success,
+            artifacts: if success { vec![format!("{}.zbin", target_name)] } else { vec![] },
             warnings: vec![],
-            errors: vec![],
-            build_time_ms: 150,
+            errors: if success { vec![] } else { vec!["Compilation failed: Syntax error in omniversal block".into()] },
+            build_time_ms: 120 / self.evolution_generation as u64, // Improved speed per generation
         };
+        
         self.build_history.push(result.clone());
         self.state = ToolchainState::Idle;
         result
     }
 
+    /// Triggers a self-evolution cycle to optimize the toolchain's own logic.
     pub fn evolve(&mut self) {
         self.state = ToolchainState::Evolving;
         self.evolution_generation += 1;
-        // Self-optimise: analyse build history, improve compilation strategies
+        println!("[AutonomousToolchain] Initiating Evolution Cycle (Gen {}).", self.evolution_generation);
+        
+        // Analyze build history to identify bottlenecks
+        let avg_time = self.build_history.iter().map(|r| r.build_time_ms).sum::<u64>() as f32 
+                      / self.build_history.len().max(1) as f32;
+        
+        if avg_time > 50.0 {
+            let patch_id = self.evolution_engine.propose_patch(
+                crate::toolchain::self_evolution::SelfModTarget::Optimiser,
+                "Improve parallel IR lowering",
+                15.0
+            );
+            if self.evolution_engine.verify_patch(patch_id) {
+                self.evolution_engine.apply_patch(patch_id);
+                println!("[AutonomousToolchain] Applied optimization patch {}.", patch_id);
+            }
+        }
+        
         self.state = ToolchainState::Idle;
     }
 
