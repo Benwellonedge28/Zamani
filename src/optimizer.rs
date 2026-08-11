@@ -150,6 +150,7 @@ impl Optimizer {
             if self.config.dead_store_elim {
                 self.dead_store_elim(func);
             }
+            self.optimize_quantum_gates(func);
 
             if func.body.len() == before {
                 break;
@@ -390,6 +391,29 @@ impl Optimizer {
     }
 
     // ── Dead Store Elimination ────────────────────────────────────────────────
+
+    // ── Quantum Gate Sequence Optimization ────────────────────────────────────
+
+    fn optimize_quantum_gates(&mut self, func: &mut IrFunction) {
+        // Optimize adjacent self-inverse gates (e.g. H followed by H cancels out)
+        let mut new_body = Vec::new();
+        let mut i = 0;
+        while i < func.body.len() {
+            if i + 1 < func.body.len() {
+                if let (IrInstruction::QuantumGate(_, gate1, args1), IrInstruction::QuantumGate(_, gate2, args2)) = (&func.body[i], &func.body[i+1]) {
+                    // H followed by H on the same qubit cancels out (H*H = I)
+                    if gate1 == gate2 && gate1 == "H" && args1 == args2 {
+                        i += 2; // skip both
+                        self.stats.strength_reductions += 1;
+                        continue;
+                    }
+                }
+            }
+            new_body.push(func.body[i].clone());
+            i += 1;
+        }
+        func.body = new_body;
+    }
 
     fn dead_store_elim(&mut self, func: &mut IrFunction) {
         let mut last_store: HashMap<String, usize> = HashMap::new();
