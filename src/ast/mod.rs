@@ -49,8 +49,10 @@ pub enum Statement {
     Class(Span, Identifier, Vec<Identifier>, Vec<ClassMember>),
     Interface(Span, Identifier, Vec<Identifier>, Vec<InterfaceMember>),
     // Zamani-native
-    QuantumCircuit(Span, String, Expression),
-    NanoAgent(Span, String, Expression),
+    QuantumCircuit(Span, String, Box<Expression>),
+    NoiseModel(Span, String, Vec<(String, String)>),
+    FidelityCheck(Span, String),
+    NanoAgent(Span, String, Box<Expression>),
     SankofaMemory(Span, String, Expression),
     EffectDeclaration(Span, Identifier),
     LanguageDeclaration(Span, String, String),

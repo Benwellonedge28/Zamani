@@ -895,6 +895,14 @@ impl IrGenerator {
                 });
             }
 
+            Statement::NoiseModel(_, name, params) => {
+                func.push(IrInstruction::Comment(format!("Noise Model: {} with params {:?}", name, params)));
+            }
+
+            Statement::FidelityCheck(_, name) => {
+                func.push(IrInstruction::Comment(format!("Fidelity Check for: {}", name)));
+            }
+
             Statement::OmniversalSimulation(_, name, stmts)
             | Statement::OmniversalCodeSynth(_, name, stmts)
             | Statement::OmniversalDeploy(_, name, stmts)

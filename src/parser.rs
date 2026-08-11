@@ -167,6 +167,7 @@ impl Parser {
             KeywordImport => self.parse_import(),
             KeywordUse => self.parse_use(),
             KeywordQuantum | KeywordCircuit => self.parse_quantum_circuit(),
+            KeywordNoise => self.parse_noise_model(),
             KeywordNano | KeywordAgent => self.parse_nano_agent(),
             KeywordRemember => self.parse_sankofa_remember(),
             KeywordEffect => self.parse_effect_decl(),
@@ -936,6 +937,31 @@ impl Parser {
             self.parse_expression(Precedence::Lowest)?
         };
         Some(Statement::QuantumCircuit(span, name, body))
+    }
+
+    fn parse_noise_model(&mut self) -> Option<Statement> {
+        let span = self.advance().span; // consume 'noise'
+        if self.current_is(TokenType::KeywordModel) || self.current_is(TokenType::Identifier) {
+            self.advance(); // consume 'model' if present
+        }
+        let name = self.current.literal.clone();
+        self.advance();
+        self.expect(TokenType::LBrace)?;
+        let mut params = vec![];
+        while !self.current_is(TokenType::RBrace) && !self.current_is(TokenType::EOF) {
+            let pk = self.current.literal.clone();
+            self.advance();
+            self.expect(TokenType::LParen)?;
+            let pv = self.current.literal.clone();
+            self.advance();
+            self.expect(TokenType::RParen)?;
+            if self.current_is(TokenType::Semicolon) {
+                self.advance();
+            }
+            params.push((pk, pv));
+        }
+        self.expect(TokenType::RBrace)?;
+        Some(Statement::NoiseModel(span, name, params))
     }
     fn parse_nano_agent(&mut self) -> Option<Statement> {
         let span = self.advance().span;

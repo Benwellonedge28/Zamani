@@ -107,6 +107,7 @@ pub enum TokenType {
     KeywordLet,
     KeywordLinear,
     KeywordMatch,
+    KeywordModel,
     KeywordModule,
     KeywordMove,
     KeywordMts,
@@ -144,6 +145,8 @@ pub enum TokenType {
     KeywordYield,
     KeywordZamani,
     KeywordEntangle,
+    KeywordNoise,
+    KeywordFidelity,
     KeywordPi, // For dependent types: Π
 
     // Special Zamani/Sankofa/Nimbus tokens
@@ -272,6 +275,7 @@ impl Lexer {
         map.insert("break".to_string(), TokenType::KeywordBreak);
         map.insert("continue".to_string(), TokenType::KeywordContinue);
         map.insert("match".to_string(), TokenType::KeywordMatch);
+        map.insert("model".to_string(), TokenType::KeywordModel);
         map.insert("case".to_string(), TokenType::KeywordCase);
         map.insert("when".to_string(), TokenType::KeywordWhen);
         map.insert("true".to_string(), TokenType::KeywordTrue);
@@ -334,6 +338,8 @@ impl Lexer {
         map.insert("wisdom".to_string(), TokenType::KeywordWisdom);
         map.insert("zamani".to_string(), TokenType::KeywordZamani);
         map.insert("entangle".to_string(), TokenType::KeywordEntangle);
+        map.insert("noise".to_string(), TokenType::KeywordNoise);
+        map.insert("fidelity".to_string(), TokenType::KeywordFidelity);
         map.insert("sasa".to_string(), TokenType::KeywordSasa);
         map.insert("ancestor".to_string(), TokenType::KeywordAncestor);
         map.insert("linear".to_string(), TokenType::KeywordLinear);

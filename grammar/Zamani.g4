@@ -488,3 +488,7 @@ fragment HEX_DIGIT: [0-9a-fA-F];
 fragment BIN_DIGIT: [01];
 fragment OCT_DIGIT: [0-7];
 fragment ESC: '\\' [nrt0"'\\];
+
+noiseModelDecl : 'noise' 'model' ident '{' noiseParam* '}' ;
+noiseParam : ident '(' (ident | number | string) ')' ';' ;
+fidelityCheck : 'fidelity' '(' ident ')' ';' ;
