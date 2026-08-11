@@ -1,8 +1,8 @@
-#![allow(dead_code, unused_variables, unused_imports, unused_mut)]
+#![allow(unused_imports, dead_code, unused_variables)]
 
-//!
-//! NOTE: Full Zamani-native source is preserved in the ORIGINAL_SOURCE constant below.
-//! This stub is used by the stable Rust build until the ZUTC compiler pipeline is active.
+//! Zamani Distributed Ledger — Data Provenance Tracking
+
+use std::collections::HashMap;
 
 /// Original Zamani-native source code preserved verbatim for reference.
 pub const ORIGINAL_SOURCE: &str = include_str!(concat!(
@@ -10,8 +10,40 @@ pub const ORIGINAL_SOURCE: &str = include_str!(concat!(
     "/src/stdlib/distributed_ledger/data_provenance_zamani_native.zn"
 ));
 
-/// Initialize the data_provenance subsystem.
-pub fn init_data_provenance() {}
+/// Initialize data_provenance
+pub fn init_data_provenance() {
+    println!("[StdLib::Ledger] Initializing Data Provenance Tracking...");
+}
 
-/// Shut down the data_provenance subsystem.
-pub fn shutdown_data_provenance() {}
+/// Shutdown data_provenance
+pub fn shutdown_data_provenance() {
+    println!("[StdLib::Ledger] Shutting down Data Provenance Tracking...");
+}
+
+#[derive(Debug, Clone)]
+pub struct ProvenanceRecord {
+    pub data_id: String,
+    pub creator: String,
+    pub timestamp: u64,
+    pub lineage: Vec<String>,
+}
+
+pub struct ProvenanceTracker {
+    pub records: HashMap<String, ProvenanceRecord>,
+}
+
+impl ProvenanceTracker {
+    pub fn new() -> Self {
+        ProvenanceTracker {
+            records: HashMap::new(),
+        }
+    }
+
+    pub fn record_lineage(&mut self, record: ProvenanceRecord) {
+        self.records.insert(record.data_id.clone(), record);
+    }
+
+    pub fn get_lineage(&self, data_id: &str) -> Option<&ProvenanceRecord> {
+        self.records.get(data_id)
+    }
+}
