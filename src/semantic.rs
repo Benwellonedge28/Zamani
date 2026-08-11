@@ -633,6 +633,26 @@ impl SemanticAnalyzer {
             Statement::LanguageDeclaration(span, _, _) => {
                 let _ = span;
             }
+
+            Statement::OmniversalSimulation(_, _, stmts)
+            | Statement::OmniversalCodeSynth(_, _, stmts)
+            | Statement::OmniversalDeploy(_, _, stmts)
+            | Statement::OmniversalAlignment(_, _, stmts)
+            | Statement::OmniversalContainment(_, _, stmts)
+            | Statement::OmniversalTrust(_, _, stmts)
+            | Statement::OmniversalKnowledge(_, _, stmts)
+            | Statement::OmniversalGenerative(_, _, stmts)
+            | Statement::OmniversalSovereignty(_, _, stmts)
+            | Statement::OmniversalGoal(_, _, stmts)
+            | Statement::OmniversalBioNano(_, _, stmts)
+            | Statement::OmniversalReality(_, _, stmts)
+            | Statement::OmniversalNlp(_, _, stmts) => {
+                self.symbols.enter_scope();
+                for s in stmts {
+                    self.check_statement(s);
+                }
+                self.symbols.exit_scope();
+            }
         }
     }
 

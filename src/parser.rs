@@ -175,6 +175,25 @@ impl Parser {
             KeywordUnsafe => self.parse_unsafe(),
             KeywordWisdom => self.parse_wisdom(),
             KeywordLanguage => self.parse_language_decl(),
+            KeywordOmniversal => {
+                self.advance(); // consume 'omniversal'
+                match self.current.token_type {
+                    TokenType::KeywordSimulate => self.parse_omniversal_block(Statement::OmniversalSimulation),
+                    TokenType::KeywordSynthesize => self.parse_omniversal_block(Statement::OmniversalCodeSynth),
+                    TokenType::KeywordDeploy => self.parse_omniversal_block(Statement::OmniversalDeploy),
+                    TokenType::KeywordAlignment => self.parse_omniversal_block(Statement::OmniversalAlignment),
+                    TokenType::KeywordContainment => self.parse_omniversal_block(Statement::OmniversalContainment),
+                    TokenType::KeywordTrust => self.parse_omniversal_block(Statement::OmniversalTrust),
+                    TokenType::KeywordKnowledge => self.parse_omniversal_block(Statement::OmniversalKnowledge),
+                    TokenType::KeywordGenerative => self.parse_omniversal_block(Statement::OmniversalGenerative),
+                    TokenType::KeywordSovereignty => self.parse_omniversal_block(Statement::OmniversalSovereignty),
+                    TokenType::KeywordGoal => self.parse_omniversal_block(Statement::OmniversalGoal),
+                    TokenType::KeywordBionano => self.parse_omniversal_block(Statement::OmniversalBioNano),
+                    TokenType::KeywordReality => self.parse_omniversal_block(Statement::OmniversalReality),
+                    TokenType::KeywordNlp => self.parse_omniversal_block(Statement::OmniversalNlp),
+                    _ => self.parse_expr_stmt(),
+                }
+            }
             Hash => self.parse_attribute_stmt(),
             _ => self.parse_expr_stmt(),
         }
@@ -1960,6 +1979,21 @@ impl Parser {
                 self.advance();
                 Some(Pattern::Wildcard(s))
             }
+        }
+    }
+
+    // ── Omniversal Declarations ───────────────────────────────────────────────
+    fn parse_omniversal_block(
+        &mut self,
+        ctor: fn(Span, String, Vec<Statement>) -> Statement,
+    ) -> Option<Statement> {
+        let span = self.advance().span;
+        let name = self.current.literal.clone();
+        self.advance();
+        let body = self.parse_block_expr()?;
+        match body {
+            Expression::Block(_, stmts) => Some(ctor(span, name, stmts)),
+            _ => Some(ctor(span, name, vec![])),
         }
     }
 }

@@ -178,6 +178,23 @@ pub enum TokenType {
     KeywordSizeof,
     KeywordTry,
 
+    // --- Omniversal & Advanced System Keywords ---
+    KeywordOmniversal,
+    KeywordSimulate,
+    KeywordSynthesize,
+    KeywordDeploy,
+    KeywordAlignment,
+    KeywordContainment,
+    KeywordTrust,
+    KeywordKnowledge,
+    KeywordGenerative,
+    KeywordSovereignty,
+    KeywordGoal,
+    KeywordBionano,
+    KeywordReality,
+    KeywordNlp,
+    KeywordSystem,
+
     // --- Compound assignment & range operators ---
     PlusAssign,
     MinusAssign,
@@ -235,15 +252,76 @@ impl Lexer {
         lexer
     }
 
-    fn init_keywords() -> HashMap<String, TokenType> {
+        fn init_keywords() -> HashMap<String, TokenType> {
         let mut map = HashMap::new();
+        
+        // --- Core Keywords ---
         map.insert("let".to_string(), TokenType::KeywordLet);
+        map.insert("var".to_string(), TokenType::KeywordVar);
+        map.insert("mut".to_string(), TokenType::KeywordMut);
+        map.insert("const".to_string(), TokenType::KeywordConst);
         map.insert("fn".to_string(), TokenType::KeywordFn);
         map.insert("return".to_string(), TokenType::KeywordReturn);
         map.insert("if".to_string(), TokenType::KeywordIf);
         map.insert("else".to_string(), TokenType::KeywordElse);
+        map.insert("for".to_string(), TokenType::KeywordFor);
+        map.insert("in".to_string(), TokenType::KeywordIn);
+        map.insert("while".to_string(), TokenType::KeywordWhile);
+        map.insert("loop".to_string(), TokenType::KeywordLoop);
+        map.insert("break".to_string(), TokenType::KeywordBreak);
+        map.insert("continue".to_string(), TokenType::KeywordContinue);
+        map.insert("match".to_string(), TokenType::KeywordMatch);
+        map.insert("case".to_string(), TokenType::KeywordCase);
+        map.insert("when".to_string(), TokenType::KeywordWhen);
         map.insert("true".to_string(), TokenType::KeywordTrue);
         map.insert("false".to_string(), TokenType::KeywordFalse);
+        map.insert("nil".to_string(), TokenType::KeywordNil);
+        map.insert("null".to_string(), TokenType::KeywordNil);
+        
+        // --- Modularity & Types ---
+        map.insert("module".to_string(), TokenType::KeywordModule);
+        map.insert("import".to_string(), TokenType::KeywordImport);
+        map.insert("export".to_string(), TokenType::KeywordExport);
+        map.insert("use".to_string(), TokenType::KeywordUse);
+        map.insert("as".to_string(), TokenType::KeywordAs);
+        map.insert("from".to_string(), TokenType::KeywordFrom);
+        map.insert("type".to_string(), TokenType::KeywordType);
+        map.insert("struct".to_string(), TokenType::KeywordStruct);
+        map.insert("enum".to_string(), TokenType::KeywordEnum);
+        map.insert("trait".to_string(), TokenType::KeywordTrait);
+        map.insert("impl".to_string(), TokenType::KeywordImpl);
+        map.insert("class".to_string(), TokenType::KeywordClass);
+        map.insert("interface".to_string(), TokenType::KeywordInterface);
+        map.insert("record".to_string(), TokenType::KeywordRecord);
+        map.insert("where".to_string(), TokenType::KeywordWhere);
+        
+        // --- OOP & Access Modifiers ---
+        map.insert("pub".to_string(), TokenType::KeywordPublic);
+        map.insert("public".to_string(), TokenType::KeywordPublic);
+        map.insert("private".to_string(), TokenType::KeywordPrivate);
+        map.insert("protected".to_string(), TokenType::KeywordProtected);
+        map.insert("static".to_string(), TokenType::KeywordStatic);
+        map.insert("override".to_string(), TokenType::KeywordOverride);
+        map.insert("virtual".to_string(), TokenType::KeywordVirtual);
+        map.insert("abstract".to_string(), TokenType::KeywordAbstract);
+        map.insert("extends".to_string(), TokenType::KeywordExtends);
+        map.insert("implements".to_string(), TokenType::KeywordImplements);
+        map.insert("this".to_string(), TokenType::KeywordThis);
+        map.insert("self".to_string(), TokenType::KeywordSelf);
+        map.insert("super".to_string(), TokenType::KeywordSuper);
+        map.insert("new".to_string(), TokenType::KeywordNew);
+        
+        // --- Async & Safety ---
+        map.insert("async".to_string(), TokenType::KeywordAsync);
+        map.insert("await".to_string(), TokenType::KeywordAwait);
+        map.insert("spawn".to_string(), TokenType::KeywordSpawn);
+        map.insert("unsafe".to_string(), TokenType::KeywordUnsafe);
+        map.insert("try".to_string(), TokenType::KeywordTry);
+        map.insert("catch".to_string(), TokenType::KeywordCatch);
+        map.insert("finally".to_string(), TokenType::KeywordFinally);
+        map.insert("throw".to_string(), TokenType::KeywordThrow);
+        
+        // --- Zamani-native & Domain Specific ---
         map.insert("quantum".to_string(), TokenType::KeywordQuantum);
         map.insert("circuit".to_string(), TokenType::KeywordCircuit);
         map.insert("nano".to_string(), TokenType::KeywordNano);
@@ -251,6 +329,7 @@ impl Lexer {
         map.insert("remember".to_string(), TokenType::KeywordRemember);
         map.insert("recall".to_string(), TokenType::KeywordRecall);
         map.insert("learn".to_string(), TokenType::KeywordLearn);
+        map.insert("infer".to_string(), TokenType::KeywordInfer);
         map.insert("wisdom".to_string(), TokenType::KeywordWisdom);
         map.insert("zamani".to_string(), TokenType::KeywordZamani);
         map.insert("sasa".to_string(), TokenType::KeywordSasa);
@@ -260,66 +339,9 @@ impl Lexer {
         map.insert("handle".to_string(), TokenType::KeywordHandle);
         map.insert("effect".to_string(), TokenType::KeywordEffect);
         map.insert("perform".to_string(), TokenType::KeywordPerform);
-        map.insert("unsafe".to_string(), TokenType::KeywordUnsafe);
-        map.insert("type".to_string(), TokenType::KeywordType);
-        map.insert("for".to_string(), TokenType::KeywordFor);
-        map.insert("in".to_string(), TokenType::KeywordIn);
-        map.insert("while".to_string(), TokenType::KeywordWhile);
-        map.insert("break".to_string(), TokenType::KeywordBreak);
-        map.insert("continue".to_string(), TokenType::KeywordContinue);
-        map.insert("match".to_string(), TokenType::KeywordMatch);
-        map.insert("with".to_string(), TokenType::KeywordWith);
-
-        // --- OOP Keywords ---
-        map.insert("extends".to_string(), TokenType::KeywordExtends);
-        map.insert("implements".to_string(), TokenType::KeywordImplements);
-        map.insert("protected".to_string(), TokenType::KeywordProtected);
-        map.insert("this".to_string(), TokenType::KeywordThis);
-        map.insert("override".to_string(), TokenType::KeywordOverride);
-        map.insert("virtual".to_string(), TokenType::KeywordVirtual);
-        map.insert("abstract".to_string(), TokenType::KeywordAbstract);
-        map.insert("public".to_string(), TokenType::KeywordPublic);
-        map.insert("private".to_string(), TokenType::KeywordPrivate);
-        map.insert("new".to_string(), TokenType::KeywordNew);
-        map.insert("super".to_string(), TokenType::KeywordSuper);
-        map.insert("class".to_string(), TokenType::KeywordClass);
-        map.insert("interface".to_string(), TokenType::KeywordInterface);
-        map.insert("implements".to_string(), TokenType::KeywordImplements);
-        map.insert("public".to_string(), TokenType::KeywordPublic);
-        map.insert("private".to_string(), TokenType::KeywordPrivate);
-        map.insert("protected".to_string(), TokenType::KeywordProtected);
-        map.insert("new".to_string(), TokenType::KeywordNew);
-        map.insert("this".to_string(), TokenType::KeywordThis);
-        map.insert("super".to_string(), TokenType::KeywordSuper);
-        map.insert("override".to_string(), TokenType::KeywordOverride);
-        map.insert("virtual".to_string(), TokenType::KeywordVirtual);
-        map.insert("abstract".to_string(), TokenType::KeywordAbstract);
-
-        // Essential missing keywords
-        map.insert("mut".to_string(), TokenType::KeywordMut);
-        map.insert("const".to_string(), TokenType::KeywordConst);
-        map.insert("var".to_string(), TokenType::KeywordVar);
-        map.insert("module".to_string(), TokenType::KeywordModule);
-        map.insert("import".to_string(), TokenType::KeywordImport);
-        map.insert("struct".to_string(), TokenType::KeywordStruct);
-        map.insert("enum".to_string(), TokenType::KeywordEnum);
-        map.insert("async".to_string(), TokenType::KeywordAsync);
-        map.insert("await".to_string(), TokenType::KeywordAwait);
-        map.insert("as".to_string(), TokenType::KeywordAs);
-        map.insert("from".to_string(), TokenType::KeywordFrom);
-        map.insert("where".to_string(), TokenType::KeywordWhere);
-        map.insert("self".to_string(), TokenType::KeywordSelf);
-        map.insert("static".to_string(), TokenType::KeywordStatic);
-        map.insert("impl".to_string(), TokenType::KeywordImpl);
-        map.insert("is".to_string(), TokenType::KeywordIs);
-        map.insert("or".to_string(), TokenType::KeywordOr);
-        map.insert("and".to_string(), TokenType::KeywordAnd);
-        map.insert("use".to_string(), TokenType::KeywordUse);
-        map.insert("trait".to_string(), TokenType::KeywordTrait);
-        map.insert("loop".to_string(), TokenType::KeywordLoop);
-        map.insert("spawn".to_string(), TokenType::KeywordSpawn);
-        map.insert("infer".to_string(), TokenType::KeywordInfer);
         map.insert("language".to_string(), TokenType::KeywordLanguage);
+        
+        // --- Built-in Types & Utilities ---
         map.insert("void".to_string(), TokenType::KeywordVoid);
         map.insert("int".to_string(), TokenType::KeywordInt);
         map.insert("float".to_string(), TokenType::KeywordFloat);
@@ -327,15 +349,30 @@ impl Lexer {
         map.insert("str".to_string(), TokenType::KeywordStr);
         map.insert("String".to_string(), TokenType::KeywordStringType);
         map.insert("char".to_string(), TokenType::KeywordCharType);
-        map.insert("nil".to_string(), TokenType::KeywordNil);
-        map.insert("null".to_string(), TokenType::KeywordNil);
         map.insert("print".to_string(), TokenType::KeywordPrint);
         map.insert("println".to_string(), TokenType::KeywordPrintln);
         map.insert("assert".to_string(), TokenType::KeywordAssert);
         map.insert("panic".to_string(), TokenType::KeywordPanic);
         map.insert("len".to_string(), TokenType::KeywordLen);
         map.insert("sizeof".to_string(), TokenType::KeywordSizeof);
-        map.insert("try".to_string(), TokenType::KeywordTry);
+        
+        // --- Omniversal Keywords ---
+        map.insert("omniversal".to_string(), TokenType::KeywordOmniversal);
+        map.insert("simulate".to_string(), TokenType::KeywordSimulate);
+        map.insert("synthesize".to_string(), TokenType::KeywordSynthesize);
+        map.insert("deploy".to_string(), TokenType::KeywordDeploy);
+        map.insert("alignment".to_string(), TokenType::KeywordAlignment);
+        map.insert("containment".to_string(), TokenType::KeywordContainment);
+        map.insert("trust".to_string(), TokenType::KeywordTrust);
+        map.insert("knowledge".to_string(), TokenType::KeywordKnowledge);
+        map.insert("generate".to_string(), TokenType::KeywordGenerative);
+        map.insert("sovereignty".to_string(), TokenType::KeywordSovereignty);
+        map.insert("goal".to_string(), TokenType::KeywordGoal);
+        map.insert("bionano".to_string(), TokenType::KeywordBionano);
+        map.insert("reality".to_string(), TokenType::KeywordReality);
+        map.insert("nlp".to_string(), TokenType::KeywordNlp);
+        map.insert("system".to_string(), TokenType::KeywordSystem);
+
         map
     }
 

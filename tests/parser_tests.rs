@@ -258,3 +258,27 @@ fn test_parse_member_access() {
         s => panic!("Expected MemberAccess, got {:?}", s),
     }
 }
+
+#[test]
+fn test_parse_omniversal_simulation() {
+    let prog = parse("omniversal simulate GalaxySim { let t = 0; }");
+    match &prog.statements[0] {
+        Statement::OmniversalSimulation(_, name, stmts) => {
+            assert_eq!(name, "GalaxySim");
+            assert_eq!(stmts.len(), 1);
+        }
+        s => panic!("Expected OmniversalSimulation, got {:?}", s),
+    }
+}
+
+#[test]
+fn test_parse_omniversal_alignment() {
+    let prog = parse("omniversal alignment SafetyNet { remember safety = true; }");
+    match &prog.statements[0] {
+        Statement::OmniversalAlignment(_, name, stmts) => {
+            assert_eq!(name, "SafetyNet");
+            assert_eq!(stmts.len(), 1);
+        }
+        s => panic!("Expected OmniversalAlignment, got {:?}", s),
+    }
+}

@@ -61,6 +61,20 @@ pub enum Statement {
     Expression(Expression),
     // Wisdom (meta-declaration)
     Wisdom(Span, String, Expression),
+    // Omniversal & Advanced System Declarations
+    OmniversalSimulation(Span, String, Vec<Statement>),
+    OmniversalCodeSynth(Span, String, Vec<Statement>),
+    OmniversalDeploy(Span, String, Vec<Statement>),
+    OmniversalAlignment(Span, String, Vec<Statement>),
+    OmniversalContainment(Span, String, Vec<Statement>),
+    OmniversalTrust(Span, String, Vec<Statement>),
+    OmniversalKnowledge(Span, String, Vec<Statement>),
+    OmniversalGenerative(Span, String, Vec<Statement>),
+    OmniversalSovereignty(Span, String, Vec<Statement>),
+    OmniversalGoal(Span, String, Vec<Statement>),
+    OmniversalBioNano(Span, String, Vec<Statement>),
+    OmniversalReality(Span, String, Vec<Statement>),
+    OmniversalNlp(Span, String, Vec<Statement>),
 }
 
 // ─── Items within definitions ────────────────────────────────────────────────

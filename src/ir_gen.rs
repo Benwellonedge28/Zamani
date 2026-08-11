@@ -893,6 +893,25 @@ impl IrGenerator {
                 });
             }
 
+            Statement::OmniversalSimulation(_, name, stmts)
+            | Statement::OmniversalCodeSynth(_, name, stmts)
+            | Statement::OmniversalDeploy(_, name, stmts)
+            | Statement::OmniversalAlignment(_, name, stmts)
+            | Statement::OmniversalContainment(_, name, stmts)
+            | Statement::OmniversalTrust(_, name, stmts)
+            | Statement::OmniversalKnowledge(_, name, stmts)
+            | Statement::OmniversalGenerative(_, name, stmts)
+            | Statement::OmniversalSovereignty(_, name, stmts)
+            | Statement::OmniversalGoal(_, name, stmts)
+            | Statement::OmniversalBioNano(_, name, stmts)
+            | Statement::OmniversalReality(_, name, stmts)
+            | Statement::OmniversalNlp(_, name, stmts) => {
+                func.push(IrInstruction::Comment(format!("Omniversal Block: {}", name)));
+                for s in stmts {
+                    self.emit_statement(s, func, module);
+                }
+            }
+
             _ => {
                 func.push(IrInstruction::Comment(format!(
                     "unimplemented stmt: {:?}",
