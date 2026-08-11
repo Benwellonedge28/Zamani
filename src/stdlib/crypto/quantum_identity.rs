@@ -54,7 +54,7 @@ impl IdentityManager {
     pub fn register_entity(&mut self, name: &str, entity_type: EntityType) -> Result<QuantumIdentity, String> {
         let (priv_key, pub_key) = dsa::generate_keypair();
         let did = format!("did:zamani:{}", hex::encode(&pub_key[..8]));
-        
+
         let identity = QuantumIdentity {
             did: did.clone(),
             entity_name: name.to_string(),
@@ -63,7 +63,7 @@ impl IdentityManager {
             private_key: priv_key,
             verified: true,
         };
-        
+
         self.identities.insert(did.clone(), identity.clone());
         Ok(identity)
     }
@@ -88,9 +88,9 @@ impl VerifiableCredential {
             claim_data.extend_from_slice(k.as_bytes());
             claim_data.extend_from_slice(v.as_bytes());
         }
-        
+
         let signature = dsa::sign(&issuer.private_key, &claim_data);
-        
+
         VerifiableCredential {
             id: format!("vc:zamani:{}", hex::encode(&signature[..8])),
             issuer_did: issuer.did.clone(),

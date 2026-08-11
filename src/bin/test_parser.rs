@@ -1,8 +1,8 @@
 /*
  * Zamani Parser Test Utility
- * 
+ *
  * This program tests the parsing of a Zamani source file using the generated ANTLR4 parser.
- * 
+ *
  * To generate the Rust parser files, run:
  * java -jar antlr4-rust-generator.jar -Dlanguage=Rust -o src/generated grammar/Zamani.g4
  */
@@ -34,10 +34,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let input_path = &args[1];
     let input = fs::read_to_string(input_path)?;
-    
+
     println!("--- Parsing File: {} ---", input_path);
 
-    /* 
+    /*
     // Implementation steps for the generated parser:
     // 1. Add the generated files to your src directory (e.g., src/generated/)
     // 2. Include them in your module tree:
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lexer = ZamaniLexer::new(InputStream::new(input.as_str()));
     let token_stream = CommonTokenStream::new(lexer);
     let mut parser = ZamaniParser::new(token_stream);
-    
+
     // Attempt to parse the 'program' rule
     let root = parser.program()?;
     println!("Parse Tree: {:?}", root);

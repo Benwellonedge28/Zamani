@@ -210,10 +210,7 @@ impl MetaTransformEngine {
     }
 
     /// Register a `#meta_transform { ... }` directive.
-    pub fn register_transform(
-        &mut self,
-        directive: &MetaTransformDirective,
-    ) -> Result<(), String> {
+    pub fn register_transform(&mut self, directive: &MetaTransformDirective) -> Result<(), String> {
         let rule = TransformRule {
             name: directive.name.clone(),
             pattern: format!("{:?}", directive.args), // Placeholder
@@ -230,10 +227,7 @@ impl MetaTransformEngine {
     }
 
     /// Register a `language_dialect! { ... }` declaration.
-    pub fn register_dialect(
-        &mut self,
-        decl: &LanguageDialectDecl,
-    ) -> Result<(), String> {
+    pub fn register_dialect(&mut self, decl: &LanguageDialectDecl) -> Result<(), String> {
         if self.dialects.contains_key(&decl.name) {
             return Err(format!(
                 "Dialect '{}' already exists at {:?}",
@@ -245,10 +239,7 @@ impl MetaTransformEngine {
     }
 
     /// Apply all registered transforms to a statement sequence.
-    pub fn apply_transforms(
-        &self,
-        stmts: &mut Vec<Statement>,
-    ) -> Result<(), String> {
+    pub fn apply_transforms(&self, stmts: &mut Vec<Statement>) -> Result<(), String> {
         // In a full implementation, this would walk the AST, match patterns,
         // and rewrite nodes. For now, we validate that transforms are well-formed.
         for rule in &self.rules {

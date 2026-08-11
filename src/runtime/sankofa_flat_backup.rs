@@ -76,7 +76,7 @@ impl SasaStore {
                 current_version.timestamp_valid_to = Some(timestamp);
             }
         }
-        
+
         let new_version = SasaKnowledgeVersion {
             version_id,
             knowledge_id: knowledge_id.clone(),
@@ -139,7 +139,7 @@ pub fn init_sankofa_runtime() -> Arc<Mutex<SankofaRuntimeState>> {
         learning_agents: HashMap::new(),
         inter_memory_interfaces: HashMap::new(),
     }));
-    
+
     // Register conceptual learning agents
     let mut state_guard = runtime_state.lock().unwrap();
     state_guard.learning_agents.insert("temporal_pattern_matcher".to_string(), Box::new(TemporalPatternMatcherAgent));
@@ -178,12 +178,12 @@ pub fn access_zamani_fact(runtime_state_arc: &Arc<Mutex<SankofaRuntimeState>>, f
 pub fn update_sasa_knowledge(runtime_state_arc: &Arc<Mutex<SankofaRuntimeState>>, knowledge_id: String, content: Vec<u8>, timestamp: u64, causal_predecessors: Vec<u64>) -> SasaKnowledgeVersion {
     let mut state = runtime_state_arc.lock().unwrap();
     let new_version = state.sasa_store.record_knowledge_update(knowledge_id.clone(), content, timestamp, causal_predecessors, None);
-    
+
     // Conceptual: Update causality graph
     // For each predecessor, add new_version as a dependent.
     // For simplicity, just adding self for now.
     state.causality_graph.entry(new_version.version_id).or_default().push(new_version.version_id);
-    
+
     println!("    -> Sankofa Runtime: Updated Sasa knowledge '{}' to version {} at {}.", knowledge_id, new_version.version_id, timestamp);
     new_version
 }
@@ -199,7 +199,7 @@ pub fn get_sasa_knowledge_at_time(runtime_state_arc: &Arc<Mutex<SankofaRuntimeSt
 pub fn temporal_learn(runtime_state_arc: &Arc<Mutex<SankofaRuntimeState>>, knowledge_id: &str, timestamp_range_start: u64, timestamp_range_end: u64) {
     println!("    -> Sankofa Runtime: Initiating temporal learning for '{}' over range {}-{}.", knowledge_id, timestamp_range_start, timestamp_range_end);
     let state_guard = runtime_state_arc.lock().unwrap();
-    
+
     if let Some(versions) = state_guard.sasa_store.knowledge_versions.get(knowledge_id) {
         for version in versions.iter().filter(|v| v.timestamp_valid_from >= timestamp_range_start && (v.timestamp_valid_to.is_none() || v.timestamp_valid_to.unwrap() <= timestamp_range_end)) {
             for agent in state_guard.learning_agents.values() {

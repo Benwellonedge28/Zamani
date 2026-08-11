@@ -14,7 +14,7 @@ pub fn aes_256_gcm_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<(Vec<u8>,
     let mut nonce_bytes = [0u8; 12];
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
-    
+
     match cipher.encrypt(nonce, plaintext) {
         Ok(ciphertext) => Ok((ciphertext, nonce_bytes.to_vec())),
         Err(e) => Err(format!("Encryption error: {:?}", e)),
@@ -28,7 +28,7 @@ pub fn aes_256_gcm_decrypt(key: &[u8; 32], ciphertext: &[u8], nonce_bytes: &[u8]
         return Err("Invalid nonce length; expected 12 bytes".into());
     }
     let nonce = Nonce::from_slice(nonce_bytes);
-    
+
     match cipher.decrypt(nonce, ciphertext) {
         Ok(plaintext) => Ok(plaintext),
         Err(e) => Err(format!("Decryption error: {:?}", e)),
