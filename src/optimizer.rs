@@ -401,8 +401,9 @@ impl Optimizer {
         while i < func.body.len() {
             if i + 1 < func.body.len() {
                 if let (IrInstruction::QuantumGate(_, gate1, args1), IrInstruction::QuantumGate(_, gate2, args2)) = (&func.body[i], &func.body[i+1]) {
-                    // H followed by H on the same qubit cancels out (H*H = I)
-                    if gate1 == gate2 && gate1 == "H" && args1 == args2 {
+                    // Self-inverse gates (H, X, Y, Z) on the same qubit cancel out
+                    let self_inverse = ["H", "X", "Y", "Z"];
+                    if gate1 == gate2 && self_inverse.contains(&gate1.as_str()) && args1 == args2 {
                         i += 2; // skip both
                         self.stats.strength_reductions += 1;
                         continue;
