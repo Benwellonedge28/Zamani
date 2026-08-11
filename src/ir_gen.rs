@@ -901,6 +901,8 @@ impl IrGenerator {
 
             Statement::SurfaceCode(_, name, props) => {
                 func.push(IrInstruction::Comment(format!("Surface Code Patch: {} with properties {:?}", name, props)));
+                let scheduler = crate::quantum::stabilizer_scheduler::StabilizerScheduler::new(name.clone(), 3);
+                scheduler.schedule_rounds(func, 2);
             }
 
             Statement::FidelityCheck(_, name) => {

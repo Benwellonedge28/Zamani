@@ -260,6 +260,12 @@ impl SemanticAnalyzer {
     }
 
     pub fn analyze(&mut self, program: &Program) -> Vec<SemanticError> {
+        if let Err(msg) = crate::toolchain::causality_checker::CausalityChecker::verify_program(program) {
+            self.errors.push(SemanticError {
+                message: format!("Causality Violation: {}", msg),
+                span: Span::default(),
+            });
+        }
         for stmt in &program.statements {
             self.check_statement(stmt);
         }
