@@ -1,4 +1,4 @@
-//! Zamani Compiler — Quantum Computing Architecture Backends (Complete 53-Target Roster)
+//! Zamani Compiler — Quantum Computing Architecture Backends (Complete 75-Target Roster)
 
 pub mod feynman_simulator;
 pub mod benioff_machine;
@@ -34,8 +34,6 @@ pub mod pasqal;
 pub mod oqc;
 pub mod aqt;
 pub mod xanadu_x8;
-
-// Expansion V3 Modules
 pub mod silq;
 pub mod quipper;
 pub mod qiskit;
@@ -52,6 +50,23 @@ pub mod terra_quantum;
 pub mod anyon_systems;
 pub mod bernstein_vazirani;
 pub mod simon_algorithm;
+
+// Expansion V4 Modules
+pub mod margolus_model;
+pub mod watrous_qca;
+pub mod qcl;
+pub mod lanq;
+pub mod qmk;
+pub mod baidu_liangxi;
+pub mod tencent_quantum;
+pub mod alibaba_quantum;
+pub mod fujitsu_annealer;
+pub mod toshiba_sqbm;
+pub mod surface_code;
+pub mod steane_code;
+pub mod vqe;
+pub mod qaoa;
+pub mod hhl_algorithm;
 
 pub use feynman_simulator::FeynmanSimulatorBackend;
 pub use benioff_machine::BenioffMachineBackend;
@@ -87,7 +102,6 @@ pub use pasqal::PasqalBackend;
 pub use oqc::OqcBackend;
 pub use aqt::AqtBackend;
 pub use xanadu_x8::XanaduX8Backend;
-
 pub use silq::SilqBackend;
 pub use quipper::QuipperBackend;
 pub use qiskit::QiskitBackend;
@@ -104,3 +118,19 @@ pub use terra_quantum::TerraQuantumBackend;
 pub use anyon_systems::AnyonSystemsBackend;
 pub use bernstein_vazirani::BernsteinVaziraniBackend;
 pub use simon_algorithm::SimonAlgorithmBackend;
+
+pub use margolus_model::MargolusModelBackend;
+pub use watrous_qca::WatrousQcaBackend;
+pub use qcl::QclBackend;
+pub use lanq::LanQBackend;
+pub use qmk::QmkBackend;
+pub use baidu_liangxi::BaiduLiangxiBackend;
+pub use tencent_quantum::TencentQuantumBackend;
+pub use alibaba_quantum::AlibabaQuantumBackend;
+pub use fujitsu_annealer::FujitsuAnnealerBackend;
+pub use toshiba_sqbm::ToshibaSqbmBackend;
+pub use surface_code::SurfaceCodeBackend;
+pub use steane_code::SteaneCodeBackend;
+pub use vqe::VqeBackend;
+pub use qaoa::QaoaBackend;
+pub use hhl_algorithm::HhlAlgorithmBackend;
