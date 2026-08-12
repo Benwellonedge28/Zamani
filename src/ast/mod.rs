@@ -95,6 +95,8 @@ pub enum Statement {
     LegalAction(Span, String, Vec<Statement>),
     TailorMadeFeature(Span, String, Vec<Statement>),
     AiForBusiness(Span, String, Vec<Statement>),
+    SoftwareGenome(Span, String, Vec<Statement>),
+    SelfDocument(Span, String, Vec<Statement>),
 }
 
 // ─── Items within definitions ────────────────────────────────────────────────

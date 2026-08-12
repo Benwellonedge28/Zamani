@@ -497,3 +497,13 @@ surfaceCodeDecl : 'surface' 'code' ident '{' surfaceCodeProp* '}' ;
 surfaceCodeProp : ( 'dimension' | 'distance' | 'logical' 'qubit' ) '(' (ident | number) ')' ';' ;
 parityCheck : 'parity' 'check' ident ';' ;
 logicalQubitDecl : 'logical' 'qubit' ident ';' ;
+
+softwareGenomeDecl : 'software' 'genome' ident '{' genomeItem* '}' ;
+genomeItem : geneDecl | mutationDecl | crossoverDecl ;
+geneDecl : 'gene' ident '(' ident ')' '{' genomeProp* '}' ;
+genomeProp : ( 'expression' | 'mutable' | 'weight' ) '(' (ident | number | BOOLEAN) ')' ';' ;
+mutationDecl : 'mutation' '{' statement* '}' ;
+crossoverDecl : 'crossover' '(' ident ')' '{' statement* '}' ;
+
+selfDocDecl : 'self' 'document' ident '{' selfDocProp* '}' ;
+selfDocProp : ( 'format' | 'output' | 'scope' ) '(' string ')' ';' ;
