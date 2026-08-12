@@ -79,15 +79,32 @@ pub fn shutdown_omniversal_simulation() {
 /// A higher-level, "omniversal" digital-twin simulation engine that wraps the
 /// core `SimEngine` for cross-domain (physical + informational) scenario
 /// testing.
+use crate::runtime::mts::MtsRuntime;
+use crate::runtime::universal_runtime::RealitySynthesizer;
+
 pub struct OmniversalSimulationEngine {
     pub engine: SimEngine,
+    pub timeline_mgr: MtsRuntime,
+    pub synthesizer: RealitySynthesizer,
 }
 
 impl OmniversalSimulationEngine {
     pub fn new() -> Self {
         OmniversalSimulationEngine {
             engine: SimEngine::new(SimMode::Physics, 1.0),
+            timeline_mgr: MtsRuntime::new(),
+            synthesizer: RealitySynthesizer::new(),
         }
+    }
+
+    pub fn fork_simulation(&mut self, timeline_name: &str) {
+        println!("[Sim] Forking simulation into new timeline: '{}'", timeline_name);
+        self.timeline_mgr.fork_timeline(1, timeline_name.into(), 100).ok();
+    }
+
+    pub fn materialize_reality(&mut self) {
+        println!("[Sim] Materializing simulated reality substrate...");
+        self.synthesizer.materialize_simulation("Omniversal_Nexus_Alpha");
     }
 }
 

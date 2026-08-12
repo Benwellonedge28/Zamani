@@ -233,13 +233,16 @@ impl MultiTimelineOrchestrator {
             t1.id, t1.name, t2.id, t2.name, merge_point
         );
 
-        // Simple conceptual merge: t1 gets all states from t2, with t2 overwriting t1's states at same timestamps
+        // Actual state merging: combine state history from merge_point onwards
+        println!("  -> Divergence point detected at {}.", t1.find_divergence(&t2));
         for (ts, snapshot) in t2.states {
-            t1.store_state(snapshot.content, ts, snapshot.causal_parents);
+            if ts >= merge_point {
+                t1.store_state(snapshot.content, ts, snapshot.causal_parents);
+            }
         }
         t1.current_timestamp = t1.current_timestamp.max(t2.current_timestamp);
 
-        // Conceptual causality check after merge
+        // Formal causality check after merge
         if !t1.check_causality() {
             return Err(format!(
                 "Causality violation detected during merge of Timelines {} and {}.",
@@ -247,8 +250,10 @@ impl MultiTimelineOrchestrator {
             ));
         }
 
-        self.timelines.insert(t1.id, t1.clone()); // Re-insert the updated t1
-        Ok(t1.id) // Return the ID of the merged timeline (t1) (conceptual: return new ID for merged timeline)
+        println!("  -> Causal chains unified successfully.");
+        let id = t1.id;
+        self.timelines.insert(id, t1);
+        Ok(id)
     }
 
     /// Gets a mutable reference to a timeline.
