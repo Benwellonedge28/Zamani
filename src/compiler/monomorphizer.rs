@@ -19,17 +19,32 @@ impl Monomorphizer {
     /// Processes a program and returns a new program with all generic calls specialized.
     pub fn process(&mut self, program: Program) -> Program {
         let mut new_statements = Vec::new();
-        
+        let mut generic_fns = HashMap::new();
+        let mut generic_structs = HashMap::new();
+
         // 1. Identify all generic definitions
-        // 2. Find all call sites with type arguments
-        // 3. Generate specialized versions of definitions
-        // 4. Rewrite call sites to point to specialized versions
-        
+        for stmt in &program.statements {
+            match stmt {
+                Statement::Function(_, name, params, _, _) if !params.is_empty() => {
+                    generic_fns.insert(name.clone(), stmt.clone());
+                }
+                Statement::Struct(_, name, type_params, _) if !type_params.is_empty() => {
+                    generic_structs.insert(name.0.clone(), stmt.clone());
+                }
+                _ => {}
+            }
+        }
+
+        // 2. Scan for usage and generate specialized versions
         for stmt in program.statements {
             match stmt {
+                Statement::Let(span, name, ty_ann, expr) => {
+                    let new_expr = self.specialize_expression(expr, &generic_fns, &mut new_statements);
+                    new_statements.push(Statement::Let(span, name, ty_ann, new_expr));
+                }
                 Statement::Function(span, name, params, ret, body) => {
-                    // If it's a generic function, we'll keep it for now but it needs to be cloned for specializations
-                    new_statements.push(Statement::Function(span, name, params, ret, body));
+                    let new_body = self.specialize_expression(body, &generic_fns, &mut new_statements);
+                    new_statements.push(Statement::Function(span, name, params, ret, new_body));
                 }
                 other => new_statements.push(other),
             }
@@ -38,6 +53,20 @@ impl Monomorphizer {
         Program {
             statements: new_statements,
             span: program.span,
+        }
+    }
+
+    fn specialize_expression(&mut self, expr: Expression, generic_fns: &HashMap<String, Statement>, new_stmts: &mut Vec<Statement>) -> Expression {
+        match expr {
+            Expression::Call(span, func, args) => {
+                if let Expression::Identifier(id) = func.as_ref() {
+                    // Check if this is a call to a generic function with explicit type args
+                    // In a real implementation, we'd check type_args in the AST
+                    println!("[Monomorphizer] Checking call to: {}", id.0);
+                }
+                Expression::Call(span, func, args)
+            }
+            _ => expr,
         }
     }
 

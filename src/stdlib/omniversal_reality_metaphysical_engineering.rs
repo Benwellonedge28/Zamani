@@ -34,13 +34,23 @@ pub struct ManipResult {
 pub struct OrsmEngine {
     pub manipulations: u64,
     pub ethical_blocks: u64,
+    pub law_overrides: std::collections::HashMap<String, String>,
 }
 impl OrsmEngine {
     pub fn new() -> Self {
         OrsmEngine {
             manipulations: 0,
             ethical_blocks: 0,
+            law_overrides: std::collections::HashMap::new(),
         }
+    }
+    pub fn override_law(&mut self, law: &str, new_definition: &str) {
+        println!("[ORSME] Overriding physical law '{}' with new definition.", law);
+        self.law_overrides.insert(law.into(), new_definition.into());
+    }
+    pub fn stabilize_reality(&self) -> bool {
+        println!("[ORSME] Stabilizing metaphysical substrate...");
+        true
     }
     pub fn apply(&mut self, m: RealityManip) -> ManipResult {
         self.manipulations += 1;

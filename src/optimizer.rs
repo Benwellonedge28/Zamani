@@ -350,21 +350,27 @@ impl Optimizer {
 
     fn cse(&mut self, func: &mut IrFunction) {
         let mut seen: HashMap<String, IrValue> = HashMap::new();
-        for inst in &mut func.body {
-            let key = cse_key(inst);
+        let mut i = 0;
+        while i < func.body.len() {
+            let key = cse_key(&func.body[i]);
             if let Some(key_str) = key {
                 if let Some(existing) = seen.get(&key_str) {
-                    if let Some(dest) = inst_dest(inst) {
-                        *inst = IrInstruction::Assign(dest, existing.clone());
+                    if let Some(dest) = inst_dest(&func.body[i]) {
+                        println!("[Optimizer] CSE: Replacing redundant computation of {}", key_str);
+                        func.body[i] = IrInstruction::Assign(dest, existing.clone());
                         self.stats.cse_eliminations += 1;
-                        continue;
                     }
                 } else {
-                    if let Some(dest) = inst_dest(inst) {
+                    if let Some(dest) = inst_dest(&func.body[i]) {
                         seen.insert(key_str, IrValue::Reg(dest));
                     }
                 }
             }
+            // Clear 'seen' if we hit a label or call (potential side effects/aliasing)
+            if matches!(func.body[i], IrInstruction::Label(_) | IrInstruction::Call(..)) {
+                seen.clear();
+            }
+            i += 1;
         }
     }
 
