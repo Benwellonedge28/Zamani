@@ -73,6 +73,11 @@ pub mod bio_ion_channel;
 pub mod gravitational_sensing;
 pub mod memristive_fabric;
 pub mod molecular_fpga;
+pub mod phononic_logic;
+pub mod hardware_obfuscation;
+pub mod microfluidic_cooling;
+pub mod puf_backend;
+pub mod relativistic_clock;
 
 pub use verilog::VerilogBackend;
 pub use vhdl::VhdlBackend;
