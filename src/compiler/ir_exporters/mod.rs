@@ -1,5 +1,5 @@
 //! Zamani Universal IR Exporters Registry
-//! Exposes 75 multi-IR backends across systems, AI, functional, VM, hardware, and domain-specific targets.
+//! Exposes exactly 100 multi-IR backends across systems, AI, functional, VM, hardware, verification, and domain-specific targets.
 
 pub mod llvm_exporter;
 pub mod qir_exporter;
@@ -74,6 +74,31 @@ pub mod svg_exporter;
 pub mod gltf_exporter;
 pub mod openscad_exporter;
 pub mod faust_exporter;
+pub mod glow_exporter;
+pub mod xnnpack_exporter;
+pub mod snpe_exporter;
+pub mod nnvm_exporter;
+pub mod poplar_exporter;
+pub mod cobol_ir_exporter;
+pub mod fortran_ir_exporter;
+pub mod pli_exporter;
+pub mod diana_exporter;
+pub mod pcode_exporter;
+pub mod ahdl_exporter;
+pub mod palasm_exporter;
+pub mod abel_exporter;
+pub mod cupl_exporter;
+pub mod verilog_a_exporter;
+pub mod why3_exporter;
+pub mod boogie_exporter;
+pub mod dafny_exporter;
+pub mod coq_gallina_exporter;
+pub mod lean_exporter;
+pub mod lilypond_exporter;
+pub mod povray_exporter;
+pub mod vrml_exporter;
+pub mod x3d_exporter;
+pub mod step_exporter;
 
 pub use llvm_exporter::LlvmIrExporter;
 pub use qir_exporter::QirExporter;
@@ -148,3 +173,28 @@ pub use svg_exporter::SvgExporter;
 pub use gltf_exporter::GltfExporter;
 pub use openscad_exporter::OpenScadExporter;
 pub use faust_exporter::FaustExporter;
+pub use glow_exporter::GlowExporter;
+pub use xnnpack_exporter::XnnpackExporter;
+pub use snpe_exporter::SnpeExporter;
+pub use nnvm_exporter::NnvmExporter;
+pub use poplar_exporter::PoplarExporter;
+pub use cobol_ir_exporter::CobolIrExporter;
+pub use fortran_ir_exporter::FortranIrExporter;
+pub use pli_exporter::PliExporter;
+pub use diana_exporter::DianaExporter;
+pub use pcode_exporter::PCodeExporter;
+pub use ahdl_exporter::AhdlExporter;
+pub use palasm_exporter::PalasmExporter;
+pub use abel_exporter::AbelExporter;
+pub use cupl_exporter::CuplExporter;
+pub use verilog_a_exporter::VerilogAExporter;
+pub use why3_exporter::Why3Exporter;
+pub use boogie_exporter::BoogieExporter;
+pub use dafny_exporter::DafnyExporter;
+pub use coq_gallina_exporter::CoqGallinaExporter;
+pub use lean_exporter::LeanExporter;
+pub use lilypond_exporter::LilyPondExporter;
+pub use povray_exporter::PovRayExporter;
+pub use vrml_exporter::VrmlExporter;
+pub use x3d_exporter::X3dExporter;
+pub use step_exporter::StepExporter;
