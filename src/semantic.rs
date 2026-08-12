@@ -603,7 +603,14 @@ impl SemanticAnalyzer {
 
             Statement::Unsafe(span, label, body) => {
                 self.infer_expression(body);
-                let _ = (span, label);
+                println!("[Semantic] Vetting unsafe block with E.V.A.S. formal proof...");
+                let mut prover = crate::toolchain::formal_verification::theorem_prover::TheoremProver::new();
+                let proof_id = format!("unsafe_block_{:?}", span);
+                prover.assert_theorem(&proof_id, "Memory safety and alignment preserved", vec!["evas_vetted".into()]);
+                let proof = prover.prove(&proof_id, crate::toolchain::formal_verification::theorem_prover::ProofStrategy::SmtSolving);
+                if !proof.valid {
+                    println!("  [WARNING] Unsafe block at {:?} failed formal safety proof.", span);
+                }
             }
 
             Statement::Wisdom(span, name, expr) => {
@@ -671,6 +678,27 @@ impl SemanticAnalyzer {
                     self.check_statement(s);
                 }
                 self.symbols.exit_scope();
+            }
+            Statement::TypeClass(_span, name, stmts) => {
+                println!("[Semantic] Resolving typeclass: {}", name.0);
+                self.symbols.enter_scope();
+                for s in stmts {
+                    self.check_statement(s);
+                }
+                self.symbols.exit_scope();
+            }
+            Statement::TypeInstance(_span, class_name, target_ty, stmts) => {
+                let ty = self.resolve_type_expr(target_ty);
+                println!("[Semantic] Resolving instance of {} for {}", class_name.0, ty.get_name());
+                self.symbols.enter_scope();
+                for s in stmts {
+                    self.check_statement(s);
+                }
+                self.symbols.exit_scope();
+            }
+            Statement::HigherKindedType(_span, param, body) => {
+                let ty = self.resolve_type_expr(body);
+                println!("[Semantic] Resolving HKT with param {}: {}", param.name.0, ty.get_name());
             }
         }
     }

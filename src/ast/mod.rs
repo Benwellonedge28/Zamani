@@ -78,6 +78,9 @@ pub enum Statement {
     OmniversalBioNano(Span, String, Vec<Statement>),
     OmniversalReality(Span, String, Vec<Statement>),
     OmniversalNlp(Span, String, Vec<Statement>),
+    TypeClass(Span, Identifier, Vec<Statement>),
+    TypeInstance(Span, Identifier, TypeExpr, Vec<Statement>),
+    HigherKindedType(Span, TypeParameter, TypeExpr),
 }
 
 // ─── Items within definitions ────────────────────────────────────────────────
@@ -421,6 +424,7 @@ pub enum TypeExpr {
     Pi(String, Box<TypeExpr>, Box<TypeExpr>),
     Sigma(String, Box<TypeExpr>, Box<TypeExpr>),
     Identity(Box<Expression>, Box<Expression>),
+    Hkt(String, Box<TypeExpr>),
 }
 
 impl TypeExpr {
@@ -513,6 +517,7 @@ pub enum Type {
     Pi(String, Box<Type>, Box<Type>),
     Sigma(String, Box<Type>, Box<Type>),
     Identity(Box<Expression>, Box<Expression>),
+    Hkt(String, Box<Type>),
     Unknown,
 }
 
