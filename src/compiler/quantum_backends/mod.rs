@@ -1,4 +1,4 @@
-//! Zamani Compiler — Quantum Computing Architecture Backends (Complete Historical & Modern Roster)
+//! Zamani Compiler — Quantum Computing Architecture Backends (Complete 36-Target Roster)
 
 pub mod feynman_simulator;
 pub mod benioff_machine;
@@ -21,6 +21,22 @@ pub mod quera;
 pub mod intel_spin;
 pub mod ibm_superconducting;
 
+// Expansion V2 Modules
+pub mod blackbird;
+pub mod alice_bob;
+pub mod nord_quantique;
+pub mod topological_qc;
+pub mod mbqc;
+pub mod loqc;
+pub mod manin_automata;
+pub mod jaqal;
+pub mod cqasm;
+pub mod scaffold;
+pub mod pasqal;
+pub mod oqc;
+pub mod aqt;
+pub mod xanadu_x8;
+
 pub use feynman_simulator::FeynmanSimulatorBackend;
 pub use benioff_machine::BenioffMachineBackend;
 pub use deutsch_computer::DeutschComputerBackend;
@@ -41,3 +57,18 @@ pub use quantinuum::QuantinuumBackend;
 pub use quera::QuEraBackend;
 pub use intel_spin::IntelSpinBackend;
 pub use ibm_superconducting::IbmSuperconductingBackend;
+
+pub use blackbird::BlackbirdBackend;
+pub use alice_bob::AliceBobBackend;
+pub use nord_quantique::NordQuantiqueBackend;
+pub use topological_qc::TopologicalQcBackend;
+pub use mbqc::MbqcBackend;
+pub use loqc::LoqcBackend;
+pub use manin_automata::ManinAutomataBackend;
+pub use jaqal::JaqalBackend;
+pub use cqasm::CQasmBackend;
+pub use scaffold::ScaffoldBackend;
+pub use pasqal::PasqalBackend;
+pub use oqc::OqcBackend;
+pub use aqt::AqtBackend;
+pub use xanadu_x8::XanaduX8Backend;
