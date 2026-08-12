@@ -66,6 +66,7 @@ pub mod omniversal_governance_safety;
 pub mod omniversal_hallucination_rag;
 pub mod omniversal_knowledge_graph;
 pub mod omniversal_legal_ethics;
+pub mod omniversal_neural_substrate;
 pub mod omniversal_media_synthesis;
 pub mod omniversal_self_adaptation;
 pub mod omniversal_self_discovery;
@@ -153,6 +154,7 @@ pub fn initialize_stdlib() {
     omniversal_generative_ai::init_omniversal_generative_ai();
     omniversal_governance_safety::init_omniversal_governance_safety();
     omniversal_knowledge_graph::init_omniversal_knowledge_graph();
+    omniversal_neural_substrate::init_omniversal_neural_substrate();
     omniversal_superintelligence::init_omniversal_superintelligence();
     omniversal_commerce::init_omniversal_commerce();
     omniversal_media_synthesis::init_omniversal_media_synthesis();
@@ -211,6 +213,7 @@ pub fn shutdown_stdlib() {
     omniversal_generative_ai::shutdown_omniversal_generative_ai();
     omniversal_governance_safety::shutdown_omniversal_governance_safety();
     omniversal_knowledge_graph::shutdown_omniversal_knowledge_graph();
+    omniversal_neural_substrate::shutdown_omniversal_neural_substrate();
     omniversal_superintelligence::shutdown_omniversal_superintelligence();
     omniversal_commerce::shutdown_omniversal_commerce();
     omniversal_media_synthesis::shutdown_omniversal_media_synthesis();
