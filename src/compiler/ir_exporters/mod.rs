@@ -1,5 +1,5 @@
 //! Zamani Universal IR Exporters Registry
-//! Exposes multi-IR backends (LLVM, QIR, MLIR, SPIR-V, FIRRTL, Wasm, HLO, ONNX, GIMPLE, Triton, P4, Verilog-AMS, BIPL, CIL, Java, eBPF, TVM, TorchScript, Quil, BLIF, EDIF, ChASM).
+//! Exposes 35+ multi-IR backends (LLVM, QIR, MLIR, SPIR-V, FIRRTL, Wasm, HLO, ONNX, GIMPLE, Triton, P4, Verilog-AMS, BIPL, CIL, Java, eBPF, TVM, TorchScript, Quil, BLIF, EDIF, ChASM, Cranelift, SIL, TensorRT, CoreML, OpenVINO, NNEF, SMV, VPI, GCode, PostScript, DOT, MIDI).
 
 pub mod llvm_exporter;
 pub mod qir_exporter;
@@ -23,6 +23,18 @@ pub mod quil_ir_exporter;
 pub mod blif_exporter;
 pub mod edif_exporter;
 pub mod chasm_exporter;
+pub mod cranelift_exporter;
+pub mod swift_sil_exporter;
+pub mod tensorrt_exporter;
+pub mod coreml_exporter;
+pub mod openvino_exporter;
+pub mod nnef_exporter;
+pub mod smv_exporter;
+pub mod vpi_exporter;
+pub mod gcode_exporter;
+pub mod postscript_exporter;
+pub mod dot_exporter;
+pub mod midi_exporter;
 
 pub use llvm_exporter::LlvmIrExporter;
 pub use qir_exporter::QirExporter;
@@ -46,3 +58,15 @@ pub use quil_ir_exporter::QuilIrExporter;
 pub use blif_exporter::BlifExporter;
 pub use edif_exporter::EdifExporter;
 pub use chasm_exporter::ChasmExporter;
+pub use cranelift_exporter::CraneliftExporter;
+pub use swift_sil_exporter::SwiftSilExporter;
+pub use tensorrt_exporter::TensorRtExporter;
+pub use coreml_exporter::CoreMlExporter;
+pub use openvino_exporter::OpenVinoExporter;
+pub use nnef_exporter::NnefExporter;
+pub use smv_exporter::SmvExporter;
+pub use vpi_exporter::VpiExporter;
+pub use gcode_exporter::GCodeExporter;
+pub use postscript_exporter::PostScriptExporter;
+pub use dot_exporter::DotExporter;
+pub use midi_exporter::MidiExporter;
