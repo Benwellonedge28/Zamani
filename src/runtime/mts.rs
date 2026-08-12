@@ -338,13 +338,14 @@ pub fn store_timeline_state(
 }
 
 /// Conceptual function to synchronize (merge) two timeline slices.
-pub fn synchronize_timelines(
+    pub fn synchronize_timelines(
     slice1_id: TimelineId,
     slice2_id: TimelineId,
     merge_point: Timestamp,
 ) -> Result<TimelineId, String> {
     if let Some(orchestrator_arc) = unsafe { MTS_ORCHESTRATOR.as_ref() } {
         let mut orchestrator = orchestrator_arc.lock().unwrap();
+        println!("[MTS] Synchronizing timelines {} and {} at point {}.", slice1_id, slice2_id, merge_point);
         orchestrator.merge_timelines(slice1_id, slice2_id, merge_point)
     } else {
         Err("MTS Runtime not initialized.".to_string())

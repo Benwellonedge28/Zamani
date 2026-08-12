@@ -33,12 +33,29 @@ impl Quota {
 
 pub struct ResourceManager {
     quotas: HashMap<String, Quota>,
+    pub thermal_throttling: bool,
+    pub conservation_mode: bool,
 }
 impl ResourceManager {
     pub fn new() -> Self {
         ResourceManager {
             quotas: HashMap::new(),
+            thermal_throttling: false,
+            conservation_mode: false,
         }
+    }
+    pub fn optimize_thermal(&mut self, current_temp: f32) {
+        println!("[Resource] Optimizing thermal profile. Current temp: {}C", current_temp);
+        if current_temp > 85.0 {
+            println!("  -> Thermal throttling ACTIVATED.");
+            self.thermal_throttling = true;
+        } else {
+            self.thermal_throttling = false;
+        }
+    }
+    pub fn activate_conservation(&mut self) {
+        println!("[Resource] Activating system-wide resource conservation mode.");
+        self.conservation_mode = true;
     }
     pub fn register(&mut self, name: &str, resource: ResourceType, limit: u64) {
         self.quotas.insert(
