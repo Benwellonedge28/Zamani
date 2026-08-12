@@ -1,4 +1,4 @@
-//! Zamani Compiler — Quantum Computing Architecture Backends (Complete 36-Target Roster)
+//! Zamani Compiler — Quantum Computing Architecture Backends (Complete 53-Target Roster)
 
 pub mod feynman_simulator;
 pub mod benioff_machine;
@@ -20,8 +20,6 @@ pub mod quantinuum;
 pub mod quera;
 pub mod intel_spin;
 pub mod ibm_superconducting;
-
-// Expansion V2 Modules
 pub mod blackbird;
 pub mod alice_bob;
 pub mod nord_quantique;
@@ -36,6 +34,24 @@ pub mod pasqal;
 pub mod oqc;
 pub mod aqt;
 pub mod xanadu_x8;
+
+// Expansion V3 Modules
+pub mod silq;
+pub mod quipper;
+pub mod qiskit;
+pub mod forest;
+pub mod yao;
+pub mod blueqat;
+pub mod qibo;
+pub mod myqlm;
+pub mod origin_quantum;
+pub mod iqm;
+pub mod psiquantum;
+pub mod spinq;
+pub mod terra_quantum;
+pub mod anyon_systems;
+pub mod bernstein_vazirani;
+pub mod simon_algorithm;
 
 pub use feynman_simulator::FeynmanSimulatorBackend;
 pub use benioff_machine::BenioffMachineBackend;
@@ -57,7 +73,6 @@ pub use quantinuum::QuantinuumBackend;
 pub use quera::QuEraBackend;
 pub use intel_spin::IntelSpinBackend;
 pub use ibm_superconducting::IbmSuperconductingBackend;
-
 pub use blackbird::BlackbirdBackend;
 pub use alice_bob::AliceBobBackend;
 pub use nord_quantique::NordQuantiqueBackend;
@@ -72,3 +87,20 @@ pub use pasqal::PasqalBackend;
 pub use oqc::OqcBackend;
 pub use aqt::AqtBackend;
 pub use xanadu_x8::XanaduX8Backend;
+
+pub use silq::SilqBackend;
+pub use quipper::QuipperBackend;
+pub use qiskit::QiskitBackend;
+pub use forest::ForestBackend;
+pub use yao::YaoBackend;
+pub use blueqat::BlueqatBackend;
+pub use qibo::QiboBackend;
+pub use myqlm::MyQlmBackend;
+pub use origin_quantum::OriginQuantumBackend;
+pub use iqm::IqmBackend;
+pub use psiquantum::PsiQuantumBackend;
+pub use spinq::SpinQBackend;
+pub use terra_quantum::TerraQuantumBackend;
+pub use anyon_systems::AnyonSystemsBackend;
+pub use bernstein_vazirani::BernsteinVaziraniBackend;
+pub use simon_algorithm::SimonAlgorithmBackend;
