@@ -1,0 +1,46 @@
+graph TD
+    subgraph Legend
+        LD[Data Qubit]
+        LX[X-Ancilla]
+        LZ[Z-Ancilla]
+    end
+
+    subgraph SurfaceCodePatch
+        D1[D] --- X1[X] --- D2[D] --- X2[X] --- D3[D]
+        Z1[Z] --- D4[D] --- Z2[Z] --- D5[D] --- Z3[Z]
+        D6[D] --- X3[X] --- D7[D] --- X4[X] --- D8[D]
+        Z4[Z] --- D9[D] --- Z5[Z] --- D10[D] --- Z6[Z]
+        D11[D] --- X5[X] --- D12[D] --- X6[X] --- D13[D]
+        
+        D1 --- Z1
+        X1 --- D4
+        D2 --- Z2
+        X2 --- D5
+        D3 --- Z3
+        
+        Z1 --- D6
+        D4 --- X3
+        Z2 --- D7
+        D5 --- X4
+        Z3 --- D8
+        
+        D6 --- Z4
+        X3 --- D9
+        D7 --- Z5
+        X4 --- D10
+        D8 --- Z6
+        
+        Z4 --- D11
+        D9 --- X5
+        Z5 --- D12
+        D10 --- X6
+        Z6 --- D13
+    end
+
+    classDef data fill:#66b3ff,stroke:#333,stroke-width:2px;
+    classDef x_ancilla fill:#ff9999,stroke:#333,stroke-width:2px;
+    classDef z_ancilla fill:#99ff99,stroke:#333,stroke-width:2px;
+
+    class D1,D2,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,LD data;
+    class X1,X2,X3,X4,X5,X6,LX x_ancilla;
+    class Z1,Z2,Z3,Z4,Z5,Z6,LZ z_ancilla;

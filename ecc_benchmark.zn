@@ -1,10 +1,10 @@
 // Zamani Quantum Error Correction Benchmark
-// Evaluating surface code patches and fault-tolerant logical qubits
+// Scaling analysis: Distance-5 surface code patch for enhanced fault tolerance
 
-omniversal simulate FaultTolerantQPU {
-    surface code SurfacePatch7x7 {
-        dimension(7);
-        distance(3);
+omniversal simulate FaultTolerantQPU_D5 {
+    surface code SurfacePatch9x9 {
+        dimension(9);
+        distance(5);
         logical qubit L1;
         logical qubit L2;
     }
@@ -18,5 +18,5 @@ omniversal simulate FaultTolerantQPU {
 }
 
 fn main() {
-    println("Surface Code Simulation Initialized.");
+    println("Distance-5 Surface Code Simulation Initialized.");
 }

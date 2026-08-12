@@ -22,26 +22,40 @@ impl DistributedExecutor {
 
     /// Emit Verilog code for hardware acceleration blocks (HDL modules)
     pub fn synthesize_verilog(module_name: &str, inputs: &[&str], outputs: &[&str]) -> String {
-        format!(
-            r#"// Auto-generated Verilog Synthesis by Zamani HDL Compiler
-module {}(
-    input clk,
-    input rst,
-    input [{}:0] in_data,
-    output reg [{}:0] out_data
-);
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            out_data <= 0;
-        end else begin
-            out_data <= in_data;
-        end
-    end
-endmodule
-"#,
-            module_name,
-            inputs.len() * 8 - 1,
-            outputs.len() * 8 - 1
-        )
+        let mut verilog = format!("// Zamani-Generated RTL: {}\n", module_name);
+        verilog.push_str(&format!("module {} (\n  input clk,\n  input rst_n,\n", module_name));
+        
+        for input in inputs {
+            verilog.push_str(&format!("  input [31:0] {},\n", input));
+        }
+        for output in outputs {
+            verilog.push_str(&format!("  output reg [31:0] {},\n", output));
+        }
+        
+        verilog.push_str(");\n\n  always @(posedge clk or negedge rst_n) begin\n");
+        verilog.push_str("    if (!rst_n) begin\n");
+        
+        for output in outputs {
+            verilog.push_str(&format!("      {} <= 32'h0;\n", output));
+        }
+        
+        verilog.push_str("    end else begin\n      // Functional logic lowering...\n");
+        verilog.push_str("    end\n  end\n\nendmodule\n");
+        
+        verilog
+    }
+
+    /// Synthesize HDL modules from AST statements
+    pub fn synthesize_from_ast(module_name: &str, stmts: &[crate::ast::Statement]) -> String {
+        let mut inputs = Vec::new();
+        let mut outputs = Vec::new();
+        
+        for s in stmts {
+            if let crate::ast::Statement::Let(_, name, _, _) = s {
+                outputs.push(name.as_str());
+            }
+        }
+        
+        Self::synthesize_verilog(module_name, &inputs, &outputs)
     }
 }

@@ -21,12 +21,23 @@ pub enum QubitState {
 pub(crate) struct AllocatedQubit {
     pub(crate) state: QubitState,
     pub(crate) entangled_with: Vec<usize>,
+    pub(crate) decoherence_time: f64, // T1 time in microseconds
+}
+
+/// Parameters for environmental noise simulation.
+#[derive(Debug, Clone, Default)]
+pub struct NoiseModel {
+    pub depolarizing_error: f64,
+    pub dephasing_error: f64,
+    pub t1_time: f64,
+    pub t2_time: f64,
 }
 
 /// A conceptual quantum processor that tracks allocated qubits.
 pub struct QuantumProcessor {
     pub(crate) allocated_qubits: HashMap<usize, AllocatedQubit>,
     pub(crate) next_qubit_id: usize,
+    pub(crate) active_noise_model: Option<NoiseModel>,
 }
 
 impl QuantumProcessor {
@@ -34,7 +45,12 @@ impl QuantumProcessor {
         QuantumProcessor {
             allocated_qubits: HashMap::new(),
             next_qubit_id: 0,
+            active_noise_model: None,
         }
+    }
+
+    pub fn set_noise_model(&mut self, model: NoiseModel) {
+        self.active_noise_model = Some(model);
     }
 
     pub fn allocate_qubit(&mut self) -> usize {
@@ -45,6 +61,7 @@ impl QuantumProcessor {
             AllocatedQubit {
                 state: QubitState::Zero,
                 entangled_with: Vec::new(),
+                decoherence_time: 100.0, // Default 100us
             },
         );
         id

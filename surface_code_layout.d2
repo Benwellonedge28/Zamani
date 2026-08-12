@@ -1,0 +1,60 @@
+direction: right
+
+Legend: {
+  shape: package
+  Data: Data Qubit {
+    style: {
+      fill: "#66b3ff"
+    }
+  }
+  X_Ancilla: X-Stabilizer (Measure-X) {
+    style: {
+      fill: "#ff9999"
+    }
+  }
+  Z_Ancilla: Z-Stabilizer (Measure-Z) {
+    style: {
+      fill: "#99ff99"
+    }
+  }
+}
+
+SurfaceCodePatch: {
+  grid-columns: 5
+  
+  D1: "D" { style.fill: "#66b3ff" }
+  X1: "X" { style.fill: "#ff9999" }
+  D2: "D" { style.fill: "#66b3ff" }
+  X2: "X" { style.fill: "#ff9999" }
+  D3: "D" { style.fill: "#66b3ff" }
+
+  Z1: "Z" { style.fill: "#99ff99" }
+  D4: "D" { style.fill: "#66b3ff" }
+  Z2: "Z" { style.fill: "#99ff99" }
+  D5: "D" { style.fill: "#66b3ff" }
+  Z3: "Z" { style.fill: "#99ff99" }
+
+  D6: "D" { style.fill: "#66b3ff" }
+  X3: "X" { style.fill: "#ff9999" }
+  D7: "D" { style.fill: "#66b3ff" }
+  X4: "X" { style.fill: "#ff9999" }
+  D8: "D" { style.fill: "#66b3ff" }
+
+  Z4: "Z" { style.fill: "#99ff99" }
+  D9: "D" { style.fill: "#66b3ff" }
+  Z5: "Z" { style.fill: "#99ff99" }
+  D10: "D" { style.fill: "#66b3ff" }
+  Z6: "Z" { style.fill: "#99ff99" }
+
+  D11: "D" { style.fill: "#66b3ff" }
+  X5: "X" { style.fill: "#ff9999" }
+  D12: "D" { style.fill: "#66b3ff" }
+  X6: "X" { style.fill: "#ff9999" }
+  D13: "D" { style.fill: "#66b3ff" }
+}
+
+# Connections representing stabilizer interactions
+SurfaceCodePatch.D1 -> SurfaceCodePatch.X1
+SurfaceCodePatch.D2 -> SurfaceCodePatch.X1
+SurfaceCodePatch.D1 -> SurfaceCodePatch.Z1
+SurfaceCodePatch.D4 -> SurfaceCodePatch.Z1

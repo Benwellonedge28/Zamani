@@ -900,9 +900,21 @@ impl IrGenerator {
             }
 
             Statement::SurfaceCode(_, name, props) => {
-                func.push(IrInstruction::Comment(format!("Surface Code Patch: {} with properties {:?}", name, props)));
-                let scheduler = crate::quantum::stabilizer_scheduler::StabilizerScheduler::new(name.clone(), 3);
-                scheduler.schedule_rounds(func, 2);
+                let mut distance = 3;
+                let mut dimension = 5;
+                for (key, val) in props {
+                    match key.as_str() {
+                        "distance" => if let Ok(d) = val.parse::<usize>() { distance = d; },
+                        "dimension" => if let Ok(d) = val.parse::<usize>() { dimension = d; },
+                        _ => {}
+                    }
+                }
+                func.push(IrInstruction::Comment(format!(
+                    "Surface Code Patch: {} (d={}, dim={})",
+                    name, distance, dimension
+                )));
+                let scheduler = crate::quantum::stabilizer_scheduler::StabilizerScheduler::new(name.clone(), distance);
+                scheduler.schedule_rounds(func, (distance + 1) / 2);
             }
 
             Statement::FidelityCheck(_, name) => {

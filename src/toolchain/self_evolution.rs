@@ -124,9 +124,23 @@ impl SelfEvolutionEngine {
         Ok(())
     }
 
-    /// Applies an approved proposal to the runtime.
-    pub fn apply_proposal(&self, _proposal: &EvolutionProposal) -> Result<(), String> {
-        println!("[SelfEvolution] Applying approved proposal.");
+    /// Applies an approved proposal to the AST.
+    /// This simulates the compiler rewriting its own logic.
+    pub fn apply_proposal(&self, proposal: &EvolutionProposal, program: &mut crate::ast::Program) -> Result<(), String> {
+        println!("[SelfEvolution] Applying approved proposal to AST.");
+        
+        for patch_data in &proposal.data {
+            if patch_data.contains("optimize_loops") {
+                // Simulated AST transformation: Inject an optimization hint attribute
+                program.statements.insert(0, crate::ast::Statement::Wisdom(
+                    crate::source_map::Span::default(),
+                    "SelfOptimizationHint".into(),
+                    crate::ast::Expression::Literal(crate::ast::Literal::String("parallel_lowering_active".into(), crate::source_map::Span::default()))
+                ));
+            }
+        }
+        
+        println!("[SelfEvolution] AST transformation complete.");
         Ok(())
     }
 }

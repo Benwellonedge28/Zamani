@@ -1,0 +1,22 @@
+// Zamani QEC Integration Test
+// Verifies that surface code patches correctly trigger stabilizer scheduling in the IR
+
+omniversal simulate QEC_Verification_Sim {
+    // Define a distance-3 surface code patch
+    surface code ValidatorPatch {
+        dimension(5);
+        distance(3);
+        logical qubit LQ1;
+    }
+
+    // A simple circuit that should be wrapped in fault-tolerant checks
+    quantum circuit LogicalH {
+        let q = |0>;
+        H(q);
+        measure(q);
+    }
+}
+
+fn main() {
+    println("QEC Integration Test: Stabilizer Scheduling Check");
+}
