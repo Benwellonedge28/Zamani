@@ -1,5 +1,5 @@
 //! Zamani Universal IR Exporters Registry
-//! Exposes 35+ multi-IR backends (LLVM, QIR, MLIR, SPIR-V, FIRRTL, Wasm, HLO, ONNX, GIMPLE, Triton, P4, Verilog-AMS, BIPL, CIL, Java, eBPF, TVM, TorchScript, Quil, BLIF, EDIF, ChASM, Cranelift, SIL, TensorRT, CoreML, OpenVINO, NNEF, SMV, VPI, GCode, PostScript, DOT, MIDI).
+//! Exposes 50 multi-IR backends (LLVM, QIR, MLIR, SPIR-V, FIRRTL, Wasm, HLO, ONNX, GIMPLE, Triton, P4, Verilog-AMS, BIPL, CIL, Java, eBPF, TVM, TorchScript, Quil, BLIF, EDIF, ChASM, Cranelift, SIL, TensorRT, CoreML, OpenVINO, NNEF, SMV, VPI, GCode, PostScript, DOT, MIDI, DEX, GoSSA, RustMIR, C--, ZMachine, GMachine, STG, Truffle, Lua, Python, EVM, HLS, VhdlAms, OSL, RSL).
 
 pub mod llvm_exporter;
 pub mod qir_exporter;
@@ -35,6 +35,21 @@ pub mod gcode_exporter;
 pub mod postscript_exporter;
 pub mod dot_exporter;
 pub mod midi_exporter;
+pub mod dex_exporter;
+pub mod go_ssa_exporter;
+pub mod rust_mir_exporter;
+pub mod c_minus_minus_exporter;
+pub mod z_machine_exporter;
+pub mod g_machine_exporter;
+pub mod stg_exporter;
+pub mod truffle_exporter;
+pub mod lua_exporter;
+pub mod python_bytecode_exporter;
+pub mod evm_exporter;
+pub mod hls_exporter;
+pub mod vhdl_ams_exporter;
+pub mod osl_exporter;
+pub mod rsl_exporter;
 
 pub use llvm_exporter::LlvmIrExporter;
 pub use qir_exporter::QirExporter;
@@ -70,3 +85,18 @@ pub use gcode_exporter::GCodeExporter;
 pub use postscript_exporter::PostScriptExporter;
 pub use dot_exporter::DotExporter;
 pub use midi_exporter::MidiExporter;
+pub use dex_exporter::DexExporter;
+pub use go_ssa_exporter::GoSsaExporter;
+pub use rust_mir_exporter::RustMirExporter;
+pub use c_minus_minus_exporter::CMinusMinusExporter;
+pub use z_machine_exporter::ZMachineExporter;
+pub use g_machine_exporter::GMachineExporter;
+pub use stg_exporter::StgExporter;
+pub use truffle_exporter::TruffleExporter;
+pub use lua_exporter::LuaVmExporter;
+pub use python_bytecode_exporter::PythonBytecodeExporter;
+pub use evm_exporter::EvmExporter;
+pub use hls_exporter::HlsExporter;
+pub use vhdl_ams_exporter::VhdlAmsExporter;
+pub use osl_exporter::OslExporter;
+pub use rsl_exporter::RslExporter;
