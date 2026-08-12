@@ -418,6 +418,9 @@ pub enum TypeExpr {
     Linear(Box<TypeExpr>),
     Affine(Box<TypeExpr>),
     Temporal(Box<TypeExpr>),
+    Pi(String, Box<TypeExpr>, Box<TypeExpr>),
+    Sigma(String, Box<TypeExpr>, Box<TypeExpr>),
+    Identity(Box<Expression>, Box<Expression>),
 }
 
 impl TypeExpr {
@@ -506,7 +509,10 @@ pub enum Type {
     Result(Box<Type>, Box<Type>),
     Quantum,
     Linear(Box<Type>),
-    Affine(Box<Type>),
+    Temporal(Box<Type>),
+    Pi(String, Box<Type>, Box<Type>),
+    Sigma(String, Box<Type>, Box<Type>),
+    Identity(Box<Expression>, Box<Expression>),
     Unknown,
 }
 

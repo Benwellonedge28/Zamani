@@ -35,7 +35,23 @@ impl EdgeRuntime {
     pub fn run(&self, id: &str, input: &str) -> Option<String> {
         self.agents
             .get(id)
-            .map(|a| format!("[Agent {}] ← {}", a.id, &input[..input.len().min(50)]))
+            .map(|a| {
+                println!("[EdgeRuntime] Running agent {} under constraints.", a.id);
+                format!("[Agent {}] ← {}", a.id, &input[..input.len().min(50)])
+            })
+    }
+    pub fn sync_with_nexus(&self, id: &str) -> Result<(), String> {
+        if self.agents.contains_key(id) {
+            println!("[EdgeRuntime] Synchronizing agent {} with Global Nexus.", id);
+            Ok(())
+        } else {
+            Err(format!("Agent {} not found on device.", id))
+        }
+    }
+    pub fn optimize_power(&self, id: &str) {
+        if let Some(a) = self.agents.get(id) {
+            println!("[EdgeRuntime] Optimizing power for agent {}.", a.id);
+        }
     }
     pub fn count(&self) -> usize {
         self.agents.len()

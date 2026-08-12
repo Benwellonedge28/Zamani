@@ -32,10 +32,14 @@ pub struct HttpResponse {
 
 pub struct WebRouter {
     routes: Vec<Route>,
+    middlewares: Vec<String>,
 }
 impl WebRouter {
     pub fn new() -> Self {
-        WebRouter { routes: Vec::new() }
+        WebRouter { 
+            routes: Vec::new(),
+            middlewares: Vec::new(),
+        }
     }
     pub fn route(&mut self, m: HttpMethod, path: &str, handler: &str) {
         self.routes.push(Route {
@@ -44,7 +48,16 @@ impl WebRouter {
             handler: handler.into(),
         });
     }
+    pub fn use_middleware(&mut self, middleware: &str) {
+        self.middlewares.push(middleware.into());
+    }
+    pub fn serve_static(&self, path: &str, dir: &str) {
+        println!("[WebDev] Serving static files from '{}' at '{}'.", dir, path);
+    }
     pub fn dispatch(&self, req: &HttpRequest) -> Option<&Route> {
+        for mw in &self.middlewares {
+            println!("[WebDev] Running middleware: {}", mw);
+        }
         self.routes
             .iter()
             .find(|r| r.method == req.method && r.path == req.path)

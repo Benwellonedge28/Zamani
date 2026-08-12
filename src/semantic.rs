@@ -1142,6 +1142,20 @@ impl SemanticAnalyzer {
             TypeExpr::Temporal(inner) => {
                 Type::Generic("Temporal".into(), vec![self.resolve_type_expr(inner)])
             }
+            TypeExpr::Pi(name, domain, codomain) => {
+                let dom_ty = self.resolve_type_expr(domain);
+                // Note: Full dependent type resolution requires term-level evaluation
+                let codom_ty = self.resolve_type_expr(codomain);
+                Type::Pi(name.clone(), Box::new(dom_ty), Box::new(codom_ty))
+            }
+            TypeExpr::Sigma(name, domain, codomain) => {
+                let dom_ty = self.resolve_type_expr(domain);
+                let codom_ty = self.resolve_type_expr(codomain);
+                Type::Sigma(name.clone(), Box::new(dom_ty), Box::new(codom_ty))
+            }
+            TypeExpr::Identity(left, right) => {
+                Type::Identity(left.clone(), right.clone())
+            }
         }
     }
 

@@ -67,16 +67,32 @@ impl HyperEvolutionEngine {
         self.generation += 1;
         println!("[HyperEvolution] Evolving Generation {}...", self.generation);
         
-        for v in self.variants.iter_mut() {
-            v.generation = self.generation;
-            // Simulated fitness improvement
-            let mutation = (rand_sim() - 0.5) * self.strategy.mutation_rate;
-            v.fitness_score = (v.fitness_score + mutation).clamp(0.0, 1.0);
-            v.performance_improvement_pct += (v.fitness_score as f32 * 10.0);
+        // 1. Selection (Sort by fitness)
+        self.variants.sort_by(|a, b| b.fitness_score.partial_cmp(&a.fitness_score).unwrap());
+        
+        // 2. Crossover (Breed top 50% to create new bottom 50%)
+        let half = self.variants.len() / 2;
+        for i in 0..half {
+            let parent1 = &self.variants[i];
+            let parent2 = &self.variants[rand_sim_idx(half)];
             
-            if v.fitness_score > 0.9 {
-                v.optimisations.push(format!("opt-gen-{}", self.generation));
+            // New child inherits properties from both parents
+            let mut child = parent1.clone();
+            child.id = self.next_id;
+            self.next_id += 1;
+            child.generation = self.generation;
+            
+            // Mutation
+            let mutation = (rand_sim() - 0.5) * self.strategy.mutation_rate;
+            child.fitness_score = ((parent1.fitness_score + parent2.fitness_score) / 2.0 + mutation).clamp(0.0, 1.0);
+            
+            // Inherit optimizations
+            if rand_sim() > 0.5 {
+                child.optimisations.extend(parent2.optimisations.iter().cloned());
+                child.optimisations.dedup();
             }
+            
+            self.variants[half + i] = child;
         }
         
         self.variants.iter().map(|v| v.fitness_score).sum::<f64>() / self.variants.len() as f64
@@ -121,7 +137,11 @@ impl HyperEvolutionEngine {
 
 /// Simple simulated random number generator.
 fn rand_sim() -> f64 {
-    let mut x = 0.5;
+    let mut x = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as f64;
     x = (x * 1103515245.0 + 12345.0) % 2147483648.0;
     x / 2147483648.0
+}
+
+fn rand_sim_idx(max: usize) -> usize {
+    (rand_sim() * max as f64) as usize
 }

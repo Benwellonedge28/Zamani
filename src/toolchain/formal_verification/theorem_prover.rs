@@ -106,6 +106,22 @@ impl TheoremProver {
     pub fn all_proved(&self) -> bool {
         self.theorems.values().all(|t| t.proved == Some(true))
     }
+
+    /// Prove equivalence of two quantum circuits (simulated ZX-calculus)
+    pub fn prove_circuit_equivalence(&mut self, c1: &str, c2: &str) -> bool {
+        self.calls += 1;
+        println!("[TheoremProver] Proving equivalence: {} <=> {}", c1, c2);
+        // Simulated rule: H . H <=> I
+        let valid = if (c1.contains("H") && c1.contains("H")) && c2 == "Identity" {
+            true
+        } else if c1.contains("XZ") && c2.contains("ZX") {
+            // Simulated rule: X . Z <=> - Z . X
+            true
+        } else {
+            false
+        };
+        valid
+    }
 }
 
 impl Default for TheoremProver {

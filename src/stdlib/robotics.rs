@@ -60,11 +60,13 @@ impl Robotics {
         robot_model: &str,
         state: &RobotState,
     ) -> Result<Map<String, Point>, String> {
-        println!(
-            "[StdLib::Robotics] Solving forward kinematics for model '{}'.",
-            robot_model
-        );
-        Ok(Map::new()) // Dummy result
+        println!("[StdLib::Robotics] Solving forward kinematics for model '{}'.", robot_model);
+        let mut poses = Map::new();
+        // Simulated FK logic: map joint angles to cartesian coordinates
+        for (i, pos) in state.joint_positions.iter().enumerate() {
+            poses.insert(format!("joint_{}", i), Point { x: pos.cos(), y: pos.sin(), z: i as f32 });
+        }
+        Ok(poses)
     }
 
     /// Solves inverse kinematics for a target pose.
@@ -171,7 +173,12 @@ impl SensorFusion {
         imu_data: &RobotState,
     ) -> Result<RobotState, String> {
         println!("[StdLib::Robotics] Updating pose estimate using visual feedback and IMU.");
-        // Conceptual: Extended Kalman Filter (EKF), Particle Filter, etc.
-        Ok(imu_data.clone())
+        let mut estimated = imu_data.clone();
+        if !visual_feedback.is_empty() {
+            // Simulated EKF update: bias towards visual data
+            println!("  -> Fusing data from {} detected objects.", visual_feedback.len());
+            estimated.orientation.0 *= 0.95; // Noise reduction simulation
+        }
+        Ok(estimated)
     }
 }
