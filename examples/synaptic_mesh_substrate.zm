@@ -1,0 +1,16 @@
+// Zamani Autogenesis Demonstration
+// Defining a novel neuromorphic substrate using native substrate grammar
+
+substrate SynapticMesh {
+    paradigm = Spiking-Neuromorphic;
+    instruction_set = [ SPIKE_EMIT, MEMBRANE_INTEGRATE, SYNAPSE_PLASTICITY, CALCIUM_FLUX ];
+    translation_rule = "MAP_SPIKE_TO_CROSSBAR_RRAM_CROSSPOINT";
+}
+
+module Main {
+    fn main() {
+        // The Zamani compiler uses SSBE to compile this substrate definition
+        // into a fully functional compilation backend at runtime.
+        print("Initialized Zamani Autogenesis Substrate: SynapticMesh");
+    }
+}
