@@ -81,6 +81,20 @@ pub enum Statement {
     TypeClass(Span, Identifier, Vec<Statement>),
     TypeInstance(Span, Identifier, TypeExpr, Vec<Statement>),
     HigherKindedType(Span, TypeParameter, TypeExpr),
+    // Supreme Expansion Declarations
+    AsiSystem(Span, String, Vec<Statement>),
+    AesiSystem(Span, String, Vec<Statement>),
+    AsesiSystem(Span, String, Vec<Statement>),
+    AdminInterface(Span, String, Vec<Statement>),
+    PaymentGateway(Span, String, Vec<Statement>),
+    Graphics(Span, String, Vec<Statement>),
+    Video(Span, String, Vec<Statement>),
+    SelfAdjust(Span, String, Vec<Statement>),
+    SelfVersioning(Span, String, Vec<Statement>),
+    CopyrightNotice(Span, String, Vec<Statement>),
+    LegalAction(Span, String, Vec<Statement>),
+    TailorMadeFeature(Span, String, Vec<Statement>),
+    AiForBusiness(Span, String, Vec<Statement>),
 }
 
 // ─── Items within definitions ────────────────────────────────────────────────

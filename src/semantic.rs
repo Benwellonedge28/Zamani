@@ -694,7 +694,20 @@ impl SemanticAnalyzer {
             | Statement::OmniversalGoal(_, _, stmts)
             | Statement::OmniversalBioNano(_, _, stmts)
             | Statement::OmniversalReality(_, _, stmts)
-            | Statement::OmniversalNlp(_, _, stmts) => {
+            | Statement::OmniversalNlp(_, _, stmts)
+            | Statement::AsiSystem(_, _, stmts)
+            | Statement::AesiSystem(_, _, stmts)
+            | Statement::AsesiSystem(_, _, stmts)
+            | Statement::AdminInterface(_, _, stmts)
+            | Statement::PaymentGateway(_, _, stmts)
+            | Statement::Graphics(_, _, stmts)
+            | Statement::Video(_, _, stmts)
+            | Statement::SelfAdjust(_, _, stmts)
+            | Statement::SelfVersioning(_, _, stmts)
+            | Statement::CopyrightNotice(_, _, stmts)
+            | Statement::LegalAction(_, _, stmts)
+            | Statement::TailorMadeFeature(_, _, stmts)
+            | Statement::AiForBusiness(_, _, stmts) => {
                 self.symbols.enter_scope();
                 for s in stmts {
                     self.check_statement(s);

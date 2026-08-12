@@ -196,6 +196,19 @@ impl Parser {
                     _ => self.parse_expr_stmt(),
                 }
             }
+            KeywordAsi => self.parse_omniversal_block(Statement::AsiSystem),
+            KeywordAesi => self.parse_omniversal_block(Statement::AesiSystem),
+            KeywordAsesi => self.parse_omniversal_block(Statement::AsesiSystem),
+            KeywordAdmin => self.parse_omniversal_block(Statement::AdminInterface),
+            KeywordPayment => self.parse_omniversal_block(Statement::PaymentGateway),
+            KeywordGraphics => self.parse_omniversal_block(Statement::Graphics),
+            KeywordVideo => self.parse_omniversal_block(Statement::Video),
+            KeywordAdjust => self.parse_omniversal_block(Statement::SelfAdjust),
+            KeywordVersioning => self.parse_omniversal_block(Statement::SelfVersioning),
+            KeywordCopyright => self.parse_omniversal_block(Statement::CopyrightNotice),
+            KeywordLegal => self.parse_omniversal_block(Statement::LegalAction),
+            KeywordTailor => self.parse_omniversal_block(Statement::TailorMadeFeature),
+            KeywordBusiness => self.parse_omniversal_block(Statement::AiForBusiness),
             Hash => self.parse_attribute_stmt(),
             _ => self.parse_expr_stmt(),
         }

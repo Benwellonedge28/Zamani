@@ -933,8 +933,21 @@ impl IrGenerator {
             | Statement::OmniversalGoal(_, name, stmts)
             | Statement::OmniversalBioNano(_, name, stmts)
             | Statement::OmniversalReality(_, name, stmts)
-            | Statement::OmniversalNlp(_, name, stmts) => {
-                func.push(IrInstruction::Comment(format!("Omniversal Block: {}", name)));
+            | Statement::OmniversalNlp(_, name, stmts)
+            | Statement::AsiSystem(_, name, stmts)
+            | Statement::AesiSystem(_, name, stmts)
+            | Statement::AsesiSystem(_, name, stmts)
+            | Statement::AdminInterface(_, name, stmts)
+            | Statement::PaymentGateway(_, name, stmts)
+            | Statement::Graphics(_, name, stmts)
+            | Statement::Video(_, name, stmts)
+            | Statement::SelfAdjust(_, name, stmts)
+            | Statement::SelfVersioning(_, name, stmts)
+            | Statement::CopyrightNotice(_, name, stmts)
+            | Statement::LegalAction(_, name, stmts)
+            | Statement::TailorMadeFeature(_, name, stmts)
+            | Statement::AiForBusiness(_, name, stmts) => {
+                func.push(IrInstruction::Comment(format!("Supreme Block: {}", name)));
                 for s in stmts {
                     self.emit_statement(s, func, module);
                 }

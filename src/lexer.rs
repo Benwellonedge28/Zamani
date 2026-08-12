@@ -203,6 +203,23 @@ pub enum TokenType {
     KeywordReality,
     KeywordNlp,
     KeywordSystem,
+    // Supreme Expansion Keywords
+    KeywordAsi,
+    KeywordAesi,
+    KeywordAsesi,
+    KeywordAdmin,
+    KeywordPayment,
+    KeywordGateway,
+    KeywordGraphics,
+    KeywordVideo,
+    KeywordAdjust,
+    KeywordVersioning,
+    KeywordCopyright,
+    KeywordNotice,
+    KeywordLegal,
+    KeywordAction,
+    KeywordTailor,
+    KeywordBusiness,
 
     // --- Compound assignment & range operators ---
     PlusAssign,
@@ -390,6 +407,24 @@ impl Lexer {
         map.insert("reality".to_string(), TokenType::KeywordReality);
         map.insert("nlp".to_string(), TokenType::KeywordNlp);
         map.insert("system".to_string(), TokenType::KeywordSystem);
+        
+        // --- Supreme Expansion Keywords ---
+        map.insert("asi".to_string(), TokenType::KeywordAsi);
+        map.insert("aesi".to_string(), TokenType::KeywordAesi);
+        map.insert("asesi".to_string(), TokenType::KeywordAsesi);
+        map.insert("admin".to_string(), TokenType::KeywordAdmin);
+        map.insert("payment".to_string(), TokenType::KeywordPayment);
+        map.insert("gateway".to_string(), TokenType::KeywordGateway);
+        map.insert("graphics".to_string(), TokenType::KeywordGraphics);
+        map.insert("video".to_string(), TokenType::KeywordVideo);
+        map.insert("adjust".to_string(), TokenType::KeywordAdjust);
+        map.insert("versioning".to_string(), TokenType::KeywordVersioning);
+        map.insert("copyright".to_string(), TokenType::KeywordCopyright);
+        map.insert("notice".to_string(), TokenType::KeywordNotice);
+        map.insert("legal".to_string(), TokenType::KeywordLegal);
+        map.insert("action".to_string(), TokenType::KeywordAction);
+        map.insert("tailor".to_string(), TokenType::KeywordTailor);
+        map.insert("business".to_string(), TokenType::KeywordBusiness);
 
         map
     }
