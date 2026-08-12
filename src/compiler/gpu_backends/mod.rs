@@ -1,0 +1,43 @@
+//! Zamani Compiler — GPU & Parallel Computing Architecture Backends (Complete Roster)
+
+pub mod sgi_iris_gl;
+pub mod glide;
+pub mod sm1;
+pub mod sm2;
+pub mod sm3;
+pub mod opengl_arb;
+pub mod cuda_early;
+pub mod opencl;
+pub mod brook_plus;
+pub mod direct_compute;
+pub mod cuda_modern;
+pub mod rocm_hip;
+pub mod apple_metal;
+pub mod vulkan_kompute;
+pub mod webgpu;
+pub mod google_tpu;
+pub mod aws_neuron;
+pub mod cerebras_wse;
+pub mod tenstorrent;
+pub mod graphcore_ipu;
+
+pub use sgi_iris_gl::SgiIrisGlBackend;
+pub use glide::GlideBackend;
+pub use sm1::ShaderModel1Backend;
+pub use sm2::ShaderModel2Backend;
+pub use sm3::ShaderModel3Backend;
+pub use opengl_arb::OpenGlArbBackend;
+pub use cuda_early::CudaEarlyBackend;
+pub use opencl::OpenClBackend;
+pub use brook_plus::BrookPlusBackend;
+pub use direct_compute::DirectComputeBackend;
+pub use cuda_modern::CudaModernBackend;
+pub use rocm_hip::RocmHipBackend;
+pub use apple_metal::AppleMetalBackend;
+pub use vulkan_kompute::VulkanKomputeBackend;
+pub use webgpu::WebGpuBackend;
+pub use google_tpu::GoogleTpuBackend;
+pub use aws_neuron::AwsNeuronBackend;
+pub use cerebras_wse::CerebrasWseBackend;
+pub use tenstorrent::TenstorrentBackend;
+pub use graphcore_ipu::GraphcoreIpuBackend;
