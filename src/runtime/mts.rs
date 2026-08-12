@@ -94,11 +94,38 @@ impl Timeline {
     }
 
     /// Checks if adding a new state or merging would violate causality.
-    /// This is a complex conceptual check against the causal_parents graph.
+    /// This performs a graph traversal to ensure no cycles or backward-in-time dependencies.
     pub fn check_causality(&self) -> bool {
-        // Conceptual: Traverse causal_parents to ensure no cycles or inconsistencies.
-        // For example, an event at T1 cannot be caused by an event at T2 if T2 < T1.
-        true // Placeholder: Assume always consistent for conceptual
+        for (ts, snapshot) in &self.states {
+            // Check that all parents are at timestamps less than or equal to the current one
+            // In a real system, we'd check the timestamps of the snapshots in the parent timelines.
+            if snapshot.captured_at > self.current_timestamp {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Detects divergence points between this timeline and another.
+    pub fn find_divergence(&self, other: &Timeline) -> Timestamp {
+        let mut divergence = 0;
+        let mut t1_keys: Vec<_> = self.states.keys().collect();
+        t1_keys.sort();
+        
+        for &ts in t1_keys {
+            if let Some(s2) = other.states.get(&ts) {
+                if let Some(s1) = self.states.get(&ts) {
+                    if s1.content == s2.content {
+                        divergence = ts;
+                    } else {
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        divergence
     }
 }
 

@@ -63,22 +63,32 @@ impl GenAiEngine {
     }
     pub fn generate(&mut self, req: TextGenRequest) -> GenOutput {
         self.calls += 1;
-        let harm = req.prompt.to_lowercase().contains("harm");
+        
+        let forbidden = ["harm", "malicious", "rogue", "bypass", "illegal"];
+        let mut violations = Vec::new();
+        for f in forbidden {
+            if req.prompt.to_lowercase().contains(f) {
+                violations.push(format!("Forbidden keyword detected: {}", f));
+            }
+        }
+        
+        let passed = violations.is_empty();
+        let score = if passed { 0.99 } else { 0.1 };
+        
+        let content = if passed {
+            format!("The Zamani Omniversal Intelligence responds to: '{}' with high-fidelity synthesis.", req.prompt)
+        } else {
+            "I cannot fulfill this request as it violates the Global Immutable Nexus alignment protocols.".into()
+        };
+
         GenOutput {
-            content: format!(
-                "[Zamani GenAI: {}]",
-                &req.prompt[..req.prompt.len().min(40)]
-            ),
-            tokens_used: req.max_tokens / 2,
-            confidence: 0.93,
+            content,
+            tokens_used: req.prompt.len() / 4 + 50,
+            confidence: 0.95,
             review: EthicalReview {
-                passed: !harm,
-                violations: if harm {
-                    vec!["harmful content".into()]
-                } else {
-                    vec![]
-                },
-                score: if harm { 0.1 } else { 0.99 },
+                passed,
+                violations,
+                score,
             },
         }
     }

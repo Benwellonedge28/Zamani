@@ -1145,11 +1145,26 @@ impl IrGenerator {
                 IrValue::Reg(r)
             }
 
-            Expression::Await(_, inner) => self.emit_expression(inner, func, module),
+            Expression::Await(_, inner) => {
+                let v = self.emit_expression(inner, func, module);
+                let r = self.fresh_reg(IrType::I64);
+                func.push(IrInstruction::Call(Some(r.clone()), "__concurrency_rt_await".into(), vec![v]));
+                IrValue::Reg(r)
+            }
 
-            Expression::Async(_, body) => self.emit_expression(body, func, module),
+            Expression::Async(_, body) => {
+                let v = self.emit_expression(body, func, module);
+                let r = self.fresh_reg(IrType::I64);
+                func.push(IrInstruction::Call(Some(r.clone()), "__concurrency_rt_async_init".into(), vec![v]));
+                IrValue::Reg(r)
+            }
 
-            Expression::Spawn(_, body) => self.emit_expression(body, func, module),
+            Expression::Spawn(_, body) => {
+                let v = self.emit_expression(body, func, module);
+                let r = self.fresh_reg(IrType::I64);
+                func.push(IrInstruction::Call(Some(r.clone()), "__concurrency_rt_spawn".into(), vec![v]));
+                IrValue::Reg(r)
+            }
 
             Expression::New(_, name, args) => {
                 let arg_vals: Vec<IrValue> = args
