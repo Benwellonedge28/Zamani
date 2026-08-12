@@ -78,6 +78,11 @@ pub mod hardware_obfuscation;
 pub mod microfluidic_cooling;
 pub mod puf_backend;
 pub mod relativistic_clock;
+pub mod topological_logic;
+pub mod neutrino_comm;
+pub mod hdc_accelerator;
+pub mod zpe_orchestrator;
+pub mod qbio_interface;
 
 pub use verilog::VerilogBackend;
 pub use vhdl::VhdlBackend;
