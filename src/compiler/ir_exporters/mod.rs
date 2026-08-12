@@ -1,5 +1,5 @@
 //! Zamani Universal IR Exporters Registry
-//! Exposes 50 multi-IR backends (LLVM, QIR, MLIR, SPIR-V, FIRRTL, Wasm, HLO, ONNX, GIMPLE, Triton, P4, Verilog-AMS, BIPL, CIL, Java, eBPF, TVM, TorchScript, Quil, BLIF, EDIF, ChASM, Cranelift, SIL, TensorRT, CoreML, OpenVINO, NNEF, SMV, VPI, GCode, PostScript, DOT, MIDI, DEX, GoSSA, RustMIR, C--, ZMachine, GMachine, STG, Truffle, Lua, Python, EVM, HLS, VhdlAms, OSL, RSL).
+//! Exposes 75 multi-IR backends across systems, AI, functional, VM, hardware, and domain-specific targets.
 
 pub mod llvm_exporter;
 pub mod qir_exporter;
@@ -50,6 +50,30 @@ pub mod hls_exporter;
 pub mod vhdl_ams_exporter;
 pub mod osl_exporter;
 pub mod rsl_exporter;
+pub mod tflite_exporter;
+pub mod mnn_exporter;
+pub mod ncnn_exporter;
+pub mod stablehlo_exporter;
+pub mod openxla_exporter;
+pub mod ghc_core_exporter;
+pub mod ocaml_lambda_exporter;
+pub mod zig_ir_exporter;
+pub mod crystal_ir_exporter;
+pub mod beam_exporter;
+pub mod smalltalk_exporter;
+pub mod forth_exporter;
+pub mod ruby_yarv_exporter;
+pub mod v8_ignition_exporter;
+pub mod verilog_structural_exporter;
+pub mod vhdl_structural_exporter;
+pub mod systemc_exporter;
+pub mod aig_exporter;
+pub mod smtlib_exporter;
+pub mod latex_exporter;
+pub mod svg_exporter;
+pub mod gltf_exporter;
+pub mod openscad_exporter;
+pub mod faust_exporter;
 
 pub use llvm_exporter::LlvmIrExporter;
 pub use qir_exporter::QirExporter;
@@ -100,3 +124,27 @@ pub use hls_exporter::HlsExporter;
 pub use vhdl_ams_exporter::VhdlAmsExporter;
 pub use osl_exporter::OslExporter;
 pub use rsl_exporter::RslExporter;
+pub use tflite_exporter::TfLiteExporter;
+pub use mnn_exporter::MnnExporter;
+pub use ncnn_exporter::NcnnExporter;
+pub use stablehlo_exporter::StableHloExporter;
+pub use openxla_exporter::OpenXlaExporter;
+pub use ghc_core_exporter::GhcCoreExporter;
+pub use ocaml_lambda_exporter::OcamlLambdaExporter;
+pub use zig_ir_exporter::ZigIrExporter;
+pub use crystal_ir_exporter::CrystalIrExporter;
+pub use beam_exporter::BeamExporter;
+pub use smalltalk_exporter::SmalltalkExporter;
+pub use forth_exporter::ForthExporter;
+pub use ruby_yarv_exporter::RubyYarvExporter;
+pub use v8_ignition_exporter::V8IgnitionExporter;
+pub use verilog_structural_exporter::VerilogStructuralExporter;
+pub use vhdl_structural_exporter::VhdlStructuralExporter;
+pub use systemc_exporter::SystemCExporter;
+pub use aig_exporter::AigExporter;
+pub use smtlib_exporter::SmtLibExporter;
+pub use latex_exporter::LatexExporter;
+pub use svg_exporter::SvgExporter;
+pub use gltf_exporter::GltfExporter;
+pub use openscad_exporter::OpenScadExporter;
+pub use faust_exporter::FaustExporter;
