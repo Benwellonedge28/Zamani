@@ -477,6 +477,7 @@ pub struct Proof {
     pub id: Identifier,
     pub steps: List<AbstractSyntaxTree>,
     pub formal_system: Identifier,
+    pub valid: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

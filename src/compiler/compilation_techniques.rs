@@ -1,4 +1,3 @@
-#![cfg(feature = "full")]
 #![allow(dead_code, unused_imports, unused_variables)]
 
 //! Zamani Universal Meta-Compiler (UMC): Compilation Techniques Module
@@ -15,9 +14,10 @@
 //! targets, ensuring "infinity Advanced and secure infinitely and ready for production"
 //! performance across the entire Omniverse.
 
-use self::backend::{CompiledBinary, TargetPlatform}; // For specific hardware backends
-use self::ir_gen::{IrInstruction, ZamaniIR}; // For Intermediate Representation
-use self::optimizer::OptimizationLevel; // For various optimization strategies
+use self::backend::{CompiledBinary, TargetPlatform};
+use self::ir_gen::ZamaniIR;
+use crate::ir_gen::IrInstruction; // For Intermediate Representation
+use crate::compiler_types::OptimizationLevel; // For various optimization strategies
 use crate::ast::Identifier; // For AST representations
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel}; // For ethical vetting of compilation choices
 use crate::source_map::Span;
@@ -428,6 +428,7 @@ pub mod optimizer {
 
 pub mod backend {
     use crate::ast::Identifier;
+    use super::ZamaniIR;
     #[derive(Debug, Clone, PartialEq)]
     pub enum TargetPlatform {
         X86_64,
@@ -493,8 +494,7 @@ pub mod ir_gen {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 use std::collections::HashMap;
-use crate::ast::{ParadigmBlock, Span};
-
+use crate::ast::ParadigmBlock;
 /// Compilation strategy for a specific paradigm.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParadigmStrategy {

@@ -64,7 +64,7 @@ impl Robotics {
         let mut poses = Map::new();
         // Simulated FK logic: map joint angles to cartesian coordinates
         for (i, pos) in state.joint_positions.iter().enumerate() {
-            poses.insert(format!("joint_{}", i), Point { x: pos.cos(), y: pos.sin(), z: i as f32 });
+            poses.insert(format!("joint_{}", i), Point { x: pos.cos() as i32, y: pos.sin() as i32 });
         }
         Ok(poses)
     }

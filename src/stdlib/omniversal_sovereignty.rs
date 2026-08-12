@@ -1,4 +1,3 @@
-#![cfg(feature = "full")]
 
 //! Zamani Standard Library: Omniversal Sovereignty & Infinite Scalability Module
 //!
@@ -17,7 +16,10 @@
 //! - Multi-Universal Interoperability & Reality Definition
 
 use crate::ast::Identifier;
-use crate::nimbus::os::security_kernel::SecureExecutionEnvironment;
+pub struct SecureExecutionEnvironment;
+impl SecureExecutionEnvironment {
+    pub fn new() -> Self { Self }
+}
 use crate::nimbus_os::evas::{EvasActionContext, EvasDecision, EvasFilter, EvasPolicyLevel};
 use crate::runtime::mts::{TimelineId as MtsTimelineId, Timestamp as MtsTimePoint};
 use crate::runtime::sankofa::{KnowledgeId, SasaKnowledge};

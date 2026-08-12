@@ -97,7 +97,8 @@ impl CloudNetworkOrchestrator {
         ))?; // Dummy target
         evolution_engine.evaluate_proposal(&mut proposal)?; // E.V.A.S. vetting happens here
         if proposal.ethical_vetting_status == format!("{:?}", evas::EvasDecision::Allow) {
-            evolution_engine.apply_proposal(&proposal)?; // Apply if approved
+            let mut dummy_prog = crate::ast::Program { statements: vec![], span: crate::source_map::Span::dummy() };
+            evolution_engine.apply_proposal(&proposal, &mut dummy_prog)?; // Apply if approved
         }
         Ok(())
     }

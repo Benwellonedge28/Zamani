@@ -1,8 +1,8 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 //! Implements cross-node teleportation, state migration, and multi-backend HDL synthesis.
 
-use crate::ir_gen::{IrFunction, IrInstruction, IrRegister, IrValue};
-use crate::compiler::hdl_backends::*;
+use crate::ir_gen::{IrFunction, IrInstruction, IrRegister, IrValue, IrType};
+use crate::hdl::*;
 
 pub struct DistributedExecutor;
 
@@ -22,11 +22,11 @@ impl DistributedExecutor {
             "--- Teleporting state '{}' to node '{}' ---",
             var_name, target_node
         )));
-        let reg = IrRegister(format!("teleport_{}", var_name));
+        let reg = IrRegister(format!("teleport_{}", var_name), IrType::I64);
         func.push(IrInstruction::Call(
             Some(reg),
             format!("__omni_rt_teleport_{}", target_node),
-            vec![IrValue::GlobalPtr(var_name.into())],
+            vec![IrValue::GlobalPtr(var_name.into(), 0)],
         ));
     }
 

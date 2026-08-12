@@ -161,6 +161,7 @@ pub enum CompilationTarget {
     MTSBytecode,
     LLVMIR,
     RiscV,
+    UniversalIRExport(String), // Target name for the 301+ IR exporters
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -12,37 +12,27 @@
 
 pub mod ast;
 pub mod backend;
-#[cfg(feature = "full")]
 pub mod compiler;
 pub mod compiler_types;
-#[cfg(feature = "full")]
 pub mod core_lang_primitives;
 pub mod error_reporting;
-#[cfg(feature = "full")]
 pub mod ai;
 pub mod distributed;
 pub mod hdl;
 pub mod ir_gen;
 pub mod lexer;
-pub mod quantum;
 pub mod nano; // Nano runtime primitives
-#[cfg(feature = "full")]
 pub mod nimbus;
-#[cfg(feature = "full")]
 pub mod nimbus_os;
 pub mod omega_trinity_libs_161_200; // Omega Trinity extended libs 161-200
 pub mod optimizer;
 pub mod parser;
 pub mod quantum; // Quantum primitives
-#[cfg(feature = "full")]
 pub mod runtime;
 pub mod semantic;
 pub mod source_map;
-#[cfg(feature = "full")]
 pub mod stdlib;
-#[cfg(any(feature = "full", feature = "lsp", feature = "buildsystem"))]
 pub mod toolchain;
-#[cfg(any(feature = "full", feature = "buildsystem"))]
 pub mod zamani_project_config;
 
 /// Initialise the Zamani Universal Trinity Runtime.

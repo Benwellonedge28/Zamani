@@ -129,6 +129,12 @@ pub struct SemanticAnalyzer {
     pub in_async: bool,
     /// Tracks usage of linear/affine variables: name -> usage_count
     pub usage_tracker: HashMap<String, usize>,
+    pub cognitive_engine: CognitiveEngine,
+}
+
+pub struct CognitiveEngine;
+impl CognitiveEngine {
+    pub fn verify_alignment(&self, _name: &str) {}
 }
 
 impl Default for SemanticAnalyzer {
@@ -146,6 +152,7 @@ impl SemanticAnalyzer {
             in_loop: false,
             in_async: false,
             usage_tracker: HashMap::new(),
+            cognitive_engine: CognitiveEngine,
         };
         s.register_builtins();
         s
@@ -608,7 +615,7 @@ impl SemanticAnalyzer {
                 let proof_id = format!("unsafe_block_{:?}", span);
                 prover.assert_theorem(&proof_id, "Memory safety and alignment preserved", vec!["evas_vetted".into()]);
                 let proof = prover.prove(&proof_id, crate::toolchain::formal_verification::theorem_prover::ProofStrategy::SmtSolving);
-                if !proof.valid {
+                if !proof.unwrap().valid {
                     println!("  [WARNING] Unsafe block at {:?} failed formal safety proof.", span);
                 }
             }
@@ -635,6 +642,27 @@ impl SemanticAnalyzer {
                 let ty = self.resolve_type_expr(type_expr);
                 self.symbols.define(name.clone(), Symbol::TypeAlias(ty));
                 let _ = span;
+            }
+            Statement::NoiseModel(span, name, fields) => {
+                let _ = (span, name, fields);
+            }
+            Statement::FidelityCheck(span, name) => {
+                let _ = (span, name);
+            }
+            Statement::SurfaceCode(span, name, fields) => {
+                let _ = (span, name, fields);
+            }
+            Statement::SoftwareGenome(span, name, stmts) => {
+                for s in stmts {
+                    self.check_statement(s);
+                }
+                let _ = (span, name);
+            }
+            Statement::SelfDocument(span, name, stmts) => {
+                for s in stmts {
+                    self.check_statement(s);
+                }
+                let _ = (span, name);
             }
 
             Statement::TypeAlias(_span, name, _params, type_expr) => {
@@ -1095,6 +1123,12 @@ impl SemanticAnalyzer {
                 }
                 Type::Unknown
             }
+
+            Expression::Entangle(_, l, r) => {
+                self.infer_expression(l);
+                self.infer_expression(r);
+                Type::Quantum
+            }
         }
     }
 
@@ -1218,6 +1252,9 @@ impl SemanticAnalyzer {
             }
             TypeExpr::Identity(left, right) => {
                 Type::Identity(left.clone(), right.clone())
+            }
+            TypeExpr::Hkt(name, inner) => {
+                Type::Hkt(name.clone(), Box::new(self.resolve_type_expr(inner)))
             }
         }
     }

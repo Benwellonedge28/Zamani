@@ -3,7 +3,9 @@
 //! Full implementation uses Zamani-native syntax compiled via the ZUTC pipeline.
 
 use std::collections::HashMap;
-use crate::ast::{ContextOfExpr, QueryOmniState, ConsensusExpr, Expression, Literal, Span};
+use std::sync::Arc;
+use crate::ast::{ContextOfExpr, QueryOmniState, ConsensusExpr, Expression, Literal};
+use crate::source_map::Span;
 
 /// Initialize the universal_runtime subsystem.
 pub fn init_universal_runtime() {
@@ -41,7 +43,7 @@ impl OmniContext {
         // Returns a compile-time constant representing the context value.
         // In production, this queries the Zamani Universal Trinity Runtime.
         Ok(Expression::Literal(Literal::String(
-            format!("omniversal_context_snapshot:{}", expr.target),
+            format!("omniversal_context_snapshot:{:?}", expr.target),
             expr.span.clone(),
         )))
     }
@@ -175,6 +177,10 @@ impl RealitySynthesizer {
         } else {
             Err(format!("Simulation {} not found.", sim_id))
         }
+    }
+
+    pub fn materialize_simulation(&mut self, name: &str) {
+        println!("[RealitySynthesizer] Materializing simulation: {}", name);
     }
 }
 

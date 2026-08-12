@@ -32,6 +32,12 @@ pub enum EvasDecision {
     HumanReviewRequired(String), // The action requires human intervention before proceeding.
 }
 
+impl EvasDecision {
+    pub fn is_permitted(&self) -> bool {
+        matches!(self, EvasDecision::Allow | EvasDecision::Warn(_) | EvasDecision::Modify(_, _))
+    }
+}
+
 /// Captures all relevant information about an action being evaluated by E.V.A.S.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvasActionContext {

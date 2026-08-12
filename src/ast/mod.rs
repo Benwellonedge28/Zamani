@@ -485,6 +485,14 @@ impl TypeExpr {
             TypeExpr::Linear(t) => format!("Linear<{}>", t.name()),
             TypeExpr::Affine(t) => format!("Affine<{}>", t.name()),
             TypeExpr::Temporal(t) => format!("Temporal<{}>", t.name()),
+            TypeExpr::Pi(name, domain, codomain) => {
+                format!("Π({}: {}). {}", name, domain.name(), codomain.name())
+            }
+            TypeExpr::Sigma(name, domain, codomain) => {
+                format!("Σ({}: {}). {}", name, domain.name(), codomain.name())
+            }
+            TypeExpr::Identity(left, right) => format!("Id({:?}, {:?})", left, right),
+            TypeExpr::Hkt(name, inner) => format!("HKT<{}>({})", name, inner.name()),
         }
     }
 }
@@ -529,6 +537,7 @@ pub enum Type {
     Result(Box<Type>, Box<Type>),
     Quantum,
     Linear(Box<Type>),
+    Affine(Box<Type>),
     Temporal(Box<Type>),
     Pi(String, Box<Type>, Box<Type>),
     Sigma(String, Box<Type>, Box<Type>),
@@ -606,6 +615,15 @@ impl Type {
             Type::Quantum => "Quantum".into(),
             Type::Linear(t) => format!("Linear<{}>", t.get_name()),
             Type::Affine(t) => format!("Affine<{}>", t.get_name()),
+            Type::Temporal(t) => format!("Temporal<{}>", t.get_name()),
+            Type::Pi(name, domain, codomain) => {
+                format!("Π({}: {}). {}", name, domain.get_name(), codomain.get_name())
+            }
+            Type::Sigma(name, domain, codomain) => {
+                format!("Σ({}: {}). {}", name, domain.get_name(), codomain.get_name())
+            }
+            Type::Identity(left, right) => format!("Id({:?}, {:?})", left, right),
+            Type::Hkt(name, inner) => format!("HKT<{}>({})", name, inner.get_name()),
             Type::Unknown => "<unknown>".into(),
         }
     }

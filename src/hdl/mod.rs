@@ -518,3 +518,44 @@ pub mod external_hdl_linker {
         Ok(Vec::new()) // Dummy IR
     }
 }
+
+pub struct VerilogBackend;
+impl VerilogBackend {
+    pub fn new() -> Self { Self }
+    pub fn emit(&self, _module: &str, _logic: &str) -> String { "/* Verilog emission */".to_string() }
+}
+pub struct VhdlBackend;
+impl VhdlBackend {
+    pub fn new() -> Self { Self }
+    pub fn emit(&self, _module: &str, _logic: &str) -> String { "/* VHDL emission */".to_string() }
+}
+pub struct SystemVerilogBackend;
+impl SystemVerilogBackend {
+    pub fn new() -> Self { Self }
+    pub fn emit(&self, _module: &str, _logic: &str) -> String { "/* SystemVerilog emission */".to_string() }
+}
+pub struct ChiselBackend;
+impl ChiselBackend {
+    pub fn new() -> Self { Self }
+    pub fn emit(&self, _module: &str, _logic: &str) -> String { "/* Chisel emission */".to_string() }
+}
+pub struct BluespecBackend;
+impl BluespecBackend {
+    pub fn new() -> Self { Self }
+    pub fn emit(&self, _module: &str, _logic: &str) -> String { "/* Bluespec emission */".to_string() }
+}
+pub struct MyHdlBackend;
+impl MyHdlBackend {
+    pub fn new() -> Self { Self }
+    pub fn emit(&self, _module: &str, _logic: &str) -> String { "/* MyHDL emission */".to_string() }
+}
+pub struct SpinalHdlBackend;
+impl SpinalHdlBackend {
+    pub fn new() -> Self { Self }
+    pub fn emit(&self, _module: &str, _logic: &str) -> String { "/* SpinalHDL emission */".to_string() }
+}
+pub struct FirrtlBackend;
+impl FirrtlBackend {
+    pub fn new() -> Self { Self }
+    pub fn emit(&self, _module: &str, _logic: &str) -> String { "/* FIRRTL emission */".to_string() }
+}

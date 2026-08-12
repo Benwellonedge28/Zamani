@@ -103,6 +103,12 @@ impl Span {
     }
 }
 
+impl Default for Span {
+    fn default() -> Self {
+        Self::dummy()
+    }
+}
+
 /// Represents a single source file, including its name and content.
 #[derive(Debug, Clone)]
 pub struct SourceFile {

@@ -28,7 +28,7 @@ impl StabilizerScheduler {
             
             // X-Stabilizer Sequence: H -> CNOTs -> H -> Measure
             func.push(IrInstruction::Comment("  [X-Stabilizers] Detecting Phase-Flips".into()));
-            let ancilla_x = IrRegister(format!("anc_x_r{}_p{}", r, self.patch_name));
+            let ancilla_x = IrRegister(format!("anc_x_r{}_p{}", r, self.patch_name), IrType::Quantum);
             func.push(IrInstruction::QuantumGate(ancilla_x.clone(), "H".into(), vec![]));
             // Simulated CNOTs between ancilla and data qubits
             func.push(IrInstruction::Comment("    - CNOTs to North, East, West, South data qubits".into()));
@@ -37,7 +37,7 @@ impl StabilizerScheduler {
 
             // Z-Stabilizer Sequence: Reset -> CNOTs -> Measure
             func.push(IrInstruction::Comment("  [Z-Stabilizers] Detecting Bit-Flips".into()));
-            let ancilla_z = IrRegister(format!("anc_z_r{}_p{}", r, self.patch_name));
+            let ancilla_z = IrRegister(format!("anc_z_r{}_p{}", r, self.patch_name), IrType::Quantum);
             func.push(IrInstruction::QuantumGate(ancilla_z.clone(), "Reset".into(), vec![]));
             func.push(IrInstruction::Comment("    - CNOTs to NW, NE, SW, SE data qubits".into()));
             func.push(IrInstruction::QuantumGate(ancilla_z.clone(), "Measure".into(), vec![]));

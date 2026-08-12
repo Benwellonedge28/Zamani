@@ -79,10 +79,8 @@ pub mod omniversal_perception_autonomous_action;
 pub mod omniversal_prompt_firewall;
 pub mod omniversal_reality_metaphysical_engineering;
 pub mod omniversal_rogue_prevention_alignment;
-pub mod omniversal_self_discovery;
 pub mod omniversal_self_sovereignty_existential_management;
 pub mod omniversal_simulation;
-pub mod omniversal_developer_analytics;
 pub mod omniversal_strategic_goal_management;
 pub mod omniversal_trust_identity_management;
 pub mod omniversal_zkp_privacy_computing;
@@ -135,7 +133,7 @@ pub fn initialize_stdlib() {
     resource_management::init_resource_management();
     developer_relations::init_developer_relations();
     omniversal_nlp::init_omniversal_nlp();
-    omniversal_sovereignty::init_omniversal_sovereignty();
+    self::omniversal_sovereignty::init_omniversal_sovereignty();
     omniversal_nlp_adv::init_omniversal_nlp_adv();
     omniversal_self_discovery::init_omniversal_self_discovery();
     omniversal_developer_analytics::init_omniversal_developer_analytics();
@@ -233,7 +231,7 @@ pub fn shutdown_stdlib() {
     omniversal_nlp_adv::shutdown_omniversal_nlp_adv();
     omniversal_self_discovery::shutdown_omniversal_self_discovery();
     omniversal_developer_analytics::shutdown_omniversal_developer_analytics();
-    omniversal_sovereignty::shutdown_omniversal_sovereignty();
+    self::omniversal_sovereignty::shutdown_omniversal_sovereignty();
     omniversal_nlp::shutdown_omniversal_nlp();
     developer_relations::shutdown_developer_relations();
     resource_management::shutdown_resource_management();

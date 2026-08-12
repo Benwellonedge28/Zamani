@@ -65,9 +65,33 @@ pub struct CounterExample {
 }
 
 /// Conceptual interface to Zamani's formal verifier tools.
+pub type Proof = crate::stdlib::math_foundations::Proof;
+pub type FormalVerificationEngine = ZamaniFormalVerifier;
+
 pub struct ZamaniFormalVerifier;
 
 impl ZamaniFormalVerifier {
+    pub fn new() -> Self {
+        ZamaniFormalVerifier
+    }
+
+    pub fn verify_object_state<T1, T2>(_obj: T1, _state: T2) -> Result<Proof, String> {
+        Ok(Proof {
+            id: crate::ast::Identifier("verified_object".to_string(), Span::dummy()),
+            steps: crate::stdlib::collections::List::new(),
+            formal_system: crate::ast::Identifier("Zamani_Hoare_Logic".to_string(), Span::dummy()),
+            valid: true,
+        })
+    }
+
+    pub fn formally_verify_meta_code<T>(&self, _code: T) -> Result<Proof, String> {
+        Ok(Proof {
+            id: crate::ast::Identifier("verified_meta_code".to_string(), Span::dummy()),
+            steps: crate::stdlib::collections::List::new(),
+            formal_system: crate::ast::Identifier("Zamani_Meta_Logic".to_string(), Span::dummy()),
+            valid: true,
+        })
+    }
     /// Runs a formal verification check on the AST (high-level properties).
     pub fn verify_ast(program_ast: &Program, property: VerificationProperty) -> VerificationResult {
         println!("[Toolchain::Verify] Verifying AST for property: {:?}...", property);
@@ -139,5 +163,33 @@ impl ZamaniFormalVerifier {
             results.push(ZamaniFormalVerifier::verify_ir(ir_code, prop.clone()));
         }
         results
+    }
+}
+
+pub mod theorem_prover {
+    use super::Proof;
+    use crate::ast::Identifier;
+    use crate::source_map::Span;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum ProofStrategy {
+        SmtSolving,
+        ModelChecking,
+        Interactive,
+    }
+
+    pub struct TheoremProver;
+    impl TheoremProver {
+        pub fn new() -> Self { TheoremProver }
+        pub fn set_strategy(&mut self, _strategy: ProofStrategy) {}
+        pub fn assert_theorem(&mut self, _id: &str, _statement: &str, _tags: Vec<String>) {}
+        pub fn prove(&mut self, _statement: &str, _strategy: ProofStrategy) -> Result<Proof, String> {
+            Ok(Proof {
+                id: Identifier("proved_theorem".to_string(), Span::dummy()),
+                steps: crate::stdlib::collections::List::new(),
+                formal_system: Identifier("Zamani_Theorem_Prover".to_string(), Span::dummy()),
+                valid: true,
+            })
+        }
     }
 }

@@ -382,3 +382,5 @@ impl MtsActorRuntime {
         }
     }
 }
+
+pub type MtsRuntime = MultiTimelineOrchestrator;

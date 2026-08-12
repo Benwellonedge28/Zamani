@@ -185,8 +185,7 @@ impl AutonomousObject {
             "[Compiler::OOPAdv] Autonomous Object '{}' performing self-verification.",
             self.base_object.get_id()
         );
-        let verifier = crate::toolchain::formal_verification::ZamaniFormalVerifier;
-        verifier.verify_object_state(self.base_object.clone(), Map::new()) // Conceptual: verify object state
+        crate::toolchain::formal_verification::ZamaniFormalVerifier::verify_object_state(self.base_object.clone(), Map::<String, String>::new()) // Conceptual: verify object state
     }
 }
 

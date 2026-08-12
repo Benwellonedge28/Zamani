@@ -60,24 +60,41 @@ impl CodeGenerator {
     }
 
     pub fn generate(&self, module: &IrModule) -> Result<CodeGenOutput, CodeGenError> {
-        let backend: Box<dyn Backend> = match &self.config.target {
-            CompilationTarget::X86_64Linux => Box::new(X86Backend),
-            CompilationTarget::Arm64 => Box::new(X86Backend),
-            CompilationTarget::Wasm32 => Box::new(WasmBackend),
-            CompilationTarget::QASM => Box::new(QasmBackend),
-            CompilationTarget::NanoControl => Box::new(NanoBackend),
-            CompilationTarget::LLVMIR => Box::new(LlvmIrBackend),
-            CompilationTarget::RiscV => Box::new(RiscVBackend),
-            CompilationTarget::MTSBytecode => Box::new(MtsBackend),
-        };
-        let source = backend.generate(module)?;
-        let size = source.len();
-        Ok(CodeGenOutput {
-            target: backend.target_name().into(),
-            extension: backend.file_extension().into(),
-            source,
-            size_bytes: size,
-        })
+        match &self.config.target {
+            CompilationTarget::UniversalIRExport(name) => {
+                let ir_str = module.to_ir_string();
+                let exported = crate::compiler::ir_exporters::export_universal_ir(name, &ir_str)
+                    .map_err(|e| CodeGenError::new(e, name))?;
+                let size = exported.len();
+                Ok(CodeGenOutput {
+                    target: format!("universal_ir_{}", name),
+                    extension: "ir".into(),
+                    source: exported,
+                    size_bytes: size,
+                })
+            }
+            _ => {
+                let backend: Box<dyn Backend> = match &self.config.target {
+                    CompilationTarget::X86_64Linux => Box::new(X86Backend),
+                    CompilationTarget::Arm64 => Box::new(X86Backend),
+                    CompilationTarget::Wasm32 => Box::new(WasmBackend),
+                    CompilationTarget::QASM => Box::new(QasmBackend),
+                    CompilationTarget::NanoControl => Box::new(NanoBackend),
+                    CompilationTarget::LLVMIR => Box::new(LlvmIrBackend),
+                    CompilationTarget::RiscV => Box::new(RiscVBackend),
+                    CompilationTarget::MTSBytecode => Box::new(MtsBackend),
+                    CompilationTarget::UniversalIRExport(_) => unreachable!(),
+                };
+                let source = backend.generate(module)?;
+                let size = source.len();
+                Ok(CodeGenOutput {
+                    target: backend.target_name().into(),
+                    extension: backend.file_extension().into(),
+                    source,
+                    size_bytes: size,
+                })
+            }
+        }
     }
 }
 

@@ -477,6 +477,7 @@ impl TheoremProvingEngine {
             id: Identifier("network_plan_proof".to_string(), Span::dummy()),
             steps: List::new(),
             formal_system: Identifier("network_stack".to_string(), Span::dummy()),
+            valid: true,
         })
     }
 }

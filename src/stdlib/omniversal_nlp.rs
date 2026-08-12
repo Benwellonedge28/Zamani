@@ -79,7 +79,8 @@ impl NlpPipeline {
         let negative = ["bad", "poor", "error", "unsafe", "rogue", "malicious"];
         
         let mut score = 0.5f32;
-        let words: Vec<_> = text.to_lowercase().split_whitespace().collect();
+        let lower = text.to_lowercase();
+        let words: Vec<_> = lower.split_whitespace().collect();
         for w in words {
             if positive.contains(&w) { score += 0.1; }
             if negative.contains(&w) { score -= 0.1; }

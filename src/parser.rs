@@ -950,7 +950,7 @@ impl Parser {
         } else {
             self.parse_expression(Precedence::Lowest)?
         };
-        Some(Statement::QuantumCircuit(span, name, body))
+        Some(Statement::QuantumCircuit(span, name, Box::new(body)))
     }
 
     fn parse_noise_model(&mut self) -> Option<Statement> {
@@ -1020,7 +1020,7 @@ impl Parser {
         } else {
             self.parse_expression(Precedence::Lowest)?
         };
-        Some(Statement::NanoAgent(span, name, body))
+        Some(Statement::NanoAgent(span, name, Box::new(body)))
     }
     fn parse_sankofa_remember(&mut self) -> Option<Statement> {
         let span = self.advance().span;

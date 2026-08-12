@@ -52,7 +52,7 @@ impl CognitiveEngine {
             "--- Neural Network Layer: {} (Neurons: {}) ---",
             layer_name, neurons
         )));
-        let reg = IrRegister(format!("nn_layer_{}", layer_name));
+        let reg = IrRegister(format!("nn_layer_{}", layer_name), IrType::I64);
         func.push(IrInstruction::Call(
             Some(reg),
             "__ai_rt_dense_layer".into(),
