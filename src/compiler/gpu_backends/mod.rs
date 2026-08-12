@@ -1,4 +1,4 @@
-//! Zamani Compiler — GPU & Parallel Computing Architecture Backends (Complete Roster)
+//! Zamani Compiler — GPU & Parallel Computing Architecture Backends (Complete 45-Target Roster)
 
 pub mod sgi_iris_gl;
 pub mod glide;
@@ -21,6 +21,34 @@ pub mod cerebras_wse;
 pub mod tenstorrent;
 pub mod graphcore_ipu;
 
+// Expansion V2 Modules (25 new targets)
+pub mod amiga_blitter;
+pub mod s3_virge;
+pub mod ati_rage;
+pub mod vs11;
+pub mod hlsl;
+pub mod glsl;
+pub mod nvidia_fermi;
+pub mod nvidia_kepler;
+pub mod nvidia_maxwell;
+pub mod nvidia_pascal;
+pub mod nvidia_volta;
+pub mod nvidia_turing;
+pub mod amd_gcn;
+pub mod amd_rdna;
+pub mod intel_xe;
+pub mod arm_mali;
+pub mod powervr;
+pub mod qualcomm_adreno;
+pub mod nvidia_tegra;
+pub mod google_tpu_v4;
+pub mod groq_lpu;
+pub mod habana_gaudi;
+pub mod sambanova;
+pub mod nec_sx_aurora;
+pub mod apple_ane;
+pub mod gpu_ref;
+
 pub use sgi_iris_gl::SgiIrisGlBackend;
 pub use glide::GlideBackend;
 pub use sm1::ShaderModel1Backend;
@@ -41,3 +69,29 @@ pub use aws_neuron::AwsNeuronBackend;
 pub use cerebras_wse::CerebrasWseBackend;
 pub use tenstorrent::TenstorrentBackend;
 pub use graphcore_ipu::GraphcoreIpuBackend;
+
+pub use amiga_blitter::AmigaBlitterBackend;
+pub use s3_virge::S3VirgeBackend;
+pub use ati_rage::AtiRageBackend;
+pub use vs11::VertexShader11Backend;
+pub use hlsl::HlslBackend;
+pub use glsl::GlslBackend;
+pub use nvidia_fermi::NvidiaFermiBackend;
+pub use nvidia_kepler::NvidiaKeplerBackend;
+pub use nvidia_maxwell::NvidiaMaxwellBackend;
+pub use nvidia_pascal::NvidiaPascalBackend;
+pub use nvidia_volta::NvidiaVoltaBackend;
+pub use nvidia_turing::NvidiaTuringBackend;
+pub use amd_gcn::AmdGcnBackend;
+pub use amd_rdna::AmdRdnaBackend;
+pub use intel_xe::IntelXeBackend;
+pub use arm_mali::ArmMaliBackend;
+pub use powervr::PowerVrBackend;
+pub use qualcomm_adreno::QualcommAdrenoBackend;
+pub use nvidia_tegra::NvidiaTegraBackend;
+pub use google_tpu_v4::GoogleTpuV4Backend;
+pub use groq_lpu::GroqLpuBackend;
+pub use habana_gaudi::HabanaGaudiBackend;
+pub use sambanova::SambaNovaBackend;
+pub use nec_sx_aurora::NecSxAuroraBackend;
+pub use apple_ane::AppleAneBackend;
