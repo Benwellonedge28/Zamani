@@ -1,4 +1,4 @@
-//! Zamani Compiler — Quantum Computing Architecture Backends (Complete 75-Target Roster)
+//! Zamani Compiler — Quantum Computing Architecture Backends (Complete 100-Target Centenary Roster)
 
 pub mod feynman_simulator;
 pub mod benioff_machine;
@@ -50,8 +50,6 @@ pub mod terra_quantum;
 pub mod anyon_systems;
 pub mod bernstein_vazirani;
 pub mod simon_algorithm;
-
-// Expansion V4 Modules
 pub mod margolus_model;
 pub mod watrous_qca;
 pub mod qcl;
@@ -67,6 +65,33 @@ pub mod steane_code;
 pub mod vqe;
 pub mod qaoa;
 pub mod hhl_algorithm;
+
+// Centenary Expansion Modules (25 new targets)
+pub mod bb84_qkd;
+pub mod e91_qkd;
+pub mod quantum_repeater;
+pub mod seeqc;
+pub mod oxford_ionics;
+pub mod qutip;
+pub mod netket;
+pub mod itensor;
+pub mod quest;
+pub mod qulacs;
+pub mod quantware;
+pub mod riverlane;
+pub mod bleximo;
+pub mod atlantic_quantum;
+pub mod eeroq;
+pub mod photonic_inc;
+pub mod lumi_q;
+pub mod q_sim;
+pub mod quantum_walk;
+pub mod qpe;
+pub mod amplitude_estimation;
+pub mod qsvt;
+pub mod vqls;
+pub mod q_leap;
+pub mod atlantic_ref;
 
 pub use feynman_simulator::FeynmanSimulatorBackend;
 pub use benioff_machine::BenioffMachineBackend;
@@ -118,7 +143,6 @@ pub use terra_quantum::TerraQuantumBackend;
 pub use anyon_systems::AnyonSystemsBackend;
 pub use bernstein_vazirani::BernsteinVaziraniBackend;
 pub use simon_algorithm::SimonAlgorithmBackend;
-
 pub use margolus_model::MargolusModelBackend;
 pub use watrous_qca::WatrousQcaBackend;
 pub use qcl::QclBackend;
@@ -134,3 +158,29 @@ pub use steane_code::SteaneCodeBackend;
 pub use vqe::VqeBackend;
 pub use qaoa::QaoaBackend;
 pub use hhl_algorithm::HhlAlgorithmBackend;
+
+pub use bb84_qkd::Bb84QkdBackend;
+pub use e91_qkd::E91QkdBackend;
+pub use quantum_repeater::QuantumRepeaterBackend;
+pub use seeqc::SeeqcBackend;
+pub use oxford_ionics::OxfordIonicsBackend;
+pub use qutip::QutipBackend;
+pub use netket::NetKetBackend;
+pub use itensor::ITensorBackend;
+pub use quest::QuestBackend;
+pub use qulacs::QulacsBackend;
+pub use quantware::QuantWareBackend;
+pub use riverlane::RiverlaneBackend;
+pub use bleximo::BleximoBackend;
+pub use atlantic_quantum::AtlanticQuantumBackend;
+pub use eeroq::EeroqBackend;
+pub use photonic_inc::PhotonicIncBackend;
+pub use lumi_q::LumiQBackend;
+pub use q_sim::QSimBackend;
+pub use quantum_walk::QuantumWalkBackend;
+pub use qpe::QpeBackend;
+pub use amplitude_estimation::AmplitudeEstimationBackend;
+pub use qsvt::QsvtBackend;
+pub use vqls::VqlsBackend;
+pub use q_leap::QLeapBackend;
+pub use atlantic_ref::AtlanticRefBackend;
