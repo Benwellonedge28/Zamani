@@ -1,0 +1,43 @@
+//! Zamani Compiler — Quantum Computing Architecture Backends (Complete Historical & Modern Roster)
+
+pub mod feynman_simulator;
+pub mod benioff_machine;
+pub mod deutsch_computer;
+pub mod shor_circuit;
+pub mod grover_oracle;
+pub mod openqasm2;
+pub mod openqasm3;
+pub mod quil;
+pub mod qir;
+pub mod qsharp;
+pub mod cirq;
+pub mod pennylane;
+pub mod braket;
+pub mod dwave_ocean;
+pub mod projectq;
+pub mod ionq;
+pub mod quantinuum;
+pub mod quera;
+pub mod intel_spin;
+pub mod ibm_superconducting;
+
+pub use feynman_simulator::FeynmanSimulatorBackend;
+pub use benioff_machine::BenioffMachineBackend;
+pub use deutsch_computer::DeutschComputerBackend;
+pub use shor_circuit::ShorCircuitBackend;
+pub use grover_oracle::GroverOracleBackend;
+pub use openqasm2::OpenQasm2Backend;
+pub use openqasm3::OpenQasm3Backend;
+pub use quil::QuilBackend;
+pub use qir::QirBackend;
+pub use qsharp::QSharpBackend;
+pub use cirq::CirqBackend;
+pub use pennylane::PennyLaneBackend;
+pub use braket::BraketBackend;
+pub use dwave_ocean::DWaveOceanBackend;
+pub use projectq::ProjectQBackend;
+pub use ionq::IonQBackend;
+pub use quantinuum::QuantinuumBackend;
+pub use quera::QuEraBackend;
+pub use intel_spin::IntelSpinBackend;
+pub use ibm_superconducting::IbmSuperconductingBackend;
