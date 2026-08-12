@@ -127,6 +127,8 @@ pub struct SemanticAnalyzer {
     pub current_return_type: Option<Type>,
     pub in_loop: bool,
     pub in_async: bool,
+    /// Tracks usage of linear/affine variables: name -> usage_count
+    pub usage_tracker: HashMap<String, usize>,
 }
 
 impl Default for SemanticAnalyzer {
@@ -143,6 +145,7 @@ impl SemanticAnalyzer {
             current_return_type: None,
             in_loop: false,
             in_async: false,
+            usage_tracker: HashMap::new(),
         };
         s.register_builtins();
         s
@@ -269,6 +272,16 @@ impl SemanticAnalyzer {
         for stmt in &program.statements {
             self.check_statement(stmt);
         }
+        
+        // Final check for linear variables: must be used exactly once
+        for (name, count) in &self.usage_tracker {
+            if let Some(Symbol::Variable(Type::Linear(_))) = self.symbols.lookup(name) {
+                if *count == 0 {
+                    self.errors.push(SemanticError::new(format!("Linear variable '{}' was never used.", name), Span::default()));
+                }
+            }
+        }
+        
         self.errors.clone()
     }
 
@@ -699,7 +712,27 @@ impl SemanticAnalyzer {
             Expression::Literal(lit) => self.infer_literal(lit),
 
             Expression::Identifier(id) => match self.symbols.lookup(&id.0) {
-                Some(sym) => sym.typ(),
+                Some(sym) => {
+                    let ty = sym.typ();
+                    let count = self.usage_tracker.entry(id.0.clone()).or_insert(0);
+                    *count += 1;
+                    match ty {
+                        Type::Linear(_) if *count > 1 => {
+                            self.errors.push(SemanticError::new(
+                                format!("Linear violation: variable '{}' used more than once.", id.0),
+                                id.1.clone(),
+                            ));
+                        }
+                        Type::Affine(_) if *count > 1 => {
+                            self.errors.push(SemanticError::new(
+                                format!("Affine violation: variable '{}' used more than once.", id.0),
+                                id.1.clone(),
+                            ));
+                        }
+                        _ => {}
+                    }
+                    ty
+                }
                 None => {
                     self.errors.push(SemanticError::new(
                         format!("Undefined symbol: '{}'", id.0),

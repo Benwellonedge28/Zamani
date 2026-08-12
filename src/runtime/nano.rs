@@ -55,10 +55,27 @@ pub struct NanoEnvironment {
     pub obstacles: Vec<(f64, f64, f64)>, // Conceptual positions of obstacles
 }
 
+/// Represents an atom in the bio-nano simulation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Atom {
+    pub element: String,
+    pub position: (f64, f64, f64),
+    pub charge: f64,
+}
+
+/// Represents a molecule assembled from atoms.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Molecule {
+    pub name: String,
+    pub atoms: Vec<Atom>,
+    pub stability: f64,
+}
+
 /// Manages all deployed nano-agents and their interaction with the environment.
 #[derive(Debug, Clone)]
 pub struct NanoAgentOrchestrator {
     pub deployed_agents: HashMap<usize, NanoAgentInstance>,
+    pub synthesized_molecules: Vec<Molecule>,
     next_agent_id: usize,
     environment: NanoEnvironment,
 }
@@ -67,6 +84,7 @@ impl NanoAgentOrchestrator {
     pub fn new() -> Self {
         NanoAgentOrchestrator {
             deployed_agents: HashMap::new(),
+            synthesized_molecules: Vec::new(),
             next_agent_id: 0,
             environment: NanoEnvironment {
                 chemical_gradients: HashMap::new(),
@@ -74,6 +92,26 @@ impl NanoAgentOrchestrator {
                 light_intensity: 0.0,
                 obstacles: Vec::new(),
             },
+        }
+    }
+
+    /// Assembles a molecule from a list of atoms.
+    pub fn assemble_molecule(&mut self, name: &str, atoms: Vec<Atom>) -> Result<Molecule, String> {
+        println!("[NanoRuntime] Assembling molecule: {} with {} atoms.", name, atoms.len());
+        let molecule = Molecule {
+            name: name.to_string(),
+            atoms,
+            stability: 0.95,
+        };
+        self.synthesized_molecules.push(molecule.clone());
+        Ok(molecule)
+    }
+
+    /// Deploys a nano-agent swarm for a specific task.
+    pub fn deploy_swarm(&mut self, count: usize, task: &str) {
+        println!("[NanoRuntime] Deploying swarm of {} agents for task: {}", count, task);
+        for i in 0..count {
+            self.assemble_nano_agent(&format!("swarm_agent_{}", i), &["sensor".into(), "actuator".into()]);
         }
     }
 
