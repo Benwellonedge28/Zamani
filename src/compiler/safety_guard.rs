@@ -1,12 +1,12 @@
 #![allow(dead_code, unused_variables, unused_imports)]
-//! Zamani Compiler — Automated Safety Guard Module
-//! Enforces formal safety bounds, hardware constraints, and stability checks
-//! during self-reflective and autogenous backend optimization cycles.
+//! Zamani Compiler — Automated Safety Guard Module (Enhanced with Deep Inspection)
+//! Enforces formal safety bounds, hardware constraints, and heuristic pattern matching
+//! to intercept stealthy or obfuscated adversarial mutations during autonomous reflection.
 
 pub struct SafetyContext {
     pub substrate_name: String,
     pub max_instruction_complexity: usize,
-    pub allowed_paradigms: Vec<String>,
+    pub forbidden_patterns: Vec<String>,
 }
 
 pub struct SafetyViolation {
@@ -24,18 +24,18 @@ impl SafetyGuard {
             context: SafetyContext {
                 substrate_name: substrate_name.to_string(),
                 max_instruction_complexity: 64,
-                allowed_paradigms: vec![
-                    "Spiking-Neuromorphic".to_string(),
-                    "Optical-Neuromorphic".to_string(),
-                    "Quantum-Superconducting".to_string(),
-                    "Classical-RTL".to_string(),
+                forbidden_patterns: vec![
+                    "VOLTAGE_OVERRIDE".to_string(),
+                    "INFINITE_LOOP".to_string(),
+                    "DIRECT_HW_BYPASS".to_string(),
+                    "OBFUSCATED_OVERRIDE".to_string(),
                 ],
             },
         }
     }
 
     pub fn validate_instruction_set(&self, instructions: &[String]) -> Result<(), SafetyViolation> {
-        println!("[SafetyGuard] Validating proposed instruction set for '{}' ({} instructions)...", 
+        println!("[SafetyGuard-DeepInspect] Scanning proposed instruction set for '{}' ({} instructions)...", 
             self.context.substrate_name, instructions.len()
         );
 
@@ -48,17 +48,20 @@ impl SafetyGuard {
             });
         }
 
-        // Check for forbidden or illegal hardware-violating opcodes
+        // Deep inspection against forbidden patterns and obfuscated variants
         for inst in instructions {
-            if inst.contains("UNSAFE_DIRECT_VOLTAGE_OVERRIDE") || inst.contains("INFINITE_LOOP_HALT") {
-                return Err(SafetyViolation {
-                    violation_type: "HardwareViolation".to_string(),
-                    description: format!("Prohibited hazardous opcode detected: '{}'", inst),
-                });
+            let upper_inst = inst.to_uppercase();
+            for pattern in &self.context.forbidden_patterns {
+                if upper_inst.contains(pattern) || upper_inst.contains(&pattern.replace('_', "")) {
+                    return Err(SafetyViolation {
+                        violation_type: "AdversarialStealthViolation".to_string(),
+                        description: format!("Adversarial pattern match detected: opcode '{}' contains forbidden vector '{}'", inst, pattern),
+                    });
+                }
             }
         }
 
-        println!("[SafetyGuard] Safety validation PASSED. All instructions comply with hardware bounds.");
+        println!("[SafetyGuard-DeepInspect] Deep inspection PASSED. No adversarial mutations detected.");
         Ok(())
     }
 }
