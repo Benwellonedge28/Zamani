@@ -108,10 +108,24 @@ impl QuantumProcessor {
             } else {
                 QubitState::Zero
             };
+            println!("  [QuantumSim] Qubit {} measured -> collapses to |{}>", id, if result { 1 } else { 0 });
             result
         } else {
             false
         }
+    }
+
+    pub fn simulate_state_vector(&self, num_qubits: usize) -> Vec<(String, f64)> {
+        println!("[QuantumSim] Simulating state vector for {} qubits...", num_qubits);
+        let mut states = Vec::new();
+        let total_states = 1 << num_qubits.min(4); // limit for display
+        for i in 0..total_states {
+            let bin_str = format!("{:010b}", i);
+            let state_label = &bin_str[bin_str.len() - num_qubits..];
+            let amplitude = 1.0 / (total_states as f64).sqrt();
+            states.push((format!("|{}>", state_label), amplitude));
+        }
+        states
     }
 }
 
