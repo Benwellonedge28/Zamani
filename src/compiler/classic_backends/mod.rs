@@ -1,4 +1,4 @@
-//! Zamani Compiler — Classic Computing Architecture Backends
+//! Zamani Compiler — Classic Computing Architecture Backends (Including Primordial Era)
 
 pub mod x86_64;
 pub mod arm64;
@@ -30,6 +30,18 @@ pub mod arc;
 pub mod blackfin;
 pub mod hexagon;
 pub mod loongarch;
+pub mod eniac;
+pub mod edsac;
+pub mod univac1;
+pub mod ibm701;
+pub mod ibm650;
+pub mod tx0;
+pub mod ibm1401;
+pub mod cdc6600;
+pub mod s360;
+pub mod h316;
+pub mod i4004;
+pub mod cray1;
 
 pub use x86_64::X86_64Backend;
 pub use arm64::Arm64Backend;
@@ -61,3 +73,15 @@ pub use arc::ArcBackend;
 pub use blackfin::BlackfinBackend;
 pub use hexagon::HexagonBackend;
 pub use loongarch::LoongArchBackend;
+pub use eniac::EniacBackend;
+pub use edsac::EdsacBackend;
+pub use univac1::Univac1Backend;
+pub use ibm701::Ibm701Backend;
+pub use ibm650::Ibm650Backend;
+pub use tx0::Tx0Backend;
+pub use ibm1401::Ibm1401Backend;
+pub use cdc6600::Cdc6600Backend;
+pub use s360::System360Backend;
+pub use h316::Honeywell316Backend;
+pub use i4004::Intel4004Backend;
+pub use cray1::Cray1Backend;
