@@ -63,6 +63,11 @@ pub mod bluespec;
 pub mod myhdl;
 pub mod spinal_hdl;
 pub mod firrtl;
+pub mod qcci_interface;
+pub mod energy_harvesting;
+pub mod spintronics;
+pub mod zkp_accelerator;
+pub mod tsn_bridge;
 
 pub use verilog::VerilogBackend;
 pub use vhdl::VhdlBackend;
