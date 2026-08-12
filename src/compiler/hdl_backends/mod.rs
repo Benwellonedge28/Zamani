@@ -68,6 +68,11 @@ pub mod energy_harvesting;
 pub mod spintronics;
 pub mod zkp_accelerator;
 pub mod tsn_bridge;
+pub mod superconducting_sfq;
+pub mod bio_ion_channel;
+pub mod gravitational_sensing;
+pub mod memristive_fabric;
+pub mod molecular_fpga;
 
 pub use verilog::VerilogBackend;
 pub use vhdl::VhdlBackend;
