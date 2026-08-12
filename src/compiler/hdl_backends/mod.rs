@@ -2,6 +2,11 @@
 
 pub mod verilog;
 pub mod vhdl;
+pub mod testbench_generator;
+pub mod verilator_sim;
+pub mod estimator;
+pub mod vendor_ip;
+pub mod formal_verifier;
 pub mod system_verilog;
 pub mod chisel;
 pub mod bluespec;
