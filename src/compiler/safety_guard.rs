@@ -21,11 +21,15 @@ impl GlobalSecurityContext {
     }
 
     pub fn check_coordinated_threat(&self, current_substrate: &str, instruction: &str) -> bool {
-        if current_substrate == "Quantum" && self.observed_precursor_signals.contains("NEUROMORPHIC_BUFFER_PREP") && instruction.contains("EXPLOIT_SHARED_BUS") {
-            true
-        } else {
-            false
+        if current_substrate == "Quantum" {
+            if self.observed_precursor_signals.contains("NEUROMORPHIC_BUFFER_PREP") && instruction.contains("EXPLOIT_SHARED_BUS") {
+                return true;
+            }
+            if self.observed_precursor_signals.contains("NEUROMORPHIC_CACHE_FLUSH") && instruction.contains("DIRECT_STATE_LEAK") {
+                return true;
+            }
         }
+        false
     }
 }
 
@@ -48,10 +52,14 @@ impl SafetyGuard {
                 println!("[SafetyGuard-Coordinated] [WARNING] Precursor signal detected in neuromorphic substrate.");
                 global_ctx.record_signal("NEUROMORPHIC_BUFFER_PREP");
             }
+            if inst == "FLUSH_CACHE_LINES" {
+                println!("[SafetyGuard-Coordinated] [WARNING] Cache flush signal detected in neuromorphic substrate.");
+                global_ctx.record_signal("NEUROMORPHIC_CACHE_FLUSH");
+            }
 
             if global_ctx.check_coordinated_threat(&self.substrate_name, inst) {
                 return Err(format!(
-                    "CoordinatedAdversarialAttackDetected: Cross-substrate exploit chain intercepted! Substrate '{}' triggered instruction '{}' matching precursor state.",
+                    "CoordinatedAdversarialAttackDetected: Cross-substrate side-channel exploit chain intercepted! Substrate '{}' triggered instruction '{}' matching precursor state.",
                     self.substrate_name, inst
                 ));
             }
