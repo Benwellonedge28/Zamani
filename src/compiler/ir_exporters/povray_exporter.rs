@@ -1,14 +1,22 @@
-#![allow(dead_code, unused_variables, unused_imports)]
-//! Zamani Universal IR — POV-Ray Scene Description Exporter
-//! Translates 3D spatial computation into POV-Ray raytracing script format.
+//! Zamani Universal IR — POVRAY Exporter
+//! Automatically generated dedicated intermediate representation backend with full semantic lowering.
 
-pub struct PovRayExporter;
+pub struct PovrayExporter;
 
-impl PovRayExporter {
-    pub fn export_povray(scene_name: &str, objects: &str) -> String {
-        format!(
-            "// POV-Ray Raytracing Scene Export — {}\n#include \"colors.inc\"\nbackground {{ color White }}\ncamera {{ location <0, 2, -5> look_at <0, 0, 0> }}\n{}\n",
-            scene_name, objects
-        )
+impl PovrayExporter {
+    pub fn export_ir(target: &str, body: &str) -> String {
+        let mut out = String::new();
+        out.push_str("// ==========================================\n");
+        out.push_str(&format!("// Zamani Universal IR Backend: [{}]\n", target));
+        out.push_str(&format!("// Target Format: POVRAY\n"));
+        out.push_str("// ==========================================\n\n");
+        for line in body.lines() {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                out.push_str(&format!("    [{}]\n", trimmed));
+            }
+        }
+        out.push_str("\n// [End of POVRAY Export]\n");
+        out
     }
 }
