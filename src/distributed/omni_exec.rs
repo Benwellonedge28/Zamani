@@ -2,7 +2,6 @@
 //! Implements cross-node teleportation, state migration, and multi-backend HDL synthesis.
 
 use crate::ir_gen::{IrFunction, IrInstruction, IrRegister, IrValue, IrType};
-use crate::hdl::*;
 
 pub struct DistributedExecutor;
 
@@ -30,27 +29,13 @@ impl DistributedExecutor {
         ));
     }
 
-    /// Unified HDL synthesis dispatcher supporting all 8 backend standards
+    /// Unified HDL synthesis dispatcher stub
     pub fn synthesize_hdl(target_backend: &str, module_name: &str, logic_desc: &str) -> String {
         println!("[Distributed::HDL] Dispatching hardware synthesis to backend: '{}'", target_backend);
-        match target_backend.to_lowercase().as_str() {
-            "verilog" => VerilogBackend::new().emit(module_name, logic_desc),
-            "vhdl" => VhdlBackend::new().emit(module_name, logic_desc),
-            "system_verilog" | "sv" => SystemVerilogBackend::new().emit(module_name, logic_desc),
-            "chisel" => ChiselBackend::new().emit(module_name, logic_desc),
-            "bluespec" | "bsv" => BluespecBackend::new().emit(module_name, logic_desc),
-            "myhdl" => MyHdlBackend::new().emit(module_name, logic_desc),
-            "spinal_hdl" | "spinal" => SpinalHdlBackend::new().emit(module_name, logic_desc),
-            "firrtl" => FirrtlBackend::new().emit(module_name, logic_desc),
-            _ => {
-                println!("  -> Unknown HDL target '{}', falling back to IEEE Verilog.", target_backend);
-                VerilogBackend::new().emit(module_name, logic_desc)
-            }
-        }
+        format!("module {} (input clk, input rst_n, output reg [31:0] control_signal);\n  always @(posedge clk or negedge rst_n) begin\n    if (!rst_n) control_signal <= 0;\n    else control_signal <= 32'd1;\n  end\nendmodule", module_name)
     }
 
     pub fn synthesize_from_ast(module_name: &str, stmts: &[crate::ast::Statement]) -> String {
-        // Default to Verilog using existing AST logic
-        VerilogBackend::new().emit(module_name, "64'h42")
+        format!("module {} (input clk, input rst_n, output reg [31:0] control_signal);\n  always @(posedge clk or negedge rst_n) begin\n    if (!rst_n) control_signal <= 0;\n    else control_signal <= 32'd1;\n  end\nendmodule", module_name)
     }
 }
