@@ -1,12 +1,12 @@
 //! Cross-Subsystem Stability Integration Tests for Zamani
 //! Validates Quantum Noise Models, Cognitive Vetting, HDL Synthesis, and Knowledge Fabric.
 
-use zamani::ast::*;
-use zamani::source_map::Span;
-use zamani::ai::cognitive_engine::CognitiveEngine;
-use zamani::distributed::omni_exec::DistributedExecutor;
-use zamani::quantum::stabilizer_scheduler::StabilizerScheduler;
-use zamani::ir_gen::{IrFunction, IrModule};
+use zamani_compiler::ast::*;
+use zamani_compiler::source_map::Span;
+use zamani_compiler::ai::cognitive_engine::CognitiveEngine;
+use zamani_compiler::distributed::omni_exec::DistributedExecutor;
+use zamani_compiler::quantum::stabilizer_scheduler::StabilizerScheduler;
+use zamani_compiler::ir_gen::{IrFunction, IrModule};
 
 #[test]
 fn test_cognitive_alignment_vetting() {
@@ -39,15 +39,15 @@ fn test_hdl_synthesis_generation() {
 
 #[test]
 fn test_quantum_stabilizer_scheduling() {
-    let mut func = IrFunction::new("test_circuit".into());
+    let mut func = IrFunction::new("test_circuit", vec![], zamani_compiler::ir_gen::IrType::Void);
     let scheduler = StabilizerScheduler::new("SurfacePatch7x7", 3);
     scheduler.schedule_rounds(&mut func, 2);
 
     let mut found_x = false;
     let mut found_z = false;
 
-    for inst in &func.instructions {
-        if let zamani::ir_gen::IrInstruction::Comment(c) = inst {
+    for inst in &func.body {
+        if let zamani_compiler::ir_gen::IrInstruction::Comment(c) = inst {
             if c.contains("X-Stabilizers") { found_x = true; }
             if c.contains("Z-Stabilizers") { found_z = true; }
         }

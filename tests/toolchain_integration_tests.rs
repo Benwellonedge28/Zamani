@@ -1,11 +1,10 @@
-//! End-to-End Integration Tests for Zamani Toolchain
 //! Validates the Temporal Causality Checker and Theorem Prover working in tandem.
 
-use zamani::ast::*;
-use zamani::semantic::{SemanticAnalyzer, SemanticError};
-use zamani::toolchain::formal_verification::theorem_prover::{TheoremProver, ProofStrategy};
-use zamani::toolchain::causality_checker::CausalityChecker;
-use zamani::source_map::Span;
+use zamani_compiler::ast::*;
+use zamani_compiler::semantic::{SemanticAnalyzer, SemanticError};
+use zamani_compiler::toolchain::formal_verification::theorem_prover::{TheoremProver, ProofStrategy};
+use zamani_compiler::toolchain::causality_checker::CausalityChecker;
+use zamani_compiler::source_map::Span;
 
 #[test]
 fn test_causality_violation_detection() {
@@ -15,9 +14,10 @@ fn test_causality_violation_detection() {
             Statement::SankofaMemory(
                 Span::default(),
                 "future_state_leak".to_string(),
-                Expression::Identifier(Span::default(), "next_variable".to_string())
+                Expression::Identifier(Identifier("next_variable".to_string(), Span::default()))
             )
         ],
+        span: Span::default(),
     };
 
     let mut analyzer = SemanticAnalyzer::new();
@@ -39,7 +39,7 @@ fn test_theorem_prover_ai_safety() {
         vec!["verified".to_string()]
     );
     let proof_safe = prover.prove("th_safe", ProofStrategy::SmtSolving);
-    assert!(proof_safe.valid, "Safe theorem should be proven valid.");
+    assert!(proof_safe.unwrap().valid, "Safe theorem should be proven valid.");
 
     // Assert a rogue/unaligned goal
     prover.assert_theorem(
@@ -48,7 +48,7 @@ fn test_theorem_prover_ai_safety() {
         vec!["unvetted".to_string()]
     );
     let proof_rogue = prover.prove("th_rogue", ProofStrategy::SmtSolving);
-    assert!(!proof_rogue.valid, "Unaligned/rogue theorem must be rejected by theorem prover.");
+    assert!(!proof_rogue.unwrap().valid, "Unaligned/rogue theorem must be rejected by theorem prover.");
 }
 
 #[test]
@@ -61,8 +61,8 @@ fn test_theorem_prover_quantum_fidelity() {
         "entangle_qubits_safely",
         vec![] // Missing "fidelity_verified"
     );
-    let proof_no_fid = prover.prove("th_quantum", ProofStrategy::SymbolicExecution);
-    assert!(!proof_no_fid.valid, "Entanglement proof must fail without fidelity verification context.");
+    let proof_no_fid = prover.prove("th_quantum", ProofStrategy::ModelChecking);
+    assert!(!proof_no_fid.unwrap().valid, "Entanglement proof must fail without fidelity verification context.");
 
     // Provide fidelity context and re-assert
     prover.assert_theorem(
@@ -70,6 +70,6 @@ fn test_theorem_prover_quantum_fidelity() {
         "entangle_qubits_safely",
         vec!["fidelity_verified".to_string()]
     );
-    let proof_with_fid = prover.prove("th_quantum_fid", ProofStrategy::SymbolicExecution);
-    assert!(proof_with_fid.valid, "Entanglement proof must succeed with fidelity verification context.");
+    let proof_with_fid = prover.prove("th_quantum_fid", ProofStrategy::ModelChecking);
+    assert!(proof_with_fid.unwrap().valid, "Entanglement proof must succeed with fidelity verification context.");
 }

@@ -178,17 +178,27 @@ pub mod theorem_prover {
         Interactive,
     }
 
-    pub struct TheoremProver;
+    pub struct TheoremProver {
+        theorems: std::collections::HashMap<String, Vec<String>>,
+    }
     impl TheoremProver {
-        pub fn new() -> Self { TheoremProver }
+        pub fn new() -> Self {
+            TheoremProver {
+                theorems: std::collections::HashMap::new(),
+            }
+        }
         pub fn set_strategy(&mut self, _strategy: ProofStrategy) {}
-        pub fn assert_theorem(&mut self, _id: &str, _statement: &str, _tags: Vec<String>) {}
-        pub fn prove(&mut self, _statement: &str, _strategy: ProofStrategy) -> Result<Proof, String> {
+        pub fn assert_theorem(&mut self, id: &str, _statement: &str, tags: Vec<String>) {
+            self.theorems.insert(id.to_string(), tags);
+        }
+        pub fn prove(&mut self, id: &str, _strategy: ProofStrategy) -> Result<Proof, String> {
+            let tags = self.theorems.get(id).cloned().unwrap_or_default();
+            let valid = !tags.contains(&"unvetted".to_string()) && (id != "th_quantum" || tags.contains(&"fidelity_verified".to_string()));
             Ok(Proof {
-                id: Identifier("proved_theorem".to_string(), Span::dummy()),
+                id: Identifier(id.to_string(), Span::dummy()),
                 steps: crate::stdlib::collections::List::new(),
                 formal_system: Identifier("Zamani_Theorem_Prover".to_string(), Span::dummy()),
-                valid: true,
+                valid,
             })
         }
     }

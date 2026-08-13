@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use zamani::compile;
+use zamani_compiler::compile;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

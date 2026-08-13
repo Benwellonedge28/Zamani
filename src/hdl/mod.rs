@@ -522,7 +522,12 @@ pub mod external_hdl_linker {
 pub struct VerilogBackend;
 impl VerilogBackend {
     pub fn new() -> Self { Self }
-    pub fn emit(&self, _module: &str, _logic: &str) -> String { "/* Verilog emission */".to_string() }
+    pub fn emit(&self, module_name: &str, _logic: &str) -> String {
+        format!(
+            "module {} (input clk, input rst_n, output reg [31:0] control_signal);\n  always @(posedge clk or negedge rst_n) begin\n    if (!rst_n) control_signal <= 0;\n    else control_signal <= 32'd1;\n  end\nendmodule",
+            module_name
+        )
+    }
 }
 pub struct VhdlBackend;
 impl VhdlBackend {

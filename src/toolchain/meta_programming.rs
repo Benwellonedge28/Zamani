@@ -288,20 +288,22 @@ mod tests {
     fn test_macro_processor_expansion() {
         let processor = MacroProcessor::new();
         let mut macros = Map::new();
+        let macro_id = Identifier("test_macro".to_string(), Span::default());
         let macro_def = MacroDefinition {
-            name: "test_macro".to_string(),
+            name: macro_id.clone(),
             input_pattern: List::new(),
             generator_logic: "generated_snippet".to_string(),
             context_constraints: Map::new(),
             security_policy_ref: None,
         };
-        macros.insert("test_macro".to_string(), macro_def);
+        macros.insert(macro_id.clone(), macro_def);
 
-        let result = processor.expand_macro(&"test_macro".to_string(), List::new(), &macros);
+        let result = processor.expand_macro(&macro_id, List::new(), &macros);
         assert!(result.is_ok());
         assert!(result.unwrap().contains("Expanded macro"));
 
-        let not_found = processor.expand_macro(&"unknown".to_string(), List::new(), &macros);
+        let unknown_id = Identifier("unknown".to_string(), Span::default());
+        let not_found = processor.expand_macro(&unknown_id, List::new(), &macros);
         assert!(not_found.is_err());
     }
 
@@ -310,7 +312,7 @@ mod tests {
         let mut engine = MetaTransformEngine::new();
         let directive = MetaTransformDirective {
             name: "inline_loops".to_string(),
-            args: vec!["for".to_string()],
+            args: vec![],
             span: Span::default(),
         };
 
@@ -319,6 +321,7 @@ mod tests {
 
         let dialect = LanguageDialectDecl {
             name: "quantum_ext".to_string(),
+            version: "1.0".to_string(),
             span: Span::default(),
         };
 
