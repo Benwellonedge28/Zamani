@@ -36,10 +36,10 @@ impl BuildSystem {
     /// Compiles a Zamani project by resolving dependencies.
     pub fn compile_project(&mut self, project_path: &str, target: &str) -> Result<(), String> {
         println!("[BuildSystem] Compiling project at '{}' for target '{}'...", project_path, target);
-        
+
         let mut sorted_tasks: Vec<String> = self.tasks.keys().cloned().collect();
         // Simplified dependency sorting
-        sorted_tasks.sort(); 
+        sorted_tasks.sort();
 
         for task_id in sorted_tasks {
             println!("[BuildSystem] Compiling module: {}", task_id);
@@ -75,4 +75,18 @@ pub fn init_build_system() {
 /// Shuts down the build system integration components.
 pub fn shutdown_build_system() {
     println!("  - Shutting down Build System...");
+}
+
+/// Module-level wrapper function to compile a Zamani project.
+/// Creates a BuildSystem instance and invokes compilation.
+pub fn compile_project(project_path: &str, target: &str) -> Result<(), String> {
+    let mut build_system = BuildSystem::new();
+    build_system.compile_project(project_path, target)
+}
+
+/// Module-level wrapper function to clean a Zamani project.
+/// Creates a BuildSystem instance and invokes cleaning.
+pub fn clean_project(project_path: &str) {
+    let mut build_system = BuildSystem::new();
+    build_system.clean_project(project_path);
 }
