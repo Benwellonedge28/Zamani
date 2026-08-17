@@ -77,7 +77,7 @@ impl CodeGenerator {
                 let backend: Box<dyn Backend> = match &self.config.target {
                     CompilationTarget::X86_64Linux => Box::new(X86Backend),
                     CompilationTarget::Arm64 => Box::new(X86Backend),
-                    CompilationTarget::Wasm32 => Box::new(WasmBackend),
+                    CompilationTarget::Wasm32 => Box::new(NewWasmBackendAdapter),
                     CompilationTarget::QASM => Box::new(QasmBackend),
                     CompilationTarget::NanoControl => Box::new(NanoBackend),
                     CompilationTarget::LLVMIR => Box::new(LlvmIrBackend),
@@ -722,5 +722,24 @@ impl Backend for MtsBackend {
         }
         out.push_str("}\n");
         Ok(out)
+    }
+}
+
+// ─── New Wasm Backend Adapter ────────────────────────────────────────────────
+
+pub struct NewWasmBackendAdapter;
+
+impl Backend for NewWasmBackendAdapter {
+    fn target_name(&self) -> &str {
+        "wasm32"
+    }
+    fn file_extension(&self) -> &str {
+        ".wat"
+    }
+
+    fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
+        let wasm_backend = crate::compiler::wasm_backend::WasmBackend::new();
+        wasm_backend.emit_wat(module)
+            .map_err(|e| CodeGenError::new(e, "wasm32"))
     }
 }

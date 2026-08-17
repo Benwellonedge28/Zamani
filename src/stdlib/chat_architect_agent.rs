@@ -100,7 +100,7 @@ impl ChatArchitectAgent {
         let mut generated_code_snippets = Map::new();
 
         // Simulate parallel/concurrent generation for different aspects of the request
-        let core_logic_snippet = AutonomousCodeGenerator::generate_code_from_goal(
+        let core_logic_snippet = self.code_generator.generate_code_from_goal(
             goal.clone(),
             constraints.clone().with(
                 "component".to_string(),
@@ -109,7 +109,7 @@ impl ChatArchitectAgent {
         )?;
         generated_code_snippets.insert("core_logic".to_string(), core_logic_snippet);
 
-        let test_suite_snippet = AutonomousCodeGenerator::generate_code_from_goal(
+        let test_suite_snippet = self.code_generator.generate_code_from_goal(
             Fact::new("generate_unit_tests".to_string(), List::new()),
             constraints.clone().with(
                 "for_component".to_string(),
@@ -155,7 +155,7 @@ impl ChatArchitectAgent {
         let combined_code = generated_code_snippets
             .values()
             .fold("".to_string(), |acc, x| acc + x + "\n"); // Combine for compilation
-        let compilation_result = AutonomousCodeGenerator::autonomously_optimize_code(
+        let compilation_result = self.code_generator.autonomously_optimize_code(
             combined_code.clone(),
             "initial_compilation".to_string(),
         )?;
@@ -181,7 +181,7 @@ impl ChatArchitectAgent {
 
         // d. Autonomous Test Execution (against generated unit tests)
         // (Conceptual: run the generated `test_suite_snippet` against the `core_logic_snippet`)
-        let test_results = AutonomousCodeGenerator::autonomously_optimize_code(
+        let test_results = self.code_generator.autonomously_optimize_code(
             test_suite_snippet.clone(),
             "run_tests".to_string(),
         )?; // Dummy: use optimize_code to simulate running tests

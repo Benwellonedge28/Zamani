@@ -269,7 +269,7 @@ impl CompilationOrchestrator {
     /// The actual Zamani compiler pipeline lives in `crate::compiler::compile`
     /// and performs:
     ///
-    ///     source → lexer → parser → semantic analysis → IR → backend
+    ///     # let _pipeline = "source -> lexer -> parser -> semantic analysis -> IR -> backend";
     ///
     /// This method therefore performs strategy selection/validation rather
     /// than creating a second compiler pipeline.

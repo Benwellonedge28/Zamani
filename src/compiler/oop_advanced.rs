@@ -173,7 +173,7 @@ impl AutonomousObject {
         );
         let current_code = self.base_object.get_zamani_code_representation(); // Conceptual
         let optimized_code =
-            AutonomousCodeGenerator::autonomously_optimize_code(current_code, optimization_goal)?; // Assuming AutonomousCodeGenerator is in scope
+            AutonomousCodeGenerator::new().autonomously_optimize_code(current_code, optimization_goal)?; // Assuming AutonomousCodeGenerator is in scope
         self.base_object.update_implementation(optimized_code); // Conceptual
         Ok(())
     }

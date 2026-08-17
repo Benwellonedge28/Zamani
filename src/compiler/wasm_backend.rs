@@ -360,7 +360,7 @@ impl WasmBackend {
                 &cfg,
                 block,
                 index,
-                &mut out,
+                out,
             )?;
         }
 

@@ -351,7 +351,7 @@ impl MetaTransformEngine {
             name: directive.name.clone(),
             pattern,
             replacement,
-            span: directive.span,
+            span: directive.span.clone(),
         });
 
         Ok(())

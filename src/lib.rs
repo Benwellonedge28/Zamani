@@ -19,6 +19,7 @@ pub mod error_reporting;
 pub mod ai;
 pub mod distributed;
 pub mod ir_gen;
+pub mod ir_verify;
 pub mod lexer;
 pub mod nano; // Nano runtime primitives
 pub mod nimbus;

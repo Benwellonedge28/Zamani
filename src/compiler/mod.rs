@@ -7,6 +7,8 @@
 
 pub mod compilation_techniques; // For Hybrid Compilation Strategies
 pub mod ir_exporters;
+pub mod wasm_backend;
+pub mod wasm_cfg;
 pub mod language_spec; // Zamani Language Specification modules
 pub mod oop_advanced; // Advanced OOP Features
 pub mod optimization_strategies;
@@ -78,6 +80,15 @@ pub fn compile(source_file_path: &str) -> Result<Vec<u8>, String> {
     // 4. IR Generation
     let mut ir_gen = crate::ir_gen::IrGenerator::new();
     let ir_module = ir_gen.generate(&program);
+
+    // 4.5. IR Verification
+    if let Err(errors) = crate::ir_verify::verify_module(&ir_module) {
+        let mut err_msg = String::new();
+        for err in errors {
+            err_msg.push_str(&format!("IR Verification Error: {}\n", err));
+        }
+        return Err(err_msg);
+    }
 
     // 5. Backend Code Generation
     let config = crate::compiler_types::CompilerConfig::default();

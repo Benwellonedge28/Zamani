@@ -77,16 +77,11 @@ impl WasmControlFlowGraph {
     pub fn from_function(function: &IrFunction) -> Result<Self, String> {
         let blocks = split_into_basic_blocks(function)?;
 
-        let entry = blocks
-            .keys()
-            .next()
+        // The true entry block is the first label encountered in source order,
+        // or "entry" if present, rather than the BTreeMap alphabetical first key.
+        let entry = blocks.keys().find(|k| k.as_str() == "entry")
             .cloned()
-            .ok_or_else(|| {
-                format!(
-                    "Function '{}' contains no basic blocks.",
-                    function.name
-                )
-            })?;
+            .unwrap_or_else(|| blocks.keys().next().unwrap().clone());
 
         let mut cfg = Self { entry, blocks };
 
@@ -420,18 +415,20 @@ fn split_into_basic_blocks(
     let mut current = WasmBasicBlock::new(current_label.clone());
 
     let mut saw_explicit_label = false;
+    let mut all_labels = std::collections::BTreeSet::new();
 
     for instruction in &function.body {
         match instruction {
             IrInstruction::Label(label) => {
                 let normalized = normalize_label(label)?;
 
-                if blocks.contains_key(&normalized) {
+                if all_labels.contains(&normalized) || (current_label == normalized && !current.instructions.is_empty()) {
                     return Err(format!(
                         "Function '{}' contains duplicate basic-block label '{}'.",
                         function.name, normalized
                     ));
                 }
+                all_labels.insert(normalized.clone());
 
                 /*
                  * If the current synthetic block contains instructions, keep

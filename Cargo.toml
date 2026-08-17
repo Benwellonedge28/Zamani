@@ -62,6 +62,7 @@ aes-gcm = "0.10"
 ed25519-dalek = "2.1"
 rsa = "0.9"
 hex = "0.4"
+wat = "1.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4"
