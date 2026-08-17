@@ -33,7 +33,10 @@ fn main() {
         match code_gen.generate(&module) {
             Ok(output) => {
                 if !output.source.is_empty() {
-                    println!("[PASS] Target '{:<20}' -> Generated {} bytes", target, output.size_bytes);
+                    println!(
+                        "[PASS] Target '{:<20}' -> Generated {} bytes",
+                        target, output.size_bytes
+                    );
                     success_count += 1;
                 } else {
                     println!("[FAIL] Target '{:<20}' -> Generated empty output", target);
@@ -48,7 +51,12 @@ fn main() {
     }
 
     println!("======================================================================");
-    println!("Test Summary: Total: {}, Passed: {}, Failed: {}", success_count + failure_count, success_count, failure_count);
+    println!(
+        "Test Summary: Total: {}, Passed: {}, Failed: {}",
+        success_count + failure_count,
+        success_count,
+        failure_count
+    );
     println!("======================================================================");
 
     if failure_count > 0 {
