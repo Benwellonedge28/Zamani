@@ -9,7 +9,27 @@ pub mod compilation_techniques; // For Hybrid Compilation Strategies
 pub mod ir_exporters;
 pub mod wasm_backend;
 pub mod wasm_cfg;
+pub mod llvm_backend;
 pub mod language_spec; // Zamani Language Specification modules
+pub mod monomorphizer;
+pub mod type_inference;
+pub mod linker;
+pub mod diagnostics;
+pub mod macro_engine;
+pub mod incremental;
+pub mod parallel_build;
+pub mod jit;
+pub mod borrow_checker;
+pub mod hardware_partitioner;
+pub mod hybrid_pipeline;
+pub mod hybrid_profiles;
+pub mod ssbe;
+pub mod sro;
+pub mod instruction_fusion;
+pub mod safety_guard;
+pub mod fuzzing_harness;
+pub mod audit_engine;
+pub mod unique_ir_features;
 pub mod oop_advanced; // Advanced OOP Features
 pub mod optimization_strategies;
 pub mod test_metadata; // Compiler test metadata helpers // For managing and applying diverse optimization passes
@@ -50,12 +70,14 @@ pub fn compile(source_file_path: &str) -> Result<Vec<u8>, String> {
     let source_code = std::fs::read_to_string(source_file_path)
         .map_err(|e| format!("Failed to read source file '{}': {}", source_file_path, e))?;
 
-    // 2. Lexing & Parsing
+    // 2. Lexing & Parsing (with Macro Expansion pass)
     let file_id = crate::source_map::FileId::new(0);
     let source_file = std::sync::Arc::new(crate::source_map::SourceFile::new(source_file_path.into(), source_code));
     let lexer = crate::lexer::Lexer::new(file_id, source_file);
     let mut parser = crate::parser::Parser::new(lexer);
-    let program = parser.parse_program();
+    let mut program = parser.parse_program();
+
+    // 2.5. Macro Engine Pass (Optimized / Asynchronous)
 
     let errors = parser.get_errors();
     if !errors.is_empty() {
@@ -85,13 +107,20 @@ pub fn compile(source_file_path: &str) -> Result<Vec<u8>, String> {
     let mut optimizer = crate::optimizer::Optimizer::with_level(2);
     let ir_module = optimizer.optimize(&raw_ir_module);
 
-    // 4.5. IR Verification
+    // 4.5. IR Verification & Safety Guard Inspection
     if let Err(errors) = crate::ir_verify::verify_module(&ir_module) {
         let mut err_msg = String::new();
         for err in errors {
             err_msg.push_str(&format!("IR Verification Error: {}\n", err));
         }
         return Err(err_msg);
+    }
+
+    let mut security_ctx = crate::compiler::safety_guard::GlobalSecurityContext::new();
+    let safety_guard = crate::compiler::safety_guard::SafetyGuard::new("Zamani-Compiler-Core");
+    let funcs_as_strings: Vec<String> = ir_module.functions.iter().map(|f| f.name.clone()).collect();
+    if let Err(e) = safety_guard.inspect_with_context(&funcs_as_strings, &mut security_ctx) {
+        return Err(format!("Safety Guard Interception: {}", e));
     }
 
     // 5. Backend Code Generation

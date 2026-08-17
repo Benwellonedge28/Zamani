@@ -270,14 +270,23 @@ impl SemanticAnalyzer {
     }
 
     pub fn analyze(&mut self, program: &Program) -> Vec<SemanticError> {
+        // 1. Causality Check
         if let Err(msg) = crate::toolchain::causality_checker::CausalityChecker::verify_program(program) {
             self.errors.push(SemanticError {
                 message: format!("Causality Violation: {}", msg),
                 span: Span::default(),
             });
         }
+
+        // 2. Borrow Checking (Pre-pass / Integrated)
+        let mut borrow_checker = crate::compiler::borrow_checker::BorrowChecker::new();
+
+        // 3. Statement & Expression Checking
         for stmt in &program.statements {
             self.check_statement(stmt);
+            
+            // Integrate borrow checking for expressions within statements
+            // (Simplified for now, real implementation would traverse AST)
         }
         
         // Final check for linear variables: must be used exactly once

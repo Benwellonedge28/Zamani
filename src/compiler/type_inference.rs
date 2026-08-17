@@ -39,7 +39,9 @@ pub type TypeVarId = usize;
 ///
 /// `Poly([a, b], T)` represents:
 ///
-///     forall a b. T
+/// ```ignore
+/// forall a b. T
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeScheme {
     Mono(Type),
@@ -456,7 +458,9 @@ impl TypeInferenceEngine {
     ///
     /// Prevents invalid recursive types such as:
     ///
-    ///     T1 = List<T1>
+    /// ```ignore
+    /// T1 = List<T1>
+    /// ```
     pub fn occurs(
         &self,
         variable: TypeVarId,
@@ -585,7 +589,7 @@ impl TypeInferenceEngine {
         expr: &Expression,
     ) -> Result<Type, TypeInferenceError> {
         match expr {
-            Expression::Literal(_, literal) => {
+            Expression::Literal(literal) => {
                 self.infer_literal(literal)
             }
 
@@ -968,8 +972,8 @@ mod tests {
 
         let literal =
             Literal::Integer(
-                crate::source_map::Span::dummy(),
                 42,
+                crate::source_map::Span::dummy(),
             );
 
         let result =
@@ -989,8 +993,8 @@ mod tests {
 
         let literal =
             Literal::Boolean(
-                crate::source_map::Span::dummy(),
                 true,
+                crate::source_map::Span::dummy(),
             );
 
         let result =

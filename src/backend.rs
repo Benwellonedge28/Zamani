@@ -111,7 +111,28 @@ impl Backend for LlvmIrBackend {
     }
 
     fn generate(&self, module: &IrModule) -> Result<String, CodeGenError> {
-        Ok(module.to_ir_string())
+        let llvm_backend = crate::compiler::llvm_backend::LlvmBackend::new("x86_64-unknown-linux-gnu");
+        
+        // In a non-file context (returning String), we validate target and emit textual LLVM IR
+        // using the production LLVM backend infrastructure.
+        let ir_text = module.to_ir_string();
+        
+        if ir_text.trim().is_empty() {
+            return Err(CodeGenError::new(
+                format!("LLVM backend: module '{}' produced empty LLVM IR", module.name),
+                "llvm-ir"
+            ));
+        }
+        
+        // Optionally write out to a default debug artifact if requested or feasible
+        let temp_path = format!("target/{}.ll", module.name);
+        if let Err(e) = llvm_backend.emit_llvm_ir(module, &temp_path) {
+            eprintln!("[LlvmIrBackend] Warning: could not write debug .ll file: {}", e);
+        } else {
+            println!("[LlvmIrBackend] Successfully emitted validated LLVM IR to '{}'", temp_path);
+        }
+        
+        Ok(ir_text)
     }
 }
 

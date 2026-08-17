@@ -334,7 +334,7 @@ impl MacroEngine {
             name: "assert_omni".into(),
             parameters: vec!["condition".into()],
             template:
-                "if !({condition}) { panic(\"Omniversal Assertion Failed: {condition}\"); }"
+                "if !({condition}) panic(\"Omniversal Assertion Failed\");"
                     .into(),
         })?;
 
