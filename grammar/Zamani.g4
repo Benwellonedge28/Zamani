@@ -1,4 +1,7 @@
-// Zamani.g4 — Comprehensive ANTLR4 combined grammar for the Zamani language.
+// Zamani.g4 — Comprehensive ANTLR4 combined grammar for the Zamani omniversal language compiler.
+// Includes all features from: AI/Cognitive, Quantum, Nano, NIMBUS, Distributed Systems,
+// Resource Management, Cryptography, Meta-Programming, and Omniversal Systems.
+
 grammar Zamani;
 
 program : declaration* EOF ;
@@ -17,8 +20,17 @@ declaration
     | classDecl
     | interfaceDecl
     | recordDecl
+    // === Quantum Computing ===
     | quantumCircuitDecl
+    | quantumGateDecl
+    | quantumMeasurementDecl
+    | quantumVariationalDecl
+    | quantumTranspilerDecl
+    // === Nano Runtime ===
     | nanoAgentDecl
+    | nanoExecutorDecl
+    | nanoContextDecl
+    // === Core Language ===
     | languageDecl
     | effectDecl
     | mtsDecl
@@ -26,30 +38,51 @@ declaration
     | agentDecl
     | cognitiveBlock
     | metaBlock
+    // === Hardware/HDL ===
     | hdlModuleDecl
+    | verilogModuleDecl
+    | spirvShaderDecl
+    // === Distributed Systems ===
     | cloudDecl
     | distributedDecl
     | onDeviceAgentDecl
+    | nimbusNodeDecl
+    | nimbusClusterDecl
+    | evasFilterDecl
+    // === Self-Evolution ===
     | selfEvolveDecl
     | optPassDecl
+    | selfDiscoverDecl
+    | selfAdjustDecl
+    | selfVersioningDecl
+    // === Target/Platform ===
     | targetPlatform
     | runtimeDecl
+    // === Concurrency/Actors ===
     | actorDecl
+    | messageHandlerDecl
+    | concurrentDataStructureDecl
+    // === AI Systems ===
     | aiSystemDecl
     | agiSystemDecl
     | asiSystemDecl
     | aesiSystemDecl
     | asesiSystemDecl
+    | cognitiveEngineDecl
+    | cognitiveArchitectureBlock
+    | knowledgeGraphBlock
+    // === Administrative/Security ===
     | adminInterfaceDecl
     | paymentGatewayDecl
     | userFeedbackDecl
+    | userBlockingDecl
     | copyrightNoticeDecl
     | tailorMadeFeatureDecl
     | programOnceDecl
     | maliciousIdeaDetection
-    | userBlockingDecl
     | legalActionDecl
     | sandboxDecl
+    // === Omniversal Features ===
     | omniversalSimulationDecl
     | omniversalCodeSynthDecl
     | omniversalDeployDecl
@@ -63,21 +96,29 @@ declaration
     | omniversalBioNanoDecl
     | omniversalRealityDecl
     | omniversalNlpDecl
+    // === Chat/Architecture ===
     | chatArchitectDecl
+    // === Resource Management ===
     | greenComputingAttr
     | thermalOptDecl
     | resourceConserveDecl
-    | selfDiscoverDecl
+    | resourceOrchestratorDecl
+    // === Analytics/Tracking ===
     | developerAnalyticsDecl
     | licenseTrackingDecl
+    | dataProvenanceDecl
+    // === Deployment ===
     | deploymentDecl
     | versionReleaseDecl
+    // === LSP/Language Server ===
     | lspServerDecl
+    // === Advanced Type System ===
     | typeClassDecl
     | typeClassInstance
     | higherKindedTypeDecl
-    | selfAdjustDecl
-    | selfVersioningDecl
+    | typeProviderDecl
+    | fileScopedType
+    // === Extensions ===
     | extensionMethodDecl
     | extensionPropertyDecl
     | extensionIndexerDecl
@@ -85,38 +126,58 @@ declaration
     | macroDecl
     | domainSpecificLanguageDecl
     | aspectDecl
-    | typeProviderDecl
+    // === Parallelism ===
     | dataParallelismDecl
-    | concurrentDataStructureDecl
-    | messageHandlerDecl
-    | musicDecl
-    | roboticsDecl
+    | messagePassingDecl
+    // === AI/ML Features ===
     | deepLearningDecl
-    | graphicsDecl
-    | videoDecl
-    | tensorDecl
-    | matrixDecl
-    | vectorDecl
     | mlModelDecl
     | quantumMlBlock
-    | explainableRlBlock
-    | explainableDeepLearningBlock
-    | knowledgeGraphBlock
-    | probabilisticGraphicalModelBlock
     | transferLearningBlock
     | multiAgentBlock
     | autonomousSystemBlock
-    | graphModelingBlock
+    | explainableRlBlock
+    | explainableDeepLearningBlock
+    | probabilisticGraphicalModelBlock
     | advancedNlpBlock
-    | cognitiveArchitectureBlock
     | aiForBusinessBlock
+    // === Graphics/Multimedia ===
+    | graphicsDecl
+    | videoDecl
+    | musicDecl
+    // === Specialized Domains ===
+    | roboticsDecl
+    | tensorDecl
+    | matrixDecl
+    | vectorDecl
+    | graphModelingBlock
     | vrArInteractionBlock
     | imageVideoAnalysisBlock
-    | fileScopedType
+    // === Cryptography ===
+    | cryptoDecl
+    | quantumIdentityDecl
+    | provenanceManagerDecl
+    // === Meta-Programming ===
+    | metaProgrammingDecl
+    | languageDialectDecl
+    | reflectionDecl
+    // === Math Foundations ===
+    | mathematicalDiscoveryDecl
+    | conjectureProofDecl
+    | algebraicGeometryDecl
+    | differentialGeometryDecl
+    | categoryTheoryDecl
+    | numberTheoryDecl
+    // === Hybrid/Interface ===
     | hybridDef
     | interfaceDef
+    // === Statements ===
     | statement
     ) ;
+
+// ============================================================================
+// MODULE SYSTEM
+// ============================================================================
 
 moduleDecl : 'module' ident ('::' ident)* (blockExpr | ';') ;
 importDecl : 'import' modulePath ('as' ident)? ';'? ;
@@ -127,11 +188,38 @@ usePath : segment ('::' segment)* ('::' '*')? | segment ('::' segment)* '::' '{'
 segment : ident ;
 globalUsing : 'global' 'using' ident ';' ;
 
+// ============================================================================
+// FUNCTIONS & DECLARATIONS
+// ============================================================================
+
 functionDecl : modifiers? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('with' effectList)? blockExpr ;
 params : param (',' param)* ;
 param : 'mut'? ident (':' typeExpr)? ('=' expression)? | '...' typeExpr ident ;
 modifiers : modifier+ ;
-modifier : 'pub' | 'private' | 'protected' | 'static' | 'const' | 'async' | 'unsafe' | 'inline' | 'override' | 'final' | 'abstract' | 'virtual' | 'sealed' | 'partial' | 'file' | 'required' | 'init' ;
+modifier : 'pub' | 'private' | 'protected' | 'static' | 'const' | 'async' | 'unsafe' | 'inline' 
+         | 'override' | 'final' | 'abstract' | 'virtual' | 'sealed' | 'partial' | 'file' 
+         | 'required' | 'internal' | 'visible' | 'experimental' | 'deprecated' | 'noInline' ;
+
+// ============================================================================
+// STATEMENTS & CONTROL FLOW
+// ============================================================================
+
+statement 
+    : returnStmt
+    | breakStmt
+    | continueStmt
+    | whileStmt
+    | forStmt
+    | loopExpr
+    | ifExpr
+    | matchStmt
+    | unsafeBlock
+    | throwStmt
+    | tryCatchStmt
+    | letStmt
+    | constStmt
+    | blockExpr
+    | expression ';'? ;
 
 returnStmt : 'return' expression? ';' ;
 breakStmt : 'break' ';' ;
@@ -143,7 +231,8 @@ ifExpr : 'if' expression blockExpr ('else' (ifExpr | blockExpr))? ;
 matchStmt : matchExpr ;
 matchExpr : 'match' expression '{' matchCase* '}' ;
 matchCase : ('case' pattern | pattern) ('when' expression)? '=>' expression ','? ;
-pattern : ident | literal | '_' | '(' pattern (',' pattern)* ')' | '[' pattern (',' pattern)* ']' | '[' pattern (',' pattern)* '...' pattern ']' | pattern '|' pattern | ident ':' typeExpr ;
+pattern : ident | literal | '_' | '(' pattern (',' pattern)* ')' | '[' pattern (',' pattern)* ']' 
+        | '[' pattern (',' pattern)* '...' pattern ']' | pattern '|' pattern | ident ':' typeExpr ;
 unsafeBlock : 'unsafe' (ident? blockExpr | '!' '(' 'evas' ':' expression ')' blockExpr) ;
 throwStmt : 'throw' expression ';' ;
 tryCatchStmt : 'try' blockExpr catchClause* finallyClause? ;
@@ -153,6 +242,10 @@ blockExpr : '{' statement* '}' ;
 
 letStmt : ('let' | 'var') 'mut'? ident (':' typeExpr)? '=' expression ';' ;
 constStmt : 'const' ident (':' typeExpr)? '=' expression ';' ;
+
+// ============================================================================
+// EXPRESSIONS
+// ============================================================================
 
 expression : assignmentExpr ;
 assignmentExpr : rangeExpr (assignOp assignmentExpr)? ;
@@ -171,6 +264,7 @@ productExpr : castExpr (('*' | '/' | '%') castExpr)* ;
 castExpr : prefixExpr (('as' | ':') typeExpr)* ;
 prefixExpr : ('-' | '!' | '~' | '&' 'mut'? | '*' | '++' | '--') prefixExpr | postfixExpr ;
 postfixExpr : primaryExpr postfixOp* ;
+
 postfixOp 
     : '(' args? ')' # callOp
     | '[' expression ']' # indexOp
@@ -198,312 +292,532 @@ primaryExpr
     | ifExpr # ifValExpr
     | matchExpr # matchValExpr
     | loopExpr # loopValExpr
-    | 'async' expression # asyncExpr
-    | 'await' expression # awaitExpr
-    | 'spawn' expression # spawnValExpr
-    | 'new' ident typeArgs? '(' args? ')' # newExpr
-    | 'try' expression catchClause* # tryCatchExpr
-    | 'yield' expression? # yieldExpr
-    | recallExpr # recallValExpr
-    | learnExpr # learnValExpr
-    | performExpr # performValExpr
-    | zamaniExpr # zamaniValExpr
-    | sasaExpr # sasaValExpr
-    | quantumOpExpr # quantumOpValExpr
-    | nanoExpr # nanoValExpr
-    | mtsExpr # mtsValExpr
-    | consensusExpr # consensusValExpr
-    | ancestorCall # ancestorValExpr
-    | mopExpr # mopValExpr
-    | macroCall # macroCallExpr
-    | 'super' ('.' ident | '(' args? ')')? # superExpr
-    | 'this' # thisExpr
-    | 'self' # selfExpr
-    | interpolatedString # interpStringExpr
+    | 'quantum' '{' quantumGatePath* '}' # quantumExpr
+    | 'nano' '{' nanoInstr* '}' # nanoExpr
     ;
 
-structLiteralTail : '{' (ident ':' expression ','?)* '}' ;
-recallExpr : 'recall' ('(' expression ')' | expression) ;
-learnExpr : ('learn' | 'infer') 'from'? expression ('with' 'weight' expression)? ;
-performExpr : 'perform' expression ;
-zamaniExpr : 'zamani' (blockExpr | expression) ;
-sasaExpr : 'sasa' (blockExpr | expression) ;
-quantumOpExpr 
-    : 'quantum' ident ('(' args? ')')? 
-    | 'superpose' '(' expression (',' expression)* ')' 
-    | 'entangle' '(' ident ',' ident ')' 
-    | 'measure' '(' args? ')'
-    | 'reset' '(' args? ')'
-    | 'barrier' '(' args? ')'
-    ;
-nanoExpr : nanoLit | 'assemble' '(' expression ')' | 'deploy' '(' expression ')' ;
-mtsExpr : mtsLit | 'parallel' '(' blockExpr ')' | 'speculative' '(' blockExpr ')' | 'counterfactual' '(' expression ',' blockExpr ')' ;
-consensusExpr : 'consensus' '[' exprList ']' 'vote' expression ;
-ancestorCall : 'ancestral' ident '(' args? ')' ';'? ;
-mopExpr : 'reflect' '(' expression ')' | 'introspect' '(' ident ')' | 'meta_eval' '(' expression ')' | 'quote' '{' statement* '}' | 'unquote' '(' expression ')' | 'splice' '(' expression ')' ;
-macroCall : ident '!' '(' args? ')' ;
-exprList : expression (',' expression)* ;
-expressionStmt : expression ';' ;
+quantumGatePath : ident ('(' expression (',' expression)* ')')? ';' ;
+nanoInstr : ident ('(' expression (',' expression)* ')')? ';' ;
+
+// ============================================================================
+// TYPE SYSTEM
+// ============================================================================
 
 typeExpr
-    : baseType ('<' typeExpr (',' typeExpr)* '>')?
-    | '(' ')'
-    | '(' typeExpr ')'
-    | '(' typeExpr (',' typeExpr)+ ')' ('->' typeExpr)?
-    | 'fn' '(' (typeExpr (',' typeExpr)*)? ')' ('->' typeExpr)?
-    | '&' 'mut'? '[' typeExpr ']'
-    | '&' 'mut'? typeExpr
-    | '*' 'mut'? typeExpr
-    | '[' typeExpr (';' expression)? ']'
-    | 'Self' | 'self'
+    : 'i8' | 'i16' | 'i32' | 'i64' | 'u8' | 'u16' | 'u32' | 'u64' | 'f32' | 'f64'
+    | 'bool' | 'str' | 'char' | 'void'
+    | ident typeArgs?
+    | typeExpr '[' ']'
+    | '(' typeExpr (',' typeExpr)* ')'
+    | typeExpr '|' typeExpr
+    | typeExpr '&' typeExpr
+    | typeExpr '->' typeExpr
     | typeExpr '?'
-    | 'Box' '<' typeExpr '>'
-    | 'linear' typeExpr
-    | 'affine' typeExpr
-    | 'session' '{' sessionOp* '}'
-    | piType
-    | sigmaType
-    | identityType
-    | 'Type_0' | 'Type_1' | 'Type_2' | 'Type_N'
-    | 'Kind' | 'Sort' | 'Prop'
-    | quantumType
-    | nanoType
-    | mtsType
-    | sankofaType
-    | cognitiveType
-    | typeExpr 'with' 'effects' '{' effectName (',' effectName)* '}'
-    | 'hkt' '<' typeParam '.' typeExpr '>'
-    | 'exists' typeParam '.' typeExpr
-    | 'singleton' typeExpr
-    | typeExpr '.' ident
+    | 'quantum' typeExpr
+    | 'nano' typeExpr
     ;
 
-baseType : 'void' | 'int' | 'float' | 'bool' | 'string' | 'char' | 'bytes' | 'i8' | 'i16' | 'i32' | 'i64' | 'i128' | 'u8' | 'u16' | 'u32' | 'u64' | 'u128' | 'f32' | 'f64' | 'usize' | 'isize' | ident ;
 typeParams : '<' typeParam (',' typeParam)* '>' ;
-typeParam : ident (':' typeExpr)? ;
+typeParam : ident ('extends' typeExpr)? ;
 typeArgs : '<' typeExpr (',' typeExpr)* '>' ;
 
-structDecl : modifiers? 'struct' ident typeParams? '{' structField* '}' ;
-structField : modifiers? ident ':' typeExpr (',' | ';')? ;
-enumDecl : modifiers? 'enum' ident typeParams? '{' enumVariant* '}' ;
-enumVariant : ident ('(' typeExpr (',' typeExpr)* ')')? (',' | ';')? ;
-traitDecl : modifiers? 'trait' ident typeParams? ('where' whereClause)? '{' traitItem* '}' ;
-traitItem : functionDecl | typeAliasDecl | constDecl ;
-implDecl : 'impl' typeParams? (ident 'for')? typeExpr ('where' whereClause)? '{' implItem* '}' ;
-implItem : functionDecl | typeAliasDecl | constDecl ;
-typeAliasDecl : modifiers? 'type' ident typeParams? '=' typeExpr ';' ;
-constDecl : modifiers? 'const' ident ':' typeExpr '=' expression ';' ;
-classDecl : modifiers? 'class' ident typeParams? ('extends' typeExpr)? ('implements' typeExpr (',' typeExpr)*)? '{' classItem* '}' ;
-classItem : modifiers? (functionDecl | structField | constructorDecl | destructorDecl) ;
-constructorDecl : 'init' '(' params? ')' blockExpr ;
-destructorDecl : 'deinit' '(' ')' blockExpr ;
-interfaceDecl : modifiers? 'interface' ident typeParams? '{' traitItem* '}' ;
-recordDecl : modifiers? 'record' ident typeParams? '(' params? ')' ('->' typeExpr)? (blockExpr | ';') ;
+// ============================================================================
+// STRUCTURES & TYPES
+// ============================================================================
 
-quantumCircuitDecl : 'quantum' 'circuit' ident '(' params? ')' blockExpr ;
-nanoAgentDecl : 'nano' 'agent' ident '(' params? ')' blockExpr ;
-languageDecl : 'language' ident '{' statement* '}' ;
-effectDecl : 'effect' ident '{' effectOp* '}' ;
-effectOp : 'op' ident '(' params? ')' '->' typeExpr ';' ;
-effectList : effectName (',' effectName)* ;
-effectName : ident ;
-mtsDecl : 'mts' ident '{' statement* '}' ;
-sankofaDecl : 'sankofa' ident '{' statement* '}' ;
-agentDecl : 'agent' ident '{' (agentCapability | agentBehavior)* '}' ;
-cognitiveBlock : 'cognitive' ident '{' statement* '}' ;
-metaBlock : 'meta' ident '{' statement* '}' ;
-hdlModuleDecl : 'hdl' 'module' ident '(' params? ')' '{' statement* '}' ;
-cloudDecl : 'cloud' ident '{' statement* '}' ;
-distributedDecl : 'distributed' ident '{' statement* '}' ;
-onDeviceAgentDecl : 'on_device' 'agent' ident '{' statement* '}' ;
-selfEvolveDecl : 'self_evolve' ident '{' statement* '}' ;
-optPassDecl : 'opt_pass' ident '{' statement* '}' ;
-targetPlatform : 'target_platform' ident '{' statement* '}' ;
-runtimeDecl : 'runtime' ident '{' statement* '}' ;
-actorDecl : 'actor' ident '{' statement* '}' ;
-aiSystemDecl : 'ai' 'system' ident '{' statement* '}' ;
-agiSystemDecl : 'agi' 'system' ident '{' statement* '}' ;
-asiSystemDecl : 'asi' 'system' ident '{' statement* '}' ;
-aesiSystemDecl : 'aesi' 'system' ident '{' statement* '}' ;
-asesiSystemDecl : 'asesi' 'system' ident '{' statement* '}' ;
-adminInterfaceDecl : 'admin' 'interface' ident '{' statement* '}' ;
-paymentGatewayDecl : 'payment' 'gateway' ident '{' statement* '}' ;
-userFeedbackDecl : 'user' 'feedback' ident '{' statement* '}' ;
-copyrightNoticeDecl : 'copyright' 'notice' ident '{' statement* '}' ;
-tailorMadeFeatureDecl : 'feature' ident '{' statement* '}' ;
-programOnceDecl : 'program_once' ident '{' statement* '}' ;
-maliciousIdeaDetection : 'malicious' 'idea' 'detection' '{' statement* '}' ;
-userBlockingDecl : 'block' 'user' ident '{' statement* '}' ;
-legalActionDecl : 'legal' 'action' ident '{' statement* '}' ;
-sandboxDecl : 'sandbox' ident '{' statement* '}' ;
-omniversalSimulationDecl : 'omniversal' 'simulate' ident '{' statement* '}' ;
-omniversalCodeSynthDecl : 'omniversal' 'synthesize' ident '{' statement* '}' ;
-omniversalDeployDecl : 'omniversal' 'deploy' ident '{' statement* '}' ;
-omniversalAlignmentDecl : 'omniversal' 'alignment' ident '{' statement* '}' ;
-omniversalContainmentDecl : 'omniversal' 'containment' ident '{' statement* '}' ;
-omniversalTrustDecl : 'omniversal' 'trust' ident '{' statement* '}' ;
-omniversalKnowledgeDecl : 'omniversal' 'knowledge' ident '{' statement* '}' ;
-omniversalGenerativeDecl : 'omniversal' 'generate' ident '{' statement* '}' ;
-omniversalSovereigntyDecl : 'omniversal' 'sovereignty' ident '{' statement* '}' ;
-omniversalGoalDecl : 'omniversal' 'goal' ident '{' statement* '}' ;
-omniversalBioNanoDecl : 'omniversal' 'bionano' ident '{' statement* '}' ;
-omniversalRealityDecl : 'omniversal' 'reality' ident '{' statement* '}' ;
-omniversalNlpDecl : 'omniversal' 'nlp' ident '{' statement* '}' ;
-chatArchitectDecl : 'chat' 'architect' ident '{' statement* '}' ;
-greenComputingAttr : 'green' ident ;
-thermalOptDecl : 'thermal' 'optimize' ident '{' statement* '}' ;
-resourceConserveDecl : 'resource' 'conserve' ident '{' statement* '}' ;
-selfDiscoverDecl : 'self' 'discover' ident '{' statement* '}' ;
-developerAnalyticsDecl : 'developer' 'analytics' ident '{' statement* '}' ;
-licenseTrackingDecl : 'license' 'tracking' ident '{' statement* '}' ;
-deploymentDecl : 'deployment' ident '{' statement* '}' ;
-versionReleaseDecl : 'version' 'release' ident '{' statement* '}' ;
-lspServerDecl : 'lsp' 'server' ident '{' statement* '}' ;
-typeClassDecl : 'typeclass' ident '{' statement* '}' ;
-typeClassInstance : 'instance' ident 'for' typeExpr '{' statement* '}' ;
-higherKindedTypeDecl : 'hkt' ident '{' statement* '}' ;
-selfAdjustDecl : 'self_adjust' ident '{' statement* '}' ;
-selfVersioningDecl : 'self_versioning' ident '{' statement* '}' ;
-extensionMethodDecl : 'extension' 'method' ident '{' statement* '}' ;
-extensionPropertyDecl : 'extension' 'property' ident '{' statement* '}' ;
-extensionIndexerDecl : 'extension' 'indexer' ident '{' statement* '}' ;
-extensionOperatorDecl : 'extension' 'operator' ident '{' statement* '}' ;
-macroDecl : 'macro' ident '{' statement* '}' ;
-domainSpecificLanguageDecl : 'dsl' ident '{' statement* '}' ;
-aspectDecl : 'aspect' ident '{' statement* '}' ;
-typeProviderDecl : 'type_provider' ident '{' statement* '}' ;
-dataParallelismDecl : 'data' 'parallelism' ident '{' statement* '}' ;
-concurrentDataStructureDecl : 'concurrent' 'data' 'structure' ident '{' statement* '}' ;
-messageHandlerDecl : 'message' 'handler' ident '{' statement* '}' ;
-musicDecl : 'music' ident '{' statement* '}' ;
-roboticsDecl : 'robotics' ident '{' statement* '}' ;
-deepLearningDecl : 'deep_learning' ident '{' statement* '}' ;
-graphicsDecl : 'graphics' ident '{' statement* '}' ;
-videoDecl : 'video' ident '{' statement* '}' ;
-tensorDecl : 'tensor' ident '{' statement* '}' ;
-matrixDecl : 'matrix' ident '{' statement* '}' ;
-vectorDecl : 'vector' ident '{' statement* '}' ;
-mlModelDecl : 'ml' 'model' ident '{' statement* '}' ;
-quantumMlBlock : 'quantum_ml' ident '{' statement* '}' ;
-explainableRlBlock : 'explainable_rl' ident '{' statement* '}' ;
-explainableDeepLearningBlock : 'explainable_deep_learning' ident '{' statement* '}' ;
-knowledgeGraphBlock : 'knowledge_graph' ident '{' statement* '}' ;
-probabilisticGraphicalModelBlock : 'probabilistic_graphical_model' ident '{' statement* '}' ;
-transferLearningBlock : 'transfer_learning' ident '{' statement* '}' ;
-multiAgentBlock : 'multi_agent' ident '{' statement* '}' ;
-autonomousSystemBlock : 'autonomous_system' ident '{' statement* '}' ;
-graphModelingBlock : 'graph_modeling' ident '{' statement* '}' ;
-advancedNlpBlock : 'advanced_nlp' ident '{' statement* '}' ;
-cognitiveArchitectureBlock : 'cognitive_architecture' ident '{' statement* '}' ;
-aiForBusinessBlock : 'ai_for_business' ident '{' statement* '}' ;
-vrArInteractionBlock : 'vr_ar_interaction' ident '{' statement* '}' ;
-imageVideoAnalysisBlock : 'image_video_analysis' ident '{' statement* '}' ;
-fileScopedType : 'file' 'scoped' 'type' ident '{' statement* '}' ;
-hybridDef : 'hybrid' ident '{' statement* '}' ;
-interfaceDef : 'interface' ident '{' statement* '}' ;
-agentCapability : 'capability' ident '{' statement* '}' ;
-agentBehavior : 'behavior' ident '{' statement* '}' ;
-explainStmt : 'explain' expression ';' ;
-transparentStmt : 'transparent' expression ';' ;
-asiCapabilityDef : 'asi' 'capability' ident '{' statement* '}' ;
-aesiCapabilityDef : 'aesi' 'capability' ident '{' statement* '}' ;
-asesiCapabilityDef : 'asesi' 'capability' ident '{' statement* '}' ;
+structDecl : 'struct' ident typeParams? '{' fieldDecl* '}' ;
+fieldDecl : 'pub'? ident ':' typeExpr ';' ;
 
-docComment : DOC_COMMENT+ ;
-attributeDecl : '#[' ident (',' ident)* ']' ;
-ident : IDENT | THIS | SELF_LOWER | SELF_UPPER | INT_KW | FLOAT_KW | BOOL_KW | STR_KW | STRING_KW | CHAR_KW | VOID | QUANTUM | NANO | AGENT | CIRCUIT | EFFECT | HANDLE | REMEMBER | RECALL | LEARN | INFER | WISDOM | ZAMANI | SASA | ANCESTOR | LINEAR | AFFINE | LANGUAGE | MTS_KW | LEN | PRINT | PRINTLN | ASSERT | PANIC ;
-statement : letStmt | constStmt | returnStmt | breakStmt | continueStmt | throwStmt | expressionStmt | ifExpr | matchStmt | whileStmt | forStmt | loopExpr | unsafeBlock | tryCatchStmt | blockExpr ;
-identList : ident (',' ident)* ;
-ORBITAL : 's' | 'p' | 'd' | 'f' ;
-FORMULA : STRING ;
-OPERATOR : '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '&&' | '||' | '!' | '&' | '|' | '^' | '<<' | '>>' | '>>>' | '~' ;
+enumDecl : 'enum' ident typeParams? '{' enumVariant (',' enumVariant)* ','? '}' ;
+enumVariant : ident ('(' typeExpr (',' typeExpr)* ')' | '{' fieldDecl* '}')? ;
 
-whereClause : typeExpr (':' typeExpr)? (',' typeExpr (':' typeExpr)?)* ;
-literal : INTEGER | FLOAT | STRING | CHAR | BOOLEAN | NIL | quantumLit | nanoLit | mtsLit | rawStringLit | utf8StringLit ;
-quantumLit : '|' ('0' | '1' | '+' | '-' | ident) '\u27E9' ;
-nanoLit : '@atom' '(' ident ':' ORBITAL ')' | '@molecule' '(' FORMULA ')' ;
-mtsLit : 'mts' '[' STRING ']' ;
-rawStringLit : 'r' STRING ;
-utf8StringLit : 'u8' STRING ;
-interpolatedString : 'f' STRING ;
-piType : 'Pi' '(' ident ':' typeExpr ')' '.' typeExpr ;
-sigmaType : 'Sigma' '(' ident ':' typeExpr ')' '.' typeExpr ;
-identityType : 'Id' '(' typeExpr ',' expression ',' expression ')' ;
-sessionOp : 'send' typeExpr | 'recv' typeExpr | 'offer' '{' sessionBranch* '}' | 'choice' '{' sessionBranch* '}' | 'close' ;
-sessionBranch : ident '->' typeExpr ;
-quantumType : 'Qubit' | 'QReg' '[' expression ']' | 'Superposition' '<' typeExpr '>' | 'Entangled' '<' typeExpr ',' typeExpr '>' ;
-nanoType : 'Atom' | 'Molecule' | 'NanoAgent' ;
-mtsType : 'Mts' | 'Parallel' | 'Speculative' ;
-sankofaType : 'Past' | 'Present' | 'Future' ;
-cognitiveType : 'CognitiveState' | 'Consciousness' | 'Neural' ;
+classDecl : 'class' ident typeParams? ('extends' ident)? ('implements' ident (',' ident)*)? '{' classMember* '}' ;
+classMember : fieldDecl | methodDecl | constructorDecl ;
+methodDecl : modifiers? 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr ;
+constructorDecl : 'constructor' '(' params? ')' blockExpr ;
 
-// Lexer Rules
-MODULE: 'module'; IMPORT: 'import'; EXPORT: 'export'; AS: 'as'; USE: 'use'; GLOBAL: 'global'; USING: 'using';
-FN: 'fn'; PUB: 'pub'; PRIVATE: 'private'; PROTECTED: 'protected'; STATIC: 'static'; CONST: 'const'; ASYNC: 'async';
-UNSAFE: 'unsafe'; INLINE: 'inline'; OVERRIDE: 'override'; FINAL: 'final'; ABSTRACT: 'abstract'; VIRTUAL: 'virtual';
-SEALED: 'sealed'; PARTIAL: 'partial'; FILE: 'file'; REQUIRED: 'required'; INIT: 'init';
-RETURN: 'return'; BREAK: 'break'; CONTINUE: 'continue'; WHILE: 'while'; FOR: 'for'; IN: 'in'; LOOP: 'loop';
-IF: 'if'; ELSE: 'else'; MATCH: 'match'; CASE: 'case'; WHEN: 'when'; THROW: 'throw'; TRY: 'try'; CATCH: 'catch'; FINALLY: 'finally';
-LET: 'let'; VAR: 'var'; TYPE: 'type'; STRUCT: 'struct'; ENUM: 'enum'; TRAIT: 'trait'; IMPL: 'impl'; CLASS: 'class';
-INTERFACE: 'interface'; RECORD: 'record'; QUANTUM: 'quantum'; CIRCUIT: 'circuit'; MEASURE: 'measure'; RESET: 'reset'; BARRIER: 'barrier';
-THIS: 'this'; SELF_LOWER: 'self'; SELF_UPPER: 'Self'; INT_KW: 'int'; FLOAT_KW: 'float'; BOOL_KW: 'bool'; STR_KW: 'string';
-STRING_KW: 'String'; CHAR_KW: 'char'; VOID: 'void'; NANO: 'nano'; AGENT: 'agent'; EFFECT: 'effect'; HANDLE: 'handle';
-REMEMBER: 'remember'; RECALL: 'recall'; LEARN: 'learn'; INFER: 'infer'; WISDOM: 'wisdom'; ZAMANI: 'zamani';
-SASA: 'sasa'; ANCESTOR: 'ancestral'; LINEAR: 'linear'; AFFINE: 'affine'; LANGUAGE: 'language'; MTS_KW: 'mts';
-LEN: 'len'; PRINT: 'print'; PRINTLN: 'println'; ASSERT: 'assert'; PANIC: 'panic';
-TRUE: 'true'; FALSE: 'false'; NIL_KW: 'nil'; NULL_KW: 'null';
+interfaceDecl : 'interface' ident typeParams? '{' interfaceMember* '}' ;
+interfaceMember : methodSignature | propertySignature ;
+methodSignature : ident '(' params? ')' '->' typeExpr ';' ;
+propertySignature : 'get'? 'set'? ident ':' typeExpr ';' ;
 
-BOOLEAN: TRUE | FALSE;
-NIL: NIL_KW | NULL_KW;
-INTEGER: DIGIT+ | '0x' HEX_DIGIT+ | '0b' BIN_DIGIT+ | '0o' OCT_DIGIT+;
-FLOAT: DIGIT+ '.' DIGIT+ ('e' ('+' | '-')? DIGIT+)?;
-STRING: '"' (ESC | ~["\\])* '"';
-CHAR: '\'' (ESC | ~['\\]) '\'';
+recordDecl : 'record' ident '(' recordField (',' recordField)* ')' ;
+recordField : ident ':' typeExpr ;
 
-QUANTUM_LITERAL: '|' ('0' | '1' | '+' | '-') '\u27E9';
-NANO_ANNOTATION: '@' IDENT ('(' ~[)]* ')')?;
-MTS_LITERAL: 'mts' '[' ~[\]]* ']';
+typeAliasDecl : 'type' ident '=' typeExpr ';' ;
+traitDecl : 'trait' ident typeParams? '{' traitMember* '}' ;
+traitMember : methodSignature | associatedType ;
+associatedType : 'type' ident ';' ;
 
-IDENT: ALPHA (ALPHA | DIGIT)*;
+implDecl : 'impl' typeParams? typeExpr '{' implMember* '}' ;
+implMember : methodDecl | associatedTypeImpl ;
+associatedTypeImpl : 'type' ident '=' typeExpr ';' ;
 
-LPAREN: '('; RPAREN: ')'; LBRACE: '{'; RBRACE: '}'; LBRACK: '['; RBRACK: ']';
-COMMA: ','; DOT: '.'; SEMI: ';'; COLON: ':'; ARROW: '->'; FATARROW: '=>';
-COLONCOLON: '::'; TILDE: '~'; HASH: '#'; AT: '@'; BANG: '!';
-PLUS: '+'; MINUS: '-'; STAR: '*'; SLASH: '/'; PERCENT: '%'; ASSIGN: '=';
-EQ: '=='; NEQ: '!='; LT: '<'; GT: '>'; LE: '<='; GE: '>=';
-ANDAND: '&&'; OROR: '||'; AMP: '&'; PIPE: '|'; CARET: '^';
-SHL: '<<'; SHR: '>>'; SHRU: '>>>';
-PLUSEQ: '+='; MINUSEQ: '-='; STAREQ: '*='; SLASHEQ: '/=';
-DOTDOT: '..'; DOTDOTEQ: '..=';
-QUESTION: '?'; DOLLAR: '$';
+// ============================================================================
+// QUANTUM COMPUTING
+// ============================================================================
 
-LINE_COMMENT: '//' ~[\r\n]* -> skip;
-BLOCK_COMMENT: '/*' .*? '*/' -> skip;
-DOC_COMMENT: '///' ~[\r\n]*;
-WS: [ \t\r\n]+ -> skip;
+quantumCircuitDecl : 'quantum_circuit' ident '{' quantumGatePath* '}' ;
+quantumGateDecl : 'quantum_gate' ident '(' params? ')' blockExpr ;
+quantumMeasurementDecl : 'quantum_measure' ident '{' ident (',' ident)* '}' ;
+quantumVariationalDecl : 'quantum_variational' ident '(' params? ')' blockExpr ;
+quantumTranspilerDecl : 'quantum_transpile' ident 'to' ident blockExpr ;
 
-fragment ALPHA: [a-zA-Z_];
-fragment DIGIT: [0-9];
-fragment HEX_DIGIT: [0-9a-fA-F];
-fragment BIN_DIGIT: [01];
-fragment OCT_DIGIT: [0-7];
-fragment ESC: '\\' [nrt0"'\\];
+// ============================================================================
+// NANO RUNTIME
+// ============================================================================
 
-noiseModelDecl : 'noise' 'model' ident '{' noiseParam* '}' ;
-noiseParam : ident '(' (ident | number | string) ')' ';' ;
-fidelityCheck : 'fidelity' '(' ident ')' ';' ;
+nanoAgentDecl : 'nano_agent' ident '{' nanoAgentMember* '}' ;
+nanoAgentMember : ident ':' typeExpr ';' | methodDecl ;
+nanoExecutorDecl : 'nano_executor' ident '{' executorConfig* '}' ;
+executorConfig : 'config' ident '=' expression ';' ;
+nanoContextDecl : 'nano_context' ident '{' ident ':' typeExpr ';'* '}' ;
 
-surfaceCodeDecl : 'surface' 'code' ident '{' surfaceCodeProp* '}' ;
-surfaceCodeProp : ( 'dimension' | 'distance' | 'logical' 'qubit' ) '(' (ident | number) ')' ';' ;
-parityCheck : 'parity' 'check' ident ';' ;
-logicalQubitDecl : 'logical' 'qubit' ident ';' ;
+// ============================================================================
+// CORE LANGUAGE FEATURES
+// ============================================================================
 
-softwareGenomeDecl : 'software' 'genome' ident '{' genomeItem* '}' ;
-genomeItem : geneDecl | mutationDecl | crossoverDecl ;
-geneDecl : 'gene' ident '(' ident ')' '{' genomeProp* '}' ;
-genomeProp : ( 'expression' | 'mutable' | 'weight' ) '(' (ident | number | BOOLEAN) ')' ';' ;
-mutationDecl : 'mutation' '{' statement* '}' ;
-crossoverDecl : 'crossover' '(' ident ')' '{' statement* '}' ;
+languageDecl : 'language' ident '{' languageFeature* '}' ;
+languageFeature : 'feature' ident ';' ;
 
-selfDocDecl : 'self' 'document' ident '{' selfDocProp* '}' ;
-selfDocProp : ( 'format' | 'output' | 'scope' ) '(' string ')' ';' ;
+effectDecl : 'effect' ident '{' effectMember* '}' ;
+effectMember : ident (':' typeExpr)? ';' ;
+effectList : effect (',' effect)* ;
+effect : ident ('(' expression (',' expression)* ')')? ;
+
+mtsDecl : 'mts' ident '{' mtsState* '}' ;
+mtsState : ident ':' typeExpr ';' ;
+
+sankofaDecl : 'sankofa' ident '{' sankofaMember* '}' ;
+sankofaMember : ident ':' typeExpr ';' | methodDecl ;
+
+agentDecl : 'agent' ident '{' agentProperty* agentBehavior* '}' ;
+agentProperty : 'property' ident ':' typeExpr ';' ;
+agentBehavior : 'behavior' ident blockExpr ;
+
+cognitiveBlock : 'cognitive' '{' cognitiveStmt* '}' ;
+cognitiveStmt : 'reason' expression ';' | 'learn' expression ';' | 'adapt' expression ';' ;
+
+metaBlock : 'meta' '{' metaOperation* '}' ;
+metaOperation : 'transform' expression ';' | 'reflect' ident ';' ;
+
+// ============================================================================
+// HARDWARE/HDL
+// ============================================================================
+
+hdlModuleDecl : 'hdl_module' ident '{' hdlPort* hdlStmt* '}' ;
+hdlPort : ('input' | 'output') ident ':' typeExpr ';' ;
+hdlStmt : 'assign' ident '=' expression ';' | 'always' '@' '(' hdlEvent ')' blockExpr ;
+hdlEvent : 'posedge' ident | 'negedge' ident ;
+
+verilogModuleDecl : 'verilog_module' IDENTIFIER '{' verilogContent '}' ;
+verilogContent : (~('{' | '}'))* ;
+
+spirvShaderDecl : 'spirv_shader' ident '{' spirvInstr* '}' ;
+spirvInstr : ident expression ';' ;
+
+// ============================================================================
+// DISTRIBUTED SYSTEMS
+// ============================================================================
+
+cloudDecl : 'cloud' ident '{' cloudConfig* '}' ;
+cloudConfig : ident '=' expression ';' ;
+
+distributedDecl : 'distributed' ident '{' distributeTarget* '}' ;
+distributeTarget : 'target' ident ';' ;
+
+onDeviceAgentDecl : 'on_device_agent' ident '{' deviceAgentConfig* '}' ;
+deviceAgentConfig : ident ':' typeExpr ';' ;
+
+nimbusNodeDecl : 'nimbus_node' ident '{' nimbusNodeProperty* '}' ;
+nimbusNodeProperty : ident ':' typeExpr ';' | 'role' ':' ident ';' ;
+
+nimbusClusterDecl : 'nimbus_cluster' ident '{' nimbusClusterMember* '}' ;
+nimbusClusterMember : 'node' ident ';' | 'consensus_threshold' ':' FLOAT ';' ;
+
+evasFilterDecl : 'evas_filter' ident '{' evasPolicy* '}' ;
+evasPolicy : 'policy' ident blockExpr ;
+
+// ============================================================================
+// SELF-EVOLUTION & ADAPTATION
+// ============================================================================
+
+selfEvolveDecl : 'self_evolve' ident '{' evolutionRule* '}' ;
+evolutionRule : 'rule' ident blockExpr ;
+
+optPassDecl : 'opt_pass' ident blockExpr ;
+
+selfDiscoverDecl : 'self_discover' ident '{' discoveryTarget* '}' ;
+discoveryTarget : 'discover' ident ';' ;
+
+selfAdjustDecl : 'self_adjust' ident '{' adjustmentStrategy* '}' ;
+adjustmentStrategy : 'strategy' ident blockExpr ;
+
+selfVersioningDecl : 'self_version' ident '{' versionInfo* '}' ;
+versionInfo : 'version' STRING ';' | 'depends_on' ident ';' ;
+
+// ============================================================================
+// TARGET & RUNTIME
+// ============================================================================
+
+targetPlatform : 'target' ident blockExpr ;
+runtimeDecl : 'runtime' ident '{' runtimeConfig* '}' ;
+runtimeConfig : ident '=' expression ';' ;
+
+// ============================================================================
+// CONCURRENCY & ACTORS
+// ============================================================================
+
+actorDecl : 'actor' ident '{' actorMember* '}' ;
+actorMember : methodDecl | 'mailbox' ':' typeExpr ';' | 'state' ':' typeExpr ';' ;
+
+messageHandlerDecl : 'message_handler' ident blockExpr ;
+
+concurrentDataStructureDecl : 'concurrent' typeExpr '{' concurrencyMember* '}' ;
+concurrencyMember : methodDecl | 'lock' ':' typeExpr ';' ;
+
+// ============================================================================
+// AI/ML SYSTEMS
+// ============================================================================
+
+aiSystemDecl : 'ai_system' ident '{' aiSystemMember* '}' ;
+aiSystemMember : methodDecl | 'model' ':' typeExpr ';' ;
+
+agiSystemDecl : 'agi_system' ident '{' agiMember* '}' ;
+agiMember : 'capability' ':' typeExpr ';' | methodDecl ;
+
+asiSystemDecl : 'asi_system' ident '{' asiMember* '}' ;
+asiMember : 'specialization' ':' typeExpr ';' | methodDecl ;
+
+aesiSystemDecl : 'aesi_system' ident '{' aesiMember* '}' ;
+aesiMember : 'enterprise_feature' ':' typeExpr ';' | methodDecl ;
+
+asesiSystemDecl : 'asesi_system' ident '{' asesiMember* '}' ;
+asesiMember : 'sovereign_feature' ':' typeExpr ';' | methodDecl ;
+
+cognitiveEngineDecl : 'cognitive_engine' ident '{' cognitiveEngineMember* '}' ;
+cognitiveEngineMember : 'transform' ':' typeExpr ';' | 'dialect' ':' typeExpr ';' | methodDecl ;
+
+cognitiveArchitectureBlock : 'cognitive_architecture' '{' architectureComponent* '}' ;
+architectureComponent : ident ':' typeExpr ';' ;
+
+knowledgeGraphBlock : 'knowledge_graph' '{' graphNode* '}' ;
+graphNode : 'node' ident '{' nodeProperty* '}' ;
+nodeProperty : ident ':' typeExpr ';' ;
+
+// ============================================================================
+// SECURITY & ADMINISTRATION
+// ============================================================================
+
+adminInterfaceDecl : 'admin_interface' ident '{' adminMethod* '}' ;
+adminMethod : methodDecl ;
+
+paymentGatewayDecl : 'payment_gateway' ident '{' paymentMethod* '}' ;
+paymentMethod : 'method' ident blockExpr ;
+
+userFeedbackDecl : 'user_feedback' ident '{' feedbackConfig* '}' ;
+feedbackConfig : ident '=' expression ';' ;
+
+userBlockingDecl : 'user_blocking' '{' blockingRule* '}' ;
+blockingRule : 'rule' ident blockExpr ;
+
+copyrightNoticeDecl : 'copyright' STRING ';' ;
+
+tailorMadeFeatureDecl : 'tailormade' ident '{' featureConfig* '}' ;
+featureConfig : ident '=' expression ';' ;
+
+programOnceDecl : 'program_once' ident blockExpr ;
+
+maliciousIdeaDetection : 'detect_malicious' '{' detectionRule* '}' ;
+detectionRule : 'rule' ident blockExpr ;
+
+legalActionDecl : 'legal_action' ident blockExpr ;
+
+sandboxDecl : 'sandbox' ident '{' sandboxPolicy* '}' ;
+sandboxPolicy : 'policy' ident blockExpr ;
+
+// ============================================================================
+// OMNIVERSAL FEATURES
+// ============================================================================
+
+omniversalSimulationDecl : 'omniversal_simulation' ident '{' simConfig* '}' ;
+simConfig : ident '=' expression ';' ;
+
+omniversalCodeSynthDecl : 'omniversal_code_synth' ident blockExpr ;
+
+omniversalDeployDecl : 'omniversal_deploy' ident '{' deployConfig* '}' ;
+deployConfig : 'target' '=' ident ';' ;
+
+omniversalAlignmentDecl : 'omniversal_alignment' '{' alignmentRule* '}' ;
+alignmentRule : 'rule' ident blockExpr ;
+
+omniversalContainmentDecl : 'omniversal_containment' ident blockExpr ;
+
+omniversalTrustDecl : 'omniversal_trust' '{' trustPolicy* '}' ;
+trustPolicy : 'policy' ident blockExpr ;
+
+omniversalKnowledgeDecl : 'omniversal_knowledge' ident '{' knowledgeItem* '}' ;
+knowledgeItem : 'fact' STRING ';' ;
+
+omniversalGenerativeDecl : 'omniversal_generative' ident blockExpr ;
+
+omniversalSovereigntyDecl : 'omniversal_sovereignty' ident blockExpr ;
+
+omniversalGoalDecl : 'omniversal_goal' ident blockExpr ;
+
+omniversalBioNanoDecl : 'omniversal_bionano' ident '{' bioConfig* '}' ;
+bioConfig : ident '=' expression ';' ;
+
+omniversalRealityDecl : 'omniversal_reality' ident '{' realityConfig* '}' ;
+realityConfig : ident '=' expression ';' ;
+
+omniversalNlpDecl : 'omniversal_nlp' ident '{' nlpComponent* '}' ;
+nlpComponent : 'module' ident ';' ;
+
+// ============================================================================
+// CHAT & ARCHITECTURE
+// ============================================================================
+
+chatArchitectDecl : 'chat_architect' ident '{' chatConfig* '}' ;
+chatConfig : ident '=' expression ';' ;
+
+// ============================================================================
+// RESOURCE MANAGEMENT
+// ============================================================================
+
+greenComputingAttr : '@green_computing' ;
+
+thermalOptDecl : 'thermal_optimization' '{' thermalPolicy* '}' ;
+thermalPolicy : 'policy' ident blockExpr ;
+
+resourceConserveDecl : 'resource_conservation' ident '{' conservePolicy* '}' ;
+conservePolicy : 'policy' ident blockExpr ;
+
+resourceOrchestratorDecl : 'resource_orchestrator' ident '{' orchestratorConfig* '}' ;
+orchestratorConfig : ident '=' expression ';' ;
+
+// ============================================================================
+// ANALYTICS & TRACKING
+// ============================================================================
+
+developerAnalyticsDecl : 'dev_analytics' ident '{' analyticsConfig* '}' ;
+analyticsConfig : ident '=' expression ';' ;
+
+licenseTrackingDecl : 'license_tracking' ident blockExpr ;
+
+dataProvenanceDecl : 'data_provenance' ident '{' provenanceConfig* '}' ;
+provenanceConfig : ident ':' typeExpr ';' ;
+
+// ============================================================================
+// DEPLOYMENT
+// ============================================================================
+
+deploymentDecl : 'deployment' ident '{' deploymentTarget* '}' ;
+deploymentTarget : 'target' ident ';' ;
+
+versionReleaseDecl : 'version_release' STRING '{' releaseNote* '}' ;
+releaseNote : 'note' STRING ';' ;
+
+// ============================================================================
+// LSP & LANGUAGE SERVER
+// ============================================================================
+
+lspServerDecl : 'lsp_server' ident '{' lspConfig* '}' ;
+lspConfig : ident '=' expression ';' ;
+
+// ============================================================================
+// ADVANCED TYPE SYSTEM
+// ============================================================================
+
+typeClassDecl : 'typeclass' ident typeParams? '{' typeClassMember* '}' ;
+typeClassMember : methodSignature ;
+
+typeClassInstance : 'instance' typeExpr 'for' typeExpr '{' implMember* '}' ;
+
+higherKindedTypeDecl : 'hkt' ident typeParams? blockExpr ;
+
+typeProviderDecl : 'type_provider' ident blockExpr ;
+
+fileScopedType : 'file_scope' typeExpr ';' ;
+
+// ============================================================================
+// EXTENSIONS
+// ============================================================================
+
+extensionMethodDecl : 'extension' typeExpr '{' methodDecl* '}' ;
+extensionPropertyDecl : 'extension_property' ident ':' typeExpr blockExpr ;
+extensionIndexerDecl : 'extension_indexer' typeExpr blockExpr ;
+extensionOperatorDecl : 'extension_operator' ident blockExpr ;
+
+macroDecl : 'macro' ident '(' params? ')' blockExpr ;
+
+domainSpecificLanguageDecl : 'dsl' ident '{' dslRule* '}' ;
+dslRule : ident '=>' expression ';' ;
+
+aspectDecl : 'aspect' ident '{' aspectAdvice* '}' ;
+aspectAdvice : 'before' | 'after' | 'around' ;
+
+// ============================================================================
+// PARALLELISM & MESSAGE PASSING
+// ============================================================================
+
+dataParallelismDecl : 'data_parallel' ident '{' parallelConfig* '}' ;
+parallelConfig : ident '=' expression ';' ;
+
+messagePassingDecl : 'message_passing' ident '{' msgChannel* '}' ;
+msgChannel : 'channel' ident ':' typeExpr ';' ;
+
+// ============================================================================
+// AI/ML FEATURES
+// ============================================================================
+
+deepLearningDecl : 'deep_learning' ident '{' dlLayer* '}' ;
+dlLayer : 'layer' ident ':' typeExpr ';' ;
+
+mlModelDecl : 'ml_model' ident '{' modelConfig* '}' ;
+modelConfig : ident '=' expression ';' ;
+
+quantumMlBlock : 'quantum_ml' '{' qmlComponent* '}' ;
+qmlComponent : ident ':' typeExpr ';' ;
+
+transferLearningBlock : 'transfer_learning' ident blockExpr ;
+multiAgentBlock : 'multi_agent' ident '{' agentConfig* '}' ;
+agentConfig : 'agent' ident ';' ;
+
+autonomousSystemBlock : 'autonomous_system' ident blockExpr ;
+
+explainableRlBlock : 'explainable_rl' ident blockExpr ;
+explainableDeepLearningBlock : 'explainable_dl' ident blockExpr ;
+
+probabilisticGraphicalModelBlock : 'pgm' ident '{' pgmNode* '}' ;
+pgmNode : 'node' ident ':' typeExpr ';' ;
+
+advancedNlpBlock : 'advanced_nlp' ident '{' nlpFeature* '}' ;
+nlpFeature : ident ':' typeExpr ';' ;
+
+aiForBusinessBlock : 'ai_business' ident blockExpr ;
+
+// ============================================================================
+// GRAPHICS & MULTIMEDIA
+// ============================================================================
+
+graphicsDecl : 'graphics' ident '{' graphicsConfig* '}' ;
+graphicsConfig : ident '=' expression ';' ;
+
+videoDecl : 'video' ident '{' videoConfig* '}' ;
+videoConfig : ident '=' expression ';' ;
+
+musicDecl : 'music' ident '{' musicConfig* '}' ;
+musicConfig : ident '=' expression ';' ;
+
+// ============================================================================
+// SPECIALIZED DOMAINS
+// ============================================================================
+
+roboticsDecl : 'robotics' ident '{' roboticsComponent* '}' ;
+roboticsComponent : ident ':' typeExpr ';' | methodDecl ;
+
+tensorDecl : 'tensor' ident '<' typeExpr '>' '{' tensorConfig* '}' ;
+tensorConfig : ident '=' expression ';' ;
+
+matrixDecl : 'matrix' ident '<' typeExpr '>' '{' matrixConfig* '}' ;
+matrixConfig : ident '=' expression ';' ;
+
+vectorDecl : 'vector' ident '<' typeExpr '>' '{' vectorConfig* '}' ;
+vectorConfig : ident '=' expression ';' ;
+
+graphModelingBlock : 'graph_model' ident '{' graphConfig* '}' ;
+graphConfig : ident ':' typeExpr ';' ;
+
+vrArInteractionBlock : 'vr_ar' ident '{' vrArConfig* '}' ;
+vrArConfig : ident '=' expression ';' ;
+
+imageVideoAnalysisBlock : 'image_video_analysis' ident blockExpr ;
+
+// ============================================================================
+// CRYPTOGRAPHY
+// ============================================================================
+
+cryptoDecl : 'crypto' ident '{' cryptoAlgorithm* '}' ;
+cryptoAlgorithm : 'algorithm' ident ';' ;
+
+quantumIdentityDecl : 'quantum_identity' ident '{' identityConfig* '}' ;
+identityConfig : ident ':' typeExpr ';' ;
+
+provenanceManagerDecl : 'provenance_manager' ident '{' provenanceMethod* '}' ;
+provenanceMethod : methodDecl ;
+
+// ============================================================================
+// META-PROGRAMMING
+// ============================================================================
+
+metaProgrammingDecl : 'meta_programming' '{' metaTransform* '}' ;
+metaTransform : 'transform' STRING '=>' STRING ';' ;
+
+languageDialectDecl : 'language_dialect' ident '{' dialectFeature* '}' ;
+dialectFeature : 'keyword' STRING ';' ;
+
+reflectionDecl : 'reflection' ident blockExpr ;
+
+// ============================================================================
+// MATHEMATICAL FOUNDATIONS
+// ============================================================================
+
+mathematicalDiscoveryDecl : 'math_discovery' ident '{' discoveryConfig* '}' ;
+discoveryConfig : ident '=' expression ';' ;
+
+conjectureProofDecl : 'conjecture' ident '{' proofConfig* '}' ;
+proofConfig : 'statement' ':' typeExpr ';' ;
+
+algebraicGeometryDecl : 'algebraic_geometry' ident blockExpr ;
+differentialGeometryDecl : 'differential_geometry' ident blockExpr ;
+categoryTheoryDecl : 'category_theory' ident blockExpr ;
+numberTheoryDecl : 'number_theory' ident blockExpr ;
+
+// ============================================================================
+// HYBRID & INTERFACES
+// ============================================================================
+
+hybridDef : 'hybrid' ident '{' hybridMember* '}' ;
+hybridMember : methodDecl | fieldDecl ;
+
+interfaceDef : 'interface' ident '{' interfaceMember* '}' ;
+
+// ============================================================================
+// LITERALS & TOKENS
+// ============================================================================
+
+literal
+    : INT
+    | FLOAT
+    | STRING
+    | CHAR
+    | 'true'
+    | 'false'
+    | 'null'
+    | 'undefined'
+    ;
+
+structLiteralTail : '{' (ident ':' expression (',' ident ':' expression)*)? '}' ;
+
+ident : IDENTIFIER ;
+docComment : DOC_COMMENT ;
+attributeDecl : '@' ident ('(' args? ')')? ;
+
+// ============================================================================
+// LEXER TOKENS
+// ============================================================================
+
+fragment LETTER : [a-zA-Z_] ;
+fragment DIGIT : [0-9] ;
+fragment HEX_DIGIT : [0-9a-fA-F] ;
+
+IDENTIFIER : LETTER (LETTER | DIGIT)* ;
+INT : DIGIT+ ('_' DIGIT+)* | '0x' HEX_DIGIT+ | '0b' [01]+ ;
+FLOAT : DIGIT+ '.' DIGIT+ ([eE] [+-]? DIGIT+)? ;
+STRING : '"' (~["\\\n\r] | '\\' . )* '"' ;
+CHAR : '\'' (~['\\\n\r] | '\\' . ) '\'' ;
+DOC_COMMENT : '///' (~[\n\r])* ;
+COMMENT : '//' (~[\n\r])* -> skip ;
+BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
+WS : [ \t\r\n]+ -> skip ;
