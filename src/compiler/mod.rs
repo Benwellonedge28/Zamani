@@ -79,7 +79,11 @@ pub fn compile(source_file_path: &str) -> Result<Vec<u8>, String> {
 
     // 4. IR Generation
     let mut ir_gen = crate::ir_gen::IrGenerator::new();
-    let ir_module = ir_gen.generate(&program);
+    let raw_ir_module = ir_gen.generate(&program);
+
+    // 4.2. Optimization Pass
+    let mut optimizer = crate::optimizer::Optimizer::with_level(2);
+    let ir_module = optimizer.optimize(&raw_ir_module);
 
     // 4.5. IR Verification
     if let Err(errors) = crate::ir_verify::verify_module(&ir_module) {
