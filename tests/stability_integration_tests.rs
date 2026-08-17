@@ -31,7 +31,7 @@ fn test_hdl_synthesis_generation() {
         Statement::Let(Span::default(), "control_signal".to_string(), None, Expression::Literal(Literal::Integer(1, Span::default())))
     ];
     let verilog = DistributedExecutor::synthesize_from_ast("QpuController", &stmts);
-    
+
     assert!(verilog.contains("module QpuController"), "Verilog should contain module declaration.");
     assert!(verilog.contains("control_signal"), "Verilog should contain output signal from let statement.");
     assert!(verilog.contains("always @(posedge clk or negedge rst_n)"), "Verilog should contain sequential logic.");
