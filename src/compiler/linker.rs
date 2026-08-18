@@ -1,48 +1,49 @@
-#![allow(dead_code, unused_variables, unused_imports)]
-
 //! Zamani Compiler — Universal Linker & Link-Time Optimization (ZLink)
 //!
 //! ZLink is the platform-independent linking layer of the Zamani compiler.
 //!
-//! Design goals:
+//! Design:
 //!
-//!   Program Once
-//!       ↓
+//!   Program
+//!      ↓
 //!   Canonical Zamani IR
-//!       ↓
+//!      ↓
 //!   Deterministic Link + LTO
-//!       ↓
-//!   ┌──────────────────────────────────────────────┐
-//!   │ Portable Zamani Artifact                    │
-//!   │ WASM / Zamani Bytecode / Portable IR         │
-//!   └──────────────────────────────────────────────┘
-//!       ↓
-//!   ┌──────────────────────────────────────────────┐
-//!   │ Target-specific native artifact             │
-//!   │ x86_64 / ARM64 / RISC-V / GPU / QPU / etc. │
-//!   └──────────────────────────────────────────────┘
+//!      ↓
+//!   Portable Zamani Artifact
+//!      ↓
+//!   Target-specific backend/linker
 //!
-//! ZLink deliberately keeps platform-independent linking separate from native
-//! linker invocation. This allows the same Zamani program to be compiled for
-//! multiple targets without changing its source code.
+//! ZLink owns:
+//! - IR module composition;
+//! - symbol validation;
+//! - deterministic string-literal merging;
+//! - target validation;
+//! - link-time normalization;
+//! - native linker process isolation.
 //!
-//! The "Program Once → Compile Once → Run Everywhere" objective is implemented
-//! through portable Zamani artifacts. Native executables remain target-specific.
+//! ZLink does NOT itself:
+//! - execute generated programs;
+//! - invoke a native linker during ordinary portable linking;
+//! - perform network access;
+//! - infer target-specific ABI rules;
+//! - silently overwrite duplicate symbols.
 //!
-//! The linker therefore never claims that one native executable is universally
-//! executable on every operating system and CPU architecture.
+//! Native linker invocation is deliberately isolated in
+//! `link_native_artifact`.
 
 use crate::ir_gen::IrModule;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+// ============================================================================
+// Targets
+// ============================================================================
+
 /// Universal target family supported by ZLink.
-///
-/// Native targets remain explicitly identified while portable targets provide
-/// the foundation for "compile once, run anywhere" execution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LinkTarget {
     /// Host/native target selected by the compiler.
@@ -55,7 +56,7 @@ pub enum LinkTarget {
         architecture: WasmArchitecture,
     },
 
-    /// Zamani's portable intermediate bytecode.
+    /// Zamani portable bytecode.
     ZamaniBytecode,
 
     /// Zamani portable execution format.
@@ -70,6 +71,7 @@ pub enum LinkTarget {
 
 impl LinkTarget {
     /// Return the target triple where one exists.
+    #[must_use]
     pub fn triple(&self) -> Option<&str> {
         match self {
             Self::Native { triple } => Some(triple),
@@ -80,7 +82,8 @@ impl LinkTarget {
         }
     }
 
-    /// Return a stable artifact format identifier.
+    /// Return a stable artifact-format identifier.
+    #[must_use]
     pub fn format(&self) -> &str {
         match self {
             Self::Native { .. } => "native",
@@ -91,7 +94,8 @@ impl LinkTarget {
         }
     }
 
-    /// Whether the target is intrinsically portable across host platforms.
+    /// Whether this target is intrinsically portable.
+    #[must_use]
     pub fn is_portable(&self) -> bool {
         matches!(
             self,
@@ -115,22 +119,17 @@ impl Default for WasmArchitecture {
     }
 }
 
+// ============================================================================
+// Linking configuration
+// ============================================================================
+
 /// Linking mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkingMode {
-    /// Produce a normal executable artifact.
     Executable,
-
-    /// Produce a shared library/module.
     Shared,
-
-    /// Produce a static library/archive.
     Static,
-
-    /// Produce a portable Zamani artifact.
     Portable,
-
-    /// Produce an intermediate object/module.
     Object,
 }
 
@@ -158,10 +157,10 @@ impl Default for LtoLevel {
 /// Reproducibility settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReproducibilityConfig {
-    /// Make ordering deterministic.
+    /// Require deterministic ordering.
     pub deterministic: bool,
 
-    /// Avoid timestamps in generated metadata.
+    /// Prevent timestamps from being introduced by ZLink metadata.
     pub strip_timestamps: bool,
 }
 
@@ -176,23 +175,23 @@ impl Default for ReproducibilityConfig {
 
 /// Native linker configuration.
 ///
-/// This is only used when ZLink has to produce a target-specific native
-/// artifact. Portable linking does not require an external native linker.
+/// Arguments are passed to `Command` as individual arguments. They are never
+/// interpreted through a shell.
 #[derive(Debug, Clone)]
 pub struct NativeLinkerConfig {
-    /// Linker executable.
+    /// Native linker executable.
     pub executable: String,
 
-    /// Additional library search directories.
+    /// Additional library search paths.
     pub library_paths: Vec<PathBuf>,
 
     /// Libraries to link.
     pub libraries: Vec<String>,
 
-    /// Raw linker arguments.
+    /// Additional linker arguments.
     pub arguments: Vec<String>,
 
-    /// Optional sysroot used for cross compilation.
+    /// Optional cross-compilation sysroot.
     pub sysroot: Option<PathBuf>,
 }
 
@@ -211,19 +210,10 @@ impl Default for NativeLinkerConfig {
 /// Universal ZLink configuration.
 #[derive(Debug, Clone)]
 pub struct LinkerConfig {
-    /// Destination compilation target.
     pub target: LinkTarget,
-
-    /// Link mode.
     pub mode: LinkingMode,
-
-    /// LTO configuration.
     pub lto: LtoLevel,
-
-    /// Reproducibility configuration.
     pub reproducibility: ReproducibilityConfig,
-
-    /// Optional native linker configuration.
     pub native: NativeLinkerConfig,
 }
 
@@ -239,25 +229,18 @@ impl Default for LinkerConfig {
     }
 }
 
-/// Result of the platform-independent linking stage.
+// ============================================================================
+// Results
+// ============================================================================
+
+/// Result of platform-independent linking.
 #[derive(Debug, Clone)]
 pub struct LinkResult {
-    /// Fully linked Zamani IR.
     pub module: IrModule,
-
-    /// Target selected for this link.
     pub target: LinkTarget,
-
-    /// Number of input modules.
     pub input_modules: usize,
-
-    /// Number of functions in the resulting module.
     pub function_count: usize,
-
-    /// Number of globals in the resulting module.
     pub global_count: usize,
-
-    /// Number of instructions after LTO.
     pub instruction_count: usize,
 }
 
@@ -278,16 +261,20 @@ impl LinkResult {
     }
 }
 
-/// ZLink errors.
-///
-/// Keeping errors structured internally makes the linker easier to integrate
-/// with compiler diagnostics later.
+// ============================================================================
+// Errors
+// ============================================================================
+
+/// Structured ZLink errors.
 #[derive(Debug)]
 pub enum LinkerError {
     EmptyInput,
     InvalidTarget(String),
     DuplicateSymbol(String),
+    DuplicateStringLiteral(String),
     MissingOutput(PathBuf),
+    InvalidOutput(PathBuf),
+    MissingInput(PathBuf),
     Io(String),
     NativeLinker(String),
 }
@@ -300,11 +287,18 @@ impl fmt::Display for LinkerError {
             }
 
             Self::InvalidTarget(message) => {
-                write!(formatter, "ZLink: invalid target: {}", message)
+                write!(formatter, "ZLink: invalid target: {message}")
             }
 
             Self::DuplicateSymbol(symbol) => {
-                write!(formatter, "ZLink: duplicate symbol '{}'", symbol)
+                write!(formatter, "ZLink: duplicate symbol '{symbol}'")
+            }
+
+            Self::DuplicateStringLiteral(name) => {
+                write!(
+                    formatter,
+                    "ZLink: duplicate string-literal symbol '{name}'"
+                )
             }
 
             Self::MissingOutput(path) => {
@@ -315,18 +309,38 @@ impl fmt::Display for LinkerError {
                 )
             }
 
+            Self::InvalidOutput(path) => {
+                write!(
+                    formatter,
+                    "ZLink: invalid output path '{}'",
+                    path.display()
+                )
+            }
+
+            Self::MissingInput(path) => {
+                write!(
+                    formatter,
+                    "ZLink: input object '{}' does not exist",
+                    path.display()
+                )
+            }
+
             Self::Io(message) => {
-                write!(formatter, "ZLink I/O error: {}", message)
+                write!(formatter, "ZLink I/O error: {message}")
             }
 
             Self::NativeLinker(message) => {
-                write!(formatter, "ZLink native linker error: {}", message)
+                write!(formatter, "ZLink native linker error: {message}")
             }
         }
     }
 }
 
 impl std::error::Error for LinkerError {}
+
+// ============================================================================
+// Linker
+// ============================================================================
 
 /// Universal Zamani linker.
 #[derive(Debug, Clone)]
@@ -337,9 +351,7 @@ pub struct ZamaniLinker {
 
 impl ZamaniLinker {
     /// Construct a linker using the portable default.
-    ///
-    /// Portable linking is preferred because it avoids coupling the canonical
-    /// Zamani artifact to the host operating system.
+    #[must_use]
     pub fn new(modules: Vec<IrModule>) -> Self {
         Self {
             modules,
@@ -347,7 +359,8 @@ impl ZamaniLinker {
         }
     }
 
-    /// Construct a linker with an explicit target.
+    /// Construct a linker for an explicit target.
+    #[must_use]
     pub fn with_target(
         modules: Vec<IrModule>,
         target: LinkTarget,
@@ -368,7 +381,7 @@ impl ZamaniLinker {
         }
     }
 
-    /// Construct a fully configured linker.
+    /// Construct a linker from a fully validated configuration.
     pub fn with_config(
         modules: Vec<IrModule>,
         config: LinkerConfig,
@@ -378,31 +391,42 @@ impl ZamaniLinker {
         Ok(Self { modules, config })
     }
 
-    /// Set the target.
-    pub fn set_target(&mut self, target: LinkTarget) -> Result<(), LinkerError> {
+    /// Replace the current target after validation.
+    pub fn set_target(
+        &mut self,
+        target: LinkTarget,
+    ) -> Result<(), LinkerError> {
         let mut config = self.config.clone();
         config.target = target;
 
-        validate_config(&config)?;
+        /*
+         * Keep the linking mode consistent with the target.
+         */
+        config.mode = if config.target.is_portable() {
+            LinkingMode::Portable
+        } else {
+            config.mode
+        };
 
+        validate_config(&config)?;
         self.config = config;
 
         Ok(())
     }
 
-    /// Set LTO level.
+    /// Set the LTO level.
     pub fn set_lto(&mut self, level: LtoLevel) {
         self.config.lto = level;
     }
 
     /// Perform deterministic platform-independent linking.
     ///
-    /// This is the fundamental ZLink operation. No native linker is invoked.
+    /// No native linker process is started by this operation.
     pub fn link(&self) -> Result<IrModule, LinkerError> {
         Ok(self.link_with_result()?.module)
     }
 
-    /// Link and return complete metadata about the resulting artifact.
+    /// Link and return complete result metadata.
     pub fn link_with_result(&self) -> Result<LinkResult, LinkerError> {
         if self.modules.is_empty() {
             return Err(LinkerError::EmptyInput);
@@ -410,28 +434,41 @@ impl ZamaniLinker {
 
         validate_config(&self.config)?;
 
-        println!(
-            "[ZLink] Linking {} Zamani IR module(s) for target '{}'",
-            self.modules.len(),
-            self.config.target.format()
-        );
-
         let mut linked_module = IrModule::new("Zamani_Linked");
+
+        /*
+         * Preserve the first module's IR target information when possible.
+         *
+         * ZLink does not invent a target triple for a portable artifact.
+         */
+        if let Some(first) = self.modules.first() {
+            linked_module.target_triple = first.target_triple.clone();
+            linked_module.data_layout = first.data_layout.clone();
+        }
 
         let mut function_symbols = HashSet::new();
         let mut global_symbols = HashSet::new();
-        let mut strings = HashSet::new();
+        let mut string_symbols = HashSet::new();
+        let mut string_values = HashSet::new();
 
         /*
-         * Deterministic module traversal.
+         * Module order is intentionally preserved.
          *
-         * The caller-provided module order is preserved. Symbols are checked
-         * before insertion so accidental collisions cannot silently overwrite
-         * program components.
+         * ZLink never iterates through a HashMap/HashSet to decide output
+         * order. HashSets are used only for membership validation.
          */
         for module in &self.modules {
+            /*
+             * Functions.
+             */
             for function in &module.functions {
                 if !function_symbols.insert(function.name.clone()) {
+                    return Err(LinkerError::DuplicateSymbol(
+                        function.name.clone(),
+                    ));
+                }
+
+                if global_symbols.contains(&function.name) {
                     return Err(LinkerError::DuplicateSymbol(
                         function.name.clone(),
                     ));
@@ -440,45 +477,83 @@ impl ZamaniLinker {
                 linked_module.add_function(function.clone());
             }
 
+            /*
+             * Globals.
+             */
             for global in &module.globals {
-                let name = global.name.clone();
+                if !global_symbols.insert(global.name.clone()) {
+                    return Err(LinkerError::DuplicateSymbol(
+                        global.name.clone(),
+                    ));
+                }
 
-                if !global_symbols.insert(name.clone()) {
-                    return Err(LinkerError::DuplicateSymbol(name));
+                if function_symbols.contains(&global.name) {
+                    return Err(LinkerError::DuplicateSymbol(
+                        global.name.clone(),
+                    ));
                 }
 
                 linked_module.add_global(global.clone());
             }
 
-            for literal in &module.string_literals {
-                if strings.insert(literal.clone()) {
-                    linked_module.string_literals.push(literal.clone());
+            /*
+             * String literals are represented by:
+             *
+             *     (symbol_name, literal_value)
+             *
+             * in the actual Zamani IR.
+             *
+             * Identical literal values may be shared only when they use the
+             * same symbol. Different symbols are preserved because their
+             * references may depend on their exact global identity.
+             */
+            for (name, value) in &module.string_literals {
+                if function_symbols.contains(name)
+                    || global_symbols.contains(name)
+                {
+                    return Err(LinkerError::DuplicateSymbol(
+                        name.clone(),
+                    ));
                 }
+
+                if !string_symbols.insert(name.clone()) {
+                    return Err(LinkerError::DuplicateStringLiteral(
+                        name.clone(),
+                    ));
+                }
+
+                if string_values.insert((name.clone(), value.clone())) {
+                    linked_module
+                        .string_literals
+                        .push((name.clone(), value.clone()));
+                }
+            }
+
+            /*
+             * Type definitions are module-level declarations. Preserve their
+             * source order while rejecting duplicate type names.
+             */
+            for (name, fields) in &module.type_defs {
+                if linked_module
+                    .type_defs
+                    .iter()
+                    .any(|(existing, _)| existing == name)
+                {
+                    return Err(LinkerError::DuplicateSymbol(
+                        name.clone(),
+                    ));
+                }
+
+                linked_module
+                    .type_defs
+                    .push((name.clone(), fields.clone()));
             }
         }
 
         /*
-         * LTO happens after all modules have been merged.
-         *
-         * This is important because optimizations such as dead-code removal
-         * and duplicate elimination require whole-program visibility.
+         * LTO runs only after whole-program composition.
          */
         self.optimize_lto(&mut linked_module);
-
-        println!(
-            "  -> Linked functions: {}",
-            linked_module.functions.len()
-        );
-
-        println!(
-            "  -> Linked globals: {}",
-            linked_module.globals.len()
-        );
-
-        println!(
-            "  -> Final instructions: {}",
-            linked_module.instruction_count()
-        );
 
         Ok(LinkResult::from_module(
             linked_module,
@@ -487,11 +562,11 @@ impl ZamaniLinker {
         ))
     }
 
-    /// Run deterministic link-time optimization.
+    /// Run deterministic link-time normalization.
     ///
-    /// This method only performs transformations that are safe at the current
-    /// IR abstraction level. More aggressive optimizations should eventually
-    /// be implemented by dedicated IR optimization passes.
+    /// Duplicate functions/globals are NOT silently removed here. They have
+    /// already been treated as linker errors. Removing one would make symbol
+    /// resolution dependent on ordering and could change program semantics.
     pub fn optimize_lto(&self, module: &mut IrModule) {
         if self.config.lto == LtoLevel::None {
             return;
@@ -499,95 +574,67 @@ impl ZamaniLinker {
 
         let initial_count = module.instruction_count();
 
-        println!(
-            "[ZLink-LTO] Running {:?} link-time optimization...",
-            self.config.lto
-        );
-
         /*
-         * Remove duplicate functions by symbol name.
+         * Deduplicate identical string-literal pairs while preserving their
+         * first occurrence.
          *
-         * The primary link stage already rejects duplicate symbols. This
-         * operation therefore acts as a defensive normalization step for
-         * modules constructed or modified after linking.
+         * Symbol names are already validated during linking, so this is
+         * defensive normalization for callers invoking optimize_lto directly.
          */
-        let mut seen_functions = HashSet::new();
-
-        module.functions.retain(|function| {
-            seen_functions.insert(function.name.clone())
-        });
-
-        /*
-         * Remove duplicate globals using their symbol names.
-         */
-        let mut seen_globals = HashSet::new();
-
-        module.globals.retain(|global| {
-            seen_globals.insert(global.name.clone())
-        });
-
-        /*
-         * Deduplicate string literals while preserving deterministic order.
-         */
-        let mut seen_strings = HashSet::new();
+        let mut seen_strings: HashSet<(String, String)> = HashSet::new();
 
         module.string_literals.retain(|literal| {
             seen_strings.insert(literal.clone())
         });
 
+        /*
+         * At present, actual instruction-level optimization belongs in the
+         * dedicated optimizer pipeline. ZLink deliberately avoids performing
+         * unsafe transformations based only on symbol names.
+         */
+
         let final_count = module.instruction_count();
 
-        println!(
-            "  -> LTO complete: instructions {} -> {}",
-            initial_count,
-            final_count
-        );
+        if initial_count != final_count {
+            eprintln!(
+                "[ZLink-LTO] instruction count: {initial_count} -> {final_count}"
+            );
+        }
     }
 
-    /// Link to a portable Zamani artifact representation.
-    ///
-    /// The canonical IR remains independent from CPU architecture and host
-    /// operating system. A future serializer can persist this representation
-    /// as `.zportable` or another stable Zamani artifact format.
+    /// Link to the portable Zamani representation.
     pub fn link_portable(&self) -> Result<IrModule, LinkerError> {
         let mut config = self.config.clone();
-
         config.target = LinkTarget::Portable;
         config.mode = LinkingMode::Portable;
 
-        let linker = Self {
+        Self {
             modules: self.modules.clone(),
             config,
-        };
-
-        linker.link()
+        }
+        .link()
     }
 
     /// Link for WebAssembly.
     ///
-    /// This produces a target-selected IR module. Actual Wasm binary emission
-    /// belongs to `wasm_backend`, keeping target-specific code outside ZLink.
+    /// Actual Wasm binary emission remains the responsibility of the Wasm
+    /// backend.
     pub fn link_wasm(
         &self,
         architecture: WasmArchitecture,
     ) -> Result<IrModule, LinkerError> {
         let mut config = self.config.clone();
-
         config.target = LinkTarget::Wasm { architecture };
         config.mode = LinkingMode::Portable;
 
-        let linker = Self {
+        Self {
             modules: self.modules.clone(),
             config,
-        };
-
-        linker.link()
+        }
+        .link()
     }
 
-    /// Link for a specific native target.
-    ///
-    /// This is cross-compilation aware: the target triple describes the
-    /// destination rather than the machine running Zamani.
+    /// Link for a specific native target at the IR/object stage.
     pub fn link_native(
         &self,
         target_triple: impl Into<String>,
@@ -597,32 +644,31 @@ impl ZamaniLinker {
         };
 
         let mut config = self.config.clone();
-
         config.target = target;
         config.mode = LinkingMode::Object;
 
-        let linker = Self {
+        Self {
             modules: self.modules.clone(),
             config,
-        };
-
-        linker.link()
+        }
+        .link()
     }
 
-    /// Invoke an external native linker.
+    /// Invoke the configured native linker.
     ///
-    /// ZLink does not assume that the host and destination platform are the
-    /// same. The configured target and sysroot are passed explicitly.
+    /// Every argument is supplied directly to `std::process::Command`.
+    /// No shell is involved, preventing shell metacharacters in paths or
+    /// arguments from becoming executable commands.
     pub fn link_native_artifact(
         &self,
         object_files: &[PathBuf],
         output_path: impl AsRef<Path>,
     ) -> Result<(), LinkerError> {
-        let output_path = output_path.as_ref();
-
         if object_files.is_empty() {
             return Err(LinkerError::EmptyInput);
         }
+
+        let output_path = output_path.as_ref();
 
         let triple = self
             .config
@@ -630,79 +676,101 @@ impl ZamaniLinker {
             .triple()
             .ok_or_else(|| {
                 LinkerError::InvalidTarget(
-                    "native artifact linking requires a native target triple"
+                    "native artifact linking requires a target triple"
                         .to_string(),
                 )
             })?;
 
+        if triple.trim().is_empty() {
+            return Err(LinkerError::InvalidTarget(
+                "native target triple cannot be empty".to_string(),
+            ));
+        }
+
         validate_output_path(output_path)?;
+
+        for object in object_files {
+            if !object.exists() {
+                return Err(LinkerError::MissingInput(object.clone()));
+            }
+
+            if !object.is_file() {
+                return Err(LinkerError::MissingInput(object.clone()));
+            }
+        }
 
         if let Some(parent) = output_path.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent).map_err(|error| {
                     LinkerError::Io(format!(
-                        "failed to create '{}': {}",
-                        parent.display(),
-                        error
+                        "failed to create output directory '{}': {error}",
+                        parent.display()
                     ))
                 })?;
             }
         }
 
-        let mut command = Command::new(&self.config.native.executable);
+        let executable = self.config.native.executable.trim();
+
+        if executable.is_empty() {
+            return Err(LinkerError::NativeLinker(
+                "native linker executable cannot be empty".to_string(),
+            ));
+        }
+
+        let mut command = Command::new(executable);
 
         /*
-         * Target selection.
-         *
-         * Different native linkers use different target flags. The
-         * environment-specific linker configuration can provide those flags
-         * through `arguments`. We deliberately do not invent platform-specific
-         * flags here.
+         * Output path is passed as one argument, never shell-expanded.
          */
-        command.arg("-o").arg(output_path);
+        command.arg("-o");
+        command.arg(output_path);
 
         if let Some(sysroot) = &self.config.native.sysroot {
-            command.arg("--sysroot").arg(sysroot);
+            command.arg("--sysroot");
+            command.arg(sysroot);
         }
 
         for path in &self.config.native.library_paths {
-            command.arg("-L").arg(path);
+            command.arg("-L");
+            command.arg(path);
         }
 
         for library in &self.config.native.libraries {
-            command.arg("-l").arg(library);
+            if library.trim().is_empty() {
+                return Err(LinkerError::NativeLinker(
+                    "library name cannot be empty".to_string(),
+                ));
+            }
+
+            command.arg("-l");
+            command.arg(library);
         }
 
+        /*
+         * Explicit target-specific arguments are configuration-owned.
+         *
+         * We intentionally do not automatically add `--target` because not
+         * every configured native linker accepts the same target-selection
+         * syntax. Toolchain-specific target selection belongs in
+         * NativeLinkerConfig::arguments.
+         */
         for argument in &self.config.native.arguments {
             command.arg(argument);
         }
 
         for object in object_files {
-            if !object.exists() {
-                return Err(LinkerError::Io(format!(
-                    "object file '{}' does not exist",
-                    object.display()
-                )));
-            }
-
             command.arg(object);
         }
 
-        println!(
-            "[ZLink] Native linking target '{}' using '{}'",
-            triple,
-            self.config.native.executable
-        );
-
         let output = command.output().map_err(|error| {
             LinkerError::NativeLinker(format!(
-                "failed to execute '{}': {}",
-                self.config.native.executable,
-                error
+                "failed to execute '{}': {error}",
+                executable
             ))
         })?;
 
-        check_linker_output(&self.config.native.executable, output)?;
+        check_linker_output(executable, output)?;
 
         if !output_path.exists() {
             return Err(LinkerError::MissingOutput(
@@ -712,57 +780,51 @@ impl ZamaniLinker {
 
         let metadata = std::fs::metadata(output_path).map_err(|error| {
             LinkerError::Io(format!(
-                "failed to inspect '{}': {}",
-                output_path.display(),
-                error
+                "failed to inspect linker output '{}': {error}",
+                output_path.display()
             ))
         })?;
 
+        if !metadata.is_file() {
+            return Err(LinkerError::InvalidOutput(
+                output_path.to_path_buf(),
+            ));
+        }
+
         if metadata.len() == 0 {
-            return Err(LinkerError::Io(format!(
-                "linker produced empty output '{}'",
-                output_path.display()
-            )));
+            return Err(LinkerError::InvalidOutput(
+                output_path.to_path_buf(),
+            ));
         }
 
         Ok(())
     }
 
-    /// Number of input modules.
+    /// Return the number of input modules.
+    #[must_use]
     pub fn module_count(&self) -> usize {
         self.modules.len()
     }
 
-    /// Whether the current target is portable.
+    /// Whether the configured target is portable.
+    #[must_use]
     pub fn is_portable_target(&self) -> bool {
         self.config.target.is_portable()
     }
 }
 
-/// Validate the complete linker configuration.
+// ============================================================================
+// Validation
+// ============================================================================
+
 fn validate_config(config: &LinkerConfig) -> Result<(), LinkerError> {
     match &config.target {
         LinkTarget::Native { triple } => {
-            if triple.trim().is_empty() {
-                return Err(LinkerError::InvalidTarget(
-                    "native target triple cannot be empty".to_string(),
-                ));
-            }
-
-            if triple.chars().any(char::is_whitespace) {
-                return Err(LinkerError::InvalidTarget(format!(
-                    "native target triple contains whitespace: '{}'",
-                    triple
-                )));
-            }
+            validate_target_triple(triple, "native")?;
         }
 
         LinkTarget::Custom { triple, format } => {
-            if triple.trim().is_empty() {
-                return Err(LinkerError::InvalidTarget(
-                    "custom target triple cannot be empty".to_string(),
-                ));
-            }
+            validate_target_triple(triple, "custom")?;
 
             if format.trim().is_empty() {
                 return Err(LinkerError::InvalidTarget(
@@ -785,7 +847,28 @@ fn validate_config(config: &LinkerConfig) -> Result<(), LinkerError> {
         )
     {
         return Err(LinkerError::InvalidTarget(
-            "portable targets cannot use native executable/shared/static linking modes"
+            "portable targets cannot use native executable/shared/static modes"
+                .to_string(),
+        ));
+    }
+
+    /*
+     * Object linking is meaningful for target-specific compilation.
+     */
+    if matches!(config.mode, LinkingMode::Object)
+        && config.target.is_portable()
+    {
+        return Err(LinkerError::InvalidTarget(
+            "portable targets cannot use native object linking mode"
+                .to_string(),
+        ));
+    }
+
+    if matches!(config.mode, LinkingMode::Portable)
+        && !config.target.is_portable()
+    {
+        return Err(LinkerError::InvalidTarget(
+            "portable linking mode requires a portable target"
                 .to_string(),
         ));
     }
@@ -793,25 +876,41 @@ fn validate_config(config: &LinkerConfig) -> Result<(), LinkerError> {
     Ok(())
 }
 
-/// Validate the final output path.
-fn validate_output_path(path: &Path) -> Result<(), LinkerError> {
-    if path.as_os_str().is_empty() {
-        return Err(LinkerError::Io(
-            "output path cannot be empty".to_string(),
-        ));
+fn validate_target_triple(
+    triple: &str,
+    target_kind: &str,
+) -> Result<(), LinkerError> {
+    if triple.trim().is_empty() {
+        return Err(LinkerError::InvalidTarget(format!(
+            "{target_kind} target triple cannot be empty"
+        )));
     }
 
-    if path.exists() && path.is_dir() {
-        return Err(LinkerError::Io(format!(
-            "output path '{}' is a directory",
-            path.display()
+    if triple.chars().any(char::is_whitespace) {
+        return Err(LinkerError::InvalidTarget(format!(
+            "{target_kind} target triple contains whitespace: '{triple}'"
         )));
     }
 
     Ok(())
 }
 
-/// Validate a native linker process result.
+fn validate_output_path(path: &Path) -> Result<(), LinkerError> {
+    if path.as_os_str().is_empty() {
+        return Err(LinkerError::InvalidOutput(path.to_path_buf()));
+    }
+
+    if path.exists() && path.is_dir() {
+        return Err(LinkerError::InvalidOutput(path.to_path_buf()));
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Native linker process handling
+// ============================================================================
+
 fn check_linker_output(
     linker: &str,
     output: Output,
@@ -829,32 +928,22 @@ fn check_linker_output(
         .map(|code| code.to_string())
         .unwrap_or_else(|| "terminated by signal".to_string());
 
-    let mut message = format!(
-        "linker '{}' failed with status {}",
-        linker, status
-    );
+    let mut message =
+        format!("linker '{linker}' failed with status {status}");
 
     if !stderr.trim().is_empty() {
-        message.push_str(&format!(
-            "\nstderr:\n{}",
-            stderr.trim()
-        ));
+        message.push_str("\nstderr:\n");
+        message.push_str(stderr.trim());
     }
 
     if !stdout.trim().is_empty() {
-        message.push_str(&format!(
-            "\nstdout:\n{}",
-            stdout.trim()
-        ));
+        message.push_str("\nstdout:\n");
+        message.push_str(stdout.trim());
     }
 
     Err(LinkerError::NativeLinker(message))
 }
 
-/// Select a conventional system linker.
-///
-/// The target-specific toolchain can override this through
-/// `NativeLinkerConfig`.
 fn default_linker() -> String {
     if cfg!(target_os = "windows") {
         "clang".to_string()
@@ -863,14 +952,23 @@ fn default_linker() -> String {
     }
 }
 
+// ============================================================================
+// Tests
+// ============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn empty_module(name: &str) -> IrModule {
+        IrModule::new(name)
+    }
 
     #[test]
     fn portable_target_is_portable() {
         assert!(LinkTarget::Portable.is_portable());
         assert!(LinkTarget::ZamaniBytecode.is_portable());
+
         assert!(
             LinkTarget::Wasm {
                 architecture: WasmArchitecture::Wasm32
@@ -881,12 +979,21 @@ mod tests {
 
     #[test]
     fn native_target_is_not_portable() {
-        assert!(
-            !LinkTarget::Native {
-                triple: "x86_64-unknown-linux-gnu".to_string()
-            }
-            .is_portable()
-        );
+        let target = LinkTarget::Native {
+            triple: "x86_64-unknown-linux-gnu".to_string(),
+        };
+
+        assert!(!target.is_portable());
+    }
+
+    #[test]
+    fn custom_target_is_not_portable() {
+        let target = LinkTarget::Custom {
+            triple: "riscv64gc-unknown-linux-gnu".to_string(),
+            format: "elf".to_string(),
+        };
+
+        assert!(!target.is_portable());
     }
 
     #[test]
@@ -902,9 +1009,27 @@ mod tests {
     }
 
     #[test]
-    fn portable_format_is_stable() {
+    fn portable_formats_are_stable() {
         assert_eq!(LinkTarget::Portable.format(), "zportable");
         assert_eq!(LinkTarget::ZamaniBytecode.format(), "zbc");
+
+        assert_eq!(
+            LinkTarget::Wasm {
+                architecture: WasmArchitecture::Wasm64
+            }
+            .format(),
+            "wasm"
+        );
+    }
+
+    #[test]
+    fn empty_input_is_rejected() {
+        let linker = ZamaniLinker::new(Vec::new());
+
+        assert!(matches!(
+            linker.link(),
+            Err(LinkerError::EmptyInput)
+        ));
     }
 
     #[test]
@@ -932,7 +1057,20 @@ mod tests {
     }
 
     #[test]
-    fn portable_target_rejects_native_executable_mode() {
+    fn empty_custom_format_is_rejected() {
+        let config = LinkerConfig {
+            target: LinkTarget::Custom {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+                format: String::new(),
+            },
+            ..LinkerConfig::default()
+        };
+
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn portable_target_rejects_executable_mode() {
         let config = LinkerConfig {
             target: LinkTarget::Portable,
             mode: LinkingMode::Executable,
@@ -943,7 +1081,44 @@ mod tests {
     }
 
     #[test]
-    fn wasm_target_is_valid() {
+    fn portable_target_rejects_object_mode() {
+        let config = LinkerConfig {
+            target: LinkTarget::Portable,
+            mode: LinkingMode::Object,
+            ..LinkerConfig::default()
+        };
+
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn portable_mode_requires_portable_target() {
+        let config = LinkerConfig {
+            target: LinkTarget::Native {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+            },
+            mode: LinkingMode::Portable,
+            ..LinkerConfig::default()
+        };
+
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn native_object_mode_is_valid() {
+        let config = LinkerConfig {
+            target: LinkTarget::Native {
+                triple: "aarch64-unknown-linux-gnu".to_string(),
+            },
+            mode: LinkingMode::Object,
+            ..LinkerConfig::default()
+        };
+
+        assert!(validate_config(&config).is_ok());
+    }
+
+    #[test]
+    fn wasm_portable_mode_is_valid() {
         let config = LinkerConfig {
             target: LinkTarget::Wasm {
                 architecture: WasmArchitecture::Wasm32,
@@ -956,15 +1131,379 @@ mod tests {
     }
 
     #[test]
-    fn native_target_allows_cross_compilation() {
-        let config = LinkerConfig {
-            target: LinkTarget::Native {
-                triple: "aarch64-unknown-linux-gnu".to_string(),
+    fn default_linker_is_non_empty() {
+        assert!(!default_linker().is_empty());
+    }
+
+    #[test]
+    fn linker_default_is_portable() {
+        let linker = ZamaniLinker::new(Vec::new());
+
+        assert!(linker.is_portable_target());
+        assert_eq!(linker.config.mode, LinkingMode::Portable);
+        assert_eq!(linker.config.lto, LtoLevel::Basic);
+    }
+
+    #[test]
+    fn with_target_sets_portable_mode_for_portable_target() {
+        let linker = ZamaniLinker::with_target(
+            vec![empty_module("a")],
+            LinkTarget::Portable,
+        );
+
+        assert_eq!(linker.config.mode, LinkingMode::Portable);
+        assert!(linker.is_portable_target());
+    }
+
+    #[test]
+    fn with_target_sets_executable_mode_for_native_target() {
+        let linker = ZamaniLinker::with_target(
+            vec![empty_module("a")],
+            LinkTarget::Native {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
             },
-            mode: LinkingMode::Object,
-            ..LinkerConfig::default()
+        );
+
+        assert_eq!(linker.config.mode, LinkingMode::Executable);
+        assert!(!linker.is_portable_target());
+    }
+
+    #[test]
+    fn module_count_is_correct() {
+        let linker = ZamaniLinker::new(vec![
+            empty_module("a"),
+            empty_module("b"),
+            empty_module("c"),
+        ]);
+
+        assert_eq!(linker.module_count(), 3);
+    }
+
+    #[test]
+    fn empty_modules_can_be_linked_when_input_exists() {
+        let linker = ZamaniLinker::new(vec![empty_module("a")]);
+
+        let result = linker.link_with_result().unwrap();
+
+        assert_eq!(result.input_modules, 1);
+        assert_eq!(result.function_count, 0);
+        assert_eq!(result.global_count, 0);
+        assert_eq!(result.instruction_count, 0);
+    }
+
+    #[test]
+    fn target_can_be_changed_safely() {
+        let mut linker = ZamaniLinker::new(vec![empty_module("a")]);
+
+        linker
+            .set_target(LinkTarget::Wasm {
+                architecture: WasmArchitecture::Wasm32,
+            })
+            .unwrap();
+
+        assert!(linker.is_portable_target());
+        assert_eq!(linker.config.mode, LinkingMode::Portable);
+    }
+
+    #[test]
+    fn invalid_target_change_does_not_mutate_configuration() {
+        let mut linker = ZamaniLinker::new(vec![empty_module("a")]);
+
+        let original = linker.config.clone();
+
+        let result = linker.set_target(LinkTarget::Custom {
+            triple: String::new(),
+            format: "elf".to_string(),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            linker.config.target,
+            original.target
+        );
+        assert_eq!(linker.config.mode, original.mode);
+    }
+
+    #[test]
+    fn link_portable_forces_portable_target() {
+        let linker = ZamaniLinker::with_target(
+            vec![empty_module("a")],
+            LinkTarget::Native {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+            },
+        );
+
+        let result = linker.link_portable().unwrap();
+
+        assert_eq!(result.name, "Zamani_Linked");
+    }
+
+    #[test]
+    fn link_wasm_forces_wasm_target() {
+        let linker = ZamaniLinker::new(vec![empty_module("a")]);
+
+        let result = linker
+            .link_wasm(WasmArchitecture::Wasm64)
+            .unwrap();
+
+        assert_eq!(
+            result.functions.len(),
+            0
+        );
+    }
+
+    #[test]
+    fn link_native_validates_target() {
+        let linker = ZamaniLinker::new(vec![empty_module("a")]);
+
+        let result = linker.link_native("");
+
+        assert!(matches!(
+            result,
+            Err(LinkerError::InvalidTarget(_))
+        ));
+    }
+
+    #[test]
+    fn duplicate_functions_are_rejected() {
+        let mut first = IrModule::new("first");
+        let mut second = IrModule::new("second");
+
+        first.add_function(crate::ir_gen::IrFunction::new(
+            "duplicate",
+            Vec::new(),
+            crate::ir_gen::IrType::Void,
+        ));
+
+        second.add_function(crate::ir_gen::IrFunction::new(
+            "duplicate",
+            Vec::new(),
+            crate::ir_gen::IrType::Void,
+        ));
+
+        let linker = ZamaniLinker::new(vec![first, second]);
+
+        assert!(matches!(
+            linker.link(),
+            Err(LinkerError::DuplicateSymbol(name))
+                if name == "duplicate"
+        ));
+    }
+
+    #[test]
+    fn function_global_collision_is_rejected() {
+        let mut module = IrModule::new("module");
+
+        module.add_function(crate::ir_gen::IrFunction::new(
+            "collision",
+            Vec::new(),
+            crate::ir_gen::IrType::Void,
+        ));
+
+        module.add_global(crate::ir_gen::IrGlobal {
+            name: "collision".to_string(),
+            ty: crate::ir_gen::IrType::I64,
+            value: crate::ir_gen::IrValue::ConstInt(
+                1,
+                crate::ir_gen::IrType::I64,
+            ),
+            is_const: true,
+        });
+
+        let linker = ZamaniLinker::new(vec![module]);
+
+        assert!(matches!(
+            linker.link(),
+            Err(LinkerError::DuplicateSymbol(name))
+                if name == "collision"
+        ));
+    }
+
+    #[test]
+    fn duplicate_globals_are_rejected() {
+        let mut first = IrModule::new("first");
+        let mut second = IrModule::new("second");
+
+        let global = || crate::ir_gen::IrGlobal {
+            name: "value".to_string(),
+            ty: crate::ir_gen::IrType::I64,
+            value: crate::ir_gen::IrValue::ConstInt(
+                42,
+                crate::ir_gen::IrType::I64,
+            ),
+            is_const: true,
         };
 
-        assert!(validate_config(&config).is_ok());
+        first.add_global(global());
+        second.add_global(global());
+
+        let linker = ZamaniLinker::new(vec![first, second]);
+
+        assert!(matches!(
+            linker.link(),
+            Err(LinkerError::DuplicateSymbol(name))
+                if name == "value"
+        ));
+    }
+
+    #[test]
+    fn string_literals_are_merged_without_changing_order() {
+        let mut first = IrModule::new("first");
+        let mut second = IrModule::new("second");
+
+        first
+            .string_literals
+            .push(("str0".into(), "hello".into()));
+
+        second
+            .string_literals
+            .push(("str1".into(), "world".into()));
+
+        let linker = ZamaniLinker::new(vec![first, second]);
+
+        let result = linker.link().unwrap();
+
+        assert_eq!(
+            result.string_literals,
+            vec![
+                ("str0".into(), "hello".into()),
+                ("str1".into(), "world".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn duplicate_string_symbols_are_rejected() {
+        let mut first = IrModule::new("first");
+        let mut second = IrModule::new("second");
+
+        first
+            .string_literals
+            .push(("str0".into(), "hello".into()));
+
+        second
+            .string_literals
+            .push(("str0".into(), "different".into()));
+
+        let linker = ZamaniLinker::new(vec![first, second]);
+
+        assert!(matches!(
+            linker.link(),
+            Err(LinkerError::DuplicateStringLiteral(name))
+                if name == "str0"
+        ));
+    }
+
+    #[test]
+    fn type_definitions_are_preserved() {
+        let mut module = IrModule::new("module");
+
+        module.type_defs.push((
+            "Point".into(),
+            vec![
+                ("x".into(), crate::ir_gen::IrType::I64),
+                ("y".into(), crate::ir_gen::IrType::I64),
+            ],
+        ));
+
+        let linker = ZamaniLinker::new(vec![module]);
+        let result = linker.link().unwrap();
+
+        assert_eq!(result.type_defs.len(), 1);
+        assert_eq!(result.type_defs[0].0, "Point");
+    }
+
+    #[test]
+    fn duplicate_type_definitions_are_rejected() {
+        let mut first = IrModule::new("first");
+        let mut second = IrModule::new("second");
+
+        first
+            .type_defs
+            .push(("Point".into(), Vec::new()));
+
+        second
+            .type_defs
+            .push(("Point".into(), Vec::new()));
+
+        let linker = ZamaniLinker::new(vec![first, second]);
+
+        assert!(matches!(
+            linker.link(),
+            Err(LinkerError::DuplicateSymbol(name))
+                if name == "Point"
+        ));
+    }
+
+    #[test]
+    fn module_target_information_is_preserved() {
+        let mut module = IrModule::new("module");
+
+        module.target_triple =
+            "aarch64-unknown-linux-gnu".into();
+
+        module.data_layout =
+            "custom-data-layout".into();
+
+        let linker = ZamaniLinker::new(vec![module]);
+        let result = linker.link().unwrap();
+
+        assert_eq!(
+            result.target_triple,
+            "aarch64-unknown-linux-gnu"
+        );
+
+        assert_eq!(
+            result.data_layout,
+            "custom-data-layout"
+        );
+    }
+
+    #[test]
+    fn lto_none_preserves_instruction_count() {
+        let linker = ZamaniLinker {
+            modules: vec![empty_module("module")],
+            config: LinkerConfig {
+                lto: LtoLevel::None,
+                ..LinkerConfig::default()
+            },
+        };
+
+        let mut module = IrModule::new("test");
+
+        linker.optimize_lto(&mut module);
+
+        assert_eq!(module.instruction_count(), 0);
+    }
+
+    #[test]
+    fn optimize_lto_deduplicates_identical_string_pairs() {
+        let linker = ZamaniLinker::new(Vec::new());
+
+        let mut module = IrModule::new("test");
+
+        module
+            .string_literals
+            .push(("a".into(), "hello".into()));
+
+        module
+            .string_literals
+            .push(("a".into(), "hello".into()));
+
+        linker.optimize_lto(&mut module);
+
+        assert_eq!(module.string_literals.len(), 1);
+    }
+
+    #[test]
+    fn output_directory_is_created_by_native_link_stage() {
+        /*
+         * Only validate path semantics here. The test deliberately does not
+         * invoke a platform linker, keeping the unit test deterministic and
+         * cross-platform.
+         */
+        let path = PathBuf::from("target/zlink-test-output/program");
+
+        assert!(validate_output_path(&path).is_ok());
     }
 }
