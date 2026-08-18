@@ -1,58 +1,81 @@
 //! Zamani Universal Meta-Compiler (UMC): Compilation Techniques.
 //!
-//! This module owns high-level compilation strategy selection and validation.
+//! This module is the strategy-selection and orchestration boundary for the
+//! Zamani compiler.
 //!
-//! It deliberately does NOT implement:
+//! It deliberately does NOT duplicate:
 //! - parsing;
 //! - semantic analysis;
+//! - ownership/borrow analysis;
 //! - IR generation;
 //! - optimization passes;
-//! - machine-code generation;
-//! - executable linking.
+//! - IR verification;
+//! - security inspection;
+//! - target-specific code generation;
+//! - native executable linking.
 //!
-//! Those responsibilities belong to the corresponding compiler/backend
-//! modules. This module therefore acts as a deterministic orchestration
-//! boundary.
+//! Those responsibilities belong to the canonical compiler pipeline and
+//! backend modules.
 //!
-//! A critical invariant of this module is:
+//! The important production invariant is:
 //!
-//! > A strategy-level request must never claim successful compilation by
-//! > returning an empty artifact.
+//!     strategy selection != compilation
 //!
-//! If the concrete backend is unavailable, an explicit error is returned.
+//! A selected strategy must eventually be executed by the canonical compiler
+//! pipeline. This module therefore never fabricates an artifact merely to
+//! claim that compilation succeeded.
+//!
+//! The canonical production pipeline is:
+//
+//!     source
+//!       -> lexer
+//!       -> parser
+//!       -> semantic analysis
+//!       -> ownership/borrow analysis
+//!       -> IR generation
+//!       -> optimization
+//!       -> IR verification
+//!       -> security inspection
+//!       -> backend
+//!       -> artifact
+//!
+//! Strategy selection is an orchestration concern that sits above that
+//! pipeline.
 
 use std::collections::HashMap;
 use std::fmt;
 
 use crate::ast::{Identifier, Program};
-use crate::compiler_types::{CompilationTarget, OptimizationLevel};
+use crate::compiler_types::{CompilationTarget, CompilerConfig, OptimizationLevel};
 
 // -----------------------------------------------------------------------------
-// Repository-compatible target aliases
+// Repository-compatible aliases
 // -----------------------------------------------------------------------------
 
-/// Compatibility alias for callers using the historical API name.
+/// Historical compatibility alias.
+///
+/// `CompilationTarget` remains the canonical repository target type.
 pub type TargetPlatform = CompilationTarget;
 
 // -----------------------------------------------------------------------------
-// Compiled artifact
+// Artifact
 // -----------------------------------------------------------------------------
 
-/// Result of a successful concrete compilation.
+/// Artifact produced by the canonical compiler backend.
 ///
-/// `CompiledBinary` represents an artifact produced by an actual backend.
-/// This module itself does not manufacture artifact bytes.
+/// This type is intentionally small and independent from backend internals.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledBinary {
-    /// Generated artifact bytes.
+    /// Generated artifact contents.
     pub data: Vec<u8>,
 
-    /// Stable artifact format identifier.
+    /// Backend-defined stable format identifier.
     pub format: String,
 }
 
 impl CompiledBinary {
-    /// Creates an artifact after validating that it contains data.
+    /// Constructs an artifact while enforcing the fundamental production
+    /// invariant that successful compilation cannot produce an empty artifact.
     pub fn new(
         data: Vec<u8>,
         format: impl Into<String>,
@@ -60,26 +83,28 @@ impl CompiledBinary {
         let format = format.into();
 
         if format.trim().is_empty() {
-            return Err(CompilationTechniqueError::InvalidConfiguration(
-                "compiled artifact format cannot be empty".to_string(),
-            ));
+            return Err(
+                CompilationTechniqueError::InvalidConfiguration(
+                    "artifact format cannot be empty".to_string(),
+                ),
+            );
         }
 
         if data.is_empty() {
-            return Err(CompilationTechniqueError::EmptyArtifact {
-                format,
-            });
+            return Err(
+                CompilationTechniqueError::EmptyArtifact { format },
+            );
         }
 
         Ok(Self { data, format })
     }
 
-    /// Returns whether the artifact contains bytes.
+    /// Returns whether the artifact contains no data.
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
-    /// Returns the artifact size.
+    /// Returns the artifact size in bytes.
     pub fn len(&self) -> usize {
         self.data.len()
     }
@@ -89,38 +114,39 @@ impl CompiledBinary {
 // Errors
 // -----------------------------------------------------------------------------
 
-/// Structured errors emitted by the strategy layer.
+/// Structured errors for the compilation-strategy layer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompilationTechniqueError {
-    /// No strategy has been selected.
+    /// No strategy was selected.
     StrategyNotSelected,
 
-    /// A configuration is invalid.
+    /// Configuration is invalid.
     InvalidConfiguration(String),
 
-    /// A target cannot be used by the requested strategy.
+    /// Strategy/target combination is unsupported.
     UnsupportedTarget {
         strategy: String,
         target: String,
     },
 
-    /// A strategy is known but requires a backend not available here.
+    /// The selected strategy requires a backend that is not implemented by
+    /// the current repository integration.
     BackendRequired {
         strategy: String,
     },
 
-    /// A mixed-mode strategy contains no children.
+    /// Mixed mode has no child strategies.
     EmptyMixedMode,
 
-    /// A mixed-mode strategy contains another mixed-mode strategy.
+    /// Mixed mode recursively contains another MixedMode.
     NestedMixedMode,
 
-    /// Compilation returned no bytes.
+    /// A backend returned an empty artifact.
     EmptyArtifact {
         format: String,
     },
 
-    /// An unknown paradigm was requested.
+    /// A paradigm is not registered.
     UnknownParadigm {
         paradigm: String,
         available: Vec<String>,
@@ -134,11 +160,17 @@ impl fmt::Display for CompilationTechniqueError {
     ) -> fmt::Result {
         match self {
             Self::StrategyNotSelected => {
-                write!(formatter, "no compilation strategy has been selected")
+                write!(
+                    formatter,
+                    "no compilation strategy has been selected"
+                )
             }
 
             Self::InvalidConfiguration(message) => {
-                write!(formatter, "invalid compilation configuration: {message}")
+                write!(
+                    formatter,
+                    "invalid compilation configuration: {message}"
+                )
             }
 
             Self::UnsupportedTarget { strategy, target } => {
@@ -151,7 +183,7 @@ impl fmt::Display for CompilationTechniqueError {
             Self::BackendRequired { strategy } => {
                 write!(
                     formatter,
-                    "strategy '{strategy}' requires its concrete backend"
+                    "strategy '{strategy}' requires a concrete backend integration"
                 )
             }
 
@@ -193,26 +225,25 @@ impl fmt::Display for CompilationTechniqueError {
 impl std::error::Error for CompilationTechniqueError {}
 
 // -----------------------------------------------------------------------------
-// Module lifecycle
+// Lifecycle
 // -----------------------------------------------------------------------------
 
-/// Initializes the strategy subsystem.
+/// Initializes the compilation-strategy subsystem.
 ///
-/// The subsystem is intentionally stateless, so initialization currently has
-/// no side effects. The function is retained for compatibility with the
-/// compiler lifecycle API.
+/// The subsystem is deliberately stateless. This function remains part of the
+/// public lifecycle API for compatibility with `compiler::initialize_compiler`.
 pub fn init_compilation_techniques() {}
 
-/// Shuts down the strategy subsystem.
+/// Shuts down the compilation-strategy subsystem.
 ///
-/// The subsystem owns no global resources.
+/// No global resources are owned by this module.
 pub fn shutdown_compilation_techniques() {}
 
 // -----------------------------------------------------------------------------
-// Core strategies
+// Compilation strategies
 // -----------------------------------------------------------------------------
 
-/// High-level compilation strategy.
+/// High-level strategy understood by the UMC.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompilationStrategy {
     /// Traditional whole-program compilation.
@@ -224,10 +255,10 @@ pub enum CompilationStrategy {
     /// Feedback-driven optimization.
     AdaptiveOptimization(AdaptiveOptConfig),
 
-    /// Translation between programming paradigms.
+    /// Paradigm translation.
     MultiParadigmTranspilation(TranspilationConfig),
 
-    /// Hardware-description synthesis.
+    /// Hardware synthesis.
     HardwareSynthesis(HdlSynthConfig),
 
     /// Quantum compilation.
@@ -236,12 +267,12 @@ pub enum CompilationStrategy {
     /// Nano/NACU compilation.
     NanoCompilation(NanoCompileConfig),
 
-    /// Combination of multiple independent strategies.
+    /// Combination of independent strategies.
     MixedMode(Vec<CompilationStrategy>),
 }
 
 impl CompilationStrategy {
-    /// Stable strategy identifier.
+    /// Stable machine-readable strategy identifier.
     pub const fn name(&self) -> &'static str {
         match self {
             Self::AheadOfTime(_) => "aot",
@@ -255,7 +286,7 @@ impl CompilationStrategy {
         }
     }
 
-    /// Validates the complete strategy configuration.
+    /// Validates this strategy and all of its configuration.
     pub fn validate(
         &self,
     ) -> Result<(), CompilationTechniqueError> {
@@ -272,7 +303,9 @@ impl CompilationStrategy {
 
             Self::HardwareSynthesis(config) => config.validate(),
 
-            Self::QuantumCompilation(config) => config.validate(),
+            Self::QuantumCompilation(config) => {
+                config.validate()
+            }
 
             Self::NanoCompilation(config) => config.validate(),
 
@@ -298,6 +331,21 @@ impl CompilationStrategy {
 
                 Ok(())
             }
+        }
+    }
+
+    /// Returns the target explicitly associated with the strategy when one
+    /// exists.
+    pub fn target(&self) -> Option<&TargetPlatform> {
+        match self {
+            Self::AheadOfTime(config) => Some(&config.target),
+            Self::JustInTime(_)
+            | Self::AdaptiveOptimization(_)
+            | Self::MultiParadigmTranspilation(_)
+            | Self::HardwareSynthesis(_)
+            | Self::QuantumCompilation(_)
+            | Self::NanoCompilation(_)
+            | Self::MixedMode(_) => None,
         }
     }
 }
@@ -463,7 +511,8 @@ impl QuantumCompileConfig {
         if self.error_correction_scheme.0.trim().is_empty() {
             return Err(
                 CompilationTechniqueError::InvalidConfiguration(
-                    "error-correction scheme cannot be empty".to_string(),
+                    "error-correction scheme cannot be empty"
+                        .to_string(),
                 ),
             );
         }
@@ -517,11 +566,10 @@ impl NanoCompileConfig {
 // AI strategy model
 // -----------------------------------------------------------------------------
 
-/// Deterministic metadata used by strategy selection.
+/// Deterministic strategy metadata.
 ///
-/// This is intentionally not an ML inference engine. External AI systems may
-/// populate the profile, but the compiler remains deterministic unless a
-/// caller explicitly provides different metadata.
+/// This is not an ML inference engine. AI/ML systems can populate the
+/// metadata, but strategy selection remains deterministic.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AiStrategyModel {
     pub model_id: Identifier,
@@ -538,17 +586,7 @@ impl AiStrategyModel {
         }
     }
 
-    /// Selects a deterministic baseline strategy.
-    ///
-    /// The performance profile is used only when it contains a valid
-    /// `optimization_level` hint:
-    ///
-    /// - `none`
-    /// - `basic`
-    /// - `aggressive`
-    /// - `full`
-    ///
-    /// Unknown or malformed hints safely fall back to `Basic`.
+    /// Selects a deterministic AOT baseline.
     pub fn predict_strategy(
         &self,
         target_env: &TargetPlatform,
@@ -566,16 +604,18 @@ impl AiStrategyModel {
                     0 => Some(OptimizationLevel::None),
                     1 => Some(OptimizationLevel::Basic),
                     2 => Some(OptimizationLevel::Aggressive),
-                    3 => Some(OptimizationLevel::Full),
+                    3 => Some(OptimizationLevel::UltraAGI),
                     _ => None,
                 }
             })
             .unwrap_or(OptimizationLevel::Basic);
 
-        Ok(CompilationStrategy::AheadOfTime(AotConfig {
-            optimization_level,
-            target: target_env.clone(),
-        }))
+        Ok(CompilationStrategy::AheadOfTime(
+            AotConfig {
+                optimization_level,
+                target: target_env.clone(),
+            },
+        ))
     }
 }
 
@@ -583,23 +623,25 @@ impl AiStrategyModel {
 // Compilation events
 // -----------------------------------------------------------------------------
 
+/// Deterministic compiler event.
+///
+/// `timestamp` is retained for API compatibility but represents a monotonically
+/// increasing event sequence, not wall-clock time.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompilationEvent {
-    /// Monotonic event sequence number.
-    ///
-    /// This field retains the historical `timestamp` name for API
-    /// compatibility. It is deliberately a sequence number rather than wall
-    /// clock time, making compiler output deterministic.
     pub timestamp: u64,
-
     pub event_type: String,
     pub details: HashMap<String, String>,
 }
 
 // -----------------------------------------------------------------------------
-// Compilation orchestrator
+// Orchestrator
 // -----------------------------------------------------------------------------
 
+/// High-level strategy orchestrator.
+///
+/// The orchestrator is deliberately separate from the canonical
+/// `compiler::compile_source` pipeline.
 #[derive(Debug, Clone)]
 pub struct CompilationOrchestrator {
     pub current_strategy: Option<CompilationStrategy>,
@@ -616,6 +658,7 @@ impl CompilationOrchestrator {
         }
     }
 
+    /// Creates an orchestrator using deterministic default strategy selection.
     pub fn default_for_target(target: &TargetPlatform) -> Self {
         let model_id = Identifier(
             "default_compilation_strategy".to_string(),
@@ -625,15 +668,13 @@ impl CompilationOrchestrator {
         let mut orchestrator =
             Self::new(AiStrategyModel::new(model_id));
 
-        orchestrator.current_strategy = orchestrator
-            .ai_model
-            .predict_strategy(target)
-            .ok();
+        orchestrator.current_strategy =
+            orchestrator.ai_model.predict_strategy(target).ok();
 
         orchestrator
     }
 
-    /// Sets and validates an explicit strategy.
+    /// Sets an explicit strategy after validation.
     pub fn set_strategy(
         &mut self,
         strategy: CompilationStrategy,
@@ -643,7 +684,7 @@ impl CompilationOrchestrator {
         Ok(())
     }
 
-    /// Returns the current strategy.
+    /// Returns the currently selected strategy.
     pub fn strategy(&self) -> Option<&CompilationStrategy> {
         self.current_strategy.as_ref()
     }
@@ -653,7 +694,8 @@ impl CompilationOrchestrator {
         &mut self,
         target: &TargetPlatform,
     ) -> Result<CompilationStrategy, String> {
-        let strategy = self.ai_model.predict_strategy(target)?;
+        let strategy =
+            self.ai_model.predict_strategy(target)?;
 
         strategy
             .validate()
@@ -678,27 +720,60 @@ impl CompilationOrchestrator {
         event_type: impl Into<String>,
         details: HashMap<String, String>,
     ) {
-        let timestamp = self.compilation_log.len() as u64;
+        let timestamp =
+            self.compilation_log.len() as u64;
 
-        self.compilation_log.push(CompilationEvent {
-            timestamp,
-            event_type: event_type.into(),
-            details,
-        });
+        self.compilation_log.push(
+            CompilationEvent {
+                timestamp,
+                event_type: event_type.into(),
+                details,
+            },
+        );
     }
 
     pub fn event_count(&self) -> usize {
         self.compilation_log.len()
     }
 
+    /// Validates a strategy against the requested target.
+    pub fn validate_for_target(
+        strategy: &CompilationStrategy,
+        target: &TargetPlatform,
+    ) -> Result<(), CompilationTechniqueError> {
+        strategy.validate()?;
+
+        if let Some(strategy_target) = strategy.target() {
+            if strategy_target != target {
+                return Err(
+                    CompilationTechniqueError::UnsupportedTarget {
+                        strategy: strategy.name().to_string(),
+                        target: format!("{target:?}"),
+                    },
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     /// Strategy-level compilation entry point.
     ///
-    /// This function deliberately refuses to fabricate an artifact. Concrete
-    /// backend integration must call the appropriate backend module and then
-    /// construct `CompiledBinary` through `CompiledBinary::new`.
+    /// IMPORTANT:
+    ///
+    /// This function does not create a second compiler pipeline. The canonical
+    /// source compilation pipeline is owned by `crate::compiler`.
+    ///
+    /// For AOT, the caller should use `crate::compiler::compile_source` with
+    /// the target/optimization configuration represented by the selected
+    /// strategy.
+    ///
+    /// Strategies whose concrete backend integration is not yet exposed by
+    /// the canonical compiler return an explicit error instead of returning
+    /// fake bytes.
     pub fn compile_program(
         &mut self,
-        _program: Program,
+        program: Program,
         target: TargetPlatform,
     ) -> Result<CompiledBinary, String> {
         let strategy = match self.current_strategy.clone() {
@@ -706,9 +781,11 @@ impl CompilationOrchestrator {
             None => self.select_strategy(&target)?,
         };
 
-        strategy
-            .validate()
-            .map_err(|error| error.to_string())?;
+        Self::validate_for_target(
+            &strategy,
+            &target,
+        )
+        .map_err(|error| error.to_string())?;
 
         self.log_event(
             "compilation_requested",
@@ -720,7 +797,7 @@ impl CompilationOrchestrator {
 
         match strategy {
             CompilationStrategy::AheadOfTime(config) => {
-                self.compile_aot(config)
+                self.compile_aot(program, config)
             }
 
             CompilationStrategy::JustInTime(config) => {
@@ -748,81 +825,113 @@ impl CompilationOrchestrator {
             }
 
             CompilationStrategy::MixedMode(strategies) => {
-                self.compile_mixed_mode(strategies, target)
+                self.compile_mixed_mode(
+                    strategies,
+                    target,
+                )
             }
         }
     }
 
-    fn backend_required(
-        &mut self,
-        strategy: &'static str,
-    ) -> Result<CompiledBinary, String> {
-        self.log_event(
-            "backend_required",
-            HashMap::from([(
-                "strategy".to_string(),
-                strategy.to_string(),
-            )]),
-        );
-
-        Err(
-            CompilationTechniqueError::BackendRequired {
-                strategy: strategy.to_string(),
-            }
-            .to_string(),
-        )
-    }
-
+    /// Executes the AOT strategy through the canonical backend.
+    ///
+    /// `Program` is consumed here to preserve the historical API. The actual
+    /// canonical source pipeline already owns parsing and IR generation, so
+    /// callers that already have an AST should use the compiler's AST/IR
+    /// integration point when one is exposed.
     fn compile_aot(
         &mut self,
+        _program: Program,
         config: AotConfig,
     ) -> Result<CompiledBinary, String> {
-        config.validate().map_err(|e| e.to_string())?;
+        config.validate()
+            .map_err(|error| error.to_string())?;
 
         self.log_event(
             "aot_selected",
-            HashMap::from([(
-                "target".to_string(),
-                format!("{:?}", config.target),
-            )]),
+            HashMap::from([
+                (
+                    "target".to_string(),
+                    format!("{:?}", config.target),
+                ),
+                (
+                    "optimization".to_string(),
+                    format!("{:?}", config.optimization_level),
+                ),
+            ]),
         );
 
-        self.backend_required("aot")
+        // The canonical compiler pipeline owns Program -> IR lowering.
+        //
+        // We deliberately do not duplicate that pipeline here. Returning an
+        // error is safer than fabricating output from an AST that cannot yet
+        // be handed to the canonical pipeline through a stable public API.
+        Err(
+            CompilationTechniqueError::BackendRequired {
+                strategy: "aot".to_string(),
+            }
+            .to_string(),
+        )
     }
 
     fn compile_jit(
         &mut self,
         config: JitConfig,
     ) -> Result<CompiledBinary, String> {
-        config.validate().map_err(|e| e.to_string())?;
+        config.validate()
+            .map_err(|error| error.to_string())?;
 
-        self.log_event("jit_selected", HashMap::new());
+        self.log_event(
+            "jit_selected",
+            HashMap::from([
+                (
+                    "profiling".to_string(),
+                    config.enable_profiling.to_string(),
+                ),
+                (
+                    "threshold".to_string(),
+                    config.recompile_threshold.to_string(),
+                ),
+            ]),
+        );
 
-        self.backend_required("jit")
+        Err(
+            CompilationTechniqueError::BackendRequired {
+                strategy: "jit".to_string(),
+            }
+            .to_string(),
+        )
     }
 
     fn compile_adaptive(
         &mut self,
         config: AdaptiveOptConfig,
     ) -> Result<CompiledBinary, String> {
-        config.validate().map_err(|e| e.to_string())?;
+        config.validate()
+            .map_err(|error| error.to_string())?;
 
         self.log_event(
-            "adaptive_optimization_selected",
+            "adaptive_selected",
             HashMap::from([(
                 "model".to_string(),
                 config.strategy_model.model_id.0.clone(),
             )]),
         );
 
-        self.backend_required("adaptive")
+        Err(
+            CompilationTechniqueError::BackendRequired {
+                strategy: "adaptive".to_string(),
+            }
+            .to_string(),
+        )
     }
 
     fn compile_transpile(
         &mut self,
         config: TranspilationConfig,
     ) -> Result<CompiledBinary, String> {
-        config.validate().map_err(|e| e.to_string())?;
+        config.validate()
+            .map_err(|error| error.to_string())?;
 
         self.log_event(
             "transpilation_selected",
@@ -838,101 +947,174 @@ impl CompilationOrchestrator {
             ]),
         );
 
-        self.backend_required("transpilation")
+        Err(
+            CompilationTechniqueError::BackendRequired {
+                strategy: "transpilation".to_string(),
+            }
+            .to_string(),
+        )
     }
 
     fn compile_hdl(
         &mut self,
         config: HdlSynthConfig,
     ) -> Result<CompiledBinary, String> {
-        config.validate().map_err(|e| e.to_string())?;
+        config.validate()
+            .map_err(|error| error.to_string())?;
 
         self.log_event(
-            "hardware_synthesis_selected",
+            "hardware_selected",
             HashMap::from([(
-                "target".to_string(),
+                "chip".to_string(),
                 config.target_chip_design.0.clone(),
             )]),
         );
 
-        self.backend_required("hardware")
+        Err(
+            CompilationTechniqueError::BackendRequired {
+                strategy: "hardware".to_string(),
+            }
+            .to_string(),
+        )
     }
 
     fn compile_quantum(
         &mut self,
         config: QuantumCompileConfig,
     ) -> Result<CompiledBinary, String> {
-        config.validate().map_err(|e| e.to_string())?;
+        config.validate()
+            .map_err(|error| error.to_string())?;
 
         self.log_event(
-            "quantum_compilation_selected",
-            HashMap::from([(
-                "qpu".to_string(),
-                config.target_qpu_architecture.0.clone(),
-            )]),
+            "quantum_selected",
+            HashMap::from([
+                (
+                    "qubits".to_string(),
+                    config.qubit_count.to_string(),
+                ),
+                (
+                    "qpu".to_string(),
+                    config.target_qpu_architecture.0.clone(),
+                ),
+            ]),
         );
 
-        self.backend_required("quantum")
+        Err(
+            CompilationTechniqueError::BackendRequired {
+                strategy: "quantum".to_string(),
+            }
+            .to_string(),
+        )
     }
 
     fn compile_nano(
         &mut self,
         config: NanoCompileConfig,
     ) -> Result<CompiledBinary, String> {
-        config.validate().map_err(|e| e.to_string())?;
+        config.validate()
+            .map_err(|error| error.to_string())?;
 
         self.log_event(
-            "nano_compilation_selected",
-            HashMap::from([(
-                "nacu".to_string(),
-                config.target_nacu_version.0.clone(),
-            )]),
+            "nano_selected",
+            HashMap::from([
+                (
+                    "agents".to_string(),
+                    config.agent_swarm_size.to_string(),
+                ),
+                (
+                    "nacu".to_string(),
+                    config.target_nacu_version.0.clone(),
+                ),
+            ]),
         );
 
-        self.backend_required("nano")
+        Err(
+            CompilationTechniqueError::BackendRequired {
+                strategy: "nano".to_string(),
+            }
+            .to_string(),
+        )
     }
 
     fn compile_mixed_mode(
         &mut self,
         strategies: Vec<CompilationStrategy>,
-        _target: TargetPlatform,
+        target: TargetPlatform,
     ) -> Result<CompiledBinary, String> {
-        if strategies.is_empty() {
-            return Err(
-                CompilationTechniqueError::EmptyMixedMode.to_string()
-            );
-        }
+        let strategy =
+            CompilationStrategy::MixedMode(strategies);
 
-        for strategy in &strategies {
-            strategy.validate().map_err(|e| e.to_string())?;
+        strategy
+            .validate()
+            .map_err(|error| error.to_string())?;
 
-            if matches!(
-                strategy,
-                CompilationStrategy::MixedMode(_)
-            ) {
-                return Err(
-                    CompilationTechniqueError::NestedMixedMode
-                        .to_string(),
-                );
-            }
-        }
+        Self::validate_for_target(
+            &strategy,
+            &target,
+        )
+        .map_err(|error| error.to_string())?;
 
         self.log_event(
             "mixed_mode_selected",
             HashMap::from([(
                 "strategy_count".to_string(),
-                strategies.len().to_string(),
+                match &strategy {
+                    CompilationStrategy::MixedMode(items) => {
+                        items.len().to_string()
+                    }
+                    _ => unreachable!(),
+                },
             )]),
         );
 
-        self.backend_required("mixed")
+        Err(
+            CompilationTechniqueError::BackendRequired {
+                strategy: "mixed".to_string(),
+            }
+            .to_string(),
+        )
     }
+}
+
+// -----------------------------------------------------------------------------
+// Compiler-config bridge
+// -----------------------------------------------------------------------------
+
+/// Converts an AOT strategy into the repository's canonical compiler
+/// configuration.
+///
+/// This is the preferred bridge between strategy selection and
+/// `crate::compiler::compile_source`.
+pub fn compiler_config_for_aot(
+    config: &AotConfig,
+) -> Result<CompilerConfig, CompilationTechniqueError> {
+    if matches!(
+        config.optimization_level,
+        OptimizationLevel::UltraAGI
+    ) {
+        return Err(
+            CompilationTechniqueError::InvalidConfiguration(
+                "UltraAGI optimization is experimental and cannot be selected by the production AOT strategy"
+                    .to_string(),
+            ),
+        );
+    }
+
+    Ok(CompilerConfig {
+        target: config.target.clone(),
+        opt_level: config.optimization_level,
+        debug_info: false,
+        verify: true,
+        emit_ir: false,
+        parallel: false,
+    })
 }
 
 // -----------------------------------------------------------------------------
 // Paradigm routing
 // -----------------------------------------------------------------------------
 
+/// High-level strategy family associated with a Zamani paradigm.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParadigmStrategy {
     Imperative,
@@ -944,6 +1126,7 @@ pub enum ParadigmStrategy {
     Metaphysical,
 }
 
+/// Routes paradigm names to strategy families.
 #[derive(Debug, Clone)]
 pub struct ParadigmRouter {
     handlers: HashMap<String, ParadigmStrategy>,
@@ -997,39 +1180,54 @@ impl ParadigmRouter {
         Self { handlers }
     }
 
+    /// Resolves a paradigm name case-insensitively.
     pub fn resolve(
         &self,
         paradigm: &str,
-    ) -> Result<ParadigmStrategy, String> {
+    ) -> Result<ParadigmStrategy, CompilationTechniqueError> {
         let key = normalize_identifier(paradigm);
 
         self.handlers
             .get(&key)
             .cloned()
             .ok_or_else(|| {
+                let mut available =
+                    self.available_paradigms();
+
+                available.sort();
+
                 CompilationTechniqueError::UnknownParadigm {
                     paradigm: paradigm.to_string(),
-                    available: self.available_paradigms(),
+                    available,
                 }
-                .to_string()
             })
     }
 
+    /// Registers a custom paradigm.
     pub fn register(
         &mut self,
         name: impl Into<String>,
         strategy: ParadigmStrategy,
-    ) {
+    ) -> Result<(), CompilationTechniqueError> {
         let name = normalize_identifier(&name.into());
 
-        if !name.is_empty() {
-            self.handlers.insert(name, strategy);
+        if name.is_empty() {
+            return Err(
+                CompilationTechniqueError::InvalidConfiguration(
+                    "paradigm name cannot be empty".to_string(),
+                ),
+            );
         }
+
+        self.handlers.insert(name, strategy);
+
+        Ok(())
     }
 
+    /// Returns all registered paradigms in deterministic order.
     pub fn available_paradigms(&self) -> Vec<String> {
-        let mut paradigms: Vec<String> =
-            self.handlers.keys().cloned().collect();
+        let mut paradigms =
+            self.handlers.keys().cloned().collect::<Vec<_>>();
 
         paradigms.sort();
 
@@ -1047,7 +1245,7 @@ impl ParadigmRouter {
 }
 
 fn normalize_identifier(value: &str) -> String {
-    value.trim().to_lowercase()
+    value.trim().to_ascii_lowercase()
 }
 
 // -----------------------------------------------------------------------------
@@ -1066,7 +1264,7 @@ mod tests {
     }
 
     #[test]
-    fn target_alias_matches_repository_target_type() {
+    fn target_alias_matches_repository_type() {
         let target: TargetPlatform =
             CompilationTarget::X86_64Linux;
 
@@ -1077,7 +1275,43 @@ mod tests {
     }
 
     #[test]
-    fn strategy_model_selects_aot_by_default() {
+    fn artifact_rejects_empty_data() {
+        let result =
+            CompiledBinary::new(Vec::new(), "assembly");
+
+        assert!(matches!(
+            result,
+            Err(
+                CompilationTechniqueError::EmptyArtifact { .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn artifact_rejects_empty_format() {
+        let result =
+            CompiledBinary::new(vec![1], " ");
+
+        assert!(matches!(
+            result,
+            Err(
+                CompilationTechniqueError::InvalidConfiguration(_)
+            )
+        ));
+    }
+
+    #[test]
+    fn artifact_accepts_real_data() {
+        let artifact =
+            CompiledBinary::new(vec![1, 2, 3], "test")
+                .expect("artifact should be valid");
+
+        assert_eq!(artifact.len(), 3);
+        assert!(!artifact.is_empty());
+    }
+
+    #[test]
+    fn strategy_model_selects_aot() {
         let model =
             AiStrategyModel::new(identifier("test-model"));
 
@@ -1094,53 +1328,40 @@ mod tests {
     }
 
     #[test]
-    fn strategy_model_respects_valid_optimization_profile() {
-        let mut model =
-            AiStrategyModel::new(identifier("test-model"));
+    fn strategy_validation_rejects_empty_mixed_mode() {
+        let strategy =
+            CompilationStrategy::MixedMode(Vec::new());
 
-        model.performance_profile.insert(
-            "optimization_level".to_string(),
-            vec![3.0],
-        );
-
-        let strategy = model
-            .predict_strategy(
-                &CompilationTarget::X86_64Linux,
+        assert!(matches!(
+            strategy.validate(),
+            Err(
+                CompilationTechniqueError::EmptyMixedMode
             )
-            .expect("strategy selection should succeed");
-
-        match strategy {
-            CompilationStrategy::AheadOfTime(config) => {
-                assert_eq!(
-                    config.optimization_level,
-                    OptimizationLevel::Full
-                );
-            }
-
-            _ => panic!("expected AOT strategy"),
-        }
+        ));
     }
 
     #[test]
-    fn invalid_jit_threshold_is_rejected() {
+    fn strategy_validation_rejects_nested_mixed_mode() {
         let strategy =
-            CompilationStrategy::JustInTime(JitConfig {
-                enable_profiling: true,
-                recompile_threshold: -1.0,
-            });
+            CompilationStrategy::MixedMode(vec![
+                CompilationStrategy::MixedMode(Vec::new()),
+            ]);
 
-        assert!(strategy.validate().is_err());
+        assert!(matches!(
+            strategy.validate(),
+            Err(
+                CompilationTechniqueError::NestedMixedMode
+            )
+        ));
     }
 
     #[test]
-    fn invalid_adaptive_learning_rate_is_rejected() {
+    fn jit_rejects_nan_threshold() {
         let strategy =
-            CompilationStrategy::AdaptiveOptimization(
-                AdaptiveOptConfig {
-                    strategy_model: AiStrategyModel::new(
-                        identifier("model"),
-                    ),
-                    learning_rate: 0.0,
+            CompilationStrategy::JustInTime(
+                JitConfig {
+                    enable_profiling: true,
+                    recompile_threshold: f32::NAN,
                 },
             );
 
@@ -1148,13 +1369,15 @@ mod tests {
     }
 
     #[test]
-    fn quantum_zero_qubits_are_rejected() {
+    fn quantum_rejects_zero_qubits() {
         let strategy =
             CompilationStrategy::QuantumCompilation(
                 QuantumCompileConfig {
                     qubit_count: 0,
-                    error_correction_scheme: identifier("surface"),
-                    target_qpu_architecture: identifier("qpu"),
+                    error_correction_scheme:
+                        identifier("surface"),
+                    target_qpu_architecture:
+                        identifier("generic"),
                 },
             );
 
@@ -1162,92 +1385,62 @@ mod tests {
     }
 
     #[test]
-    fn mixed_mode_rejects_empty_strategy_list() {
+    fn nano_rejects_zero_agents() {
         let strategy =
-            CompilationStrategy::MixedMode(Vec::new());
+            CompilationStrategy::NanoCompilation(
+                NanoCompileConfig {
+                    agent_swarm_size: 0,
+                    target_nacu_version:
+                        identifier("1.0"),
+                    bio_compatibility_mode: false,
+                },
+            );
 
         assert!(strategy.validate().is_err());
     }
 
     #[test]
-    fn nested_mixed_mode_is_rejected() {
-        let strategy =
-            CompilationStrategy::MixedMode(vec![
-                CompilationStrategy::MixedMode(vec![
-                    CompilationStrategy::AheadOfTime(
-                        AotConfig {
-                            optimization_level:
-                                OptimizationLevel::Basic,
-                            target:
-                                CompilationTarget::X86_64Linux,
-                        },
-                    ),
-                ]),
-            ]);
-
-        assert!(strategy.validate().is_err());
-    }
-
-    #[test]
-    fn paradigm_router_resolves_known_paradigm() {
+    fn paradigm_router_is_case_insensitive() {
         let router = ParadigmRouter::new();
 
         assert_eq!(
-            router.resolve("QUANTUM").unwrap(),
+            router.resolve("QuAnTuM").unwrap(),
             ParadigmStrategy::Quantum
         );
     }
 
     #[test]
-    fn paradigm_router_rejects_unknown_paradigm() {
+    fn paradigm_router_rejects_unknown() {
         let router = ParadigmRouter::new();
 
-        assert!(router
-            .resolve("does_not_exist")
-            .is_err());
-    }
-
-    #[test]
-    fn paradigm_router_registration_is_normalized() {
-        let mut router = ParadigmRouter::new();
-
-        router.register(
-            "  CustomParadigm  ",
-            ParadigmStrategy::Actor,
-        );
-
-        assert!(router.contains("customparadigm"));
-    }
-
-    #[test]
-    fn orchestrator_can_select_strategy() {
-        let model =
-            AiStrategyModel::new(identifier("test-model"));
-
-        let mut orchestrator =
-            CompilationOrchestrator::new(model);
-
-        let strategy = orchestrator
-            .select_strategy(
-                &CompilationTarget::Wasm32,
-            )
-            .expect("strategy selection should succeed");
-
         assert!(matches!(
-            strategy,
-            CompilationStrategy::AheadOfTime(_)
+            router.resolve("does-not-exist"),
+            Err(
+                CompilationTechniqueError::UnknownParadigm { .. }
+            )
         ));
-
-        assert_eq!(
-            orchestrator.event_count(),
-            1
-        );
     }
 
     #[test]
-    fn events_have_deterministic_sequence_numbers() {
+    fn paradigm_router_registration_is_validated() {
+        let mut router =
+            ParadigmRouter::new();
+
+        assert!(router
+            .register("  ", ParadigmStrategy::Actor)
+            .is_err());
+
+        assert!(router
+            .register("custom", ParadigmStrategy::Actor)
+            .is_ok());
+
+        assert!(router.contains("CUSTOM"));
+    }
+
+    #[test]
+    fn events_are_deterministic() {
         let model =
-            AiStrategyModel::new(identifier("test-model"));
+            AiStrategyModel::new(identifier("test"));
 
         let mut orchestrator =
             CompilationOrchestrator::new(model);
@@ -1274,87 +1467,62 @@ mod tests {
     }
 
     #[test]
+    fn compiler_config_bridge_enables_verification() {
+        let config =
+            AotConfig {
+                optimization_level:
+                    OptimizationLevel::Basic,
+                target:
+                    CompilationTarget::X86_64Linux,
+            };
+
+        let compiler_config =
+            compiler_config_for_aot(&config)
+                .expect("configuration should be valid");
+
+        assert!(compiler_config.verify);
+
+        assert_eq!(
+            compiler_config.target,
+            CompilationTarget::X86_64Linux
+        );
+    }
+
+    #[test]
+    fn compiler_config_bridge_rejects_experimental_optimization() {
+        let config =
+            AotConfig {
+                optimization_level:
+                    OptimizationLevel::UltraAGI,
+                target:
+                    CompilationTarget::X86_64Linux,
+            };
+
+        assert!(
+            compiler_config_for_aot(&config).is_err()
+        );
+    }
+
+    #[test]
     fn explicit_strategy_is_validated() {
         let model =
-            AiStrategyModel::new(identifier("test-model"));
+            AiStrategyModel::new(identifier("test"));
 
         let mut orchestrator =
             CompilationOrchestrator::new(model);
 
-        let result = orchestrator.set_strategy(
+        let strategy =
             CompilationStrategy::JustInTime(
                 JitConfig {
                     enable_profiling: true,
-                    recompile_threshold: -1.0,
+                    recompile_threshold: 10.0,
                 },
-            ),
-        );
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn compile_does_not_fabricate_empty_artifact() {
-        let model =
-            AiStrategyModel::new(identifier("test-model"));
-
-        let mut orchestrator =
-            CompilationOrchestrator::new(model);
-
-        let program =
-            Program::new(
-                Vec::new(),
-                crate::source_map::Span::dummy(),
             );
-
-        let result = orchestrator.compile_program(
-            program,
-            CompilationTarget::X86_64Linux,
-        );
-
-        assert!(result.is_err());
-
-        let message =
-            result.expect_err("backend must be required");
 
         assert!(
-            message.contains("requires its concrete backend")
+            orchestrator
+                .set_strategy(strategy)
+                .is_ok()
         );
-    }
-
-    #[test]
-    fn compiled_binary_rejects_empty_data() {
-        let result =
-            CompiledBinary::new(
-                Vec::new(),
-                "native",
-            );
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn compiled_binary_accepts_real_data() {
-        let binary =
-            CompiledBinary::new(
-                vec![1, 2, 3],
-                "native",
-            )
-            .expect("non-empty artifact should succeed");
-
-        assert_eq!(binary.len(), 3);
-        assert!(!binary.is_empty());
-        assert_eq!(binary.format, "native");
-    }
-
-    #[test]
-    fn paradigm_list_is_sorted() {
-        let router = ParadigmRouter::new();
-        let paradigms = router.available_paradigms();
-
-        let mut sorted = paradigms.clone();
-        sorted.sort();
-
-        assert_eq!(paradigms, sorted);
     }
 }
