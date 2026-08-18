@@ -1,74 +1,118 @@
 //! Zamani Compiler — Ownership & Borrow Checker
 //!
-//! This module performs deterministic ownership and borrowing analysis over
-//! Zamani expressions.
-//
+//! Deterministic, scope-aware ownership and borrowing analysis.
+//!
 //! Design goals:
 //! - no global mutable state;
-//! - no logging during compilation;
+//! - no compiler-time logging;
 //! - deterministic diagnostics;
-//! - explicit ownership state;
-//! - mutable/immutable borrow exclusivity;
+//! - lexical scopes;
+//! - controlled shadowing;
 //! - move/use-after-move detection;
-//! - scope-aware state;
-//! - conservative behaviour for unsupported ownership-sensitive operations;
-//! - unit-testable without requiring the complete compiler pipeline.
-//
-//! The checker intentionally does not claim to provide lifetime inference or
-//! whole-program proof by itself. Those guarantees require integration with
-//! the semantic analyzer, function signatures, type information, and control
-//! flow analysis.
+//! - immutable/mutable borrow exclusivity;
+//! - borrow lifetime tracking by lexical scope;
+//! - explicit state invariants;
+//! - conservative behaviour for unsupported AST operations;
+//! - unit-testable without the complete compiler pipeline.
+//!
+//! This checker is intentionally not a complete replacement for:
+//! - type checking;
+//! - lifetime inference;
+//! - control-flow analysis;
+//! - escape analysis;
+//! - whole-program alias analysis.
+//!
+//! Those analyses must integrate with this checker at a higher compiler
+//! layer.
 
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::Expression;
 
-/// Ownership state for a tracked local value.
+/// Ownership state for a tracked binding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OwnershipState {
-    /// The value is owned and available for use.
+    /// The binding owns a usable value.
     Owned,
+
     /// The value has been moved and can no longer be used.
     Moved,
-    /// The value is mutably borrowed.
+
+    /// The value currently has an active mutable borrow.
     MutablyBorrowed,
-    /// The value has one or more immutable borrows.
+
+    /// The value currently has one or more immutable borrows.
     ImmutablyBorrowed,
 }
 
 impl OwnershipState {
-    fn is_usable(self) -> bool {
-        matches!(self, Self::Owned | Self::ImmutablyBorrowed)
+    /// Whether the value may be read.
+    pub const fn is_readable(self) -> bool {
+        matches!(
+            self,
+            Self::Owned | Self::ImmutablyBorrowed
+        )
+    }
+
+    /// Whether the value has been moved.
+    pub const fn is_moved(self) -> bool {
+        matches!(self, Self::Moved)
     }
 }
 
 /// Kind of active borrow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BorrowKind {
+    /// Shared/read-only borrow.
     Immutable,
+
+    /// Exclusive/mutable borrow.
     Mutable,
 }
 
-/// An active borrow tracked by the checker.
+/// An active borrow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BorrowRecord {
+    /// Binding being borrowed.
     pub variable: String,
+
+    /// Borrow kind.
     pub kind: BorrowKind,
+
+    /// Lexical scope in which the borrow was created.
     pub scope_depth: usize,
 }
 
-/// Stable diagnostic codes emitted by the borrow checker.
+/// Stable diagnostic codes emitted by the checker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BorrowErrorCode {
+    /// Use of a moved value.
     UseAfterMove,
+
+    /// Mutable borrow conflicts with another borrow.
     MutableBorrowWhileBorrowed,
+
+    /// Immutable borrow conflicts with mutable borrow.
     ImmutableBorrowWhileMutablyBorrowed,
+
+    /// Move attempted while a borrow is active.
     MoveWhileBorrowed,
+
+    /// Duplicate binding in the same lexical scope.
     DuplicateDeclaration,
+
+    /// Invalid or unknown ownership target.
     InvalidBorrowTarget,
+
+    /// Invalid binding name.
+    InvalidDeclaration,
+
+    /// Internal ownership-state invariant failed.
+    InvariantViolation,
 }
 
 impl BorrowErrorCode {
+    /// Stable machine-readable diagnostic code.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::UseAfterMove => "E0401",
@@ -77,6 +121,8 @@ impl BorrowErrorCode {
             Self::MoveWhileBorrowed => "E0404",
             Self::DuplicateDeclaration => "E0405",
             Self::InvalidBorrowTarget => "E0406",
+            Self::InvalidDeclaration => "E0407",
+            Self::InvariantViolation => "E0408",
         }
     }
 }
@@ -84,8 +130,13 @@ impl BorrowErrorCode {
 /// Structured ownership diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BorrowError {
+    /// Stable diagnostic code.
     pub code: BorrowErrorCode,
+
+    /// Human-readable diagnostic.
     pub message: String,
+
+    /// Related binding, where available.
     pub variable: Option<String>,
 }
 
@@ -102,39 +153,78 @@ impl BorrowError {
         }
     }
 
-    /// Stable machine-readable error code.
+    /// Stable diagnostic code.
     pub const fn code(&self) -> &'static str {
         self.code.as_str()
     }
 }
 
-/// Ownership information for one local binding.
+/// Ownership information associated with a binding.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OwnershipInfo {
+    /// Current ownership state.
     pub state: OwnershipState,
+
+    /// Number of active immutable borrows.
     pub immutable_borrows: usize,
+
+    /// Whether an active mutable borrow exists.
     pub mutable_borrow: bool,
+
+    /// Lexical scope containing this binding.
+    pub scope_depth: usize,
 }
 
-impl Default for OwnershipInfo {
-    fn default() -> Self {
+impl OwnershipInfo {
+    fn new(scope_depth: usize) -> Self {
         Self {
             state: OwnershipState::Owned,
             immutable_borrows: 0,
             mutable_borrow: false,
+            scope_depth,
         }
+    }
+
+    fn refresh_state(&mut self) {
+        if self.state.is_moved() {
+            return;
+        }
+
+        self.state = if self.mutable_borrow {
+            OwnershipState::MutablyBorrowed
+        } else if self.immutable_borrows > 0 {
+            OwnershipState::ImmutablyBorrowed
+        } else {
+            OwnershipState::Owned
+        };
     }
 }
 
+/// A lexical scope.
+#[derive(Debug, Clone, Default)]
+struct Scope {
+    /// Bindings declared directly in this scope.
+    bindings: HashSet<String>,
+}
+
 /// Production-oriented ownership checker.
-///
-/// The checker is deliberately independent of stdout/stderr. Compilation
-/// should never emit diagnostic text as a side effect.
 #[derive(Debug, Clone)]
 pub struct BorrowChecker {
+    /// Ownership state for every visible binding.
+    ///
+    /// Names are unique among visible bindings. Shadowing is supported by
+    /// removing the shadowed binding from the visible map and restoring it
+    /// when the inner scope ends.
     ownership: HashMap<String, OwnershipInfo>,
+
+    /// Saved bindings hidden by lexical shadowing.
+    shadowed: Vec<HashMap<String, OwnershipInfo>>,
+
+    /// Active borrows.
     borrows: Vec<BorrowRecord>,
-    scopes: Vec<HashSet<String>>,
+
+    /// Lexical scope stack.
+    scopes: Vec<Scope>,
 }
 
 impl Default for BorrowChecker {
@@ -144,21 +234,27 @@ impl Default for BorrowChecker {
 }
 
 impl BorrowChecker {
-    /// Creates a new checker with one root scope.
+    /// Creates a checker with one root scope.
     pub fn new() -> Self {
         Self {
             ownership: HashMap::new(),
+            shadowed: Vec::new(),
             borrows: Vec::new(),
-            scopes: vec![HashSet::new()],
+            scopes: vec![Scope::default()],
         }
+    }
+
+    /// Returns the current lexical depth.
+    pub fn scope_depth(&self) -> usize {
+        self.scopes.len() - 1
     }
 
     /// Enters a lexical scope.
     pub fn enter_scope(&mut self) {
-        self.scopes.push(HashSet::new());
+        self.scopes.push(Scope::default());
     }
 
-    /// Leaves the current lexical scope and releases borrows belonging to it.
+    /// Leaves the current lexical scope.
     ///
     /// The root scope cannot be removed.
     pub fn leave_scope(&mut self) {
@@ -166,57 +262,116 @@ impl BorrowChecker {
             return;
         }
 
-        let depth = self.scopes.len() - 1;
+        let depth = self.scope_depth();
 
-        self.borrows.retain(|borrow| borrow.scope_depth < depth);
+        self.borrows
+            .retain(|borrow| borrow.scope_depth < depth);
 
-        if let Some(bindings) = self.scopes.pop() {
-            for name in bindings {
+        if let Some(scope) = self.scopes.pop() {
+            for name in scope.bindings {
                 self.ownership.remove(&name);
             }
         }
 
+        self.restore_shadowed_bindings(depth);
+
         self.rebuild_borrow_state();
+
+        debug_assert!(
+            self.validate_invariants().is_ok(),
+            "borrow checker invariant failed after leaving scope"
+        );
     }
 
-    /// Declares a new owned local.
-    pub fn declare(&mut self, name: impl Into<String>) -> Result<(), BorrowError> {
+    /// Declares an owned local.
+    ///
+    /// Same-scope redeclaration is rejected.
+    ///
+    /// Shadowing an outer binding is allowed.
+    pub fn declare(
+        &mut self,
+        name: impl Into<String>,
+    ) -> Result<(), BorrowError> {
         let name = name.into();
 
-        if self.ownership.contains_key(&name) {
+        self.validate_name(&name)?;
+
+        let current_depth = self.scope_depth();
+
+        let current_scope_contains = self
+            .scopes
+            .last()
+            .map(|scope| scope.bindings.contains(&name))
+            .unwrap_or(false);
+
+        if current_scope_contains {
             return Err(BorrowError::new(
                 BorrowErrorCode::DuplicateDeclaration,
-                format!("variable `{name}` is already declared in this ownership context"),
+                format!(
+                    "variable `{name}` is already declared in this scope"
+                ),
                 Some(name),
             ));
         }
 
-        self.ownership.insert(name.clone(), OwnershipInfo::default());
+        if let Some(previous) = self.ownership.remove(&name) {
+            self.shadowed
+                .push(HashMap::from([(name.clone(), previous)]));
+        }
+
+        self.ownership.insert(
+            name.clone(),
+            OwnershipInfo::new(current_depth),
+        );
 
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name);
+            scope.bindings.insert(name);
         }
+
+        self.debug_assert_invariants();
 
         Ok(())
     }
 
-    /// Explicitly registers an existing value as owned.
+    /// Registers an already-known owned binding.
     ///
-    /// This is useful when integrating the checker with semantic analysis,
-    /// where declarations may already have been processed.
-    pub fn register_owned(&mut self, name: impl Into<String>) {
+    /// This is intended for integration with semantic analysis.
+    pub fn register_owned(
+        &mut self,
+        name: impl Into<String>,
+    ) {
         let name = name.into();
-        self.ownership
-            .entry(name.clone())
-            .or_insert_with(OwnershipInfo::default);
+
+        if self.validate_name(&name).is_err() {
+            return;
+        }
+
+        let current_depth = self.scope_depth();
+
+        if let Some(existing) = self.ownership.get_mut(&name) {
+            existing.state = OwnershipState::Owned;
+            existing.immutable_borrows = 0;
+            existing.mutable_borrow = false;
+            return;
+        }
+
+        self.ownership.insert(
+            name.clone(),
+            OwnershipInfo::new(current_depth),
+        );
 
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name);
+            scope.bindings.insert(name);
         }
+
+        self.debug_assert_invariants();
     }
 
-    /// Returns ownership information for a variable.
-    pub fn ownership_of(&self, name: &str) -> Option<&OwnershipInfo> {
+    /// Returns ownership information for the currently visible binding.
+    pub fn ownership_of(
+        &self,
+        name: &str,
+    ) -> Option<&OwnershipInfo> {
         self.ownership.get(name)
     }
 
@@ -225,7 +380,11 @@ impl BorrowChecker {
         &mut self,
         name: &str,
     ) -> Result<(), BorrowError> {
-        let info = self.require_usable(name)?;
+        let info = self.require_binding(name)?;
+
+        if info.state.is_moved() {
+            return Err(Self::use_after_move(name));
+        }
 
         if info.mutable_borrow {
             return Err(BorrowError::new(
@@ -237,12 +396,16 @@ impl BorrowChecker {
             ));
         }
 
-        let scope_depth = self.scopes.len() - 1;
+        let scope_depth = self.scope_depth();
 
-        if let Some(info) = self.ownership.get_mut(name) {
-            info.immutable_borrows += 1;
-            info.state = OwnershipState::ImmutablyBorrowed;
-        }
+        let info = self
+            .ownership
+            .get_mut(name)
+            .expect("binding existence checked above");
+
+        info.immutable_borrows =
+            info.immutable_borrows.saturating_add(1);
+        info.refresh_state();
 
         self.borrows.push(BorrowRecord {
             variable: name.to_string(),
@@ -250,12 +413,21 @@ impl BorrowChecker {
             scope_depth,
         });
 
+        self.debug_assert_invariants();
+
         Ok(())
     }
 
     /// Records a mutable borrow.
-    pub fn borrow_mut(&mut self, name: &str) -> Result<(), BorrowError> {
-        let info = self.require_usable(name)?;
+    pub fn borrow_mut(
+        &mut self,
+        name: &str,
+    ) -> Result<(), BorrowError> {
+        let info = self.require_binding(name)?;
+
+        if info.state.is_moved() {
+            return Err(Self::use_after_move(name));
+        }
 
         if info.mutable_borrow || info.immutable_borrows > 0 {
             return Err(BorrowError::new(
@@ -267,12 +439,15 @@ impl BorrowChecker {
             ));
         }
 
-        let scope_depth = self.scopes.len() - 1;
+        let scope_depth = self.scope_depth();
 
-        if let Some(info) = self.ownership.get_mut(name) {
-            info.mutable_borrow = true;
-            info.state = OwnershipState::MutablyBorrowed;
-        }
+        let info = self
+            .ownership
+            .get_mut(name)
+            .expect("binding existence checked above");
+
+        info.mutable_borrow = true;
+        info.refresh_state();
 
         self.borrows.push(BorrowRecord {
             variable: name.to_string(),
@@ -280,75 +455,79 @@ impl BorrowChecker {
             scope_depth,
         });
 
+        self.debug_assert_invariants();
+
         Ok(())
     }
 
-    /// Releases all borrows of a variable in the current scope.
-    pub fn release_current_scope_borrows(&mut self, name: &str) {
-        let current_depth = self.scopes.len() - 1;
+    /// Releases borrows of a variable created in the current scope.
+    pub fn release_current_scope_borrows(
+        &mut self,
+        name: &str,
+    ) {
+        let depth = self.scope_depth();
 
         self.borrows.retain(|borrow| {
-            !(borrow.variable == name && borrow.scope_depth == current_depth)
+            !(borrow.variable == name
+                && borrow.scope_depth == depth)
         });
 
         self.rebuild_borrow_state();
+
+        self.debug_assert_invariants();
     }
 
     /// Moves a value.
-    pub fn move_value(&mut self, name: &str) -> Result<(), BorrowError> {
-        self.require_usable(name)?;
+    pub fn move_value(
+        &mut self,
+        name: &str,
+    ) -> Result<(), BorrowError> {
+        let info = self.require_binding(name)?;
 
-        let has_active_borrow = self.borrows.iter().any(|borrow| borrow.variable == name);
+        if info.state.is_moved() {
+            return Err(Self::use_after_move(name));
+        }
 
-        if has_active_borrow {
+        if self
+            .borrows
+            .iter()
+            .any(|borrow| borrow.variable == name)
+        {
             return Err(BorrowError::new(
                 BorrowErrorCode::MoveWhileBorrowed,
-                format!("cannot move `{name}` while it is borrowed"),
+                format!(
+                    "cannot move `{name}` while it is borrowed"
+                ),
                 Some(name.to_string()),
             ));
         }
 
-        if let Some(info) = self.ownership.get_mut(name) {
-            info.state = OwnershipState::Moved;
-        }
-
-        Ok(())
-    }
-
-    /// Checks a normal use of a value.
-    pub fn use_value(&self, name: &str) -> Result<(), BorrowError> {
         let info = self
             .ownership
-            .get(name)
-            .ok_or_else(|| {
-                BorrowError::new(
-                    BorrowErrorCode::InvalidBorrowTarget,
-                    format!("cannot use undeclared variable `{name}`"),
-                    Some(name.to_string()),
-                )
-            })?;
+            .get_mut(name)
+            .expect("binding existence checked above");
 
-        if info.state == OwnershipState::Moved {
-            return Err(BorrowError::new(
-                BorrowErrorCode::UseAfterMove,
-                format!("use of moved value `{name}`"),
-                Some(name.to_string()),
-            ));
-        }
+        info.state = OwnershipState::Moved;
+        info.immutable_borrows = 0;
+        info.mutable_borrow = false;
+
+        self.debug_assert_invariants();
 
         Ok(())
     }
 
-    /// Checks an expression against the current ownership environment.
-    ///
-    /// The method intentionally avoids println!/eprintln! side effects.
-    /// Unsupported expressions are left to semantic/type analysis unless they
-    /// contain an ownership-sensitive identifier that can be checked safely.
-    pub fn check_expression(
-        &mut self,
-        expr: &Expression,
+    /// Checks a normal read/use.
+    pub fn use_value(
+        &self,
+        name: &str,
     ) -> Result<(), BorrowError> {
-        self.check_expression_inner(expr)
+        let info = self.require_binding(name)?;
+
+        if info.state.is_moved() {
+            return Err(Self::use_after_move(name));
+        }
+
+        Ok(())
     }
 
     /// Returns all currently active borrows.
@@ -356,79 +535,269 @@ impl BorrowChecker {
         &self.borrows
     }
 
-    /// Clears the complete ownership environment.
+    /// Clears all ownership and scope state.
     pub fn clear(&mut self) {
         self.ownership.clear();
+        self.shadowed.clear();
         self.borrows.clear();
         self.scopes.clear();
-        self.scopes.push(HashSet::new());
+        self.scopes.push(Scope::default());
     }
 
-    fn require_usable(&self, name: &str) -> Result<&OwnershipInfo, BorrowError> {
-        let info = self
-            .ownership
-            .get(name)
-            .ok_or_else(|| {
-                BorrowError::new(
-                    BorrowErrorCode::InvalidBorrowTarget,
-                    format!("cannot borrow undeclared variable `{name}`"),
-                    Some(name.to_string()),
-                )
-            })?;
+    /// Checks an expression against the ownership environment.
+    ///
+    /// Ownership-sensitive AST lowering should call the explicit operations
+    /// (`declare`, `move_value`, `borrow_immutable`, `borrow_mut`, etc.).
+    ///
+    /// The checker deliberately does not guess at `Expression` variants here;
+    /// that would couple this safety-critical module to grammar details and
+    /// make compiler evolution unnecessarily fragile.
+    pub fn check_expression(
+        &mut self,
+        _expr: &Expression,
+    ) -> Result<(), BorrowError> {
+        Ok(())
+    }
 
-        if !info.state.is_usable() || info.state == OwnershipState::Moved {
+    /// Validates internal checker invariants.
+    ///
+    /// This is useful for compiler integration tests and fuzzing.
+    pub fn validate_invariants(
+        &self,
+    ) -> Result<(), BorrowError> {
+        if self.scopes.is_empty() {
             return Err(BorrowError::new(
-                BorrowErrorCode::UseAfterMove,
-                format!("cannot borrow moved value `{name}`"),
-                Some(name.to_string()),
+                BorrowErrorCode::InvariantViolation,
+                "borrow checker has no root scope",
+                None,
             ));
         }
 
-        Ok(info)
-    }
+        for borrow in &self.borrows {
+            if borrow.scope_depth >= self.scopes.len() {
+                return Err(BorrowError::new(
+                    BorrowErrorCode::InvariantViolation,
+                    format!(
+                        "borrow for `{}` references invalid scope depth {}",
+                        borrow.variable,
+                        borrow.scope_depth
+                    ),
+                    Some(borrow.variable.clone()),
+                ));
+            }
 
-    fn rebuild_borrow_state(&mut self) {
-        for info in self.ownership.values_mut() {
-            info.immutable_borrows = 0;
-            info.mutable_borrow = false;
-
-            if info.state != OwnershipState::Moved {
-                info.state = OwnershipState::Owned;
+            if !self.ownership.contains_key(&borrow.variable) {
+                return Err(BorrowError::new(
+                    BorrowErrorCode::InvariantViolation,
+                    format!(
+                        "active borrow references missing binding `{}`",
+                        borrow.variable
+                    ),
+                    Some(borrow.variable.clone()),
+                ));
             }
         }
 
-        for borrow in &self.borrows {
-            if let Some(info) = self.ownership.get_mut(&borrow.variable) {
-                match borrow.kind {
-                    BorrowKind::Immutable => {
-                        info.immutable_borrows += 1;
-                        if info.state != OwnershipState::Moved {
-                            info.state = OwnershipState::ImmutablyBorrowed;
-                        }
-                    }
-                    BorrowKind::Mutable => {
-                        info.mutable_borrow = true;
-                        if info.state != OwnershipState::Moved {
-                            info.state = OwnershipState::MutablyBorrowed;
-                        }
-                    }
+        for (name, info) in &self.ownership {
+            let Some(scope) = self
+                .scopes
+                .get(info.scope_depth)
+            else {
+                return Err(BorrowError::new(
+                    BorrowErrorCode::InvariantViolation,
+                    format!(
+                        "binding `{name}` references missing scope {}",
+                        info.scope_depth
+                    ),
+                    Some(name.clone()),
+                ));
+            };
+
+            if !scope.bindings.contains(name) {
+                return Err(BorrowError::new(
+                    BorrowErrorCode::InvariantViolation,
+                    format!(
+                        "binding `{name}` is not registered in its scope"
+                    ),
+                    Some(name.clone()),
+                ));
+            }
+
+            let immutable_count = self
+                .borrows
+                .iter()
+                .filter(|borrow| {
+                    borrow.variable == *name
+                        && borrow.kind == BorrowKind::Immutable
+                })
+                .count();
+
+            let mutable_count = self
+                .borrows
+                .iter()
+                .filter(|borrow| {
+                    borrow.variable == *name
+                        && borrow.kind == BorrowKind::Mutable
+                })
+                .count();
+
+            if info.immutable_borrows != immutable_count {
+                return Err(BorrowError::new(
+                    BorrowErrorCode::InvariantViolation,
+                    format!(
+                        "immutable borrow count mismatch for `{name}`"
+                    ),
+                    Some(name.clone()),
+                ));
+            }
+
+            if info.mutable_borrow != (mutable_count > 0) {
+                return Err(BorrowError::new(
+                    BorrowErrorCode::InvariantViolation,
+                    format!(
+                        "mutable borrow state mismatch for `{name}`"
+                    ),
+                    Some(name.clone()),
+                ));
+            }
+
+            if mutable_count > 1 {
+                return Err(BorrowError::new(
+                    BorrowErrorCode::InvariantViolation,
+                    format!(
+                        "multiple mutable borrows exist for `{name}`"
+                    ),
+                    Some(name.clone()),
+                ));
+            }
+
+            if mutable_count > 0 && immutable_count > 0 {
+                return Err(BorrowError::new(
+                    BorrowErrorCode::InvariantViolation,
+                    format!(
+                        "mutable and immutable borrows coexist for `{name}`"
+                    ),
+                    Some(name.clone()),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn require_binding(
+        &self,
+        name: &str,
+    ) -> Result<&OwnershipInfo, BorrowError> {
+        self.ownership.get(name).ok_or_else(|| {
+            BorrowError::new(
+                BorrowErrorCode::InvalidBorrowTarget,
+                format!(
+                    "cannot access undeclared variable `{name}`"
+                ),
+                Some(name.to_string()),
+            )
+        })
+    }
+
+    fn validate_name(
+        &self,
+        name: &str,
+    ) -> Result<(), BorrowError> {
+        if name.trim().is_empty() {
+            return Err(BorrowError::new(
+                BorrowErrorCode::InvalidDeclaration,
+                "variable name cannot be empty",
+                None,
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn restore_shadowed_bindings(
+        &mut self,
+        depth: usize,
+    ) {
+        let current_names: Vec<String> = self
+            .ownership
+            .iter()
+            .filter_map(|(name, info)| {
+                if info.scope_depth == depth {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for name in current_names {
+            if let Some(saved) = self
+                .shadowed
+                .iter()
+                .rev()
+                .find_map(|map| map.get(&name).cloned())
+            {
+                self.ownership.insert(name.clone(), saved);
+
+                if let Some(index) = self
+                    .shadowed
+                    .iter()
+                    .rposition(|map| map.contains_key(&name))
+                {
+                    self.shadowed.remove(index);
                 }
             }
         }
     }
 
-    fn check_expression_inner(
-        &mut self,
-        _expr: &Expression,
-    ) -> Result<(), BorrowError> {
-        // The exact Expression variants in Zamani are broader than the
-        // ownership model represented by this standalone checker. Semantic
-        // analysis should lower ownership-relevant operations into the
-        // explicit methods above.
-        //
-        // We intentionally do not guess at AST variants here. Guessing would
-        // make this file fragile whenever the language grammar evolves.
-        Ok(())
+    fn rebuild_borrow_state(&mut self) {
+        let borrow_snapshot = self.borrows.clone();
+
+        for info in self.ownership.values_mut() {
+            if info.state.is_moved() {
+                continue;
+            }
+
+            info.immutable_borrows = 0;
+            info.mutable_borrow = false;
+            info.state = OwnershipState::Owned;
+        }
+
+        for borrow in borrow_snapshot {
+            if let Some(info) =
+                self.ownership.get_mut(&borrow.variable)
+            {
+                match borrow.kind {
+                    BorrowKind::Immutable => {
+                        info.immutable_borrows =
+                            info.immutable_borrows
+                                .saturating_add(1);
+                    }
+
+                    BorrowKind::Mutable => {
+                        info.mutable_borrow = true;
+                    }
+                }
+
+                info.refresh_state();
+            }
+        }
+    }
+
+    fn debug_assert_invariants(&self) {
+        debug_assert!(
+            self.validate_invariants().is_ok(),
+            "borrow checker internal invariant violation"
+        );
+    }
+
+    fn use_after_move(name: &str) -> BorrowError {
+        BorrowError::new(
+            BorrowErrorCode::UseAfterMove,
+            format!("use of moved value `{name}`"),
+            Some(name.to_string()),
+        )
     }
 }
 
@@ -437,36 +806,67 @@ mod tests {
     use super::*;
 
     #[test]
-    fn new_checker_starts_with_empty_environment() {
+    fn new_checker_has_root_scope() {
         let checker = BorrowChecker::new();
 
-        assert!(checker.ownership_of("value").is_none());
+        assert_eq!(checker.scope_depth(), 0);
         assert!(checker.active_borrows().is_empty());
+        assert!(checker.validate_invariants().is_ok());
     }
 
     #[test]
-    fn declaration_registers_owned_value() {
+    fn declaration_creates_owned_binding() {
         let mut checker = BorrowChecker::new();
 
-        checker.declare("value").expect("declaration should succeed");
+        checker.declare("value").unwrap();
 
         assert_eq!(
-            checker.ownership_of("value").map(|info| info.state),
-            Some(OwnershipState::Owned)
+            checker.ownership_of("value").unwrap().state,
+            OwnershipState::Owned
+        );
+
+        assert!(checker.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn same_scope_duplicate_is_rejected() {
+        let mut checker = BorrowChecker::new();
+
+        checker.declare("value").unwrap();
+
+        let error = checker
+            .declare("value")
+            .expect_err("duplicate must fail");
+
+        assert_eq!(
+            error.code(),
+            "E0405"
         );
     }
 
     #[test]
-    fn duplicate_declaration_is_rejected() {
+    fn nested_scope_can_shadow_outer_binding() {
         let mut checker = BorrowChecker::new();
 
-        checker.declare("value").expect("first declaration should succeed");
+        checker.declare("value").unwrap();
+        checker.move_value("value").unwrap();
 
-        let error = checker
-            .declare("value")
-            .expect_err("duplicate declaration must fail");
+        checker.enter_scope();
+        checker.declare("value").unwrap();
 
-        assert_eq!(error.code(), "E0405");
+        assert_eq!(
+            checker.ownership_of("value").unwrap().state,
+            OwnershipState::Owned
+        );
+
+        checker.leave_scope();
+
+        assert_eq!(
+            checker.ownership_of("value").unwrap().state,
+            OwnershipState::Moved
+        );
+
+        assert!(checker.validate_invariants().is_ok());
     }
 
     #[test]
@@ -481,11 +881,14 @@ mod tests {
 
         assert_eq!(info.immutable_borrows, 2);
         assert!(!info.mutable_borrow);
-        assert_eq!(info.state, OwnershipState::ImmutablyBorrowed);
+        assert_eq!(
+            info.state,
+            OwnershipState::ImmutablyBorrowed
+        );
     }
 
     #[test]
-    fn mutable_borrow_rejects_existing_immutable_borrow() {
+    fn mutable_borrow_rejects_immutable_borrow() {
         let mut checker = BorrowChecker::new();
 
         checker.declare("value").unwrap();
@@ -495,11 +898,14 @@ mod tests {
             .borrow_mut("value")
             .expect_err("mutable borrow must fail");
 
-        assert_eq!(error.code(), "E0402");
+        assert_eq!(
+            error.code(),
+            "E0402"
+        );
     }
 
     #[test]
-    fn immutable_borrow_rejects_existing_mutable_borrow() {
+    fn immutable_borrow_rejects_mutable_borrow() {
         let mut checker = BorrowChecker::new();
 
         checker.declare("value").unwrap();
@@ -509,11 +915,31 @@ mod tests {
             .borrow_immutable("value")
             .expect_err("immutable borrow must fail");
 
-        assert_eq!(error.code(), "E0403");
+        assert_eq!(
+            error.code(),
+            "E0403"
+        );
     }
 
     #[test]
-    fn moving_a_borrowed_value_is_rejected() {
+    fn second_mutable_borrow_is_rejected() {
+        let mut checker = BorrowChecker::new();
+
+        checker.declare("value").unwrap();
+        checker.borrow_mut("value").unwrap();
+
+        let error = checker
+            .borrow_mut("value")
+            .expect_err("second mutable borrow must fail");
+
+        assert_eq!(
+            error.code(),
+            "E0402"
+        );
+    }
+
+    #[test]
+    fn moving_borrowed_value_is_rejected() {
         let mut checker = BorrowChecker::new();
 
         checker.declare("value").unwrap();
@@ -521,9 +947,12 @@ mod tests {
 
         let error = checker
             .move_value("value")
-            .expect_err("moving borrowed value must fail");
+            .expect_err("move must fail");
 
-        assert_eq!(error.code(), "E0404");
+        assert_eq!(
+            error.code(),
+            "E0404"
+        );
     }
 
     #[test]
@@ -535,9 +964,12 @@ mod tests {
 
         let error = checker
             .use_value("value")
-            .expect_err("use after move must fail");
+            .expect_err("use-after-move must fail");
 
-        assert_eq!(error.code(), "E0401");
+        assert_eq!(
+            error.code(),
+            "E0401"
+        );
     }
 
     #[test]
@@ -549,13 +981,16 @@ mod tests {
 
         let error = checker
             .borrow_immutable("value")
-            .expect_err("borrow of moved value must fail");
+            .expect_err("borrow must fail");
 
-        assert_eq!(error.code(), "E0401");
+        assert_eq!(
+            error.code(),
+            "E0401"
+        );
     }
 
     #[test]
-    fn leaving_scope_releases_scope_borrows() {
+    fn leaving_scope_releases_inner_borrows() {
         let mut checker = BorrowChecker::new();
 
         checker.declare("value").unwrap();
@@ -563,19 +998,25 @@ mod tests {
         checker.enter_scope();
         checker.borrow_immutable("value").unwrap();
 
-        assert_eq!(checker.active_borrows().len(), 1);
+        assert_eq!(
+            checker.active_borrows().len(),
+            1
+        );
 
         checker.leave_scope();
 
-        assert!(checker.active_borrows().is_empty());
+        assert!(
+            checker.active_borrows().is_empty()
+        );
+
         assert_eq!(
-            checker.ownership_of("value").map(|info| info.state),
-            Some(OwnershipState::Owned)
+            checker.ownership_of("value").unwrap().state,
+            OwnershipState::Owned
         );
     }
 
     #[test]
-    fn inner_scope_bindings_are_removed() {
+    fn inner_scope_binding_is_removed() {
         let mut checker = BorrowChecker::new();
 
         checker.enter_scope();
@@ -594,6 +1035,8 @@ mod tests {
 
         checker.leave_scope();
 
+        assert_eq!(checker.scope_depth(), 0);
+
         checker.declare("value").unwrap();
 
         assert!(checker.ownership_of("value").is_some());
@@ -609,36 +1052,59 @@ mod tests {
         checker.release_current_scope_borrows("value");
 
         assert!(checker.active_borrows().is_empty());
+
         assert_eq!(
-            checker.ownership_of("value").map(|info| info.state),
-            Some(OwnershipState::Owned)
+            checker.ownership_of("value").unwrap().state,
+            OwnershipState::Owned
         );
+
+        assert!(checker.validate_invariants().is_ok());
     }
 
     #[test]
-    fn undeclared_value_cannot_be_used() {
+    fn undeclared_use_is_rejected() {
         let checker = BorrowChecker::new();
 
         let error = checker
             .use_value("missing")
-            .expect_err("undeclared value must fail");
+            .expect_err("undeclared use must fail");
 
-        assert_eq!(error.code(), "E0406");
+        assert_eq!(
+            error.code(),
+            "E0406"
+        );
     }
 
     #[test]
-    fn undeclared_value_cannot_be_borrowed() {
+    fn undeclared_borrow_is_rejected() {
         let mut checker = BorrowChecker::new();
 
         let error = checker
             .borrow_immutable("missing")
-            .expect_err("undeclared value must fail");
+            .expect_err("undeclared borrow must fail");
 
-        assert_eq!(error.code(), "E0406");
+        assert_eq!(
+            error.code(),
+            "E0406"
+        );
     }
 
     #[test]
-    fn clear_resets_all_state() {
+    fn empty_declaration_is_rejected() {
+        let mut checker = BorrowChecker::new();
+
+        let error = checker
+            .declare("")
+            .expect_err("empty name must fail");
+
+        assert_eq!(
+            error.code(),
+            "E0407"
+        );
+    }
+
+    #[test]
+    fn clear_resets_checker() {
         let mut checker = BorrowChecker::new();
 
         checker.declare("value").unwrap();
@@ -646,10 +1112,68 @@ mod tests {
 
         checker.clear();
 
-        assert!(checker.ownership_of("value").is_none());
-        assert!(checker.active_borrows().is_empty());
+        assert!(
+            checker.ownership_of("value").is_none()
+        );
+
+        assert!(
+            checker.active_borrows().is_empty()
+        );
+
+        assert_eq!(
+            checker.scope_depth(),
+            0
+        );
+
+        assert!(
+            checker.validate_invariants().is_ok()
+        );
+    }
+
+    #[test]
+    fn mutable_and_immutable_borrows_never_coexist() {
+        let mut checker = BorrowChecker::new();
 
         checker.declare("value").unwrap();
-        assert!(checker.ownership_of("value").is_some());
+        checker.borrow_immutable("value").unwrap();
+
+        assert!(
+            checker.borrow_mut("value").is_err()
+        );
+
+        assert!(
+            checker.validate_invariants().is_ok()
+        );
+    }
+
+    #[test]
+    fn invariants_hold_after_normal_lifecycle() {
+        let mut checker = BorrowChecker::new();
+
+        checker.declare("a").unwrap();
+        checker.declare("b").unwrap();
+
+        checker.enter_scope();
+
+        checker.borrow_immutable("a").unwrap();
+        checker.declare("c").unwrap();
+
+        assert!(
+            checker.validate_invariants().is_ok()
+        );
+
+        checker.release_current_scope_borrows("a");
+
+        assert!(
+            checker.validate_invariants().is_ok()
+        );
+
+        checker.leave_scope();
+
+        checker.move_value("b").unwrap();
+
+        assert!(
+            checker.validate_invariants().is_ok()
+        );
     }
 }
