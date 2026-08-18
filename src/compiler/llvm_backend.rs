@@ -1,53 +1,55 @@
 //! Zamani Compiler — LLVM Backend
 //!
-//! Production-oriented LLVM backend boundary.
+//! Production LLVM backend boundary.
 //!
 //! Responsibilities:
-//!   1. Convert the Zamani IR module into LLVM IR.
-//!   2. Validate the generated LLVM IR.
-//!   3. Invoke the installed LLVM toolchain to produce native output.
-//!   4. Propagate compiler/toolchain failures instead of reporting false success.
-//!   5. Keep target selection deterministic and explicit.
+//!   1. Convert Zamani IR into textual LLVM IR.
+//!   2. Validate LLVM IR with `llvm-as`.
+//!   3. Generate target-specific object code with `llc`.
+//!   4. Never report successful compilation unless the requested artifact
+//!      was actually produced and is non-empty.
+//!   5. Keep temporary compilation state isolated between concurrent builds.
+//!   6. Preserve useful diagnostics from the LLVM toolchain.
 //!
-//! The backend deliberately does not embed LLVM bindings. This keeps the core
-//! compiler independent of a particular LLVM Rust binding version while allowing
-//! LLVM to be used as the native-code generation backend.
+//! The backend intentionally uses LLVM command-line tools rather than LLVM
+//! Rust bindings. This keeps Zamani's compiler core independent of a specific
+//! LLVM binding/version.
 //!
-//! Required external tools:
-//!   - `llvm-as` for LLVM IR validation/assembly.
-//!   - `llc` for native/object-code generation.
+//! Required tools:
+//!   - llvm-as
+//!   - llc
 //!
-//! The exact LLVM binaries can be overridden through the constructor.
+//! The paths to both tools can be explicitly configured for CI, cross
+//! compilation, hermetic builds, and non-standard LLVM installations.
 
 use crate::ir_gen::IrModule;
 
+use std::fmt;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// LLVM native-code backend.
-///
-/// The backend is intentionally stateless apart from the target triple and
-/// LLVM executable locations, making it safe to construct per compilation.
 #[derive(Debug, Clone)]
 pub struct LlvmBackend {
-    /// LLVM target triple, for example:
-    /// `x86_64-unknown-linux-gnu`
+    /// LLVM target triple.
     pub target_triple: String,
 
-    /// Path/name of the LLVM IR assembler.
+    /// LLVM textual IR assembler.
     pub llvm_as: String,
 
-    /// Path/name of the LLVM static compiler.
+    /// LLVM static compiler/code generator.
     pub llc: String,
 
     /// LLVM optimization level.
     pub optimization_level: LlvmOptimizationLevel,
 }
 
-/// Supported LLVM optimization levels.
+/// LLVM optimization level.
 ///
-/// These map directly to LLVM's conventional `-O0` through `-O3` levels.
+/// These correspond to LLVM's conventional optimization levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LlvmOptimizationLevel {
     O0,
@@ -73,8 +75,140 @@ impl Default for LlvmOptimizationLevel {
     }
 }
 
+/// Structured LLVM backend errors.
+///
+/// Keeping errors typed makes this backend easier to integrate with the
+/// compiler's diagnostic subsystem later.
+#[derive(Debug)]
+pub enum LlvmBackendError {
+    InvalidTarget(String),
+    InvalidOutput(String),
+    Io {
+        operation: String,
+        path: Option<PathBuf>,
+        source: io::Error,
+    },
+    ToolExecution {
+        tool: String,
+        source: io::Error,
+    },
+    ToolFailure {
+        tool: String,
+        status: String,
+        stdout: String,
+        stderr: String,
+    },
+    MissingArtifact(PathBuf),
+    EmptyArtifact(PathBuf),
+    InvalidIr(String),
+}
+
+impl fmt::Display for LlvmBackendError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidTarget(message) => {
+                write!(formatter, "LLVM backend: invalid target: {}", message)
+            }
+
+            Self::InvalidOutput(message) => {
+                write!(formatter, "LLVM backend: invalid output: {}", message)
+            }
+
+            Self::Io {
+                operation,
+                path,
+                source,
+            } => {
+                if let Some(path) = path {
+                    write!(
+                        formatter,
+                        "LLVM backend: {} '{}': {}",
+                        operation,
+                        path.display(),
+                        source
+                    )
+                } else {
+                    write!(
+                        formatter,
+                        "LLVM backend: {}: {}",
+                        operation,
+                        source
+                    )
+                }
+            }
+
+            Self::ToolExecution { tool, source } => {
+                write!(
+                    formatter,
+                    "LLVM backend: failed to execute '{}': {}",
+                    tool,
+                    source
+                )
+            }
+
+            Self::ToolFailure {
+                tool,
+                status,
+                stdout,
+                stderr,
+            } => {
+                write!(
+                    formatter,
+                    "LLVM backend: '{}' failed with status {}",
+                    tool,
+                    status
+                )?;
+
+                if !stderr.trim().is_empty() {
+                    write!(
+                        formatter,
+                        "\nstderr:\n{}",
+                        stderr.trim()
+                    )?;
+                }
+
+                if !stdout.trim().is_empty() {
+                    write!(
+                        formatter,
+                        "\nstdout:\n{}",
+                        stdout.trim()
+                    )?;
+                }
+
+                Ok(())
+            }
+
+            Self::MissingArtifact(path) => {
+                write!(
+                    formatter,
+                    "LLVM backend: expected artifact '{}' was not produced",
+                    path.display()
+                )
+            }
+
+            Self::EmptyArtifact(path) => {
+                write!(
+                    formatter,
+                    "LLVM backend: generated artifact '{}' is empty",
+                    path.display()
+                )
+            }
+
+            Self::InvalidIr(message) => {
+                write!(
+                    formatter,
+                    "LLVM backend: invalid LLVM IR: {}",
+                    message
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for LlvmBackendError {}
+
 impl LlvmBackend {
-    /// Construct an LLVM backend using the system LLVM installation.
+    /// Construct an LLVM backend using the supplied target triple.
     pub fn new(target_triple: impl Into<String>) -> Self {
         Self {
             target_triple: target_triple.into(),
@@ -84,10 +218,7 @@ impl LlvmBackend {
         }
     }
 
-    /// Construct a backend with explicitly selected LLVM executables.
-    ///
-    /// This is useful for CI, hermetic toolchains, cross compilation, and
-    /// systems where LLVM is installed outside the normal PATH.
+    /// Construct a backend with explicit LLVM executables.
     pub fn with_tools(
         target_triple: impl Into<String>,
         llvm_as: impl Into<String>,
@@ -101,7 +232,7 @@ impl LlvmBackend {
         }
     }
 
-    /// Set the LLVM optimization level.
+    /// Configure the LLVM optimization level.
     pub fn with_optimization_level(
         mut self,
         optimization_level: LlvmOptimizationLevel,
@@ -110,220 +241,194 @@ impl LlvmBackend {
         self
     }
 
-    /// Return the target triple used by this backend.
+    /// Return the configured target triple.
     pub fn target_triple(&self) -> &str {
         &self.target_triple
     }
 
-    /// Generate native machine/object code from a Zamani IR module.
+    /// Validate the backend configuration.
+    pub fn validate(&self) -> Result<(), LlvmBackendError> {
+        self.validate_target()?;
+
+        if self.llvm_as.trim().is_empty() {
+            return Err(LlvmBackendError::InvalidTarget(
+                "llvm-as executable cannot be empty".to_string(),
+            ));
+        }
+
+        if self.llc.trim().is_empty() {
+            return Err(LlvmBackendError::InvalidTarget(
+                "llc executable cannot be empty".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Emit target-specific object code.
     ///
-    /// The pipeline is:
+    /// Pipeline:
     ///
     /// ```text
     /// Zamani IR
-    ///    ↓
+    ///     |
+    ///     v
     /// LLVM textual IR
-    ///    ↓
+    ///     |
+    ///     v
     /// llvm-as
-    ///    ↓
+    ///     |
+    ///     v
     /// validated LLVM bitcode
-    ///    ↓
+    ///     |
+    ///     v
     /// llc
-    ///    ↓
-    /// native object/machine code
+    ///     |
+    ///     v
+    /// target object file
     /// ```
     ///
-    /// The method never returns `Ok(())` unless the requested output has
-    /// actually been produced successfully.
+    /// The final output is written atomically where possible: LLVM generates
+    /// into a private temporary file first, then Zamani replaces the requested
+    /// output only after successful validation.
     pub fn emit_machine_code(
         &self,
         module: &IrModule,
-        output_path: &str,
-    ) -> Result<(), String> {
-        self.validate_target()?;
+        output_path: impl AsRef<Path>,
+    ) -> Result<(), LlvmBackendError> {
+        self.validate()?;
 
-        let output = Path::new(output_path);
+        let output_path = validate_output_path(output_path.as_ref())?;
 
-        if output.as_os_str().is_empty() {
-            return Err("LLVM backend: output path cannot be empty".to_string());
-        }
+        let ir_text = self.generate_ir(module)?;
 
-        if let Some(parent) = output.parent() {
-            if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).map_err(|error| {
-                    format!(
-                        "LLVM backend: failed to create output directory '{}': {}",
-                        parent.display(),
-                        error
-                    )
-                })?;
-            }
-        }
+        let temporary_directory =
+            TemporaryDirectory::create(output_path.parent().unwrap_or_else(|| Path::new(".")))?;
 
-        let ir_text = module.to_ir_string();
+        let module_name = Self::safe_name(&module.name);
 
-        if ir_text.trim().is_empty() {
-            return Err(format!(
-                "LLVM backend: IR module '{}' produced empty LLVM IR",
-                module.name
-            ));
-        }
+        let llvm_ir_path =
+            temporary_directory.path().join(format!("{}.ll", module_name));
 
-        let temporary_dir = Self::temporary_directory(output)?;
-
-        let llvm_ir_path = temporary_dir.join(format!("{}.ll", Self::safe_name(&module.name)));
         let bitcode_path =
-            temporary_dir.join(format!("{}.bc", Self::safe_name(&module.name)));
+            temporary_directory.path().join(format!("{}.bc", module_name));
 
-        fs::write(&llvm_ir_path, ir_text.as_bytes()).map_err(|error| {
-            format!(
-                "LLVM backend: failed to write temporary LLVM IR '{}': {}",
-                llvm_ir_path.display(),
-                error
-            )
-        })?;
+        let object_path =
+            temporary_directory.path().join(format!("{}.o", module_name));
 
-        // Stage 1: assemble and validate LLVM IR.
+        write_file(&llvm_ir_path, ir_text.as_bytes())?;
+
         self.assemble_ir(&llvm_ir_path, &bitcode_path)?;
 
-        // Stage 2: generate native machine/object code.
-        self.run_llc(&bitcode_path, output)?;
+        self.run_llc(&bitcode_path, &object_path)?;
 
-        if !output.exists() {
-            return Err(format!(
-                "LLVM backend: LLVM reported success but output '{}' does not exist",
-                output.display()
-            ));
-        }
+        validate_artifact(&object_path)?;
 
-        let metadata = fs::metadata(output).map_err(|error| {
-            format!(
-                "LLVM backend: failed to inspect generated output '{}': {}",
-                output.display(),
-                error
-            )
-        })?;
+        atomic_replace(&object_path, &output_path)?;
 
-        if metadata.len() == 0 {
-            return Err(format!(
-                "LLVM backend: generated output '{}' is empty",
-                output.display()
-            ));
-        }
-
-        // Best-effort cleanup. Compilation success must not depend on cleanup.
-        let _ = fs::remove_file(&llvm_ir_path);
-        let _ = fs::remove_file(&bitcode_path);
-        let _ = fs::remove_dir(&temporary_dir);
+        validate_artifact(&output_path)?;
 
         Ok(())
     }
 
-    /// Emit LLVM textual IR without invoking the native backend.
+    /// Emit textual LLVM IR.
     ///
-    /// This is useful for debugging, compiler tests, inspection, and later
-    /// LLVM optimization stages.
+    /// The generated file is written through a private temporary file and
+    /// installed only after the write has completed successfully.
     pub fn emit_llvm_ir(
         &self,
         module: &IrModule,
-        output_path: &str,
-    ) -> Result<(), String> {
-        self.validate_target()?;
+        output_path: impl AsRef<Path>,
+    ) -> Result<(), LlvmBackendError> {
+        self.validate()?;
 
-        let output = Path::new(output_path);
+        let output_path = validate_output_path(output_path)?;
 
-        if output.as_os_str().is_empty() {
-            return Err("LLVM backend: output path cannot be empty".to_string());
-        }
+        let ir_text = self.generate_ir(module)?;
 
-        if let Some(parent) = output.parent() {
-            if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).map_err(|error| {
-                    format!(
-                        "LLVM backend: failed to create output directory '{}': {}",
-                        parent.display(),
-                        error
-                    )
-                })?;
-            }
-        }
+        let temporary_directory =
+            TemporaryDirectory::create(output_path.parent().unwrap_or_else(|| Path::new(".")))?;
 
+        let temporary_output =
+            temporary_directory.path().join("module.ll");
+
+        write_file(&temporary_output, ir_text.as_bytes())?;
+
+        validate_artifact(&temporary_output)?;
+
+        atomic_replace(&temporary_output, &output_path)?;
+
+        validate_artifact(&output_path)?;
+
+        Ok(())
+    }
+
+    /// Generate LLVM textual IR from a Zamani module.
+    fn generate_ir(
+        &self,
+        module: &IrModule,
+    ) -> Result<String, LlvmBackendError> {
         let ir_text = module.to_ir_string();
 
         if ir_text.trim().is_empty() {
-            return Err(format!(
-                "LLVM backend: module '{}' generated empty LLVM IR",
+            return Err(LlvmBackendError::InvalidIr(format!(
+                "module '{}' produced empty LLVM IR",
                 module.name
-            ));
+            )));
         }
 
-        fs::write(output, ir_text.as_bytes()).map_err(|error| {
-            format!(
-                "LLVM backend: failed to write LLVM IR '{}': {}",
-                output.display(),
-                error
-            )
-        })?;
-
-        Ok(())
+        Ok(ir_text)
     }
 
-    /// Validate that the configured LLVM target is usable.
-    fn validate_target(&self) -> Result<(), String> {
-        if self.target_triple.trim().is_empty() {
-            return Err("LLVM backend: target triple cannot be empty".to_string());
+    /// Validate the configured target triple.
+    fn validate_target(&self) -> Result<(), LlvmBackendError> {
+        let target = self.target_triple.trim();
+
+        if target.is_empty() {
+            return Err(LlvmBackendError::InvalidTarget(
+                "target triple cannot be empty".to_string(),
+            ));
         }
 
-        if self.target_triple.chars().any(char::is_whitespace) {
-            return Err(format!(
-                "LLVM backend: target triple contains whitespace: '{}'",
-                self.target_triple
-            ));
+        if target.chars().any(char::is_whitespace) {
+            return Err(LlvmBackendError::InvalidTarget(format!(
+                "target triple contains whitespace: '{}'",
+                target
+            )));
         }
 
         Ok(())
     }
 
-    /// Assemble LLVM textual IR into validated LLVM bitcode.
+    /// Assemble textual LLVM IR into LLVM bitcode.
     fn assemble_ir(
         &self,
         llvm_ir_path: &Path,
         bitcode_path: &Path,
-    ) -> Result<(), String> {
+    ) -> Result<(), LlvmBackendError> {
         let output = Command::new(&self.llvm_as)
             .arg(llvm_ir_path)
             .arg("-o")
             .arg(bitcode_path)
             .output()
-            .map_err(|error| {
-                format!(
-                    "LLVM backend: failed to execute '{}': {}. \
-                     Ensure LLVM is installed and llvm-as is available.",
-                    self.llvm_as, error
-                )
+            .map_err(|source| LlvmBackendError::ToolExecution {
+                tool: self.llvm_as.clone(),
+                source,
             })?;
 
-        Self::check_command(
-            &format!("LLVM assembler '{}'", self.llvm_as),
-            output,
-        )?;
+        check_command(&self.llvm_as, output)?;
 
-        if !bitcode_path.exists() {
-            return Err(format!(
-                "LLVM backend: llvm-as completed successfully but '{}' was not created",
-                bitcode_path.display()
-            ));
-        }
+        validate_artifact(bitcode_path)?;
 
         Ok(())
     }
 
-    /// Generate native object/machine code using LLVM's `llc`.
+    /// Generate target-specific object code using LLVM `llc`.
     fn run_llc(
         &self,
         bitcode_path: &Path,
-        output_path: &Path,
-    ) -> Result<(), String> {
+        object_path: &Path,
+    ) -> Result<(), LlvmBackendError> {
         let output = Command::new(&self.llc)
             .arg(bitcode_path)
             .arg("-mtriple")
@@ -331,91 +436,21 @@ impl LlvmBackend {
             .arg(self.optimization_level.as_flag())
             .arg("-filetype=obj")
             .arg("-o")
-            .arg(output_path)
+            .arg(object_path)
             .output()
-            .map_err(|error| {
-                format!(
-                    "LLVM backend: failed to execute '{}': {}. \
-                     Ensure LLVM is installed and llc is available.",
-                    self.llc, error
-                )
+            .map_err(|source| LlvmBackendError::ToolExecution {
+                tool: self.llc.clone(),
+                source,
             })?;
 
-        Self::check_command(
-            &format!("LLVM code generator '{}'", self.llc),
-            output,
-        )
+        check_command(&self.llc, output)?;
+
+        validate_artifact(object_path)?;
+
+        Ok(())
     }
 
-    /// Convert process failure into a useful compiler diagnostic.
-    fn check_command(
-        command_name: &str,
-        output: Output,
-    ) -> Result<(), String> {
-        if output.status.success() {
-            return Ok(());
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        let mut message = format!(
-            "{} failed with exit status {}.",
-            command_name,
-            output
-                .status
-                .code()
-                .map(|code| code.to_string())
-                .unwrap_or_else(|| "terminated by signal".to_string())
-        );
-
-        if !stderr.trim().is_empty() {
-            message.push_str(&format!("\nLLVM stderr:\n{}", stderr.trim()));
-        }
-
-        if !stdout.trim().is_empty() {
-            message.push_str(&format!("\nLLVM stdout:\n{}", stdout.trim()));
-        }
-
-        Err(format!("LLVM backend: {}", message))
-    }
-
-    /// Create a private temporary directory adjacent to the requested output.
-    ///
-    /// Keeping temporary files near the output avoids crossing filesystem
-    /// boundaries during compilation and makes cleanup deterministic.
-    fn temporary_directory(output: &Path) -> Result<PathBuf, String> {
-        let parent = output.parent().unwrap_or_else(|| Path::new("."));
-
-        let file_name = output
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("zamani-output");
-
-        let directory = parent.join(format!(".{}.llvm-tmp", file_name));
-
-        if directory.exists() {
-            fs::remove_dir_all(&directory).map_err(|error| {
-                format!(
-                    "LLVM backend: failed to remove stale temporary directory '{}': {}",
-                    directory.display(),
-                    error
-                )
-            })?;
-        }
-
-        fs::create_dir_all(&directory).map_err(|error| {
-            format!(
-                "LLVM backend: failed to create temporary directory '{}': {}",
-                directory.display(),
-                error
-            )
-        })?;
-
-        Ok(directory)
-    }
-
-    /// Produce a filesystem-safe module name for temporary artifacts.
+    /// Produce a filesystem-safe module name.
     fn safe_name(name: &str) -> String {
         let sanitized: String = name
             .chars()
@@ -432,18 +467,255 @@ impl LlvmBackend {
             })
             .collect();
 
+        let sanitized = sanitized.trim_matches('.');
+
         if sanitized.is_empty() {
             "zamani_module".to_string()
         } else {
-            sanitized
+            sanitized.to_string()
         }
     }
 }
 
 impl Default for LlvmBackend {
+    /// Default backend configuration.
+    ///
+    /// `native` is deliberately not used as a target triple because LLVM
+    /// requires an actual target triple. Callers should normally construct
+    /// the backend with the compiler's resolved target triple.
     fn default() -> Self {
-        Self::new("native")
+        Self {
+            target_triple: String::new(),
+            llvm_as: "llvm-as".to_string(),
+            llc: "llc".to_string(),
+            optimization_level: LlvmOptimizationLevel::default(),
+        }
     }
+}
+
+/// Validate and normalize an output path.
+fn validate_output_path(path: &Path) -> Result<PathBuf, LlvmBackendError> {
+    if path.as_os_str().is_empty() {
+        return Err(LlvmBackendError::InvalidOutput(
+            "output path cannot be empty".to_string(),
+        ));
+    }
+
+    if path.exists() && path.is_dir() {
+        return Err(LlvmBackendError::InvalidOutput(format!(
+            "output path '{}' is a directory",
+            path.display()
+        )));
+    }
+
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|source| LlvmBackendError::Io {
+                operation: "resolve current directory".to_string(),
+                path: None,
+                source,
+            })?
+            .join(path)
+    };
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|source| LlvmBackendError::Io {
+            operation: "create output directory".to_string(),
+            path: Some(parent.to_path_buf()),
+            source,
+        })?;
+    }
+
+    Ok(path)
+}
+
+/// Write a file completely.
+fn write_file(
+    path: &Path,
+    contents: &[u8],
+) -> Result<(), LlvmBackendError> {
+    fs::write(path, contents).map_err(|source| LlvmBackendError::Io {
+        operation: "write file".to_string(),
+        path: Some(path.to_path_buf()),
+        source,
+    })
+}
+
+/// Verify that an artifact exists and is non-empty.
+fn validate_artifact(path: &Path) -> Result<(), LlvmBackendError> {
+    if !path.exists() {
+        return Err(LlvmBackendError::MissingArtifact(
+            path.to_path_buf(),
+        ));
+    }
+
+    let metadata =
+        fs::metadata(path).map_err(|source| LlvmBackendError::Io {
+            operation: "inspect artifact".to_string(),
+            path: Some(path.to_path_buf()),
+            source,
+        })?;
+
+    if !metadata.is_file() {
+        return Err(LlvmBackendError::InvalidOutput(format!(
+            "artifact '{}' is not a regular file",
+            path.display()
+        )));
+    }
+
+    if metadata.len() == 0 {
+        return Err(LlvmBackendError::EmptyArtifact(
+            path.to_path_buf(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Replace the destination with a successfully generated artifact.
+///
+/// `rename` is atomic on the same filesystem. If the destination exists,
+/// Windows requires removal first, while Unix systems allow replacement.
+fn atomic_replace(
+    source: &Path,
+    destination: &Path,
+) -> Result<(), LlvmBackendError> {
+    #[cfg(windows)]
+    {
+        if destination.exists() {
+            fs::remove_file(destination).map_err(|source_error| {
+                LlvmBackendError::Io {
+                    operation: "remove previous output".to_string(),
+                    path: Some(destination.to_path_buf()),
+                    source: source_error,
+                }
+            })?;
+        }
+    }
+
+    fs::rename(source, destination).map_err(|source_error| {
+        LlvmBackendError::Io {
+            operation: "install generated artifact".to_string(),
+            path: Some(destination.to_path_buf()),
+            source: source_error,
+        }
+    })
+}
+
+/// Convert an LLVM process result into a structured compiler error.
+fn check_command(
+    tool: &str,
+    output: Output,
+) -> Result<(), LlvmBackendError> {
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .to_string();
+
+    let stderr = String::from_utf8_lossy(&output.stderr)
+        .trim()
+        .to_string();
+
+    let status = output
+        .status
+        .code()
+        .map(|code| code.to_string())
+        .unwrap_or_else(|| "terminated by signal".to_string());
+
+    Err(LlvmBackendError::ToolFailure {
+        tool: tool.to_string(),
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+/// Private temporary compilation directory.
+///
+/// Each compilation receives a unique directory, preventing concurrent
+/// compiler invocations from deleting or overwriting one another's state.
+struct TemporaryDirectory {
+    path: PathBuf,
+}
+
+impl TemporaryDirectory {
+    fn create(parent: &Path) -> Result<Self, LlvmBackendError> {
+        fs::create_dir_all(parent).map_err(|source| {
+            LlvmBackendError::Io {
+                operation: "create temporary directory parent".to_string(),
+                path: Some(parent.to_path_buf()),
+                source,
+            }
+        })?;
+
+        for attempt in 0..32_u32 {
+            let unique = unique_suffix(attempt);
+
+            let path = parent.join(format!(
+                ".zamani-llvm-{}",
+                unique
+            ));
+
+            match fs::create_dir(&path) {
+                Ok(()) => {
+                    return Ok(Self { path });
+                }
+
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                    continue;
+                }
+
+                Err(source) => {
+                    return Err(LlvmBackendError::Io {
+                        operation: "create LLVM temporary directory".to_string(),
+                        path: Some(path),
+                        source,
+                    });
+                }
+            }
+        }
+
+        Err(LlvmBackendError::Io {
+            operation: "allocate unique LLVM temporary directory".to_string(),
+            path: Some(parent.to_path_buf()),
+            source: io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "unable to allocate a unique temporary directory after 32 attempts",
+            ),
+        })
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TemporaryDirectory {
+    fn drop(&mut self) {
+        // Cleanup is deliberately best-effort. A cleanup failure must never
+        // turn an otherwise successful compilation into a failed compilation.
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
+
+/// Generate a collision-resistant temporary-directory suffix.
+fn unique_suffix(attempt: u32) -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+
+    format!(
+        "{}-{}-{}",
+        std::process::id(),
+        nanos,
+        attempt
+    )
 }
 
 #[cfg(test)]
@@ -452,15 +724,31 @@ mod tests {
 
     #[test]
     fn optimization_levels_have_expected_flags() {
-        assert_eq!(LlvmOptimizationLevel::O0.as_flag(), "-O0");
-        assert_eq!(LlvmOptimizationLevel::O1.as_flag(), "-O1");
-        assert_eq!(LlvmOptimizationLevel::O2.as_flag(), "-O2");
-        assert_eq!(LlvmOptimizationLevel::O3.as_flag(), "-O3");
+        assert_eq!(
+            LlvmOptimizationLevel::O0.as_flag(),
+            "-O0"
+        );
+
+        assert_eq!(
+            LlvmOptimizationLevel::O1.as_flag(),
+            "-O1"
+        );
+
+        assert_eq!(
+            LlvmOptimizationLevel::O2.as_flag(),
+            "-O2"
+        );
+
+        assert_eq!(
+            LlvmOptimizationLevel::O3.as_flag(),
+            "-O3"
+        );
     }
 
     #[test]
     fn backend_preserves_target_triple() {
-        let backend = LlvmBackend::new("x86_64-unknown-linux-gnu");
+        let backend =
+            LlvmBackend::new("x86_64-unknown-linux-gnu");
 
         assert_eq!(
             backend.target_triple(),
@@ -470,7 +758,8 @@ mod tests {
 
     #[test]
     fn backend_defaults_to_o2() {
-        let backend = LlvmBackend::new("x86_64-unknown-linux-gnu");
+        let backend =
+            LlvmBackend::new("x86_64-unknown-linux-gnu");
 
         assert_eq!(
             backend.optimization_level,
@@ -487,6 +776,22 @@ mod tests {
     }
 
     #[test]
+    fn safe_name_handles_empty_names() {
+        assert_eq!(
+            LlvmBackend::safe_name(""),
+            "zamani_module"
+        );
+    }
+
+    #[test]
+    fn safe_name_removes_leading_and_trailing_dots() {
+        assert_eq!(
+            LlvmBackend::safe_name("..module.."),
+            "module"
+        );
+    }
+
+    #[test]
     fn empty_target_is_rejected() {
         let backend = LlvmBackend::new("");
 
@@ -494,9 +799,62 @@ mod tests {
     }
 
     #[test]
-    fn whitespace_in_target_is_rejected() {
-        let backend = LlvmBackend::new("x86_64 unknown");
+    fn whitespace_target_is_rejected() {
+        let backend =
+            LlvmBackend::new("x86_64 unknown");
 
         assert!(backend.validate_target().is_err());
+    }
+
+    #[test]
+    fn empty_llvm_as_is_rejected() {
+        let backend = LlvmBackend {
+            target_triple: "x86_64-unknown-linux-gnu".to_string(),
+            llvm_as: String::new(),
+            llc: "llc".to_string(),
+            optimization_level:
+                LlvmOptimizationLevel::O2,
+        };
+
+        assert!(backend.validate().is_err());
+    }
+
+    #[test]
+    fn empty_llc_is_rejected() {
+        let backend = LlvmBackend {
+            target_triple: "x86_64-unknown-linux-gnu".to_string(),
+            llvm_as: "llvm-as".to_string(),
+            llc: String::new(),
+            optimization_level:
+                LlvmOptimizationLevel::O2,
+        };
+
+        assert!(backend.validate().is_err());
+    }
+
+    #[test]
+    fn default_backend_requires_explicit_target() {
+        let backend = LlvmBackend::default();
+
+        assert!(backend.validate().is_err());
+    }
+
+    #[test]
+    fn portable_target_is_not_silently_invented() {
+        let backend =
+            LlvmBackend::new("x86_64-unknown-linux-gnu");
+
+        assert_eq!(
+            backend.target_triple(),
+            "x86_64-unknown-linux-gnu"
+        );
+    }
+
+    #[test]
+    fn unique_suffix_changes_between_attempts() {
+        let first = unique_suffix(0);
+        let second = unique_suffix(1);
+
+        assert_ne!(first, second);
     }
 }
