@@ -1,41 +1,62 @@
-//! Zamani Quantum Error Correction — Decoder
+//! Zamani Quantum Error Correction — Decoder.
 //!
-//! Hardware-independent error-syndrome decoding.
+//! Decoder-independent interfaces and reference implementations for
+//! converting stabilizer syndromes into candidate corrections.
 //!
-//! A decoder consumes measured syndrome information and produces a recovery
-//! operation. The decoder itself does not mutate quantum hardware; hardware
-//! application belongs to a later correction/backend stage.
+//! Mathematical Pauli/stabilizer operations live in `stabilizer.rs`.
+//! This module owns decoding policy and correction selection.
 //!
 //! Architecture:
 //!
-//!     Syndrome
-//!         |
-//!         v
-//!     Decoder
-//!         |
-//!         v
-//!     Correction
-//!         |
-//!         v
-//!     Recovery / Pauli frame
+//! ```text
+//!                    stabilizer.rs
+//!                         │
+//!              ┌──────────┴──────────┐
+//!              │                     │
+//!         PauliString             Syndrome
+//!              │                     │
+//!              └──────────┬──────────┘
+//!                         ▼
+//!                    Decoder
+//!                         │
+//!             ┌───────────┴───────────┐
+//!             ▼                       ▼
+//!        Correction              DecodeResult
+//! ```
 //!
-//! The core API is deliberately generic so different QEC codes can implement
-//! their own decoding algorithms without changing the surrounding compiler.
+//! A decoder does not modify the quantum state. It interprets a measured
+//! syndrome and proposes a correction.
 
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt;
 
+use super::stabilizer::{
+    Pauli,
+    PauliString,
+    StabilizerError,
+    StabilizerGroup,
+    Syndrome,
+};
+
 // -----------------------------------------------------------------------------
-// Basic identifiers
+// Decoder identifier
 // -----------------------------------------------------------------------------
 
-/// Identifier for a syndrome measurement.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SyndromeId(pub usize);
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+)]
+pub struct DecoderId(pub usize);
 
-impl SyndromeId {
-    pub const fn new(index: usize) -> Self {
-        Self(index)
+impl DecoderId {
+    pub const fn new(id: usize) -> Self {
+        Self(id)
     }
 
     pub const fn index(self) -> usize {
@@ -43,213 +64,12 @@ impl SyndromeId {
     }
 }
 
-impl fmt::Display for SyndromeId {
+impl fmt::Display for DecoderId {
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        write!(f, "s{}", self.0)
-    }
-}
-
-/// Identifier for a logical qubit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct LogicalQubitId(pub usize);
-
-impl LogicalQubitId {
-    pub const fn new(index: usize) -> Self {
-        Self(index)
-    }
-
-    pub const fn index(self) -> usize {
-        self.0
-    }
-}
-
-impl fmt::Display for LogicalQubitId {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-        write!(f, "q{}", self.0)
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Pauli operators
-// -----------------------------------------------------------------------------
-
-/// Single-qubit Pauli correction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Pauli {
-    I,
-    X,
-    Y,
-    Z,
-}
-
-impl Pauli {
-    pub const fn is_identity(self) -> bool {
-        matches!(self, Self::I)
-    }
-
-    /// Pauli multiplication, ignoring global phase.
-    pub const fn multiply(
-        self,
-        other: Self,
-    ) -> Self {
-        use Pauli::*;
-
-        match (self, other) {
-            (I, p) | (p, I) => p,
-
-            (X, X) | (Y, Y) | (Z, Z) => I,
-
-            (X, Y) | (Y, X) => Z,
-            (X, Z) | (Z, X) => Y,
-            (Y, Z) | (Z, Y) => X,
-        }
-    }
-
-    pub const fn anticommutes_with(
-        self,
-        other: Self,
-    ) -> bool {
-        use Pauli::*;
-
-        matches!(
-            (self, other),
-            (X, Y)
-                | (Y, X)
-                | (X, Z)
-                | (Z, X)
-                | (Y, Z)
-                | (Z, Y)
-        )
-    }
-}
-
-impl fmt::Display for Pauli {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-        let symbol = match self {
-            Self::I => "I",
-            Self::X => "X",
-            Self::Y => "Y",
-            Self::Z => "Z",
-        };
-
-        write!(f, "{symbol}")
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Syndrome
-// -----------------------------------------------------------------------------
-
-/// One measured syndrome bit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SyndromeBit {
-    pub id: SyndromeId,
-    pub value: bool,
-}
-
-impl SyndromeBit {
-    pub const fn new(
-        id: SyndromeId,
-        value: bool,
-    ) -> Self {
-        Self { id, value }
-    }
-}
-
-/// Collection of measured syndrome bits.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Syndrome {
-    bits: BTreeMap<SyndromeId, bool>,
-}
-
-impl Syndrome {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn from_bits(
-        bits: impl IntoIterator<Item = SyndromeBit>,
-    ) -> Self {
-        let mut syndrome = Self::new();
-
-        for bit in bits {
-            syndrome.insert(bit);
-        }
-
-        syndrome
-    }
-
-    pub fn insert(
-        &mut self,
-        bit: SyndromeBit,
-    ) {
-        self.bits.insert(
-            bit.id,
-            bit.value,
-        );
-    }
-
-    pub fn set(
-        &mut self,
-        id: SyndromeId,
-        value: bool,
-    ) {
-        self.bits.insert(id, value);
-    }
-
-    pub fn get(
-        &self,
-        id: SyndromeId,
-    ) -> Option<bool> {
-        self.bits.get(&id).copied()
-    }
-
-    pub fn is_triggered(
-        &self,
-        id: SyndromeId,
-    ) -> bool {
-        self.get(id).unwrap_or(false)
-    }
-
-    pub fn len(&self) -> usize {
-        self.bits.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.bits.is_empty()
-    }
-
-    pub fn iter(
-        &self,
-    ) -> impl Iterator<
-        Item = (&SyndromeId, &bool),
-    > {
-        self.bits.iter()
-    }
-
-    pub fn triggered(
-        &self,
-    ) -> impl Iterator<
-        Item = SyndromeId,
-    > + '_ {
-        self.bits
-            .iter()
-            .filter_map(|(id, value)| {
-                value.then_some(*id)
-            })
-    }
-
-    pub fn triggered_count(&self) -> usize {
-        self.triggered().count()
+        write!(f, "decoder-{}", self.0)
     }
 }
 
@@ -257,192 +77,613 @@ impl Syndrome {
 // Correction
 // -----------------------------------------------------------------------------
 
-/// A Pauli correction applied to a logical/physical qubit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A proposed Pauli correction.
+///
+/// The correction is represented using the same binary-symplectic
+/// `PauliString` used by the stabilizer algebra.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+)]
 pub struct Correction {
-    pub qubit: LogicalQubitId,
-    pub pauli: Pauli,
+    operator: PauliString,
 }
 
 impl Correction {
-    pub const fn new(
-        qubit: LogicalQubitId,
-        pauli: Pauli,
+    pub fn new(
+        operator: PauliString,
     ) -> Self {
-        Self { qubit, pauli }
-    }
-}
-
-/// Collection of decoder corrections.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct CorrectionSet {
-    corrections: BTreeMap<LogicalQubitId, Pauli>,
-}
-
-impl CorrectionSet {
-    pub fn new() -> Self {
-        Self::default()
+        Self { operator }
     }
 
-    pub fn insert(
-        &mut self,
-        correction: Correction,
-    ) {
-        let qubit = correction.qubit;
-        let pauli = correction.pauli;
-
-        if pauli.is_identity() {
-            return;
-        }
-
-        match self.corrections.get(&qubit) {
-            Some(existing) => {
-                let combined =
-                    existing.multiply(pauli);
-
-                if combined.is_identity() {
-                    self.corrections.remove(
-                        &qubit,
-                    );
-                } else {
-                    self.corrections.insert(
-                        qubit,
-                        combined,
-                    );
-                }
-            }
-
-            None => {
-                self.corrections
-                    .insert(qubit, pauli);
-            }
+    pub fn identity(
+        num_qubits: usize,
+    ) -> Self {
+        Self {
+            operator:
+                PauliString::identity(
+                    num_qubits,
+                ),
         }
     }
 
-    pub fn get(
-        &self,
-        qubit: LogicalQubitId,
-    ) -> Pauli {
-        self.corrections
-            .get(&qubit)
-            .copied()
-            .unwrap_or(Pauli::I)
+    pub fn operator(&self) -> &PauliString {
+        &self.operator
     }
 
-    pub fn len(&self) -> usize {
-        self.corrections.len()
+    pub fn weight(&self) -> usize {
+        self.operator.weight()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.corrections.is_empty()
+    pub fn is_identity(&self) -> bool {
+        self.operator.is_identity()
     }
 
-    pub fn iter(
-        &self,
-    ) -> impl Iterator<
-        Item = (&LogicalQubitId, &Pauli),
-    > {
-        self.corrections.iter()
+    pub fn num_qubits(&self) -> usize {
+        self.operator.num_qubits()
     }
-}
-
-// -----------------------------------------------------------------------------
-// Decoder confidence
-// -----------------------------------------------------------------------------
-
-/// Confidence classification for a decoded correction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DecodeConfidence {
-    /// No syndrome was detected.
-    CertainNoError,
-
-    /// Decoder found a high-confidence correction.
-    High,
-
-    /// Decoder found a correction but ambiguity remains.
-    Medium,
-
-    /// Decoder found multiple plausible corrections.
-    Low,
-
-    /// Decoder could not determine a valid recovery.
-    Failed,
 }
 
 // -----------------------------------------------------------------------------
 // Decode result
 // -----------------------------------------------------------------------------
 
-/// Result produced by a decoder.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Result returned by a decoder.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+)]
 pub struct DecodeResult {
-    pub corrections: CorrectionSet,
-    pub confidence: DecodeConfidence,
-    pub detected_errors: usize,
+    decoder: DecoderId,
+    syndrome: Syndrome,
+    correction: Correction,
 }
 
 impl DecodeResult {
-    pub fn no_error() -> Self {
-        Self {
-            corrections: CorrectionSet::new(),
-            confidence:
-                DecodeConfidence::CertainNoError,
-            detected_errors: 0,
-        }
-    }
-
     pub fn new(
-        corrections: CorrectionSet,
-        confidence: DecodeConfidence,
-        detected_errors: usize,
+        decoder: DecoderId,
+        syndrome: Syndrome,
+        correction: Correction,
     ) -> Self {
         Self {
-            corrections,
-            confidence,
-            detected_errors,
+            decoder,
+            syndrome,
+            correction,
         }
     }
 
-    pub fn has_correction(&self) -> bool {
-        !self.corrections.is_empty()
+    pub const fn decoder(&self) -> DecoderId {
+        self.decoder
     }
 
-    pub fn is_successful(&self) -> bool {
-        !matches!(
-            self.confidence,
-            DecodeConfidence::Failed
-        )
+    pub fn syndrome(&self) -> &Syndrome {
+        &self.syndrome
+    }
+
+    pub fn correction(&self) -> &Correction {
+        &self.correction
+    }
+
+    pub fn correction_weight(&self) -> usize {
+        self.correction.weight()
+    }
+
+    pub fn is_trivial(&self) -> bool {
+        self.syndrome.is_trivial()
     }
 }
 
 // -----------------------------------------------------------------------------
-// Decoder errors
+// Decoder trait
 // -----------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Common interface implemented by all Zamani QEC decoders.
+pub trait Decoder {
+    fn id(&self) -> DecoderId;
+
+    fn decode(
+        &self,
+        syndrome: &Syndrome,
+    ) -> Result<DecodeResult, DecoderError>;
+}
+
+// -----------------------------------------------------------------------------
+// Stabilizer-backed decoder
+// -----------------------------------------------------------------------------
+
+/// Base decoder containing the stabilizer system.
+///
+/// This gives decoders a validated mathematical model without forcing every
+/// decoder implementation to duplicate stabilizer validation.
+#[derive(
+    Debug,
+    Clone,
+)]
+pub struct StabilizerDecoder {
+    id: DecoderId,
+    stabilizers: StabilizerGroup,
+}
+
+impl StabilizerDecoder {
+    pub fn new(
+        id: DecoderId,
+        stabilizers: StabilizerGroup,
+    ) -> Result<Self, DecoderError> {
+        stabilizers
+            .validate()
+            .map_err(DecoderError::Stabilizer)?;
+
+        Ok(Self {
+            id,
+            stabilizers,
+        })
+    }
+
+    pub const fn id(&self) -> DecoderId {
+        self.id
+    }
+
+    pub fn stabilizers(
+        &self,
+    ) -> &StabilizerGroup {
+        &self.stabilizers
+    }
+
+    pub fn num_qubits(&self) -> usize {
+        self.stabilizers.num_qubits()
+    }
+
+    pub fn generator_count(&self) -> usize {
+        self.stabilizers.len()
+    }
+
+    /// Recomputes a syndrome for a candidate Pauli error.
+    pub fn syndrome_for_error(
+        &self,
+        error: &PauliString,
+    ) -> Result<Syndrome, DecoderError> {
+        self.stabilizers
+            .syndrome(error)
+            .map_err(DecoderError::Stabilizer)
+    }
+
+    /// Verifies that a candidate correction produces the requested syndrome.
+    pub fn correction_matches_syndrome(
+        &self,
+        correction: &Correction,
+        expected: &Syndrome,
+    ) -> Result<bool, DecoderError> {
+        let actual =
+            self.syndrome_for_error(
+                correction.operator(),
+            )?;
+
+        Ok(&actual == expected)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Identity decoder
+// -----------------------------------------------------------------------------
+
+/// Decoder used when no correction is required.
+///
+/// This is useful for:
+/// - no-error syndromes;
+/// - pipeline testing;
+/// - decoder composition;
+/// - hardware integration tests.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+)]
+pub struct IdentityDecoder {
+    id: DecoderId,
+    num_qubits: usize,
+}
+
+impl IdentityDecoder {
+    pub fn new(
+        id: DecoderId,
+        num_qubits: usize,
+    ) -> Result<Self, DecoderError> {
+        if num_qubits == 0 {
+            return Err(
+                DecoderError::InvalidQubitCount {
+                    count: num_qubits,
+                },
+            );
+        }
+
+        Ok(Self {
+            id,
+            num_qubits,
+        })
+    }
+
+    pub const fn id(&self) -> DecoderId {
+        self.id
+    }
+
+    pub const fn num_qubits(&self) -> usize {
+        self.num_qubits
+    }
+}
+
+impl Decoder for IdentityDecoder {
+    fn id(&self) -> DecoderId {
+        self.id
+    }
+
+    fn decode(
+        &self,
+        syndrome: &Syndrome,
+    ) -> Result<DecodeResult, DecoderError> {
+        Ok(DecodeResult::new(
+            self.id,
+            syndrome.clone(),
+            Correction::identity(
+                self.num_qubits,
+            ),
+        ))
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Syndrome validator
+// -----------------------------------------------------------------------------
+
+/// Validates a syndrome against a stabilizer group.
+pub fn validate_syndrome(
+    syndrome: &Syndrome,
+    stabilizers: &StabilizerGroup,
+) -> Result<(), DecoderError> {
+    if syndrome.len()
+        != stabilizers.len()
+    {
+        return Err(
+            DecoderError::SyndromeLengthMismatch {
+                expected: stabilizers.len(),
+                actual: syndrome.len(),
+            },
+        );
+    }
+
+    Ok(())
+}
+
+// -----------------------------------------------------------------------------
+// Syndrome classification
+// -----------------------------------------------------------------------------
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+)]
+pub enum SyndromeClass {
+    Trivial,
+    NonTrivial,
+}
+
+impl SyndromeClass {
+    pub const fn classify(
+        syndrome: &Syndrome,
+    ) -> Self {
+        if syndrome.is_trivial() {
+            Self::Trivial
+        } else {
+            Self::NonTrivial
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Decoder statistics
+// -----------------------------------------------------------------------------
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+)]
+pub struct DecoderStatistics {
+    decoded: usize,
+    trivial: usize,
+    nontrivial: usize,
+    failed: usize,
+}
+
+impl DecoderStatistics {
+    pub const fn new() -> Self {
+        Self {
+            decoded: 0,
+            trivial: 0,
+            nontrivial: 0,
+            failed: 0,
+        }
+    }
+
+    pub const fn decoded(&self) -> usize {
+        self.decoded
+    }
+
+    pub const fn trivial(&self) -> usize {
+        self.trivial
+    }
+
+    pub const fn nontrivial(&self) -> usize {
+        self.nontrivial
+    }
+
+    pub const fn failed(&self) -> usize {
+        self.failed
+    }
+
+    pub fn record(
+        &mut self,
+        result: Result<
+            &DecodeResult,
+            &DecoderError,
+        >,
+    ) {
+        match result {
+            Ok(result) => {
+                self.decoded += 1;
+
+                if result.is_trivial() {
+                    self.trivial += 1;
+                } else {
+                    self.nontrivial += 1;
+                }
+            }
+
+            Err(_) => {
+                self.failed += 1;
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Correction validation
+// -----------------------------------------------------------------------------
+
+/// Validates that a correction belongs to the same physical system.
+pub fn validate_correction(
+    correction: &Correction,
+    num_qubits: usize,
+) -> Result<(), DecoderError> {
+    if correction.num_qubits()
+        != num_qubits
+    {
+        return Err(
+            DecoderError::CorrectionQubitCountMismatch {
+                expected: num_qubits,
+                actual: correction.num_qubits(),
+            },
+        );
+    }
+
+    Ok(())
+}
+
+/// Validates a correction against a measured syndrome.
+///
+/// A valid correction must reproduce the syndrome when measured against
+/// the stabilizer generators.
+pub fn validate_correction_for_syndrome(
+    correction: &Correction,
+    syndrome: &Syndrome,
+    stabilizers: &StabilizerGroup,
+) -> Result<bool, DecoderError> {
+    validate_syndrome(
+        syndrome,
+        stabilizers,
+    )?;
+
+    validate_correction(
+        correction,
+        stabilizers.num_qubits(),
+    )?;
+
+    let produced =
+        stabilizers
+            .syndrome(
+                correction.operator(),
+            )
+            .map_err(
+                DecoderError::Stabilizer,
+            )?;
+
+    Ok(&produced == syndrome)
+}
+
+// -----------------------------------------------------------------------------
+// Pauli error helpers
+// -----------------------------------------------------------------------------
+
+/// Creates a single-qubit Pauli error.
+pub fn single_qubit_error(
+    num_qubits: usize,
+    qubit: usize,
+    pauli: Pauli,
+) -> Result<PauliString, DecoderError> {
+    if qubit >= num_qubits {
+        return Err(
+            DecoderError::QubitOutOfRange {
+                qubit,
+                num_qubits,
+            },
+        );
+    }
+
+    let mut error =
+        PauliString::identity(
+            num_qubits,
+        );
+
+    error
+        .set_pauli(
+            super::stabilizer::QubitIndex::new(
+                qubit,
+            ),
+            pauli,
+        )
+        .map_err(
+            DecoderError::Stabilizer,
+        )?;
+
+    Ok(error)
+}
+
+/// Creates an X error on one qubit.
+pub fn x_error(
+    num_qubits: usize,
+    qubit: usize,
+) -> Result<PauliString, DecoderError> {
+    single_qubit_error(
+        num_qubits,
+        qubit,
+        Pauli::X,
+    )
+}
+
+/// Creates a Y error on one qubit.
+pub fn y_error(
+    num_qubits: usize,
+    qubit: usize,
+) -> Result<PauliString, DecoderError> {
+    single_qubit_error(
+        num_qubits,
+        qubit,
+        Pauli::Y,
+    )
+}
+
+/// Creates a Z error on one qubit.
+pub fn z_error(
+    num_qubits: usize,
+    qubit: usize,
+) -> Result<PauliString, DecoderError> {
+    single_qubit_error(
+        num_qubits,
+        qubit,
+        Pauli::Z,
+    )
+}
+
+// -----------------------------------------------------------------------------
+// Decoder registry
+// -----------------------------------------------------------------------------
+
+/// Registry for decoder implementations.
+///
+/// This keeps decoder selection separate from decoder mathematics and allows
+/// future implementations such as:
+///
+/// - minimum-weight perfect matching;
+/// - union-find;
+/// - belief propagation;
+/// - tensor-network decoding;
+/// - neural decoders.
+#[derive(
+    Debug,
+    Default,
+)]
+pub struct DecoderRegistry {
+    ids: BTreeSet<DecoderId>,
+}
+
+impl DecoderRegistry {
+    pub fn new() -> Self {
+        Self {
+            ids: BTreeSet::new(),
+        }
+    }
+
+    pub fn register<D>(
+        &mut self,
+        decoder: &D,
+    ) -> Result<(), DecoderError>
+    where
+        D: Decoder,
+    {
+        if !self.ids.insert(
+            decoder.id(),
+        ) {
+            return Err(
+                DecoderError::DuplicateDecoder {
+                    id: decoder.id(),
+                },
+            );
+        }
+
+        Ok(())
+    }
+
+    pub fn contains(
+        &self,
+        id: DecoderId,
+    ) -> bool {
+        self.ids.contains(&id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.ids.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ids.is_empty()
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Errors
+// -----------------------------------------------------------------------------
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+)]
 pub enum DecoderError {
-    EmptySyndrome,
+    Stabilizer(
+        StabilizerError,
+    ),
 
-    InvalidSyndrome {
-        syndrome: SyndromeId,
+    InvalidQubitCount {
+        count: usize,
     },
 
-    UnknownSyndrome {
-        syndrome: SyndromeId,
+    QubitOutOfRange {
+        qubit: usize,
+        num_qubits: usize,
     },
 
-    InvalidQubit {
-        qubit: LogicalQubitId,
+    SyndromeLengthMismatch {
+        expected: usize,
+        actual: usize,
     },
 
-    UnsupportedCode,
-
-    DecodeFailed {
-        reason: String,
+    CorrectionQubitCountMismatch {
+        expected: usize,
+        actual: usize,
     },
 
-    InvalidCorrection {
-        qubit: LogicalQubitId,
+    DuplicateDecoder {
+        id: DecoderId,
     },
 }
 
@@ -452,49 +693,58 @@ impl fmt::Display for DecoderError {
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
-            Self::EmptySyndrome => {
-                write!(f, "syndrome is empty")
-            }
-
-            Self::InvalidSyndrome { syndrome } => {
+            Self::Stabilizer(error) => {
                 write!(
                     f,
-                    "invalid syndrome {syndrome}"
+                    "stabilizer error: {error}"
                 )
             }
 
-            Self::UnknownSyndrome { syndrome } => {
+            Self::InvalidQubitCount {
+                count,
+            } => {
                 write!(
                     f,
-                    "unknown syndrome {syndrome}"
+                    "decoder requires at least one qubit, got {count}"
                 )
             }
 
-            Self::InvalidQubit { qubit } => {
+            Self::QubitOutOfRange {
+                qubit,
+                num_qubits,
+            } => {
                 write!(
                     f,
-                    "invalid logical qubit {qubit}"
+                    "qubit {qubit} is outside a {num_qubits}-qubit system"
                 )
             }
 
-            Self::UnsupportedCode => {
+            Self::SyndromeLengthMismatch {
+                expected,
+                actual,
+            } => {
                 write!(
                     f,
-                    "unsupported quantum error-correction code"
+                    "syndrome length mismatch: expected {expected}, got {actual}"
                 )
             }
 
-            Self::DecodeFailed { reason } => {
+            Self::CorrectionQubitCountMismatch {
+                expected,
+                actual,
+            } => {
                 write!(
                     f,
-                    "decoding failed: {reason}"
+                    "correction qubit count mismatch: expected {expected}, got {actual}"
                 )
             }
 
-            Self::InvalidCorrection { qubit } => {
+            Self::DuplicateDecoder {
+                id,
+            } => {
                 write!(
                     f,
-                    "invalid correction for {qubit}"
+                    "decoder {id} is already registered"
                 )
             }
         }
@@ -503,289 +753,13 @@ impl fmt::Display for DecoderError {
 
 impl std::error::Error for DecoderError {}
 
-// -----------------------------------------------------------------------------
-// Decoder trait
-// -----------------------------------------------------------------------------
-
-/// Generic quantum error-correction decoder.
-///
-/// Different QEC codes can implement this trait without coupling their
-/// algorithms to the circuit or hardware layers.
-pub trait Decoder {
-    /// Decode a syndrome into a recovery operation.
-    fn decode(
-        &self,
-        syndrome: &Syndrome,
-    ) -> Result<DecodeResult, DecoderError>;
-
-    /// Human-readable decoder name.
-    fn name(&self) -> &'static str;
-
-    /// Whether this decoder supports the supplied syndrome.
-    fn supports(
-        &self,
-        syndrome: &Syndrome,
-    ) -> bool {
-        !syndrome.is_empty()
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Lookup decoder
-// -----------------------------------------------------------------------------
-
-/// Deterministic lookup-table decoder.
-///
-/// Useful for small stabilizer codes, testing, simulation, and code-specific
-/// tables generated elsewhere in the compiler.
-#[derive(Debug, Clone, Default)]
-pub struct LookupDecoder {
-    table: BTreeMap<Vec<SyndromeId>, CorrectionSet>,
-}
-
-impl LookupDecoder {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn insert(
-        &mut self,
-        syndrome: Vec<SyndromeId>,
-        corrections: CorrectionSet,
-    ) {
-        self.table.insert(
-            normalize_syndrome(syndrome),
-            corrections,
-        );
-    }
-
-    pub fn contains(
-        &self,
-        syndrome: &Syndrome,
-    ) -> bool {
-        let key =
-            normalize_syndrome(
-                syndrome.triggered().collect(),
-            );
-
-        self.table.contains_key(&key)
-    }
-}
-
-impl Decoder for LookupDecoder {
-    fn decode(
-        &self,
-        syndrome: &Syndrome,
-    ) -> Result<DecodeResult, DecoderError> {
-        if syndrome.is_empty() {
-            return Ok(
-                DecodeResult::no_error()
-            );
-        }
-
-        let key =
-            normalize_syndrome(
-                syndrome.triggered().collect(),
-            );
-
-        match self.table.get(&key) {
-            Some(corrections) => {
-                Ok(DecodeResult::new(
-                    corrections.clone(),
-                    DecodeConfidence::High,
-                    syndrome.triggered_count(),
-                ))
-            }
-
-            None => Err(
-                DecoderError::DecodeFailed {
-                    reason:
-                        "syndrome is not present in lookup table"
-                            .to_string(),
-                },
-            ),
-        }
-    }
-
-    fn name(&self) -> &'static str {
-        "lookup"
-    }
-}
-
-fn normalize_syndrome(
-    mut syndrome: Vec<SyndromeId>,
-) -> Vec<SyndromeId> {
-    syndrome.sort_unstable();
-    syndrome.dedup();
-    syndrome
-}
-
-// -----------------------------------------------------------------------------
-// Simple repetition-code decoder
-// -----------------------------------------------------------------------------
-
-/// Minimal majority-style decoder for a repetition code.
-///
-/// This is intentionally small and deterministic. More sophisticated
-/// decoders can implement `Decoder` independently.
-#[derive(Debug, Clone, Copy)]
-pub struct RepetitionDecoder {
-    length: usize,
-}
-
-impl RepetitionDecoder {
-    pub fn new(
-        length: usize,
-    ) -> Result<Self, DecoderError> {
-        if length == 0 {
-            return Err(
-                DecoderError::UnsupportedCode
-            );
-        }
-
-        Ok(Self { length })
-    }
-
-    pub const fn length(&self) -> usize {
-        self.length
-    }
-}
-
-impl Decoder for RepetitionDecoder {
-    fn decode(
-        &self,
-        syndrome: &Syndrome,
-    ) -> Result<DecodeResult, DecoderError> {
-        if syndrome.is_empty() {
-            return Ok(
-                DecodeResult::no_error()
-            );
-        }
-
-        let mut corrections =
-            CorrectionSet::new();
-
-        let detected =
-            syndrome.triggered_count();
-
-        /*
-         * A repetition-code syndrome normally identifies the boundary
-         * between neighboring physical bits. For this generic IR decoder,
-         * a triggered syndrome `sN` maps deterministically to qubit `N`.
-         *
-         * Code-specific geometry can be implemented by a specialized
-         * decoder while retaining the same DecodeResult API.
-         */
-        for id in syndrome.triggered() {
-            let index = id.index();
-
-            if index >= self.length {
-                return Err(
-                    DecoderError::InvalidSyndrome {
-                        syndrome: id,
-                    },
-                );
-            }
-
-            corrections.insert(
-                Correction::new(
-                    LogicalQubitId::new(index),
-                    Pauli::X,
-                ),
-            );
-        }
-
-        Ok(DecodeResult::new(
-            corrections,
-            DecodeConfidence::Medium,
-            detected,
-        ))
-    }
-
-    fn name(&self) -> &'static str {
-        "repetition"
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Decoder pipeline
-// -----------------------------------------------------------------------------
-
-/// Executes multiple decoders in sequence.
-///
-/// The first successful decoder result is returned.
-pub struct DecoderPipeline {
-    decoders: Vec<Box<dyn Decoder>>,
-}
-
-impl DecoderPipeline {
-    pub fn new() -> Self {
-        Self {
-            decoders: Vec::new(),
-        }
-    }
-
-    pub fn add<D>(
-        &mut self,
-        decoder: D,
-    ) where
-        D: Decoder + 'static,
-    {
-        self.decoders
-            .push(Box::new(decoder));
-    }
-
-    pub fn len(&self) -> usize {
-        self.decoders.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.decoders.is_empty()
-    }
-
-    pub fn decode(
-        &self,
-        syndrome: &Syndrome,
-    ) -> Result<DecodeResult, DecoderError> {
-        if syndrome.is_empty() {
-            return Ok(
-                DecodeResult::no_error()
-            );
-        }
-
-        let mut last_error = None;
-
-        for decoder in &self.decoders {
-            if !decoder.supports(syndrome) {
-                continue;
-            }
-
-            match decoder.decode(syndrome) {
-                Ok(result) => {
-                    return Ok(result)
-                }
-
-                Err(error) => {
-                    last_error = Some(error);
-                }
-            }
-        }
-
-        Err(
-            last_error.unwrap_or(
-                DecoderError::DecodeFailed {
-                    reason:
-                        "no decoder accepted syndrome"
-                            .to_string(),
-                },
-            ),
-        )
-    }
-}
-
-impl Default for DecoderPipeline {
-    fn default() -> Self {
-        Self::new()
+impl From<StabilizerError>
+    for DecoderError
+{
+    fn from(
+        error: StabilizerError,
+    ) -> Self {
+        Self::Stabilizer(error)
     }
 }
 
@@ -798,250 +772,214 @@ mod tests {
     use super::*;
 
     #[test]
-    fn syndrome_can_store_bits() {
-        let mut syndrome =
-            Syndrome::new();
-
-        syndrome.set(
-            SyndromeId::new(0),
-            true,
-        );
-
-        syndrome.set(
-            SyndromeId::new(1),
-            false,
-        );
-
-        assert_eq!(
-            syndrome.len(),
-            2
-        );
-
-        assert!(syndrome.is_triggered(
-            SyndromeId::new(0)
-        ));
-
-        assert!(!syndrome.is_triggered(
-            SyndromeId::new(1)
-        ));
-    }
-
-    #[test]
-    fn empty_syndrome_means_no_error() {
+    fn identity_decoder_returns_identity() {
         let decoder =
-            RepetitionDecoder::new(3)
-                .unwrap();
+            IdentityDecoder::new(
+                DecoderId::new(0),
+                3,
+            )
+            .unwrap();
+
+        let syndrome =
+            Syndrome::new(vec![
+                false,
+                false,
+            ]);
 
         let result =
-            decoder
-                .decode(
-                    &Syndrome::new()
-                )
-                .unwrap();
+            decoder.decode(
+                &syndrome,
+            )
+            .unwrap();
 
-        assert_eq!(
-            result.confidence,
-            DecodeConfidence::CertainNoError
+        assert!(
+            result
+                .correction()
+                .is_identity()
         );
 
-        assert!(!result.has_correction());
+        assert_eq!(
+            result
+                .correction()
+                .num_qubits(),
+            3
+        );
     }
 
     #[test]
-    fn pauli_multiplication_works() {
+    fn validates_syndrome_length() {
+        let mut group =
+            StabilizerGroup::new(2)
+                .unwrap();
+
+        group
+            .add_generator(
+                StabilizerGenerator::new(
+                    0,
+                    PauliString::from_paulis(
+                        &[
+                            Pauli::Z,
+                            Pauli::Z,
+                        ],
+                    ),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let syndrome =
+            Syndrome::new(vec![
+                true,
+                false,
+            ]);
+
+        assert!(matches!(
+            validate_syndrome(
+                &syndrome,
+                &group,
+            ),
+            Err(
+                DecoderError::SyndromeLengthMismatch {
+                    expected: 1,
+                    actual: 2
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn single_qubit_x_error_is_constructed() {
+        let error =
+            x_error(3, 1)
+                .unwrap();
+
         assert_eq!(
-            Pauli::X.multiply(Pauli::X),
+            error
+                .pauli_at(
+                    super::super::stabilizer::QubitIndex::new(
+                        0,
+                    ),
+                )
+                .unwrap(),
             Pauli::I
         );
 
         assert_eq!(
-            Pauli::X.multiply(Pauli::Y),
-            Pauli::Z
-        );
-
-        assert_eq!(
-            Pauli::Y.multiply(Pauli::Z),
+            error
+                .pauli_at(
+                    super::super::stabilizer::QubitIndex::new(
+                        1,
+                    ),
+                )
+                .unwrap(),
             Pauli::X
         );
     }
 
     #[test]
-    fn correction_set_combines_paulis() {
-        let mut set =
-            CorrectionSet::new();
-
-        let qubit =
-            LogicalQubitId::new(0);
-
-        set.insert(
-            Correction::new(
-                qubit,
-                Pauli::X,
-            ),
-        );
-
-        set.insert(
-            Correction::new(
-                qubit,
-                Pauli::X,
-            ),
-        );
-
-        assert!(set.is_empty());
-    }
-
-    #[test]
-    fn lookup_decoder_decodes_known_syndrome() {
-        let mut decoder =
-            LookupDecoder::new();
-
-        let mut corrections =
-            CorrectionSet::new();
-
-        corrections.insert(
-            Correction::new(
-                LogicalQubitId::new(0),
-                Pauli::X,
-            ),
-        );
-
-        decoder.insert(
-            vec![SyndromeId::new(0)],
-            corrections,
-        );
-
-        let syndrome =
-            Syndrome::from_bits([
-                SyndromeBit::new(
-                    SyndromeId::new(0),
-                    true,
-                ),
-            ]);
-
-        let result =
-            decoder
-                .decode(&syndrome)
+    fn correction_matches_syndrome() {
+        let mut group =
+            StabilizerGroup::new(1)
                 .unwrap();
 
-        assert_eq!(
-            result.confidence,
-            DecodeConfidence::High
-        );
+        group
+            .add_generator(
+                StabilizerGenerator::new(
+                    0,
+                    PauliString::from_paulis(
+                        &[Pauli::Z],
+                    ),
+                )
+                .unwrap(),
+            )
+            .unwrap();
 
-        assert_eq!(
-            result.corrections.get(
-                LogicalQubitId::new(0)
-            ),
-            Pauli::X
-        );
-    }
-
-    #[test]
-    fn lookup_decoder_rejects_unknown_syndrome() {
-        let decoder =
-            LookupDecoder::new();
+        let error =
+            x_error(1, 0)
+                .unwrap();
 
         let syndrome =
-            Syndrome::from_bits([
-                SyndromeBit::new(
-                    SyndromeId::new(5),
-                    true,
-                ),
-            ]);
+            group
+                .syndrome(&error)
+                .unwrap();
+
+        let correction =
+            Correction::new(
+                error,
+            );
 
         assert!(
-            decoder.decode(&syndrome).is_err()
+            validate_correction_for_syndrome(
+                &correction,
+                &syndrome,
+                &group,
+            )
+            .unwrap()
         );
     }
 
     #[test]
-    fn repetition_decoder_produces_correction() {
+    fn registry_rejects_duplicate_decoder() {
         let decoder =
-            RepetitionDecoder::new(3)
-                .unwrap();
+            IdentityDecoder::new(
+                DecoderId::new(1),
+                2,
+            )
+            .unwrap();
 
-        let syndrome =
-            Syndrome::from_bits([
-                SyndromeBit::new(
-                    SyndromeId::new(1),
-                    true,
-                ),
-            ]);
+        let mut registry =
+            DecoderRegistry::new();
 
-        let result =
-            decoder
-                .decode(&syndrome)
-                .unwrap();
+        registry
+            .register(&decoder)
+            .unwrap();
 
-        assert_eq!(
-            result.corrections.get(
-                LogicalQubitId::new(1)
+        assert!(matches!(
+            registry.register(
+                &decoder
             ),
-            Pauli::X
-        );
+            Err(
+                DecoderError::DuplicateDecoder {
+                    id: DecoderId(1)
+                }
+            )
+        ));
     }
 
     #[test]
-    fn pipeline_uses_registered_decoder() {
-        let mut pipeline =
-            DecoderPipeline::new();
-
-        let mut decoder =
-            LookupDecoder::new();
-
-        let mut corrections =
-            CorrectionSet::new();
-
-        corrections.insert(
-            Correction::new(
-                LogicalQubitId::new(2),
-                Pauli::Z,
-            ),
-        );
-
-        decoder.insert(
-            vec![SyndromeId::new(2)],
-            corrections,
-        );
-
-        pipeline.add(decoder);
+    fn statistics_track_results() {
+        let decoder =
+            IdentityDecoder::new(
+                DecoderId::new(2),
+                2,
+            )
+            .unwrap();
 
         let syndrome =
-            Syndrome::from_bits([
-                SyndromeBit::new(
-                    SyndromeId::new(2),
-                    true,
-                ),
+            Syndrome::new(vec![
+                false,
             ]);
 
         let result =
-            pipeline
-                .decode(&syndrome)
-                .unwrap();
+            decoder.decode(
+                &syndrome,
+            );
+
+        let mut stats =
+            DecoderStatistics::new();
+
+        stats.record(
+            result.as_ref()
+        );
 
         assert_eq!(
-            result.corrections.get(
-                LogicalQubitId::new(2)
-            ),
-            Pauli::Z
+            stats.decoded(),
+            1
         );
-    }
 
-    #[test]
-    fn pipeline_reports_failure_when_empty() {
-        let pipeline =
-            DecoderPipeline::new();
-
-        let syndrome =
-            Syndrome::from_bits([
-                SyndromeBit::new(
-                    SyndromeId::new(0),
-                    true,
-                ),
-            ]);
-
-        assert!(
-            pipeline.decode(&syndrome).is_err()
+        assert_eq!(
+            stats.trivial(),
+            1
         );
     }
 }
