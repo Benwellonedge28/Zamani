@@ -1,45 +1,62 @@
-//! Zamani Quantum Error Correction — Surface Code.
+//! Zamani Quantum Error Correction — Rotated Planar Surface Code.
 //!
-//! Mathematically explicit surface-code representation.
+//! This module provides an explicit, validated representation of a
+//! rotated planar surface code.
 //!
-//! The implementation separates:
+//! Mathematical model
+//! ------------------
 //!
-//! 1. physical data-qubit topology;
-//! 2. stabilizer topology;
-//! 3. stabilizer Pauli operators;
-//! 4. logical operators;
-//! 5. code validation;
-//! 6. code-distance verification.
+//! For an odd code distance d >= 3:
 //!
-//! A surface code is valid only when:
+//!     data qubits = d²
+//!     stabilizers = d² - 1
+//!     logical qubits = 1
+//!     code distance = d
 //!
-//! - every referenced data qubit exists;
-//! - no stabilizer contains duplicate qubits;
-//! - stabilizer support matches its topology;
-//! - stabilizer weights are valid;
-//! - X/Z stabilizers commute;
-//! - logical operators commute with every stabilizer;
-//! - logical X and logical Z anticommute;
-//! - logical operators are not themselves stabilizers;
-//! - the claimed code distance is consistent with the logical operators.
+//! Data qubits are arranged on a d × d square grid:
+//!
+//!     q00 ─ q01 ─ q02 ─ ... ─ q0(d-1)
+//!      │     │     │
+//!     q10 ─ q11 ─ q12 ─ ... ─ q1(d-1)
+//!      │     │     │
+//!     ...
+//!
+//! Bulk stabilizers act on four data qubits.
+//! Boundary stabilizers act on two data qubits.
+//!
+//! The stabilizers form a checkerboard of X- and Z-type operators.
+//!
+//! Canonical logical operators are:
+//!
+//!     X_L = X on one complete row
+//!     Z_L = Z on one complete column
+//!
+//! These have weight d and anticommute exactly once.
+//!
+//! The implementation deliberately keeps topology explicit rather than
+//! deriving it from qubit counts. This makes invalid geometries detectable
+//! before a decoder or circuit generator is invoked.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt;
 
+use super::distance;
 use super::stabilizer::{
+    logical_operators_anticommute,
     Pauli,
     PauliString,
     QubitIndex,
     StabilizerError,
     StabilizerGenerator,
     StabilizerGroup,
+    Syndrome,
 };
 
-// -----------------------------------------------------------------------------
-// Coordinates
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Coordinate
+// ============================================================================
 
-/// Integer coordinate in the surface-code lattice.
+/// Two-dimensional coordinate of a data qubit.
 #[derive(
     Debug,
     Clone,
@@ -51,8 +68,8 @@ use super::stabilizer::{
     Hash,
 )]
 pub struct Coordinate {
-    pub row: usize,
-    pub column: usize,
+    row: usize,
+    column: usize,
 }
 
 impl Coordinate {
@@ -60,11 +77,28 @@ impl Coordinate {
         row: usize,
         column: usize,
     ) -> Self {
-        Self { row, column }
+        Self {
+            row,
+            column,
+        }
+    }
+
+    pub const fn row(
+        self,
+    ) -> usize {
+        self.row
+    }
+
+    pub const fn column(
+        self,
+    ) -> usize {
+        self.column
     }
 }
 
-impl fmt::Display for Coordinate {
+impl fmt::Display
+    for Coordinate
+{
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -78,51 +112,50 @@ impl fmt::Display for Coordinate {
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Data qubit
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Physical data qubit in the surface-code lattice.
+/// A physical data qubit in the surface-code lattice.
 #[derive(
     Debug,
     Clone,
     Copy,
     PartialEq,
     Eq,
-    PartialOrd,
-    Ord,
-    Hash,
 )]
 pub struct DataQubit {
-    id: QubitIndex,
+    index: QubitIndex,
     coordinate: Coordinate,
 }
 
 impl DataQubit {
     pub const fn new(
-        id: QubitIndex,
+        index: QubitIndex,
         coordinate: Coordinate,
     ) -> Self {
         Self {
-            id,
+            index,
             coordinate,
         }
     }
 
-    pub const fn id(&self) -> QubitIndex {
-        self.id
+    pub const fn index(
+        self,
+    ) -> QubitIndex {
+        self.index
     }
 
     pub const fn coordinate(
-        &self,
+        self,
     ) -> Coordinate {
         self.coordinate
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Stabilizer kind
-// -----------------------------------------------------------------------------
+// ============================================================================
 
 #[derive(
     Debug,
@@ -150,13 +183,63 @@ impl StabilizerKind {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Surface-code stabilizer
-// -----------------------------------------------------------------------------
+impl fmt::Display
+    for StabilizerKind
+{
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        match self {
+            Self::X => write!(f, "X"),
+            Self::Z => write!(f, "Z"),
+        }
+    }
+}
 
-/// Explicit geometric stabilizer.
-///
-/// `qubits` is the exact set of data qubits on which the stabilizer acts.
+// ============================================================================
+// Boundary
+// ============================================================================
+
+/// Boundary classification for a surface-code stabilizer.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+)]
+pub enum Boundary {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+impl fmt::Display
+    for Boundary
+{
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        match self {
+            Self::Top => write!(f, "top"),
+            Self::Bottom => write!(f, "bottom"),
+            Self::Left => write!(f, "left"),
+            Self::Right => write!(f, "right"),
+        }
+    }
+}
+
+// ============================================================================
+// Stabilizer
+// ============================================================================
+
+/// Explicit surface-code stabilizer topology.
 #[derive(
     Debug,
     Clone,
@@ -166,18 +249,18 @@ impl StabilizerKind {
 pub struct SurfaceStabilizer {
     id: usize,
     kind: StabilizerKind,
-    coordinate: Coordinate,
-    qubits: Vec<QubitIndex>,
+    support: Vec<QubitIndex>,
+    boundary: Option<Boundary>,
 }
 
 impl SurfaceStabilizer {
     pub fn new(
         id: usize,
         kind: StabilizerKind,
-        coordinate: Coordinate,
-        qubits: Vec<QubitIndex>,
+        support: Vec<QubitIndex>,
+        boundary: Option<Boundary>,
     ) -> Result<Self, SurfaceCodeError> {
-        if qubits.is_empty() {
+        if support.is_empty() {
             return Err(
                 SurfaceCodeError::EmptyStabilizer {
                     id,
@@ -185,16 +268,39 @@ impl SurfaceStabilizer {
             );
         }
 
-        let unique =
-            qubits
-                .iter()
-                .copied()
-                .collect::<BTreeSet<_>>();
+        let mut unique =
+            BTreeSet::new();
 
-        if unique.len() != qubits.len() {
+        for &qubit in
+            &support
+        {
+            if !unique.insert(qubit) {
+                return Err(
+                    SurfaceCodeError::DuplicateQubitInStabilizer {
+                        id,
+                        qubit,
+                    },
+                );
+            }
+        }
+
+        let expected_weight =
+            if boundary.is_some() {
+                2
+            } else {
+                4
+            };
+
+        if support.len()
+            != expected_weight
+        {
             return Err(
-                SurfaceCodeError::DuplicateQubit {
-                    stabilizer: id,
+                SurfaceCodeError::InvalidStabilizerWeight {
+                    id,
+                    expected:
+                        expected_weight,
+                    actual:
+                        support.len(),
                 },
             );
         }
@@ -202,12 +308,14 @@ impl SurfaceStabilizer {
         Ok(Self {
             id,
             kind,
-            coordinate,
-            qubits,
+            support,
+            boundary,
         })
     }
 
-    pub const fn id(&self) -> usize {
+    pub const fn id(
+        &self,
+    ) -> usize {
         self.id
     }
 
@@ -217,61 +325,87 @@ impl SurfaceStabilizer {
         self.kind
     }
 
-    pub const fn coordinate(
-        &self,
-    ) -> Coordinate {
-        self.coordinate
-    }
-
-    pub fn qubits(
+    pub fn support(
         &self,
     ) -> &[QubitIndex] {
-        &self.qubits
+        &self.support
     }
 
-    pub fn weight(&self) -> usize {
-        self.qubits.len()
+    pub fn boundary(
+        &self,
+    ) -> Option<Boundary> {
+        self.boundary
     }
 
-    /// Converts the geometric stabilizer into the common stabilizer algebra.
-    pub fn to_pauli_string(
+    pub fn weight(
+        &self,
+    ) -> usize {
+        self.support.len()
+    }
+
+    pub fn is_boundary(
+        &self,
+    ) -> bool {
+        self.boundary.is_some()
+    }
+
+    /// Converts this explicit topology into the generic Pauli-string IR.
+    pub fn pauli_string(
         &self,
         num_qubits: usize,
     ) -> Result<PauliString, SurfaceCodeError> {
-        let mut operator =
-            PauliString::identity(
-                num_qubits,
-            );
+        let mut paulis =
+            vec![Pauli::I; num_qubits];
 
-        for &qubit in &self.qubits {
-            if qubit.index() >= num_qubits {
+        for &qubit in
+            &self.support
+        {
+            let index =
+                qubit.index();
+
+            if index >= num_qubits {
                 return Err(
                     SurfaceCodeError::NonexistentQubit {
-                        stabilizer: self.id,
+                        stabilizer:
+                            self.id,
                         qubit,
                     },
                 );
             }
 
-            operator
-                .set_pauli(
-                    qubit,
-                    self.kind.pauli(),
-                )
-                .map_err(
-                    SurfaceCodeError::Stabilizer,
-                )?;
+            paulis[index] =
+                self.kind.pauli();
         }
 
-        Ok(operator)
+        Ok(
+            PauliString::from_paulis(
+                &paulis,
+            )
+        )
+    }
+
+    pub fn generator(
+        &self,
+        num_qubits: usize,
+    ) -> Result<StabilizerGenerator, SurfaceCodeError> {
+        let operator =
+            self.pauli_string(
+                num_qubits,
+            )?;
+
+        Ok(
+            StabilizerGenerator::new(
+                self.id,
+                operator,
+            )?
+        )
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Logical operator
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Logical Pauli operator represented explicitly on physical data qubits.
 #[derive(
     Debug,
     Clone,
@@ -279,95 +413,133 @@ impl SurfaceStabilizer {
     Eq,
 )]
 pub struct LogicalOperator {
-    name: String,
-    pauli: PauliString,
+    name: &'static str,
+    kind: StabilizerKind,
+    operator: PauliString,
 }
 
 impl LogicalOperator {
     pub fn new(
-        name: impl Into<String>,
-        pauli: PauliString,
+        name: &'static str,
+        kind: StabilizerKind,
+        operator: PauliString,
     ) -> Result<Self, SurfaceCodeError> {
-        if pauli.is_identity() {
+        if operator.is_identity() {
             return Err(
-                SurfaceCodeError::IdentityLogicalOperator,
+                SurfaceCodeError::IdentityLogicalOperator {
+                    name,
+                },
             );
         }
 
         Ok(Self {
-            name: name.into(),
-            pauli,
+            name,
+            kind,
+            operator,
         })
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    pub const fn name(
+        &self,
+    ) -> &'static str {
+        self.name
     }
 
-    pub fn operator(&self) -> &PauliString {
-        &self.pauli
+    pub const fn kind(
+        &self,
+    ) -> StabilizerKind {
+        self.kind
     }
 
-    pub fn weight(&self) -> usize {
-        self.pauli.weight()
+    pub fn operator(
+        &self,
+    ) -> &PauliString {
+        &self.operator
+    }
+
+    pub fn weight(
+        &self,
+    ) -> usize {
+        self.operator.weight()
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Surface code
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Explicit surface-code model.
+/// Explicit rotated planar surface-code topology.
 #[derive(
     Debug,
     Clone,
 )]
 pub struct SurfaceCode {
     distance: usize,
-    data_qubits: BTreeMap<QubitIndex, DataQubit>,
+    data_qubits: Vec<DataQubit>,
     stabilizers: Vec<SurfaceStabilizer>,
     logical_x: LogicalOperator,
     logical_z: LogicalOperator,
 }
 
 impl SurfaceCode {
-    /// Creates an empty surface-code model.
+    /// Constructs a canonical rotated planar surface code.
     ///
-    /// Topology is added explicitly using `add_data_qubit` and
-    /// `add_stabilizer`.
+    /// The implementation currently requires an odd distance:
+    ///
+    ///     d = 3, 5, 7, ...
+    ///
+    /// This corresponds to the standard single-logical-qubit rotated planar
+    /// surface-code family.
     pub fn new(
         distance: usize,
-        logical_x: LogicalOperator,
-        logical_z: LogicalOperator,
     ) -> Result<Self, SurfaceCodeError> {
-        if distance < 2 {
-            return Err(
-                SurfaceCodeError::InvalidDistance {
-                    distance,
-                },
-            );
-        }
-
-        if logical_x
-            .operator()
-            .num_qubits()
-            != logical_z
-                .operator()
-                .num_qubits()
-        {
-            return Err(
-                SurfaceCodeError::LogicalQubitCountMismatch,
-            );
-        }
-
-        Ok(Self {
+        validate_distance_parameter(
             distance,
-            data_qubits: BTreeMap::new(),
-            stabilizers: Vec::new(),
+        )?;
+
+        let data_qubits =
+            build_data_qubits(
+                distance,
+            );
+
+        let stabilizers =
+            build_stabilizers(
+                distance,
+            )?;
+
+        let logical_x =
+            build_logical_x(
+                distance,
+            )?;
+
+        let logical_z =
+            build_logical_z(
+                distance,
+            )?;
+
+        let code = Self {
+            distance,
+            data_qubits,
+            stabilizers,
             logical_x,
             logical_z,
-        })
+        };
+
+        code.validate()?;
+
+        Ok(code)
     }
+
+    /// Alias for explicit construction from a code distance.
+    pub fn from_distance(
+        distance: usize,
+    ) -> Result<Self, SurfaceCodeError> {
+        Self::new(distance)
+    }
+
+    // ------------------------------------------------------------------------
+    // Basic properties
+    // ------------------------------------------------------------------------
 
     pub const fn distance(
         &self,
@@ -375,10 +547,28 @@ impl SurfaceCode {
         self.distance
     }
 
+    pub fn num_data_qubits(
+        &self,
+    ) -> usize {
+        self.data_qubits.len()
+    }
+
+    pub fn num_stabilizers(
+        &self,
+    ) -> usize {
+        self.stabilizers.len()
+    }
+
+    pub const fn num_logical_qubits(
+        &self,
+    ) -> usize {
+        1
+    }
+
     pub fn data_qubits(
         &self,
-    ) -> impl Iterator<Item = &DataQubit> {
-        self.data_qubits.values()
+    ) -> &[DataQubit] {
+        &self.data_qubits
     }
 
     pub fn stabilizers(
@@ -399,122 +589,293 @@ impl SurfaceCode {
         &self.logical_z
     }
 
-    pub fn num_data_qubits(&self) -> usize {
-        self.data_qubits.len()
+    // ------------------------------------------------------------------------
+    // Topology
+    // ------------------------------------------------------------------------
+
+    /// Converts a grid coordinate into a data-qubit index.
+    pub fn qubit_at(
+        &self,
+        coordinate: Coordinate,
+    ) -> Result<DataQubit, SurfaceCodeError> {
+        if coordinate.row()
+            >= self.distance
+            || coordinate.column()
+                >= self.distance
+        {
+            return Err(
+                SurfaceCodeError::CoordinateOutOfRange {
+                    coordinate,
+                    distance:
+                        self.distance,
+                },
+            );
+        }
+
+        let index =
+            coordinate.row()
+                * self.distance
+                + coordinate.column();
+
+        Ok(
+            self.data_qubits[index]
+        )
     }
 
-    pub fn num_stabilizers(&self) -> usize {
-        self.stabilizers.len()
+    /// Returns the coordinate of a data qubit.
+    pub fn coordinate_of(
+        &self,
+        qubit: QubitIndex,
+    ) -> Result<Coordinate, SurfaceCodeError> {
+        if qubit.index()
+            >= self.data_qubits.len()
+        {
+            return Err(
+                SurfaceCodeError::NonexistentQubit {
+                    stabilizer:
+                        usize::MAX,
+                    qubit,
+                },
+            );
+        }
+
+        Ok(
+            self.data_qubits
+                [qubit.index()]
+                .coordinate()
+        )
     }
 
-    /// Adds one physical data qubit.
-    pub fn add_data_qubit(
-        &mut self,
-        qubit: DataQubit,
+    /// Returns the four data-qubit coordinates surrounding a bulk face.
+    pub fn face_qubits(
+        &self,
+        row: usize,
+        column: usize,
+    ) -> Result<[QubitIndex; 4], SurfaceCodeError> {
+        if row + 1
+            >= self.distance
+            || column + 1
+                >= self.distance
+        {
+            return Err(
+                SurfaceCodeError::FaceOutOfRange {
+                    row,
+                    column,
+                    distance:
+                        self.distance,
+                },
+            );
+        }
+
+        let d =
+            self.distance;
+
+        Ok([
+            QubitIndex(
+                row * d + column,
+            ),
+            QubitIndex(
+                row * d + column + 1,
+            ),
+            QubitIndex(
+                (row + 1) * d + column,
+            ),
+            QubitIndex(
+                (row + 1) * d + column + 1,
+            ),
+        ])
+    }
+
+    // ------------------------------------------------------------------------
+    // Generic stabilizer representation
+    // ------------------------------------------------------------------------
+
+    /// Builds the generic stabilizer group used by the decoder,
+    /// syndrome engine, and distance verifier.
+    pub fn stabilizer_group(
+        &self,
+    ) -> Result<StabilizerGroup, SurfaceCodeError> {
+        let mut group =
+            StabilizerGroup::new(
+                self.num_data_qubits(),
+            )?;
+
+        for stabilizer
+            in &self.stabilizers
+        {
+            group.add_generator(
+                stabilizer.generator(
+                    self.num_data_qubits(),
+                )?,
+            )?;
+        }
+
+        group.validate()?;
+
+        Ok(group)
+    }
+
+    /// Computes a syndrome for a Pauli error.
+    pub fn syndrome(
+        &self,
+        error: &PauliString,
+    ) -> Result<Syndrome, SurfaceCodeError> {
+        let group =
+            self.stabilizer_group()?;
+
+        Ok(
+            group.syndrome(error)?
+        )
+    }
+
+    // ------------------------------------------------------------------------
+    // Logical operators
+    // ------------------------------------------------------------------------
+
+    /// Validates the logical operators against the stabilizer group.
+    pub fn validate_logical_operators(
+        &self,
     ) -> Result<(), SurfaceCodeError> {
-        if self
-            .data_qubits
-            .contains_key(&qubit.id())
-        {
+        let group =
+            self.stabilizer_group()?;
+
+        validate_logical_operator(
+            &self.logical_x,
+            &group,
+            self.distance,
+        )?;
+
+        validate_logical_operator(
+            &self.logical_z,
+            &group,
+            self.distance,
+        )?;
+
+        if !logical_operators_anticommute(
+            self.logical_x.operator(),
+            self.logical_z.operator(),
+        )? {
             return Err(
-                SurfaceCodeError::DuplicateDataQubit {
-                    qubit: qubit.id(),
-                },
+                SurfaceCodeError::LogicalOperatorsMustAnticommute,
             );
         }
-
-        if self
-            .data_qubits
-            .values()
-            .any(|existing| {
-                existing.coordinate()
-                    == qubit.coordinate()
-            })
-        {
-            return Err(
-                SurfaceCodeError::DuplicateCoordinate {
-                    coordinate: qubit.coordinate(),
-                },
-            );
-        }
-
-        self.data_qubits
-            .insert(qubit.id(), qubit);
 
         Ok(())
     }
 
-    /// Adds a geometrically explicit stabilizer.
-    pub fn add_stabilizer(
-        &mut self,
-        stabilizer: SurfaceStabilizer,
-    ) -> Result<(), SurfaceCodeError> {
-        if self
-            .stabilizers
-            .iter()
-            .any(|existing| {
-                existing.id()
-                    == stabilizer.id()
-            })
-        {
-            return Err(
-                SurfaceCodeError::DuplicateStabilizer {
-                    id: stabilizer.id(),
-                },
-            );
-        }
+    // ------------------------------------------------------------------------
+    // Full validation
+    // ------------------------------------------------------------------------
 
-        for &qubit in stabilizer.qubits() {
-            if !self
-                .data_qubits
-                .contains_key(&qubit)
-            {
-                return Err(
-                    SurfaceCodeError::NonexistentQubit {
-                        stabilizer:
-                            stabilizer.id(),
-                        qubit,
-                    },
-                );
-            }
-        }
-
-        self.stabilizers
-            .push(stabilizer);
-
-        Ok(())
-    }
-
-    // -------------------------------------------------------------------------
-    // Validation
-    // -------------------------------------------------------------------------
-
-    /// Performs all mathematical and topology checks.
+    /// Performs structural and mathematical validation.
+    ///
+    /// This does NOT perform the expensive exhaustive distance search.
+    /// Use `verify_distance()` when an independent distance calculation is
+    /// required.
     pub fn validate(
         &self,
     ) -> Result<(), SurfaceCodeError> {
+        validate_distance_parameter(
+            self.distance,
+        )?;
+
         self.validate_data_qubits()?;
-        self.validate_stabilizers()?;
-        self.validate_commutation()?;
+
+        self.validate_stabilizer_topology()?;
+
+        let group =
+            self.stabilizer_group()?;
+
+        group.validate()?;
+
         self.validate_logical_operators()?;
-        self.validate_distance()?;
 
         Ok(())
     }
+
+    /// Independently computes the exact distance using the generic
+    /// stabilizer-distance implementation.
+    ///
+    /// This is intentionally separate from `validate()` because exact
+    /// distance calculation can become expensive as the code grows.
+    pub fn verify_distance(
+        &self,
+    ) -> Result<usize, SurfaceCodeError> {
+        let group =
+            self.stabilizer_group()?;
+
+        let result =
+            distance::compute_distance(
+                &group,
+            )?;
+
+        if result.distance()
+            != self.distance
+        {
+            return Err(
+                SurfaceCodeError::DistanceMismatch {
+                    expected:
+                        self.distance,
+                    actual:
+                        result.distance(),
+                },
+            );
+        }
+
+        distance::validate_distance(
+            &group,
+            self.distance,
+            self.logical_x.operator(),
+        )?;
+
+        Ok(
+            result.distance()
+        )
+    }
+
+    // ------------------------------------------------------------------------
+    // Data-qubit validation
+    // ------------------------------------------------------------------------
 
     fn validate_data_qubits(
         &self,
     ) -> Result<(), SurfaceCodeError> {
-        if self.data_qubits.is_empty() {
+        let expected =
+            self.distance
+                * self.distance;
+
+        if self.data_qubits.len()
+            != expected
+        {
             return Err(
-                SurfaceCodeError::NoDataQubits,
+                SurfaceCodeError::DataQubitCountMismatch {
+                    expected,
+                    actual:
+                        self.data_qubits.len(),
+                },
             );
         }
+
+        let mut indices =
+            BTreeSet::new();
 
         let mut coordinates =
             BTreeSet::new();
 
-        for qubit in self.data_qubits.values() {
+        for qubit
+            in &self.data_qubits
+        {
+            if !indices.insert(
+                qubit.index(),
+            ) {
+                return Err(
+                    SurfaceCodeError::DuplicateDataQubit {
+                        qubit:
+                            qubit.index(),
+                    },
+                );
+            }
+
             if !coordinates.insert(
                 qubit.coordinate(),
             ) {
@@ -525,56 +886,111 @@ impl SurfaceCode {
                     },
                 );
             }
+
+            if qubit.coordinate().row()
+                >= self.distance
+                || qubit
+                    .coordinate()
+                    .column()
+                    >= self.distance
+            {
+                return Err(
+                    SurfaceCodeError::CoordinateOutOfRange {
+                        coordinate:
+                            qubit.coordinate(),
+                        distance:
+                            self.distance,
+                    },
+                );
+            }
+        }
+
+        for index in
+            0..expected
+        {
+            if !indices.contains(
+                &QubitIndex(index),
+            ) {
+                return Err(
+                    SurfaceCodeError::MissingDataQubit {
+                        qubit:
+                            QubitIndex(index),
+                    },
+                );
+            }
         }
 
         Ok(())
     }
 
-    fn validate_stabilizers(
+    // ------------------------------------------------------------------------
+    // Stabilizer topology validation
+    // ------------------------------------------------------------------------
+
+    fn validate_stabilizer_topology(
         &self,
     ) -> Result<(), SurfaceCodeError> {
-        for stabilizer in
-            &self.stabilizers
+        let expected =
+            self.distance
+                * self.distance
+                - 1;
+
+        if self.stabilizers.len()
+            != expected
         {
-            if stabilizer.weight()
-                > 4
-            {
+            return Err(
+                SurfaceCodeError::StabilizerCountMismatch {
+                    expected,
+                    actual:
+                        self.stabilizers.len(),
+                },
+            );
+        }
+
+        let mut ids =
+            BTreeSet::new();
+
+        let mut supports =
+            BTreeSet::new();
+
+        for stabilizer
+            in &self.stabilizers
+        {
+            if !ids.insert(
+                stabilizer.id(),
+            ) {
                 return Err(
-                    SurfaceCodeError::InvalidStabilizerWeight {
-                        id: stabilizer.id(),
-                        weight: stabilizer.weight(),
+                    SurfaceCodeError::DuplicateStabilizerId {
+                        id:
+                            stabilizer.id(),
                     },
                 );
             }
 
-            if stabilizer.weight()
-                == 0
-            {
+            let canonical_support =
+                canonical_support(
+                    stabilizer.support(),
+                );
+
+            if !supports.insert(
+                (
+                    stabilizer.kind(),
+                    canonical_support,
+                ),
+            ) {
                 return Err(
-                    SurfaceCodeError::EmptyStabilizer {
-                        id: stabilizer.id(),
+                    SurfaceCodeError::DuplicateStabilizerSupport {
+                        id:
+                            stabilizer.id(),
                     },
                 );
             }
-
-            let mut seen =
-                BTreeSet::new();
 
             for &qubit in
-                stabilizer.qubits()
+                stabilizer.support()
             {
-                if !seen.insert(qubit) {
-                    return Err(
-                        SurfaceCodeError::DuplicateQubit {
-                            stabilizer:
-                                stabilizer.id(),
-                        },
-                    );
-                }
-
-                if !self
-                    .data_qubits
-                    .contains_key(&qubit)
+                if qubit.index()
+                    >= self.num_data_qubits()
                 {
                     return Err(
                         SurfaceCodeError::NonexistentQubit {
@@ -585,307 +1001,585 @@ impl SurfaceCode {
                     );
                 }
             }
+
+            validate_boundary_geometry(
+                stabilizer,
+                self.distance,
+            )?;
         }
+
+        // IDs are deliberately contiguous and deterministic.
+        for id in
+            0..expected
+        {
+            if !ids.contains(&id) {
+                return Err(
+                    SurfaceCodeError::MissingStabilizerId {
+                        id,
+                    },
+                );
+            }
+        }
+
+        // This invokes the symplectic commutation validation.
+        let group =
+            self.stabilizer_group()?;
+
+        group.validate()?;
 
         Ok(())
     }
+}
 
-    /// Verifies pairwise stabilizer commutation using the common
-    /// symplectic representation.
-    fn validate_commutation(
-        &self,
-    ) -> Result<(), SurfaceCodeError> {
-        let num_qubits =
-            self.num_data_qubits();
+// ============================================================================
+// Construction
+// ============================================================================
 
-        let mut operators =
-            Vec::with_capacity(
-                self.stabilizers.len(),
+fn validate_distance_parameter(
+    distance: usize,
+) -> Result<(), SurfaceCodeError> {
+    if distance < 3 {
+        return Err(
+            SurfaceCodeError::DistanceTooSmall {
+                distance,
+            },
+        );
+    }
+
+    if distance % 2 == 0 {
+        return Err(
+            SurfaceCodeError::DistanceMustBeOdd {
+                distance,
+            },
+        );
+    }
+
+    Ok(())
+}
+
+fn build_data_qubits(
+    distance: usize,
+) -> Vec<DataQubit> {
+    let mut qubits =
+        Vec::with_capacity(
+            distance * distance,
+        );
+
+    for row in
+        0..distance
+    {
+        for column in
+            0..distance
+        {
+            let index =
+                row * distance
+                    + column;
+
+            qubits.push(
+                DataQubit::new(
+                    QubitIndex(index),
+                    Coordinate::new(
+                        row,
+                        column,
+                    ),
+                ),
+            );
+        }
+    }
+
+    qubits
+}
+
+/// Builds the canonical rotated planar surface-code stabilizers.
+///
+/// Bulk:
+///
+///     checkerboard X/Z faces
+///
+/// Boundary:
+///
+///     X checks on left/right boundaries
+///     Z checks on top/bottom boundaries
+///
+/// For odd d this produces:
+///
+///     (d² - 1) / 2 X stabilizers
+///     (d² - 1) / 2 Z stabilizers
+///
+/// and therefore d² - 1 total stabilizers.
+fn build_stabilizers(
+    distance: usize,
+) -> Result<Vec<SurfaceStabilizer>, SurfaceCodeError> {
+    let mut stabilizers =
+        Vec::with_capacity(
+            distance * distance
+                - 1,
+        );
+
+    let mut id =
+        0usize;
+
+    // ------------------------------------------------------------------------
+    // Bulk four-body stabilizers
+    // ------------------------------------------------------------------------
+
+    for row in
+        0..(distance - 1)
+    {
+        for column in
+            0..(distance - 1)
+        {
+            let kind =
+                if (row + column) % 2
+                    == 1
+                {
+                    StabilizerKind::X
+                } else {
+                    StabilizerKind::Z
+                };
+
+            let d =
+                distance;
+
+            let support =
+                vec![
+                    QubitIndex(
+                        row * d + column,
+                    ),
+                    QubitIndex(
+                        row * d
+                            + column
+                            + 1,
+                    ),
+                    QubitIndex(
+                        (row + 1)
+                            * d
+                            + column,
+                    ),
+                    QubitIndex(
+                        (row + 1)
+                            * d
+                            + column
+                            + 1,
+                    ),
+                ];
+
+            stabilizers.push(
+                SurfaceStabilizer::new(
+                    id,
+                    kind,
+                    support,
+                    None,
+                )?,
             );
 
-        for stabilizer in
-            &self.stabilizers
-        {
-            operators.push((
-                stabilizer,
-                stabilizer
-                    .to_pauli_string(
-                        num_qubits,
-                    )?,
-            ));
+            id += 1;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // X-type boundary stabilizers
+    // ------------------------------------------------------------------------
+    //
+    // Alternating between left and right boundaries prevents duplicate
+    // endpoint interactions while maintaining the CSS commutation rule.
+
+    for row in
+        0..(distance - 1)
+    {
+        if row % 2 == 0 {
+            // Left boundary.
+            let support =
+                vec![
+                    QubitIndex(
+                        row * distance,
+                    ),
+                    QubitIndex(
+                        (row + 1)
+                            * distance,
+                    ),
+                ];
+
+            stabilizers.push(
+                SurfaceStabilizer::new(
+                    id,
+                    StabilizerKind::X,
+                    support,
+                    Some(
+                        Boundary::Left,
+                    ),
+                )?,
+            );
+        } else {
+            // Right boundary.
+            let right =
+                distance - 1;
+
+            let support =
+                vec![
+                    QubitIndex(
+                        row * distance
+                            + right,
+                    ),
+                    QubitIndex(
+                        (row + 1)
+                            * distance
+                            + right,
+                    ),
+                ];
+
+            stabilizers.push(
+                SurfaceStabilizer::new(
+                    id,
+                    StabilizerKind::X,
+                    support,
+                    Some(
+                        Boundary::Right,
+                    ),
+                )?,
+            );
         }
 
-        for i in 0..operators.len() {
-            for j in (i + 1)..operators.len()
-            {
-                if operators[i]
-                    .1
-                    .anticommutes_with(
-                        &operators[j].1,
+        id += 1;
+    }
+
+    // ------------------------------------------------------------------------
+    // Z-type boundary stabilizers
+    // ------------------------------------------------------------------------
+    //
+    // Top boundary pairs are shifted by one position relative to the bottom
+    // boundary. This is required by the rotated-code checkerboard geometry.
+
+    for column in
+        (0..(distance - 1))
+            .step_by(2)
+    {
+        // Top boundary.
+        let support_top =
+            vec![
+                QubitIndex(
+                    column + 1,
+                ),
+                QubitIndex(
+                    column + 2,
+                ),
+            ];
+
+        stabilizers.push(
+            SurfaceStabilizer::new(
+                id,
+                StabilizerKind::Z,
+                support_top,
+                Some(Boundary::Top),
+            )?,
+        );
+
+        id += 1;
+
+        // Bottom boundary.
+        let bottom =
+            distance - 1;
+
+        let support_bottom =
+            vec![
+                QubitIndex(
+                    bottom * distance
+                        + column,
+                ),
+                QubitIndex(
+                    bottom * distance
+                        + column
+                        + 1,
+                ),
+            ];
+
+        stabilizers.push(
+            SurfaceStabilizer::new(
+                id,
+                StabilizerKind::Z,
+                support_bottom,
+                Some(
+                    Boundary::Bottom,
+                ),
+            )?,
+        );
+
+        id += 1;
+    }
+
+    Ok(stabilizers)
+}
+
+// ============================================================================
+// Logical operators
+// ============================================================================
+
+fn build_logical_x(
+    distance: usize,
+) -> Result<LogicalOperator, SurfaceCodeError> {
+    // Canonical logical X is a horizontal string.
+    let mut paulis =
+        vec![Pauli::I; distance * distance];
+
+    for column in
+        0..distance
+    {
+        paulis[column] =
+            Pauli::X;
+    }
+
+    LogicalOperator::new(
+        "X_L",
+        StabilizerKind::X,
+        PauliString::from_paulis(
+            &paulis,
+        ),
+    )
+}
+
+fn build_logical_z(
+    distance: usize,
+) -> Result<LogicalOperator, SurfaceCodeError> {
+    // Canonical logical Z is a vertical string.
+    let mut paulis =
+        vec![Pauli::I; distance * distance];
+
+    for row in
+        0..distance
+    {
+        paulis[
+            row * distance
+        ] = Pauli::Z;
+    }
+
+    LogicalOperator::new(
+        "Z_L",
+        StabilizerKind::Z,
+        PauliString::from_paulis(
+            &paulis,
+        ),
+    )
+}
+
+// ============================================================================
+// Geometry validation
+// ============================================================================
+
+fn validate_boundary_geometry(
+    stabilizer: &SurfaceStabilizer,
+    distance: usize,
+) -> Result<(), SurfaceCodeError> {
+    let support =
+        stabilizer.support();
+
+    if stabilizer.is_boundary() {
+        if support.len() != 2 {
+            return Err(
+                SurfaceCodeError::InvalidBoundaryWeight {
+                    id:
+                        stabilizer.id(),
+                    weight:
+                        support.len(),
+                },
+            );
+        }
+
+        let coordinates: Vec<Coordinate> =
+            support
+                .iter()
+                .map(|qubit| {
+                    let index =
+                        qubit.index();
+
+                    Coordinate::new(
+                        index / distance,
+                        index % distance,
                     )
-                    .map_err(
-                        SurfaceCodeError::Stabilizer,
-                    )?
+                })
+                .collect();
+
+        let boundary =
+            stabilizer
+                .boundary()
+                .expect(
+                    "boundary stabilizer must have a boundary",
+                );
+
+        match boundary {
+            Boundary::Top => {
+                if !coordinates
+                    .iter()
+                    .all(|coordinate| {
+                        coordinate.row()
+                            == 0
+                    })
                 {
                     return Err(
-                        SurfaceCodeError::NonCommutingStabilizers {
-                            first:
-                                operators[i]
-                                    .0
-                                    .id(),
-                            second:
-                                operators[j]
-                                    .0
-                                    .id(),
+                        SurfaceCodeError::InvalidBoundaryGeometry {
+                            id:
+                                stabilizer.id(),
+                            boundary,
+                        },
+                    );
+                }
+            }
+
+            Boundary::Bottom => {
+                if !coordinates
+                    .iter()
+                    .all(|coordinate| {
+                        coordinate.row()
+                            == distance - 1
+                    })
+                {
+                    return Err(
+                        SurfaceCodeError::InvalidBoundaryGeometry {
+                            id:
+                                stabilizer.id(),
+                            boundary,
+                        },
+                    );
+                }
+            }
+
+            Boundary::Left => {
+                if !coordinates
+                    .iter()
+                    .all(|coordinate| {
+                        coordinate
+                            .column()
+                            == 0
+                    })
+                {
+                    return Err(
+                        SurfaceCodeError::InvalidBoundaryGeometry {
+                            id:
+                                stabilizer.id(),
+                            boundary,
+                        },
+                    );
+                }
+            }
+
+            Boundary::Right => {
+                if !coordinates
+                    .iter()
+                    .all(|coordinate| {
+                        coordinate
+                            .column()
+                            == distance - 1
+                    })
+                {
+                    return Err(
+                        SurfaceCodeError::InvalidBoundaryGeometry {
+                            id:
+                                stabilizer.id(),
+                            boundary,
                         },
                     );
                 }
             }
         }
-
-        Ok(())
-    }
-
-    fn validate_logical_operators(
-        &self,
-    ) -> Result<(), SurfaceCodeError> {
-        let num_qubits =
-            self.num_data_qubits();
-
-        if self.logical_x
-            .operator()
-            .num_qubits()
-            != num_qubits
-        {
-            return Err(
-                SurfaceCodeError::LogicalQubitCountMismatch,
-            );
-        }
-
-        if self.logical_z
-            .operator()
-            .num_qubits()
-            != num_qubits
-        {
-            return Err(
-                SurfaceCodeError::LogicalQubitCountMismatch,
-            );
-        }
-
-        let stabilizer_group =
-            self.stabilizer_group()?;
-
-        if !super::stabilizer::
-            commutes_with_stabilizer_group(
-                self.logical_x.operator(),
-                &stabilizer_group,
-            )
-            .map_err(
-                SurfaceCodeError::Stabilizer,
-            )?
-        {
-            return Err(
-                SurfaceCodeError::LogicalDoesNotCommute {
-                    logical: self
-                        .logical_x
-                        .name()
-                        .to_owned(),
-                },
-            );
-        }
-
-        if !super::stabilizer::
-            commutes_with_stabilizer_group(
-                self.logical_z.operator(),
-                &stabilizer_group,
-            )
-            .map_err(
-                SurfaceCodeError::Stabilizer,
-            )?
-        {
-            return Err(
-                SurfaceCodeError::LogicalDoesNotCommute {
-                    logical: self
-                        .logical_z
-                        .name()
-                        .to_owned(),
-                },
-            );
-        }
-
-        if !self
-            .logical_x
-            .operator()
-            .anticommutes_with(
-                self.logical_z.operator(),
-            )
-            .map_err(
-                SurfaceCodeError::Stabilizer,
-            )?
-        {
-            return Err(
-                SurfaceCodeError::LogicalOperatorsMustAnticommute,
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Verifies that the explicitly supplied logical operators have the
-    /// requested distance.
-    ///
-    /// For a concrete logical representative, its weight cannot be smaller
-    /// than the code distance. A complete distance proof additionally
-    /// requires searching the normalizer for the minimum non-stabilizer
-    /// logical operator.
-    fn validate_distance(
-        &self,
-    ) -> Result<(), SurfaceCodeError> {
-        if self.logical_x.weight()
-            < self.distance
-        {
-            return Err(
-                SurfaceCodeError::LogicalOperatorBelowDistance {
-                    logical: self
-                        .logical_x
-                        .name()
-                        .to_owned(),
-                    weight:
-                        self.logical_x
-                            .weight(),
-                    distance:
-                        self.distance,
-                },
-            );
-        }
-
-        if self.logical_z.weight()
-            < self.distance
-        {
-            return Err(
-                SurfaceCodeError::LogicalOperatorBelowDistance {
-                    logical: self
-                        .logical_z
-                        .name()
-                        .to_owned(),
-                    weight:
-                        self.logical_z
-                            .weight(),
-                    distance:
-                        self.distance,
-                },
-            );
-        }
-
-        Ok(())
-    }
-
-    // -------------------------------------------------------------------------
-    // Stabilizer conversion
-    // -------------------------------------------------------------------------
-
-    /// Converts the geometric stabilizers into the common stabilizer group.
-    pub fn stabilizer_group(
-        &self,
-    ) -> Result<StabilizerGroup, SurfaceCodeError> {
-        let num_qubits =
-            self.num_data_qubits();
-
-        let mut group =
-            StabilizerGroup::new(
-                num_qubits,
-            )
-            .map_err(
-                SurfaceCodeError::Stabilizer,
-            )?;
-
-        for stabilizer in
-            &self.stabilizers
-        {
-            let operator =
-                stabilizer
-                    .to_pauli_string(
-                        num_qubits,
-                    )?;
-
-            let generator =
-                StabilizerGenerator::new(
+    } else if support.len() != 4 {
+        return Err(
+            SurfaceCodeError::InvalidBulkWeight {
+                id:
                     stabilizer.id(),
-                    operator,
-                )
-                .map_err(
-                    SurfaceCodeError::Stabilizer,
-                )?;
-
-            group
-                .add_generator(generator)
-                .map_err(
-                    SurfaceCodeError::Stabilizer,
-                )?;
-        }
-
-        Ok(group)
+                weight:
+                    support.len(),
+            },
+        );
     }
 
-    /// Computes the syndrome for a physical Pauli error.
-    pub fn syndrome(
-        &self,
-        error: &PauliString,
-    ) -> Result<
-        super::stabilizer::Syndrome,
-        SurfaceCodeError,
-    > {
-        let group =
-            self.stabilizer_group()?;
-
-        group
-            .syndrome(error)
-            .map_err(
-                SurfaceCodeError::Stabilizer,
-            )
-    }
-
-    // -------------------------------------------------------------------------
-    // Topology helpers
-    // -------------------------------------------------------------------------
-
-    /// Returns all data qubits directly referenced by a stabilizer.
-    pub fn stabilizer_support(
-        &self,
-        id: usize,
-    ) -> Result<&[QubitIndex], SurfaceCodeError> {
-        self.stabilizers
-            .iter()
-            .find(|stabilizer| {
-                stabilizer.id() == id
-            })
-            .map(
-                SurfaceStabilizer::qubits
-            )
-            .ok_or(
-                SurfaceCodeError::UnknownStabilizer {
-                    id,
-                },
-            )
-    }
-
-    /// Returns the data qubits at a lattice coordinate.
-    pub fn qubit_at(
-        &self,
-        coordinate: Coordinate,
-    ) -> Option<&DataQubit> {
-        self.data_qubits
-            .values()
-            .find(|qubit| {
-                qubit.coordinate()
-                    == coordinate
-            })
-    }
+    Ok(())
 }
 
-// -----------------------------------------------------------------------------
+fn canonical_support(
+    support: &[QubitIndex],
+) -> Vec<usize> {
+    let mut result: Vec<usize> =
+        support
+            .iter()
+            .map(
+                |qubit| qubit.index(),
+            )
+            .collect();
+
+    result.sort_unstable();
+
+    result
+}
+
+// ============================================================================
+// Logical validation
+// ============================================================================
+
+fn validate_logical_operator(
+    logical: &LogicalOperator,
+    group: &StabilizerGroup,
+    expected_distance: usize,
+) -> Result<(), SurfaceCodeError> {
+    if logical.weight()
+        != expected_distance
+    {
+        return Err(
+            SurfaceCodeError::LogicalOperatorWeightMismatch {
+                name:
+                    logical.name(),
+                expected:
+                    expected_distance,
+                actual:
+                    logical.weight(),
+            },
+        );
+    }
+
+    if logical.operator().is_identity() {
+        return Err(
+            SurfaceCodeError::IdentityLogicalOperator {
+                name:
+                    logical.name(),
+            },
+        );
+    }
+
+    for stabilizer
+        in group.generators()
+    {
+        if logical
+            .operator()
+            .anticommutes_with(
+                stabilizer.operator(),
+            )?
+        {
+            return Err(
+                SurfaceCodeError::LogicalOperatorDoesNotCommute {
+                    name:
+                        logical.name(),
+                    stabilizer:
+                        stabilizer.id(),
+                },
+            );
+        }
+    }
+
+    if group.contains(
+        logical.operator(),
+    )? {
+        return Err(
+            SurfaceCodeError::LogicalOperatorIsStabilizer {
+                name:
+                    logical.name(),
+            },
+        );
+    }
+
+    Ok(())
+}
+
+// ============================================================================
 // Errors
-// -----------------------------------------------------------------------------
+// ============================================================================
 
 #[derive(
     Debug,
@@ -894,13 +1588,33 @@ impl SurfaceCode {
     Eq,
 )]
 pub enum SurfaceCodeError {
-    InvalidDistance {
+    Stabilizer(
+        StabilizerError,
+    ),
+
+    DistanceTooSmall {
         distance: usize,
     },
 
-    NoDataQubits,
+    DistanceMustBeOdd {
+        distance: usize,
+    },
+
+    DataQubitCountMismatch {
+        expected: usize,
+        actual: usize,
+    },
+
+    StabilizerCountMismatch {
+        expected: usize,
+        actual: usize,
+    },
 
     DuplicateDataQubit {
+        qubit: QubitIndex,
+    },
+
+    MissingDataQubit {
         qubit: QubitIndex,
     },
 
@@ -908,7 +1622,26 @@ pub enum SurfaceCodeError {
         coordinate: Coordinate,
     },
 
-    DuplicateStabilizer {
+    CoordinateOutOfRange {
+        coordinate: Coordinate,
+        distance: usize,
+    },
+
+    FaceOutOfRange {
+        row: usize,
+        column: usize,
+        distance: usize,
+    },
+
+    DuplicateStabilizerId {
+        id: usize,
+    },
+
+    MissingStabilizerId {
+        id: usize,
+    },
+
+    DuplicateStabilizerSupport {
         id: usize,
     },
 
@@ -916,8 +1649,9 @@ pub enum SurfaceCodeError {
         id: usize,
     },
 
-    DuplicateQubit {
-        stabilizer: usize,
+    DuplicateQubitInStabilizer {
+        id: usize,
+        qubit: QubitIndex,
     },
 
     NonexistentQubit {
@@ -927,36 +1661,53 @@ pub enum SurfaceCodeError {
 
     InvalidStabilizerWeight {
         id: usize,
+        expected: usize,
+        actual: usize,
+    },
+
+    InvalidBoundaryWeight {
+        id: usize,
         weight: usize,
     },
 
-    NonCommutingStabilizers {
-        first: usize,
-        second: usize,
+    InvalidBulkWeight {
+        id: usize,
+        weight: usize,
     },
 
-    LogicalQubitCountMismatch,
+    InvalidBoundaryGeometry {
+        id: usize,
+        boundary: Boundary,
+    },
 
-    IdentityLogicalOperator,
+    IdentityLogicalOperator {
+        name: &'static str,
+    },
 
-    LogicalDoesNotCommute {
-        logical: String,
+    LogicalOperatorWeightMismatch {
+        name: &'static str,
+        expected: usize,
+        actual: usize,
+    },
+
+    LogicalOperatorDoesNotCommute {
+        name: &'static str,
+        stabilizer: usize,
+    },
+
+    LogicalOperatorIsStabilizer {
+        name: &'static str,
     },
 
     LogicalOperatorsMustAnticommute,
 
-    LogicalOperatorBelowDistance {
-        logical: String,
-        weight: usize,
-        distance: usize,
+    DistanceMismatch {
+        expected: usize,
+        actual: usize,
     },
 
-    UnknownStabilizer {
-        id: usize,
-    },
-
-    Stabilizer(
-        StabilizerError,
+    Distance(
+        distance::DistanceError,
     ),
 }
 
@@ -968,17 +1719,48 @@ impl fmt::Display
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
-            Self::InvalidDistance {
-                distance,
-            } => write!(
-                f,
-                "surface-code distance must be >= 2, got {distance}"
-            ),
-
-            Self::NoDataQubits => {
+            Self::Stabilizer(error) => {
                 write!(
                     f,
-                    "surface code contains no data qubits"
+                    "stabilizer error: {error}"
+                )
+            }
+
+            Self::DistanceTooSmall {
+                distance,
+            } => {
+                write!(
+                    f,
+                    "surface-code distance {distance} is too small; minimum supported distance is 3"
+                )
+            }
+
+            Self::DistanceMustBeOdd {
+                distance,
+            } => {
+                write!(
+                    f,
+                    "surface-code distance {distance} must be odd for this canonical rotated planar construction"
+                )
+            }
+
+            Self::DataQubitCountMismatch {
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "data-qubit count mismatch: expected {expected}, found {actual}"
+                )
+            }
+
+            Self::StabilizerCountMismatch {
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "stabilizer count mismatch: expected {expected}, found {actual}"
                 )
             }
 
@@ -987,7 +1769,16 @@ impl fmt::Display
             } => {
                 write!(
                     f,
-                    "data qubit {qubit} is already defined"
+                    "duplicate data qubit: {qubit}"
+                )
+            }
+
+            Self::MissingDataQubit {
+                qubit,
+            } => {
+                write!(
+                    f,
+                    "missing data qubit: {qubit}"
                 )
             }
 
@@ -996,16 +1787,55 @@ impl fmt::Display
             } => {
                 write!(
                     f,
-                    "data-qubit coordinate {coordinate} is already occupied"
+                    "duplicate data-qubit coordinate: {coordinate}"
                 )
             }
 
-            Self::DuplicateStabilizer {
+            Self::CoordinateOutOfRange {
+                coordinate,
+                distance,
+            } => {
+                write!(
+                    f,
+                    "coordinate {coordinate} is outside the {distance}×{distance} lattice"
+                )
+            }
+
+            Self::FaceOutOfRange {
+                row,
+                column,
+                distance,
+            } => {
+                write!(
+                    f,
+                    "face ({row}, {column}) is outside the {distance}×{distance} data lattice"
+                )
+            }
+
+            Self::DuplicateStabilizerId {
                 id,
             } => {
                 write!(
                     f,
-                    "stabilizer {id} is already defined"
+                    "duplicate stabilizer ID: {id}"
+                )
+            }
+
+            Self::MissingStabilizerId {
+                id,
+            } => {
+                write!(
+                    f,
+                    "missing stabilizer ID: {id}"
+                )
+            }
+
+            Self::DuplicateStabilizerSupport {
+                id,
+            } => {
+                write!(
+                    f,
+                    "duplicate stabilizer support for stabilizer {id}"
                 )
             }
 
@@ -1014,16 +1844,17 @@ impl fmt::Display
             } => {
                 write!(
                     f,
-                    "stabilizer {id} has no data-qubit support"
+                    "stabilizer {id} has empty support"
                 )
             }
 
-            Self::DuplicateQubit {
-                stabilizer,
+            Self::DuplicateQubitInStabilizer {
+                id,
+                qubit,
             } => {
                 write!(
                     f,
-                    "stabilizer {stabilizer} contains a duplicate data qubit"
+                    "stabilizer {id} references qubit {qubit} more than once"
                 )
             }
 
@@ -1039,44 +1870,81 @@ impl fmt::Display
 
             Self::InvalidStabilizerWeight {
                 id,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "stabilizer {id} has invalid weight {actual}; expected {expected}"
+                )
+            }
+
+            Self::InvalidBoundaryWeight {
+                id,
                 weight,
             } => {
                 write!(
                     f,
-                    "stabilizer {id} has invalid weight {weight}; surface-code stabilizers have weight 2–4"
+                    "boundary stabilizer {id} has invalid weight {weight}; expected 2"
                 )
             }
 
-            Self::NonCommutingStabilizers {
-                first,
-                second,
+            Self::InvalidBulkWeight {
+                id,
+                weight,
             } => {
                 write!(
                     f,
-                    "stabilizers {first} and {second} do not commute"
+                    "bulk stabilizer {id} has invalid weight {weight}; expected 4"
                 )
             }
 
-            Self::LogicalQubitCountMismatch => {
-                write!(
-                    f,
-                    "logical operators do not match the data-qubit count"
-                )
-            }
-
-            Self::IdentityLogicalOperator => {
-                write!(
-                    f,
-                    "logical operator cannot be identity"
-                )
-            }
-
-            Self::LogicalDoesNotCommute {
-                logical,
+            Self::InvalidBoundaryGeometry {
+                id,
+                boundary,
             } => {
                 write!(
                     f,
-                    "logical operator '{logical}' does not commute with the stabilizer group"
+                    "stabilizer {id} is not geometrically valid for the {boundary} boundary"
+                )
+            }
+
+            Self::IdentityLogicalOperator {
+                name,
+            } => {
+                write!(
+                    f,
+                    "logical operator {name} cannot be identity"
+                )
+            }
+
+            Self::LogicalOperatorWeightMismatch {
+                name,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "logical operator {name} has weight {actual}; expected {expected}"
+                )
+            }
+
+            Self::LogicalOperatorDoesNotCommute {
+                name,
+                stabilizer,
+            } => {
+                write!(
+                    f,
+                    "logical operator {name} anticommutes with stabilizer {stabilizer}"
+                )
+            }
+
+            Self::LogicalOperatorIsStabilizer {
+                name,
+            } => {
+                write!(
+                    f,
+                    "logical operator {name} is contained in the stabilizer group"
                 )
             }
 
@@ -1087,30 +1955,20 @@ impl fmt::Display
                 )
             }
 
-            Self::LogicalOperatorBelowDistance {
-                logical,
-                weight,
-                distance,
+            Self::DistanceMismatch {
+                expected,
+                actual,
             } => {
                 write!(
                     f,
-                    "logical operator '{logical}' has weight {weight}, below claimed distance {distance}"
+                    "code-distance mismatch: expected {expected}, independently calculated {actual}"
                 )
             }
 
-            Self::UnknownStabilizer {
-                id,
-            } => {
+            Self::Distance(error) => {
                 write!(
                     f,
-                    "unknown stabilizer {id}"
-                )
-            }
-
-            Self::Stabilizer(error) => {
-                write!(
-                    f,
-                    "stabilizer algebra error: {error}"
+                    "distance error: {error}"
                 )
             }
         }
@@ -1132,257 +1990,297 @@ impl From<StabilizerError>
     }
 }
 
-// -----------------------------------------------------------------------------
+impl From<distance::DistanceError>
+    for SurfaceCodeError
+{
+    fn from(
+        error: distance::DistanceError,
+    ) -> Self {
+        Self::Distance(error)
+    }
+}
+
+// ============================================================================
 // Tests
-// -----------------------------------------------------------------------------
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn logical_operator(
-        name: &str,
-        paulis: &[Pauli],
-    ) -> LogicalOperator {
-        LogicalOperator::new(
-            name,
-            PauliString::from_paulis(
-                paulis,
-            ),
-        )
-        .unwrap()
-    }
-
     #[test]
-    fn duplicate_qubits_inside_stabilizer_are_rejected() {
-        let result =
-            SurfaceStabilizer::new(
-                0,
-                StabilizerKind::X,
-                Coordinate::new(0, 0),
-                vec![
-                    QubitIndex::new(0),
-                    QubitIndex::new(0),
-                ],
-            );
-
-        assert!(matches!(
-            result,
-            Err(
-                SurfaceCodeError::DuplicateQubit {
-                    stabilizer: 0
-                }
-            )
-        ));
-    }
-
-    #[test]
-    fn nonexistent_stabilizer_qubit_is_rejected() {
-        let logical_x =
-            logical_operator(
-                "logical_x",
-                &[
-                    Pauli::X,
-                    Pauli::X,
-                ],
-            );
-
-        let logical_z =
-            logical_operator(
-                "logical_z",
-                &[
-                    Pauli::Z,
-                    Pauli::Z,
-                ],
-            );
-
-        let mut code =
-            SurfaceCode::new(
-                2,
-                logical_x,
-                logical_z,
-            )
-            .unwrap();
-
-        code.add_data_qubit(
-            DataQubit::new(
-                QubitIndex::new(0),
-                Coordinate::new(0, 0),
-            ),
-        )
-        .unwrap();
-
-        let result =
-            code.add_stabilizer(
-                SurfaceStabilizer::new(
-                    0,
-                    StabilizerKind::X,
-                    Coordinate::new(0, 1),
-                    vec![
-                        QubitIndex::new(0),
-                        QubitIndex::new(1),
-                    ],
-                )
-                .unwrap(),
-            );
-
-        assert!(matches!(
-            result,
-            Err(
-                SurfaceCodeError::NonexistentQubit {
-                    stabilizer: 0,
-                    qubit: QubitIndex(1)
-                }
-            )
-        ));
-    }
-
-    #[test]
-    fn stabilizer_support_is_explicit() {
-        let stabilizer =
-            SurfaceStabilizer::new(
-                7,
-                StabilizerKind::Z,
-                Coordinate::new(1, 1),
-                vec![
-                    QubitIndex::new(0),
-                    QubitIndex::new(1),
-                    QubitIndex::new(3),
-                ],
-            )
-            .unwrap();
-
-        assert_eq!(
-            stabilizer.weight(),
-            3
-        );
-
-        assert_eq!(
-            stabilizer.qubits(),
-            &[
-                QubitIndex::new(0),
-                QubitIndex::new(1),
-                QubitIndex::new(3),
-            ]
-        );
-    }
-
-    #[test]
-    fn logical_x_and_z_must_anticommute() {
-        let logical_x =
-            LogicalOperator::new(
-                "X",
-                PauliString::from_paulis(
-                    &[
-                        Pauli::X,
-                        Pauli::I,
-                    ],
-                ),
-            )
-            .unwrap();
-
-        let logical_z =
-            LogicalOperator::new(
-                "Z",
-                PauliString::from_paulis(
-                    &[
-                        Pauli::Z,
-                        Pauli::I,
-                    ],
-                ),
-            )
-            .unwrap();
-
+    fn distance_three_has_nine_data_qubits() {
         let code =
-            SurfaceCode::new(
-                2,
-                logical_x,
-                logical_z,
-            )
-            .unwrap();
+            SurfaceCode::new(3)
+                .unwrap();
+
+        assert_eq!(
+            code.num_data_qubits(),
+            9
+        );
+
+        assert_eq!(
+            code.num_stabilizers(),
+            8
+        );
+
+        assert_eq!(
+            code.num_logical_qubits(),
+            1
+        );
+    }
+
+    #[test]
+    fn distance_five_has_twenty_five_data_qubits() {
+        let code =
+            SurfaceCode::new(5)
+                .unwrap();
+
+        assert_eq!(
+            code.num_data_qubits(),
+            25
+        );
+
+        assert_eq!(
+            code.num_stabilizers(),
+            24
+        );
+    }
+
+    #[test]
+    fn stabilizer_counts_are_balanced() {
+        let code =
+            SurfaceCode::new(5)
+                .unwrap();
+
+        let x_count =
+            code.stabilizers()
+                .iter()
+                .filter(|s| {
+                    s.kind()
+                        == StabilizerKind::X
+                })
+                .count();
+
+        let z_count =
+            code.stabilizers()
+                .iter()
+                .filter(|s| {
+                    s.kind()
+                        == StabilizerKind::Z
+                })
+                .count();
+
+        assert_eq!(
+            x_count,
+            12
+        );
+
+        assert_eq!(
+            z_count,
+            12
+        );
+    }
+
+    #[test]
+    fn bulk_stabilizers_have_weight_four() {
+        let code =
+            SurfaceCode::new(3)
+                .unwrap();
+
+        for stabilizer
+            in code.stabilizers()
+        {
+            if !stabilizer.is_boundary() {
+                assert_eq!(
+                    stabilizer.weight(),
+                    4
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn boundary_stabilizers_have_weight_two() {
+        let code =
+            SurfaceCode::new(3)
+                .unwrap();
+
+        for stabilizer
+            in code.stabilizers()
+        {
+            if stabilizer.is_boundary() {
+                assert_eq!(
+                    stabilizer.weight(),
+                    2
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn all_stabilizers_commute() {
+        let code =
+            SurfaceCode::new(3)
+                .unwrap();
+
+        let group =
+            code.stabilizer_group()
+                .unwrap();
+
+        assert!(
+            group.validate().is_ok()
+        );
+    }
+
+    #[test]
+    fn logical_operators_are_valid() {
+        let code =
+            SurfaceCode::new(3)
+                .unwrap();
+
+        assert!(
+            code
+                .validate_logical_operators()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn logical_operators_have_distance_weight() {
+        let code =
+            SurfaceCode::new(5)
+                .unwrap();
+
+        assert_eq!(
+            code.logical_x().weight(),
+            5
+        );
+
+        assert_eq!(
+            code.logical_z().weight(),
+            5
+        );
+    }
+
+    #[test]
+    fn logical_operators_anticommute() {
+        let code =
+            SurfaceCode::new(3)
+                .unwrap();
 
         assert!(
             code.logical_x()
                 .operator()
                 .anticommutes_with(
                     code.logical_z()
-                        .operator(),
+                        .operator()
                 )
                 .unwrap()
         );
     }
 
     #[test]
-    fn empty_code_fails_validation() {
-        let logical_x =
-            logical_operator(
-                "X",
-                &[
-                    Pauli::X,
-                    Pauli::X,
-                ],
-            );
-
-        let logical_z =
-            logical_operator(
-                "Z",
-                &[
-                    Pauli::Z,
-                    Pauli::Z,
-                ],
-            );
-
+    fn coordinate_mapping_is_correct() {
         let code =
-            SurfaceCode::new(
-                2,
-                logical_x,
-                logical_z,
+            SurfaceCode::new(3)
+                .unwrap();
+
+        let qubit =
+            code.qubit_at(
+                Coordinate::new(
+                    2,
+                    1,
+                ),
             )
             .unwrap();
 
+        assert_eq!(
+            qubit.index(),
+            QubitIndex(7)
+        );
+    }
+
+    #[test]
+    fn topology_validation_succeeds() {
+        let code =
+            SurfaceCode::new(3)
+                .unwrap();
+
+        assert!(
+            code.validate().is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_even_distance() {
         assert!(matches!(
-            code.validate(),
+            SurfaceCode::new(4),
             Err(
-                SurfaceCodeError::NoDataQubits
+                SurfaceCodeError::
+                    DistanceMustBeOdd {
+                        distance: 4
+                    }
             )
         ));
     }
 
     #[test]
-    fn stabilizer_converts_to_common_pauli_model() {
-        let stabilizer =
-            SurfaceStabilizer::new(
-                0,
-                StabilizerKind::X,
-                Coordinate::new(0, 0),
-                vec![
-                    QubitIndex::new(0),
-                    QubitIndex::new(1),
-                ],
+    fn rejects_distance_two() {
+        assert!(matches!(
+            SurfaceCode::new(2),
+            Err(
+                SurfaceCodeError::
+                    DistanceTooSmall {
+                        distance: 2
+                    }
             )
-            .unwrap();
+        ));
+    }
 
-        let operator =
-            stabilizer
-                .to_pauli_string(2)
+    #[test]
+    fn distance_three_can_be_verified_independently() {
+        let code =
+            SurfaceCode::new(3)
                 .unwrap();
 
         assert_eq!(
-            operator
-                .pauli_at(
-                    QubitIndex::new(0)
-                )
+            code.verify_distance()
                 .unwrap(),
-            Pauli::X
+            3
         );
+    }
+
+    #[test]
+    fn syndrome_has_one_bit_per_stabilizer() {
+        let code =
+            SurfaceCode::new(3)
+                .unwrap();
+
+        let error =
+            PauliString::from_paulis(
+                &[
+                    Pauli::X,
+                    Pauli::I,
+                    Pauli::I,
+                    Pauli::I,
+                    Pauli::I,
+                    Pauli::I,
+                    Pauli::I,
+                    Pauli::I,
+                    Pauli::I,
+                ],
+            );
+
+        let syndrome =
+            code.syndrome(
+                &error,
+            )
+            .unwrap();
 
         assert_eq!(
-            operator
-                .pauli_at(
-                    QubitIndex::new(1)
-                )
-                .unwrap(),
-            Pauli::X
+            syndrome.len(),
+            8
         );
     }
 }
