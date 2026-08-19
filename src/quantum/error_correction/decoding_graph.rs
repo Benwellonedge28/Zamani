@@ -1,136 +1,134 @@
-//! Zamani Quantum Error Correction — Space-Time Decoding Graph.
+//! Zamani Quantum Error Correction — Deterministic Space-Time Decoding Graph.
 //!
-//! This module converts detection events into a bounded, deterministic
-//! space-time graph suitable for fault-tolerant decoding.
+//! This module is the intermediate representation between syndrome processing
+//! and a decoder such as MWPM or Union-Find.
 //!
-//! Architecture:
+//! Design:
 //!
 //! ```text
-//! Syndrome rounds
-//!       │
-//!       ▼
-//! Detection events
-//!       │
-//!       ▼
+//! DetectionEvent
+//!      │
+//!      ▼
 //! DecodingGraph
-//!       │
-//!       ├── Detection nodes
-//!       │
-//!       ├── Boundary nodes
-//!       │
-//!       └── Weighted edges
-//!              │
-//!              ▼
-//!          MWPM / Union-Find
+//!      │
+//!      ├── DetectionNode
+//!      ├── BoundaryNode
+//!      └── GraphEdge
+//!             │
+//!             ▼
+//!       MWPM / Union-Find
 //! ```
 //!
-//! This module deliberately does NOT implement a decoder.
+//! The graph is deliberately not a decoder.
 //!
 //! Responsibilities:
-//! - represent space-time detection nodes;
-//! - represent boundary nodes;
+//! - represent space-time detection events;
+//! - represent physical/logical boundaries;
 //! - represent weighted candidate error paths;
+//! - enforce QecLimits before allocation;
+//! - perform memory preflight;
 //! - validate graph invariants;
-//! - prevent duplicate nodes and edges;
-//! - enforce resource limits;
-//! - provide deterministic ordering;
-//! - provide probability-to-weight conversion;
-//! - support future MWPM and Union-Find implementations;
-//! - reject malformed external input without panicking.
+//! - reject duplicate nodes and edges;
+//! - provide deterministic iteration;
+//! - provide checked coordinate arithmetic;
+//! - provide bounded probability-to-weight conversion;
+//! - expose a stable API to decoder implementations.
 //!
 //! Non-responsibilities:
 //! - syndrome extraction;
 //! - stabilizer algebra;
-//! - physical noise generation;
-//! - correction application;
+//! - noise generation;
 //! - matching;
-//! - logical-error classification.
+//! - correction application;
+//! - logical-error classification;
+//! - QPU execution.
 //!
-//! The graph is therefore an intermediate representation between syndrome
-//! processing and decoding.
-//
-// ============================================================================
-// Imports
-// ============================================================================
+//! Resource policy:
+//!
+//! ```text
+//! QecLimits
+//!     │
+//!     ▼
+//! DecodingGraph preflight
+//!     │
+//!     ▼
+//! graph allocation
+//! ```
+//!
+//! No production graph-size ceiling is defined locally. Representation
+//! invariants such as coordinate dimensionality and maximum encoded weight
+//! remain local because they describe the graph representation itself rather
+//! than execution policy.
 
-use std::collections::{
-    BTreeMap,
-    BTreeSet,
-};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use super::limits::{LimitError, QecLimits};
 use super::syndrome::{
     DetectionEvent,
     MeasurementConfidence,
     MeasurementRound,
-    MeasurementTimestamp,
     StabilizerId,
 };
 
 // ============================================================================
-// Resource limits
+// Representation invariants
 // ============================================================================
 
-/// Maximum number of detection nodes in one graph.
-pub const MAX_DETECTION_NODES: usize = 1_000_000;
-
-/// Maximum number of boundary nodes in one graph.
-pub const MAX_BOUNDARY_NODES: usize = 100_000;
-
-/// Maximum number of graph edges.
-pub const MAX_GRAPH_EDGES: usize = 4_000_000;
-
-/// Maximum number of spatial coordinates supported by one node.
+/// Maximum number of spatial dimensions represented by one coordinate.
+///
+/// This is a representation invariant, not an execution resource policy.
 pub const MAX_SPATIAL_DIMENSIONS: usize = 8;
 
-/// Maximum absolute spatial coordinate.
+/// Maximum absolute coordinate component representable by the graph.
 ///
-/// Coordinates are signed because some lattice representations naturally use
-/// offsets around an origin.
+/// This prevents malformed external coordinates from creating pathological
+/// arithmetic while leaving workload sizing to `QecLimits`.
 pub const MAX_COORDINATE_ABS: i64 = 1_000_000_000;
 
-/// Maximum measurement round accepted by the graph.
+/// Maximum valid graph round.
+///
+/// `MeasurementRound` already validates its own range. This constant exists
+/// as a graph-level invariant for defensive validation.
 pub const MAX_GRAPH_ROUND: u64 = u64::MAX - 1;
 
-/// Maximum timestamp accepted by the graph.
+/// Maximum valid graph timestamp.
+///
+/// `MeasurementTimestamp` already validates its own range.
 pub const MAX_GRAPH_TIMESTAMP: u64 = u64::MAX - 1;
 
-/// Probability fixed-point scale.
+/// Fixed-point probability scale.
 ///
 /// ```text
-/// 0                  = 0
-/// 1_000_000_000_000  = 1
+/// 0                   = 0
+/// 1_000_000_000_000   = 1.0
 /// ```
 pub const PROBABILITY_SCALE: u64 = 1_000_000_000_000;
 
-/// Maximum finite decoding weight.
+/// Maximum finite encoded edge weight.
 ///
-/// This prevents pathological probabilities from creating infinities or
-/// overflowing downstream matching algorithms.
+/// This prevents pathological values from reaching decoders.
 pub const MAX_WEIGHT: u64 = 1_000_000_000_000_000;
 
+/// Conservative per-node memory estimate used by preflight.
+///
+/// This is deliberately an estimate, not an allocator measurement.
+const ESTIMATED_NODE_BYTES: u64 = 128;
+
+/// Conservative per-boundary memory estimate used by preflight.
+const ESTIMATED_BOUNDARY_BYTES: u64 = 96;
+
+/// Conservative per-edge memory estimate used by preflight.
+const ESTIMATED_EDGE_BYTES: u64 = 96;
+
+/// Conservative graph base memory estimate.
+const ESTIMATED_GRAPH_BASE_BYTES: u64 = 1024;
+
 // ============================================================================
-// Graph coordinate
+// Spatial coordinate
 // ============================================================================
 
-/// A spatial coordinate in the decoding lattice.
-///
-/// The decoding graph treats spatial coordinates as opaque integer
-/// coordinates. The topology owner decides what the coordinates mean.
-///
-/// For example, a surface-code implementation may use:
-///
-/// ```text
-/// (x, y)
-/// ```
-///
-/// while a more complex architecture may use:
-///
-/// ```text
-/// (x, y, layer)
-/// ```
-///
-/// No floating-point coordinates are permitted.
+/// Spatial coordinate in the decoding lattice.
 #[derive(
     Debug,
     Clone,
@@ -145,7 +143,7 @@ pub struct SpatialCoordinate {
 }
 
 impl SpatialCoordinate {
-    /// Creates a spatial coordinate.
+    /// Creates a validated spatial coordinate.
     pub fn new(
         values: Vec<i64>,
     ) -> Result<Self, DecodingGraphError> {
@@ -155,28 +153,25 @@ impl SpatialCoordinate {
             );
         }
 
-        if values.len()
-            > MAX_SPATIAL_DIMENSIONS
-        {
+        if values.len() > MAX_SPATIAL_DIMENSIONS {
             return Err(
                 DecodingGraphError::TooManyDimensions {
                     dimensions: values.len(),
-                    limit:
-                        MAX_SPATIAL_DIMENSIONS,
+                    limit: MAX_SPATIAL_DIMENSIONS,
                 },
             );
         }
 
         for &value in &values {
-            if value
+            let absolute = value
                 .checked_abs()
-                .is_none_or(
-                    |absolute| {
-                        absolute
-                            > MAX_COORDINATE_ABS
+                .ok_or(
+                    DecodingGraphError::CoordinateOutOfRange {
+                        value,
                     },
-                )
-            {
+                )?;
+
+            if absolute > MAX_COORDINATE_ABS {
                 return Err(
                     DecodingGraphError::CoordinateOutOfRange {
                         value,
@@ -205,14 +200,12 @@ impl SpatialCoordinate {
         Self::new(vec![x, y, z])
     }
 
-    /// Returns the coordinate dimension.
-    pub fn dimensions(
-        &self,
-    ) -> usize {
+    /// Returns the coordinate dimensionality.
+    pub fn dimensions(&self) -> usize {
         self.values.len()
     }
 
-    /// Returns a coordinate component.
+    /// Returns one coordinate component.
     pub fn get(
         &self,
         dimension: usize,
@@ -221,20 +214,16 @@ impl SpatialCoordinate {
     }
 
     /// Returns all coordinate components.
-    pub fn values(
-        &self,
-    ) -> &[i64] {
+    pub fn values(&self) -> &[i64] {
         &self.values
     }
 
-    /// Calculates Manhattan distance between coordinates.
+    /// Computes Manhattan distance using checked arithmetic.
     pub fn manhattan_distance(
         &self,
         other: &Self,
     ) -> Result<u64, DecodingGraphError> {
-        if self.dimensions()
-            != other.dimensions()
-        {
+        if self.dimensions() != other.dimensions() {
             return Err(
                 DecodingGraphError::DimensionMismatch,
             );
@@ -242,52 +231,41 @@ impl SpatialCoordinate {
 
         let mut distance = 0u64;
 
-        for (&left, &right) in self
-            .values
-            .iter()
-            .zip(other.values.iter())
+        for (&left, &right) in
+            self.values.iter().zip(other.values.iter())
         {
-            let delta =
-                left
-                    .checked_sub(right)
-                    .ok_or(
-                        DecodingGraphError::ArithmeticOverflow,
-                    )?;
+            let delta = left
+                .checked_sub(right)
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
 
-            let absolute =
-                delta
-                    .checked_abs()
-                    .ok_or(
-                        DecodingGraphError::ArithmeticOverflow,
-                    )?;
+            let absolute = delta
+                .checked_abs()
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
 
-            distance =
-                distance
-                    .checked_add(
-                        absolute as u64,
-                    )
-                    .ok_or(
-                        DecodingGraphError::ArithmeticOverflow,
-                    )?;
+            distance = distance
+                .checked_add(absolute as u64)
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
         }
 
         Ok(distance)
     }
 }
 
-impl fmt::Display
-    for SpatialCoordinate
-{
+impl fmt::Display for SpatialCoordinate {
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         write!(f, "(")?;
 
-        for (
-            index,
-            value,
-        ) in self.values.iter().enumerate()
+        for (index, value) in
+            self.values.iter().enumerate()
         {
             if index != 0 {
                 write!(f, ",")?;
@@ -304,11 +282,7 @@ impl fmt::Display
 // Space-time coordinate
 // ============================================================================
 
-/// A node position in space-time.
-///
-/// ```text
-/// (spatial coordinate, measurement round)
-/// ```
+/// A position in the decoding space-time lattice.
 #[derive(
     Debug,
     Clone,
@@ -324,14 +298,12 @@ pub struct SpaceTimeCoordinate {
 }
 
 impl SpaceTimeCoordinate {
-    /// Creates a space-time coordinate.
+    /// Creates a validated space-time coordinate.
     pub fn new(
         spatial: SpatialCoordinate,
         round: MeasurementRound,
     ) -> Result<Self, DecodingGraphError> {
-        if round.value()
-            > MAX_GRAPH_ROUND
-        {
+        if round.value() > MAX_GRAPH_ROUND {
             return Err(
                 DecodingGraphError::InvalidRound {
                     round: round.value(),
@@ -361,10 +333,10 @@ impl SpaceTimeCoordinate {
 }
 
 // ============================================================================
-// Node identifier
+// Node identifiers
 // ============================================================================
 
-/// Stable graph-node identifier.
+/// Stable detection-node identifier.
 #[derive(
     Debug,
     Clone,
@@ -375,22 +347,16 @@ impl SpaceTimeCoordinate {
     Ord,
     Hash,
 )]
-pub struct NodeId(
-    usize,
-);
+pub struct NodeId(usize);
 
 impl NodeId {
-    /// Creates a node identifier.
-    pub const fn new(
-        id: usize,
-    ) -> Self {
+    /// Creates an identifier.
+    pub const fn new(id: usize) -> Self {
         Self(id)
     }
 
-    /// Returns the underlying identifier.
-    pub const fn index(
-        self,
-    ) -> usize {
+    /// Returns the numeric identifier.
+    pub const fn index(self) -> usize {
         self.0
     }
 }
@@ -404,11 +370,7 @@ impl fmt::Display for NodeId {
     }
 }
 
-// ============================================================================
-// Boundary identifier
-// ============================================================================
-
-/// Stable identifier for a graph boundary.
+/// Stable boundary identifier.
 #[derive(
     Debug,
     Clone,
@@ -419,29 +381,21 @@ impl fmt::Display for NodeId {
     Ord,
     Hash,
 )]
-pub struct BoundaryId(
-    usize,
-);
+pub struct BoundaryId(usize);
 
 impl BoundaryId {
-    /// Creates a boundary identifier.
-    pub const fn new(
-        id: usize,
-    ) -> Self {
+    /// Creates an identifier.
+    pub const fn new(id: usize) -> Self {
         Self(id)
     }
 
-    /// Returns the underlying identifier.
-    pub const fn index(
-        self,
-    ) -> usize {
+    /// Returns the numeric identifier.
+    pub const fn index(self) -> usize {
         self.0
     }
 }
 
-impl fmt::Display
-    for BoundaryId
-{
+impl fmt::Display for BoundaryId {
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -451,10 +405,10 @@ impl fmt::Display
 }
 
 // ============================================================================
-// Graph node
+// Detection node
 // ============================================================================
 
-/// A detection node in the decoding graph.
+/// Detection event represented in the decoding graph.
 #[derive(
     Debug,
     Clone,
@@ -484,28 +438,24 @@ impl DetectionNode {
         }
     }
 
-    /// Returns node identifier.
     pub const fn id(
         &self,
     ) -> NodeId {
         self.id
     }
 
-    /// Returns node coordinate.
     pub fn coordinate(
         &self,
     ) -> &SpaceTimeCoordinate {
         &self.coordinate
     }
 
-    /// Returns stabilizer identifier.
     pub const fn stabilizer(
         &self,
     ) -> StabilizerId {
         self.stabilizer
     }
 
-    /// Returns measurement confidence.
     pub const fn confidence(
         &self,
     ) -> MeasurementConfidence {
@@ -517,10 +467,7 @@ impl DetectionNode {
 // Boundary node
 // ============================================================================
 
-/// A graph boundary.
-///
-/// Boundary nodes represent error chains terminating at a physical or
-/// logical boundary instead of another detection event.
+/// A physical or logical decoding boundary.
 #[derive(
     Debug,
     Clone,
@@ -533,7 +480,6 @@ pub struct BoundaryNode {
 }
 
 impl BoundaryNode {
-    /// Creates a boundary node.
     pub fn new(
         id: BoundaryId,
         coordinate: SpaceTimeCoordinate,
@@ -544,14 +490,12 @@ impl BoundaryNode {
         }
     }
 
-    /// Returns the boundary identifier.
     pub const fn id(
         &self,
     ) -> BoundaryId {
         self.id
     }
 
-    /// Returns the boundary coordinate.
     pub fn coordinate(
         &self,
     ) -> &SpaceTimeCoordinate {
@@ -563,7 +507,7 @@ impl BoundaryNode {
 // Graph endpoint
 // ============================================================================
 
-/// Endpoint of a decoding-graph edge.
+/// Endpoint of a decoding graph edge.
 #[derive(
     Debug,
     Clone,
@@ -575,15 +519,14 @@ impl BoundaryNode {
     Hash,
 )]
 pub enum GraphEndpoint {
-    /// Detection-event node.
+    /// Detection event.
     Detection(NodeId),
 
-    /// Boundary node.
+    /// Physical or logical boundary.
     Boundary(BoundaryId),
 }
 
 impl GraphEndpoint {
-    /// Returns true if the endpoint is a detection node.
     pub const fn is_detection(
         self,
     ) -> bool {
@@ -593,7 +536,6 @@ impl GraphEndpoint {
         )
     }
 
-    /// Returns true if the endpoint is a boundary.
     pub const fn is_boundary(
         self,
     ) -> bool {
@@ -608,7 +550,7 @@ impl GraphEndpoint {
 // Edge kind
 // ============================================================================
 
-/// Physical interpretation of a decoding-graph edge.
+/// Semantic type of a candidate error path.
 #[derive(
     Debug,
     Clone,
@@ -620,19 +562,19 @@ impl GraphEndpoint {
     Hash,
 )]
 pub enum EdgeKind {
-    /// Spatial propagation of an error.
+    /// Spatial propagation.
     Spatial,
 
-    /// Temporal propagation caused by measurement/storage faults.
+    /// Temporal propagation.
     Temporal,
 
-    /// Combined spatial and temporal propagation.
+    /// Combined spatial/temporal propagation.
     SpaceTime,
 
-    /// Connection to a physical/logical boundary.
+    /// Connection to a boundary.
     Boundary,
 
-    /// Explicitly supplied backend-specific edge.
+    /// Backend-specific edge.
     Custom,
 }
 
@@ -640,21 +582,7 @@ pub enum EdgeKind {
 // Edge weight
 // ============================================================================
 
-/// Exact bounded non-negative decoding weight.
-///
-/// MWPM traditionally uses:
-///
-/// ```text
-/// w = -log(p / (1-p))
-/// ```
-///
-/// or another decoder-specific log-likelihood convention.
-///
-/// This module does not prescribe the matching convention. It stores a
-/// validated non-negative integer weight so that the graph remains
-/// deterministic and free from NaN/infinity.
-///
-/// A backend can construct weights using [`EdgeWeight::from_probability`].
+/// Bounded deterministic edge weight.
 #[derive(
     Debug,
     Clone,
@@ -665,9 +593,7 @@ pub enum EdgeKind {
     Ord,
     Hash,
 )]
-pub struct EdgeWeight(
-    u64,
-);
+pub struct EdgeWeight(u64);
 
 impl EdgeWeight {
     /// Zero weight.
@@ -688,98 +614,48 @@ impl EdgeWeight {
         Ok(Self(value))
     }
 
-    /// Returns the underlying weight.
-    pub const fn value(
-        self,
-    ) -> u64 {
+    /// Returns the numeric weight.
+    pub const fn value(self) -> u64 {
         self.0
     }
 
-    /// Creates a weight from a fixed-point probability.
+    /// Creates a bounded weight from a probability.
     ///
-    /// This uses a deterministic fixed-point approximation of:
+    /// The probability is supplied as fixed-point:
     ///
-    /// ```text
-    /// -ln(p)
-    /// ```
+    /// `1_000_000_000_000 == 1.0`
     ///
-    /// It is intentionally conservative and finite.
-    ///
-    /// For a production decoder, a calibrated backend may supply its own
-    /// weights using [`EdgeWeight::new`].
+    /// The conversion uses `-ln(p)` and stores a fixed integer scale.
+    /// Decoder decisions themselves remain integer-only.
     pub fn from_probability(
         probability: u64,
     ) -> Result<Self, DecodingGraphError> {
         if probability == 0
-            || probability
-                > PROBABILITY_SCALE
+            || probability > PROBABILITY_SCALE
         {
             return Err(
                 DecodingGraphError::InvalidProbability,
             );
         }
 
-        if probability
-            == PROBABILITY_SCALE
+        let p =
+            probability as f64
+                / PROBABILITY_SCALE as f64;
+
+        let raw = -p.ln() * 1_000_000.0;
+
+        if !raw.is_finite()
+            || raw < 0.0
+            || raw > MAX_WEIGHT as f64
         {
-            return Ok(Self::ZERO);
+            return Err(
+                DecodingGraphError::WeightOutOfRange {
+                    value: MAX_WEIGHT,
+                },
+            );
         }
 
-        let ratio =
-            PROBABILITY_SCALE
-                .checked_div(
-                    probability,
-                )
-                .ok_or(
-                    DecodingGraphError::ArithmeticOverflow,
-                )?;
-
-        let ratio =
-            ratio.max(1);
-
-        let mut value =
-            0u64;
-
-        let mut current =
-            ratio;
-
-        while current > 1 {
-            current /= 2;
-
-            value =
-                value
-                    .checked_add(
-                        693_147_180_559,
-                    )
-                    .ok_or(
-                        DecodingGraphError::ArithmeticOverflow,
-                    )?;
-
-            if value
-                >= MAX_WEIGHT
-            {
-                return Ok(
-                    Self(MAX_WEIGHT),
-                );
-            }
-        }
-
-        Self::new(value)
-    }
-
-    /// Adds two weights with overflow and maximum checks.
-    pub fn checked_add(
-        self,
-        other: Self,
-    ) -> Result<Self, DecodingGraphError> {
-        let value =
-            self.0
-                .checked_add(other.0)
-                .ok_or(
-                    DecodingGraphError::WeightOverflow,
-                )?;
-
-        Self::new(value)
+        Self::new(raw.round() as u64)
     }
 }
 
@@ -787,7 +663,7 @@ impl EdgeWeight {
 // Graph edge
 // ============================================================================
 
-/// Weighted candidate physical-error path.
+/// Weighted candidate error path.
 #[derive(
     Debug,
     Clone,
@@ -795,91 +671,316 @@ impl EdgeWeight {
     Eq,
 )]
 pub struct GraphEdge {
-    from: GraphEndpoint,
-    to: GraphEndpoint,
-    kind: EdgeKind,
+    first: GraphEndpoint,
+    second: GraphEndpoint,
     weight: EdgeWeight,
+    kind: EdgeKind,
 }
 
 impl GraphEdge {
-    /// Creates a graph edge.
+    /// Creates an edge.
+    ///
+    /// Endpoints are canonicalized so deterministic equality and ordering are
+    /// preserved regardless of insertion direction.
     pub fn new(
-        from: GraphEndpoint,
-        to: GraphEndpoint,
-        kind: EdgeKind,
+        first: GraphEndpoint,
+        second: GraphEndpoint,
         weight: EdgeWeight,
+        kind: EdgeKind,
     ) -> Result<Self, DecodingGraphError> {
-        if from == to {
+        if first == second {
             return Err(
                 DecodingGraphError::SelfLoop,
             );
         }
 
+        let (first, second) =
+            canonical_endpoints(first, second);
+
+        if kind == EdgeKind::Boundary
+            && !(
+                first.is_boundary()
+                    || second.is_boundary()
+            )
+        {
+            return Err(
+                DecodingGraphError::BoundaryEdgeRequiresBoundary,
+            );
+        }
+
         Ok(Self {
-            from,
-            to,
-            kind,
+            first,
+            second,
             weight,
+            kind,
         })
     }
 
-    /// Returns the source endpoint.
-    pub const fn from(
+    /// First canonical endpoint.
+    pub const fn first(
         &self,
     ) -> GraphEndpoint {
-        self.from
+        self.first
     }
 
-    /// Returns the destination endpoint.
-    pub const fn to(
+    /// Second canonical endpoint.
+    pub const fn second(
         &self,
     ) -> GraphEndpoint {
-        self.to
+        self.second
     }
 
-    /// Returns the edge kind.
-    pub const fn kind(
-        &self,
-    ) -> EdgeKind {
-        self.kind
-    }
-
-    /// Returns the decoding weight.
+    /// Edge weight.
     pub const fn weight(
         &self,
     ) -> EdgeWeight {
         self.weight
     }
 
-    /// Returns true when this edge touches a boundary.
+    /// Edge semantic kind.
+    pub const fn kind(
+        &self,
+    ) -> EdgeKind {
+        self.kind
+    }
+
+    /// Returns true if this edge touches a boundary.
     pub const fn touches_boundary(
         &self,
     ) -> bool {
-        self.from.is_boundary()
-            || self.to.is_boundary()
+        self.first.is_boundary()
+            || self.second.is_boundary()
     }
 
-    /// Returns true when this is an ordinary detection-to-detection edge.
-    pub const fn connects_detections(
+    /// Returns the opposite endpoint.
+    pub fn other(
         &self,
-    ) -> bool {
-        self.from.is_detection()
-            && self.to.is_detection()
+        endpoint: GraphEndpoint,
+    ) -> Option<GraphEndpoint> {
+        if endpoint == self.first {
+            Some(self.second)
+        } else if endpoint == self.second {
+            Some(self.first)
+        } else {
+            None
+        }
     }
 }
 
 // ============================================================================
-// Graph
+// Graph configuration
 // ============================================================================
 
-/// Deterministic bounded space-time decoding graph.
+/// Graph construction policy.
 ///
-/// The graph uses ordered maps/sets so that:
-///
-/// - insertion order does not affect iteration;
-/// - serialization can be deterministic;
-/// - decoder behavior can be reproducible;
-/// - malformed duplicate topology is rejected.
+/// `QecLimits` is the authoritative execution/resource policy.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+)]
+pub struct DecodingGraphConfig {
+    limits: QecLimits,
+}
+
+impl DecodingGraphConfig {
+    /// Creates a graph configuration from central QEC limits.
+    pub fn new(
+        limits: QecLimits,
+    ) -> Result<Self, DecodingGraphError> {
+        limits
+            .validate()
+            .map_err(DecodingGraphError::Limit)?;
+
+        Ok(Self { limits })
+    }
+
+    /// Returns the resource policy.
+    pub const fn limits(
+        &self,
+    ) -> QecLimits {
+        self.limits
+    }
+}
+
+impl Default for DecodingGraphConfig {
+    fn default() -> Self {
+        Self {
+            limits: QecLimits::new(),
+        }
+    }
+}
+
+// ============================================================================
+// Graph resource estimate
+// ============================================================================
+
+/// Resource estimate generated before graph allocation.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+)]
+pub struct GraphResourceEstimate {
+    detection_nodes: usize,
+    boundary_nodes: usize,
+    edges: usize,
+    estimated_memory_bytes: u64,
+}
+
+impl GraphResourceEstimate {
+    /// Calculates an estimate without allocating graph storage.
+    pub fn calculate(
+        detection_nodes: usize,
+        boundary_nodes: usize,
+        edges: usize,
+    ) -> Result<Self, DecodingGraphError> {
+        let detection_bytes =
+            (detection_nodes as u64)
+                .checked_mul(
+                    ESTIMATED_NODE_BYTES,
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        let boundary_bytes =
+            (boundary_nodes as u64)
+                .checked_mul(
+                    ESTIMATED_BOUNDARY_BYTES,
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        let edge_bytes =
+            (edges as u64)
+                .checked_mul(
+                    ESTIMATED_EDGE_BYTES,
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        let total =
+            ESTIMATED_GRAPH_BASE_BYTES
+                .checked_add(
+                    detection_bytes,
+                )
+                .and_then(|v| {
+                    v.checked_add(
+                        boundary_bytes,
+                    )
+                })
+                .and_then(|v| {
+                    v.checked_add(edge_bytes)
+                })
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        Ok(Self {
+            detection_nodes,
+            boundary_nodes,
+            edges,
+            estimated_memory_bytes: total,
+        })
+    }
+
+    pub const fn detection_nodes(
+        self,
+    ) -> usize {
+        self.detection_nodes
+    }
+
+    pub const fn boundary_nodes(
+        self,
+    ) -> usize {
+        self.boundary_nodes
+    }
+
+    pub const fn edges(
+        self,
+    ) -> usize {
+        self.edges
+    }
+
+    pub const fn estimated_memory_bytes(
+        self,
+    ) -> u64 {
+        self.estimated_memory_bytes
+    }
+
+    /// Validates the estimate against central QEC limits.
+    pub fn validate_against(
+        &self,
+        limits: &QecLimits,
+    ) -> Result<(), DecodingGraphError> {
+        limits
+            .validate()
+            .map_err(DecodingGraphError::Limit)?;
+
+        let nodes = self
+            .detection_nodes
+            .checked_add(
+                self.boundary_nodes,
+            )
+            .ok_or(
+                DecodingGraphError::ArithmeticOverflow,
+            )?;
+
+        if nodes > limits.max_graph_nodes {
+            return Err(
+                DecodingGraphError::Limit(
+                    LimitError::GraphNodes {
+                        requested: nodes,
+                        maximum:
+                            limits.max_graph_nodes,
+                    },
+                ),
+            );
+        }
+
+        if self.edges > limits.max_graph_edges {
+            return Err(
+                DecodingGraphError::Limit(
+                    LimitError::GraphEdges {
+                        requested: self.edges,
+                        maximum:
+                            limits.max_graph_edges,
+                    },
+                ),
+            );
+        }
+
+        if self.estimated_memory_bytes
+            > limits.max_memory_bytes
+        {
+            return Err(
+                DecodingGraphError::Limit(
+                    LimitError::MemoryBytes {
+                        requested:
+                            self.estimated_memory_bytes,
+                        maximum:
+                            limits.max_memory_bytes,
+                    },
+                ),
+            );
+        }
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Decoding graph
+// ============================================================================
+
+/// Deterministic bounded decoding graph.
 #[derive(
     Debug,
     Clone,
@@ -887,6 +988,8 @@ impl GraphEdge {
     Eq,
 )]
 pub struct DecodingGraph {
+    config: DecodingGraphConfig,
+
     nodes:
         BTreeMap<
             NodeId,
@@ -901,14 +1004,20 @@ pub struct DecodingGraph {
 
     edges:
         BTreeMap<
-            GraphEdgeKey,
+            (GraphEndpoint, GraphEndpoint),
             GraphEdge,
         >,
 
-    coordinate_index:
+    detection_index:
+        BTreeMap<
+            DetectionKey,
+            NodeId,
+        >,
+
+    boundary_index:
         BTreeMap<
             SpaceTimeCoordinate,
-            NodeId,
+            BoundaryId,
         >,
 
     next_node_id: usize,
@@ -916,9 +1025,40 @@ pub struct DecodingGraph {
 }
 
 impl DecodingGraph {
-    /// Creates an empty decoding graph.
+    /// Creates an empty graph using the default QEC resource policy.
     pub fn new() -> Self {
-        Self {
+        Self::with_config(
+            DecodingGraphConfig::default(),
+        )
+        .expect(
+            "default QEC limits must be valid",
+        )
+    }
+
+    /// Creates an empty graph using explicit QEC limits.
+    pub fn new_with_limits(
+        limits: &QecLimits,
+    ) -> Result<Self, DecodingGraphError> {
+        let config =
+            DecodingGraphConfig::new(
+                *limits,
+            )?;
+
+        Self::with_config(config)
+    }
+
+    /// Creates an empty graph from an explicit configuration.
+    pub fn with_config(
+        config: DecodingGraphConfig,
+    ) -> Result<Self, DecodingGraphError> {
+        config
+            .limits
+            .validate()
+            .map_err(DecodingGraphError::Limit)?;
+
+        Ok(Self {
+            config,
+
             nodes:
                 BTreeMap::new(),
 
@@ -928,12 +1068,52 @@ impl DecodingGraph {
             edges:
                 BTreeMap::new(),
 
-            coordinate_index:
+            detection_index:
+                BTreeMap::new(),
+
+            boundary_index:
                 BTreeMap::new(),
 
             next_node_id: 0,
             next_boundary_id: 0,
-        }
+        })
+    }
+
+    /// Returns the graph resource policy.
+    pub const fn limits(
+        &self,
+    ) -> QecLimits {
+        self.config.limits()
+    }
+
+    /// Returns the graph configuration.
+    pub const fn config(
+        &self,
+    ) -> DecodingGraphConfig {
+        self.config
+    }
+
+    /// Performs allocation-free resource preflight.
+    pub fn preflight(
+        limits: &QecLimits,
+        detection_nodes: usize,
+        boundary_nodes: usize,
+        edges: usize,
+    ) -> Result<
+        GraphResourceEstimate,
+        DecodingGraphError,
+    > {
+        let estimate =
+            GraphResourceEstimate::calculate(
+                detection_nodes,
+                boundary_nodes,
+                edges,
+            )?;
+
+        estimate
+            .validate_against(limits)?;
+
+        Ok(estimate)
     }
 
     /// Returns the number of detection nodes.
@@ -950,21 +1130,31 @@ impl DecodingGraph {
         self.boundaries.len()
     }
 
-    /// Returns the number of edges.
+    /// Returns the total graph-node count.
+    pub fn total_node_count(
+        &self,
+    ) -> usize {
+        self.node_count()
+            .saturating_add(
+                self.boundary_count(),
+            )
+    }
+
+    /// Returns the edge count.
     pub fn edge_count(
         &self,
     ) -> usize {
         self.edges.len()
     }
 
-    /// Returns true when the graph contains no detection nodes.
+    /// Returns true when no detection nodes exist.
     pub fn is_empty(
         &self,
     ) -> bool {
         self.nodes.is_empty()
     }
 
-    /// Returns an iterator over detection nodes in deterministic order.
+    /// Returns detection nodes in deterministic ID order.
     pub fn nodes(
         &self,
     ) -> impl Iterator<
@@ -973,7 +1163,16 @@ impl DecodingGraph {
         self.nodes.values()
     }
 
-    /// Returns an iterator over boundary nodes.
+    /// Returns detection nodes.
+    pub fn detection_nodes(
+        &self,
+    ) -> impl Iterator<
+        Item = &DetectionNode,
+    > {
+        self.nodes.values()
+    }
+
+    /// Returns boundaries in deterministic ID order.
     pub fn boundaries(
         &self,
     ) -> impl Iterator<
@@ -982,7 +1181,7 @@ impl DecodingGraph {
         self.boundaries.values()
     }
 
-    /// Returns an iterator over edges in deterministic order.
+    /// Returns all edges in deterministic endpoint order.
     pub fn edges(
         &self,
     ) -> impl Iterator<
@@ -991,7 +1190,7 @@ impl DecodingGraph {
         self.edges.values()
     }
 
-    /// Looks up a detection node.
+    /// Gets a detection node.
     pub fn node(
         &self,
         id: NodeId,
@@ -999,7 +1198,7 @@ impl DecodingGraph {
         self.nodes.get(&id)
     }
 
-    /// Looks up a boundary node.
+    /// Gets a boundary node.
     pub fn boundary(
         &self,
         id: BoundaryId,
@@ -1007,43 +1206,56 @@ impl DecodingGraph {
         self.boundaries.get(&id)
     }
 
-    /// Finds a detection node by space-time coordinate.
-    pub fn node_at(
-        &self,
-        coordinate: &SpaceTimeCoordinate,
-    ) -> Option<NodeId> {
-        self.coordinate_index
-            .get(coordinate)
-            .copied()
+    /// Adds a detection event using an explicit spatial coordinate.
+    ///
+    /// The graph owns the space-time coordinate; the syndrome layer owns the
+    /// event semantics.
+    pub fn add_detection_event(
+        &mut self,
+        event: DetectionEvent,
+        spatial: SpatialCoordinate,
+    ) -> Result<NodeId, DecodingGraphError> {
+        if !event.value() {
+            return Err(
+                DecodingGraphError::InactiveDetectionEvent,
+            );
+        }
+
+        let coordinate =
+            SpaceTimeCoordinate::new(
+                spatial,
+                event.round(),
+            )?;
+
+        self.add_detection_node(
+            coordinate,
+            event.stabilizer(),
+            event.confidence(),
+        )
     }
 
     /// Adds a detection node.
-    ///
-    /// The same space-time coordinate may not identify two different
-    /// detection nodes.
-    pub fn add_detection(
+    pub fn add_detection_node(
         &mut self,
         coordinate: SpaceTimeCoordinate,
         stabilizer: StabilizerId,
         confidence: MeasurementConfidence,
     ) -> Result<NodeId, DecodingGraphError> {
-        if self.nodes.len()
-            >= MAX_DETECTION_NODES
-        {
-            return Err(
-                DecodingGraphError::TooManyNodes {
-                    limit:
-                        MAX_DETECTION_NODES,
-                },
-            );
-        }
+        self.check_node_capacity(1)?;
+
+        let key =
+            DetectionKey {
+                coordinate:
+                    coordinate.clone(),
+                stabilizer,
+            };
 
         if self
-            .coordinate_index
-            .contains_key(&coordinate)
+            .detection_index
+            .contains_key(&key)
         {
             return Err(
-                DecodingGraphError::DuplicateNodeCoordinate,
+                DecodingGraphError::DuplicateDetectionNode,
             );
         }
 
@@ -1056,30 +1268,29 @@ impl DecodingGraph {
             self.next_node_id
                 .checked_add(1)
                 .ok_or(
-                    DecodingGraphError::NodeIdOverflow,
+                    DecodingGraphError::IdentifierOverflow,
                 )?;
 
         let node =
             DetectionNode::new(
                 id,
-                coordinate.clone(),
+                coordinate,
                 stabilizer,
                 confidence,
             );
 
-        self.nodes
-            .insert(id, node);
+        self.nodes.insert(
+            id,
+            node,
+        );
 
-        self.coordinate_index
-            .insert(
-                coordinate,
-                id,
-            );
+        self.detection_index
+            .insert(key, id);
 
         Ok(id)
     }
 
-    /// Adds a boundary node.
+    /// Adds a physical/logical boundary.
     pub fn add_boundary(
         &mut self,
         coordinate: SpaceTimeCoordinate,
@@ -1087,14 +1298,14 @@ impl DecodingGraph {
         BoundaryId,
         DecodingGraphError,
     > {
-        if self.boundaries.len()
-            >= MAX_BOUNDARY_NODES
+        self.check_node_capacity(1)?;
+
+        if self
+            .boundary_index
+            .contains_key(&coordinate)
         {
             return Err(
-                DecodingGraphError::TooManyBoundaries {
-                    limit:
-                        MAX_BOUNDARY_NODES,
-                },
+                DecodingGraphError::DuplicateBoundary,
             );
         }
 
@@ -1107,51 +1318,49 @@ impl DecodingGraph {
             self.next_boundary_id
                 .checked_add(1)
                 .ok_or(
-                    DecodingGraphError::BoundaryIdOverflow,
+                    DecodingGraphError::IdentifierOverflow,
                 )?;
+
+        let boundary =
+            BoundaryNode::new(
+                id,
+                coordinate.clone(),
+            );
 
         self.boundaries.insert(
             id,
-            BoundaryNode::new(
-                id,
-                coordinate,
-            ),
+            boundary,
         );
+
+        self.boundary_index
+            .insert(coordinate, id);
 
         Ok(id)
     }
 
-    /// Adds an edge.
-    ///
-    /// The graph is undirected. Therefore `(A,B)` and `(B,A)` are considered
-    /// the same edge.
+    /// Adds a weighted graph edge.
     pub fn add_edge(
         &mut self,
-        edge: GraphEdge,
+        first: GraphEndpoint,
+        second: GraphEndpoint,
+        weight: EdgeWeight,
+        kind: EdgeKind,
     ) -> Result<(), DecodingGraphError> {
-        self.validate_endpoint(
-            edge.from(),
-        )?;
+        self.ensure_endpoint_exists(first)?;
+        self.ensure_endpoint_exists(second)?;
 
-        self.validate_endpoint(
-            edge.to(),
-        )?;
-
-        if self.edges.len()
-            >= MAX_GRAPH_EDGES
-        {
-            return Err(
-                DecodingGraphError::TooManyEdges {
-                    limit:
-                        MAX_GRAPH_EDGES,
-                },
-            );
-        }
+        let edge =
+            GraphEdge::new(
+                first,
+                second,
+                weight,
+                kind,
+            )?;
 
         let key =
-            GraphEdgeKey::new(
-                edge.from(),
-                edge.to(),
+            canonical_endpoints(
+                edge.first(),
+                edge.second(),
             );
 
         if self.edges.contains_key(&key) {
@@ -1159,6 +1368,8 @@ impl DecodingGraph {
                 DecodingGraphError::DuplicateEdge,
             );
         }
+
+        self.check_edge_capacity(1)?;
 
         self.edges.insert(
             key,
@@ -1168,46 +1379,24 @@ impl DecodingGraph {
         Ok(())
     }
 
-    /// Adds an edge from two endpoints.
-    pub fn connect(
-        &mut self,
-        from: GraphEndpoint,
-        to: GraphEndpoint,
-        kind: EdgeKind,
-        weight: EdgeWeight,
-    ) -> Result<(), DecodingGraphError> {
-        self.add_edge(
-            GraphEdge::new(
-                from,
-                to,
-                kind,
-                weight,
-            )?,
-        )
-    }
+    /// Returns an edge between two endpoints.
+    pub fn edge(
+        &self,
+        first: GraphEndpoint,
+        second: GraphEndpoint,
+    ) -> Option<&GraphEdge> {
+        let key =
+            canonical_endpoints(
+                first,
+                second,
+            );
 
-    /// Adds an edge using a physical probability.
-    pub fn connect_with_probability(
-        &mut self,
-        from: GraphEndpoint,
-        to: GraphEndpoint,
-        kind: EdgeKind,
-        probability: u64,
-    ) -> Result<(), DecodingGraphError> {
-        let weight =
-            EdgeWeight::from_probability(
-                probability,
-            )?;
-
-        self.connect(
-            from,
-            to,
-            kind,
-            weight,
-        )
+        self.edges.get(&key)
     }
 
     /// Returns edges incident to an endpoint.
+    ///
+    /// Results are deterministic.
     pub fn incident_edges(
         &self,
         endpoint: GraphEndpoint,
@@ -1216,321 +1405,323 @@ impl DecodingGraph {
             .values()
             .filter(
                 |edge| {
-                    edge.from() == endpoint
-                        || edge.to()
+                    edge.first() == endpoint
+                        || edge.second()
                             == endpoint
                 },
             )
             .collect()
     }
 
-    /// Validates all graph invariants.
+    /// Returns graph neighbours for an endpoint.
+    ///
+    /// The result is deterministic and contains no duplicates.
+    pub fn neighbours(
+        &self,
+        endpoint: GraphEndpoint,
+    ) -> Vec<GraphEndpoint> {
+        let mut result =
+            BTreeSet::new();
+
+        for edge in self.edges.values() {
+            if edge.first() == endpoint {
+                result.insert(
+                    edge.second(),
+                );
+            } else if edge.second()
+                == endpoint
+            {
+                result.insert(
+                    edge.first(),
+                );
+            }
+        }
+
+        result.into_iter().collect()
+    }
+
+    /// US spelling compatibility alias.
+    pub fn neighbors(
+        &self,
+        endpoint: GraphEndpoint,
+    ) -> Vec<GraphEndpoint> {
+        self.neighbours(endpoint)
+    }
+
+    /// Validates the complete graph.
     pub fn validate(
         &self,
     ) -> Result<(), DecodingGraphError> {
+        self.limits()
+            .validate()
+            .map_err(
+                DecodingGraphError::Limit,
+            )?;
+
+        Self::preflight(
+            &self.limits(),
+            self.node_count(),
+            self.boundary_count(),
+            self.edge_count(),
+        )?;
+
         if self.nodes.len()
-            > MAX_DETECTION_NODES
+            != self.detection_index.len()
         {
             return Err(
-                DecodingGraphError::TooManyNodes {
-                    limit:
-                        MAX_DETECTION_NODES,
-                },
+                DecodingGraphError::IndexMismatch,
             );
         }
 
         if self.boundaries.len()
-            > MAX_BOUNDARY_NODES
+            != self.boundary_index.len()
         {
             return Err(
-                DecodingGraphError::TooManyBoundaries {
-                    limit:
-                        MAX_BOUNDARY_NODES,
-                },
+                DecodingGraphError::IndexMismatch,
             );
         }
 
-        if self.edges.len()
-            > MAX_GRAPH_EDGES
-        {
-            return Err(
-                DecodingGraphError::TooManyEdges {
-                    limit:
-                        MAX_GRAPH_EDGES,
-                },
-            );
-        }
-
-        for (
-            id,
-            node,
-        ) in &self.nodes
-        {
+        for (id, node) in &self.nodes {
             if *id != node.id() {
                 return Err(
-                    DecodingGraphError::NodeIdentityMismatch,
+                    DecodingGraphError::NodeIdMismatch,
                 );
             }
 
-            match self
-                .coordinate_index
-                .get(node.coordinate())
-            {
-                Some(indexed_id)
-                    if indexed_id == id => {}
-
-                _ => {
-                    return Err(
-                        DecodingGraphError::CoordinateIndexCorruption,
-                    );
-                }
-            }
-        }
-
-        let mut coordinates =
-            BTreeSet::new();
-
-        for node in self.nodes.values() {
-            if !coordinates
-                .insert(
-                    node.coordinate()
-                        .clone(),
-                )
+            if node.coordinate()
+                .round()
+                .value()
+                > MAX_GRAPH_ROUND
             {
                 return Err(
-                    DecodingGraphError::DuplicateNodeCoordinate,
+                    DecodingGraphError::InvalidRound {
+                        round: node
+                            .coordinate()
+                            .round()
+                            .value(),
+                    },
                 );
             }
         }
 
+        for (id, boundary)
+            in &self.boundaries
+        {
+            if *id != boundary.id() {
+                return Err(
+                    DecodingGraphError::BoundaryIdMismatch,
+                );
+            }
+        }
+
+        let mut seen_edges =
+            BTreeSet::new();
+
         for edge in self.edges.values() {
-            self.validate_endpoint(
-                edge.from(),
+            let first =
+                edge.first();
+            let second =
+                edge.second();
+
+            self.ensure_endpoint_exists(
+                first,
             )?;
 
-            self.validate_endpoint(
-                edge.to(),
+            self.ensure_endpoint_exists(
+                second,
             )?;
+
+            if first == second {
+                return Err(
+                    DecodingGraphError::SelfLoop,
+                );
+            }
+
+            let key =
+                canonical_endpoints(
+                    first,
+                    second,
+                );
+
+            if !seen_edges.insert(key) {
+                return Err(
+                    DecodingGraphError::DuplicateEdge,
+                );
+            }
+
+            if edge.weight().value()
+                > MAX_WEIGHT
+            {
+                return Err(
+                    DecodingGraphError::WeightOutOfRange {
+                        value: edge
+                            .weight()
+                            .value(),
+                    },
+                );
+            }
         }
 
         Ok(())
     }
 
-    /// Builds a graph directly from detection events.
-    ///
-    /// Every detection event becomes one graph node.
-    ///
-    /// This method deliberately does not infer physical adjacency. Topology
-    /// must be supplied explicitly through [`DecodingGraph::connect`].
-    ///
-    /// The stabilizer ID is used as the first spatial coordinate and the
-    /// measurement round as time. This provides a deterministic generic
-    /// representation suitable for initial graph construction.
-    pub fn from_detection_events(
-        events: &[DetectionEvent],
-    ) -> Result<Self, DecodingGraphError> {
-        let mut graph =
-            Self::new();
+    /// Returns a deterministic graph resource estimate.
+    pub fn resource_estimate(
+        &self,
+    ) -> Result<
+        GraphResourceEstimate,
+        DecodingGraphError,
+    > {
+        GraphResourceEstimate::calculate(
+            self.node_count(),
+            self.boundary_count(),
+            self.edge_count(),
+        )
+    }
 
-        for event in events {
-            let stabilizer =
-                event
-                    .stabilizer()
-                    .index();
+    // ------------------------------------------------------------------------
+    // Internal capacity checks
+    // ------------------------------------------------------------------------
 
-            if stabilizer
-                > MAX_COORDINATE_ABS as usize
-            {
-                return Err(
-                    DecodingGraphError::CoordinateOutOfRange {
-                        value:
-                            stabilizer as i64,
+    fn check_node_capacity(
+        &self,
+        additional: usize,
+    ) -> Result<(), DecodingGraphError> {
+        let requested_detection =
+            self.node_count()
+                .checked_add(
+                    additional,
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        let total =
+            requested_detection
+                .checked_add(
+                    self.boundary_count(),
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        if total
+            > self
+                .limits()
+                .max_graph_nodes
+        {
+            return Err(
+                DecodingGraphError::Limit(
+                    LimitError::GraphNodes {
+                        requested: total,
+                        maximum:
+                            self.limits()
+                                .max_graph_nodes,
                     },
-                );
-            }
+                ),
+            );
+        }
 
-            let spatial =
-                SpatialCoordinate::new(
-                    vec![
-                        stabilizer as i64,
-                    ],
-                )?;
-
-            let coordinate =
-                SpaceTimeCoordinate::new(
-                    spatial,
-                    event.round(),
-                )?;
-
-            graph.add_detection(
-                coordinate,
-                event.stabilizer(),
-                event.confidence(),
+        let estimate =
+            GraphResourceEstimate::calculate(
+                requested_detection,
+                self.boundary_count(),
+                self.edge_count(),
             )?;
+
+        if estimate
+            .estimated_memory_bytes()
+            > self
+                .limits()
+                .max_memory_bytes
+        {
+            return Err(
+                DecodingGraphError::Limit(
+                    LimitError::MemoryBytes {
+                        requested:
+                            estimate
+                                .estimated_memory_bytes(),
+                        maximum:
+                            self.limits()
+                                .max_memory_bytes,
+                    },
+                ),
+            );
         }
 
-        graph.validate()?;
-
-        Ok(graph)
+        Ok(())
     }
 
-    /// Connects two detection nodes with an explicitly supplied weight.
-    pub fn connect_detections(
-        &mut self,
-        from: NodeId,
-        to: NodeId,
-        kind: EdgeKind,
-        weight: EdgeWeight,
+    fn check_edge_capacity(
+        &self,
+        additional: usize,
     ) -> Result<(), DecodingGraphError> {
-        if !self.nodes.contains_key(&from)
+        let requested =
+            self.edge_count()
+                .checked_add(
+                    additional,
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        if requested
+            > self
+                .limits()
+                .max_graph_edges
         {
             return Err(
-                DecodingGraphError::UnknownNode {
-                    node: from,
-                },
+                DecodingGraphError::Limit(
+                    LimitError::GraphEdges {
+                        requested,
+                        maximum:
+                            self.limits()
+                                .max_graph_edges,
+                    },
+                ),
             );
         }
 
-        if !self.nodes.contains_key(&to)
+        let estimate =
+            GraphResourceEstimate::calculate(
+                self.node_count(),
+                self.boundary_count(),
+                requested,
+            )?;
+
+        if estimate
+            .estimated_memory_bytes()
+            > self
+                .limits()
+                .max_memory_bytes
         {
             return Err(
-                DecodingGraphError::UnknownNode {
-                    node: to,
-                },
+                DecodingGraphError::Limit(
+                    LimitError::MemoryBytes {
+                        requested:
+                            estimate
+                                .estimated_memory_bytes(),
+                        maximum:
+                            self.limits()
+                                .max_memory_bytes,
+                    },
+                ),
             );
         }
 
-        self.connect(
-            GraphEndpoint::Detection(from),
-            GraphEndpoint::Detection(to),
-            kind,
-            weight,
-        )
+        Ok(())
     }
 
-    /// Connects a detection node to a boundary.
-    pub fn connect_boundary(
-        &mut self,
-        node: NodeId,
-        boundary: BoundaryId,
-        weight: EdgeWeight,
-    ) -> Result<(), DecodingGraphError> {
-        if !self.nodes.contains_key(&node)
-        {
-            return Err(
-                DecodingGraphError::UnknownNode {
-                    node,
-                },
-            );
-        }
-
-        if !self
-            .boundaries
-            .contains_key(&boundary)
-        {
-            return Err(
-                DecodingGraphError::UnknownBoundary {
-                    boundary,
-                },
-            );
-        }
-
-        self.connect(
-            GraphEndpoint::Detection(node),
-            GraphEndpoint::Boundary(
-                boundary,
-            ),
-            EdgeKind::Boundary,
-            weight,
-        )
-    }
-
-    /// Returns all graph nodes at a measurement round.
-    pub fn nodes_at_round(
-        &self,
-        round: MeasurementRound,
-    ) -> Vec<&DetectionNode> {
-        self.nodes
-            .values()
-            .filter(
-                |node| {
-                    node.coordinate()
-                        .round()
-                        == round
-                },
-            )
-            .collect()
-    }
-
-    /// Returns all detection nodes belonging to a stabilizer.
-    pub fn nodes_for_stabilizer(
-        &self,
-        stabilizer: StabilizerId,
-    ) -> Vec<&DetectionNode> {
-        self.nodes
-            .values()
-            .filter(
-                |node| {
-                    node.stabilizer()
-                        == stabilizer
-                },
-            )
-            .collect()
-    }
-
-    /// Returns the highest measurement round represented by the graph.
-    pub fn maximum_round(
-        &self,
-    ) -> Option<MeasurementRound> {
-        self.nodes
-            .values()
-            .map(
-                |node| {
-                    node.coordinate()
-                        .round()
-                },
-            )
-            .max()
-    }
-
-    /// Returns the earliest measurement round represented by the graph.
-    pub fn minimum_round(
-        &self,
-    ) -> Option<MeasurementRound> {
-        self.nodes
-            .values()
-            .map(
-                |node| {
-                    node.coordinate()
-                        .round()
-                },
-            )
-            .min()
-    }
-
-    /// Removes all graph contents.
-    pub fn clear(
-        &mut self,
-    ) {
-        self.nodes.clear();
-        self.boundaries.clear();
-        self.edges.clear();
-        self.coordinate_index.clear();
-        self.next_node_id = 0;
-        self.next_boundary_id = 0;
-    }
-
-    fn validate_endpoint(
+    fn ensure_endpoint_exists(
         &self,
         endpoint: GraphEndpoint,
     ) -> Result<(), DecodingGraphError> {
         match endpoint {
             GraphEndpoint::Detection(id) => {
-                if !self.nodes.contains_key(&id)
-                {
+                if !self.nodes.contains_key(&id) {
                     return Err(
                         DecodingGraphError::UnknownNode {
-                            node: id,
+                            id,
                         },
                     );
                 }
@@ -1543,7 +1734,7 @@ impl DecodingGraph {
                 {
                     return Err(
                         DecodingGraphError::UnknownBoundary {
-                            boundary: id,
+                            id,
                         },
                     );
                 }
@@ -1561,49 +1752,45 @@ impl Default for DecodingGraph {
 }
 
 // ============================================================================
-// Edge key
+// Internal indexing
 // ============================================================================
 
-/// Canonical key for an undirected edge.
 #[derive(
     Debug,
     Clone,
-    Copy,
     PartialEq,
     Eq,
     PartialOrd,
     Ord,
-    Hash,
 )]
-struct GraphEdgeKey {
-    first: GraphEndpoint,
-    second: GraphEndpoint,
+struct DetectionKey {
+    coordinate: SpaceTimeCoordinate,
+    stabilizer: StabilizerId,
 }
 
-impl GraphEdgeKey {
-    fn new(
-        first: GraphEndpoint,
-        second: GraphEndpoint,
-    ) -> Self {
-        if first <= second {
-            Self {
-                first,
-                second,
-            }
-        } else {
-            Self {
-                first: second,
-                second: first,
-            }
-        }
+// ============================================================================
+// Canonical ordering
+// ============================================================================
+
+fn canonical_endpoints(
+    first: GraphEndpoint,
+    second: GraphEndpoint,
+) -> (
+    GraphEndpoint,
+    GraphEndpoint,
+) {
+    if first <= second {
+        (first, second)
+    } else {
+        (second, first)
     }
 }
 
 // ============================================================================
-// Error type
+// Errors
 // ============================================================================
 
-/// Errors returned by decoding-graph construction and validation.
+/// Errors produced by decoding graph construction and validation.
 #[derive(
     Debug,
     Clone,
@@ -1611,97 +1798,67 @@ impl GraphEdgeKey {
     Eq,
 )]
 pub enum DecodingGraphError {
-    /// Coordinate contains no dimensions.
     EmptyCoordinate,
 
-    /// Coordinate has more dimensions than supported.
     TooManyDimensions {
         dimensions: usize,
         limit: usize,
     },
 
-    /// Coordinate component exceeds the supported range.
     CoordinateOutOfRange {
         value: i64,
     },
 
-    /// Two coordinates use different dimensions.
     DimensionMismatch,
 
-    /// Measurement round exceeds the graph limit.
+    ArithmeticOverflow,
+
     InvalidRound {
         round: u64,
     },
 
-    /// Timestamp exceeds the graph limit.
     InvalidTimestamp {
         timestamp: u64,
     },
 
-    /// Probability is zero or greater than one.
     InvalidProbability,
 
-    /// A graph weight exceeds the supported maximum.
     WeightOutOfRange {
         value: u64,
     },
 
-    /// Weight addition overflowed.
-    WeightOverflow,
-
-    /// Generic arithmetic overflow.
-    ArithmeticOverflow,
-
-    /// Too many detection nodes.
-    TooManyNodes {
-        limit: usize,
-    },
-
-    /// Too many boundary nodes.
-    TooManyBoundaries {
-        limit: usize,
-    },
-
-    /// Too many graph edges.
-    TooManyEdges {
-        limit: usize,
-    },
-
-    /// Node identifier counter overflowed.
-    NodeIdOverflow,
-
-    /// Boundary identifier counter overflowed.
-    BoundaryIdOverflow,
-
-    /// Two detection nodes have the same space-time coordinate.
-    DuplicateNodeCoordinate,
-
-    /// The same edge was inserted twice.
-    DuplicateEdge,
-
-    /// An edge connects an endpoint that does not exist.
-    UnknownNode {
-        node: NodeId,
-    },
-
-    /// An edge references a boundary that does not exist.
-    UnknownBoundary {
-        boundary: BoundaryId,
-    },
-
-    /// An edge connects an endpoint to itself.
     SelfLoop,
 
-    /// Node's stored identity disagrees with its map key.
-    NodeIdentityMismatch,
+    BoundaryEdgeRequiresBoundary,
 
-    /// Coordinate index does not point to its node.
-    CoordinateIndexCorruption,
+    DuplicateDetectionNode,
+
+    DuplicateBoundary,
+
+    DuplicateEdge,
+
+    InactiveDetectionEvent,
+
+    IdentifierOverflow,
+
+    UnknownNode {
+        id: NodeId,
+    },
+
+    UnknownBoundary {
+        id: BoundaryId,
+    },
+
+    IndexMismatch,
+
+    NodeIdMismatch,
+
+    BoundaryIdMismatch,
+
+    Limit(LimitError),
 }
 
-impl fmt::Display
-    for DecodingGraphError
-{
+impl fmt::Display for DecodingGraphError {
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -1710,7 +1867,7 @@ impl fmt::Display
             Self::EmptyCoordinate => {
                 write!(
                     f,
-                    "space coordinate cannot be empty"
+                    "spatial coordinate cannot be empty"
                 )
             }
 
@@ -1740,12 +1897,19 @@ impl fmt::Display
                 )
             }
 
+            Self::ArithmeticOverflow => {
+                write!(
+                    f,
+                    "arithmetic overflow in decoding graph"
+                )
+            }
+
             Self::InvalidRound {
                 round,
             } => {
                 write!(
                     f,
-                    "invalid measurement round: {round}"
+                    "invalid graph measurement round: {round}"
                 )
             }
 
@@ -1754,14 +1918,14 @@ impl fmt::Display
             } => {
                 write!(
                     f,
-                    "invalid measurement timestamp: {timestamp}"
+                    "invalid graph timestamp: {timestamp}"
                 )
             }
 
             Self::InvalidProbability => {
                 write!(
                     f,
-                    "probability must be greater than zero and no greater than one"
+                    "probability must be in the range (0, 1]"
                 )
             }
 
@@ -1770,94 +1934,7 @@ impl fmt::Display
             } => {
                 write!(
                     f,
-                    "graph weight {value} exceeds the maximum supported weight"
-                )
-            }
-
-            Self::WeightOverflow => {
-                write!(
-                    f,
-                    "graph-weight arithmetic overflow"
-                )
-            }
-
-            Self::ArithmeticOverflow => {
-                write!(
-                    f,
-                    "arithmetic overflow"
-                )
-            }
-
-            Self::TooManyNodes {
-                limit,
-            } => {
-                write!(
-                    f,
-                    "decoding graph exceeds node limit {limit}"
-                )
-            }
-
-            Self::TooManyBoundaries {
-                limit,
-            } => {
-                write!(
-                    f,
-                    "decoding graph exceeds boundary limit {limit}"
-                )
-            }
-
-            Self::TooManyEdges {
-                limit,
-            } => {
-                write!(
-                    f,
-                    "decoding graph exceeds edge limit {limit}"
-                )
-            }
-
-            Self::NodeIdOverflow => {
-                write!(
-                    f,
-                    "decoding graph node identifier overflow"
-                )
-            }
-
-            Self::BoundaryIdOverflow => {
-                write!(
-                    f,
-                    "decoding graph boundary identifier overflow"
-                )
-            }
-
-            Self::DuplicateNodeCoordinate => {
-                write!(
-                    f,
-                    "two detection nodes cannot occupy the same space-time coordinate"
-                )
-            }
-
-            Self::DuplicateEdge => {
-                write!(
-                    f,
-                    "decoding graph edge already exists"
-                )
-            }
-
-            Self::UnknownNode {
-                node,
-            } => {
-                write!(
-                    f,
-                    "unknown detection node {node}"
-                )
-            }
-
-            Self::UnknownBoundary {
-                boundary,
-            } => {
-                write!(
-                    f,
-                    "unknown boundary {boundary}"
+                    "edge weight {value} exceeds the supported maximum"
                 )
             }
 
@@ -1868,17 +1945,91 @@ impl fmt::Display
                 )
             }
 
-            Self::NodeIdentityMismatch => {
+            Self::BoundaryEdgeRequiresBoundary => {
                 write!(
                     f,
-                    "detection-node identity invariant violated"
+                    "a Boundary edge must touch a boundary endpoint"
                 )
             }
 
-            Self::CoordinateIndexCorruption => {
+            Self::DuplicateDetectionNode => {
                 write!(
                     f,
-                    "space-time coordinate index invariant violated"
+                    "duplicate detection node"
+                )
+            }
+
+            Self::DuplicateBoundary => {
+                write!(
+                    f,
+                    "duplicate boundary"
+                )
+            }
+
+            Self::DuplicateEdge => {
+                write!(
+                    f,
+                    "duplicate graph edge"
+                )
+            }
+
+            Self::InactiveDetectionEvent => {
+                write!(
+                    f,
+                    "inactive detection event cannot become a graph node"
+                )
+            }
+
+            Self::IdentifierOverflow => {
+                write!(
+                    f,
+                    "graph identifier overflow"
+                )
+            }
+
+            Self::UnknownNode {
+                id,
+            } => {
+                write!(
+                    f,
+                    "unknown graph node {id}"
+                )
+            }
+
+            Self::UnknownBoundary {
+                id,
+            } => {
+                write!(
+                    f,
+                    "unknown graph boundary {id}"
+                )
+            }
+
+            Self::IndexMismatch => {
+                write!(
+                    f,
+                    "graph index does not match graph storage"
+                )
+            }
+
+            Self::NodeIdMismatch => {
+                write!(
+                    f,
+                    "graph node identifier mismatch"
+                )
+            }
+
+            Self::BoundaryIdMismatch => {
+                write!(
+                    f,
+                    "graph boundary identifier mismatch"
+                )
+            }
+
+            Self::Limit(error) => {
+                write!(
+                    f,
+                    "{error}"
                 )
             }
         }
@@ -1887,8 +2038,7 @@ impl fmt::Display
 
 impl std::error::Error
     for DecodingGraphError
-{
-}
+{}
 
 // ============================================================================
 // Tests
@@ -1898,483 +2048,206 @@ impl std::error::Error
 mod tests {
     use super::*;
 
+    fn limits() -> QecLimits {
+        let mut limits =
+            QecLimits::new();
+
+        limits.max_graph_nodes = 32;
+        limits.max_graph_edges = 64;
+        limits.max_memory_bytes = 64 * 1024;
+
+        limits
+    }
+
     fn round(
         value: u64,
     ) -> MeasurementRound {
-        MeasurementRound::new(
-            value,
-        )
-        .unwrap()
+        MeasurementRound::new(value)
+            .expect(
+                "test round must be valid",
+            )
     }
 
-    fn timestamp(
-        value: u64,
-    ) -> MeasurementTimestamp {
-        MeasurementTimestamp::new(
-            value,
-        )
-        .unwrap()
-    }
-
-    fn confidence()
-        -> MeasurementConfidence
-    {
-        MeasurementConfidence::FULL
-    }
-
-    #[test]
-    fn coordinate_creation_is_deterministic() {
-        let coordinate =
-            SpatialCoordinate::xy(
-                2,
-                3,
+    fn coordinate(
+        x: i64,
+        y: i64,
+    ) -> SpatialCoordinate {
+        SpatialCoordinate::xy(x, y)
+            .expect(
+                "test coordinate must be valid",
             )
-            .unwrap();
-
-        assert_eq!(
-            coordinate.values(),
-            &[2, 3]
-        );
-
-        assert_eq!(
-            coordinate.to_string(),
-            "(2,3)"
-        );
-    }
-
-    #[test]
-    fn empty_coordinate_is_rejected() {
-        assert_eq!(
-            SpatialCoordinate::new(
-                Vec::new(),
-            ),
-            Err(
-                DecodingGraphError::EmptyCoordinate
-            )
-        );
-    }
-
-    #[test]
-    fn excessive_coordinate_dimensions_are_rejected() {
-        assert_eq!(
-            SpatialCoordinate::new(
-                vec![
-                    0;
-                    MAX_SPATIAL_DIMENSIONS
-                        + 1
-                ],
-            ),
-            Err(
-                DecodingGraphError::TooManyDimensions {
-                    dimensions:
-                        MAX_SPATIAL_DIMENSIONS
-                            + 1,
-                    limit:
-                        MAX_SPATIAL_DIMENSIONS,
-                }
-            )
-        );
-    }
-
-    #[test]
-    fn manhattan_distance_is_correct() {
-        let a =
-            SpatialCoordinate::xy(
-                1,
-                2,
-            )
-            .unwrap();
-
-        let b =
-            SpatialCoordinate::xy(
-                4,
-                6,
-            )
-            .unwrap();
-
-        assert_eq!(
-            a.manhattan_distance(&b)
-                .unwrap(),
-            7
-        );
-    }
-
-    #[test]
-    fn dimension_mismatch_is_rejected() {
-        let a =
-            SpatialCoordinate::xy(
-                1,
-                2,
-            )
-            .unwrap();
-
-        let b =
-            SpatialCoordinate::xyz(
-                1,
-                2,
-                3,
-            )
-            .unwrap();
-
-        assert_eq!(
-            a.manhattan_distance(&b),
-            Err(
-                DecodingGraphError::DimensionMismatch
-            )
-        );
     }
 
     #[test]
     fn graph_starts_empty() {
         let graph =
-            DecodingGraph::new();
+            DecodingGraph::new_with_limits(
+                &limits(),
+            )
+            .expect(
+                "graph creation should succeed",
+            );
+
+        assert_eq!(
+            graph.node_count(),
+            0
+        );
+
+        assert_eq!(
+            graph.boundary_count(),
+            0
+        );
+
+        assert_eq!(
+            graph.edge_count(),
+            0
+        );
 
         assert!(
             graph.is_empty()
         );
+    }
+
+    #[test]
+    fn coordinate_distance_is_checked() {
+        let a =
+            coordinate(0, 0);
+
+        let b =
+            coordinate(3, 4);
 
         assert_eq!(
-            graph.node_count(),
-            0
-        );
-
-        assert_eq!(
-            graph.boundary_count(),
-            0
-        );
-
-        assert_eq!(
-            graph.edge_count(),
-            0
+            a.manhattan_distance(&b)
+                .expect(
+                    "distance should succeed",
+                ),
+            7
         );
     }
 
     #[test]
-    fn detection_node_can_be_added() {
+    fn duplicate_detection_nodes_are_rejected() {
         let mut graph =
-            DecodingGraph::new();
-
-        let coordinate =
-            SpaceTimeCoordinate::new(
-                SpatialCoordinate::xy(
-                    1,
-                    2,
-                )
-                .unwrap(),
-                round(3),
+            DecodingGraph::new_with_limits(
+                &limits(),
             )
             .unwrap();
 
-        let id =
-            graph
-                .add_detection(
-                    coordinate,
-                    StabilizerId::new(4),
-                    confidence(),
-                )
-                .unwrap();
-
-        assert_eq!(
-            id.index(),
-            0
-        );
-
-        assert_eq!(
-            graph.node_count(),
-            1
-        );
-
-        assert_eq!(
-            graph.node(id)
-                .unwrap()
-                .stabilizer(),
-            StabilizerId::new(4)
-        );
-    }
-
-    #[test]
-    fn duplicate_coordinate_is_rejected() {
-        let mut graph =
-            DecodingGraph::new();
-
         let coordinate =
             SpaceTimeCoordinate::new(
-                SpatialCoordinate::xy(
-                    1,
-                    2,
-                )
-                .unwrap(),
-                round(3),
-            )
-            .unwrap();
-
-        graph
-            .add_detection(
-                coordinate.clone(),
-                StabilizerId::new(0),
-                confidence(),
-            )
-            .unwrap();
-
-        assert_eq!(
-            graph.add_detection(
-                coordinate,
-                StabilizerId::new(1),
-                confidence(),
-            ),
-            Err(
-                DecodingGraphError::DuplicateNodeCoordinate
-            )
-        );
-    }
-
-    #[test]
-    fn coordinate_index_returns_node() {
-        let mut graph =
-            DecodingGraph::new();
-
-        let coordinate =
-            SpaceTimeCoordinate::new(
-                SpatialCoordinate::xy(
-                    7,
-                    9,
-                )
-                .unwrap(),
-                round(4),
-            )
-            .unwrap();
-
-        let id =
-            graph
-                .add_detection(
-                    coordinate.clone(),
-                    StabilizerId::new(2),
-                    confidence(),
-                )
-                .unwrap();
-
-        assert_eq!(
-            graph.node_at(&coordinate),
-            Some(id)
-        );
-    }
-
-    #[test]
-    fn boundary_can_be_added() {
-        let mut graph =
-            DecodingGraph::new();
-
-        let coordinate =
-            SpaceTimeCoordinate::new(
-                SpatialCoordinate::xy(
-                    0,
-                    0,
-                )
-                .unwrap(),
+                coordinate(1, 2),
                 round(0),
             )
             .unwrap();
 
-        let boundary =
-            graph
-                .add_boundary(
-                    coordinate,
-                )
-                .unwrap();
-
-        assert_eq!(
-            boundary.index(),
-            0
-        );
-
-        assert_eq!(
-            graph.boundary_count(),
-            1
-        );
-    }
-
-    #[test]
-    fn edge_can_connect_detection_nodes() {
-        let mut graph =
-            DecodingGraph::new();
-
-        let first =
-            graph
-                .add_detection(
-                    SpaceTimeCoordinate::new(
-                        SpatialCoordinate::xy(
-                            0,
-                            0,
-                        )
-                        .unwrap(),
-                        round(0),
-                    )
-                    .unwrap(),
-                    StabilizerId::new(0),
-                    confidence(),
-                )
-                .unwrap();
-
-        let second =
-            graph
-                .add_detection(
-                    SpaceTimeCoordinate::new(
-                        SpatialCoordinate::xy(
-                            1,
-                            0,
-                        )
-                        .unwrap(),
-                        round(0),
-                    )
-                    .unwrap(),
-                    StabilizerId::new(1),
-                    confidence(),
-                )
-                .unwrap();
-
         graph
-            .connect_detections(
-                first,
-                second,
-                EdgeKind::Spatial,
-                EdgeWeight::new(10)
-                    .unwrap(),
+            .add_detection_node(
+                coordinate.clone(),
+                StabilizerId::new(0),
+                MeasurementConfidence::FULL,
             )
             .unwrap();
 
-        assert_eq!(
-            graph.edge_count(),
-            1
-        );
-    }
-
-    #[test]
-    fn duplicate_undirected_edge_is_rejected() {
-        let mut graph =
-            DecodingGraph::new();
-
-        let first =
-            graph
-                .add_detection(
-                    SpaceTimeCoordinate::new(
-                        SpatialCoordinate::xy(
-                            0,
-                            0,
-                        )
-                        .unwrap(),
-                        round(0),
-                    )
-                    .unwrap(),
-                    StabilizerId::new(0),
-                    confidence(),
-                )
-                .unwrap();
-
-        let second =
-            graph
-                .add_detection(
-                    SpaceTimeCoordinate::new(
-                        SpatialCoordinate::xy(
-                            1,
-                            0,
-                        )
-                        .unwrap(),
-                        round(0),
-                    )
-                    .unwrap(),
-                    StabilizerId::new(1),
-                    confidence(),
-                )
-                .unwrap();
-
-        graph
-            .connect_detections(
-                first,
-                second,
-                EdgeKind::Spatial,
-                EdgeWeight::new(10)
-                    .unwrap(),
-            )
-            .unwrap();
-
-        assert_eq!(
-            graph.connect_detections(
-                second,
-                first,
-                EdgeKind::Spatial,
-                EdgeWeight::new(10)
-                    .unwrap(),
-            ),
-            Err(
-                DecodingGraphError::DuplicateEdge
-            )
-        );
-    }
-
-    #[test]
-    fn self_loop_is_rejected() {
-        let endpoint =
-            GraphEndpoint::Detection(
-                NodeId::new(0),
+        let result =
+            graph.add_detection_node(
+                coordinate,
+                StabilizerId::new(0),
+                MeasurementConfidence::FULL,
             );
 
         assert_eq!(
-            GraphEdge::new(
-                endpoint,
-                endpoint,
-                EdgeKind::Spatial,
-                EdgeWeight::ZERO,
-            ),
+            result,
             Err(
-                DecodingGraphError::SelfLoop
+                DecodingGraphError::
+                    DuplicateDetectionNode
             )
         );
     }
 
     #[test]
-    fn unknown_detection_node_is_rejected() {
+    fn duplicate_edges_are_rejected() {
         let mut graph =
-            DecodingGraph::new();
+            DecodingGraph::new_with_limits(
+                &limits(),
+            )
+            .unwrap();
+
+        let a =
+            graph
+                .add_detection_node(
+                    SpaceTimeCoordinate::new(
+                        coordinate(0, 0),
+                        round(0),
+                    )
+                    .unwrap(),
+                    StabilizerId::new(0),
+                    MeasurementConfidence::FULL,
+                )
+                .unwrap();
+
+        let b =
+            graph
+                .add_detection_node(
+                    SpaceTimeCoordinate::new(
+                        coordinate(1, 0),
+                        round(0),
+                    )
+                    .unwrap(),
+                    StabilizerId::new(1),
+                    MeasurementConfidence::FULL,
+                )
+                .unwrap();
+
+        let first =
+            GraphEndpoint::Detection(a);
+
+        let second =
+            GraphEndpoint::Detection(b);
+
+        graph
+            .add_edge(
+                first,
+                second,
+                EdgeWeight::new(1).unwrap(),
+                EdgeKind::Spatial,
+            )
+            .unwrap();
+
+        let result =
+            graph.add_edge(
+                second,
+                first,
+                EdgeWeight::new(1).unwrap(),
+                EdgeKind::Spatial,
+            );
 
         assert_eq!(
-            graph.connect(
-                GraphEndpoint::Detection(
-                    NodeId::new(999),
-                ),
-                GraphEndpoint::Detection(
-                    NodeId::new(1000),
-                ),
-                EdgeKind::Spatial,
-                EdgeWeight::ZERO,
-            ),
+            result,
             Err(
-                DecodingGraphError::UnknownNode {
-                    node:
-                        NodeId::new(999),
-                }
+                DecodingGraphError::
+                    DuplicateEdge
             )
         );
     }
 
     #[test]
-    fn boundary_connection_is_supported() {
+    fn boundaries_are_real_graph_endpoints() {
         let mut graph =
-            DecodingGraph::new();
+            DecodingGraph::new_with_limits(
+                &limits(),
+            )
+            .unwrap();
 
         let node =
             graph
-                .add_detection(
+                .add_detection_node(
                     SpaceTimeCoordinate::new(
-                        SpatialCoordinate::xy(
-                            2,
-                            2,
-                        )
-                        .unwrap(),
-                        round(1),
+                        coordinate(0, 0),
+                        round(0),
                     )
                     .unwrap(),
-                    StabilizerId::new(2),
-                    confidence(),
+                    StabilizerId::new(0),
+                    MeasurementConfidence::FULL,
                 )
                 .unwrap();
 
@@ -2382,25 +2255,28 @@ mod tests {
             graph
                 .add_boundary(
                     SpaceTimeCoordinate::new(
-                        SpatialCoordinate::xy(
-                            0,
-                            2,
-                        )
-                        .unwrap(),
-                        round(1),
+                        coordinate(0, -1),
+                        round(0),
                     )
                     .unwrap(),
                 )
                 .unwrap();
 
         graph
-            .connect_boundary(
-                node,
-                boundary,
-                EdgeWeight::new(5)
-                    .unwrap(),
+            .add_edge(
+                GraphEndpoint::Detection(node),
+                GraphEndpoint::Boundary(
+                    boundary,
+                ),
+                EdgeWeight::new(5).unwrap(),
+                EdgeKind::Boundary,
             )
             .unwrap();
+
+        assert_eq!(
+            graph.boundary_count(),
+            1
+        );
 
         assert_eq!(
             graph.edge_count(),
@@ -2408,392 +2284,81 @@ mod tests {
         );
 
         assert!(
-            graph
-                .edges()
-                .next()
-                .unwrap()
-                .touches_boundary()
+            graph.validate().is_ok()
         );
     }
 
     #[test]
-    fn graph_validation_succeeds_for_valid_graph() {
+    fn resource_preflight_happens_before_graph_allocation() {
+        let mut limits =
+            limits();
+
+        limits.max_graph_nodes = 2;
+        limits.max_graph_edges = 1;
+
+        let result =
+            DecodingGraph::preflight(
+                &limits,
+                3,
+                0,
+                0,
+            );
+
+        assert!(matches!(
+            result,
+            Err(
+                DecodingGraphError::Limit(
+                    LimitError::GraphNodes {
+                        ..
+                    }
+                )
+            )
+        ));
+    }
+
+    #[test]
+    fn graph_iteration_is_deterministic() {
         let mut graph =
-            DecodingGraph::new();
+            DecodingGraph::new_with_limits(
+                &limits(),
+            )
+            .unwrap();
 
         let first =
             graph
-                .add_detection(
+                .add_detection_node(
                     SpaceTimeCoordinate::new(
-                        SpatialCoordinate::xy(
-                            0,
-                            0,
-                        )
-                        .unwrap(),
-                        round(0),
+                        coordinate(5, 5),
+                        round(1),
                     )
                     .unwrap(),
-                    StabilizerId::new(0),
-                    confidence(),
+                    StabilizerId::new(5),
+                    MeasurementConfidence::FULL,
                 )
                 .unwrap();
 
         let second =
             graph
-                .add_detection(
-                    SpaceTimeCoordinate::xy(
-                        1,
-                        0,
-                    )
-                    .unwrap()
-                    .into_space_time(
+                .add_detection_node(
+                    SpaceTimeCoordinate::new(
+                        coordinate(1, 1),
                         round(0),
-                    ),
+                    )
+                    .unwrap(),
                     StabilizerId::new(1),
-                    confidence(),
+                    MeasurementConfidence::FULL,
                 )
                 .unwrap();
 
-        graph
-            .connect_detections(
-                first,
-                second,
-                EdgeKind::Spatial,
-                EdgeWeight::new(10)
-                    .unwrap(),
-            )
-            .unwrap();
-
-        assert!(
-            graph.validate().is_ok()
-        );
-    }
-
-    #[test]
-    fn graph_can_be_created_from_detection_events() {
-        let mut syndrome =
-            super::super::syndrome::Syndrome::new(
-                round(1),
-                timestamp(100),
-            );
-
-        syndrome
-            .insert(
-                super::super::syndrome::SyndromeMeasurement::new(
-                    StabilizerId::new(0),
-                    true,
-                    confidence(),
-                ),
-            )
-            .unwrap();
-
-        let previous =
-            super::super::syndrome::Syndrome::new(
-                round(0),
-                timestamp(90),
-            );
-
-        let mut previous =
-            previous;
-
-        previous
-            .insert(
-                super::super::syndrome::SyndromeMeasurement::new(
-                    StabilizerId::new(0),
-                    false,
-                    confidence(),
-                ),
-            )
-            .unwrap();
-
-        let events =
-            syndrome
-                .detection_events_against(
-                    &previous,
-                )
-                .unwrap();
-
-        let graph =
-            DecodingGraph::from_detection_events(
-                &events,
-            )
-            .unwrap();
-
-        assert_eq!(
-            graph.node_count(),
-            1
-        );
-
-        assert_eq!(
-            graph.edge_count(),
-            0
-        );
-
-        assert!(
-            graph.validate().is_ok()
-        );
-    }
-
-    #[test]
-    fn nodes_can_be_filtered_by_round() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_detection(
-                SpaceTimeCoordinate::new(
-                    SpatialCoordinate::xy(
-                        0,
-                        0,
-                    )
-                    .unwrap(),
-                    round(0),
-                )
-                .unwrap(),
-                StabilizerId::new(0),
-                confidence(),
-            )
-            .unwrap();
-
-        graph
-            .add_detection(
-                SpaceTimeCoordinate::new(
-                    SpatialCoordinate::xy(
-                        1,
-                        0,
-                    )
-                    .unwrap(),
-                    round(1),
-                )
-                .unwrap(),
-                StabilizerId::new(1),
-                confidence(),
-            )
-            .unwrap();
-
-        assert_eq!(
+        let ids: Vec<NodeId> =
             graph
-                .nodes_at_round(
-                    round(0),
-                )
-                .len(),
-            1
-        );
+                .nodes()
+                .map(DetectionNode::id)
+                .collect();
 
         assert_eq!(
-            graph
-                .nodes_at_round(
-                    round(1),
-                )
-                .len(),
-            1
+            ids,
+            vec![first, second]
         );
-    }
-
-    #[test]
-    fn nodes_can_be_filtered_by_stabilizer() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_detection(
-                SpaceTimeCoordinate::new(
-                    SpatialCoordinate::xy(
-                        0,
-                        0,
-                    )
-                    .unwrap(),
-                    round(0),
-                )
-                .unwrap(),
-                StabilizerId::new(5),
-                confidence(),
-            )
-            .unwrap();
-
-        graph
-            .add_detection(
-                SpaceTimeCoordinate::new(
-                    SpatialCoordinate::xy(
-                        0,
-                        1,
-                    )
-                    .unwrap(),
-                    round(1),
-                )
-                .unwrap(),
-                StabilizerId::new(5),
-                confidence(),
-            )
-            .unwrap();
-
-        assert_eq!(
-            graph
-                .nodes_for_stabilizer(
-                    StabilizerId::new(5),
-                )
-                .len(),
-            2
-        );
-    }
-
-    #[test]
-    fn minimum_and_maximum_rounds_are_correct() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_detection(
-                SpaceTimeCoordinate::new(
-                    SpatialCoordinate::xy(
-                        0,
-                        0,
-                    )
-                    .unwrap(),
-                    round(2),
-                )
-                .unwrap(),
-                StabilizerId::new(0),
-                confidence(),
-            )
-            .unwrap();
-
-        graph
-            .add_detection(
-                SpaceTimeCoordinate::new(
-                    SpatialCoordinate::xy(
-                        1,
-                        0,
-                    )
-                    .unwrap(),
-                    round(7),
-                )
-                .unwrap(),
-                StabilizerId::new(1),
-                confidence(),
-            )
-            .unwrap();
-
-        assert_eq!(
-            graph.minimum_round(),
-            Some(round(2))
-        );
-
-        assert_eq!(
-            graph.maximum_round(),
-            Some(round(7))
-        );
-    }
-
-    #[test]
-    fn probability_weight_is_finite_and_bounded() {
-        let weight =
-            EdgeWeight::from_probability(
-                PROBABILITY_SCALE / 2,
-            )
-            .unwrap();
-
-        assert!(
-            weight.value()
-                <= MAX_WEIGHT
-        );
-    }
-
-    #[test]
-    fn invalid_probability_is_rejected() {
-        assert_eq!(
-            EdgeWeight::from_probability(
-                0,
-            ),
-            Err(
-                DecodingGraphError::InvalidProbability
-            )
-        );
-
-        assert_eq!(
-            EdgeWeight::from_probability(
-                PROBABILITY_SCALE + 1,
-            ),
-            Err(
-                DecodingGraphError::InvalidProbability
-            )
-        );
-    }
-
-    #[test]
-    fn weight_addition_is_checked() {
-        let a =
-            EdgeWeight::new(
-                MAX_WEIGHT / 2,
-            )
-            .unwrap();
-
-        let b =
-            EdgeWeight::new(
-                MAX_WEIGHT / 2,
-            )
-            .unwrap();
-
-        assert_eq!(
-            a.checked_add(b)
-                .unwrap()
-                .value(),
-            MAX_WEIGHT
-        );
-    }
-
-    #[test]
-    fn graph_clear_is_complete() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_detection(
-                SpaceTimeCoordinate::new(
-                    SpatialCoordinate::xy(
-                        0,
-                        0,
-                    )
-                    .unwrap(),
-                    round(0),
-                )
-                .unwrap(),
-                StabilizerId::new(0),
-                confidence(),
-            )
-            .unwrap();
-
-        graph.clear();
-
-        assert!(
-            graph.is_empty()
-        );
-
-        assert_eq!(
-            graph.node_count(),
-            0
-        );
-
-        assert_eq!(
-            graph.edge_count(),
-            0
-        );
-    }
-}
-
-// ============================================================================
-// Convenience conversion
-// ============================================================================
-
-impl SpatialCoordinate {
-    /// Converts a spatial coordinate into a space-time coordinate.
-    pub fn into_space_time(
-        self,
-        round: MeasurementRound,
-    ) -> SpaceTimeCoordinate {
-        SpaceTimeCoordinate {
-            spatial: self,
-            round,
-        }
     }
 }
