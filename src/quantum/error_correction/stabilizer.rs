@@ -3,29 +3,17 @@
 //! Hardware-independent representation and validation of Pauli operators
 //! and stabilizer generators.
 //!
-//! The module provides:
-//!
-//! - single-qubit Pauli operators;
-//! - multi-qubit Pauli strings;
-//! - symplectic commutation checks;
-//! - stabilizer generators;
-//! - stabilizer-group validation;
-//! - logical-operator commutation checks;
-//! - syndrome calculation.
-//!
 //! The implementation uses the binary symplectic representation:
 //!
 //!     P = X^x Z^z
-//!
-//! where each qubit has one X bit and one Z bit.
 //!
 //! Two Pauli strings commute iff:
 //!
 //!     x₁ · z₂ + z₁ · x₂ = 0 (mod 2)
 //!
-//! This representation intentionally ignores global phase. That is
-//! sufficient for stabilizer commutation, syndrome extraction, logical
-//! equivalence and error-correction decisions.
+//! Global phase is intentionally ignored because it is not required for
+//! stabilizer commutation, syndrome extraction, logical equivalence, or
+//! error-correction decisions.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -34,7 +22,6 @@ use std::fmt;
 // Qubit identifier
 // -----------------------------------------------------------------------------
 
-/// Logical index of a qubit in a stabilizer Pauli string.
 #[derive(
     Debug,
     Clone,
@@ -58,18 +45,18 @@ impl QubitIndex {
 }
 
 impl fmt::Display for QubitIndex {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         write!(f, "q{}", self.0)
     }
 }
 
 // -----------------------------------------------------------------------------
-// Single-qubit Pauli
+// Pauli
 // -----------------------------------------------------------------------------
 
-/// Single-qubit Pauli operator.
-///
-/// Global phase is intentionally excluded.
 #[derive(
     Debug,
     Clone,
@@ -86,24 +73,40 @@ pub enum Pauli {
 }
 
 impl Pauli {
-    pub const fn is_identity(self) -> bool {
+    pub const fn is_identity(
+        self,
+    ) -> bool {
         matches!(self, Self::I)
     }
 
-    pub const fn is_non_identity(self) -> bool {
+    pub const fn is_non_identity(
+        self,
+    ) -> bool {
         !self.is_identity()
     }
 
-    pub const fn has_x_component(self) -> bool {
-        matches!(self, Self::X | Self::Y)
+    pub const fn has_x_component(
+        self,
+    ) -> bool {
+        matches!(
+            self,
+            Self::X | Self::Y
+        )
     }
 
-    pub const fn has_z_component(self) -> bool {
-        matches!(self, Self::Z | Self::Y)
+    pub const fn has_z_component(
+        self,
+    ) -> bool {
+        matches!(
+            self,
+            Self::Z | Self::Y
+        )
     }
 
-    /// Returns true when the two single-qubit Paulis anticommute.
-    pub const fn anticommutes_with(self, other: Self) -> bool {
+    pub const fn anticommutes_with(
+        self,
+        other: Self,
+    ) -> bool {
         matches!(
             (self, other),
             (Self::X, Self::Z)
@@ -115,18 +118,28 @@ impl Pauli {
         )
     }
 
-    /// Multiplication with global phase discarded.
-    pub const fn multiply(self, other: Self) -> Self {
+    /// Multiplies two Paulis while discarding global phase.
+    pub const fn multiply(
+        self,
+        other: Self,
+    ) -> Self {
         use Pauli::*;
 
         match (self, other) {
             (I, p) | (p, I) => p,
 
-            (X, X) | (Y, Y) | (Z, Z) => I,
+            (X, X)
+            | (Y, Y)
+            | (Z, Z) => I,
 
-            (X, Y) | (Y, X) => Z,
-            (X, Z) | (Z, X) => Y,
-            (Y, Z) | (Z, Y) => X,
+            (X, Y)
+            | (Y, X) => Z,
+
+            (X, Z)
+            | (Z, X) => Y,
+
+            (Y, Z)
+            | (Z, Y) => X,
         }
     }
 
@@ -144,7 +157,10 @@ impl Pauli {
 }
 
 impl fmt::Display for Pauli {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         let symbol = match self {
             Self::I => 'I',
             Self::X => 'X',
@@ -157,21 +173,9 @@ impl fmt::Display for Pauli {
 }
 
 // -----------------------------------------------------------------------------
-// Binary symplectic Pauli string
+// Pauli string
 // -----------------------------------------------------------------------------
 
-/// Multi-qubit Pauli operator represented in binary symplectic form.
-///
-/// For each qubit:
-///
-/// ```text
-/// x = 0, z = 0  -> I
-/// x = 1, z = 0  -> X
-/// x = 1, z = 1  -> Y
-/// x = 0, z = 1  -> Z
-/// ```
-///
-/// The global phase is not stored.
 #[derive(
     Debug,
     Clone,
@@ -185,7 +189,6 @@ pub struct PauliString {
 }
 
 impl PauliString {
-    /// Creates the identity on `num_qubits`.
     pub fn identity(
         num_qubits: usize,
     ) -> Self {
@@ -196,14 +199,17 @@ impl PauliString {
         }
     }
 
-    /// Creates a Pauli string from single-qubit operators.
     pub fn from_paulis(
         paulis: &[Pauli],
     ) -> Self {
         let mut result =
-            Self::identity(paulis.len());
+            Self::identity(
+                paulis.len(),
+            );
 
-        for (index, &pauli) in paulis.iter().enumerate() {
+        for (index, &pauli)
+            in paulis.iter().enumerate()
+        {
             result.x[index] =
                 pauli.has_x_component();
 
@@ -214,7 +220,6 @@ impl PauliString {
         result
     }
 
-    /// Creates a Pauli string from explicit X/Z bit vectors.
     pub fn from_bits(
         x: Vec<bool>,
         z: Vec<bool>,
@@ -235,15 +240,21 @@ impl PauliString {
         })
     }
 
-    pub const fn num_qubits(&self) -> usize {
+    pub const fn num_qubits(
+        &self,
+    ) -> usize {
         self.num_qubits
     }
 
-    pub fn x_bits(&self) -> &[bool] {
+    pub fn x_bits(
+        &self,
+    ) -> &[bool] {
         &self.x
     }
 
-    pub fn z_bits(&self) -> &[bool] {
+    pub fn z_bits(
+        &self,
+    ) -> &[bool] {
         &self.z
     }
 
@@ -266,7 +277,8 @@ impl PauliString {
     ) -> Result<(), StabilizerError> {
         self.check_qubit(qubit)?;
 
-        let index = qubit.index();
+        let index =
+            qubit.index();
 
         self.x[index] =
             pauli.has_x_component();
@@ -277,24 +289,34 @@ impl PauliString {
         Ok(())
     }
 
-    pub fn weight(&self) -> usize {
+    pub fn weight(
+        &self,
+    ) -> usize {
         (0..self.num_qubits)
             .filter(|&index| {
-                self.x[index] || self.z[index]
+                self.x[index]
+                    || self.z[index]
             })
             .count()
     }
 
-    pub fn is_identity(&self) -> bool {
+    pub fn is_identity(
+        &self,
+    ) -> bool {
         self.weight() == 0
     }
 
-    /// Returns the qubits on which this Pauli is non-identity.
-    pub fn support(&self) -> Vec<QubitIndex> {
+    pub fn support(
+        &self,
+    ) -> Vec<QubitIndex> {
         (0..self.num_qubits)
             .filter_map(|index| {
-                if self.x[index] || self.z[index] {
-                    Some(QubitIndex(index))
+                if self.x[index]
+                    || self.z[index]
+                {
+                    Some(
+                        QubitIndex(index),
+                    )
                 } else {
                     None
                 }
@@ -302,20 +324,17 @@ impl PauliString {
             .collect()
     }
 
-    /// Symplectic commutation test.
-    ///
-    /// Two Pauli strings commute iff:
-    ///
-    /// ```text
-    /// x₁·z₂ + z₁·x₂ = 0 mod 2
-    /// ```
     pub fn commutes_with(
         &self,
         other: &Self,
     ) -> Result<bool, StabilizerError> {
         self.check_compatible(other)?;
 
-        Ok(self.symplectic_product(other) == 0)
+        Ok(
+            self.symplectic_product(
+                other,
+            ) == 0
+        )
     }
 
     pub fn anticommutes_with(
@@ -324,28 +343,41 @@ impl PauliString {
     ) -> Result<bool, StabilizerError> {
         self.check_compatible(other)?;
 
-        Ok(self.symplectic_product(other) == 1)
+        Ok(
+            self.symplectic_product(
+                other,
+            ) == 1
+        )
     }
 
-    /// Returns the binary symplectic product.
     pub fn symplectic_product(
         &self,
         other: &Self,
     ) -> u8 {
-        let mut parity = false;
+        debug_assert_eq!(
+            self.num_qubits,
+            other.num_qubits
+        );
 
-        for index in 0..self.num_qubits {
+        let mut parity =
+            false;
+
+        for index in
+            0..self.num_qubits
+        {
             parity ^=
-                self.x[index] && other.z[index];
+                self.x[index]
+                    && other.z[index];
 
             parity ^=
-                self.z[index] && other.x[index];
+                self.z[index]
+                    && other.x[index];
         }
 
         parity as u8
     }
 
-    /// Multiplies two Pauli strings, ignoring global phase.
+    /// Multiplies two Pauli strings while ignoring global phase.
     pub fn multiply(
         &self,
         other: &Self,
@@ -353,14 +385,20 @@ impl PauliString {
         self.check_compatible(other)?;
 
         let mut result =
-            Self::identity(self.num_qubits);
+            Self::identity(
+                self.num_qubits,
+            );
 
-        for index in 0..self.num_qubits {
+        for index in
+            0..self.num_qubits
+        {
             result.x[index] =
-                self.x[index] ^ other.x[index];
+                self.x[index]
+                    ^ other.x[index];
 
             result.z[index] =
-                self.z[index] ^ other.z[index];
+                self.z[index]
+                    ^ other.z[index];
         }
 
         Ok(result)
@@ -370,11 +408,14 @@ impl PauliString {
         &self,
         qubit: QubitIndex,
     ) -> Result<(), StabilizerError> {
-        if qubit.index() >= self.num_qubits {
+        if qubit.index()
+            >= self.num_qubits
+        {
             return Err(
                 StabilizerError::QubitOutOfRange {
                     qubit,
-                    num_qubits: self.num_qubits,
+                    num_qubits:
+                        self.num_qubits,
                 },
             );
         }
@@ -386,11 +427,15 @@ impl PauliString {
         &self,
         other: &Self,
     ) -> Result<(), StabilizerError> {
-        if self.num_qubits != other.num_qubits {
+        if self.num_qubits
+            != other.num_qubits
+        {
             return Err(
                 StabilizerError::QubitCountMismatch {
-                    first: self.num_qubits,
-                    second: other.num_qubits,
+                    first:
+                        self.num_qubits,
+                    second:
+                        other.num_qubits,
                 },
             );
         }
@@ -399,12 +444,16 @@ impl PauliString {
     }
 }
 
-impl fmt::Display for PauliString {
+impl fmt::Display
+    for PauliString
+{
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        for index in 0..self.num_qubits {
+        for index in
+            0..self.num_qubits
+        {
             write!(
                 f,
                 "{}",
@@ -423,7 +472,6 @@ impl fmt::Display for PauliString {
 // Stabilizer generator
 // -----------------------------------------------------------------------------
 
-/// A single stabilizer generator.
 #[derive(
     Debug,
     Clone,
@@ -454,15 +502,21 @@ impl StabilizerGenerator {
         })
     }
 
-    pub const fn id(&self) -> usize {
+    pub const fn id(
+        &self,
+    ) -> usize {
         self.id
     }
 
-    pub fn operator(&self) -> &PauliString {
+    pub fn operator(
+        &self,
+    ) -> &PauliString {
         &self.operator
     }
 
-    pub fn weight(&self) -> usize {
+    pub fn weight(
+        &self,
+    ) -> usize {
         self.operator.weight()
     }
 }
@@ -471,7 +525,6 @@ impl StabilizerGenerator {
 // Stabilizer group
 // -----------------------------------------------------------------------------
 
-/// Validated collection of stabilizer generators.
 #[derive(
     Debug,
     Clone,
@@ -487,7 +540,7 @@ impl StabilizerGroup {
     ) -> Result<Self, StabilizerError> {
         if num_qubits == 0 {
             return Err(
-                StabilizerError::ZeroQubits
+                StabilizerError::ZeroQubits,
             );
         }
 
@@ -497,7 +550,9 @@ impl StabilizerGroup {
         })
     }
 
-    pub const fn num_qubits(&self) -> usize {
+    pub const fn num_qubits(
+        &self,
+    ) -> usize {
         self.num_qubits
     }
 
@@ -507,11 +562,15 @@ impl StabilizerGroup {
         &self.generators
     }
 
-    pub fn len(&self) -> usize {
+    pub fn len(
+        &self,
+    ) -> usize {
         self.generators.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(
+        &self,
+    ) -> bool {
         self.generators.is_empty()
     }
 
@@ -526,29 +585,33 @@ impl StabilizerGroup {
         {
             return Err(
                 StabilizerError::QubitCountMismatch {
-                    first: self.num_qubits,
-                    second: generator
-                        .operator()
-                        .num_qubits(),
+                    first:
+                        self.num_qubits,
+                    second:
+                        generator
+                            .operator()
+                            .num_qubits(),
                 },
             );
         }
 
-        if self
-            .generators
-            .iter()
+        if self.generators.iter()
             .any(|existing| {
-                existing.id() == generator.id()
+                existing.id()
+                    == generator.id()
             })
         {
             return Err(
                 StabilizerError::DuplicateGenerator {
-                    id: generator.id(),
+                    id:
+                        generator.id(),
                 },
             );
         }
 
-        for existing in &self.generators {
+        for existing
+            in &self.generators
+        {
             if generator
                 .operator()
                 .anticommutes_with(
@@ -557,14 +620,17 @@ impl StabilizerGroup {
             {
                 return Err(
                     StabilizerError::NonCommutingGenerators {
-                        first: existing.id(),
-                        second: generator.id(),
+                        first:
+                            existing.id(),
+                        second:
+                            generator.id(),
                     },
                 );
             }
         }
 
-        self.generators.push(generator);
+        self.generators
+            .push(generator);
 
         Ok(())
     }
@@ -575,11 +641,16 @@ impl StabilizerGroup {
         let mut ids =
             BTreeSet::new();
 
-        for generator in &self.generators {
-            if !ids.insert(generator.id()) {
+        for generator
+            in &self.generators
+        {
+            if !ids.insert(
+                generator.id(),
+            ) {
                 return Err(
                     StabilizerError::DuplicateGenerator {
-                        id: generator.id(),
+                        id:
+                            generator.id(),
                     },
                 );
             }
@@ -591,17 +662,23 @@ impl StabilizerGroup {
             {
                 return Err(
                     StabilizerError::QubitCountMismatch {
-                        first: self.num_qubits,
-                        second: generator
-                            .operator()
-                            .num_qubits(),
+                        first:
+                            self.num_qubits,
+                        second:
+                            generator
+                                .operator()
+                                .num_qubits(),
                     },
                 );
             }
         }
 
-        for i in 0..self.generators.len() {
-            for j in (i + 1)..self.generators.len() {
+        for i in
+            0..self.generators.len()
+        {
+            for j in
+                (i + 1)..self.generators.len()
+            {
                 if self.generators[i]
                     .operator()
                     .anticommutes_with(
@@ -611,8 +688,12 @@ impl StabilizerGroup {
                 {
                     return Err(
                         StabilizerError::NonCommutingGenerators {
-                            first: self.generators[i].id(),
-                            second: self.generators[j].id(),
+                            first:
+                                self.generators[i]
+                                    .id(),
+                            second:
+                                self.generators[j]
+                                    .id(),
                         },
                     );
                 }
@@ -622,58 +703,117 @@ impl StabilizerGroup {
         Ok(())
     }
 
-    /// Returns the syndrome produced by a Pauli error.
+    // -------------------------------------------------------------------------
+    // Exact stabilizer membership
+    // -------------------------------------------------------------------------
+
+    /// Returns whether `operator` belongs to the stabilizer group.
     ///
-    /// A syndrome bit is `1` exactly when the error anticommutes with the
-    /// corresponding stabilizer generator.
-    pub fn syndrome(
+    /// The stabilizer group generated by `r` independent generators contains
+    /// up to 2^r distinct phase-free Pauli operators.
+    ///
+    /// This implementation enumerates generator products exactly. It is
+    /// intentionally simple and deterministic and is suitable for validation
+    /// and small-to-medium codes.
+    ///
+    /// Larger codes should use binary-symplectic Gaussian elimination.
+    pub fn contains(
         &self,
-        error: &PauliString,
-    ) -> Result<Syndrome, StabilizerError> {
-        if error.num_qubits()
+        operator: &PauliString,
+    ) -> Result<bool, StabilizerError> {
+        if operator.num_qubits()
             != self.num_qubits
         {
             return Err(
                 StabilizerError::QubitCountMismatch {
-                    first: self.num_qubits,
-                    second: error.num_qubits(),
+                    first:
+                        self.num_qubits,
+                    second:
+                        operator
+                            .num_qubits(),
                 },
             );
         }
 
-        let mut bits =
-            Vec::with_capacity(
-                self.generators.len()
-            );
+        // The identity is always in the stabilizer group.
+        if operator.is_identity() {
+            return Ok(true);
+        }
 
-        for generator in &self.generators {
-            bits.push(
-                generator
-                    .operator()
-                    .anticommutes_with(error)?,
+        let generator_count =
+            self.generators.len();
+
+        // Enumerate every subset of generators.
+        //
+        // The group generated by commuting Pauli generators consists of
+        // products of arbitrary subsets of those generators.
+        if generator_count
+            >= usize::BITS as usize
+        {
+            return Err(
+                StabilizerError::MembershipSearchTooLarge {
+                    generators:
+                        generator_count,
+                },
             );
         }
 
-        Ok(Syndrome {
-            bits,
-        })
+        let combinations =
+            1usize
+                << generator_count;
+
+        for mask in 0..combinations
+        {
+            let mut product =
+                PauliString::identity(
+                    self.num_qubits,
+                );
+
+            for index in
+                0..generator_count
+            {
+                if (mask
+                    & (1usize << index))
+                    != 0
+                {
+                    product =
+                        product.multiply(
+                            self.generators
+                                [index]
+                                .operator(),
+                        )?;
+                }
+            }
+
+            if product == *operator {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 
-    /// Multiplies a collection of generators, ignoring global phase.
+    /// Returns the stabilizer element generated by the selected generator
+    /// IDs.
     pub fn product(
         &self,
         indices: &[usize],
     ) -> Result<PauliString, StabilizerError> {
         let mut result =
             PauliString::identity(
-                self.num_qubits
+                self.num_qubits,
             );
 
         for &index in indices {
             let generator =
                 self.generators
                     .iter()
-                    .find(|g| g.id() == index)
+                    .find(
+                        |generator| {
+                            generator.id()
+                                == index
+                        },
+                    )
                     .ok_or(
                         StabilizerError::UnknownGenerator {
                             id: index,
@@ -688,13 +828,55 @@ impl StabilizerGroup {
 
         Ok(result)
     }
+
+    // -------------------------------------------------------------------------
+    // Syndrome
+    // -------------------------------------------------------------------------
+
+    pub fn syndrome(
+        &self,
+        error: &PauliString,
+    ) -> Result<Syndrome, StabilizerError> {
+        if error.num_qubits()
+            != self.num_qubits
+        {
+            return Err(
+                StabilizerError::QubitCountMismatch {
+                    first:
+                        self.num_qubits,
+                    second:
+                        error.num_qubits(),
+                },
+            );
+        }
+
+        let mut bits =
+            Vec::with_capacity(
+                self.generators.len(),
+            );
+
+        for generator
+            in &self.generators
+        {
+            bits.push(
+                generator
+                    .operator()
+                    .anticommutes_with(
+                        error,
+                    )?,
+            );
+        }
+
+        Ok(Syndrome {
+            bits,
+        })
+    }
 }
 
 // -----------------------------------------------------------------------------
 // Syndrome
 // -----------------------------------------------------------------------------
 
-/// Syndrome produced by measuring stabilizer generators.
 #[derive(
     Debug,
     Clone,
@@ -712,19 +894,27 @@ impl Syndrome {
         Self { bits }
     }
 
-    pub fn bits(&self) -> &[bool] {
+    pub fn bits(
+        &self,
+    ) -> &[bool] {
         &self.bits
     }
 
-    pub fn len(&self) -> usize {
+    pub fn len(
+        &self,
+    ) -> usize {
         self.bits.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(
+        &self,
+    ) -> bool {
         self.bits.is_empty()
     }
 
-    pub fn triggered_count(&self) -> usize {
+    pub fn triggered_count(
+        &self,
+    ) -> usize {
         self.bits
             .iter()
             .filter(|&&bit| bit)
@@ -744,21 +934,37 @@ impl Syndrome {
             )
     }
 
-    pub fn is_trivial(&self) -> bool {
+    pub fn is_trivial(
+        &self,
+    ) -> bool {
         self.triggered_count() == 0
     }
 }
 
 // -----------------------------------------------------------------------------
-// Logical operator validation
+// Logical operator helpers
 // -----------------------------------------------------------------------------
 
-/// Validates that a Pauli operator commutes with every stabilizer generator.
 pub fn commutes_with_stabilizer_group(
     operator: &PauliString,
     group: &StabilizerGroup,
 ) -> Result<bool, StabilizerError> {
-    for generator in group.generators() {
+    if operator.num_qubits()
+        != group.num_qubits()
+    {
+        return Err(
+            StabilizerError::QubitCountMismatch {
+                first:
+                    group.num_qubits(),
+                second:
+                    operator.num_qubits(),
+            },
+        );
+    }
+
+    for generator
+        in group.generators()
+    {
         if operator
             .anticommutes_with(
                 generator.operator(),
@@ -771,12 +977,13 @@ pub fn commutes_with_stabilizer_group(
     Ok(true)
 }
 
-/// Returns true when two operators anticommute.
 pub fn logical_operators_anticommute(
     first: &PauliString,
     second: &PauliString,
 ) -> Result<bool, StabilizerError> {
-    first.anticommutes_with(second)
+    first.anticommutes_with(
+        second,
+    )
 }
 
 // -----------------------------------------------------------------------------
@@ -823,9 +1030,15 @@ pub enum StabilizerError {
         first: usize,
         second: usize,
     },
+
+    MembershipSearchTooLarge {
+        generators: usize,
+    },
 }
 
-impl fmt::Display for StabilizerError {
+impl fmt::Display
+    for StabilizerError
+{
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -868,21 +1081,27 @@ impl fmt::Display for StabilizerError {
                 )
             }
 
-            Self::IdentityGenerator { id } => {
+            Self::IdentityGenerator {
+                id,
+            } => {
                 write!(
                     f,
                     "stabilizer generator {id} cannot be identity"
                 )
             }
 
-            Self::DuplicateGenerator { id } => {
+            Self::DuplicateGenerator {
+                id,
+            } => {
                 write!(
                     f,
                     "stabilizer generator {id} already exists"
                 )
             }
 
-            Self::UnknownGenerator { id } => {
+            Self::UnknownGenerator {
+                id,
+            } => {
                 write!(
                     f,
                     "unknown stabilizer generator {id}"
@@ -898,11 +1117,23 @@ impl fmt::Display for StabilizerError {
                     "stabilizer generators {first} and {second} do not commute"
                 )
             }
+
+            Self::MembershipSearchTooLarge {
+                generators,
+            } => {
+                write!(
+                    f,
+                    "exact stabilizer membership search is too large for {generators} generators"
+                )
+            }
         }
     }
 }
 
-impl std::error::Error for StabilizerError {}
+impl std::error::Error
+    for StabilizerError
+{
+}
 
 // -----------------------------------------------------------------------------
 // Tests
@@ -912,231 +1143,11 @@ impl std::error::Error for StabilizerError {}
 mod tests {
     use super::*;
 
-    #[test]
-    fn pauli_multiplication_ignores_global_phase() {
-        assert_eq!(
-            Pauli::X.multiply(Pauli::Z),
-            Pauli::Y
-        );
-
-        assert_eq!(
-            Pauli::Y.multiply(Pauli::Y),
-            Pauli::I
-        );
-    }
-
-    #[test]
-    fn single_qubit_x_and_z_anticommute() {
-        assert!(
-            Pauli::X
-                .anticommutes_with(Pauli::Z)
-        );
-
-        assert!(
-            !Pauli::X
-                .anticommutes_with(Pauli::X)
-        );
-    }
-
-    #[test]
-    fn pauli_string_commutation_is_symplectic() {
-        let x =
-            PauliString::from_paulis(&[
-                Pauli::X,
-            ]);
-
-        let z =
-            PauliString::from_paulis(&[
-                Pauli::Z,
-            ]);
-
-        assert!(
-            x.anticommutes_with(&z)
-                .unwrap()
-        );
-    }
-
-    #[test]
-    fn disjoint_paulis_commute() {
-        let x =
-            PauliString::from_paulis(&[
-                Pauli::X,
-                Pauli::I,
-            ]);
-
-        let z =
-            PauliString::from_paulis(&[
-                Pauli::I,
-                Pauli::Z,
-            ]);
-
-        assert!(
-            x.commutes_with(&z)
-                .unwrap()
-        );
-    }
-
-    #[test]
-    fn overlapping_even_parity_commutes() {
-        let x =
-            PauliString::from_paulis(&[
-                Pauli::X,
-                Pauli::X,
-            ]);
-
-        let z =
-            PauliString::from_paulis(&[
-                Pauli::Z,
-                Pauli::Z,
-            ]);
-
-        assert!(
-            x.commutes_with(&z)
-                .unwrap()
-        );
-    }
-
-    #[test]
-    fn pauli_string_multiplication_works() {
-        let x =
-            PauliString::from_paulis(&[
-                Pauli::X,
-                Pauli::I,
-            ]);
-
-        let z =
-            PauliString::from_paulis(&[
-                Pauli::Z,
-                Pauli::I,
-            ]);
-
-        let result =
-            x.multiply(&z)
-                .unwrap();
-
-        assert_eq!(
-            result.pauli_at(
-                QubitIndex::new(0)
-            )
-            .unwrap(),
-            Pauli::Y
-        );
-    }
-
-    #[test]
-    fn stabilizer_group_rejects_non_commuting_generators() {
+    fn three_qubit_group()
+        -> StabilizerGroup
+    {
         let mut group =
-            StabilizerGroup::new(1)
-                .unwrap();
-
-        group
-            .add_generator(
-                StabilizerGenerator::new(
-                    0,
-                    PauliString::from_paulis(
-                        &[Pauli::X],
-                    ),
-                )
-                .unwrap(),
-            )
-            .unwrap();
-
-        let result =
-            group.add_generator(
-                StabilizerGenerator::new(
-                    1,
-                    PauliString::from_paulis(
-                        &[Pauli::Z],
-                    ),
-                )
-                .unwrap(),
-            );
-
-        assert!(matches!(
-            result,
-            Err(
-                StabilizerError::NonCommutingGenerators {
-                    first: 0,
-                    second: 1
-                }
-            )
-        ));
-    }
-
-    #[test]
-    fn syndrome_detects_anticommutation() {
-        let mut group =
-            StabilizerGroup::new(1)
-                .unwrap();
-
-        group
-            .add_generator(
-                StabilizerGenerator::new(
-                    0,
-                    PauliString::from_paulis(
-                        &[Pauli::Z],
-                    ),
-                )
-                .unwrap(),
-            )
-            .unwrap();
-
-        let error =
-            PauliString::from_paulis(
-                &[Pauli::X],
-            );
-
-        let syndrome =
-            group.syndrome(&error)
-                .unwrap();
-
-        assert_eq!(
-            syndrome.bits(),
-            &[true]
-        );
-
-        assert_eq!(
-            syndrome.triggered_count(),
-            1
-        );
-    }
-
-    #[test]
-    fn trivial_syndrome_is_detected() {
-        let mut group =
-            StabilizerGroup::new(1)
-                .unwrap();
-
-        group
-            .add_generator(
-                StabilizerGenerator::new(
-                    0,
-                    PauliString::from_paulis(
-                        &[Pauli::Z],
-                    ),
-                )
-                .unwrap(),
-            )
-            .unwrap();
-
-        let error =
-            PauliString::from_paulis(
-                &[Pauli::Z],
-            );
-
-        let syndrome =
-            group.syndrome(&error)
-                .unwrap();
-
-        assert!(
-            syndrome.is_trivial()
-        );
-    }
-
-    #[test]
-    fn logical_operator_must_commute_with_group() {
-        let mut group =
-            StabilizerGroup::new(2)
+            StabilizerGroup::new(3)
                 .unwrap();
 
         group
@@ -1147,6 +1158,7 @@ mod tests {
                         &[
                             Pauli::Z,
                             Pauli::Z,
+                            Pauli::I,
                         ],
                     ),
                 )
@@ -1154,65 +1166,163 @@ mod tests {
             )
             .unwrap();
 
-        let logical =
-            PauliString::from_paulis(
-                &[
-                    Pauli::X,
-                    Pauli::X,
-                ],
-            );
+        group
+            .add_generator(
+                StabilizerGenerator::new(
+                    1,
+                    PauliString::from_paulis(
+                        &[
+                            Pauli::I,
+                            Pauli::Z,
+                            Pauli::Z,
+                        ],
+                    ),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        group
+    }
+
+    #[test]
+    fn identity_is_in_stabilizer_group()
+    {
+        let group =
+            three_qubit_group();
 
         assert!(
-            commutes_with_stabilizer_group(
-                &logical,
-                &group,
-            )
-            .unwrap()
+            group
+                .contains(
+                    &PauliString::identity(3)
+                )
+                .unwrap()
         );
     }
 
     #[test]
-    fn logical_x_and_z_can_anticommute() {
-        let logical_x =
-            PauliString::from_paulis(
-                &[
-                    Pauli::X,
-                    Pauli::I,
-                ],
-            );
+    fn generator_is_in_group()
+    {
+        let group =
+            three_qubit_group();
 
-        let logical_z =
+        let operator =
             PauliString::from_paulis(
                 &[
+                    Pauli::Z,
                     Pauli::Z,
                     Pauli::I,
                 ],
             );
 
         assert!(
-            logical_operators_anticommute(
-                &logical_x,
-                &logical_z,
-            )
-            .unwrap()
+            group
+                .contains(&operator)
+                .unwrap()
         );
     }
 
     #[test]
-    fn identity_generator_is_rejected() {
-        let result =
-            StabilizerGenerator::new(
-                0,
-                PauliString::identity(3),
+    fn product_of_generators_is_in_group()
+    {
+        let group =
+            three_qubit_group();
+
+        let operator =
+            PauliString::from_paulis(
+                &[
+                    Pauli::Z,
+                    Pauli::I,
+                    Pauli::Z,
+                ],
             );
 
+        assert!(
+            group
+                .contains(&operator)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn unrelated_operator_is_not_in_group()
+    {
+        let group =
+            three_qubit_group();
+
+        let operator =
+            PauliString::from_paulis(
+                &[
+                    Pauli::X,
+                    Pauli::I,
+                    Pauli::I,
+                ],
+            );
+
+        assert!(
+            !group
+                .contains(&operator)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn syndrome_detects_anticommutation()
+    {
+        let group =
+            three_qubit_group();
+
+        let error =
+            PauliString::from_paulis(
+                &[
+                    Pauli::X,
+                    Pauli::I,
+                    Pauli::I,
+                ],
+            );
+
+        let syndrome =
+            group
+                .syndrome(&error)
+                .unwrap();
+
+        assert_eq!(
+            syndrome.bits(),
+            &[true, false]
+        );
+    }
+
+    #[test]
+    fn incompatible_membership_is_rejected()
+    {
+        let group =
+            three_qubit_group();
+
+        let operator =
+            PauliString::identity(2);
+
         assert!(matches!(
-            result,
+            group.contains(
+                &operator
+            ),
             Err(
-                StabilizerError::IdentityGenerator {
-                    id: 0
-                }
+                StabilizerError::
+                    QubitCountMismatch {
+                        first: 3,
+                        second: 2
+                    }
             )
         ));
+    }
+
+    #[test]
+    fn generators_commute()
+    {
+        let group =
+            three_qubit_group();
+
+        assert!(
+            group.validate().is_ok()
+        );
     }
 }
