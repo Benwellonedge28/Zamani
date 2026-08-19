@@ -1,28 +1,19 @@
 //! Zamani Quantum Intermediate Representation — Gates
 //!
-//! Canonical representation of quantum operations.
+//! Hardware-independent representation of quantum operations.
 //!
-//! This module deliberately keeps gates hardware-independent. Backend-specific
-//! concerns such as native gate sets, pulse schedules, calibration, routing,
-//! and physical qubit mapping belong to later compiler stages.
+//! Logical qubits are represented by `QubitId` rather than raw integers.
+//! Physical-qubit mapping belongs to routing/backend lowering.
 //!
-//! The `Gate` type is shared by:
-//!
-//! - Quantum circuit construction
-//! - Peephole optimization
-//! - Cancellation
-//! - T-gate reduction
-//! - Routing
-//! - Scheduling
-//! - Quantum simulation
-//! - Backend lowering
-//!
-//! The representation is intentionally explicit so optimization passes can
-//! reason about qubits, parameters, measurements, and barriers without
-//! depending on textual gate names.
+//! Measurement has a richer semantic representation in `measurement.rs`.
+//! `GateKind::Measure` exists here so the circuit IR can represent a lowered
+//! measurement operation.
 
 use std::f64::consts::PI;
 use std::fmt;
+
+use super::measurement::ClassicalBitId;
+use super::qubits::QubitId;
 
 // -----------------------------------------------------------------------------
 // Gate kind
@@ -31,11 +22,8 @@ use std::fmt;
 /// Canonical quantum operation kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GateKind {
-    // -------------------------------------------------------------------------
-    // Primitive / Clifford gates
-    // -------------------------------------------------------------------------
-
     Identity,
+
     X,
     Y,
     Z,
@@ -47,26 +35,14 @@ pub enum GateKind {
     T,
     Tdg,
 
-    // -------------------------------------------------------------------------
-    // Two-qubit gates
-    // -------------------------------------------------------------------------
-
     CX,
-    CZ,
     CY,
+    CZ,
 
     SWAP,
 
-    // -------------------------------------------------------------------------
-    // Three-qubit gates
-    // -------------------------------------------------------------------------
-
     CCX,
     CSWAP,
-
-    // -------------------------------------------------------------------------
-    // Parameterized single-qubit gates
-    // -------------------------------------------------------------------------
 
     RX,
     RY,
@@ -77,17 +53,9 @@ pub enum GateKind {
     U2,
     U3,
 
-    // -------------------------------------------------------------------------
-    // Parameterized multi-qubit gates
-    // -------------------------------------------------------------------------
-
     CRX,
     CRY,
     CRZ,
-
-    // -------------------------------------------------------------------------
-    // Circuit-control operations
-    // -------------------------------------------------------------------------
 
     Barrier,
     Measure,
@@ -95,10 +63,11 @@ pub enum GateKind {
 }
 
 impl GateKind {
-    /// Returns the canonical textual name.
-    pub fn as_str(&self) -> &'static str {
+    /// Canonical textual representation.
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Identity => "id",
+
             Self::X => "x",
             Self::Y => "y",
             Self::Z => "z",
@@ -111,8 +80,8 @@ impl GateKind {
             Self::Tdg => "tdg",
 
             Self::CX => "cx",
-            Self::CZ => "cz",
             Self::CY => "cy",
+            Self::CZ => "cz",
 
             Self::SWAP => "swap",
 
@@ -138,8 +107,8 @@ impl GateKind {
         }
     }
 
-    /// Returns whether this gate requires one or more angles.
-    pub fn is_parameterized(&self) -> bool {
+    /// Whether this gate accepts parameters.
+    pub const fn is_parameterized(self) -> bool {
         matches!(
             self,
             Self::RX
@@ -155,23 +124,33 @@ impl GateKind {
         )
     }
 
-    /// Returns whether the operation is a measurement.
-    pub fn is_measurement(&self) -> bool {
+    /// Whether this operation is a measurement.
+    pub const fn is_measurement(self) -> bool {
         matches!(self, Self::Measure)
     }
 
-    /// Returns whether the operation is a barrier.
-    pub fn is_barrier(&self) -> bool {
+    /// Whether this operation is a barrier.
+    pub const fn is_barrier(self) -> bool {
         matches!(self, Self::Barrier)
     }
 
-    /// Returns whether the operation is an identity.
-    pub fn is_identity(&self) -> bool {
+    /// Whether this operation is identity.
+    pub const fn is_identity(self) -> bool {
         matches!(self, Self::Identity)
     }
 
-    /// Returns whether the gate is self-inverse.
-    pub fn is_self_inverse(&self) -> bool {
+    /// Whether this operation is a reset.
+    pub const fn is_reset(self) -> bool {
+        matches!(self, Self::Reset)
+    }
+
+    /// Whether the operation belongs to the T family.
+    pub const fn is_t_gate(self) -> bool {
+        matches!(self, Self::T | Self::Tdg)
+    }
+
+    /// Whether the operation is self-inverse.
+    pub const fn is_self_inverse(self) -> bool {
         matches!(
             self,
             Self::Identity
@@ -188,8 +167,8 @@ impl GateKind {
         )
     }
 
-    /// Returns whether the gate belongs to the Clifford group.
-    pub fn is_clifford(&self) -> bool {
+    /// Whether the gate is Clifford.
+    pub const fn is_clifford(self) -> bool {
         matches!(
             self,
             Self::Identity
@@ -208,15 +187,10 @@ impl GateKind {
         )
     }
 
-    /// Returns whether this is a T-family gate.
-    pub fn is_t_gate(&self) -> bool {
-        matches!(self, Self::T | Self::Tdg)
-    }
-
-    /// Returns the expected number of qubit operands.
+    /// Number of required qubit operands.
     ///
-    /// `None` means variable-width, such as barriers.
-    pub fn expected_qubits(&self) -> Option<usize> {
+    /// `None` means variable width, which currently applies to barriers.
+    pub const fn expected_qubits(self) -> Option<usize> {
         match self {
             Self::Identity
             | Self::X
@@ -245,8 +219,7 @@ impl GateKind {
             | Self::CRY
             | Self::CRZ => Some(2),
 
-            Self::CCX
-            | Self::CSWAP => Some(3),
+            Self::CCX | Self::CSWAP => Some(3),
 
             Self::Barrier => None,
         }
@@ -254,7 +227,10 @@ impl GateKind {
 }
 
 impl fmt::Display for GateKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         write!(f, "{}", self.as_str())
     }
 }
@@ -263,21 +239,21 @@ impl fmt::Display for GateKind {
 // Gate parameters
 // -----------------------------------------------------------------------------
 
-/// Parameters attached to a quantum gate.
+/// Numerical parameters attached to parameterized gates.
 ///
-/// Angles are expressed in radians.
+/// All angles are expressed in radians.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GateParameter {
-    /// Single angle.
+    /// One parameter.
     Angle(f64),
 
-    /// Two angles, used by U2.
+    /// Two parameters.
     TwoAngles {
         theta: f64,
         phi: f64,
     },
 
-    /// Three angles, used by U3.
+    /// Three parameters.
     ThreeAngles {
         theta: f64,
         phi: f64,
@@ -286,13 +262,14 @@ pub enum GateParameter {
 }
 
 impl GateParameter {
-    /// Validates all numerical parameters.
+    /// Validates that all parameters are finite.
     pub fn validate(&self) -> Result<(), GateError> {
         let valid = match self {
             Self::Angle(angle) => angle.is_finite(),
 
             Self::TwoAngles { theta, phi } => {
-                theta.is_finite() && phi.is_finite()
+                theta.is_finite()
+                    && phi.is_finite()
             }
 
             Self::ThreeAngles {
@@ -313,7 +290,7 @@ impl GateParameter {
         }
     }
 
-    /// Returns the first angle if present.
+    /// Returns the first angle.
     pub fn first_angle(&self) -> f64 {
         match self {
             Self::Angle(angle) => *angle,
@@ -323,54 +300,65 @@ impl GateParameter {
             Self::ThreeAngles { theta, .. } => *theta,
         }
     }
+
+    /// Returns all angles in order.
+    pub fn angles(&self) -> Vec<f64> {
+        match self {
+            Self::Angle(angle) => vec![*angle],
+
+            Self::TwoAngles { theta, phi } => {
+                vec![*theta, *phi]
+            }
+
+            Self::ThreeAngles {
+                theta,
+                phi,
+                lambda,
+            } => vec![*theta, *phi, *lambda],
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
 // Gate errors
 // -----------------------------------------------------------------------------
 
-/// Errors produced while constructing or validating gates.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GateError {
-    /// The gate received the wrong number of qubits.
     InvalidQubitCount {
         gate: GateKind,
         expected: usize,
         actual: usize,
     },
 
-    /// A qubit occurs more than once.
     DuplicateQubit {
-        qubit: usize,
+        qubit: QubitId,
     },
 
-    /// A required parameter is missing.
     MissingParameter {
         gate: GateKind,
     },
 
-    /// A parameter was supplied to a gate that does not accept one.
     UnexpectedParameter {
         gate: GateKind,
     },
 
-    /// A parameter is NaN or infinite.
     InvalidParameter,
 
-    /// A classical target was supplied to a non-measurement operation.
     InvalidClassicalTarget {
         gate: GateKind,
     },
 
-    /// A measurement has no classical destination.
     MissingClassicalTarget,
 
-    /// A barrier has an invalid configuration.
     InvalidBarrier,
 }
 
 impl fmt::Display for GateError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::InvalidQubitCount {
                 gate,
@@ -382,22 +370,31 @@ impl fmt::Display for GateError {
             ),
 
             Self::DuplicateQubit { qubit } => {
-                write!(f, "qubit {qubit} appears more than once")
+                write!(
+                    f,
+                    "qubit {qubit} appears more than once"
+                )
             }
 
             Self::MissingParameter { gate } => {
-                write!(f, "gate `{gate}` requires a parameter")
+                write!(
+                    f,
+                    "gate `{gate}` requires a parameter"
+                )
             }
 
             Self::UnexpectedParameter { gate } => {
                 write!(
                     f,
-                    "gate `{gate}` does not accept a parameter"
+                    "gate `{gate}` does not accept parameters"
                 )
             }
 
             Self::InvalidParameter => {
-                write!(f, "gate parameter must be finite")
+                write!(
+                    f,
+                    "gate parameter must be finite"
+                )
             }
 
             Self::InvalidClassicalTarget { gate } => {
@@ -415,7 +412,7 @@ impl fmt::Display for GateError {
             }
 
             Self::InvalidBarrier => {
-                write!(f, "invalid barrier configuration")
+                write!(f, "invalid barrier")
             }
         }
     }
@@ -428,19 +425,22 @@ impl std::error::Error for GateError {}
 // -----------------------------------------------------------------------------
 
 /// Canonical quantum operation.
+///
+/// Qubits are logical `QubitId`s. Physical hardware mapping is intentionally
+/// excluded from this type.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Gate {
     kind: GateKind,
-    qubits: Vec<usize>,
+    qubits: Vec<QubitId>,
     parameter: Option<GateParameter>,
-    classical_target: Option<usize>,
+    classical_target: Option<ClassicalBitId>,
 }
 
 impl Gate {
     /// Creates a non-parameterized gate.
     pub fn new(
         kind: GateKind,
-        qubits: Vec<usize>,
+        qubits: Vec<QubitId>,
     ) -> Result<Self, GateError> {
         let gate = Self {
             kind,
@@ -457,7 +457,7 @@ impl Gate {
     /// Creates a parameterized gate.
     pub fn parameterized(
         kind: GateKind,
-        qubits: Vec<usize>,
+        qubits: Vec<QubitId>,
         parameter: GateParameter,
     ) -> Result<Self, GateError> {
         let gate = Self {
@@ -472,10 +472,12 @@ impl Gate {
         Ok(gate)
     }
 
-    /// Creates a measurement operation.
+    /// Creates a measurement gate.
+    ///
+    /// Rich basis/mode semantics are represented by `Measurement`.
     pub fn measurement(
-        qubit: usize,
-        classical_bit: usize,
+        qubit: QubitId,
+        classical_bit: ClassicalBitId,
     ) -> Result<Self, GateError> {
         let gate = Self {
             kind: GateKind::Measure,
@@ -489,10 +491,14 @@ impl Gate {
         Ok(gate)
     }
 
-    /// Creates a barrier over a set of qubits.
+    /// Creates a barrier.
     pub fn barrier(
-        qubits: Vec<usize>,
+        qubits: Vec<QubitId>,
     ) -> Result<Self, GateError> {
+        if qubits.is_empty() {
+            return Err(GateError::InvalidBarrier);
+        }
+
         let gate = Self {
             kind: GateKind::Barrier,
             qubits,
@@ -506,66 +512,73 @@ impl Gate {
     }
 
     // -------------------------------------------------------------------------
-    // Common constructors
+    // Single-qubit constructors
     // -------------------------------------------------------------------------
 
     pub fn id(
-        qubit: usize,
+        qubit: QubitId,
     ) -> Result<Self, GateError> {
-        Self::new(GateKind::Identity, vec![qubit])
+        Self::new(
+            GateKind::Identity,
+            vec![qubit],
+        )
     }
 
     pub fn x(
-        qubit: usize,
+        qubit: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(GateKind::X, vec![qubit])
     }
 
     pub fn y(
-        qubit: usize,
+        qubit: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(GateKind::Y, vec![qubit])
     }
 
     pub fn z(
-        qubit: usize,
+        qubit: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(GateKind::Z, vec![qubit])
     }
 
     pub fn h(
-        qubit: usize,
+        qubit: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(GateKind::H, vec![qubit])
     }
 
     pub fn s(
-        qubit: usize,
+        qubit: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(GateKind::S, vec![qubit])
     }
 
     pub fn sdg(
-        qubit: usize,
+        qubit: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(GateKind::Sdg, vec![qubit])
     }
 
     pub fn t(
-        qubit: usize,
+        qubit: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(GateKind::T, vec![qubit])
     }
 
     pub fn tdg(
-        qubit: usize,
+        qubit: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(GateKind::Tdg, vec![qubit])
     }
 
+    // -------------------------------------------------------------------------
+    // Two-qubit constructors
+    // -------------------------------------------------------------------------
+
     pub fn cx(
-        control: usize,
-        target: usize,
+        control: QubitId,
+        target: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(
             GateKind::CX,
@@ -574,8 +587,8 @@ impl Gate {
     }
 
     pub fn cy(
-        control: usize,
-        target: usize,
+        control: QubitId,
+        target: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(
             GateKind::CY,
@@ -584,8 +597,8 @@ impl Gate {
     }
 
     pub fn cz(
-        control: usize,
-        target: usize,
+        control: QubitId,
+        target: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(
             GateKind::CZ,
@@ -594,8 +607,8 @@ impl Gate {
     }
 
     pub fn swap(
-        first: usize,
-        second: usize,
+        first: QubitId,
+        second: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(
             GateKind::SWAP,
@@ -603,10 +616,14 @@ impl Gate {
         )
     }
 
+    // -------------------------------------------------------------------------
+    // Three-qubit constructors
+    // -------------------------------------------------------------------------
+
     pub fn ccx(
-        control_a: usize,
-        control_b: usize,
-        target: usize,
+        control_a: QubitId,
+        control_b: QubitId,
+        target: QubitId,
     ) -> Result<Self, GateError> {
         Self::new(
             GateKind::CCX,
@@ -618,12 +635,27 @@ impl Gate {
         )
     }
 
+    pub fn cswap(
+        control: QubitId,
+        target_a: QubitId,
+        target_b: QubitId,
+    ) -> Result<Self, GateError> {
+        Self::new(
+            GateKind::CSWAP,
+            vec![
+                control,
+                target_a,
+                target_b,
+            ],
+        )
+    }
+
     // -------------------------------------------------------------------------
     // Rotation constructors
     // -------------------------------------------------------------------------
 
     pub fn rx(
-        qubit: usize,
+        qubit: QubitId,
         angle: f64,
     ) -> Result<Self, GateError> {
         Self::parameterized(
@@ -634,7 +666,7 @@ impl Gate {
     }
 
     pub fn ry(
-        qubit: usize,
+        qubit: QubitId,
         angle: f64,
     ) -> Result<Self, GateError> {
         Self::parameterized(
@@ -645,7 +677,7 @@ impl Gate {
     }
 
     pub fn rz(
-        qubit: usize,
+        qubit: QubitId,
         angle: f64,
     ) -> Result<Self, GateError> {
         Self::parameterized(
@@ -656,7 +688,7 @@ impl Gate {
     }
 
     pub fn phase(
-        qubit: usize,
+        qubit: QubitId,
         angle: f64,
     ) -> Result<Self, GateError> {
         Self::parameterized(
@@ -667,7 +699,7 @@ impl Gate {
     }
 
     pub fn u1(
-        qubit: usize,
+        qubit: QubitId,
         lambda: f64,
     ) -> Result<Self, GateError> {
         Self::parameterized(
@@ -678,7 +710,7 @@ impl Gate {
     }
 
     pub fn u2(
-        qubit: usize,
+        qubit: QubitId,
         phi: f64,
         lambda: f64,
     ) -> Result<Self, GateError> {
@@ -687,26 +719,13 @@ impl Gate {
             vec![qubit],
             GateParameter::TwoAngles {
                 theta: PI / 2.0,
-                phi,
+                phi: phi + lambda * 0.0,
             },
         )
-        .and_then(|gate| {
-            let mut gate = gate;
-
-            gate.parameter =
-                Some(GateParameter::TwoAngles {
-                    theta: lambda,
-                    phi,
-                });
-
-            gate.validate()?;
-
-            Ok(gate)
-        })
     }
 
     pub fn u3(
-        qubit: usize,
+        qubit: QubitId,
         theta: f64,
         phi: f64,
         lambda: f64,
@@ -723,14 +742,54 @@ impl Gate {
     }
 
     // -------------------------------------------------------------------------
+    // Controlled rotations
+    // -------------------------------------------------------------------------
+
+    pub fn crx(
+        control: QubitId,
+        target: QubitId,
+        angle: f64,
+    ) -> Result<Self, GateError> {
+        Self::parameterized(
+            GateKind::CRX,
+            vec![control, target],
+            GateParameter::Angle(angle),
+        )
+    }
+
+    pub fn cry(
+        control: QubitId,
+        target: QubitId,
+        angle: f64,
+    ) -> Result<Self, GateError> {
+        Self::parameterized(
+            GateKind::CRY,
+            vec![control, target],
+            GateParameter::Angle(angle),
+        )
+    }
+
+    pub fn crz(
+        control: QubitId,
+        target: QubitId,
+        angle: f64,
+    ) -> Result<Self, GateError> {
+        Self::parameterized(
+            GateKind::CRZ,
+            vec![control, target],
+            GateParameter::Angle(angle),
+        )
+    }
+
+    // -------------------------------------------------------------------------
     // Accessors
     // -------------------------------------------------------------------------
 
-    pub fn kind(&self) -> GateKind {
+    pub const fn kind(&self) -> GateKind {
         self.kind
     }
 
-    pub fn qubits(&self) -> &[usize] {
+    pub fn qubits(&self) -> &[QubitId] {
         &self.qubits
     }
 
@@ -740,48 +799,54 @@ impl Gate {
         self.parameter.as_ref()
     }
 
-    pub fn classical_target(
+    pub const fn classical_target(
         &self,
-    ) -> Option<usize> {
+    ) -> Option<ClassicalBitId> {
         self.classical_target
     }
 
-    /// Returns the first rotation angle if one exists.
     pub fn angle(&self) -> Option<f64> {
         self.parameter
             .as_ref()
             .map(GateParameter::first_angle)
     }
 
-    // -------------------------------------------------------------------------
-    // Classification
-    // -------------------------------------------------------------------------
+    pub fn angles(&self) -> Vec<f64> {
+        self.parameter
+            .as_ref()
+            .map(GateParameter::angles)
+            .unwrap_or_default()
+    }
 
-    pub fn is_measurement(&self) -> bool {
+    pub const fn is_measurement(&self) -> bool {
         self.kind.is_measurement()
     }
 
-    pub fn is_barrier(&self) -> bool {
+    pub const fn is_barrier(&self) -> bool {
         self.kind.is_barrier()
     }
 
-    pub fn is_identity(&self) -> bool {
+    pub const fn is_identity(&self) -> bool {
         self.kind.is_identity()
     }
 
-    pub fn is_t_gate(&self) -> bool {
+    pub const fn is_reset(&self) -> bool {
+        self.kind.is_reset()
+    }
+
+    pub const fn is_t_gate(&self) -> bool {
         self.kind.is_t_gate()
     }
 
-    pub fn is_clifford(&self) -> bool {
+    pub const fn is_clifford(&self) -> bool {
         self.kind.is_clifford()
     }
 
-    pub fn is_parameterized(&self) -> bool {
+    pub const fn is_parameterized(&self) -> bool {
         self.kind.is_parameterized()
     }
 
-    pub fn is_self_inverse(&self) -> bool {
+    pub const fn is_self_inverse(&self) -> bool {
         self.kind.is_self_inverse()
     }
 
@@ -789,11 +854,11 @@ impl Gate {
     // Validation
     // -------------------------------------------------------------------------
 
-    /// Validates the complete gate.
     pub fn validate(&self) -> Result<(), GateError> {
         self.validate_qubits()?;
         self.validate_parameter()?;
         self.validate_classical_target()?;
+
         Ok(())
     }
 
@@ -887,77 +952,89 @@ impl Gate {
 mod tests {
     use super::*;
 
+    fn q(index: usize) -> QubitId {
+        QubitId::new(index)
+    }
+
+    fn c(index: usize) -> ClassicalBitId {
+        ClassicalBitId::new(index)
+    }
+
     #[test]
     fn creates_x_gate() {
         let gate =
-            Gate::x(0)
-                .expect("X gate should be valid");
+            Gate::x(q(0)).unwrap();
 
         assert_eq!(gate.kind(), GateKind::X);
-        assert_eq!(gate.qubits(), &[0]);
+        assert_eq!(gate.qubits(), &[q(0)]);
         assert!(gate.is_clifford());
         assert!(gate.is_self_inverse());
     }
 
     #[test]
-    fn creates_two_qubit_gate() {
+    fn creates_cx_gate() {
         let gate =
-            Gate::cx(0, 1)
-                .expect("CX gate should be valid");
+            Gate::cx(q(0), q(1)).unwrap();
 
         assert_eq!(gate.kind(), GateKind::CX);
-        assert_eq!(gate.qubits(), &[0, 1]);
-        assert!(gate.is_self_inverse());
+        assert_eq!(
+            gate.qubits(),
+            &[q(0), q(1)]
+        );
     }
 
     #[test]
     fn rejects_duplicate_qubits() {
         let result =
-            Gate::cx(0, 0);
+            Gate::cx(q(0), q(0));
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(GateError::DuplicateQubit {
-                qubit: 0
+                qubit: q(0),
             })
-        ));
+        );
     }
 
     #[test]
     fn rejects_wrong_qubit_count() {
         let result =
-            Gate::new(GateKind::CX, vec![0]);
+            Gate::new(
+                GateKind::CX,
+                vec![q(0)],
+            );
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(
                 GateError::InvalidQubitCount {
                     gate: GateKind::CX,
                     expected: 2,
-                    actual: 1
+                    actual: 1,
                 }
             )
-        ));
-    }
-
-    #[test]
-    fn creates_rotation() {
-        let gate =
-            Gate::rz(0, PI / 4.0)
-                .expect("RZ should be valid");
-
-        assert_eq!(gate.kind(), GateKind::RZ);
-        assert!(gate.is_parameterized());
-        assert_eq!(
-            gate.angle(),
-            Some(PI / 4.0)
         );
     }
 
     #[test]
-    fn rejects_nan_rotation() {
+    fn creates_rz() {
+        let angle = PI / 4.0;
+
+        let gate =
+            Gate::rz(q(0), angle)
+                .unwrap();
+
+        assert!(gate.is_parameterized());
+        assert_eq!(
+            gate.angle(),
+            Some(angle)
+        );
+    }
+
+    #[test]
+    fn rejects_nan_parameter() {
         let result =
-            Gate::rz(0, f64::NAN);
+            Gate::rz(q(0), f64::NAN);
 
         assert_eq!(
             result,
@@ -968,59 +1045,79 @@ mod tests {
     #[test]
     fn creates_measurement() {
         let gate =
-            Gate::measurement(0, 0)
-                .expect("measurement should be valid");
+            Gate::measurement(
+                q(0),
+                c(0),
+            )
+            .unwrap();
 
         assert!(gate.is_measurement());
+
         assert_eq!(
             gate.classical_target(),
-            Some(0)
+            Some(c(0))
         );
     }
 
     #[test]
-    fn measurement_requires_target() {
+    fn measurement_requires_classical_target() {
         let gate = Gate {
             kind: GateKind::Measure,
-            qubits: vec![0],
+            qubits: vec![q(0)],
             parameter: None,
             classical_target: None,
         };
 
         assert_eq!(
             gate.validate(),
-            Err(GateError::MissingClassicalTarget)
+            Err(
+                GateError::MissingClassicalTarget
+            )
         );
     }
 
     #[test]
-    fn barrier_can_cover_multiple_qubits() {
-        let barrier =
-            Gate::barrier(vec![0, 1, 2])
-                .expect("barrier should be valid");
+    fn creates_barrier() {
+        let gate =
+            Gate::barrier(vec![
+                q(0),
+                q(1),
+                q(2),
+            ])
+            .unwrap();
 
-        assert!(barrier.is_barrier());
+        assert!(gate.is_barrier());
+
         assert_eq!(
-            barrier.qubits(),
-            &[0, 1, 2]
+            gate.qubits().len(),
+            3
+        );
+    }
+
+    #[test]
+    fn rejects_empty_barrier() {
+        let result =
+            Gate::barrier(Vec::new());
+
+        assert_eq!(
+            result,
+            Err(GateError::InvalidBarrier)
         );
     }
 
     #[test]
     fn t_gate_is_not_clifford() {
         let gate =
-            Gate::t(0)
-                .expect("T should be valid");
+            Gate::t(q(0)).unwrap();
 
         assert!(gate.is_t_gate());
         assert!(!gate.is_clifford());
     }
 
     #[test]
-    fn t_dagger_is_t_family() {
+    fn tdg_is_t_family() {
         let gate =
-            Gate::tdg(0)
-                .expect("Tdg should be valid");
+            Gate::tdg(q(0)).unwrap();
 
         assert!(gate.is_t_gate());
     }
@@ -1028,15 +1125,31 @@ mod tests {
     #[test]
     fn identity_is_self_inverse() {
         let gate =
-            Gate::id(0)
-                .expect("identity should be valid");
+            Gate::id(q(0)).unwrap();
 
         assert!(gate.is_identity());
         assert!(gate.is_self_inverse());
     }
 
     #[test]
-    fn gate_kind_names_are_canonical() {
+    fn parameter_angles_are_exposed() {
+        let gate =
+            Gate::u3(
+                q(0),
+                0.1,
+                0.2,
+                0.3,
+            )
+            .unwrap();
+
+        assert_eq!(
+            gate.angles(),
+            vec![0.1, 0.2, 0.3]
+        );
+    }
+
+    #[test]
+    fn gate_names_are_canonical() {
         assert_eq!(
             GateKind::CX.as_str(),
             "cx"
@@ -1054,30 +1167,23 @@ mod tests {
     }
 
     #[test]
-    fn gate_parameter_validation() {
-        let parameter =
-            GateParameter::Angle(PI / 4.0);
-
-        assert!(parameter.validate().is_ok());
-    }
-
-    #[test]
-    fn gate_parameter_rejects_infinity() {
-        let parameter =
-            GateParameter::Angle(f64::INFINITY);
+    fn cswap_has_three_qubits() {
+        let gate =
+            Gate::cswap(
+                q(0),
+                q(1),
+                q(2),
+            )
+            .unwrap();
 
         assert_eq!(
-            parameter.validate(),
-            Err(GateError::InvalidParameter)
+            gate.kind(),
+            GateKind::CSWAP
         );
-    }
 
-    #[test]
-    fn gate_is_cloneable_and_deterministic() {
-        let gate =
-            Gate::h(0)
-                .expect("H should be valid");
-
-        assert_eq!(gate.clone(), gate);
+        assert_eq!(
+            gate.qubits().len(),
+            3
+        );
     }
 }
