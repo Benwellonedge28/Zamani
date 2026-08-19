@@ -1,62 +1,57 @@
 //! Zamani Quantum Error Correction — Code Distance.
 //!
-//! Computes and verifies the distance of a stabilizer code.
+//! Computes and validates the distance of a stabilizer code.
 //!
-//! For a stabilizer code, the distance is the minimum weight of a Pauli
-//! operator that:
-//!
-//! 1. commutes with every stabilizer; and
-//! 2. is not itself an element of the stabilizer group.
-//!
-//! In other words:
+//! For a stabilizer code with stabilizer group S, the distance is
 //!
 //!     d = min wt(P)
-//!         where P ∈ N(S) \ S
 //!
-//! where:
+//! over all Pauli operators P that:
 //!
-//!     S = stabilizer group
-//!     N(S) = normaliser of S
+//!   1. commute with every stabilizer, and
+//!   2. are not themselves members of S.
 //!
-//! This implementation provides an exact exhaustive search for small codes.
-//! It is intended primarily for correctness validation and testing.
+//! Such operators are non-trivial logical operators.
 //!
-//! Larger production codes should use specialised algorithms rather than
-//! exhaustive enumeration.
-
-use std::fmt;
+//! This implementation performs an exact search by increasing Pauli weight.
+//! It is intended primarily for validation and small/medium codes.
+//!
+//! The stabilizer membership test itself uses GF(2) linear algebra through
+//! `StabilizerGroup::contains()`.
 
 use super::stabilizer::{
+    commutes_with_stabilizer_group,
     Pauli,
     PauliString,
     StabilizerError,
     StabilizerGroup,
 };
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Distance result
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Exact result of a code-distance calculation.
 #[derive(
     Debug,
     Clone,
     PartialEq,
     Eq,
 )]
-pub struct DistanceResult {
+pub struct CodeDistance {
     distance: usize,
     logical_operator: PauliString,
 }
 
-impl DistanceResult {
+impl CodeDistance {
     pub fn new(
         distance: usize,
         logical_operator: PauliString,
     ) -> Result<Self, DistanceError> {
         if distance == 0 {
             return Err(
-                DistanceError::InvalidDistance,
+                DistanceError::InvalidDistance {
+                    distance,
+                },
             );
         }
 
@@ -70,9 +65,9 @@ impl DistanceResult {
             != distance
         {
             return Err(
-                DistanceError::WeightMismatch {
-                    expected: distance,
-                    actual:
+                DistanceError::DistanceWeightMismatch {
+                    distance,
+                    weight:
                         logical_operator.weight(),
                 },
             );
@@ -97,282 +92,355 @@ impl DistanceResult {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Distance calculator
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Distance calculation
+// ============================================================================
 
-/// Exact distance calculator.
+/// Computes the exact stabilizer-code distance.
 ///
-/// This enumerates all non-identity Pauli operators and searches by
-/// increasing weight. The first normaliser element that is not a stabiliser
-/// determines the exact code distance.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Default,
-)]
-pub struct ExactDistanceCalculator;
+/// The search starts at weight 1 and stops at the first non-trivial logical
+/// operator found.
+///
+/// Returns:
+///
+///     d = minimum weight of a Pauli in N(S) \ S
+///
+/// where N(S) is the normalizer of the stabilizer group.
+pub fn compute_distance(
+    stabilizers: &StabilizerGroup,
+) -> Result<CodeDistance, DistanceError> {
+    stabilizers.validate()?;
 
-impl ExactDistanceCalculator {
-    pub const fn new() -> Self {
-        Self
+    if stabilizers.is_empty() {
+        return Err(
+            DistanceError::NoStabilizerGenerators,
+        );
     }
 
-    /// Computes the exact distance of a stabilizer code.
-    pub fn calculate(
-        &self,
-        stabilizers: &StabilizerGroup,
-    ) -> Result<DistanceResult, DistanceError> {
-        let n =
-            stabilizers.num_qubits();
+    let num_qubits =
+        stabilizers.num_qubits();
 
-        if n == 0 {
-            return Err(
-                DistanceError::EmptyCode,
+    // Search by increasing weight. The first logical operator encountered
+    // therefore defines the exact code distance.
+    for weight in
+        1..=num_qubits
+    {
+        if let Some(operator) =
+            find_logical_operator_of_weight(
+                stabilizers,
+                weight,
+            )?
+        {
+            return CodeDistance::new(
+                weight,
+                operator,
             );
         }
-
-        // Search from weight 1 upwards.
-        for weight in 1..=n {
-            if let Some(operator) =
-                self.search_weight(
-                    stabilizers,
-                    weight,
-                )?
-            {
-                return DistanceResult::new(
-                    weight,
-                    operator,
-                );
-            }
-        }
-
-        Err(
-            DistanceError::NoLogicalOperator,
-        )
     }
 
-    /// Verifies a claimed code distance.
-    pub fn verify(
-        &self,
-        stabilizers: &StabilizerGroup,
-        claimed_distance: usize,
-    ) -> Result<DistanceResult, DistanceError> {
-        let actual =
-            self.calculate(stabilizers)?;
+    Err(
+        DistanceError::NoLogicalOperatorFound {
+            num_qubits,
+        },
+    )
+}
 
-        if actual.distance()
-            != claimed_distance
+/// Finds a non-trivial logical operator of exactly `weight`.
+///
+/// A valid logical operator must:
+///
+///     - act on exactly `weight` qubits;
+///     - commute with every stabilizer;
+///     - not belong to the stabilizer group.
+pub fn find_logical_operator_of_weight(
+    stabilizers: &StabilizerGroup,
+    weight: usize,
+) -> Result<Option<PauliString>, DistanceError> {
+    stabilizers.validate()?;
+
+    let num_qubits =
+        stabilizers.num_qubits();
+
+    if weight == 0
+        || weight > num_qubits
+    {
+        return Ok(None);
+    }
+
+    let mut selected =
+        Vec::with_capacity(weight);
+
+    search_supports(
+        stabilizers,
+        weight,
+        0,
+        &mut selected,
+    )
+}
+
+// ============================================================================
+// Support search
+// ============================================================================
+
+fn search_supports(
+    stabilizers: &StabilizerGroup,
+    remaining_weight: usize,
+    start_qubit: usize,
+    selected: &mut Vec<usize>,
+) -> Result<Option<PauliString>, DistanceError> {
+    let num_qubits =
+        stabilizers.num_qubits();
+
+    if remaining_weight == 0 {
+        return search_paulis_on_support(
+            stabilizers,
+            selected,
+        );
+    }
+
+    if num_qubits
+        .saturating_sub(start_qubit)
+        < remaining_weight
+    {
+        return Ok(None);
+    }
+
+    for qubit in
+        start_qubit..num_qubits
+    {
+        selected.push(qubit);
+
+        if let Some(operator) =
+            search_supports(
+                stabilizers,
+                remaining_weight - 1,
+                qubit + 1,
+                selected,
+            )?
+        {
+            return Ok(Some(operator));
+        }
+
+        selected.pop();
+    }
+
+    Ok(None)
+}
+
+// ============================================================================
+// Pauli assignment search
+// ============================================================================
+
+fn search_paulis_on_support(
+    stabilizers: &StabilizerGroup,
+    support: &[usize],
+) -> Result<Option<PauliString>, DistanceError> {
+    let num_qubits =
+        stabilizers.num_qubits();
+
+    let mut paulis =
+        vec![Pauli::I; num_qubits];
+
+    search_pauli_assignments(
+        stabilizers,
+        support,
+        0,
+        &mut paulis,
+    )
+}
+
+fn search_pauli_assignments(
+    stabilizers: &StabilizerGroup,
+    support: &[usize],
+    position: usize,
+    paulis: &mut [Pauli],
+) -> Result<Option<PauliString>, DistanceError> {
+    if position == support.len() {
+        let operator =
+            PauliString::from_paulis(
+                paulis,
+            );
+
+        // Defensive invariant: the generated operator must have exactly
+        // the requested support weight.
+        if operator.weight()
+            != support.len()
+        {
+            return Ok(None);
+        }
+
+        // A logical operator must lie in the normalizer of the stabilizer
+        // group.
+        if !commutes_with_stabilizer_group(
+            &operator,
+            stabilizers,
+        )? {
+            return Ok(None);
+        }
+
+        // A stabilizer itself represents the trivial logical operator.
+        if stabilizers.contains(
+            &operator,
+        )? {
+            return Ok(None);
+        }
+
+        return Ok(Some(operator));
+    }
+
+    let qubit =
+        support[position];
+
+    // Every non-identity Pauli is considered because X, Y and Z may have
+    // different logical behaviour on the same support.
+    for pauli in [
+        Pauli::X,
+        Pauli::Y,
+        Pauli::Z,
+    ] {
+        paulis[qubit] =
+            pauli;
+
+        if let Some(operator) =
+            search_pauli_assignments(
+                stabilizers,
+                support,
+                position + 1,
+                paulis,
+            )?
+        {
+            return Ok(Some(operator));
+        }
+    }
+
+    paulis[qubit] =
+        Pauli::I;
+
+    Ok(None)
+}
+
+// ============================================================================
+// Distance validation
+// ============================================================================
+
+/// Validates a claimed code distance.
+///
+/// The supplied logical operator must:
+///
+///     - have the claimed weight;
+///     - commute with every stabilizer;
+///     - not be a stabilizer;
+///     - have no lower-weight logical operator.
+///
+/// This provides a stronger invariant than simply trusting a stored
+/// distance value.
+pub fn validate_distance(
+    stabilizers: &StabilizerGroup,
+    claimed_distance: usize,
+    witness: &PauliString,
+) -> Result<(), DistanceError> {
+    stabilizers.validate()?;
+
+    if claimed_distance == 0 {
+        return Err(
+            DistanceError::InvalidDistance {
+                distance:
+                    claimed_distance,
+            },
+        );
+    }
+
+    if witness.num_qubits()
+        != stabilizers.num_qubits()
+    {
+        return Err(
+            DistanceError::Stabilizer(
+                StabilizerError::QubitCountMismatch {
+                    first:
+                        stabilizers.num_qubits(),
+                    second:
+                        witness.num_qubits(),
+                },
+            ),
+        );
+    }
+
+    if witness.is_identity() {
+        return Err(
+            DistanceError::IdentityLogicalOperator,
+        );
+    }
+
+    if witness.weight()
+        != claimed_distance
+    {
+        return Err(
+            DistanceError::DistanceWeightMismatch {
+                distance:
+                    claimed_distance,
+                weight:
+                    witness.weight(),
+            },
+        );
+    }
+
+    if !commutes_with_stabilizer_group(
+        witness,
+        stabilizers,
+    )? {
+        return Err(
+            DistanceError::WitnessDoesNotCommute,
+        );
+    }
+
+    if stabilizers.contains(
+        witness,
+    )? {
+        return Err(
+            DistanceError::WitnessIsStabilizer,
+        );
+    }
+
+    // Search for anything strictly smaller than the claimed distance.
+    for weight in
+        1..claimed_distance
+    {
+        if find_logical_operator_of_weight(
+            stabilizers,
+            weight,
+        )?
+        .is_some()
         {
             return Err(
-                DistanceError::DistanceMismatch {
-                    claimed:
-                        claimed_distance,
-                    actual:
-                        actual.distance(),
+                DistanceError::LowerWeightLogicalOperator {
+                    weight,
                 },
             );
         }
-
-        Ok(actual)
     }
 
-    fn search_weight(
-        &self,
-        stabilizers: &StabilizerGroup,
-        weight: usize,
-    ) -> Result<Option<PauliString>, DistanceError> {
-        let n =
-            stabilizers.num_qubits();
-
-        let mut current =
-            vec![Pauli::I; n];
-
-        self.search_recursive(
-            stabilizers,
-            weight,
-            0,
-            &mut current,
-        )
-    }
-
-    fn search_recursive(
-        &self,
-        stabilizers: &StabilizerGroup,
-        target_weight: usize,
-        position: usize,
-        current: &mut [Pauli],
-    ) -> Result<Option<PauliString>, DistanceError> {
-        let n =
-            current.len();
-
-        if position == n {
-            let actual_weight =
-                current
-                    .iter()
-                    .filter(|p| **p != Pauli::I)
-                    .count();
-
-            if actual_weight
-                != target_weight
-            {
-                return Ok(None);
-            }
-
-            let candidate =
-                PauliString::from_paulis(
-                    current,
-                );
-
-            if candidate.is_identity() {
-                return Ok(None);
-            }
-
-            // Candidate must commute with every stabilizer.
-            let syndrome =
-                stabilizers
-                    .syndrome(&candidate)
-                    .map_err(
-                        DistanceError::Stabilizer,
-                    )?;
-
-            if !syndrome.is_trivial() {
-                return Ok(None);
-            }
-
-            // Candidate must not be a stabilizer.
-            if stabilizers
-                .contains(&candidate)
-                .map_err(
-                    DistanceError::Stabilizer,
-                )?
-            {
-                return Ok(None);
-            }
-
-            return Ok(Some(candidate));
-        }
-
-        // Prune if there are not enough remaining positions to reach the
-        // target weight.
-        let remaining =
-            n - position;
-
-        let current_weight =
-            current
-                .iter()
-                .take(position)
-                .filter(|p| **p != Pauli::I)
-                .count();
-
-        if current_weight
-            > target_weight
-        {
-            return Ok(None);
-        }
-
-        if current_weight
-            + remaining
-            < target_weight
-        {
-            return Ok(None);
-        }
-
-        // Identity branch.
-        current[position] =
-            Pauli::I;
-
-        if let Some(result) =
-            self.search_recursive(
-                stabilizers,
-                target_weight,
-                position + 1,
-                current,
-            )?
-        {
-            return Ok(Some(result));
-        }
-
-        // X branch.
-        current[position] =
-            Pauli::X;
-
-        if let Some(result) =
-            self.search_recursive(
-                stabilizers,
-                target_weight,
-                position + 1,
-                current,
-            )?
-        {
-            return Ok(Some(result));
-        }
-
-        // Y branch.
-        current[position] =
-            Pauli::Y;
-
-        if let Some(result) =
-            self.search_recursive(
-                stabilizers,
-                target_weight,
-                position + 1,
-                current,
-            )?
-        {
-            return Ok(Some(result));
-        }
-
-        // Z branch.
-        current[position] =
-            Pauli::Z;
-
-        if let Some(result) =
-            self.search_recursive(
-                stabilizers,
-                target_weight,
-                position + 1,
-                current,
-            )?
-        {
-            return Ok(Some(result));
-        }
-
-        current[position] =
-            Pauli::I;
-
-        Ok(None)
-    }
+    Ok(())
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Convenience API
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Calculates the exact distance of a stabilizer code.
-pub fn calculate_distance(
+/// Returns the exact distance as a plain integer.
+pub fn distance(
     stabilizers: &StabilizerGroup,
-) -> Result<DistanceResult, DistanceError> {
-    ExactDistanceCalculator::new()
-        .calculate(stabilizers)
-}
-
-/// Verifies the exact distance against a claimed value.
-pub fn verify_distance(
-    stabilizers: &StabilizerGroup,
-    claimed_distance: usize,
-) -> Result<DistanceResult, DistanceError> {
-    ExactDistanceCalculator::new()
-        .verify(
+) -> Result<usize, DistanceError> {
+    Ok(
+        compute_distance(
             stabilizers,
-            claimed_distance,
-        )
+        )?
+        .distance(),
+    )
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Errors
-// -----------------------------------------------------------------------------
+// ============================================================================
 
 #[derive(
     Debug,
@@ -381,27 +449,34 @@ pub fn verify_distance(
     Eq,
 )]
 pub enum DistanceError {
-    EmptyCode,
-
-    InvalidDistance,
-
-    IdentityLogicalOperator,
-
-    WeightMismatch {
-        expected: usize,
-        actual: usize,
-    },
-
-    DistanceMismatch {
-        claimed: usize,
-        actual: usize,
-    },
-
-    NoLogicalOperator,
-
     Stabilizer(
         StabilizerError,
     ),
+
+    NoStabilizerGenerators,
+
+    InvalidDistance {
+        distance: usize,
+    },
+
+    IdentityLogicalOperator,
+
+    DistanceWeightMismatch {
+        distance: usize,
+        weight: usize,
+    },
+
+    WitnessDoesNotCommute,
+
+    WitnessIsStabilizer,
+
+    LowerWeightLogicalOperator {
+        weight: usize,
+    },
+
+    NoLogicalOperatorFound {
+        num_qubits: usize,
+    },
 }
 
 impl fmt::Display
@@ -412,58 +487,75 @@ impl fmt::Display
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
-            Self::EmptyCode => {
+            Self::Stabilizer(error) => {
                 write!(
                     f,
-                    "cannot calculate distance of an empty code"
+                    "stabilizer error: {error}"
                 )
             }
 
-            Self::InvalidDistance => {
+            Self::NoStabilizerGenerators => {
                 write!(
                     f,
-                    "distance must be greater than zero"
+                    "cannot determine code distance without stabilizer generators"
+                )
+            }
+
+            Self::InvalidDistance {
+                distance,
+            } => {
+                write!(
+                    f,
+                    "invalid code distance: {distance}"
                 )
             }
 
             Self::IdentityLogicalOperator => {
                 write!(
                     f,
-                    "identity cannot be a logical operator"
+                    "identity cannot be a logical-operator witness"
                 )
             }
 
-            Self::WeightMismatch {
-                expected,
-                actual,
+            Self::DistanceWeightMismatch {
+                distance,
+                weight,
             } => {
                 write!(
                     f,
-                    "distance/operator weight mismatch: expected {expected}, got {actual}"
+                    "claimed distance {distance} does not match witness weight {weight}"
                 )
             }
 
-            Self::DistanceMismatch {
-                claimed,
-                actual,
+            Self::WitnessDoesNotCommute => {
+                write!(
+                    f,
+                    "logical-operator witness does not commute with the stabilizer group"
+                )
+            }
+
+            Self::WitnessIsStabilizer => {
+                write!(
+                    f,
+                    "logical-operator witness is itself a stabilizer"
+                )
+            }
+
+            Self::LowerWeightLogicalOperator {
+                weight,
             } => {
                 write!(
                     f,
-                    "claimed code distance {claimed} does not match exact distance {actual}"
+                    "found a logical operator of lower weight {weight}"
                 )
             }
 
-            Self::NoLogicalOperator => {
+            Self::NoLogicalOperatorFound {
+                num_qubits,
+            } => {
                 write!(
                     f,
-                    "no non-stabilizer logical operator was found"
-                )
-            }
-
-            Self::Stabilizer(error) => {
-                write!(
-                    f,
-                    "stabilizer error: {error}"
+                    "no non-trivial logical operator found for {num_qubits}-qubit stabilizer system"
                 )
             }
         }
@@ -485,50 +577,50 @@ impl From<StabilizerError>
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Tests
-// -----------------------------------------------------------------------------
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn repetition_code() -> StabilizerGroup {
+    fn three_qubit_repetition_code()
+        -> StabilizerGroup
+    {
         let mut group =
             StabilizerGroup::new(3)
                 .unwrap();
 
         group
             .add_generator(
-                super::super::stabilizer::
-                    StabilizerGenerator::new(
-                        0,
-                        PauliString::from_paulis(
-                            &[
-                                Pauli::Z,
-                                Pauli::Z,
-                                Pauli::I,
-                            ],
-                        ),
-                    )
-                    .unwrap(),
+                super::super::stabilizer::StabilizerGenerator::new(
+                    0,
+                    PauliString::from_paulis(
+                        &[
+                            Pauli::Z,
+                            Pauli::Z,
+                            Pauli::I,
+                        ],
+                    ),
+                )
+                .unwrap(),
             )
             .unwrap();
 
         group
             .add_generator(
-                super::super::stabilizer::
-                    StabilizerGenerator::new(
-                        1,
-                        PauliString::from_paulis(
-                            &[
-                                Pauli::I,
-                                Pauli::Z,
-                                Pauli::Z,
-                            ],
-                        ),
-                    )
-                    .unwrap(),
+                super::super::stabilizer::StabilizerGenerator::new(
+                    1,
+                    PauliString::from_paulis(
+                        &[
+                            Pauli::I,
+                            Pauli::Z,
+                            Pauli::Z,
+                        ],
+                    ),
+                )
+                .unwrap(),
             )
             .unwrap();
 
@@ -536,12 +628,12 @@ mod tests {
     }
 
     #[test]
-    fn finds_repetition_code_distance() {
+    fn finds_three_qubit_code_distance() {
         let group =
-            repetition_code();
+            three_qubit_repetition_code();
 
         let result =
-            calculate_distance(
+            compute_distance(
                 &group,
             )
             .unwrap();
@@ -553,48 +645,129 @@ mod tests {
     }
 
     #[test]
-    fn rejects_wrong_claimed_distance() {
+    fn rejects_stabilizer_as_logical_witness() {
         let group =
-            repetition_code();
+            three_qubit_repetition_code();
+
+        let stabilizer =
+            PauliString::from_paulis(
+                &[
+                    Pauli::Z,
+                    Pauli::Z,
+                    Pauli::I,
+                ],
+            );
 
         let result =
-            verify_distance(
+            validate_distance(
                 &group,
-                3,
+                2,
+                &stabilizer,
             );
 
         assert!(matches!(
             result,
             Err(
-                DistanceError::DistanceMismatch {
-                    claimed: 3,
-                    actual: 1
-                }
+                DistanceError::
+                    WitnessIsStabilizer
             )
         ));
     }
 
     #[test]
-    fn found_operator_has_minimum_weight() {
+    fn rejects_non_commuting_witness() {
         let group =
-            repetition_code();
+            three_qubit_repetition_code();
 
+        let witness =
+            PauliString::from_paulis(
+                &[
+                    Pauli::X,
+                    Pauli::I,
+                    Pauli::I,
+                ],
+            );
+
+        // X on q0 actually commutes with ZZ only if it acts on an even
+        // number of overlapping X/Z locations; here it anticommutes with
+        // the first stabilizer.
         let result =
-            calculate_distance(
+            validate_distance(
                 &group,
-            )
-            .unwrap();
+                1,
+                &witness,
+            );
 
-        assert_eq!(
-            result.logical_operator()
-                .weight(),
-            result.distance()
-        );
+        assert!(matches!(
+            result,
+            Err(
+                DistanceError::
+                    WitnessDoesNotCommute
+            )
+        ));
+    }
+
+    #[test]
+    fn accepts_valid_logical_witness() {
+        let group =
+            three_qubit_repetition_code();
+
+        // XXX commutes with both ZZ stabilizers and is not itself a
+        // stabilizer. Its weight is 3.
+        let witness =
+            PauliString::from_paulis(
+                &[
+                    Pauli::X,
+                    Pauli::X,
+                    Pauli::X,
+                ],
+            );
 
         assert!(
-            !result
-                .logical_operator()
-                .is_identity()
+            validate_distance(
+                &group,
+                3,
+                &witness,
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn identity_is_not_a_logical_operator() {
+        let group =
+            three_qubit_repetition_code();
+
+        let identity =
+            PauliString::identity(3);
+
+        let result =
+            validate_distance(
+                &group,
+                0,
+                &identity,
+            );
+
+        assert!(matches!(
+            result,
+            Err(
+                DistanceError::
+                    InvalidDistance {
+                        distance: 0
+                    }
+            )
+        ));
+    }
+
+    #[test]
+    fn distance_convenience_function_works() {
+        let group =
+            three_qubit_repetition_code();
+
+        assert_eq!(
+            distance(&group)
+                .unwrap(),
+            1
         );
     }
 }
