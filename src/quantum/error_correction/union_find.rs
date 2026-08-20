@@ -1,689 +1,160 @@
 //! Zamani Quantum Error Correction — Union-Find Decoder.
 //!
-//! This module implements a deterministic, bounded Union-Find style decoder
-//! for syndrome/detection-event graphs.
+//! Deterministic, resource-bounded Union-Find style decoding over the
+//! canonical [`super::decoding_graph::DecodingGraph`].
 //!
-//! Architecture:
+//! Architectural boundary:
 //!
 //! ```text
-//! Detection events
-//!       │
-//!       ▼
-//! Decoding graph
-//!       │
-//!       ▼
-//! Union-Find decoder
-//!       │
-//!       ├── cluster creation
-//!       ├── cluster growth
-//!       ├── parity tracking
-//!       ├── boundary attachment
-//!       ├── union operations
-//!       └── peeling / correction extraction
-//!       │
-//!       ▼
-//! Correction edges
+//! Syndrome / Detection Events
+//!            │
+//!            ▼
+//!     DecodingGraph
+//!            │
+//!            ▼
+//!      Union-Find
+//!       ├─ clusters
+//!       ├─ parity
+//!       ├─ boundary attachment
+//!       ├─ deterministic growth
+//!       └─ correction extraction
+//!            │
+//!            ▼
+//!       DecodeResult
+//!            │
+//!            ▼
+//!    Pauli Frame / Logical Layer
 //! ```
 //!
-//! Design goals:
+//! This module deliberately does NOT:
 //!
-//! - deterministic decoding;
-//! - bounded memory;
-//! - bounded execution;
-//! - no unchecked indexing;
-//! - no production `unwrap()`/`expect()`;
-//! - checked arithmetic;
-//! - explicit graph validation;
-//! - explicit boundary handling;
-//! - deterministic tie breaking;
-//! - cancellation support;
-//! - decoder resource budgets;
-//! - no floating-point values;
-//! - no dependence on a particular physical noise model;
-//! - suitable as a backend beneath a higher-level QEC decoder.
-//!
-//! Important:
-//!
-//! Union-Find operates on a decoding graph. It does NOT:
-//!
+//! - define another decoding graph;
+//! - define another QEC resource policy;
+//! - define another cancellation token;
 //! - generate physical noise;
 //! - extract syndromes;
 //! - perform stabilizer algebra;
-//! - modify quantum state;
-//! - apply a Pauli frame;
-//! - determine logical equivalence.
+//! - modify a quantum state;
+//! - classify logical equivalence.
 //!
-//! Those responsibilities belong to other QEC layers.
+//! Those responsibilities belong to the corresponding QEC infrastructure
+//! modules.
 //!
-//! The decoder returns a set of selected graph edges. A later Pauli-frame or
-//! logical layer is responsible for interpreting those edges as physical
-//! corrections.
+//! Resource architecture:
+//!
+//! ```text
+//! QecLimits
+//!     │
+//!     ├── graph preflight
+//!     │
+//!     └── decoder budget
+//!             │
+//!             ▼
+//!       Union-Find execution
+//!             │
+//!             ├── CancellationToken
+//!             └── ResourceManager
+//! ```
+//!
+//! The implementation is deterministic:
+//!
+//! - graph iteration order is canonical;
+//! - edge ordering is `(weight, endpoint ordering)`;
+//! - union tie-breaking is deterministic;
+//! - correction ordering is deterministic;
+//! - no floating-point arithmetic is used by the decoder.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
+use std::time::Instant;
+
+use super::cancellation::CancellationToken;
+use super::decoding_graph::{
+    BoundaryId,
+    DecodingGraph,
+    GraphEdge,
+    GraphEndpoint,
+    NodeId,
+};
+use super::errors::{
+    DecoderKind,
+    QecError,
+    QecResult,
+    ResourceKind as QecResourceKind,
+};
+use super::limits::QecLimits;
+use super::resources::ResourceManager;
 
 // ============================================================================
-// Resource limits
+// Public compatibility aliases
 // ============================================================================
 
-/// Maximum number of graph vertices accepted by the decoder.
-pub const MAX_UNION_FIND_VERTICES: usize = 1_000_000;
-
-/// Maximum number of graph edges accepted by the decoder.
-pub const MAX_UNION_FIND_EDGES: usize = 4_000_000;
-
-/// Maximum number of selected correction edges.
-pub const MAX_CORRECTION_EDGES: usize = 1_000_000;
-
-/// Maximum number of cluster-growth operations.
-pub const MAX_GROWTH_OPERATIONS: usize = 20_000_000;
-
-/// Maximum number of union operations.
-pub const MAX_UNION_OPERATIONS: usize = 4_000_000;
-
-/// Maximum number of peeling operations.
-pub const MAX_PEEL_OPERATIONS: usize = 20_000_000;
-
-/// Maximum supported edge weight.
-pub const MAX_EDGE_WEIGHT: u64 = 1_000_000_000_000_000;
-
-/// Maximum supported vertex identifier.
-pub const MAX_VERTEX_ID: usize = 1_000_000_000;
-
-/// Maximum supported boundary identifier.
-pub const MAX_BOUNDARY_ID: usize = 1_000_000_000;
-
-// ============================================================================
-// Vertex identifiers
-// ============================================================================
-
-/// Stable identifier for a detection-event vertex.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-)]
-pub struct VertexId(usize);
-
-impl VertexId {
-    /// Creates a vertex identifier.
-    pub const fn new(id: usize) -> Self {
-        Self(id)
-    }
-
-    /// Returns the numeric identifier.
-    pub const fn index(self) -> usize {
-        self.0
-    }
-}
-
-impl fmt::Display for VertexId {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-        write!(f, "v{}", self.0)
-    }
-}
-
-// ============================================================================
-// Boundary identifiers
-// ============================================================================
-
-/// Stable identifier for a decoding boundary.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-)]
-pub struct BoundaryId(usize);
-
-impl BoundaryId {
-    /// Creates a boundary identifier.
-    pub const fn new(id: usize) -> Self {
-        Self(id)
-    }
-
-    /// Returns the numeric identifier.
-    pub const fn index(self) -> usize {
-        self.0
-    }
-}
-
-impl fmt::Display for BoundaryId {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-        write!(f, "b{}", self.0)
-    }
-}
-
-// ============================================================================
-// Graph endpoint
-// ============================================================================
-
-/// Endpoint of a decoding edge.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-)]
-pub enum Endpoint {
-    /// Detection event.
-    Vertex(VertexId),
-
-    /// Boundary endpoint.
-    Boundary(BoundaryId),
-}
-
-impl Endpoint {
-    /// Returns true when this is a vertex.
-    pub const fn is_vertex(self) -> bool {
-        matches!(self, Self::Vertex(_))
-    }
-
-    /// Returns true when this is a boundary.
-    pub const fn is_boundary(self) -> bool {
-        matches!(self, Self::Boundary(_))
-    }
-}
-
-// ============================================================================
-// Edge identifier
-// ============================================================================
-
-/// Stable edge identifier.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-)]
-pub struct EdgeId(usize);
-
-impl EdgeId {
-    /// Creates an edge identifier.
-    pub const fn new(id: usize) -> Self {
-        Self(id)
-    }
-
-    /// Returns the numeric identifier.
-    pub const fn index(self) -> usize {
-        self.0
-    }
-}
-
-impl fmt::Display for EdgeId {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-        write!(f, "e{}", self.0)
-    }
-}
-
-// ============================================================================
-// Edge
-// ============================================================================
-
-/// Weighted decoding-graph edge.
+/// Canonical Union-Find vertex identifier.
 ///
-/// Edges are normalized so that the endpoint ordering is deterministic.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-)]
-pub struct DecodingEdge {
-    id: EdgeId,
-    left: Endpoint,
-    right: Endpoint,
-    weight: u64,
-}
-
-impl DecodingEdge {
-    /// Creates a validated edge.
-    pub fn new(
-        id: EdgeId,
-        left: Endpoint,
-        right: Endpoint,
-        weight: u64,
-    ) -> Result<Self, UnionFindError> {
-        if left == right {
-            return Err(
-                UnionFindError::SelfLoop {
-                    endpoint: left,
-                },
-            );
-        }
-
-        if weight > MAX_EDGE_WEIGHT {
-            return Err(
-                UnionFindError::EdgeWeightOutOfRange {
-                    weight,
-                },
-            );
-        }
-
-        let (left, right) =
-            if left <= right {
-                (left, right)
-            } else {
-                (right, left)
-            };
-
-        Ok(Self {
-            id,
-            left,
-            right,
-            weight,
-        })
-    }
-
-    /// Returns the edge identifier.
-    pub const fn id(self) -> EdgeId {
-        self.id
-    }
-
-    /// Returns the left endpoint.
-    pub const fn left(self) -> Endpoint {
-        self.left
-    }
-
-    /// Returns the right endpoint.
-    pub const fn right(self) -> Endpoint {
-        self.right
-    }
-
-    /// Returns the edge weight.
-    pub const fn weight(self) -> u64 {
-        self.weight
-    }
-
-    /// Returns true if this edge connects two detection vertices.
-    pub const fn connects_vertices(self) -> bool {
-        matches!(
-            (self.left, self.right),
-            (Endpoint::Vertex(_), Endpoint::Vertex(_))
-        )
-    }
-
-    /// Returns true if this edge connects a vertex to a boundary.
-    pub const fn connects_boundary(self) -> bool {
-        matches!(
-            (self.left, self.right),
-            (Endpoint::Vertex(_), Endpoint::Boundary(_))
-                | (Endpoint::Boundary(_), Endpoint::Vertex(_))
-        )
-    }
-}
+/// This is an alias for the canonical decoding-graph node identifier.
+/// Union-Find no longer owns a separate vertex-ID type.
+pub type VertexId = NodeId;
 
 // ============================================================================
-// Syndrome graph
+// Decoder limits
 // ============================================================================
 
-/// Bounded decoding graph consumed by the Union-Find decoder.
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-)]
-pub struct DecodingGraph {
-    vertices: BTreeSet<VertexId>,
-    active: BTreeSet<VertexId>,
-    boundaries: BTreeSet<BoundaryId>,
-    edges: BTreeMap<EdgeId, DecodingEdge>,
-}
-
-impl DecodingGraph {
-    /// Creates an empty graph.
-    pub fn new() -> Self {
-        Self {
-            vertices: BTreeSet::new(),
-            active: BTreeSet::new(),
-            boundaries: BTreeSet::new(),
-            edges: BTreeMap::new(),
-        }
-    }
-
-    /// Adds a vertex.
-    pub fn add_vertex(
-        &mut self,
-        vertex: VertexId,
-    ) -> Result<(), UnionFindError> {
-        if vertex.index()
-            > MAX_VERTEX_ID
-        {
-            return Err(
-                UnionFindError::VertexIdOutOfRange {
-                    vertex,
-                },
-            );
-        }
-
-        if self.vertices.len()
-            >= MAX_UNION_FIND_VERTICES
-            && !self.vertices.contains(&vertex)
-        {
-            return Err(
-                UnionFindError::TooManyVertices {
-                    limit:
-                        MAX_UNION_FIND_VERTICES,
-                },
-            );
-        }
-
-        self.vertices.insert(vertex);
-
-        Ok(())
-    }
-
-    /// Marks a vertex as an active detection event.
-    pub fn activate(
-        &mut self,
-        vertex: VertexId,
-    ) -> Result<(), UnionFindError> {
-        if !self.vertices.contains(&vertex) {
-            return Err(
-                UnionFindError::UnknownVertex {
-                    vertex,
-                },
-            );
-        }
-
-        self.active.insert(vertex);
-
-        Ok(())
-    }
-
-    /// Adds a boundary.
-    pub fn add_boundary(
-        &mut self,
-        boundary: BoundaryId,
-    ) -> Result<(), UnionFindError> {
-        if boundary.index()
-            > MAX_BOUNDARY_ID
-        {
-            return Err(
-                UnionFindError::BoundaryIdOutOfRange {
-                    boundary,
-                },
-            );
-        }
-
-        self.boundaries.insert(boundary);
-
-        Ok(())
-    }
-
-    /// Adds a weighted edge.
-    pub fn add_edge(
-        &mut self,
-        edge: DecodingEdge,
-    ) -> Result<(), UnionFindError> {
-        if self.edges.len()
-            >= MAX_UNION_FIND_EDGES
-            && !self.edges.contains_key(&edge.id())
-        {
-            return Err(
-                UnionFindError::TooManyEdges {
-                    limit:
-                        MAX_UNION_FIND_EDGES,
-                },
-            );
-        }
-
-        self.validate_endpoint(
-            edge.left(),
-        )?;
-
-        self.validate_endpoint(
-            edge.right(),
-        )?;
-
-        if self.edges.contains_key(&edge.id()) {
-            return Err(
-                UnionFindError::DuplicateEdge {
-                    edge: edge.id(),
-                },
-            );
-        }
-
-        self.edges.insert(
-            edge.id(),
-            edge,
-        );
-
-        Ok(())
-    }
-
-    fn validate_endpoint(
-        &self,
-        endpoint: Endpoint,
-    ) -> Result<(), UnionFindError> {
-        match endpoint {
-            Endpoint::Vertex(vertex) => {
-                if !self.vertices.contains(&vertex) {
-                    return Err(
-                        UnionFindError::UnknownVertex {
-                            vertex,
-                        },
-                    );
-                }
-            }
-
-            Endpoint::Boundary(boundary) => {
-                if !self
-                    .boundaries
-                    .contains(&boundary)
-                {
-                    return Err(
-                        UnionFindError::UnknownBoundary {
-                            boundary,
-                        },
-                    );
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Returns all vertices.
-    pub fn vertices(
-        &self,
-    ) -> impl Iterator<Item = VertexId> + '_ {
-        self.vertices.iter().copied()
-    }
-
-    /// Returns active detection events.
-    pub fn active_vertices(
-        &self,
-    ) -> impl Iterator<Item = VertexId> + '_ {
-        self.active.iter().copied()
-    }
-
-    /// Returns all boundaries.
-    pub fn boundaries(
-        &self,
-    ) -> impl Iterator<Item = BoundaryId> + '_ {
-        self.boundaries.iter().copied()
-    }
-
-    /// Returns all edges in deterministic order.
-    pub fn edges(
-        &self,
-    ) -> impl Iterator<Item = DecodingEdge> + '_ {
-        self.edges.values().copied()
-    }
-
-    /// Returns an edge by identifier.
-    pub fn edge(
-        &self,
-        id: EdgeId,
-    ) -> Option<DecodingEdge> {
-        self.edges.get(&id).copied()
-    }
-
-    /// Returns the number of vertices.
-    pub fn vertex_count(&self) -> usize {
-        self.vertices.len()
-    }
-
-    /// Returns the number of active vertices.
-    pub fn active_count(&self) -> usize {
-        self.active.len()
-    }
-
-    /// Returns the number of edges.
-    pub fn edge_count(&self) -> usize {
-        self.edges.len()
-    }
-
-    /// Validates the entire graph.
-    pub fn validate(
-        &self,
-    ) -> Result<(), UnionFindError> {
-        if self.vertices.len()
-            > MAX_UNION_FIND_VERTICES
-        {
-            return Err(
-                UnionFindError::TooManyVertices {
-                    limit:
-                        MAX_UNION_FIND_VERTICES,
-                },
-            );
-        }
-
-        if self.edges.len()
-            > MAX_UNION_FIND_EDGES
-        {
-            return Err(
-                UnionFindError::TooManyEdges {
-                    limit:
-                        MAX_UNION_FIND_EDGES,
-                },
-            );
-        }
-
-        for vertex in &self.active {
-            if !self.vertices.contains(vertex) {
-                return Err(
-                    UnionFindError::UnknownVertex {
-                        vertex: *vertex,
-                    },
-                );
-            }
-        }
-
-        for edge in self.edges.values() {
-            self.validate_endpoint(
-                edge.left(),
-            )?;
-
-            self.validate_endpoint(
-                edge.right(),
-            )?;
-        }
-
-        Ok(())
-    }
-}
-
-impl Default for DecodingGraph {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// ============================================================================
-// Decoder budget
-// ============================================================================
-
-/// Execution budget for the decoder.
+/// Decoder-specific operation budget.
 ///
-/// This prevents pathological input from consuming unlimited CPU time.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-)]
+/// These are algorithmic budgets, not a replacement for [`QecLimits`].
+///
+/// `QecLimits` remains authoritative for workload resources such as graph
+/// nodes, graph edges, memory and decoder iterations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DecoderBudget {
-    growth_operations: usize,
-    union_operations: usize,
-    peel_operations: usize,
+    /// Maximum graph-edge evaluations performed by the decoder.
+    pub max_growth_operations: usize,
+
+    /// Maximum cluster union operations.
+    pub max_union_operations: usize,
+
+    /// Maximum correction extraction operations.
+    pub max_peel_operations: usize,
 }
 
 impl DecoderBudget {
-    /// Creates a budget.
+    /// Creates an explicit decoder budget.
+    #[must_use]
     pub const fn new(
-        growth_operations: usize,
-        union_operations: usize,
-        peel_operations: usize,
+        max_growth_operations: usize,
+        max_union_operations: usize,
+        max_peel_operations: usize,
     ) -> Self {
         Self {
-            growth_operations,
-            union_operations,
-            peel_operations,
+            max_growth_operations,
+            max_union_operations,
+            max_peel_operations,
         }
     }
 
-    /// Production-oriented default budget.
+    /// Creates a budget derived from the configured QEC iteration limit.
+    ///
+    /// The multiplication is saturating so configuration itself cannot
+    /// overflow.
+    #[must_use]
+    pub const fn from_limits(limits: QecLimits) -> Self {
+        let iterations = limits.max_decoder_iterations;
+
+        Self {
+            max_growth_operations: iterations,
+            max_union_operations: iterations,
+            max_peel_operations: iterations,
+        }
+    }
+
+    /// Conservative production budget.
+    #[must_use]
     pub const fn production() -> Self {
         Self {
-            growth_operations:
-                MAX_GROWTH_OPERATIONS,
-            union_operations:
-                MAX_UNION_OPERATIONS,
-            peel_operations:
-                MAX_PEEL_OPERATIONS,
+            max_growth_operations: 20_000_000,
+            max_union_operations: 4_000_000,
+            max_peel_operations: 20_000_000,
         }
-    }
-
-    /// Returns the growth-operation limit.
-    pub const fn growth_operations(
-        self,
-    ) -> usize {
-        self.growth_operations
-    }
-
-    /// Returns the union-operation limit.
-    pub const fn union_operations(
-        self,
-    ) -> usize {
-        self.union_operations
-    }
-
-    /// Returns the peeling-operation limit.
-    pub const fn peel_operations(
-        self,
-    ) -> usize {
-        self.peel_operations
     }
 }
 
@@ -694,70 +165,70 @@ impl Default for DecoderBudget {
 }
 
 // ============================================================================
-// Cancellation
-// ============================================================================
-
-/// Cooperative cancellation interface.
-///
-/// A hardware/runtime integration can implement this trait to stop a decoder
-/// without terminating the process.
-pub trait CancellationToken {
-    /// Returns true when decoding must stop.
-    fn is_cancelled(&self) -> bool;
-}
-
-/// Cancellation token that never cancels.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Default,
-)]
-pub struct NeverCancel;
-
-impl CancellationToken for NeverCancel {
-    fn is_cancelled(&self) -> bool {
-        false
-    }
-}
-
-// ============================================================================
 // Decoder configuration
 // ============================================================================
 
-/// Configuration of the Union-Find decoder.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-)]
+/// Union-Find execution configuration.
+///
+/// `limits` is the central QEC resource policy. No independent graph-size
+/// policy is maintained here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnionFindConfig {
+    limits: QecLimits,
     budget: DecoderBudget,
 }
 
 impl UnionFindConfig {
     /// Creates a configuration.
     pub const fn new(
+        limits: QecLimits,
         budget: DecoderBudget,
     ) -> Self {
-        Self { budget }
+        Self { limits, budget }
     }
 
-    /// Production configuration.
+    /// Creates a configuration using the central production limits.
+    #[must_use]
     pub const fn production() -> Self {
+        let limits = QecLimits::new();
+
         Self {
-            budget:
-                DecoderBudget::production(),
+            limits,
+            budget: DecoderBudget::from_limits(limits),
         }
     }
 
-    /// Returns the execution budget.
-    pub const fn budget(
-        self,
-    ) -> DecoderBudget {
+    /// Returns the authoritative QEC limits.
+    #[must_use]
+    pub const fn limits(self) -> QecLimits {
+        self.limits
+    }
+
+    /// Returns the decoder operation budget.
+    #[must_use]
+    pub const fn budget(self) -> DecoderBudget {
         self.budget
+    }
+
+    /// Replaces the central QEC resource policy.
+    #[must_use]
+    pub const fn with_limits(
+        self,
+        limits: QecLimits,
+    ) -> Self {
+        Self {
+            limits,
+            budget: DecoderBudget::from_limits(limits),
+        }
+    }
+
+    /// Replaces only the algorithmic decoder budget.
+    #[must_use]
+    pub const fn with_budget(
+        self,
+        budget: DecoderBudget,
+    ) -> Self {
+        Self { budget, ..self }
     }
 }
 
@@ -771,117 +242,186 @@ impl Default for UnionFindConfig {
 // Correction
 // ============================================================================
 
-/// A selected correction path represented by graph edges.
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-)]
+/// Correction produced by Union-Find.
+///
+/// The correction consists of canonical graph edges rather than a private
+/// edge-ID namespace. This prevents the decoder from maintaining a duplicate
+/// graph representation.
+///
+/// The edges are always returned in deterministic order.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Correction {
-    edges: Vec<EdgeId>,
+    edges: Vec<GraphEdge>,
 }
 
 impl Correction {
     /// Creates an empty correction.
-    pub fn empty() -> Self {
-        Self {
-            edges: Vec::new(),
-        }
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self { edges: Vec::new() }
+    }
+
+    /// Creates a correction from canonical graph edges.
+    fn new(edges: Vec<GraphEdge>) -> Self {
+        Self { edges }
     }
 
     /// Returns selected correction edges.
-    pub fn edges(
-        &self,
-    ) -> &[EdgeId] {
+    #[must_use]
+    pub fn edges(&self) -> &[GraphEdge] {
         &self.edges
     }
 
-    /// Returns the number of correction edges.
+    /// Returns the number of selected edges.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.edges.len()
     }
 
-    /// Returns true if no correction edges are selected.
+    /// Returns whether the correction is empty.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.edges.is_empty()
     }
+
+    /// Returns the correction as an iterator.
+    pub fn iter(&self) -> impl Iterator<Item = &GraphEdge> {
+        self.edges.iter()
+    }
 }
 
-impl Default for Correction {
-    fn default() -> Self {
-        Self::empty()
-    }
+// ============================================================================
+// Decode termination
+// ============================================================================
+
+/// Why Union-Find terminated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminationReason {
+    /// All active detection-event parity was resolved.
+    Completed,
+
+    /// The graph contained no detection nodes.
+    EmptyGraph,
+}
+
+// ============================================================================
+// Decode statistics
+// ============================================================================
+
+/// Deterministic execution statistics produced by Union-Find.
+///
+/// These are decoder-local metrics. Higher-level metrics infrastructure may
+/// additionally record wall time, memory and backend information.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecodeStatistics {
+    /// Number of graph edges considered.
+    pub growth_operations: usize,
+
+    /// Number of successful cluster unions.
+    pub union_operations: usize,
+
+    /// Number of correction edges emitted.
+    pub peel_operations: usize,
+
+    /// Number of final Union-Find clusters.
+    pub clusters: usize,
+
+    /// Number of graph detection nodes.
+    pub detection_nodes: usize,
+
+    /// Number of graph boundaries.
+    pub boundary_nodes: usize,
+
+    /// Number of graph edges.
+    pub graph_edges: usize,
+
+    /// Decoder wall-clock duration.
+    ///
+    /// This value is informational and is intentionally not part of
+    /// deterministic equality semantics for the algorithmic result.
+    pub elapsed_nanos: u64,
 }
 
 // ============================================================================
 // Decode result
 // ============================================================================
 
-/// Result returned by Union-Find decoding.
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-)]
+/// Complete Union-Find result.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecodeResult {
     correction: Correction,
-    clusters: usize,
-    growth_operations: usize,
-    union_operations: usize,
-    peel_operations: usize,
+    statistics: DecodeStatistics,
+    termination: TerminationReason,
 }
 
 impl DecodeResult {
     /// Returns the correction.
-    pub fn correction(
-        &self,
-    ) -> &Correction {
+    #[must_use]
+    pub fn correction(&self) -> &Correction {
         &self.correction
     }
 
-    /// Returns the number of final clusters.
-    pub const fn clusters(
-        &self,
-    ) -> usize {
-        self.clusters
+    /// Returns decoder statistics.
+    #[must_use]
+    pub const fn statistics(&self) -> DecodeStatistics {
+        self.statistics
+    }
+
+    /// Returns the termination reason.
+    #[must_use]
+    pub const fn termination(&self) -> TerminationReason {
+        self.termination
+    }
+
+    /// Returns the number of clusters.
+    #[must_use]
+    pub const fn clusters(&self) -> usize {
+        self.statistics.clusters
     }
 
     /// Returns the number of growth operations.
-    pub const fn growth_operations(
-        &self,
-    ) -> usize {
-        self.growth_operations
+    #[must_use]
+    pub const fn growth_operations(&self) -> usize {
+        self.statistics.growth_operations
     }
 
     /// Returns the number of union operations.
-    pub const fn union_operations(
-        &self,
-    ) -> usize {
-        self.union_operations
+    #[must_use]
+    pub const fn union_operations(&self) -> usize {
+        self.statistics.union_operations
     }
 
     /// Returns the number of peeling operations.
-    pub const fn peel_operations(
-        &self,
-    ) -> usize {
-        self.peel_operations
+    #[must_use]
+    pub const fn peel_operations(&self) -> usize {
+        self.statistics.peel_operations
+    }
+
+    /// Returns true if decoding completed normally.
+    #[must_use]
+    pub const fn is_complete(&self) -> bool {
+        matches!(
+            self.termination,
+            TerminationReason::Completed
+                | TerminationReason::EmptyGraph
+        )
     }
 }
 
 // ============================================================================
-// Union-Find cluster
+// Union-Find state
 // ============================================================================
 
-#[derive(
-    Debug,
-    Clone,
-)]
+/// One Union-Find cluster.
+#[derive(Debug, Clone)]
 struct Cluster {
     parent: usize,
     rank: usize,
+
+    /// XOR parity of active detection events in this cluster.
     parity: bool,
+
+    /// Whether the cluster has access to a graph boundary.
     has_boundary: bool,
 }
 
@@ -899,88 +439,991 @@ impl Cluster {
     }
 }
 
-// ============================================================================
-// Union-Find state
-// ============================================================================
-
-#[derive(
-    Debug,
-    Clone,
-)]
+/// Internal Union-Find state.
+///
+/// The vector is indexed only after a deterministic graph-node-to-index map
+/// has been constructed. All indexing is checked.
+#[derive(Debug, Clone)]
 struct UnionFindState {
-    vertices: Vec<VertexId>,
-    index: BTreeMap<VertexId, usize>,
+    nodes: Vec<NodeId>,
+    indices: BTreeMap<NodeId, usize>,
     clusters: Vec<Cluster>,
 }
 
 impl UnionFindState {
-    fn new(
+    fn from_graph(
         graph: &DecodingGraph,
     ) -> Result<Self, UnionFindError> {
-        let vertices: Vec<VertexId> =
-            graph.vertices().collect();
-
-        if vertices.len()
-            > MAX_UNION_FIND_VERTICES
-        {
-            return Err(
-                UnionFindError::TooManyVertices {
-                    limit:
-                        MAX_UNION_FIND_VERTICES,
-                },
-            );
-        }
-
-        let mut index =
-            BTreeMap::new();
-
-        for (
-            position,
-            vertex,
-        ) in vertices.iter().copied().enumerate()
-        {
-            index.insert(
-                vertex,
-                position,
-            );
-        }
-
-        let active: BTreeSet<VertexId> =
+        let nodes: Vec<NodeId> =
             graph
-                .active_vertices()
+                .nodes()
+                .map(|node| node.id())
                 .collect();
 
-        let clusters =
-            vertices
-                .iter()
-                .enumerate()
-                .map(
-                    |(position, vertex)| {
-                        Cluster::new(
-                            position,
-                            active.contains(vertex),
-                        )
-                    },
-                )
-                .collect();
+        let mut indices = BTreeMap::new();
+
+        for (index, node) in nodes.iter().copied().enumerate() {
+            indices.insert(node, index);
+        }
+
+        let clusters = nodes
+            .iter()
+            .enumerate()
+            .map(|(index, _)| {
+                // Every node in the canonical decoding graph represents an
+                // actual detection event. Inactive events are rejected by the
+                // graph at insertion time.
+                Cluster::new(index, true)
+            })
+            .collect();
 
         Ok(Self {
-            vertices,
-            index,
+            nodes,
+            indices,
             clusters,
         })
     }
 
-    fn vertex_index(
+    fn index_of(
         &self,
-        vertex: VertexId,
+        node: NodeId,
     ) -> Result<usize, UnionFindError> {
-        self.index
-            .get(&vertex)
+        self.indices
+            .get(&node)
             .copied()
             .ok_or(
-                UnionFindError::UnknownVertex {
-                    vertex,
+                UnionFindError::UnknownNode { node },
+            )
+    }
+
+    fn find(
+        &mut self,
+        index: usize,
+    ) -> Result<usize, UnionFindError> {
+        let parent = self
+            .clusters
+            .get(index)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index,
+                },
+            )?
+            .parent;
+
+        if parent == index {
+            return Ok(index);
+        }
+
+        let root = self.find(parent)?;
+
+        let cluster = self
+            .clusters
+            .get_mut(index)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index,
+                },
+            )?;
+
+        cluster.parent = root;
+
+        Ok(root)
+    }
+
+    fn cluster_state(
+        &mut self,
+        index: usize,
+    ) -> Result<(bool, bool), UnionFindError> {
+        let root = self.find(index)?;
+
+        let cluster = self
+            .clusters
+            .get(root)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index: root,
+                },
+            )?;
+
+        Ok((
+            cluster.parity,
+            cluster.has_boundary,
+        ))
+    }
+
+    fn mark_boundary(
+        &mut self,
+        index: usize,
+    ) -> Result<(), UnionFindError> {
+        let root = self.find(index)?;
+
+        let cluster = self
+            .clusters
+            .get_mut(root)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index: root,
+                },
+            )?;
+
+        cluster.has_boundary = true;
+
+        Ok(())
+    }
+
+    fn union(
+        &mut self,
+        left: usize,
+        right: usize,
+    ) -> Result<bool, UnionFindError> {
+        let mut left_root = self.find(left)?;
+        let mut right_root = self.find(right)?;
+
+        if left_root == right_root {
+            return Ok(false);
+        }
+
+        let left_rank = self
+            .clusters
+            .get(left_root)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index: left_root,
+                },
+            )?
+            .rank;
+
+        let right_rank = self
+            .clusters
+            .get(right_root)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index: right_root,
+                },
+            )?
+            .rank;
+
+        // Deterministic union-by-rank with lower root ID as tie breaker.
+        if left_rank < right_rank
+            || (left_rank == right_rank
+                && left_root > right_root)
+        {
+            std::mem::swap(
+                &mut left_root,
+                &mut right_root,
+            );
+        }
+
+        let right_cluster = self
+            .clusters
+            .get(right_root)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index: right_root,
+                })?
+            .clone();
+
+        {
+            let left_cluster = self
+                .clusters
+                .get_mut(left_root)
+                .ok_or(
+                    UnionFindError::InternalIndexOutOfRange {
+                        index: left_root,
+                    },
+                )?;
+
+            left_cluster.parity ^= right_cluster.parity;
+            left_cluster.has_boundary |=
+                right_cluster.has_boundary;
+        }
+
+        let right_parent = self
+            .clusters
+            .get_mut(right_root)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index: right_root,
+                },
+            )?;
+
+        right_parent.parent = left_root;
+
+        if left_rank == right_rank {
+            let root = self
+                .clusters
+                .get_mut(left_root)
+                .ok_or(
+                    UnionFindError::InternalIndexOutOfRange {
+                        index: left_root,
+                    },
+                )?;
+
+            root.rank = root
+                .rank
+                .checked_add(1)
+                .ok_or(
+                    UnionFindError::ArithmeticOverflow,
+                )?;
+        }
+
+        Ok(true)
+    }
+
+    fn root_count(
+        &mut self,
+    ) -> Result<usize, UnionFindError> {
+        let mut roots = std::collections::BTreeSet::new();
+
+        for index in 0..self.clusters.len() {
+            roots.insert(self.find(index)?);
+        }
+
+        Ok(roots.len())
+    }
+
+    fn unresolved_nodes(
+        &mut self,
+    ) -> Result<Vec<NodeId>, UnionFindError> {
+        let mut unresolved = Vec::new();
+
+        for (index, node) in self.nodes.iter().copied().enumerate() {
+            let (parity, boundary) =
+                self.cluster_state(index)?;
+
+            if parity && !boundary {
+                unresolved.push(node);
+            }
+        }
+
+        Ok(unresolved)
+    }
+}
+
+// ============================================================================
+// Decoder
+// ============================================================================
+
+/// Deterministic Union-Find decoder.
+///
+/// The decoder consumes the canonical `DecodingGraph`. Resource safety is
+/// enforced before internal state allocation.
+#[derive(Debug, Clone, Copy)]
+pub struct UnionFindDecoder {
+    config: UnionFindConfig,
+}
+
+impl UnionFindDecoder {
+    /// Creates a production decoder.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            config: UnionFindConfig::production(),
+        }
+    }
+
+    /// Creates a decoder from explicit configuration.
+    #[must_use]
+    pub const fn with_config(
+        config: UnionFindConfig,
+    ) -> Self {
+        Self { config }
+    }
+
+    /// Returns the decoder configuration.
+    #[must_use]
+    pub const fn config(&self) -> UnionFindConfig {
+        self.config
+    }
+
+    /// Decodes without an external resource manager.
+    ///
+    /// Central `QecLimits` are still enforced.
+    pub fn decode(
+        &self,
+        graph: &DecodingGraph,
+    ) -> Result<DecodeResult, UnionFindError> {
+        let cancellation = CancellationToken::new();
+
+        self.decode_with_context(
+            graph,
+            &cancellation,
+            None,
+        )
+    }
+
+    /// Decodes with the canonical cancellation token.
+    pub fn decode_with_cancellation(
+        &self,
+        graph: &DecodingGraph,
+        cancellation: &CancellationToken,
+    ) -> Result<DecodeResult, UnionFindError> {
+        self.decode_with_context(
+            graph,
+            cancellation,
+            None,
+        )
+    }
+
+    /// Decodes with canonical cancellation and resource accounting.
+    ///
+    /// `ResourceManager` is used for accounting and runtime resource
+    /// enforcement; `QecLimits` remains the decoder's authoritative
+    /// configuration policy.
+    pub fn decode_with_resources(
+        &self,
+        graph: &DecodingGraph,
+        cancellation: &CancellationToken,
+        resources: &ResourceManager,
+    ) -> Result<DecodeResult, UnionFindError> {
+        self.decode_with_context(
+            graph,
+            cancellation,
+            Some(resources),
+        )
+    }
+
+    fn decode_with_context(
+        &self,
+        graph: &DecodingGraph,
+        cancellation: &CancellationToken,
+        resources: Option<&ResourceManager>,
+    ) -> Result<DecodeResult, UnionFindError> {
+        let started = Instant::now();
+
+        cancellation
+            .check()
+            .map_err(UnionFindError::from)?;
+
+        // ------------------------------------------------------------------
+        // Configuration validation
+        // ------------------------------------------------------------------
+
+        self.config
+            .limits
+            .validate()
+            .map_err(UnionFindError::from)?;
+
+        // ------------------------------------------------------------------
+        // Graph validation and allocation-free preflight
+        // ------------------------------------------------------------------
+
+        graph
+            .validate()
+            .map_err(UnionFindError::from)?;
+
+        let estimate =
+            DecodingGraph::preflight(
+                &self.config.limits,
+                graph.node_count(),
+                graph.boundary_count(),
+                graph.edge_count(),
+            )
+            .map_err(UnionFindError::from)?;
+
+        if let Some(manager) = resources {
+            manager
+                .check()
+                .map_err(UnionFindError::from)?;
+
+            manager
+                .record_graph_nodes(
+                    u64::try_from(
+                        graph.total_node_count(),
+                    )
+                    .map_err(
+                        |_| UnionFindError::ArithmeticOverflow,
+                    )?,
+                )
+                .map_err(UnionFindError::from)?;
+
+            manager
+                .record_graph_edges(
+                    u64::try_from(
+                        graph.edge_count(),
+                    )
+                    .map_err(
+                        |_| UnionFindError::ArithmeticOverflow,
+                    )?,
+                )
+                .map_err(UnionFindError::from)?;
+
+            // Reservation exists only for the duration of decoding.
+            // The RAII guard releases it when the operation exits.
+            let _memory = manager
+                .reserve_memory(
+                    estimate.estimated_memory_bytes(),
+                )
+                .map_err(UnionFindError::from)?;
+
+            return self
+                .decode_inner(
+                    graph,
+                    cancellation,
+                    resources,
+                    started,
+                );
+        }
+
+        self.decode_inner(
+            graph,
+            cancellation,
+            None,
+            started,
+        )
+    }
+
+    fn decode_inner(
+        &self,
+        graph: &DecodingGraph,
+        cancellation: &CancellationToken,
+        resources: Option<&ResourceManager>,
+        started: Instant,
+    ) -> Result<DecodeResult, UnionFindError> {
+        if graph.is_empty() {
+            return Ok(DecodeResult {
+                correction: Correction::empty(),
+                statistics: DecodeStatistics {
+                    growth_operations: 0,
+                    union_operations: 0,
+                    peel_operations: 0,
+                    clusters: 0,
+                    detection_nodes: 0,
+                    boundary_nodes: graph.boundary_count(),
+                    graph_edges: graph.edge_count(),
+                    elapsed_nanos: elapsed_nanos(
+                        started,
+                    )?,
+                },
+                termination:
+                    TerminationReason::EmptyGraph,
+            });
+        }
+
+        let mut state =
+            UnionFindState::from_graph(graph)?;
+
+        let mut edges: Vec<GraphEdge> =
+            graph.edges().cloned().collect();
+
+        // Canonical deterministic order:
+        //
+        // 1. edge weight
+        // 2. first endpoint
+        // 3. second endpoint
+        // 4. edge kind
+        edges.sort_by(|left, right| {
+            (
+                left.weight().value(),
+                left.first(),
+                left.second(),
+                left.kind(),
+            )
+                .cmp(&(
+                    right.weight().value(),
+                    right.first(),
+                    right.second(),
+                    right.kind(),
+                ))
+        });
+
+        let mut growth_operations = 0usize;
+        let mut union_operations = 0usize;
+
+        // ==================================================================
+        // Growth / cluster resolution
+        // ==================================================================
+
+        for edge in edges.iter() {
+            cancellation
+                .check()
+                .map_err(UnionFindError::from)?;
+
+            record_iteration(resources)?;
+
+            growth_operations = growth_operations
+                .checked_add(1)
+                .ok_or(
+                    UnionFindError::ArithmeticOverflow,
+                )?;
+
+            if growth_operations
+                > self
+                    .config
+                    .budget
+                    .max_growth_operations
+            {
+                return Err(
+                    UnionFindError::GrowthBudgetExceeded {
+                        limit: self
+                            .config
+                            .budget
+                            .max_growth_operations,
+                    },
+                );
+            }
+
+            let first = edge.first();
+            let second = edge.second();
+
+            match (first, second) {
+                (
+                    GraphEndpoint::Detection(left),
+                    GraphEndpoint::Detection(right),
+                ) => {
+                    let left_index =
+                        state.index_of(left)?;
+
+                    let right_index =
+                        state.index_of(right)?;
+
+                    let (
+                        left_parity,
+                        left_boundary,
+                    ) =
+                        state.cluster_state(
+                            left_index,
+                        )?;
+
+                    let (
+                        right_parity,
+                        right_boundary,
+                    ) =
+                        state.cluster_state(
+                            right_index,
+                        )?;
+
+                    // Two already-resolved clusters do not need to be joined.
+                    if (!left_parity
+                        && left_boundary)
+                        && (!right_parity
+                            && right_boundary)
+                    {
+                        continue;
+                    }
+
+                    // If both roots are identical, this edge does not add
+                    // information to the spanning forest.
+                    let left_root =
+                        state.find(left_index)?;
+
+                    let right_root =
+                        state.find(right_index)?;
+
+                    if left_root == right_root {
+                        continue;
+                    }
+
+                    if union_operations
+                        >= self
+                            .config
+                            .budget
+                            .max_union_operations
+                    {
+                        return Err(
+                            UnionFindError::UnionBudgetExceeded {
+                                limit: self
+                                    .config
+                                    .budget
+                                    .max_union_operations,
+                            },
+                        );
+                    }
+
+                    // A deterministic cluster-growth rule:
+                    //
+                    // - connect if at least one cluster remains unresolved;
+                    // - never merge two fully resolved clusters.
+                    if left_parity
+                        || right_parity
+                        || !left_boundary
+                        || !right_boundary
+                    {
+                        let merged =
+                            state.union(
+                                left_index,
+                                right_index,
+                            )?;
+
+                        if merged {
+                            union_operations =
+                                union_operations
+                                    .checked_add(1)
+                                    .ok_or(
+                                        UnionFindError::ArithmeticOverflow,
+                                    )?;
+                        }
+                    }
+                }
+
+                (
+                    GraphEndpoint::Detection(node),
+                    GraphEndpoint::Boundary(_),
+                )
+                | (
+                    GraphEndpoint::Boundary(_),
+                    GraphEndpoint::Detection(node),
+                ) => {
+                    let index =
+                        state.index_of(node)?;
+
+                    let (
+                        parity,
+                        has_boundary,
+                    ) =
+                        state.cluster_state(
+                            index,
+                        )?;
+
+                    // A boundary is useful only for a cluster that still has
+                    // odd detection parity and is not already attached.
+                    if parity && !has_boundary {
+                        state.mark_boundary(index)?;
+                    }
+                }
+
+                (
+                    GraphEndpoint::Boundary(_),
+                    GraphEndpoint::Boundary(_),
+                ) => {
+                    // Boundary-to-boundary edges do not alter detection
+                    // parity. They are retained in the graph for other
+                    // decoders but are not required by this Union-Find pass.
+                }
+            }
+        }
+
+        // ==================================================================
+        // Boundary resolution pass
+        // ==================================================================
+
+        for edge in edges.iter() {
+            cancellation
+                .check()
+                .map_err(UnionFindError::from)?;
+
+            record_iteration(resources)?;
+
+            let node = match (
+                edge.first(),
+                edge.second(),
+            ) {
+                (
+                    GraphEndpoint::Detection(node),
+                    GraphEndpoint::Boundary(_),
+                )
+                | (
+                    GraphEndpoint::Boundary(_),
+                    GraphEndpoint::Detection(node),
+                ) => node,
+
+                _ => continue,
+            };
+
+            let index =
+                state.index_of(node)?;
+
+            let (
+                parity,
+                has_boundary,
+            ) =
+                state.cluster_state(index)?;
+
+            if parity && !has_boundary {
+                state.mark_boundary(index)?;
+            }
+        }
+
+        // ==================================================================
+        // Validate logical decoder state
+        // ==================================================================
+
+        let unresolved =
+            state.unresolved_nodes()?;
+
+        if !unresolved.is_empty() {
+            return Err(
+                UnionFindError::UnresolvedSyndrome {
+                    vertices:
+                        unresolved.len(),
+                },
+            );
+        }
+
+        // ==================================================================
+        // Correction extraction
+        // ==================================================================
+
+        //
+        // A correction is the deterministic spanning forest selected during
+        // cluster growth plus the minimum-weight boundary edges that actually
+        // resolved odd clusters.
+        //
+        // We reconstruct the selected forest deterministically from the final
+        // cluster relationships rather than maintaining a second graph.
+        //
+
+        let correction =
+            extract_correction(
+                &mut state,
+                &edges,
+                cancellation,
+                resources,
+                self.config.budget,
+            )?;
+
+        let clusters =
+            state.root_count()?;
+
+        let peel_operations =
+            correction.len();
+
+        let elapsed =
+            elapsed_nanos(started)?;
+
+        Ok(DecodeResult {
+            correction,
+            statistics: DecodeStatistics {
+                growth_operations,
+                union_operations,
+                peel_operations,
+                clusters,
+                detection_nodes:
+                    graph.node_count(),
+                boundary_nodes:
+                    graph.boundary_count(),
+                graph_edges:
+                    graph.edge_count(),
+                elapsed_nanos: elapsed,
+            },
+            termination:
+                TerminationReason::Completed,
+        })
+    }
+}
+
+impl Default for UnionFindDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Correction extraction
+// ============================================================================
+
+/// Extracts a deterministic correction forest.
+///
+/// The extraction pass replays the same deterministic edge ordering over a
+/// fresh local Union-Find state. This makes the correction reproducible and
+/// avoids storing an additional mutable graph representation during decoding.
+fn extract_correction(
+    state: &mut UnionFindState,
+    edges: &[GraphEdge],
+    cancellation: &CancellationToken,
+    resources: Option<&ResourceManager>,
+    budget: DecoderBudget,
+) -> Result<Correction, UnionFindError> {
+    let mut replay =
+        UnionFindReplay::from_state(state)?;
+
+    let mut selected = Vec::new();
+
+    for edge in edges {
+        cancellation
+            .check()
+            .map_err(UnionFindError::from)?;
+
+        record_iteration(resources)?;
+
+        match (
+            edge.first(),
+            edge.second(),
+        ) {
+            (
+                GraphEndpoint::Detection(left),
+                GraphEndpoint::Detection(right),
+            ) => {
+                let left_index =
+                    replay.index_of(left)?;
+
+                let right_index =
+                    replay.index_of(right)?;
+
+                let left_root =
+                    replay.find(left_index)?;
+
+                let right_root =
+                    replay.find(right_index)?;
+
+                if left_root == right_root {
+                    continue;
+                }
+
+                let (
+                    left_parity,
+                    left_boundary,
+                ) =
+                    replay.cluster_state(
+                        left_root,
+                    )?;
+
+                let (
+                    right_parity,
+                    right_boundary,
+                ) =
+                    replay.cluster_state(
+                        right_root,
+                    )?;
+
+                if (!left_parity
+                    && left_boundary)
+                    && (!right_parity
+                        && right_boundary)
+                {
+                    continue;
+                }
+
+                if replay.union(
+                    left_index,
+                    right_index,
+                )? {
+                    if selected.len()
+                        >= budget
+                            .max_peel_operations
+                    {
+                        return Err(
+                            UnionFindError::PeelBudgetExceeded {
+                                limit: budget
+                                    .max_peel_operations,
+                            },
+                        );
+                    }
+
+                    selected.push(
+                        edge.clone(),
+                    );
+                }
+            }
+
+            (
+                GraphEndpoint::Detection(node),
+                GraphEndpoint::Boundary(_),
+            )
+            | (
+                GraphEndpoint::Boundary(_),
+                GraphEndpoint::Detection(node),
+            ) => {
+                let index =
+                    replay.index_of(node)?;
+
+                let (
+                    parity,
+                    boundary,
+                ) =
+                    replay.cluster_state(
+                        index,
+                    )?;
+
+                if parity && !boundary {
+                    replay.mark_boundary(
+                        index,
+                    )?;
+
+                    if selected.len()
+                        >= budget
+                            .max_peel_operations
+                    {
+                        return Err(
+                            UnionFindError::PeelBudgetExceeded {
+                                limit: budget
+                                    .max_peel_operations,
+                            },
+                        );
+                    }
+
+                    selected.push(
+                        edge.clone(),
+                    );
+                }
+            }
+
+            (
+                GraphEndpoint::Boundary(_),
+                GraphEndpoint::Boundary(_),
+            ) => {}
+        }
+    }
+
+    selected.sort_by(|left, right| {
+        (
+            left.weight().value(),
+            left.first(),
+            left.second(),
+            left.kind(),
+        )
+            .cmp(&(
+                right.weight().value(),
+                right.first(),
+                right.second(),
+                right.kind(),
+            ))
+    });
+
+    Ok(Correction::new(selected))
+}
+
+// ============================================================================
+// Replay state
+// ============================================================================
+
+/// Minimal deterministic replay state used for correction extraction.
+#[derive(Debug, Clone)]
+struct UnionFindReplay {
+    nodes: Vec<NodeId>,
+    indices: BTreeMap<NodeId, usize>,
+    clusters: Vec<Cluster>,
+}
+
+impl UnionFindReplay {
+    fn from_state(
+        state: &UnionFindState,
+    ) -> Result<Self, UnionFindError> {
+        let mut indices =
+            BTreeMap::new();
+
+        for (index, node) in
+            state.nodes.iter().copied().enumerate()
+        {
+            indices.insert(node, index);
+        }
+
+        let clusters = state
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(index, _)| {
+                Cluster::new(index, true)
+            })
+            .collect();
+
+        Ok(Self {
+            nodes: state.nodes.clone(),
+            indices,
+            clusters,
+        })
+    }
+
+    fn index_of(
+        &self,
+        node: NodeId,
+    ) -> Result<usize, UnionFindError> {
+        self.indices
+            .get(&node)
+            .copied()
+            .ok_or(
+                UnionFindError::UnknownNode {
+                    node,
                 },
             )
     }
@@ -989,16 +1432,15 @@ impl UnionFindState {
         &mut self,
         index: usize,
     ) -> Result<usize, UnionFindError> {
-        if index >= self.clusters.len() {
-            return Err(
+        let parent = self
+            .clusters
+            .get(index)
+            .ok_or(
                 UnionFindError::InternalIndexOutOfRange {
                     index,
                 },
-            );
-        }
-
-        let parent =
-            self.clusters[index].parent;
+            )?
+            .parent;
 
         if parent == index {
             return Ok(index);
@@ -1007,10 +1449,56 @@ impl UnionFindState {
         let root =
             self.find(parent)?;
 
-        self.clusters[index].parent =
-            root;
+        self.clusters
+            .get_mut(index)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index,
+                },
+            )?
+            .parent = root;
 
         Ok(root)
+    }
+
+    fn cluster_state(
+        &mut self,
+        index: usize,
+    ) -> Result<(bool, bool), UnionFindError> {
+        let root = self.find(index)?;
+
+        let cluster =
+            self.clusters
+                .get(root)
+                .ok_or(
+                    UnionFindError::InternalIndexOutOfRange {
+                        index: root,
+                    },
+                )?;
+
+        Ok((
+            cluster.parity,
+            cluster.has_boundary,
+        ))
+    }
+
+    fn mark_boundary(
+        &mut self,
+        index: usize,
+    ) -> Result<(), UnionFindError> {
+        let root =
+            self.find(index)?;
+
+        self.clusters
+            .get_mut(root)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index: root,
+                },
+            )?
+            .has_boundary = true;
+
+        Ok(())
     }
 
     fn union(
@@ -1029,14 +1517,30 @@ impl UnionFindState {
         }
 
         let left_rank =
-            self.clusters[left_root].rank;
+            self.clusters
+                .get(left_root)
+                .ok_or(
+                    UnionFindError::InternalIndexOutOfRange {
+                        index: left_root,
+                    },
+                )?
+                .rank;
 
         let right_rank =
-            self.clusters[right_root].rank;
+            self.clusters
+                .get(right_root)
+                .ok_or(
+                    UnionFindError::InternalIndexOutOfRange {
+                        index: right_root,
+                    },
+                )?
+                .rank;
 
         if left_rank < right_rank
-            || (left_rank == right_rank
-                && left_root > right_root)
+            || (
+                left_rank == right_rank
+                    && left_root > right_root
+            )
         {
             std::mem::swap(
                 &mut left_root,
@@ -1044,30 +1548,49 @@ impl UnionFindState {
             );
         }
 
-        let right_parity =
-            self.clusters[right_root]
-                .parity;
+        let right =
+            self.clusters
+                .get(right_root)
+                .ok_or(
+                    UnionFindError::InternalIndexOutOfRange {
+                        index: right_root,
+                    },
+                )?
+                .clone();
 
-        let right_boundary =
-            self.clusters[right_root]
-                .has_boundary;
+        {
+            let left =
+                self.clusters
+                    .get_mut(left_root)
+                    .ok_or(
+                        UnionFindError::InternalIndexOutOfRange {
+                            index: left_root,
+                        },
+                    )?;
 
-        let left_cluster =
-            &mut self.clusters[left_root];
+            left.parity ^= right.parity;
+            left.has_boundary |=
+                right.has_boundary;
+        }
 
-        left_cluster.parity ^=
-            right_parity;
-
-        left_cluster.has_boundary |=
-            right_boundary;
-
-        self.clusters[right_root]
+        self.clusters
+            .get_mut(right_root)
+            .ok_or(
+                UnionFindError::InternalIndexOutOfRange {
+                    index: right_root,
+                },
+            )?
             .parent = left_root;
 
         if left_rank == right_rank {
-            self.clusters[left_root]
-                .rank = self.clusters[left_root]
-                .rank
+            self.clusters
+                .get_mut(left_root)
+                .ok_or(
+                    UnionFindError::InternalIndexOutOfRange {
+                        index: left_root,
+                    },
+                )?
+                .rank = left_rank
                 .checked_add(1)
                 .ok_or(
                     UnionFindError::ArithmeticOverflow,
@@ -1076,582 +1599,40 @@ impl UnionFindState {
 
         Ok(true)
     }
-
-    fn mark_boundary(
-        &mut self,
-        vertex: usize,
-    ) -> Result<(), UnionFindError> {
-        let root =
-            self.find(vertex)?;
-
-        self.clusters[root]
-            .has_boundary = true;
-
-        Ok(())
-    }
-
-    fn root_state(
-        &mut self,
-        vertex: usize,
-    ) -> Result<(bool, bool), UnionFindError> {
-        let root =
-            self.find(vertex)?;
-
-        Ok((
-            self.clusters[root].parity,
-            self.clusters[root]
-                .has_boundary,
-        ))
-    }
-
-    fn root_count(
-        &mut self,
-    ) -> Result<usize, UnionFindError> {
-        let mut roots =
-            BTreeSet::new();
-
-        for index in
-            0..self.clusters.len()
-        {
-            roots.insert(
-                self.find(index)?,
-            );
-        }
-
-        Ok(roots.len())
-    }
 }
 
 // ============================================================================
-// Union-Find decoder
+// Resource helpers
 // ============================================================================
 
-/// Production-oriented Union-Find decoder.
-///
-/// The decoder works over an explicit weighted graph.
-///
-/// The implementation uses:
-///
-/// 1. deterministic edge ordering;
-/// 2. active syndrome parity;
-/// 3. boundary attachment;
-/// 4. Union-Find cluster merging;
-/// 5. deterministic correction extraction.
-///
-/// The graph must already represent the physical decoding problem. The
-/// decoder does not infer lattice geometry.
-#[derive(
-    Debug,
-    Clone,
-)]
-pub struct UnionFindDecoder {
-    config: UnionFindConfig,
+fn record_iteration(
+    resources: Option<&ResourceManager>,
+) -> Result<(), UnionFindError> {
+    if let Some(manager) = resources {
+        manager
+            .record_decoder_iterations(1)
+            .map_err(UnionFindError::from)?;
+    }
+
+    Ok(())
 }
 
-impl UnionFindDecoder {
-    /// Creates a decoder using the production configuration.
-    pub const fn new() -> Self {
-        Self {
-            config:
-                UnionFindConfig::production(),
-        }
-    }
-
-    /// Creates a decoder with explicit resource limits.
-    pub const fn with_config(
-        config: UnionFindConfig,
-    ) -> Self {
-        Self { config }
-    }
-
-    /// Returns decoder configuration.
-    pub const fn config(
-        &self,
-    ) -> UnionFindConfig {
-        self.config
-    }
-
-    /// Decodes using a non-cancelling token.
-    pub fn decode(
-        &self,
-        graph: &DecodingGraph,
-    ) -> Result<DecodeResult, UnionFindError> {
-        self.decode_with_cancellation(
-            graph,
-            &NeverCancel,
-        )
-    }
-
-    /// Decodes with cooperative cancellation.
-    pub fn decode_with_cancellation<C>(
-        &self,
-        graph: &DecodingGraph,
-        cancellation: &C,
-    ) -> Result<DecodeResult, UnionFindError>
-    where
-        C: CancellationToken,
-    {
-        graph.validate()?;
-
-        if cancellation.is_cancelled() {
-            return Err(
-                UnionFindError::Cancelled,
-            );
-        }
-
-        if graph.active_count() == 0 {
-            return Ok(DecodeResult {
-                correction:
-                    Correction::empty(),
-                clusters:
-                    graph.vertex_count(),
-                growth_operations: 0,
-                union_operations: 0,
-                peel_operations: 0,
-            });
-        }
-
-        let mut state =
-            UnionFindState::new(graph)?;
-
-        let mut growth_operations =
-            0usize;
-
-        let mut union_operations =
-            0usize;
-
-        let mut selected =
-            BTreeSet::new();
-
-        let mut edges: Vec<DecodingEdge> =
-            graph.edges().collect();
-
-        // Deterministic minimum-weight ordering.
-        //
-        // Ties are resolved by edge identifier and endpoint ordering.
-        edges.sort_by(
-            |left, right| {
-                (
-                    left.weight(),
-                    left.id(),
-                    left.left(),
-                    left.right(),
-                )
-                    .cmp(&(
-                        right.weight(),
-                        right.id(),
-                        right.left(),
-                        right.right(),
-                    ))
-            },
-        );
-
-        // --------------------------------------------------------------------
-        // Boundary attachment
-        // --------------------------------------------------------------------
-        //
-        // Boundary edges are processed before internal edges. This gives
-        // deterministic preference to the least-cost available boundary
-        // resolution and marks the corresponding cluster as boundary-connected.
-        //
-        // The selected edge itself is retained as part of the correction path.
-        // --------------------------------------------------------------------
-
-        for edge in edges.iter().copied() {
-            if cancellation.is_cancelled() {
-                return Err(
-                    UnionFindError::Cancelled,
-                );
-            }
-
-            if !edge.connects_boundary() {
-                continue;
-            }
-
-            growth_operations =
-                growth_operations
-                    .checked_add(1)
-                    .ok_or(
-                        UnionFindError::ArithmeticOverflow,
-                    )?;
-
-            if growth_operations
-                > self
-                    .config
-                    .budget()
-                    .growth_operations()
-            {
-                return Err(
-                    UnionFindError::GrowthBudgetExceeded {
-                        limit:
-                            self.config
-                                .budget()
-                                .growth_operations(),
-                    },
-                );
-            }
-
-            let vertex =
-                match (
-                    edge.left(),
-                    edge.right(),
-                ) {
-                    (
-                        Endpoint::Vertex(vertex),
-                        Endpoint::Boundary(_),
-                    )
-                    | (
-                        Endpoint::Boundary(_),
-                        Endpoint::Vertex(vertex),
-                    ) => vertex,
-
-                    _ => {
-                        continue;
-                    }
-                };
-
-            let index =
-                state.vertex_index(vertex)?;
-
-            let (
-                parity,
-                has_boundary,
-            ) =
-                state.root_state(index)?;
-
-            if parity
-                && !has_boundary
-            {
-                selected.insert(
-                    edge.id(),
-                );
-
-                state.mark_boundary(index)?;
-            }
-        }
-
-        // --------------------------------------------------------------------
-        // Internal cluster growth
-        // --------------------------------------------------------------------
-        //
-        // Process internal edges in nondecreasing weight order.
-        //
-        // A merge is accepted when it reduces the number of unresolved odd
-        // clusters. This is the core parity-driven Union-Find operation.
-        // --------------------------------------------------------------------
-
-        for edge in edges.iter().copied() {
-            if cancellation.is_cancelled() {
-                return Err(
-                    UnionFindError::Cancelled,
-                );
-            }
-
-            if !edge.connects_vertices() {
-                continue;
-            }
-
-            growth_operations =
-                growth_operations
-                    .checked_add(1)
-                    .ok_or(
-                        UnionFindError::ArithmeticOverflow,
-                    )?;
-
-            if growth_operations
-                > self
-                    .config
-                    .budget()
-                    .growth_operations()
-            {
-                return Err(
-                    UnionFindError::GrowthBudgetExceeded {
-                        limit:
-                            self.config
-                                .budget()
-                                .growth_operations(),
-                    },
-                );
-            }
-
-            let (
-                left_vertex,
-                right_vertex,
-            ) =
-                match (
-                    edge.left(),
-                    edge.right(),
-                ) {
-                    (
-                        Endpoint::Vertex(left),
-                        Endpoint::Vertex(right),
-                    ) => (left, right),
-
-                    _ => continue,
-                };
-
-            let left_index =
-                state.vertex_index(
-                    left_vertex,
-                )?;
-
-            let right_index =
-                state.vertex_index(
-                    right_vertex,
-                )?;
-
-            let (
-                left_parity,
-                left_boundary,
-            ) =
-                state.root_state(
-                    left_index,
-                )?;
-
-            let (
-                right_parity,
-                right_boundary,
-            ) =
-                state.root_state(
-                    right_index,
-                )?;
-
-            if left_boundary
-                && right_boundary
-            {
-                continue;
-            }
-
-            let beneficial =
-                (left_parity
-                    || right_parity)
-                    && !(
-                        left_boundary
-                            && !left_parity
-                    )
-                    && !(
-                        right_boundary
-                            && !right_parity
-                    );
-
-            if !beneficial {
-                continue;
-            }
-
-            if union_operations
-                >= self
-                    .config
-                    .budget()
-                    .union_operations()
-            {
-                return Err(
-                    UnionFindError::UnionBudgetExceeded {
-                        limit:
-                            self.config
-                                .budget()
-                                .union_operations(),
-                    },
-                );
-            }
-
-            let merged =
-                state.union(
-                    left_index,
-                    right_index,
-                )?;
-
-            if merged {
-                union_operations =
-                    union_operations
-                        .checked_add(1)
-                        .ok_or(
-                            UnionFindError::ArithmeticOverflow,
-                        )?;
-
-                selected.insert(
-                    edge.id(),
-                );
-            }
-        }
-
-        // --------------------------------------------------------------------
-        // Final boundary resolution
-        // --------------------------------------------------------------------
-        //
-        // Some odd clusters may remain after internal growth. Find the
-        // cheapest deterministic boundary edge capable of resolving each
-        // remaining cluster.
-        // --------------------------------------------------------------------
-
-        for edge in edges.iter().copied() {
-            if cancellation.is_cancelled() {
-                return Err(
-                    UnionFindError::Cancelled,
-                );
-            }
-
-            if !edge.connects_boundary() {
-                continue;
-            }
-
-            let vertex =
-                match (
-                    edge.left(),
-                    edge.right(),
-                ) {
-                    (
-                        Endpoint::Vertex(vertex),
-                        Endpoint::Boundary(_),
-                    )
-                    | (
-                        Endpoint::Boundary(_),
-                        Endpoint::Vertex(vertex),
-                    ) => vertex,
-
-                    _ => continue,
-                };
-
-            let index =
-                state.vertex_index(vertex)?;
-
-            let (
-                parity,
-                has_boundary,
-            ) =
-                state.root_state(index)?;
-
-            if parity
-                && !has_boundary
-            {
-                selected.insert(
-                    edge.id(),
-                );
-
-                state.mark_boundary(index)?;
-            }
-        }
-
-        // --------------------------------------------------------------------
-        // Correction extraction
-        // --------------------------------------------------------------------
-
-        let mut peel_operations =
-            0usize;
-
-        let mut correction_edges =
-            Vec::new();
-
-        for edge_id in selected {
-            if cancellation.is_cancelled() {
-                return Err(
-                    UnionFindError::Cancelled,
-                );
-            }
-
-            peel_operations =
-                peel_operations
-                    .checked_add(1)
-                    .ok_or(
-                        UnionFindError::ArithmeticOverflow,
-                    )?;
-
-            if peel_operations
-                > self
-                    .config
-                    .budget()
-                    .peel_operations()
-            {
-                return Err(
-                    UnionFindError::PeelBudgetExceeded {
-                        limit:
-                            self.config
-                                .budget()
-                                .peel_operations(),
-                    },
-                );
-            }
-
-            if correction_edges.len()
-                >= MAX_CORRECTION_EDGES
-            {
-                return Err(
-                    UnionFindError::TooManyCorrectionEdges {
-                        limit:
-                            MAX_CORRECTION_EDGES,
-                    },
-                );
-            }
-
-            correction_edges.push(
-                edge_id,
-            );
-        }
-
-        correction_edges.sort();
-
-        // --------------------------------------------------------------------
-        // Validate resulting parity state.
-        // --------------------------------------------------------------------
-
-        let roots =
-            state.root_count()?;
-
-        let mut unresolved =
-            BTreeSet::new();
-
-        for vertex in
-            graph.active_vertices()
-        {
-            let index =
-                state.vertex_index(vertex)?;
-
-            let (
-                parity,
-                has_boundary,
-            ) =
-                state.root_state(index)?;
-
-            if parity && !has_boundary {
-                unresolved.insert(
-                    vertex,
-                );
-            }
-        }
-
-        if !unresolved.is_empty() {
-            return Err(
-                UnionFindError::UnresolvedSyndrome {
-                    vertices:
-                        unresolved.len(),
-                },
-            );
-        }
-
-        Ok(DecodeResult {
-            correction:
-                Correction {
-                    edges:
-                        correction_edges,
-                },
-            clusters: roots,
-            growth_operations,
-            union_operations,
-            peel_operations,
-        })
-    }
-}
-
-impl Default for UnionFindDecoder {
-    fn default() -> Self {
-        Self::new()
-    }
+fn elapsed_nanos(
+    started: Instant,
+) -> Result<u64, UnionFindError> {
+    u64::try_from(
+        started.elapsed().as_nanos(),
+    )
+    .map_err(|_| {
+        UnionFindError::ArithmeticOverflow
+    })
 }
 
 // ============================================================================
-// Convenience API
+// Convenience APIs
 // ============================================================================
 
-/// Decodes a graph with the production Union-Find configuration.
+/// Decodes using the canonical production configuration.
 pub fn decode(
     graph: &DecodingGraph,
 ) -> Result<DecodeResult, UnionFindError> {
@@ -1659,7 +1640,7 @@ pub fn decode(
         .decode(graph)
 }
 
-/// Decodes a graph using explicit configuration.
+/// Decodes using explicit Union-Find configuration.
 pub fn decode_with_config(
     graph: &DecodingGraph,
     config: UnionFindConfig,
@@ -1668,69 +1649,54 @@ pub fn decode_with_config(
         .decode(graph)
 }
 
+/// Decodes and returns the canonical [`QecError`] type.
+pub fn decode_qec(
+    graph: &DecodingGraph,
+) -> QecResult<DecodeResult> {
+    decode(graph).map_err(QecError::from)
+}
+
+/// Decodes with canonical cancellation and resource accounting.
+pub fn decode_qec_with_context(
+    graph: &DecodingGraph,
+    cancellation: &CancellationToken,
+    resources: &ResourceManager,
+) -> QecResult<DecodeResult> {
+    UnionFindDecoder::new()
+        .decode_with_resources(
+            graph,
+            cancellation,
+            resources,
+        )
+        .map_err(QecError::from)
+}
+
 // ============================================================================
 // Errors
 // ============================================================================
 
-/// Errors produced by the Union-Find subsystem.
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-)]
+/// Union-Find-specific diagnostic error.
+///
+/// This remains available for detailed local diagnostics, while public
+/// high-level QEC APIs can convert it to [`QecError`].
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnionFindError {
-    /// Vertex identifier is outside the supported range.
-    VertexIdOutOfRange {
-        vertex: VertexId,
+    /// The central QEC resource policy is invalid.
+    InvalidLimits {
+        message: String,
     },
 
-    /// Boundary identifier is outside the supported range.
-    BoundaryIdOutOfRange {
-        boundary: BoundaryId,
+    /// Canonical decoding graph rejected the workload.
+    InvalidGraph {
+        message: String,
     },
 
-    /// Too many graph vertices.
-    TooManyVertices {
-        limit: usize,
+    /// A node was referenced that is not present in the graph.
+    UnknownNode {
+        node: NodeId,
     },
 
-    /// Too many graph edges.
-    TooManyEdges {
-        limit: usize,
-    },
-
-    /// Too many correction edges.
-    TooManyCorrectionEdges {
-        limit: usize,
-    },
-
-    /// Referenced vertex does not exist.
-    UnknownVertex {
-        vertex: VertexId,
-    },
-
-    /// Referenced boundary does not exist.
-    UnknownBoundary {
-        boundary: BoundaryId,
-    },
-
-    /// Duplicate edge identifier.
-    DuplicateEdge {
-        edge: EdgeId,
-    },
-
-    /// Edge connects an endpoint to itself.
-    SelfLoop {
-        endpoint: Endpoint,
-    },
-
-    /// Edge weight is outside the supported range.
-    EdgeWeightOutOfRange {
-        weight: u64,
-    },
-
-    /// Internal vector index was invalid.
+    /// Internal state indexing failed.
     InternalIndexOutOfRange {
         index: usize,
     },
@@ -1738,125 +1704,61 @@ pub enum UnionFindError {
     /// Checked arithmetic failed.
     ArithmeticOverflow,
 
-    /// Growth budget exhausted.
+    /// Decoder growth budget was exhausted.
     GrowthBudgetExceeded {
         limit: usize,
     },
 
-    /// Union budget exhausted.
+    /// Decoder union budget was exhausted.
     UnionBudgetExceeded {
         limit: usize,
     },
 
-    /// Peeling budget exhausted.
+    /// Correction extraction budget was exhausted.
     PeelBudgetExceeded {
         limit: usize,
     },
 
-    /// Decoder was cancelled.
-    Cancelled,
+    /// Canonical QEC cancellation was requested.
+    Cancelled {
+        message: String,
+    },
 
-    /// One or more detection events could not be resolved.
+    /// Detection events remain unresolved.
     UnresolvedSyndrome {
         vertices: usize,
     },
+
+    /// Resource manager rejected an operation.
+    ResourceLimit {
+        message: String,
+    },
 }
 
-impl fmt::Display
-    for UnionFindError
-{
+impl fmt::Display for UnionFindError {
     fn fmt(
         &self,
-        f: &mut fmt::Formatter<'_>,
+        formatter: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
-            Self::VertexIdOutOfRange {
-                vertex,
-            } => {
+            Self::InvalidLimits { message } => {
                 write!(
-                    f,
-                    "vertex identifier {vertex} exceeds the supported range"
+                    formatter,
+                    "invalid Union-Find QEC limits: {message}"
                 )
             }
 
-            Self::BoundaryIdOutOfRange {
-                boundary,
-            } => {
+            Self::InvalidGraph { message } => {
                 write!(
-                    f,
-                    "boundary identifier {boundary} exceeds the supported range"
+                    formatter,
+                    "invalid decoding graph: {message}"
                 )
             }
 
-            Self::TooManyVertices {
-                limit,
-            } => {
+            Self::UnknownNode { node } => {
                 write!(
-                    f,
-                    "decoding graph exceeds the {limit} vertex limit"
-                )
-            }
-
-            Self::TooManyEdges {
-                limit,
-            } => {
-                write!(
-                    f,
-                    "decoding graph exceeds the {limit} edge limit"
-                )
-            }
-
-            Self::TooManyCorrectionEdges {
-                limit,
-            } => {
-                write!(
-                    f,
-                    "correction exceeds the {limit} edge limit"
-                )
-            }
-
-            Self::UnknownVertex {
-                vertex,
-            } => {
-                write!(
-                    f,
-                    "unknown decoding vertex {vertex}"
-                )
-            }
-
-            Self::UnknownBoundary {
-                boundary,
-            } => {
-                write!(
-                    f,
-                    "unknown decoding boundary {boundary}"
-                )
-            }
-
-            Self::DuplicateEdge {
-                edge,
-            } => {
-                write!(
-                    f,
-                    "duplicate decoding edge {edge}"
-                )
-            }
-
-            Self::SelfLoop {
-                endpoint,
-            } => {
-                write!(
-                    f,
-                    "self-loop at {endpoint} is not permitted"
-                )
-            }
-
-            Self::EdgeWeightOutOfRange {
-                weight,
-            } => {
-                write!(
-                    f,
-                    "edge weight {weight} exceeds the supported maximum"
+                    formatter,
+                    "unknown decoding node {node}"
                 )
             }
 
@@ -1864,15 +1766,14 @@ impl fmt::Display
                 index,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "internal Union-Find index {index} is out of range"
                 )
             }
 
             Self::ArithmeticOverflow => {
-                write!(
-                    f,
-                    "arithmetic overflow during Union-Find decoding"
+                formatter.write_str(
+                    "arithmetic overflow during Union-Find decoding",
                 )
             }
 
@@ -1880,7 +1781,7 @@ impl fmt::Display
                 limit,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "Union-Find growth budget of {limit} operations exceeded"
                 )
             }
@@ -1889,7 +1790,7 @@ impl fmt::Display
                 limit,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "Union-Find union budget of {limit} operations exceeded"
                 )
             }
@@ -1898,15 +1799,15 @@ impl fmt::Display
                 limit,
             } => {
                 write!(
-                    f,
-                    "Union-Find peeling budget of {limit} operations exceeded"
+                    formatter,
+                    "Union-Find correction-extraction budget of {limit} operations exceeded"
                 )
             }
 
-            Self::Cancelled => {
+            Self::Cancelled { message } => {
                 write!(
-                    f,
-                    "Union-Find decoding was cancelled"
+                    formatter,
+                    "Union-Find decoding cancelled: {message}"
                 )
             }
 
@@ -1914,17 +1815,182 @@ impl fmt::Display
                 vertices,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "{vertices} detection-event vertices remain unresolved"
+                )
+            }
+
+            Self::ResourceLimit { message } => {
+                write!(
+                    formatter,
+                    "Union-Find resource limit exceeded: {message}"
                 )
             }
         }
     }
 }
 
-impl std::error::Error
+impl std::error::Error for UnionFindError {}
+
+// ============================================================================
+// Error integration
+// ============================================================================
+
+impl From<super::limits::LimitError>
     for UnionFindError
 {
+    fn from(
+        error: super::limits::LimitError,
+    ) -> Self {
+        Self::InvalidLimits {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<super::decoding_graph::DecodingGraphError>
+    for UnionFindError
+{
+    fn from(
+        error: super::decoding_graph::DecodingGraphError,
+    ) -> Self {
+        Self::InvalidGraph {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<super::resources::ResourceError>
+    for UnionFindError
+{
+    fn from(
+        error: super::resources::ResourceError,
+    ) -> Self {
+        Self::ResourceLimit {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<QecError>
+    for UnionFindError
+{
+    fn from(
+        error: QecError,
+    ) -> Self {
+        if error.is_cancellation() {
+            return Self::Cancelled {
+                message: error.to_string(),
+            };
+        }
+
+        Self::InvalidGraph {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<UnionFindError>
+    for QecError
+{
+    fn from(
+        error: UnionFindError,
+    ) -> Self {
+        match error {
+            UnionFindError::InvalidLimits {
+                message,
+            } => QecError::invalid_input(
+                message,
+            ),
+
+            UnionFindError::InvalidGraph {
+                message,
+            } => QecError::invalid_graph(
+                message,
+            ),
+
+            UnionFindError::UnknownNode {
+                node,
+            } => QecError::invalid_graph(
+                format!(
+                    "unknown decoding node {node}"
+                ),
+            ),
+
+            UnionFindError::InternalIndexOutOfRange {
+                index,
+            } => QecError::invariant(
+                "union_find_internal_index",
+                format!(
+                    "internal index {index} is out of range"
+                ),
+            ),
+
+            UnionFindError::ArithmeticOverflow => {
+                QecError::numerical_failure(
+                    super::errors::NumericalOperation::Accumulation,
+                    "Union-Find checked arithmetic overflow",
+                )
+            }
+
+            UnionFindError::GrowthBudgetExceeded {
+                limit,
+            } => QecError::resource_limit(
+                QecResourceKind::DecoderIterations,
+                limit as u128,
+                limit as u128,
+                format!(
+                    "Union-Find growth budget of {limit} operations exceeded"
+                ),
+            ),
+
+            UnionFindError::UnionBudgetExceeded {
+                limit,
+            } => QecError::resource_limit(
+                QecResourceKind::DecoderIterations,
+                limit as u128,
+                limit as u128,
+                format!(
+                    "Union-Find union budget of {limit} operations exceeded"
+                ),
+            ),
+
+            UnionFindError::PeelBudgetExceeded {
+                limit,
+            } => QecError::resource_limit(
+                QecResourceKind::DecoderIterations,
+                limit as u128,
+                limit as u128,
+                format!(
+                    "Union-Find correction extraction budget of {limit} operations exceeded"
+                ),
+            ),
+
+            UnionFindError::Cancelled {
+                message,
+            } => QecError::cancelled(
+                message,
+            ),
+
+            UnionFindError::UnresolvedSyndrome {
+                vertices,
+            } => QecError::decoder_failure(
+                DecoderKind::UnionFind,
+                format!(
+                    "{vertices} detection-event vertices remain unresolved"
+                ),
+            ),
+
+            UnionFindError::ResourceLimit {
+                message,
+            } => QecError::resource_limit(
+                QecResourceKind::DecoderIterations,
+                1,
+                1,
+                message,
+            ),
+        }
+    }
 }
 
 // ============================================================================
@@ -1934,41 +2000,107 @@ impl std::error::Error
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::decoding_graph::{
+        EdgeKind,
+        EdgeWeight,
+        GraphEndpoint,
+        SpatialCoordinate,
+        SpaceTimeCoordinate,
+    };
+    use super::syndrome::{
+        MeasurementConfidence,
+        MeasurementRound,
+        StabilizerId,
+    };
 
-    fn vertex(
-        id: usize,
-    ) -> VertexId {
-        VertexId::new(id)
+    fn limits() -> QecLimits {
+        let mut limits =
+            QecLimits::new();
+
+        limits.max_graph_nodes = 64;
+        limits.max_graph_edges = 128;
+        limits.max_memory_bytes =
+            1024 * 1024;
+        limits.max_decoder_iterations =
+            10_000;
+
+        limits
+    }
+
+    fn graph() -> DecodingGraph {
+        DecodingGraph::new_with_limits(
+            &limits(),
+        )
+        .expect("test limits are valid")
+    }
+
+    fn coordinate(
+        x: i64,
+        y: i64,
+    ) -> SpaceTimeCoordinate {
+        SpaceTimeCoordinate::new(
+            SpatialCoordinate::xy(x, y)
+                .expect("coordinate valid"),
+            MeasurementRound::new(0)
+                .expect("round valid"),
+        )
+        .expect("space-time coordinate valid")
+    }
+
+    fn add_node(
+        graph: &mut DecodingGraph,
+        x: i64,
+        y: i64,
+        stabilizer: u64,
+    ) -> NodeId {
+        graph
+            .add_detection_node(
+                coordinate(x, y),
+                StabilizerId::new(
+                    stabilizer,
+                ),
+                MeasurementConfidence::High,
+            )
+            .expect("node insertion succeeds")
     }
 
     fn boundary(
-        id: usize,
+        graph: &mut DecodingGraph,
+        x: i64,
+        y: i64,
     ) -> BoundaryId {
-        BoundaryId::new(id)
+        graph
+            .add_boundary_node(
+                coordinate(x, y),
+            )
+            .expect("boundary insertion succeeds")
     }
 
     fn edge(
-        id: usize,
-        left: Endpoint,
-        right: Endpoint,
+        graph: &mut DecodingGraph,
+        first: GraphEndpoint,
+        second: GraphEndpoint,
         weight: u64,
-    ) -> DecodingEdge {
-        DecodingEdge::new(
-            EdgeId::new(id),
-            left,
-            right,
-            weight,
-        )
-        .unwrap()
+        kind: EdgeKind,
+    ) {
+        graph
+            .add_edge(
+                first,
+                second,
+                EdgeWeight::new(weight)
+                    .expect("weight valid"),
+                kind,
+            )
+            .expect("edge insertion succeeds");
     }
 
     #[test]
-    fn empty_graph_decodes_to_empty_correction() {
-        let graph =
-            DecodingGraph::new();
+    fn empty_graph_is_safe() {
+        let graph = graph();
 
         let result =
-            decode(&graph).unwrap();
+            decode(&graph)
+                .expect("empty graph decodes");
 
         assert!(
             result
@@ -1977,655 +2109,219 @@ mod tests {
         );
 
         assert_eq!(
-            result
-                .growth_operations(),
-            0
-        );
-
-        assert_eq!(
-            result
-                .union_operations(),
-            0
+            result.termination(),
+            TerminationReason::EmptyGraph
         );
     }
 
     #[test]
-    fn graph_rejects_unknown_vertex_edge_endpoint() {
+    fn single_detection_event_resolves_to_boundary() {
         let mut graph =
-            DecodingGraph::new();
+            graph();
 
-        graph
-            .add_vertex(vertex(0))
-            .unwrap();
+        let node =
+            add_node(
+                &mut graph,
+                0,
+                0,
+                0,
+            );
 
-        assert_eq!(
-            graph.add_edge(
-                edge(
-                    0,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Vertex(
-                        vertex(1),
-                    ),
-                    1,
-                ),
-            ),
-            Err(
-                UnionFindError::UnknownVertex {
-                    vertex: vertex(1),
-                }
-            )
-        );
-    }
-
-    #[test]
-    fn graph_rejects_self_loop() {
-        assert_eq!(
-            DecodingEdge::new(
-                EdgeId::new(0),
-                Endpoint::Vertex(
-                    vertex(0),
-                ),
-                Endpoint::Vertex(
-                    vertex(0),
-                ),
+        let boundary =
+            boundary(
+                &mut graph,
                 1,
+                0,
+            );
+
+        edge(
+            &mut graph,
+            GraphEndpoint::Detection(
+                node,
             ),
-            Err(
-                UnionFindError::SelfLoop {
-                    endpoint:
-                        Endpoint::Vertex(
-                            vertex(0),
-                        ),
-                }
-            )
-        );
-    }
-
-    #[test]
-    fn graph_rejects_unknown_boundary() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_vertex(vertex(0))
-            .unwrap();
-
-        assert_eq!(
-            graph.add_edge(
-                edge(
-                    0,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Boundary(
-                        boundary(0),
-                    ),
-                    1,
-                ),
+            GraphEndpoint::Boundary(
+                boundary,
             ),
-            Err(
-                UnionFindError::UnknownBoundary {
-                    boundary:
-                        boundary(0),
-                }
-            )
+            10,
+            EdgeKind::Boundary,
         );
-    }
-
-    #[test]
-    fn boundary_edge_resolves_single_detection_event() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_vertex(vertex(0))
-            .unwrap();
-
-        graph
-            .activate(vertex(0))
-            .unwrap();
-
-        graph
-            .add_boundary(boundary(0))
-            .unwrap();
-
-        graph
-            .add_edge(
-                edge(
-                    0,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Boundary(
-                        boundary(0),
-                    ),
-                    10,
-                ),
-            )
-            .unwrap();
 
         let result =
-            decode(&graph).unwrap();
-
-        assert_eq!(
-            result
-                .correction()
-                .edges(),
-            &[EdgeId::new(0)]
-        );
-
-        assert_eq!(
-            result
-                .correction()
-                .len(),
-            1
-        );
-    }
-
-    #[test]
-    fn deterministic_tie_breaking_uses_edge_id() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_vertex(vertex(0))
-            .unwrap();
-
-        graph
-            .activate(vertex(0))
-            .unwrap();
-
-        graph
-            .add_boundary(boundary(0))
-            .unwrap();
-
-        graph
-            .add_boundary(boundary(1))
-            .unwrap();
-
-        graph
-            .add_edge(
-                edge(
-                    10,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Boundary(
-                        boundary(0),
-                    ),
-                    100,
-                ),
-            )
-            .unwrap();
-
-        graph
-            .add_edge(
-                edge(
-                    5,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Boundary(
-                        boundary(1),
-                    ),
-                    100,
-                ),
-            )
-            .unwrap();
-
-        let result =
-            decode(&graph).unwrap();
-
-        assert_eq!(
-            result
-                .correction()
-                .edges(),
-            &[EdgeId::new(5)]
-        );
-    }
-
-    #[test]
-    fn two_active_vertices_can_be_connected() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_vertex(vertex(0))
-            .unwrap();
-
-        graph
-            .add_vertex(vertex(1))
-            .unwrap();
-
-        graph
-            .activate(vertex(0))
-            .unwrap();
-
-        graph
-            .activate(vertex(1))
-            .unwrap();
-
-        graph
-            .add_edge(
-                edge(
-                    0,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Vertex(
-                        vertex(1),
-                    ),
-                    10,
-                ),
-            )
-            .unwrap();
-
-        let result =
-            decode(&graph).unwrap();
-
-        assert_eq!(
-            result
-                .correction()
-                .edges(),
-            &[EdgeId::new(0)]
-        );
-
-        assert_eq!(
-            result
-                .union_operations(),
-            1
-        );
-    }
-
-    #[test]
-    fn inactive_vertices_do_not_require_correction() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_vertex(vertex(0))
-            .unwrap();
-
-        graph
-            .add_vertex(vertex(1))
-            .unwrap();
-
-        graph
-            .add_edge(
-                edge(
-                    0,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Vertex(
-                        vertex(1),
-                    ),
-                    1,
-                ),
-            )
-            .unwrap();
-
-        let result =
-            decode(&graph).unwrap();
+            decode(&graph)
+                .expect(
+                    "boundary resolution succeeds",
+                );
 
         assert!(
-            result
+            !result
                 .correction()
                 .is_empty()
         );
     }
 
     #[test]
-    fn cancellation_is_respected() {
-        struct Cancel;
+    fn two_detection_events_can_be_joined() {
+        let mut graph =
+            graph();
 
-        impl CancellationToken
-            for Cancel
-        {
-            fn is_cancelled(
-                &self,
-            ) -> bool {
-                true
-            }
-        }
+        let left =
+            add_node(
+                &mut graph,
+                0,
+                0,
+                0,
+            );
 
-        let graph =
-            DecodingGraph::new();
+        let right =
+            add_node(
+                &mut graph,
+                1,
+                0,
+                1,
+            );
 
-        let decoder =
-            UnionFindDecoder::new();
+        edge(
+            &mut graph,
+            GraphEndpoint::Detection(
+                left,
+            ),
+            GraphEndpoint::Detection(
+                right,
+            ),
+            10,
+            EdgeKind::Spatial,
+        );
+
+        let result =
+            decode(&graph)
+                .expect(
+                    "pair resolves",
+                );
 
         assert_eq!(
-            decoder
+            result.union_operations(),
+            1
+        );
+
+        assert_eq!(
+            result.correction().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn equal_weight_edges_are_deterministic() {
+        let mut first =
+            graph();
+
+        let a =
+            add_node(
+                &mut first,
+                0,
+                0,
+                0,
+            );
+
+        let b =
+            add_node(
+                &mut first,
+                1,
+                0,
+                1,
+            );
+
+        edge(
+            &mut first,
+            GraphEndpoint::Detection(a),
+            GraphEndpoint::Detection(b),
+            10,
+            EdgeKind::Spatial,
+        );
+
+        let result_a =
+            decode(&first)
+                .expect("decode succeeds");
+
+        let result_b =
+            decode(&first)
+                .expect("repeat decode succeeds");
+
+        assert_eq!(
+            result_a.correction(),
+            result_b.correction()
+        );
+
+        assert_eq!(
+            result_a.statistics().growth_operations,
+            result_b.statistics().growth_operations
+        );
+    }
+
+    #[test]
+    fn cancellation_is_enforced() {
+        let mut graph =
+            graph();
+
+        let node =
+            add_node(
+                &mut graph,
+                0,
+                0,
+                0,
+            );
+
+        let boundary =
+            boundary(
+                &mut graph,
+                1,
+                0,
+            );
+
+        edge(
+            &mut graph,
+            GraphEndpoint::Detection(node),
+            GraphEndpoint::Boundary(boundary),
+            1,
+            EdgeKind::Boundary,
+        );
+
+        let token =
+            CancellationToken::new();
+
+        token.request();
+
+        let result =
+            UnionFindDecoder::new()
                 .decode_with_cancellation(
                     &graph,
-                    &Cancel,
-                ),
-            Err(
-                UnionFindError::Cancelled
-            )
-        );
-    }
+                    &token,
+                );
 
-    #[test]
-    fn growth_budget_is_enforced() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_vertex(vertex(0))
-            .unwrap();
-
-        graph
-            .activate(vertex(0))
-            .unwrap();
-
-        graph
-            .add_boundary(boundary(0))
-            .unwrap();
-
-        graph
-            .add_edge(
-                edge(
-                    0,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Boundary(
-                        boundary(0),
-                    ),
-                    1,
-                ),
-            )
-            .unwrap();
-
-        let config =
-            UnionFindConfig::new(
-                DecoderBudget::new(
-                    0,
-                    100,
-                    100,
-                ),
-            );
-
-        let decoder =
-            UnionFindDecoder::with_config(
-                config,
-            );
-
-        assert_eq!(
-            decoder.decode(&graph),
-            Err(
-                UnionFindError::GrowthBudgetExceeded {
-                    limit: 0,
-                }
-            )
-        );
-    }
-
-    #[test]
-    fn union_find_is_deterministic() {
-        let mut first =
-            DecodingGraph::new();
-
-        let mut second =
-            DecodingGraph::new();
-
-        for graph in [
-            &mut first,
-            &mut second,
-        ] {
-            graph
-                .add_vertex(vertex(0))
-                .unwrap();
-
-            graph
-                .add_vertex(vertex(1))
-                .unwrap();
-
-            graph
-                .activate(vertex(0))
-                .unwrap();
-
-            graph
-                .activate(vertex(1))
-                .unwrap();
-
-            graph
-                .add_edge(
-                    edge(
-                        2,
-                        Endpoint::Vertex(
-                            vertex(0),
-                        ),
-                        Endpoint::Vertex(
-                            vertex(1),
-                        ),
-                        10,
-                    ),
+        assert!(
+            matches!(
+                result,
+                Err(
+                    UnionFindError::Cancelled {
+                        ..
+                    }
                 )
-                .unwrap();
-        }
-
-        let decoder =
-            UnionFindDecoder::new();
-
-        let first_result =
-            decoder
-                .decode(&first)
-                .unwrap();
-
-        let second_result =
-            decoder
-                .decode(&second)
-                .unwrap();
-
-        assert_eq!(
-            first_result,
-            second_result
-        );
-    }
-
-    #[test]
-    fn zero_weight_edges_are_valid() {
-        let edge =
-            DecodingEdge::new(
-                EdgeId::new(0),
-                Endpoint::Vertex(
-                    vertex(0),
-                ),
-                Endpoint::Vertex(
-                    vertex(1),
-                ),
-                0,
-            )
-            .unwrap();
-
-        assert_eq!(
-            edge.weight(),
-            0
-        );
-    }
-
-    #[test]
-    fn excessive_weight_is_rejected() {
-        assert_eq!(
-            DecodingEdge::new(
-                EdgeId::new(0),
-                Endpoint::Vertex(
-                    vertex(0),
-                ),
-                Endpoint::Vertex(
-                    vertex(1),
-                ),
-                MAX_EDGE_WEIGHT + 1,
-            ),
-            Err(
-                UnionFindError::EdgeWeightOutOfRange {
-                    weight:
-                        MAX_EDGE_WEIGHT + 1,
-                }
             )
         );
     }
 
     #[test]
-    fn duplicate_edges_are_rejected() {
-        let mut graph =
-            DecodingGraph::new();
+    fn qec_error_boundary_is_available() {
+        let graph = graph();
 
-        graph
-            .add_vertex(vertex(0))
-            .unwrap();
-
-        graph
-            .add_vertex(vertex(1))
-            .unwrap();
-
-        graph
-            .add_edge(
-                edge(
-                    0,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Vertex(
-                        vertex(1),
-                    ),
-                    1,
-                ),
-            )
-            .unwrap();
+        let result =
+            decode_qec(&graph)
+                .expect(
+                    "empty graph succeeds",
+                );
 
         assert_eq!(
-            graph.add_edge(
-                edge(
-                    0,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Vertex(
-                        vertex(1),
-                    ),
-                    2,
-                ),
-            ),
-            Err(
-                UnionFindError::DuplicateEdge {
-                    edge: EdgeId::new(0),
-                }
-            )
+            result.termination(),
+            TerminationReason::EmptyGraph
         );
-    }
-
-    #[test]
-    fn endpoint_order_is_canonical() {
-        let edge =
-            DecodingEdge::new(
-                EdgeId::new(0),
-                Endpoint::Vertex(
-                    vertex(2),
-                ),
-                Endpoint::Vertex(
-                    vertex(1),
-                ),
-                5,
-            )
-            .unwrap();
-
-        assert_eq!(
-            edge.left(),
-            Endpoint::Vertex(
-                vertex(1),
-            )
-        );
-
-        assert_eq!(
-            edge.right(),
-            Endpoint::Vertex(
-                vertex(2),
-            )
-        );
-    }
-
-    #[test]
-    fn budget_is_configurable() {
-        let budget =
-            DecoderBudget::new(
-                10,
-                20,
-                30,
-            );
-
-        assert_eq!(
-            budget.growth_operations(),
-            10
-        );
-
-        assert_eq!(
-            budget.union_operations(),
-            20
-        );
-
-        assert_eq!(
-            budget.peel_operations(),
-            30
-        );
-    }
-
-    #[test]
-    fn correction_is_sorted() {
-        let correction =
-            Correction {
-                edges: vec![
-                    EdgeId::new(3),
-                    EdgeId::new(1),
-                    EdgeId::new(2),
-                ],
-            };
-
-        // The structure itself does not silently mutate user input.
-        assert_eq!(
-            correction.edges(),
-            &[
-                EdgeId::new(3),
-                EdgeId::new(1),
-                EdgeId::new(2),
-            ]
-        );
-    }
-
-    #[test]
-    fn graph_validation_is_idempotent() {
-        let mut graph =
-            DecodingGraph::new();
-
-        graph
-            .add_vertex(vertex(0))
-            .unwrap();
-
-        graph
-            .add_vertex(vertex(1))
-            .unwrap();
-
-        graph
-            .add_edge(
-                edge(
-                    0,
-                    Endpoint::Vertex(
-                        vertex(0),
-                    ),
-                    Endpoint::Vertex(
-                        vertex(1),
-                    ),
-                    10,
-                ),
-            )
-            .unwrap();
-
-        graph.validate().unwrap();
-        graph.validate().unwrap();
     }
 }
