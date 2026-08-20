@@ -2,100 +2,149 @@
 //!
 //! # Architectural contract
 //!
-//! `limits.rs` owns the declarative QEC resource policy.
-//! `resources.rs` owns runtime accounting and reservations.
+//! `limits.rs` owns the canonical declarative QEC resource policy.
+//! `resources.rs` owns runtime accounting, admission, reservations and
+//! operation-local quotas.
+//! `memory.rs` owns actual memory-allocation enforcement.
+//! `cancellation.rs` owns cooperative cancellation.
+//! `errors.rs` owns the canonical public QEC error boundary.
+//!
+//! Dependency direction:
 //!
 //! ```text
-//!                         QecConfig
-//!                            │
-//!                            ▼
-//!                         QecLimits
-//!                            │
-//!                 ┌──────────┴──────────┐
-//!                 │                     │
-//!                 ▼                     ▼
-//!             Preflight            ResourceManager
-//!                                       │
-//!                           ┌───────────┼───────────┐
-//!                           │           │           │
-//!                           ▼           ▼           ▼
-//!                         Memory     Counters    Cancellation
-//!                           │           │           │
-//!                           └───────────┼───────────┘
-//!                                       ▼
-//!                              ResourceSnapshot
+//!                     QecLimits
+//!                         │
+//!                         ▼
+//!                 ResourceManager
+//!                    │     │
+//!          ┌─────────┘     └──────────┐
+//!          ▼                          ▼
+//!   ResourceScope              ResourceSnapshot
+//!          │
+//!     ┌────┼──────────────┐
+//!     ▼    ▼              ▼
+//!  Memory Workers      Counters
+//!
+//! CancellationToken ───────────────► admission checks
+//!
+//! memory.rs ───────────────────────► actual allocation enforcement
+//!
+//! errors.rs ◄────────────────────── all public failures
 //! ```
 //!
-//! The important architectural distinction is:
+//! # Responsibilities
 //!
-//! - [`QecLimits`] = what the execution is allowed to request.
-//! - [`ResourceManager`] = what the execution has actually consumed.
-//! - [`ResourceSnapshot`] = immutable runtime accounting state.
-//! - [`ResourceScope`] = a bounded logical operation.
+//! This module owns:
 //!
-//! `resources.rs` must not invent a second independent production resource
-//! policy. `QecLimits` is the canonical policy.
+//! - runtime resource accounting;
+//! - resource admission;
+//! - allocation-free preflight;
+//! - atomic counter reservation;
+//! - RAII memory reservations;
+//! - RAII worker reservations;
+//! - operation-local quotas;
+//! - resource snapshots;
+//! - runtime wall-time enforcement;
+//! - resource request estimation;
+//! - compatibility adapters for legacy callers.
 //!
-//! # Safety properties
+//! This module does NOT own:
 //!
-//! - Resource checks occur before reservations.
-//! - Reservations are atomic.
-//! - Memory and workers use RAII guards.
-//! - Counter arithmetic is checked.
-//! - Resource exhaustion returns structured errors.
-//! - Cancellation is checked by expensive operations.
-//! - Wall-clock limits are enforced.
-//! - Operation quotas cannot bypass global limits.
-//! - Preflight estimation performs no allocation.
-//! - Resource-limited work cannot silently appear successful.
-//! - Runtime counters can be shared safely between decoder workers.
+//! - global resource policy;
+//! - actual allocator management;
+//! - decoder algorithms;
+//! - QPU execution;
+//! - scheduling policy;
+//! - authorization;
+//! - telemetry transport;
+//! - checkpoint serialization.
 //!
-//! The subsystem does not promise literally infinite memory, runtime, or
-//! parallelism. Arbitrarily large workloads are supported only when the
-//! configured resource policy and physical execution environment permit them.
+//! # Important distinction
+//!
+//! ```text
+//! limits.rs
+//!     = what the execution is allowed to consume
+//!
+//! resources.rs
+//!     = what the execution has consumed / reserved
+//!
+//! memory.rs
+//!     = actual memory allocation enforcement
+//!
+//! cancellation.rs
+//!     = whether execution should stop
+//! ```
+//!
+//! # Resource semantics
+//!
+//! There are two kinds of runtime quantities:
+//!
+//! 1. **Live reservations**
+//!    - memory;
+//!    - worker slots.
+//!
+//!    These increase when acquired and decrease when released.
+//!
+//! 2. **Monotonic consumption counters**
+//!    - syndrome events;
+//!    - graph nodes;
+//!    - graph edges;
+//!    - decoder iterations;
+//!    - QPU shots;
+//!    - verification operations;
+//!    - etc.
+//!
+//! Consumption counters represent cumulative work within the manager's
+//! lifetime and therefore do not decrease when an operation finishes.
+//!
+//! # Rust compatibility
+//!
+//! Target: Rust 1.97.1.
+//!
+//! No unstable language features are used.
 
 use core::fmt;
-use std::sync::atomic::{
-    AtomicBool,
-    AtomicU64,
-    AtomicUsize,
-    Ordering,
+use std::sync::{
+    atomic::{AtomicU64, AtomicUsize, Ordering},
+    Arc,
 };
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::errors::{
-    QecError,
-    QecResult,
-    ResourceKind as QecResourceKind,
-};
-use super::limits::{
-    LimitError,
-    LimitKind,
-    QecLimits,
+use super::{
+    cancellation::CancellationToken,
+    errors::{
+        NumericalOperation,
+        QecError,
+        QecResult,
+        ResourceKind as QecResourceKind,
+    },
+    limits::{LimitError, LimitKind, QecLimits},
 };
 
-/// Compatibility sentinel.
+/* ========================================================================== */
+/* Compatibility constants                                                    */
+/* ========================================================================== */
+
+/// Application-level "no additional finite ceiling" sentinel.
 ///
-/// This does not mean physical resources are infinite. It means the
-/// application-level policy does not impose an additional finite ceiling.
+/// This never means physically infinite memory or compute.
 pub const UNLIMITED_U64: u64 = u64::MAX;
 
-/// Compatibility sentinel for parallelism.
+/// Application-level "no additional finite worker ceiling" sentinel.
+///
+/// This never means physically infinite parallelism.
 pub const UNLIMITED_USIZE: usize = usize::MAX;
 
 /* ========================================================================== */
-/* Runtime resource kinds                                                     */
+/* Runtime resource kinds                                                      */
 /* ========================================================================== */
 
 /// Runtime dimensions tracked by [`ResourceManager`].
 ///
-/// This is intentionally separate from `limits::LimitKind`:
+/// This is deliberately distinct from [`LimitKind`].
 ///
-/// - `LimitKind` describes policy dimensions.
-/// - `ResourceKind` describes runtime counters/reservations.
-///
-/// Both are mapped explicitly rather than relying on enum layout.
+/// `LimitKind` describes declarative policy.
+/// `ResourceKind` describes runtime accounting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ResourceKind {
     MemoryBytes,
@@ -120,6 +169,7 @@ pub enum ResourceKind {
 }
 
 impl ResourceKind {
+    /// Stable machine-readable identifier.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::MemoryBytes => "memory_bytes",
@@ -144,6 +194,7 @@ impl ResourceKind {
         }
     }
 
+    /// Converts the runtime dimension to the canonical QEC error dimension.
     pub const fn to_qec_kind(self) -> QecResourceKind {
         match self {
             Self::MemoryBytes => QecResourceKind::MemoryBytes,
@@ -159,12 +210,12 @@ impl ResourceKind {
             Self::CheckpointSizeBytes => QecResourceKind::CheckpointSize,
             Self::Partitions => QecResourceKind::Partitions,
             Self::StreamBufferEvents => QecResourceKind::StreamBuffer,
-            Self::StabilizerWeight => QecResourceKind::Custom,
-            Self::LogicalOperatorWeight => QecResourceKind::Custom,
+            Self::StabilizerWeight => QecResourceKind::StabilizerWeight,
+            Self::LogicalOperatorWeight => QecResourceKind::LogicalWeight,
             Self::QubitsPerPartition => QecResourceKind::Custom,
             Self::QpuShots => QecResourceKind::QpuShots,
             Self::QpuCircuits => QecResourceKind::QpuCircuits,
-            Self::VerificationOperations => QecResourceKind::Custom,
+            Self::VerificationOperations => QecResourceKind::Operations,
         }
     }
 }
@@ -176,25 +227,17 @@ impl fmt::Display for ResourceKind {
 }
 
 /* ========================================================================== */
-/* Compatibility resource policy                                             */
+/* Legacy compatibility policy                                                */
 /* ========================================================================== */
 
-/// Compatibility adapter for older callers.
+/// Legacy compatibility adapter.
 ///
-/// `QecLimits` is now canonical. New code should use:
+/// New code must use [`QecLimits`].
 ///
-/// ```text
-/// QecLimits
-///     ↓
-/// ResourceManager::from_qec_limits
-/// ```
-///
-/// This type remains available so existing lower-level code can migrate
-/// without requiring an all-at-once repository rewrite.
-///
-/// New production code should not introduce additional `ResourceLimits`.
+/// This type intentionally remains only as a migration boundary so existing
+/// callers do not need to be rewritten simultaneously.
 #[deprecated(
-    note = "use limits::QecLimits; ResourceManager::from_qec_limits() is the canonical API"
+    note = "use limits::QecLimits and ResourceManager::new instead"
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResourceLimits {
@@ -210,9 +253,7 @@ pub struct ResourceLimits {
 #[allow(deprecated)]
 impl Default for ResourceLimits {
     fn default() -> Self {
-        let limits = QecLimits::default();
-
-        Self::from(&limits)
+        Self::from_qec_limits(&QecLimits::default())
     }
 }
 
@@ -247,35 +288,36 @@ impl ResourceLimits {
     }
 
     pub fn into_qec_limits(self) -> Result<QecLimits, ResourceError> {
+        self.validate()?;
+
         let mut limits = QecLimits::default();
 
         limits.max_memory_bytes = self.max_memory_bytes;
-        limits.max_syndrome_events = to_usize(
-            self.max_syndrome_events,
-            LimitKind::SyndromeEvents,
-        )?;
+        limits.max_syndrome_events =
+            checked_u64_to_usize(
+                self.max_syndrome_events,
+                ResourceKind::SyndromeEvents,
+            )?;
         limits.max_graph_nodes =
-            to_usize(self.max_graph_nodes, LimitKind::GraphNodes)?;
+            checked_u64_to_usize(
+                self.max_graph_nodes,
+                ResourceKind::GraphNodes,
+            )?;
         limits.max_graph_edges =
-            to_usize(self.max_graph_edges, LimitKind::GraphEdges)?;
-        limits.max_decoder_iterations = to_usize(
-            self.max_decoder_iterations,
-            LimitKind::DecoderIterations,
-        )?;
+            checked_u64_to_usize(
+                self.max_graph_edges,
+                ResourceKind::GraphEdges,
+            )?;
+        limits.max_decoder_iterations =
+            checked_u64_to_usize(
+                self.max_decoder_iterations,
+                ResourceKind::DecoderIterations,
+            )?;
         limits.max_parallelism = self.max_parallelism;
 
-        /*
-         * The canonical QecLimits has a nanosecond decoder-time limit rather
-         * than an Option<Duration>. `None` is represented here by the
-         * canonical maximum.
-         */
         if let Some(duration) = self.max_wall_time {
             limits.max_decoder_time_ns =
-                u64::try_from(duration.as_nanos()).map_err(|_| {
-                    ResourceError::ArithmeticOverflow {
-                        resource: ResourceKind::MemoryBytes,
-                    }
-                })?;
+                duration_to_u64_nanos(duration)?;
         }
 
         limits.validate().map_err(ResourceError::from)
@@ -284,27 +326,34 @@ impl ResourceLimits {
     pub fn from_qec_limits(limits: &QecLimits) -> Self {
         Self {
             max_memory_bytes: limits.max_memory_bytes,
-            max_syndrome_events: limits.max_syndrome_events as u64,
-            max_graph_nodes: limits.max_graph_nodes as u64,
-            max_graph_edges: limits.max_graph_edges as u64,
+            max_syndrome_events:
+                limits.max_syndrome_events as u64,
+            max_graph_nodes:
+                limits.max_graph_nodes as u64,
+            max_graph_edges:
+                limits.max_graph_edges as u64,
             max_decoder_iterations:
                 limits.max_decoder_iterations as u64,
             max_parallelism: limits.max_parallelism,
-            max_wall_time: Some(Duration::from_nanos(
-                limits.max_decoder_time_ns,
-            )),
+            max_wall_time: Some(
+                Duration::from_nanos(
+                    limits.max_decoder_time_ns,
+                ),
+            ),
         }
     }
 }
 
 /* ========================================================================== */
-/* Per-operation quotas                                                       */
+/* Operation quota                                                             */
 /* ========================================================================== */
 
-/// Optional stricter quota for one logical operation.
+/// Optional operation-local limits.
 ///
-/// A quota can only tighten the global `QecLimits`. It can never expand it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Every configured quota is a stricter ceiling for one operation.
+///
+/// A quota can never increase the corresponding global [`QecLimits`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ResourceQuota {
     pub max_memory_bytes: Option<u64>,
     pub max_syndrome_events: Option<u64>,
@@ -329,107 +378,163 @@ pub struct ResourceQuota {
     pub max_verification_operations: Option<u64>,
 }
 
-impl Default for ResourceQuota {
-    fn default() -> Self {
-        Self {
-            max_memory_bytes: None,
-            max_syndrome_events: None,
-            max_graph_nodes: None,
-            max_graph_edges: None,
-            max_decoder_iterations: None,
-            max_parallelism: None,
-            max_wall_time: None,
-            max_code_distance: None,
-            max_qubits: None,
-            max_stabilizers: None,
-            max_rounds: None,
-            max_checkpoint_size_bytes: None,
-            max_partitions: None,
-            max_stream_buffer_events: None,
-            max_stabilizer_weight: None,
-            max_logical_operator_weight: None,
-            max_qubits_per_partition: None,
-            max_qpu_shots: None,
-            max_qpu_circuits: None,
-            max_verification_operations: None,
-        }
-    }
-}
-
 impl ResourceQuota {
     pub fn validate(&self) -> Result<(), ResourceError> {
-        let numeric_limits = [
+        macro_rules! require_nonzero {
+            ($value:expr, $reason:expr) => {
+                if let Some(value) = $value {
+                    if value == 0 {
+                        return Err(ResourceError::InvalidLimit {
+                            reason: $reason,
+                        });
+                    }
+                }
+            };
+        }
+
+        require_nonzero!(
             self.max_memory_bytes,
+            "operation memory quota must be greater than zero"
+        );
+        require_nonzero!(
             self.max_syndrome_events,
+            "operation syndrome quota must be greater than zero"
+        );
+        require_nonzero!(
             self.max_graph_nodes,
+            "operation graph-node quota must be greater than zero"
+        );
+        require_nonzero!(
             self.max_graph_edges,
+            "operation graph-edge quota must be greater than zero"
+        );
+        require_nonzero!(
             self.max_decoder_iterations,
-            self.max_code_distance.map(|v| v as u64),
-            self.max_qubits.map(|v| v as u64),
-            self.max_stabilizers.map(|v| v as u64),
-            self.max_rounds.map(|v| v as u64),
+            "operation decoder-iteration quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_parallelism,
+            "operation parallelism quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_code_distance,
+            "operation code-distance quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_qubits,
+            "operation qubit quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_stabilizers,
+            "operation stabilizer quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_rounds,
+            "operation round quota must be greater than zero"
+        );
+        require_nonzero!(
             self.max_checkpoint_size_bytes,
-            self.max_partitions.map(|v| v as u64),
-            self.max_stream_buffer_events.map(|v| v as u64),
-            self.max_stabilizer_weight.map(|v| v as u64),
-            self.max_logical_operator_weight.map(|v| v as u64),
-            self.max_qubits_per_partition.map(|v| v as u64),
+            "operation checkpoint quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_partitions,
+            "operation partition quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_stream_buffer_events,
+            "operation stream-buffer quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_stabilizer_weight,
+            "operation stabilizer-weight quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_logical_operator_weight,
+            "operation logical-weight quota must be greater than zero"
+        );
+        require_nonzero!(
+            self.max_qubits_per_partition,
+            "operation partition-qubit quota must be greater than zero"
+        );
+        require_nonzero!(
             self.max_qpu_shots,
+            "operation QPU-shot quota must be greater than zero"
+        );
+        require_nonzero!(
             self.max_qpu_circuits,
+            "operation QPU-circuit quota must be greater than zero"
+        );
+        require_nonzero!(
             self.max_verification_operations,
-        ];
-
-        if numeric_limits.iter().flatten().any(|v| *v == 0) {
-            return Err(ResourceError::InvalidLimit {
-                reason: "finite operation quotas must be greater than zero",
-            });
-        }
-
-        if self.max_parallelism == Some(0) {
-            return Err(ResourceError::InvalidLimit {
-                reason: "operation parallelism quota must be greater than zero",
-            });
-        }
+            "operation verification quota must be greater than zero"
+        );
 
         Ok(())
     }
 }
 
 /* ========================================================================== */
-/* Runtime snapshot                                                           */
+/* Runtime snapshot                                                            */
 /* ========================================================================== */
 
-/// Immutable runtime resource snapshot.
+/// Immutable runtime resource state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResourceSnapshot {
+    /// Currently reserved memory.
     pub allocated_bytes: u64,
+
+    /// Highest simultaneous memory reservation.
     pub peak_bytes: u64,
 
+    /// Cumulative syndrome/detection events.
     pub syndrome_events: u64,
+
+    /// Cumulative graph nodes admitted.
     pub graph_nodes: u64,
+
+    /// Cumulative graph edges admitted.
     pub graph_edges: u64,
+
+    /// Cumulative decoder iterations.
     pub decoder_iterations: u64,
 
+    /// Currently reserved worker slots.
     pub parallel_workers: usize,
 
+    /// Highest code distance observed.
     pub code_distance: usize,
+
+    /// Cumulative qubits admitted.
     pub qubits: usize,
+
+    /// Cumulative stabilizers admitted.
     pub stabilizers: usize,
+
+    /// Cumulative measurement rounds admitted.
     pub measurement_rounds: usize,
 
+    /// Cumulative checkpoint bytes.
     pub checkpoint_bytes: u64,
+
+    /// Cumulative partitions admitted.
     pub partitions: usize,
+
+    /// Cumulative stream-buffer events.
     pub stream_buffer_events: usize,
 
+    /// Cumulative QPU shots.
     pub qpu_shots: u64,
+
+    /// Cumulative QPU circuits.
     pub qpu_circuits: u64,
 
+    /// Cumulative mathematical-verification operations.
     pub verification_operations: u64,
 
     /// Wall-clock time since manager creation.
     pub wall_time: Duration,
 
-    /// Backend-reported compute time.
+    /// Backend/decoder-reported compute time.
     pub compute_time: Duration,
 }
 
@@ -441,13 +546,13 @@ impl ResourceSnapshot {
 }
 
 /* ========================================================================== */
-/* Errors                                                                     */
+/* Resource errors                                                             */
 /* ========================================================================== */
 
-/// Runtime resource-accounting error.
+/// Runtime resource-management error.
 ///
-/// Policy-definition errors originate from `limits.rs` and are converted
-/// into this runtime type at the resource-management boundary.
+/// Policy-definition errors originate in `limits.rs`.
+/// Runtime enforcement errors originate here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResourceError {
     InvalidLimit {
@@ -495,6 +600,12 @@ pub enum ResourceError {
     },
 
     Cancelled,
+
+    AccountingInvariantViolation {
+        resource: ResourceKind,
+        attempted_release: u64,
+        current: u64,
+    },
 }
 
 impl fmt::Display for ResourceError {
@@ -522,8 +633,8 @@ impl fmt::Display for ResourceError {
             } => {
                 write!(
                     f,
-                    "{resource} limit exceeded: requested {requested}, \
-                     current {current}, limit {limit}"
+                    "{resource} limit exceeded: \
+                     requested={requested}, current={current}, limit={limit}"
                 )
             }
 
@@ -534,8 +645,8 @@ impl fmt::Display for ResourceError {
             } => {
                 write!(
                     f,
-                    "parallelism limit exceeded: requested {requested}, \
-                     current {current}, limit {limit}"
+                    "parallelism limit exceeded: \
+                     requested={requested}, current={current}, limit={limit}"
                 )
             }
 
@@ -547,8 +658,8 @@ impl fmt::Display for ResourceError {
             } => {
                 write!(
                     f,
-                    "{resource} operation quota exceeded: requested \
-                     {requested}, current {current}, quota {limit}"
+                    "{resource} operation quota exceeded: \
+                     requested={requested}, current={current}, quota={limit}"
                 )
             }
 
@@ -559,15 +670,15 @@ impl fmt::Display for ResourceError {
             } => {
                 write!(
                     f,
-                    "parallelism operation quota exceeded: requested \
-                     {requested}, current {current}, quota {limit}"
+                    "parallelism operation quota exceeded: \
+                     requested={requested}, current={current}, quota={limit}"
                 )
             }
 
             Self::ArithmeticOverflow { resource } => {
                 write!(
                     f,
-                    "resource counter overflow for {resource}"
+                    "resource accounting arithmetic overflow for {resource}"
                 )
             }
 
@@ -577,19 +688,35 @@ impl fmt::Display for ResourceError {
             } => {
                 write!(
                     f,
-                    "wall-time limit exceeded: elapsed {elapsed:?}, \
-                     limit {limit:?}"
+                    "QEC wall-time limit exceeded: \
+                     elapsed={elapsed:?}, limit={limit:?}"
                 )
             }
 
             Self::Cancelled => {
-                f.write_str("resource operation cancelled")
+                f.write_str("QEC resource operation cancelled")
+            }
+
+            Self::AccountingInvariantViolation {
+                resource,
+                attempted_release,
+                current,
+            } => {
+                write!(
+                    f,
+                    "resource accounting invariant violation for {resource}: \
+                     attempted release={attempted_release}, current={current}"
+                )
             }
         }
     }
 }
 
 impl std::error::Error for ResourceError {}
+
+/* ========================================================================== */
+/* Limit error conversion                                                      */
+/* ========================================================================== */
 
 impl From<LimitError> for ResourceError {
     fn from(error: LimitError) -> Self {
@@ -598,7 +725,7 @@ impl From<LimitError> for ResourceError {
                 Self::PolicyInvalid {
                     resource,
                     message: format!(
-                        "value {value} must be greater than zero"
+                        "configured value {value} must be greater than zero"
                     ),
                 }
             }
@@ -619,7 +746,7 @@ impl From<LimitError> for ResourceError {
             LimitError::ArithmeticOverflow { resource } => {
                 Self::PolicyInvalid {
                     resource,
-                    message: "policy arithmetic overflow".to_string(),
+                    message: "policy arithmetic overflow".to_owned(),
                 }
             }
 
@@ -635,12 +762,24 @@ impl From<LimitError> for ResourceError {
                     ),
                 }
             }
+
+            LimitError::UnsupportedSchema {
+                found,
+                expected,
+            } => {
+                Self::PolicyInvalid {
+                    resource: LimitKind::MemoryBytes,
+                    message: format!(
+                        "unsupported limits schema {found}; expected {expected}"
+                    ),
+                }
+            }
         }
     }
 }
 
 /* ========================================================================== */
-/* Atomic runtime counters                                                    */
+/* Atomic counters                                                             */
 /* ========================================================================== */
 
 #[derive(Debug, Default)]
@@ -670,53 +809,67 @@ struct ResourceCounters {
     verification_operations: AtomicU64,
 
     compute_time_nanos: AtomicU64,
-
-    cancelled: AtomicBool,
 }
 
 /* ========================================================================== */
-/* Resource manager                                                           */
+/* Resource manager                                                            */
 /* ========================================================================== */
 
 /// Thread-safe runtime resource manager.
 ///
-/// The manager is intentionally independent from any particular decoder.
-/// MWPM, Union-Find, surface-code construction, streaming, partitioning,
-/// simulation, verification and QPU adapters can all use the same manager.
+/// The manager is suitable for sharing across decoder workers through `Arc`.
 #[derive(Debug)]
 pub struct ResourceManager {
     limits: QecLimits,
     counters: ResourceCounters,
+    cancellation: CancellationToken,
     started: Instant,
 }
 
 impl ResourceManager {
-    /// Creates a manager from the canonical QEC resource policy.
-    pub fn from_qec_limits(
+    /// Creates a manager from canonical QEC limits.
+    pub fn new(limits: QecLimits) -> Result<Self, ResourceError> {
+        Self::with_cancellation(limits, CancellationToken::new())
+    }
+
+    /// Creates a manager using an externally owned cancellation token.
+    ///
+    /// This is the preferred integration point for:
+    ///
+    /// - scheduler.rs;
+    /// - decoder.rs;
+    /// - streaming.rs;
+    /// - partition.rs;
+    /// - distributed.rs;
+    /// - checkpoint.rs;
+    /// - QPU execution.
+    pub fn with_cancellation(
         limits: QecLimits,
+        cancellation: CancellationToken,
     ) -> Result<Self, ResourceError> {
         limits.validate()?;
 
         Ok(Self {
             limits,
             counters: ResourceCounters::default(),
+            cancellation,
             started: Instant::now(),
         })
     }
 
-    /// Canonical constructor.
-    pub fn new(
+    /// Explicit canonical constructor alias.
+    pub fn from_qec_limits(
         limits: QecLimits,
     ) -> Result<Self, ResourceError> {
-        Self::from_qec_limits(limits)
+        Self::new(limits)
     }
 
-    /// Compatibility constructor for older callers.
+    /// Legacy constructor.
     #[allow(deprecated)]
     pub fn from_resource_limits(
         limits: ResourceLimits,
     ) -> Result<Self, ResourceError> {
-        Self::from_qec_limits(limits.into_qec_limits()?)
+        Self::new(limits.into_qec_limits()?)
     }
 
     /// Returns the canonical immutable policy.
@@ -724,49 +877,37 @@ impl ResourceManager {
         self.limits
     }
 
-    /// Creates a shared resource manager.
+    /// Returns the cancellation token used by this manager.
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.cancellation.clone()
+    }
+
+    /// Creates a shareable manager.
     pub fn shared(
         limits: QecLimits,
     ) -> Result<Arc<Self>, ResourceError> {
         Ok(Arc::new(Self::new(limits)?))
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Cancellation                                                            */
-    /* ---------------------------------------------------------------------- */
-
-    /// Requests cancellation of the current manager workload.
+    /// Requests cancellation through the canonical cancellation subsystem.
     pub fn cancel(&self) {
-        self.counters
-            .cancelled
-            .store(true, Ordering::Release);
+        self.cancellation.request();
     }
 
-    /// Clears the cancellation state.
-    ///
-    /// This should only be used between logical operations.
-    pub fn reset_cancellation(&self) {
-        self.counters
-            .cancelled
-            .store(false, Ordering::Release);
-    }
-
+    /// Returns whether the workload is cancelled.
     pub fn is_cancelled(&self) -> bool {
-        self.counters
-            .cancelled
-            .load(Ordering::Acquire)
+        self.cancellation.is_cancelled()
     }
 
-    /// Checks cancellation and the global execution deadline.
+    /// Checks cancellation and the global wall-clock budget.
     pub fn check(&self) -> Result<(), ResourceError> {
-        if self.is_cancelled() {
-            return Err(ResourceError::Cancelled);
-        }
+        self.cancellation
+            .check()
+            .map_err(|_| ResourceError::Cancelled)?;
 
         let elapsed = self.started.elapsed();
-        let limit = Duration::from_nanos(
-            self.limits.max_decoder_time_ns,
-        );
+        let limit =
+            Duration::from_nanos(self.limits.max_decoder_time_ns);
 
         if elapsed > limit {
             return Err(ResourceError::WallTimeLimitExceeded {
@@ -778,13 +919,13 @@ impl ResourceManager {
         Ok(())
     }
 
-    /// Same check exposed as the canonical QEC error type.
+    /// Canonical QEC-error form of [`Self::check`].
     pub fn check_qec(&self) -> QecResult<()> {
         self.check().map_err(Into::into)
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Snapshots                                                               */
+    /* Snapshot                                                                 */
     /* ---------------------------------------------------------------------- */
 
     pub fn snapshot(&self) -> ResourceSnapshot {
@@ -885,14 +1026,10 @@ impl ResourceManager {
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Preflight                                                               */
+    /* Allocation-free preflight                                               */
     /* ---------------------------------------------------------------------- */
 
-    /// Checks a complete workload request before allocation/construction.
-    ///
-    /// This is the API that surface-code construction, simulation, QPU
-    /// adapters and exact verification should call before doing expensive
-    /// work.
+    /// Validates a complete workload request without changing runtime state.
     pub fn preflight(
         &self,
         request: &ResourceRequest,
@@ -900,115 +1037,133 @@ impl ResourceManager {
         self.check()?;
         request.validate()?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::CodeDistance,
             request.code_distance,
-            self.limits.max_code_distance,
+            self.limits.max_code_distance as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::Qubits,
             request.qubits,
-            self.limits.max_qubits,
+            self.limits.max_qubits as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::Stabilizers,
             request.stabilizers,
-            self.limits.max_stabilizers,
+            self.limits.max_stabilizers as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::SyndromeEvents,
             request.syndrome_events,
-            self.limits.max_syndrome_events,
+            self.limits.max_syndrome_events as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::MeasurementRounds,
             request.measurement_rounds,
-            self.limits.max_rounds,
+            self.limits.max_rounds as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::GraphNodes,
             request.graph_nodes,
-            self.limits.max_graph_nodes,
+            self.limits.max_graph_nodes as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::GraphEdges,
             request.graph_edges,
-            self.limits.max_graph_edges,
+            self.limits.max_graph_edges as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::MemoryBytes,
             request.memory_bytes,
             self.limits.max_memory_bytes,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::DecoderIterations,
             request.decoder_iterations,
             self.limits.max_decoder_iterations as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::ParallelWorkers,
-            request.parallel_workers as u64,
+            usize_to_u64(
+                request.parallel_workers,
+                ResourceKind::ParallelWorkers,
+            )?,
             self.limits.max_parallelism as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::CheckpointSizeBytes,
             request.checkpoint_size_bytes,
             self.limits.max_checkpoint_size_bytes,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::Partitions,
-            request.partitions as u64,
+            usize_to_u64(
+                request.partitions,
+                ResourceKind::Partitions,
+            )?,
             self.limits.max_partitions as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::StreamBufferEvents,
-            request.stream_buffer_events as u64,
+            usize_to_u64(
+                request.stream_buffer_events,
+                ResourceKind::StreamBufferEvents,
+            )?,
             self.limits.max_stream_buffer_events as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::StabilizerWeight,
-            request.stabilizer_weight as u64,
+            usize_to_u64(
+                request.stabilizer_weight,
+                ResourceKind::StabilizerWeight,
+            )?,
             self.limits.max_stabilizer_weight as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::LogicalOperatorWeight,
-            request.logical_operator_weight as u64,
+            usize_to_u64(
+                request.logical_operator_weight,
+                ResourceKind::LogicalOperatorWeight,
+            )?,
             self.limits.max_logical_operator_weight as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::QubitsPerPartition,
-            request.qubits_per_partition as u64,
+            usize_to_u64(
+                request.qubits_per_partition,
+                ResourceKind::QubitsPerPartition,
+            )?,
             self.limits.max_qubits_per_partition as u64,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::QpuShots,
             request.qpu_shots,
             self.limits.max_qpu_shots,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::QpuCircuits,
             request.qpu_circuits,
             self.limits.max_qpu_circuits,
         )?;
 
-        self.check_policy_value(
+        self.check_request_limit(
             ResourceKind::VerificationOperations,
             request.verification_operations,
             self.limits.max_verification_operations,
@@ -1017,21 +1172,18 @@ impl ResourceManager {
         Ok(())
     }
 
-    /// Returns the amount of memory that may be safely reserved after
-    /// accounting for the currently allocated memory.
     pub fn available_memory(&self) -> u64 {
-        let current = self
-            .counters
-            .allocated_bytes
-            .load(Ordering::Acquire);
-
         self.limits
             .max_memory_bytes
-            .saturating_sub(current)
+            .saturating_sub(
+                self.counters
+                    .allocated_bytes
+                    .load(Ordering::Acquire),
+            )
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Memory                                                                  */
+    /* Memory reservations                                                     */
     /* ---------------------------------------------------------------------- */
 
     pub fn reserve_memory(
@@ -1054,7 +1206,7 @@ impl ResourceManager {
     ) -> Result<(), ResourceError> {
         self.check()?;
 
-        self.try_add(
+        self.try_add_u64(
             ResourceKind::MemoryBytes,
             &self.counters.allocated_bytes,
             bytes,
@@ -1067,15 +1219,19 @@ impl ResourceManager {
         Ok(())
     }
 
-    pub fn release_memory(&self, bytes: u64) {
-        saturating_sub_u64(
+    pub fn release_memory(
+        &self,
+        bytes: u64,
+    ) -> Result<(), ResourceError> {
+        release_u64_checked(
+            ResourceKind::MemoryBytes,
             &self.counters.allocated_bytes,
             bytes,
-        );
+        )
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Generic bounded counters                                                */
+    /* Cumulative counters                                                      */
     /* ---------------------------------------------------------------------- */
 
     pub fn record_syndrome_events(
@@ -1086,7 +1242,7 @@ impl ResourceManager {
             ResourceKind::SyndromeEvents,
             &self.counters.syndrome_events,
             count,
-            self.limits.max_syndrome_events,
+            self.limits.max_syndrome_events as u64,
             None,
         )
     }
@@ -1170,17 +1326,20 @@ impl ResourceManager {
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Size/count resources                                                    */
+    /* Cumulative usize resources                                               */
     /* ---------------------------------------------------------------------- */
 
     pub fn record_code_distance(
         &self,
         distance: usize,
     ) -> Result<(), ResourceError> {
-        self.check_policy_value(
+        let distance_u64 =
+            usize_to_u64(distance, ResourceKind::CodeDistance)?;
+
+        self.check_request_limit(
             ResourceKind::CodeDistance,
-            distance as u64,
-            self.limits.max_code_distance,
+            distance_u64,
+            self.limits.max_code_distance as u64,
         )?;
 
         store_max_usize(
@@ -1265,7 +1424,7 @@ impl ResourceManager {
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Workers                                                                 */
+    /* Worker reservations                                                      */
     /* ---------------------------------------------------------------------- */
 
     pub fn acquire_workers(
@@ -1314,13 +1473,13 @@ impl ResourceManager {
                 );
             }
 
-            if let Some(limit) = quota {
-                if next > limit {
+            if let Some(quota_limit) = quota {
+                if next > quota_limit {
                     return Err(
                         ResourceError::ParallelismQuotaExceeded {
                             requested: workers,
                             current,
-                            limit,
+                            limit: quota_limit,
                         },
                     );
                 }
@@ -1342,25 +1501,26 @@ impl ResourceManager {
         }
     }
 
-    pub fn release_workers(&self, workers: usize) {
-        saturating_sub_usize(
+    pub fn release_workers(
+        &self,
+        workers: usize,
+    ) -> Result<(), ResourceError> {
+        release_usize_checked(
+            ResourceKind::ParallelWorkers,
             &self.counters.parallel_workers,
             workers,
-        );
+        )
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Compute time                                                            */
+    /* Compute time                                                             */
     /* ---------------------------------------------------------------------- */
 
     pub fn record_compute_time(
         &self,
         duration: Duration,
     ) -> Result<(), ResourceError> {
-        let nanos = u64::try_from(duration.as_nanos())
-            .map_err(|_| ResourceError::ArithmeticOverflow {
-                resource: ResourceKind::DecoderIterations,
-            })?;
+        let nanos = duration_to_u64_nanos(duration)?;
 
         let mut current = self
             .counters
@@ -1411,7 +1571,7 @@ impl ResourceManager {
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Internal accounting helpers                                             */
+    /* Internal counter helpers                                                */
     /* ---------------------------------------------------------------------- */
 
     fn record_u64(
@@ -1424,7 +1584,7 @@ impl ResourceManager {
     ) -> Result<(), ResourceError> {
         self.check()?;
 
-        self.try_add(
+        self.try_add_u64(
             resource,
             counter,
             requested,
@@ -1453,9 +1613,18 @@ impl ResourceManager {
             if next > global_limit {
                 return Err(ResourceError::LimitExceeded {
                     resource,
-                    requested: requested as u64,
-                    current: current as u64,
-                    limit: global_limit as u64,
+                    requested: usize_to_u64(
+                        requested,
+                        resource,
+                    )?,
+                    current: usize_to_u64(
+                        current,
+                        resource,
+                    )?,
+                    limit: usize_to_u64(
+                        global_limit,
+                        resource,
+                    )?,
                 });
             }
 
@@ -1471,7 +1640,7 @@ impl ResourceManager {
         }
     }
 
-    fn try_add(
+    fn try_add_u64(
         &self,
         resource: ResourceKind,
         counter: &AtomicU64,
@@ -1496,13 +1665,13 @@ impl ResourceManager {
                 });
             }
 
-            if let Some(limit) = quota {
-                if next > limit {
+            if let Some(quota_limit) = quota {
+                if next > quota_limit {
                     return Err(ResourceError::QuotaExceeded {
                         resource,
                         requested,
                         current,
-                        limit,
+                        limit: quota_limit,
                     });
                 }
             }
@@ -1519,7 +1688,7 @@ impl ResourceManager {
         }
     }
 
-    fn check_policy_value(
+    fn check_request_limit(
         &self,
         resource: ResourceKind,
         requested: u64,
@@ -1567,14 +1736,12 @@ impl ResourceManager {
 }
 
 /* ========================================================================== */
-/* Resource request / preflight model                                         */
+/* Resource request                                                            */
 /* ========================================================================== */
 
-/// Declarative estimate of resources required by an operation.
+/// Allocation-free estimate of resources required by an operation.
 ///
-/// This object is intentionally allocation-free and can therefore be used
-/// before constructing a surface code, graph, syndrome buffer, checkpoint,
-/// QPU workload or exact verification search.
+/// Zero means "not requested" for dimensions where zero is a valid omission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ResourceRequest {
     pub code_distance: u64,
@@ -1600,10 +1767,6 @@ pub struct ResourceRequest {
 
 impl ResourceRequest {
     pub fn validate(&self) -> Result<(), ResourceError> {
-        /*
-         * Zero means "not requested" rather than an invalid workload estimate.
-         * This allows callers to provide only the dimensions they know.
-         */
         if self.parallel_workers == usize::MAX {
             return Err(ResourceError::InvalidLimit {
                 reason: "parallel worker request cannot use usize::MAX",
@@ -1613,82 +1776,125 @@ impl ResourceRequest {
         Ok(())
     }
 
-    /// Computes a surface-code request without allocating.
+    /// Builds a conservative surface-code resource estimate.
     ///
-    /// This is deliberately conservative.
+    /// No allocation is performed.
     pub fn surface_code(
         distance: usize,
         stabilizer_weight: usize,
     ) -> Result<Self, ResourceError> {
         let distance_u64 =
-            u64::try_from(distance).map_err(|_| {
-                ResourceError::ArithmeticOverflow {
-                    resource: ResourceKind::CodeDistance,
-                }
-            })?;
+            usize_to_u64(
+                distance,
+                ResourceKind::CodeDistance,
+            )?;
 
-        let d2 = distance
-            .checked_mul(distance)
-            .ok_or(ResourceError::ArithmeticOverflow {
+        let d2 = distance.checked_mul(distance).ok_or(
+            ResourceError::ArithmeticOverflow {
                 resource: ResourceKind::Qubits,
-            })?;
+            },
+        )?;
 
-        let stabilizers = d2
-            .checked_sub(1)
-            .ok_or(ResourceError::ArithmeticOverflow {
+        let stabilizers = d2.checked_sub(1).ok_or(
+            ResourceError::ArithmeticOverflow {
                 resource: ResourceKind::Stabilizers,
-            })?;
+            },
+        )?;
 
-        let memory_bytes = d2
-            .checked_mul(
+        let d2_u64 =
+            usize_to_u64(
+                d2,
+                ResourceKind::Qubits,
+            )?;
+
+        let stabilizers_u64 =
+            usize_to_u64(
+                stabilizers,
+                ResourceKind::Stabilizers,
+            )?;
+
+        let weight_u64 =
+            usize_to_u64(
+                stabilizer_weight,
+                ResourceKind::StabilizerWeight,
+            )?;
+
+        let node_bytes =
+            usize_to_u64(
                 std::mem::size_of::<usize>(),
-            )
-            .and_then(|v| v.checked_mul(8))
-            .ok_or(ResourceError::ArithmeticOverflow {
-                resource: ResourceKind::MemoryBytes,
-            })?;
+                ResourceKind::MemoryBytes,
+            )?;
+
+        let memory_bytes = d2_u64
+            .checked_mul(node_bytes)
+            .and_then(|value| value.checked_mul(8))
+            .ok_or(
+                ResourceError::ArithmeticOverflow {
+                    resource: ResourceKind::MemoryBytes,
+                },
+            )?;
 
         Ok(Self {
             code_distance: distance_u64,
-            qubits: d2 as u64,
-            stabilizers: stabilizers as u64,
-            stabilizer_weight: stabilizer_weight as usize,
-            memory_bytes: memory_bytes as u64,
+            qubits: d2_u64,
+            stabilizers: stabilizers_u64,
+            stabilizer_weight:
+                checked_u64_to_usize(
+                    weight_u64,
+                    ResourceKind::StabilizerWeight,
+                )?,
+            memory_bytes,
             ..Self::default()
         })
     }
 
-    /// Computes a graph request without allocating.
+    /// Builds a conservative graph resource estimate.
+    ///
+    /// No allocation is performed.
     pub fn graph(
         nodes: usize,
         edges: usize,
     ) -> Result<Self, ResourceError> {
-        let memory_nodes = (nodes as u64)
-            .checked_mul(
-                std::mem::size_of::<usize>() as u64,
-            )
-            .ok_or(ResourceError::ArithmeticOverflow {
-                resource: ResourceKind::MemoryBytes,
-            })?;
+        let nodes_u64 =
+            usize_to_u64(nodes, ResourceKind::GraphNodes)?;
 
-        let memory_edges = (edges as u64)
-            .checked_mul(
-                std::mem::size_of::<usize>() as u64,
-            )
-            .ok_or(ResourceError::ArithmeticOverflow {
-                resource: ResourceKind::MemoryBytes,
-            })?;
+        let edges_u64 =
+            usize_to_u64(edges, ResourceKind::GraphEdges)?;
+
+        let element_bytes =
+            usize_to_u64(
+                std::mem::size_of::<usize>(),
+                ResourceKind::MemoryBytes,
+            )?;
+
+        let node_memory =
+            nodes_u64
+                .checked_mul(element_bytes)
+                .ok_or(
+                    ResourceError::ArithmeticOverflow {
+                        resource: ResourceKind::MemoryBytes,
+                    },
+                )?;
+
+        let edge_memory =
+            edges_u64
+                .checked_mul(element_bytes)
+                .ok_or(
+                    ResourceError::ArithmeticOverflow {
+                        resource: ResourceKind::MemoryBytes,
+                    },
+                )?;
 
         let memory_bytes =
-            memory_nodes
-                .checked_add(memory_edges)
-                .ok_or(ResourceError::ArithmeticOverflow {
+            node_memory.checked_add(edge_memory).ok_or(
+                ResourceError::ArithmeticOverflow {
                     resource: ResourceKind::MemoryBytes,
-                })?;
+                },
+            )?;
 
         Ok(Self {
-            graph_nodes: nodes as u64,
-            graph_edges: edges as u64,
+            graph_nodes: nodes_u64,
+            graph_edges: edges_u64,
             memory_bytes,
             ..Self::default()
         })
@@ -1696,10 +1902,10 @@ impl ResourceRequest {
 }
 
 /* ========================================================================== */
-/* RAII reservations                                                          */
+/* RAII memory reservation                                                     */
 /* ========================================================================== */
 
-/// RAII memory reservation.
+/// RAII reservation for live memory.
 pub struct MemoryReservation<'a> {
     manager: &'a ResourceManager,
     bytes: u64,
@@ -1711,6 +1917,9 @@ impl<'a> MemoryReservation<'a> {
         self.bytes
     }
 
+    /// Explicitly releases the reservation.
+    ///
+    /// Consumes the guard so a second release cannot occur.
     pub fn release(
         mut self,
     ) -> bool {
@@ -1718,23 +1927,29 @@ impl<'a> MemoryReservation<'a> {
             return false;
         }
 
-        self.manager.release_memory(self.bytes);
+        let result =
+            self.manager.release_memory(self.bytes);
+
         self.active = false;
 
-        true
+        result.is_ok()
     }
 }
 
 impl Drop for MemoryReservation<'_> {
     fn drop(&mut self) {
         if self.active {
-            self.manager.release_memory(self.bytes);
+            let _ = self.manager.release_memory(self.bytes);
             self.active = false;
         }
     }
 }
 
-/// RAII worker reservation.
+/* ========================================================================== */
+/* RAII worker reservation                                                     */
+/* ========================================================================== */
+
+/// RAII reservation for live worker slots.
 pub struct WorkerReservation<'a> {
     manager: &'a ResourceManager,
     workers: usize,
@@ -1746,6 +1961,7 @@ impl<'a> WorkerReservation<'a> {
         self.workers
     }
 
+    /// Explicitly releases the worker reservation.
     pub fn release(
         mut self,
     ) -> bool {
@@ -1753,34 +1969,37 @@ impl<'a> WorkerReservation<'a> {
             return false;
         }
 
-        self.manager.release_workers(self.workers);
+        let result =
+            self.manager.release_workers(self.workers);
+
         self.active = false;
 
-        true
+        result.is_ok()
     }
 }
 
 impl Drop for WorkerReservation<'_> {
     fn drop(&mut self) {
         if self.active {
-            self.manager.release_workers(self.workers);
+            let _ = self.manager.release_workers(self.workers);
             self.active = false;
         }
     }
 }
 
 /* ========================================================================== */
-/* Operation scope                                                            */
+/* Operation scope                                                             */
 /* ========================================================================== */
 
-/// A bounded logical QEC operation.
+/// A bounded logical operation.
 ///
-/// All resource reservations made through this scope are constrained by both:
+/// All reservations and cumulative accounting made through this scope are
+/// constrained by both:
 ///
 /// ```text
-/// QecLimits
-///     AND
-/// ResourceQuota
+/// global QecLimits
+///        AND
+/// operation ResourceQuota
 /// ```
 pub struct ResourceScope<'a> {
     manager: &'a ResourceManager,
@@ -1825,10 +2044,16 @@ impl<'a> ResourceScope<'a> {
         self.check().map_err(Into::into)
     }
 
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.manager.cancellation_token()
+    }
+
     pub fn reserve_memory(
         &self,
         bytes: u64,
     ) -> Result<MemoryReservation<'a>, ResourceError> {
+        self.check()?;
+
         self.manager.reserve_memory_with_quota(
             bytes,
             self.quota.max_memory_bytes,
@@ -1845,11 +2070,8 @@ impl<'a> ResourceScope<'a> {
         &self,
         count: u64,
     ) -> Result<(), ResourceError> {
-        self.manager.check()?;
-
-        self.manager.try_add(
+        self.record_u64(
             ResourceKind::SyndromeEvents,
-            &self.manager.counters.syndrome_events,
             count,
             self.manager.limits.max_syndrome_events as u64,
             self.quota.max_syndrome_events,
@@ -1860,11 +2082,8 @@ impl<'a> ResourceScope<'a> {
         &self,
         count: u64,
     ) -> Result<(), ResourceError> {
-        self.manager.check()?;
-
-        self.manager.try_add(
+        self.record_u64(
             ResourceKind::GraphNodes,
-            &self.manager.counters.graph_nodes,
             count,
             self.manager.limits.max_graph_nodes as u64,
             self.quota.max_graph_nodes.map(|v| v as u64),
@@ -1875,11 +2094,8 @@ impl<'a> ResourceScope<'a> {
         &self,
         count: u64,
     ) -> Result<(), ResourceError> {
-        self.manager.check()?;
-
-        self.manager.try_add(
+        self.record_u64(
             ResourceKind::GraphEdges,
-            &self.manager.counters.graph_edges,
             count,
             self.manager.limits.max_graph_edges as u64,
             self.quota.max_graph_edges.map(|v| v as u64),
@@ -1890,13 +2106,12 @@ impl<'a> ResourceScope<'a> {
         &self,
         count: u64,
     ) -> Result<(), ResourceError> {
-        self.manager.check()?;
-
-        self.manager.try_add(
+        self.record_u64(
             ResourceKind::DecoderIterations,
-            &self.manager.counters.decoder_iterations,
             count,
-            self.manager.limits.max_decoder_iterations as u64,
+            self.manager
+                .limits
+                .max_decoder_iterations as u64,
             self.quota.max_decoder_iterations,
         )
     }
@@ -1905,11 +2120,8 @@ impl<'a> ResourceScope<'a> {
         &self,
         count: u64,
     ) -> Result<(), ResourceError> {
-        self.manager.check()?;
-
-        self.manager.try_add(
+        self.record_u64(
             ResourceKind::QpuShots,
-            &self.manager.counters.qpu_shots,
             count,
             self.manager.limits.max_qpu_shots,
             self.quota.max_qpu_shots,
@@ -1920,11 +2132,8 @@ impl<'a> ResourceScope<'a> {
         &self,
         count: u64,
     ) -> Result<(), ResourceError> {
-        self.manager.check()?;
-
-        self.manager.try_add(
+        self.record_u64(
             ResourceKind::QpuCircuits,
-            &self.manager.counters.qpu_circuits,
             count,
             self.manager.limits.max_qpu_circuits,
             self.quota.max_qpu_circuits,
@@ -1935,14 +2144,89 @@ impl<'a> ResourceScope<'a> {
         &self,
         count: u64,
     ) -> Result<(), ResourceError> {
-        self.manager.check()?;
-
-        self.manager.try_add(
+        self.record_u64(
             ResourceKind::VerificationOperations,
-            &self.manager.counters.verification_operations,
             count,
-            self.manager.limits.max_verification_operations,
+            self.manager
+                .limits
+                .max_verification_operations,
             self.quota.max_verification_operations,
+        )
+    }
+
+    pub fn record_qubits(
+        &self,
+        count: usize,
+    ) -> Result<(), ResourceError> {
+        self.record_usize(
+            ResourceKind::Qubits,
+            count,
+            self.manager.limits.max_qubits,
+            self.quota.max_qubits,
+        )
+    }
+
+    pub fn record_stabilizers(
+        &self,
+        count: usize,
+    ) -> Result<(), ResourceError> {
+        self.record_usize(
+            ResourceKind::Stabilizers,
+            count,
+            self.manager.limits.max_stabilizers,
+            self.quota.max_stabilizers,
+        )
+    }
+
+    pub fn record_measurement_rounds(
+        &self,
+        count: usize,
+    ) -> Result<(), ResourceError> {
+        self.record_usize(
+            ResourceKind::MeasurementRounds,
+            count,
+            self.manager.limits.max_rounds,
+            self.quota.max_rounds,
+        )
+    }
+
+    pub fn record_partitions(
+        &self,
+        count: usize,
+    ) -> Result<(), ResourceError> {
+        self.record_usize(
+            ResourceKind::Partitions,
+            count,
+            self.manager.limits.max_partitions,
+            self.quota.max_partitions,
+        )
+    }
+
+    pub fn record_stream_buffer_events(
+        &self,
+        count: usize,
+    ) -> Result<(), ResourceError> {
+        self.record_usize(
+            ResourceKind::StreamBufferEvents,
+            count,
+            self.manager
+                .limits
+                .max_stream_buffer_events,
+            self.quota.max_stream_buffer_events,
+        )
+    }
+
+    pub fn record_checkpoint_bytes(
+        &self,
+        count: u64,
+    ) -> Result<(), ResourceError> {
+        self.record_u64(
+            ResourceKind::CheckpointSizeBytes,
+            count,
+            self.manager
+                .limits
+                .max_checkpoint_size_bytes,
+            self.quota.max_checkpoint_size_bytes,
         )
     }
 
@@ -1950,6 +2234,8 @@ impl<'a> ResourceScope<'a> {
         &self,
         workers: usize,
     ) -> Result<WorkerReservation<'a>, ResourceError> {
+        self.check()?;
+
         self.manager.acquire_workers_with_quota(
             workers,
             self.quota.max_parallelism,
@@ -1962,6 +2248,9 @@ impl<'a> ResourceScope<'a> {
         })
     }
 
+    /// Performs global and operation-local preflight.
+    ///
+    /// No runtime counters are modified.
     pub fn preflight(
         &self,
         request: &ResourceRequest,
@@ -1969,74 +2258,127 @@ impl<'a> ResourceScope<'a> {
         self.check()?;
         self.manager.preflight(request)?;
 
-        /*
-         * Apply the operation quota as a second, stricter boundary.
-         */
-        if let Some(limit) = self.quota.max_memory_bytes {
-            if request.memory_bytes > limit {
-                return Err(ResourceError::QuotaExceeded {
-                    resource: ResourceKind::MemoryBytes,
-                    requested: request.memory_bytes,
-                    current: 0,
-                    limit,
-                });
-            }
+        macro_rules! quota_u64 {
+            ($field:ident, $kind:expr) => {
+                if let Some(limit) = self.quota.$field {
+                    if request.$field > limit {
+                        return Err(
+                            ResourceError::QuotaExceeded {
+                                resource: $kind,
+                                requested: request.$field,
+                                current: 0,
+                                limit,
+                            },
+                        );
+                    }
+                }
+            };
         }
 
-        if let Some(limit) = self.quota.max_qubits {
-            if request.qubits > limit as u64 {
-                return Err(ResourceError::QuotaExceeded {
-                    resource: ResourceKind::Qubits,
-                    requested: request.qubits,
-                    current: 0,
-                    limit: limit as u64,
-                });
-            }
+        macro_rules! quota_usize {
+            ($field:ident, $kind:expr) => {
+                if let Some(limit) = self.quota.$field {
+                    let requested = usize_to_u64(
+                        request.$field,
+                        $kind,
+                    )?;
+
+                    let limit_u64 = usize_to_u64(
+                        limit,
+                        $kind,
+                    )?;
+
+                    if requested > limit_u64 {
+                        return Err(
+                            ResourceError::QuotaExceeded {
+                                resource: $kind,
+                                requested,
+                                current: 0,
+                                limit: limit_u64,
+                            },
+                        );
+                    }
+                }
+            };
         }
 
-        if let Some(limit) = self.quota.max_graph_nodes {
-            if request.graph_nodes > limit as u64 {
-                return Err(ResourceError::QuotaExceeded {
-                    resource: ResourceKind::GraphNodes,
-                    requested: request.graph_nodes,
-                    current: 0,
-                    limit: limit as u64,
-                });
-            }
-        }
+        quota_u64!(
+            max_memory_bytes,
+            ResourceKind::MemoryBytes
+        );
+        quota_u64!(
+            max_syndrome_events,
+            ResourceKind::SyndromeEvents
+        );
+        quota_u64!(
+            max_graph_nodes,
+            ResourceKind::GraphNodes
+        );
+        quota_u64!(
+            max_graph_edges,
+            ResourceKind::GraphEdges
+        );
+        quota_u64!(
+            max_decoder_iterations,
+            ResourceKind::DecoderIterations
+        );
+        quota_u64!(
+            max_checkpoint_size_bytes,
+            ResourceKind::CheckpointSizeBytes
+        );
+        quota_u64!(
+            max_qpu_shots,
+            ResourceKind::QpuShots
+        );
+        quota_u64!(
+            max_qpu_circuits,
+            ResourceKind::QpuCircuits
+        );
+        quota_u64!(
+            max_verification_operations,
+            ResourceKind::VerificationOperations
+        );
 
-        if let Some(limit) = self.quota.max_graph_edges {
-            if request.graph_edges > limit as u64 {
-                return Err(ResourceError::QuotaExceeded {
-                    resource: ResourceKind::GraphEdges,
-                    requested: request.graph_edges,
-                    current: 0,
-                    limit: limit as u64,
-                });
-            }
-        }
-
-        if let Some(limit) = self.quota.max_qpu_shots {
-            if request.qpu_shots > limit {
-                return Err(ResourceError::QuotaExceeded {
-                    resource: ResourceKind::QpuShots,
-                    requested: request.qpu_shots,
-                    current: 0,
-                    limit,
-                });
-            }
-        }
-
-        if let Some(limit) = self.quota.max_verification_operations {
-            if request.verification_operations > limit {
-                return Err(ResourceError::QuotaExceeded {
-                    resource: ResourceKind::VerificationOperations,
-                    requested: request.verification_operations,
-                    current: 0,
-                    limit,
-                });
-            }
-        }
+        quota_usize!(
+            max_parallelism,
+            ResourceKind::ParallelWorkers
+        );
+        quota_usize!(
+            max_code_distance,
+            ResourceKind::CodeDistance
+        );
+        quota_usize!(
+            max_qubits,
+            ResourceKind::Qubits
+        );
+        quota_usize!(
+            max_stabilizers,
+            ResourceKind::Stabilizers
+        );
+        quota_usize!(
+            max_rounds,
+            ResourceKind::MeasurementRounds
+        );
+        quota_usize!(
+            max_partitions,
+            ResourceKind::Partitions
+        );
+        quota_usize!(
+            max_stream_buffer_events,
+            ResourceKind::StreamBufferEvents
+        );
+        quota_usize!(
+            max_stabilizer_weight,
+            ResourceKind::StabilizerWeight
+        );
+        quota_usize!(
+            max_logical_operator_weight,
+            ResourceKind::LogicalOperatorWeight
+        );
+        quota_usize!(
+            max_qubits_per_partition,
+            ResourceKind::QubitsPerPartition
+        );
 
         Ok(())
     }
@@ -2044,30 +2386,95 @@ impl<'a> ResourceScope<'a> {
     pub fn snapshot(&self) -> ResourceSnapshot {
         self.manager.snapshot()
     }
+
+    fn record_u64(
+        &self,
+        resource: ResourceKind,
+        count: u64,
+        global_limit: u64,
+        quota: Option<u64>,
+    ) -> Result<(), ResourceError> {
+        self.check()?;
+
+        self.manager.try_add_u64(
+            resource,
+            counter_for_u64(
+                resource,
+                &self.manager.counters,
+            )?,
+            count,
+            global_limit,
+            quota,
+        )
+    }
+
+    fn record_usize(
+        &self,
+        resource: ResourceKind,
+        count: usize,
+        global_limit: usize,
+        quota: Option<usize>,
+    ) -> Result<(), ResourceError> {
+        self.check()?;
+
+        let requested =
+            usize_to_u64(count, resource)?;
+
+        let quota_u64 =
+            quota.map(|value| {
+                usize_to_u64(value, resource)
+            });
+
+        let quota_u64 =
+            match quota_u64 {
+                Some(Ok(value)) => Some(value),
+                Some(Err(error)) => return Err(error),
+                None => None,
+            };
+
+        self.manager.try_add_usize(
+            resource,
+            counter_for_usize(
+                resource,
+                &self.manager.counters,
+            )?,
+            count,
+            global_limit,
+            quota,
+        )?;
+
+        let _ = requested;
+
+        let _ = quota_u64;
+
+        Ok(())
+    }
 }
 
 /* ========================================================================== */
-/* Canonical error conversion                                                 */
+/* Canonical QEC error conversion                                              */
 /* ========================================================================== */
 
 impl From<ResourceError> for QecError {
     fn from(error: ResourceError) -> Self {
         match error {
             ResourceError::InvalidLimit { reason } => {
-                QecError::invalid_input(reason)
+                QecError::InvalidInput {
+                    message: reason.to_owned(),
+                }
             }
 
             ResourceError::PolicyInvalid {
                 resource,
                 message,
             } => {
-                QecError::resource_limit(
-                    resource.to_qec_kind(),
-                    0,
-                    0,
-                    0,
+                QecError::ResourceLimitExceeded {
+                    resource: resource_to_qec_kind(resource),
+                    requested: 0,
+                    current: 0,
+                    limit: 0,
                     message,
-                )
+                }
             }
 
             ResourceError::LimitExceeded {
@@ -2077,24 +2484,24 @@ impl From<ResourceError> for QecError {
                 limit,
             } => {
                 if resource == ResourceKind::MemoryBytes {
-                    QecError::memory_limit(
-                        requested,
-                        current,
-                        limit,
-                        format!(
-                            "{resource} resource limit exceeded"
-                        ),
-                    )
+                    QecError::MemoryLimitExceeded {
+                        requested_bytes: requested,
+                        current_bytes: current,
+                        limit_bytes: limit,
+                        message:
+                            "QEC memory resource limit exceeded"
+                                .to_owned(),
+                    }
                 } else {
-                    QecError::resource_limit(
-                        resource.to_qec_kind(),
-                        requested as u128,
-                        current as u128,
-                        limit as u128,
-                        format!(
-                            "{resource} resource limit exceeded"
-                        ),
-                    )
+                    QecError::ResourceLimitExceeded {
+                        resource: resource.to_qec_kind(),
+                        requested: requested as u128,
+                        current: current as u128,
+                        limit: limit as u128,
+                        message:
+                            "QEC resource limit exceeded"
+                                .to_owned(),
+                    }
                 }
             }
 
@@ -2103,13 +2510,15 @@ impl From<ResourceError> for QecError {
                 current,
                 limit,
             } => {
-                QecError::resource_limit(
-                    QecResourceKind::Parallelism,
-                    requested as u128,
-                    current as u128,
-                    limit as u128,
-                    "parallelism resource limit exceeded",
-                )
+                QecError::ResourceLimitExceeded {
+                    resource: QecResourceKind::Parallelism,
+                    requested: requested as u128,
+                    current: current as u128,
+                    limit: limit as u128,
+                    message:
+                        "QEC parallelism limit exceeded"
+                            .to_owned(),
+                }
             }
 
             ResourceError::QuotaExceeded {
@@ -2118,13 +2527,15 @@ impl From<ResourceError> for QecError {
                 current,
                 limit,
             } => {
-                QecError::resource_limit(
-                    resource.to_qec_kind(),
-                    requested as u128,
-                    current as u128,
-                    limit as u128,
-                    "operation resource quota exceeded",
-                )
+                QecError::ResourceLimitExceeded {
+                    resource: resource.to_qec_kind(),
+                    requested: requested as u128,
+                    current: current as u128,
+                    limit: limit as u128,
+                    message:
+                        "QEC operation quota exceeded"
+                            .to_owned(),
+                }
             }
 
             ResourceError::ParallelismQuotaExceeded {
@@ -2132,54 +2543,70 @@ impl From<ResourceError> for QecError {
                 current,
                 limit,
             } => {
-                QecError::resource_limit(
-                    QecResourceKind::Parallelism,
-                    requested as u128,
-                    current as u128,
-                    limit as u128,
-                    "operation parallelism quota exceeded",
-                )
+                QecError::ResourceLimitExceeded {
+                    resource: QecResourceKind::Parallelism,
+                    requested: requested as u128,
+                    current: current as u128,
+                    limit: limit as u128,
+                    message:
+                        "QEC operation parallelism quota exceeded"
+                            .to_owned(),
+                }
             }
 
             ResourceError::ArithmeticOverflow { resource } => {
-                QecError::numerical_failure(
-                    super::errors::NumericalOperation::IntegerConversion,
-                    format!(
+                QecError::NumericalFailure {
+                    operation: NumericalOperation::IntegerConversion,
+                    message: format!(
                         "resource accounting overflow for {resource}"
                     ),
-                )
+                }
             }
 
             ResourceError::WallTimeLimitExceeded {
                 elapsed,
                 limit,
             } => {
-                let elapsed_nanos =
-                    u64::try_from(elapsed.as_nanos())
-                        .unwrap_or(u64::MAX);
-
-                let limit_nanos =
-                    u64::try_from(limit.as_nanos())
-                        .unwrap_or(u64::MAX);
-
-                QecError::time_limit(
-                    elapsed_nanos,
-                    limit_nanos,
-                    "QEC wall-time limit exceeded",
-                )
+                QecError::TimeLimitExceeded {
+                    elapsed_nanos:
+                        duration_to_u64_nanos_saturating(elapsed),
+                    limit_nanos:
+                        duration_to_u64_nanos_saturating(limit),
+                    message:
+                        "QEC wall-time limit exceeded"
+                            .to_owned(),
+                }
             }
 
             ResourceError::Cancelled => {
-                QecError::cancelled(
-                    "QEC resource operation cancelled",
-                )
+                QecError::CancellationRequested {
+                    message:
+                        "QEC resource operation cancelled"
+                            .to_owned(),
+                }
+            }
+
+            ResourceError::AccountingInvariantViolation {
+                resource,
+                attempted_release,
+                current,
+            } => {
+                QecError::InternalInvariantViolation {
+                    invariant: format!(
+                        "{resource} release cannot exceed current reservation"
+                    ),
+                    message: format!(
+                        "attempted release={attempted_release}, \
+                         current={current}"
+                    ),
+                }
             }
         }
     }
 }
 
 /* ========================================================================== */
-/* Shared helpers                                                             */
+/* Shared constructors                                                         */
 /* ========================================================================== */
 
 /// Creates a shareable canonical resource manager.
@@ -2197,63 +2624,43 @@ pub fn shared_legacy(
     ResourceManager::from_resource_limits(limits)
 }
 
-fn to_usize(
+/* ========================================================================== */
+/* Helper functions                                                            */
+/* ========================================================================== */
+
+fn usize_to_u64(
+    value: usize,
+    resource: ResourceKind,
+) -> Result<u64, ResourceError> {
+    u64::try_from(value).map_err(|_| {
+        ResourceError::ArithmeticOverflow { resource }
+    })
+}
+
+fn checked_u64_to_usize(
     value: u64,
-    resource: LimitKind,
+    resource: ResourceKind,
 ) -> Result<usize, ResourceError> {
     usize::try_from(value).map_err(|_| {
+        ResourceError::ArithmeticOverflow { resource }
+    })
+}
+
+fn duration_to_u64_nanos(
+    duration: Duration,
+) -> Result<u64, ResourceError> {
+    u64::try_from(duration.as_nanos()).map_err(|_| {
         ResourceError::ArithmeticOverflow {
-            resource: match resource {
-                LimitKind::MemoryBytes => ResourceKind::MemoryBytes,
-                LimitKind::SyndromeEvents => {
-                    ResourceKind::SyndromeEvents
-                }
-                LimitKind::GraphNodes => ResourceKind::GraphNodes,
-                LimitKind::GraphEdges => ResourceKind::GraphEdges,
-                LimitKind::DecoderIterations => {
-                    ResourceKind::DecoderIterations
-                }
-                LimitKind::CodeDistance => {
-                    ResourceKind::CodeDistance
-                }
-                LimitKind::Qubits => ResourceKind::Qubits,
-                LimitKind::Stabilizers => {
-                    ResourceKind::Stabilizers
-                }
-                LimitKind::MeasurementRounds => {
-                    ResourceKind::MeasurementRounds
-                }
-                LimitKind::CheckpointSizeBytes => {
-                    ResourceKind::CheckpointSizeBytes
-                }
-                LimitKind::Parallelism => {
-                    ResourceKind::ParallelWorkers
-                }
-                LimitKind::Partitions => {
-                    ResourceKind::Partitions
-                }
-                LimitKind::StreamBufferEvents => {
-                    ResourceKind::StreamBufferEvents
-                }
-                LimitKind::StabilizerWeight => {
-                    ResourceKind::StabilizerWeight
-                }
-                LimitKind::LogicalOperatorWeight => {
-                    ResourceKind::LogicalOperatorWeight
-                }
-                LimitKind::QubitsPerPartition => {
-                    ResourceKind::QubitsPerPartition
-                }
-                LimitKind::QpuShots => ResourceKind::QpuShots,
-                LimitKind::QpuCircuits => {
-                    ResourceKind::QpuCircuits
-                }
-                LimitKind::VerificationOperations => {
-                    ResourceKind::VerificationOperations
-                }
-            },
+            resource: ResourceKind::MemoryBytes,
         }
     })
+}
+
+fn duration_to_u64_nanos_saturating(
+    duration: Duration,
+) -> u64 {
+    u64::try_from(duration.as_nanos())
+        .unwrap_or(u64::MAX)
 }
 
 fn store_max_usize(
@@ -2276,15 +2683,26 @@ fn store_max_usize(
     }
 }
 
-fn saturating_sub_u64(
+fn release_u64_checked(
+    resource: ResourceKind,
     counter: &AtomicU64,
     amount: u64,
-) {
+) -> Result<(), ResourceError> {
     let mut current =
         counter.load(Ordering::Acquire);
 
     loop {
-        let next = current.saturating_sub(amount);
+        if amount > current {
+            return Err(
+                ResourceError::AccountingInvariantViolation {
+                    resource,
+                    attempted_release: amount,
+                    current,
+                },
+            );
+        }
+
+        let next = current - amount;
 
         match counter.compare_exchange_weak(
             current,
@@ -2292,21 +2710,34 @@ fn saturating_sub_u64(
             Ordering::AcqRel,
             Ordering::Acquire,
         ) {
-            Ok(_) => return,
+            Ok(_) => return Ok(()),
             Err(actual) => current = actual,
         }
     }
 }
 
-fn saturating_sub_usize(
+fn release_usize_checked(
+    resource: ResourceKind,
     counter: &AtomicUsize,
     amount: usize,
-) {
+) -> Result<(), ResourceError> {
     let mut current =
         counter.load(Ordering::Acquire);
 
     loop {
-        let next = current.saturating_sub(amount);
+        if amount > current {
+            return Err(
+                ResourceError::AccountingInvariantViolation {
+                    resource,
+                    attempted_release:
+                        usize_to_u64(amount, resource)?,
+                    current:
+                        usize_to_u64(current, resource)?,
+                },
+            );
+        }
+
+        let next = current - amount;
 
         match counter.compare_exchange_weak(
             current,
@@ -2314,25 +2745,248 @@ fn saturating_sub_usize(
             Ordering::AcqRel,
             Ordering::Acquire,
         ) {
-            Ok(_) => return,
+            Ok(_) => return Ok(()),
             Err(actual) => current = actual,
+        }
+    }
+}
+
+fn resource_to_qec_kind(
+    resource: LimitKind,
+) -> QecResourceKind {
+    match resource {
+        LimitKind::CodeDistance =>
+            QecResourceKind::CodeDistance,
+
+        LimitKind::Qubits =>
+            QecResourceKind::Qubits,
+
+        LimitKind::Stabilizers =>
+            QecResourceKind::Stabilizers,
+
+        LimitKind::SyndromeEvents =>
+            QecResourceKind::SyndromeEvents,
+
+        LimitKind::MeasurementRounds =>
+            QecResourceKind::MeasurementRounds,
+
+        LimitKind::GraphNodes =>
+            QecResourceKind::GraphNodes,
+
+        LimitKind::GraphEdges =>
+            QecResourceKind::GraphEdges,
+
+        LimitKind::MemoryBytes =>
+            QecResourceKind::MemoryBytes,
+
+        LimitKind::DecoderTimeNs =>
+            QecResourceKind::Time,
+
+        LimitKind::Parallelism =>
+            QecResourceKind::Parallelism,
+
+        LimitKind::CheckpointSizeBytes =>
+            QecResourceKind::CheckpointSize,
+
+        LimitKind::Partitions =>
+            QecResourceKind::Partitions,
+
+        LimitKind::StreamBufferEvents =>
+            QecResourceKind::StreamBuffer,
+
+        LimitKind::DecoderIterations =>
+            QecResourceKind::DecoderIterations,
+
+        LimitKind::StabilizerWeight =>
+            QecResourceKind::StabilizerWeight,
+
+        LimitKind::LogicalOperatorWeight =>
+            QecResourceKind::LogicalWeight,
+
+        LimitKind::QubitsPerPartition =>
+            QecResourceKind::Custom,
+
+        LimitKind::QpuShots =>
+            QecResourceKind::QpuShots,
+
+        LimitKind::QpuCircuits =>
+            QecResourceKind::QpuCircuits,
+
+        LimitKind::VerificationOperations =>
+            QecResourceKind::Operations,
+    }
+}
+
+fn counter_for_u64<'a>(
+    resource: ResourceKind,
+    counters: &'a ResourceCounters,
+) -> Result<&'a AtomicU64, ResourceError> {
+    match resource {
+        ResourceKind::SyndromeEvents =>
+            Ok(&counters.syndrome_events),
+
+        ResourceKind::GraphNodes =>
+            Ok(&counters.graph_nodes),
+
+        ResourceKind::GraphEdges =>
+            Ok(&counters.graph_edges),
+
+        ResourceKind::DecoderIterations =>
+            Ok(&counters.decoder_iterations),
+
+        ResourceKind::CheckpointSizeBytes =>
+            Ok(&counters.checkpoint_bytes),
+
+        ResourceKind::QpuShots =>
+            Ok(&counters.qpu_shots),
+
+        ResourceKind::QpuCircuits =>
+            Ok(&counters.qpu_circuits),
+
+        ResourceKind::VerificationOperations =>
+            Ok(&counters.verification_operations),
+
+        ResourceKind::MemoryBytes =>
+            Ok(&counters.allocated_bytes),
+
+        _ => Err(
+            ResourceError::InvalidLimit {
+                reason:
+                    "resource dimension is not a u64 cumulative counter",
+            },
+        ),
+    }
+}
+
+fn counter_for_usize<'a>(
+    resource: ResourceKind,
+    counters: &'a ResourceCounters,
+) -> Result<&'a AtomicUsize, ResourceError> {
+    match resource {
+        ResourceKind::Qubits =>
+            Ok(&counters.qubits),
+
+        ResourceKind::Stabilizers =>
+            Ok(&counters.stabilizers),
+
+        ResourceKind::MeasurementRounds =>
+            Ok(&counters.measurement_rounds),
+
+        ResourceKind::Partitions =>
+            Ok(&counters.partitions),
+
+        ResourceKind::StreamBufferEvents =>
+            Ok(&counters.stream_buffer_events),
+
+        _ => Err(
+            ResourceError::InvalidLimit {
+                reason:
+                    "resource dimension is not a usize cumulative counter",
+            },
+        ),
+    }
+}
+
+impl ResourceManager {
+    fn try_add_usize(
+        &self,
+        resource: ResourceKind,
+        counter: &AtomicUsize,
+        requested: usize,
+        global_limit: usize,
+        quota: Option<usize>,
+    ) -> Result<(), ResourceError> {
+        let mut current =
+            counter.load(Ordering::Acquire);
+
+        loop {
+            let next = current.checked_add(requested).ok_or(
+                ResourceError::ArithmeticOverflow { resource },
+            )?;
+
+            if next > global_limit {
+                return Err(ResourceError::LimitExceeded {
+                    resource,
+                    requested:
+                        usize_to_u64(
+                            requested,
+                            resource,
+                        )?,
+                    current:
+                        usize_to_u64(
+                            current,
+                            resource,
+                        )?,
+                    limit:
+                        usize_to_u64(
+                            global_limit,
+                            resource,
+                        )?,
+                });
+            }
+
+            if let Some(quota_limit) = quota {
+                if next > quota_limit {
+                    return Err(
+                        ResourceError::QuotaExceeded {
+                            resource,
+                            requested:
+                                usize_to_u64(
+                                    requested,
+                                    resource,
+                                )?,
+                            current:
+                                usize_to_u64(
+                                    current,
+                                    resource,
+                                )?,
+                            limit:
+                                usize_to_u64(
+                                    quota_limit,
+                                    resource,
+                                )?,
+                        },
+                    );
+                }
+            }
+
+            match counter.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Ok(()),
+                Err(actual) => current = actual,
+            }
         }
     }
 }
 
 /* ========================================================================== */
-/* Tests                                                                      */
+/* Unit tests                                                                  */
 /* ========================================================================== */
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn limits() -> QecLimits {
+        let mut limits = QecLimits::default();
+
+        limits.max_memory_bytes = 1_024;
+        limits.max_parallelism = 2;
+        limits.max_qpu_shots = 10;
+        limits.max_verification_operations = 10;
+
+        limits
+    }
+
     #[test]
     fn canonical_limits_create_manager() {
         let manager =
-            ResourceManager::new(QecLimits::default())
-                .expect("default QecLimits must be valid");
+            ResourceManager::new(limits())
+                .expect("limits must be valid");
 
         assert_eq!(
             manager.snapshot().allocated_bytes,
@@ -2342,22 +2996,24 @@ mod tests {
 
     #[test]
     fn memory_reservation_is_raii() {
-        let mut limits = QecLimits::default();
-        limits.max_memory_bytes = 1024;
-
         let manager =
-            ResourceManager::new(limits).unwrap();
+            ResourceManager::new(limits())
+                .unwrap();
 
         {
             let reservation =
-                manager.reserve_memory(512).unwrap();
+                manager.reserve_memory(512)
+                    .unwrap();
+
+            assert_eq!(
+                reservation.bytes(),
+                512
+            );
 
             assert_eq!(
                 manager.snapshot().allocated_bytes,
                 512
             );
-
-            assert_eq!(reservation.bytes(), 512);
         }
 
         assert_eq!(
@@ -2373,13 +3029,13 @@ mod tests {
 
     #[test]
     fn memory_limit_is_enforced_atomically() {
-        let mut limits = QecLimits::default();
-        limits.max_memory_bytes = 100;
-
         let manager =
-            ResourceManager::new(limits).unwrap();
+            ResourceManager::new(limits())
+                .unwrap();
 
-        manager.reserve_memory(100).unwrap();
+        manager
+            .reserve_memory(1_024)
+            .unwrap();
 
         let result =
             manager.reserve_memory(1);
@@ -2387,7 +3043,8 @@ mod tests {
         assert!(matches!(
             result,
             Err(ResourceError::LimitExceeded {
-                resource: ResourceKind::MemoryBytes,
+                resource:
+                    ResourceKind::MemoryBytes,
                 ..
             })
         ));
@@ -2395,22 +3052,24 @@ mod tests {
 
     #[test]
     fn worker_reservation_is_raii() {
-        let mut limits = QecLimits::default();
-        limits.max_parallelism = 2;
-
         let manager =
-            ResourceManager::new(limits).unwrap();
+            ResourceManager::new(limits())
+                .unwrap();
 
         {
-            let workers =
-                manager.acquire_workers(2).unwrap();
+            let reservation =
+                manager.acquire_workers(2)
+                    .unwrap();
+
+            assert_eq!(
+                reservation.workers(),
+                2
+            );
 
             assert_eq!(
                 manager.snapshot().parallel_workers,
                 2
             );
-
-            assert_eq!(workers.workers(), 2);
         }
 
         assert_eq!(
@@ -2420,12 +3079,18 @@ mod tests {
     }
 
     #[test]
-    fn cancellation_is_enforced() {
-        let manager =
-            ResourceManager::new(QecLimits::default())
-                .unwrap();
+    fn cancellation_is_delegated_to_canonical_token() {
+        let token =
+            CancellationToken::new();
 
-        manager.cancel();
+        let manager =
+            ResourceManager::with_cancellation(
+                limits(),
+                token.clone(),
+            )
+            .unwrap();
+
+        token.request();
 
         assert!(matches!(
             manager.check(),
@@ -2435,30 +3100,29 @@ mod tests {
 
     #[test]
     fn operation_quota_cannot_expand_global_limit() {
-        let mut limits = QecLimits::default();
-        limits.max_memory_bytes = 100;
-
         let manager =
-            ResourceManager::new(limits).unwrap();
+            ResourceManager::new(limits())
+                .unwrap();
 
         let quota = ResourceQuota {
-            max_memory_bytes: Some(1_000),
+            max_memory_bytes: Some(10_000),
             ..ResourceQuota::default()
         };
 
         let scope =
-            manager.scope("test", quota).unwrap();
+            manager.scope("test", quota)
+                .unwrap();
 
-        assert!(scope.reserve_memory(101).is_err());
+        assert!(
+            scope.reserve_memory(1_025).is_err()
+        );
     }
 
     #[test]
     fn operation_quota_can_tighten_global_limit() {
-        let mut limits = QecLimits::default();
-        limits.max_memory_bytes = 1_000;
-
         let manager =
-            ResourceManager::new(limits).unwrap();
+            ResourceManager::new(limits())
+                .unwrap();
 
         let quota = ResourceQuota {
             max_memory_bytes: Some(100),
@@ -2466,28 +3130,32 @@ mod tests {
         };
 
         let scope =
-            manager.scope("test", quota).unwrap();
+            manager.scope("test", quota)
+                .unwrap();
 
-        scope.reserve_memory(100).unwrap();
+        scope.reserve_memory(100)
+            .unwrap();
 
-        assert!(scope.reserve_memory(1).is_err());
+        assert!(
+            scope.reserve_memory(1).is_err()
+        );
     }
 
     #[test]
     fn preflight_performs_no_allocation() {
-        let mut limits = QecLimits::default();
-        limits.max_qubits = 1_000;
-
         let manager =
-            ResourceManager::new(limits).unwrap();
+            ResourceManager::new(limits())
+                .unwrap();
 
         let request = ResourceRequest {
-            qubits: 1_000,
+            qubits: 10,
             memory_bytes: 512,
             ..ResourceRequest::default()
         };
 
-        manager.preflight(&request).unwrap();
+        manager
+            .preflight(&request)
+            .unwrap();
 
         assert_eq!(
             manager.snapshot().allocated_bytes,
@@ -2496,36 +3164,14 @@ mod tests {
     }
 
     #[test]
-    fn preflight_rejects_large_request_before_construction() {
-        let mut limits = QecLimits::default();
-        limits.max_qubits = 100;
-
+    fn qpu_limits_are_enforced() {
         let manager =
-            ResourceManager::new(limits).unwrap();
+            ResourceManager::new(limits())
+                .unwrap();
 
-        let request = ResourceRequest {
-            qubits: 101,
-            ..ResourceRequest::default()
-        };
-
-        assert!(matches!(
-            manager.preflight(&request),
-            Err(ResourceError::LimitExceeded {
-                resource: ResourceKind::Qubits,
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn qpu_limits_are_runtime_enforced() {
-        let mut limits = QecLimits::default();
-        limits.max_qpu_shots = 10;
-
-        let manager =
-            ResourceManager::new(limits).unwrap();
-
-        manager.record_qpu_shots(10).unwrap();
+        manager
+            .record_qpu_shots(10)
+            .unwrap();
 
         assert!(
             manager.record_qpu_shots(1).is_err()
@@ -2533,12 +3179,10 @@ mod tests {
     }
 
     #[test]
-    fn verification_budget_is_runtime_enforced() {
-        let mut limits = QecLimits::default();
-        limits.max_verification_operations = 10;
-
+    fn verification_limits_are_enforced() {
         let manager =
-            ResourceManager::new(limits).unwrap();
+            ResourceManager::new(limits())
+                .unwrap();
 
         manager
             .record_verification_operations(10)
@@ -2557,25 +3201,94 @@ mod tests {
             ResourceRequest::surface_code(5, 4)
                 .unwrap();
 
-        assert_eq!(request.code_distance, 5);
-        assert_eq!(request.qubits, 25);
-        assert_eq!(request.stabilizer_weight, 4);
+        assert_eq!(
+            request.code_distance,
+            5
+        );
+
+        assert_eq!(
+            request.qubits,
+            25
+        );
+
+        assert_eq!(
+            request.stabilizer_weight,
+            4
+        );
     }
 
     #[test]
-    fn snapshot_is_zero_for_new_manager() {
-        let manager =
-            ResourceManager::new(QecLimits::default())
+    fn graph_request_uses_checked_arithmetic() {
+        let request =
+            ResourceRequest::graph(10, 20)
                 .unwrap();
 
-        let snapshot = manager.snapshot();
+        assert_eq!(
+            request.graph_nodes,
+            10
+        );
 
-        assert_eq!(snapshot.allocated_bytes, 0);
-        assert_eq!(snapshot.parallel_workers, 0);
-        assert_eq!(snapshot.syndrome_events, 0);
-        assert_eq!(snapshot.graph_nodes, 0);
-        assert_eq!(snapshot.graph_edges, 0);
-        assert_eq!(snapshot.qpu_shots, 0);
-        assert_eq!(snapshot.verification_operations, 0);
+        assert_eq!(
+            request.graph_edges,
+            20
+        );
+
+        assert!(
+            request.memory_bytes > 0
+        );
+    }
+
+    #[test]
+    fn release_cannot_underflow_accounting() {
+        let manager =
+            ResourceManager::new(limits())
+                .unwrap();
+
+        let result =
+            manager.release_memory(1);
+
+        assert!(matches!(
+            result,
+            Err(
+                ResourceError::
+                    AccountingInvariantViolation {
+                        resource:
+                            ResourceKind::MemoryBytes,
+                        ..
+                    }
+            )
+        ));
+    }
+
+    #[test]
+    fn operation_quota_preflight_checks_all_dimensions() {
+        let manager =
+            ResourceManager::new(limits())
+                .unwrap();
+
+        let quota = ResourceQuota {
+            max_qubits: Some(4),
+            max_graph_nodes: Some(4),
+            max_qpu_shots: Some(4),
+            ..ResourceQuota::default()
+        };
+
+        let scope =
+            manager.scope("test", quota)
+                .unwrap();
+
+        let request = ResourceRequest {
+            qubits: 5,
+            ..ResourceRequest::default()
+        };
+
+        assert!(matches!(
+            scope.preflight(&request),
+            Err(ResourceError::QuotaExceeded {
+                resource:
+                    ResourceKind::Qubits,
+                ..
+            })
+        ));
     }
 }
