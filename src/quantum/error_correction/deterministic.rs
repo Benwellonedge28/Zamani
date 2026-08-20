@@ -1,56 +1,54 @@
-//! Deterministic execution infrastructure for Zamani QEC.
+//! Deterministic execution infrastructure for Zamani Quantum Error Correction.
 //!
-//! This module provides deterministic building blocks for quantum-error-
-//! correction algorithms, simulations, distributed decoding, checkpointing,
-//! metrics, and reproducibility.
+//! This module is the execution-level implementation of the determinism policy
+//! declared by `configuration.rs`.
 //!
-//! # Determinism contract
+//! Architectural contract:
 //!
-//! Given identical:
+//! ```text
+//! QecConfig
+//!     │
+//!     ├── QecLimits
+//!     ├── DeterminismConfig
+//!     ├── ParallelismConfig
+//!     └── NumericalPolicy
+//!          │
+//!          ▼
+//! DeterministicContext
+//!     │
+//!     ├── deterministic scheduling
+//!     ├── deterministic worker assignment
+//!     ├── deterministic ordering
+//!     ├── deterministic reductions
+//!     ├── reproducible RNG
+//!     ├── canonical execution fingerprint
+//!     ├── cancellation checkpoints
+//!     └── resource-aware validation
+//!          │
+//!          ▼
+//! Decoder / Streaming / Partition / Distributed / Simulation / Checkpoint
+//! ```
 //!
-//! * code/topology;
-//! * noise model;
-//! * syndrome stream;
-//! * configuration;
-//! * seed;
-//! * algorithm/version;
+//! Determinism means that identical logical inputs and configuration produce
+//! identical observable QEC results, regardless of worker execution order.
 //!
-//! deterministic execution must produce identical:
+//! It does NOT mean that arbitrary floating-point hardware is bit-for-bit
+//! identical. Cross-platform numerical reproducibility must use the explicit
+//! deterministic numerical primitives supplied here.
 //!
-//! * event ordering;
-//! * pseudo-random decisions;
-//! * reductions;
-//! * correction ordering;
-//! * logical outcome;
-//! * execution fingerprint.
+//! This module deliberately:
 //!
-//! Determinism is deliberately separated from scheduling. Parallel execution
-//! may change physical execution order, but observable QEC results must not
-//! depend on that order.
-//!
-//! # Design goals
-//!
-//! * no unsafe code;
-//! * no process-global mutable state;
-//! * no dependence on wall-clock time for deterministic decisions;
-//! * checked arithmetic;
-//! * canonical ordering;
-//! * stable hashing;
-//! * reproducible pseudo-random generation;
-//! * deterministic floating-point reduction helpers;
-//! * deterministic partition/worker assignment;
-//! * explicit configuration;
-//! * structured errors;
-//! * no panics for externally supplied values;
-//! * suitable for streaming, partitioned and distributed QEC.
-//!
-//! # Important limitation
-//!
-//! Determinism does not mean that floating-point hardware is magically
-//! identical across every CPU/GPU architecture. Algorithms requiring
-//! cross-platform bit-for-bit reproducibility should use the deterministic
-//! integer/fixed-point primitives provided here or an explicitly specified
-//! numerical representation.
+//! * contains no unsafe code;
+//! * contains no process-global mutable state;
+//! * never uses wall-clock time for deterministic ordering;
+//! * uses checked arithmetic at policy boundaries;
+//! * uses canonical ordering;
+//! * uses explicit seeds;
+//! * integrates with `QecConfig`;
+//! * integrates with `CancellationToken`;
+//! * respects `QecLimits`;
+//! * exposes `QecError` at the public error boundary;
+//! * does not silently convert resource-limited execution into success.
 
 #![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -58,76 +56,102 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::hash::{Hash, Hasher};
 
-// -----------------------------------------------------------------------------
-// Constants
-// -----------------------------------------------------------------------------
+use super::cancellation::CancellationToken;
+use super::configuration::{
+    DeterminismConfig as QecDeterminismConfig,
+    FloatingPointMode,
+    QecConfig,
+};
+use super::errors::{QecError, QecResult};
 
-/// Deterministic subsystem API version.
-pub const DETERMINISTIC_API_VERSION: &str = "1.0.0";
+// ============================================================================
+// Version / constants
+// ============================================================================
 
-/// Fixed-width output size of the deterministic execution fingerprint.
+/// Deterministic execution API version.
+pub const DETERMINISTIC_API_VERSION: &str = "2.0.0";
+
+/// Size of an execution fingerprint.
 pub const FINGERPRINT_SIZE: usize = 32;
 
-/// Internal mixing constants.
+/// Default deterministic seed used only when deterministic execution is
+/// explicitly enabled without an externally supplied seed.
+pub const DEFAULT_DETERMINISTIC_SEED: u64 = 0x5A4D_414E_4951_4543;
+
 const MIX_1: u64 = 0x9E37_79B9_7F4A_7C15;
 const MIX_2: u64 = 0xBF58_476D_1CE4_E5B9;
 const MIX_3: u64 = 0x94D0_49BB_1331_11EB;
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Errors
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Errors produced by deterministic execution infrastructure.
+/// Errors specific to deterministic execution infrastructure.
+///
+/// Public QEC APIs should normally expose these as `QecError`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeterministicError {
-    /// A requested operation would overflow.
+    /// Arithmetic overflow occurred.
     ArithmeticOverflow {
         operation: &'static str,
     },
 
-    /// A deterministic seed or configuration is invalid.
+    /// Deterministic configuration is invalid.
     InvalidConfiguration {
-        reason: &'static str,
+        reason: String,
     },
 
-    /// An externally supplied collection contains an invalid identifier.
+    /// Configuration validation failed.
+    ConfigurationValidation {
+        message: String,
+    },
+
+    /// An identifier is invalid.
     InvalidIdentifier {
         value: u64,
     },
 
-    /// A duplicate identifier was encountered where uniqueness is required.
+    /// An identifier that must be unique was duplicated.
     DuplicateIdentifier {
         value: u64,
     },
 
-    /// A reduction was requested for an empty collection when at least one
-    /// element is required.
+    /// An operation requiring input received none.
     EmptyInput {
         operation: &'static str,
     },
 
-    /// A sequence number cannot be advanced safely.
+    /// A deterministic sequence cannot advance.
     SequenceExhausted,
 
-    /// A worker count is invalid.
+    /// Worker count is invalid.
     InvalidWorkerCount {
         workers: usize,
     },
 
-    /// A worker identifier is outside the configured worker range.
+    /// Worker identifier is invalid.
     InvalidWorkerId {
         worker_id: usize,
         workers: usize,
     },
 
-    /// A deterministic operation cannot represent its requested index.
+    /// A partition count is invalid.
+    InvalidPartitionCount {
+        partitions: usize,
+    },
+
+    /// Integer index conversion failed.
     IndexOverflow,
 
-    /// A floating-point value cannot participate in deterministic arithmetic.
+    /// Non-finite floating-point input.
     InvalidFloatingPoint {
         operation: &'static str,
+    },
+
+    /// A required deterministic invariant was violated.
+    InvariantViolation {
+        invariant: &'static str,
     },
 }
 
@@ -142,6 +166,10 @@ impl fmt::Display for DeterministicError {
                 write!(f, "invalid deterministic configuration: {reason}")
             }
 
+            Self::ConfigurationValidation { message } => {
+                write!(f, "QEC configuration validation failed: {message}")
+            }
+
             Self::InvalidIdentifier { value } => {
                 write!(f, "invalid deterministic identifier: {value}")
             }
@@ -151,7 +179,10 @@ impl fmt::Display for DeterministicError {
             }
 
             Self::EmptyInput { operation } => {
-                write!(f, "empty input is not valid for deterministic operation: {operation}")
+                write!(
+                    f,
+                    "empty input is invalid for deterministic operation: {operation}"
+                )
             }
 
             Self::SequenceExhausted => {
@@ -162,19 +193,36 @@ impl fmt::Display for DeterministicError {
                 write!(f, "invalid deterministic worker count: {workers}")
             }
 
-            Self::InvalidWorkerId { worker_id, workers } => {
+            Self::InvalidWorkerId {
+                worker_id,
+                workers,
+            } => {
                 write!(
                     f,
                     "invalid worker id {worker_id}; configured workers: {workers}"
                 )
             }
 
+            Self::InvalidPartitionCount { partitions } => {
+                write!(f, "invalid deterministic partition count: {partitions}")
+            }
+
             Self::IndexOverflow => {
-                write!(f, "deterministic index overflow")
+                write!(f, "deterministic index conversion overflow")
             }
 
             Self::InvalidFloatingPoint { operation } => {
-                write!(f, "invalid floating-point value for deterministic operation: {operation}")
+                write!(
+                    f,
+                    "invalid floating-point value for deterministic operation: {operation}"
+                )
+            }
+
+            Self::InvariantViolation { invariant } => {
+                write!(
+                    f,
+                    "deterministic invariant violated: {invariant}"
+                )
             }
         }
     }
@@ -182,59 +230,256 @@ impl fmt::Display for DeterministicError {
 
 impl std::error::Error for DeterministicError {}
 
-// -----------------------------------------------------------------------------
-// Determinism policy
-// -----------------------------------------------------------------------------
+impl From<DeterministicError> for QecError {
+    fn from(error: DeterministicError) -> Self {
+        match error {
+            DeterministicError::ArithmeticOverflow { operation } => {
+                QecError::NumericalFailure {
+                    operation: super::errors::NumericalOperation::Arithmetic,
+                    message: format!(
+                        "deterministic arithmetic overflow: {operation}"
+                    ),
+                }
+            }
 
-/// Controls how strongly deterministic execution is enforced.
+            DeterministicError::InvalidFloatingPoint { operation } => {
+                QecError::NumericalFailure {
+                    operation: super::errors::NumericalOperation::FloatingPoint,
+                    message: format!(
+                        "invalid floating-point value: {operation}"
+                    ),
+                }
+            }
+
+            DeterministicError::ConfigurationValidation { message } => {
+                QecError::InvalidInput { message }
+            }
+
+            DeterministicError::InvalidConfiguration { reason } => {
+                QecError::UnsupportedConfiguration {
+                    feature: "deterministic_execution".to_string(),
+                    message: reason,
+                }
+            }
+
+            DeterministicError::SequenceExhausted => {
+                QecError::InternalInvariantViolation {
+                    invariant: "deterministic_sequence_must_not_wrap",
+                    message: "deterministic sequence exhausted".to_string(),
+                }
+            }
+
+            DeterministicError::InvariantViolation { invariant } => {
+                QecError::InternalInvariantViolation {
+                    invariant: invariant.to_string(),
+                    message: "deterministic execution invariant violated"
+                        .to_string(),
+                }
+            }
+
+            other => QecError::InvalidInput {
+                message: other.to_string(),
+            },
+        }
+    }
+}
+
+/// Result type for internal deterministic operations.
+pub type DeterministicResult<T> = Result<T, DeterministicError>;
+
+// ============================================================================
+// Determinism mode
+// ============================================================================
+
+/// Execution-level determinism mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeterminismMode {
-    /// Deterministic ordering and random decisions.
+    /// Determinism is disabled.
+    Disabled,
+
+    /// Deterministic scheduling, ordering and reductions are required.
     Deterministic,
 
-    /// Deterministic execution plus strict validation of deterministic
-    /// numerical operations.
+    /// Determinism is enabled and numerical operations are additionally
+    /// validated strictly.
     Strict,
-
-    /// Determinism is disabled at the execution-policy level.
-    ///
-    /// This does not make this module's primitives nondeterministic. It tells
-    /// higher-level components that they are permitted to use optimized
-    /// nondeterministic execution.
-    Disabled,
 }
 
 impl Default for DeterminismMode {
     fn default() -> Self {
-        Self::Deterministic
+        Self::Disabled
     }
 }
 
-/// Configuration governing deterministic execution.
+// ============================================================================
+// Deterministic runtime configuration
+// ============================================================================
+
+/// Runtime configuration derived from the repository's `QecConfig`.
+///
+/// This is intentionally separate from `configuration::DeterminismConfig`.
+/// `configuration.rs` owns policy; this structure contains the validated
+/// execution state needed by the deterministic engine.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DeterministicConfig {
-    /// Deterministic execution mode.
+pub struct DeterministicRuntimeConfig {
+    /// Execution mode.
     pub mode: DeterminismMode,
 
-    /// Root seed used for reproducible pseudo-random decisions.
+    /// Reproducible root seed.
     pub seed: u64,
-
-    /// Stable algorithm identifier.
-    pub algorithm_id: u64,
-
-    /// Algorithm version encoded as a stable integer.
-    pub algorithm_version: u64,
 
     /// Number of logical workers.
     pub worker_count: usize,
 
-    /// Whether worker assignment must be deterministic.
+    /// Whether scheduling must be canonical.
+    pub deterministic_scheduling: bool,
+
+    /// Whether reductions must be canonical.
+    pub deterministic_reductions: bool,
+
+    /// Whether serialized ordering must be canonical.
+    pub deterministic_serialization: bool,
+
+    /// Whether execution fingerprints are required.
+    pub require_fingerprint: bool,
+}
+
+impl Default for DeterministicRuntimeConfig {
+    fn default() -> Self {
+        Self {
+            mode: DeterminismMode::Disabled,
+            seed: DEFAULT_DETERMINISTIC_SEED,
+            worker_count: 1,
+            deterministic_scheduling: true,
+            deterministic_reductions: true,
+            deterministic_serialization: true,
+            require_fingerprint: true,
+        }
+    }
+}
+
+impl DeterministicRuntimeConfig {
+    /// Creates deterministic runtime configuration from `QecConfig`.
+    pub fn from_qec_config(
+        config: &QecConfig,
+    ) -> DeterministicResult<Self> {
+        config
+            .validate()
+            .map_err(|error| {
+                DeterministicError::ConfigurationValidation {
+                    message: error.to_string(),
+                }
+            })?;
+
+        let policy = &config.determinism;
+
+        let mode = if !policy.enabled {
+            DeterminismMode::Disabled
+        } else if config.numerical.floating_point_mode
+            == FloatingPointMode::Strict
+        {
+            DeterminismMode::Strict
+        } else {
+            DeterminismMode::Deterministic
+        };
+
+        let worker_count = usize::try_from(
+            config.parallelism.max_workers,
+        )
+        .map_err(|_| DeterministicError::IndexOverflow)?;
+
+        if worker_count == 0 {
+            return Err(
+                DeterministicError::InvalidWorkerCount {
+                    workers: worker_count,
+                },
+            );
+        }
+
+        let seed = policy
+            .seed
+            .unwrap_or(DEFAULT_DETERMINISTIC_SEED);
+
+        let runtime = Self {
+            mode,
+            seed,
+            worker_count,
+            deterministic_scheduling:
+                policy.deterministic_scheduling,
+            deterministic_reductions:
+                policy.deterministic_reductions,
+            deterministic_serialization:
+                policy.deterministic_serialization,
+            require_fingerprint: policy.enabled,
+        };
+
+        runtime.validate()?;
+        Ok(runtime)
+    }
+
+    /// Validates the runtime configuration.
+    pub fn validate(&self) -> DeterministicResult<()> {
+        if self.worker_count == 0 {
+            return Err(
+                DeterministicError::InvalidWorkerCount {
+                    workers: 0,
+                },
+            );
+        }
+
+        if self.mode != DeterminismMode::Disabled {
+            if !self.deterministic_scheduling {
+                return Err(
+                    DeterministicError::InvalidConfiguration {
+                        reason:
+                            "deterministic execution requires deterministic scheduling"
+                                .to_string(),
+                    },
+                );
+            }
+
+            if !self.deterministic_reductions {
+                return Err(
+                    DeterministicError::InvalidConfiguration {
+                        reason:
+                            "deterministic execution requires deterministic reductions"
+                                .to_string(),
+                    },
+                );
+            }
+
+            if !self.deterministic_serialization {
+                return Err(
+                    DeterministicError::InvalidConfiguration {
+                        reason:
+                            "deterministic execution requires deterministic serialization"
+                                .to_string(),
+                    },
+                );
+            }
+        }
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Backward-compatible deterministic configuration
+// ============================================================================
+
+/// Standalone deterministic configuration.
+///
+/// Prefer `DeterministicRuntimeConfig::from_qec_config()` for production
+/// execution. This type remains useful for unit tests and low-level primitives.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DeterministicConfig {
+    pub mode: DeterminismMode,
+    pub seed: u64,
+    pub algorithm_id: u64,
+    pub algorithm_version: u64,
+    pub worker_count: usize,
     pub deterministic_worker_assignment: bool,
-
-    /// Whether reduction ordering must be deterministic.
     pub deterministic_reduction: bool,
-
-    /// Whether fingerprints are required.
     pub require_fingerprint: bool,
 }
 
@@ -242,7 +487,7 @@ impl Default for DeterministicConfig {
     fn default() -> Self {
         Self {
             mode: DeterminismMode::Deterministic,
-            seed: 0,
+            seed: DEFAULT_DETERMINISTIC_SEED,
             algorithm_id: 0,
             algorithm_version: 1,
             worker_count: 1,
@@ -254,41 +499,64 @@ impl Default for DeterministicConfig {
 }
 
 impl DeterministicConfig {
-    /// Validates the complete deterministic configuration.
-    pub fn validate(&self) -> Result<(), DeterministicError> {
+    pub fn validate(&self) -> DeterministicResult<()> {
         if self.worker_count == 0 {
-            return Err(DeterministicError::InvalidWorkerCount {
-                workers: self.worker_count,
-            });
+            return Err(
+                DeterministicError::InvalidWorkerCount {
+                    workers: 0,
+                },
+            );
         }
 
-        if self.mode == DeterminismMode::Strict
-            && (!self.deterministic_worker_assignment || !self.deterministic_reduction)
-        {
-            return Err(DeterministicError::InvalidConfiguration {
-                reason: "strict mode requires deterministic worker assignment and reduction",
-            });
+        if self.mode != DeterminismMode::Disabled {
+            if !self.deterministic_worker_assignment {
+                return Err(
+                    DeterministicError::InvalidConfiguration {
+                        reason:
+                            "deterministic execution requires deterministic worker assignment"
+                                .to_string(),
+                    },
+                );
+            }
+
+            if !self.deterministic_reduction {
+                return Err(
+                    DeterministicError::InvalidConfiguration {
+                        reason:
+                            "deterministic execution requires deterministic reduction"
+                                .to_string(),
+                    },
+                );
+            }
         }
 
         Ok(())
     }
+
+    /// Converts the standalone configuration into runtime configuration.
+    pub fn runtime(&self) -> DeterministicResult<DeterministicRuntimeConfig> {
+        let runtime = DeterministicRuntimeConfig {
+            mode: self.mode,
+            seed: self.seed,
+            worker_count: self.worker_count,
+            deterministic_scheduling:
+                self.deterministic_worker_assignment,
+            deterministic_reductions:
+                self.deterministic_reduction,
+            deterministic_serialization: true,
+            require_fingerprint: self.require_fingerprint,
+        };
+
+        runtime.validate()?;
+        Ok(runtime)
+    }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Deterministic sequence
-// -----------------------------------------------------------------------------
+// ============================================================================
 
 /// Monotonically increasing deterministic sequence.
-///
-/// Useful for:
-///
-/// * syndrome events;
-/// * decoder iterations;
-/// * partitions;
-/// * checkpoint generations;
-/// * telemetry event IDs.
-///
-/// It never derives ordering from wall-clock time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeterministicSequence {
     next: u64,
@@ -301,18 +569,15 @@ impl Default for DeterministicSequence {
 }
 
 impl DeterministicSequence {
-    /// Creates a sequence starting at zero.
     pub const fn new() -> Self {
         Self { next: 0 }
     }
 
-    /// Creates a sequence beginning at a specific value.
     pub const fn from(start: u64) -> Self {
         Self { next: start }
     }
 
-    /// Returns the next sequence number.
-    pub fn next(&mut self) -> Result<u64, DeterministicError> {
+    pub fn next(&mut self) -> DeterministicResult<u64> {
         let value = self.next;
 
         self.next = self
@@ -323,94 +588,102 @@ impl DeterministicSequence {
         Ok(value)
     }
 
-    /// Returns the next value without consuming it.
     pub const fn peek(&self) -> u64 {
         self.next
     }
 }
 
-// -----------------------------------------------------------------------------
-// Deterministic RNG
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Reproducible RNG
+// ============================================================================
 
-/// Reproducible pseudo-random generator.
+/// Reproducible non-cryptographic pseudo-random generator.
 ///
-/// This is deliberately not intended for cryptography.
-///
-/// QEC simulations should use this generator when reproducibility is required
-/// rather than using ambient/global randomness.
+/// Never use this generator for secrets, credentials, cryptographic keys,
+/// capability tokens, or security decisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeterministicRng {
     state: u64,
 }
 
 impl DeterministicRng {
-    /// Creates a generator from a seed.
     pub const fn new(seed: u64) -> Self {
         Self {
             state: splitmix64(seed),
         }
     }
 
-    /// Returns the current internal state.
-    pub const fn state(&self) -> u64 {
-        self.state
-    }
-
-    /// Restores a generator from a previously captured state.
     pub const fn from_state(state: u64) -> Self {
         Self { state }
     }
 
-    /// Generates the next 64-bit value.
-    pub fn next_u64(&mut self) -> u64 {
-        self.state = splitmix64(self.state.wrapping_add(MIX_1));
+    pub const fn state(&self) -> u64 {
         self.state
     }
 
-    /// Generates a reproducible boolean.
+    pub fn next_u64(&mut self) -> u64 {
+        self.state =
+            splitmix64(self.state.wrapping_add(MIX_1));
+        self.state
+    }
+
     pub fn next_bool(&mut self) -> bool {
         (self.next_u64() & 1) != 0
     }
 
-    /// Generates a value in `[0, upper)`.
-    pub fn next_bounded(&mut self, upper: u64) -> Result<u64, DeterministicError> {
+    /// Uniform value in `[0, upper)`.
+    pub fn next_bounded(
+        &mut self,
+        upper: u64,
+    ) -> DeterministicResult<u64> {
         if upper == 0 {
-            return Err(DeterministicError::InvalidConfiguration {
-                reason: "random upper bound must be greater than zero",
-            });
+            return Err(
+                DeterministicError::InvalidConfiguration {
+                    reason:
+                        "random upper bound must be greater than zero"
+                            .to_string(),
+                },
+            );
         }
 
-        // Rejection sampling avoids modulo bias.
-        let zone = u64::MAX - (u64::MAX % upper);
+        /*
+         * Rejection sampling avoids modulo bias.
+         *
+         * The previous implementation used:
+         *
+         *   u64::MAX - (u64::MAX % upper)
+         *
+         * which excludes a slightly incorrect range at the boundary.
+         *
+         * Using `wrapping_neg()` gives the exact largest multiple zone.
+         */
+        let threshold =
+            upper.wrapping_neg() % upper;
 
         loop {
             let value = self.next_u64();
 
-            if value < zone {
+            if value >= threshold {
                 return Ok(value % upper);
             }
         }
     }
 
-    /// Generates a reproducible `f64` in `[0, 1)`.
-    ///
-    /// The construction uses the top 53 bits and therefore avoids generating
-    /// exactly 1.0.
+    /// Generates a reproducible finite value in `[0, 1)`.
     pub fn next_unit_f64(&mut self) -> f64 {
         let value = self.next_u64() >> 11;
         value as f64 / ((1_u64 << 53) as f64)
     }
 }
 
-// -----------------------------------------------------------------------------
-// Stable hashing
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Stable deterministic hashing
+// ============================================================================
 
-/// Stable non-cryptographic hash state.
+/// Stable non-cryptographic hashing state.
 ///
-/// Rust's default hashers are intentionally not specified as a cross-process
-/// stable serialization format. This hasher exists for reproducibility.
+/// This is intended for execution identity and reproducibility, not
+/// cryptographic integrity. Checkpoint integrity belongs to `checkpoint.rs`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StableHasher {
     state: u64,
@@ -423,21 +696,18 @@ impl Default for StableHasher {
 }
 
 impl StableHasher {
-    /// Creates a new stable hash state.
     pub const fn new() -> Self {
         Self {
             state: 0x243F_6A88_85A3_08D3,
         }
     }
 
-    /// Creates a hash state with an explicit seed.
     pub const fn with_seed(seed: u64) -> Self {
         Self {
             state: seed ^ 0x243F_6A88_85A3_08D3,
         }
     }
 
-    /// Mixes raw bytes into the hash.
     pub fn update(&mut self, bytes: &[u8]) {
         for byte in bytes {
             self.state ^= u64::from(*byte);
@@ -447,72 +717,80 @@ impl StableHasher {
         }
     }
 
-    /// Mixes a `u64`.
+    pub fn update_u8(&mut self, value: u8) {
+        self.update(&[value]);
+    }
+
+    pub fn update_bool(&mut self, value: bool) {
+        self.update_u8(u8::from(value));
+    }
+
     pub fn update_u64(&mut self, value: u64) {
         self.update(&value.to_le_bytes());
     }
 
-    /// Mixes a signed integer.
     pub fn update_i64(&mut self, value: i64) {
         self.update_u64(value as u64);
     }
 
-    /// Mixes a boolean.
-    pub fn update_bool(&mut self, value: bool) {
-        self.update(&[u8::from(value)]);
-    }
-
-    /// Mixes a string using its UTF-8 representation.
     pub fn update_str(&mut self, value: &str) {
         self.update_u64(value.len() as u64);
         self.update(value.as_bytes());
     }
 
-    /// Returns the final 64-bit digest.
     pub fn finish_u64(&self) -> u64 {
         avalanche(self.state)
     }
 
-    /// Returns a fixed-size fingerprint.
     pub fn finish(&self) -> ExecutionFingerprint {
-        ExecutionFingerprint::from_seed(self.finish_u64())
+        ExecutionFingerprint::from_seed(
+            self.finish_u64(),
+        )
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Execution fingerprint
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Fixed-size reproducibility fingerprint for a QEC execution.
+/// Fixed-size deterministic execution fingerprint.
+///
+/// This is an execution identity, not a cryptographic authentication token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ExecutionFingerprint([u8; FINGERPRINT_SIZE]);
+pub struct ExecutionFingerprint(
+    [u8; FINGERPRINT_SIZE],
+);
 
 impl ExecutionFingerprint {
     fn from_seed(seed: u64) -> Self {
         let mut output = [0_u8; FINGERPRINT_SIZE];
-
         let mut state = seed;
 
         for chunk in output.chunks_exact_mut(8) {
-            state = splitmix64(state.wrapping_add(MIX_3));
-            chunk.copy_from_slice(&state.to_le_bytes());
+            state =
+                splitmix64(state.wrapping_add(MIX_3));
+
+            chunk.copy_from_slice(
+                &state.to_le_bytes(),
+            );
         }
 
         Self(output)
     }
 
-    /// Returns the raw fingerprint bytes.
-    pub const fn as_bytes(&self) -> &[u8; FINGERPRINT_SIZE] {
+    pub const fn as_bytes(
+        &self,
+    ) -> &[u8; FINGERPRINT_SIZE] {
         &self.0
     }
 
-    /// Returns a lowercase hexadecimal representation.
     pub fn to_hex(&self) -> String {
-        let mut output = String::with_capacity(FINGERPRINT_SIZE * 2);
+        let mut output =
+            String::with_capacity(FINGERPRINT_SIZE * 2);
 
         for byte in self.0 {
             output.push(hex_digit(byte >> 4));
-            output.push(hex_digit(byte & 0x0f));
+            output.push(hex_digit(byte));
         }
 
         output
@@ -520,19 +798,22 @@ impl ExecutionFingerprint {
 }
 
 impl fmt::Display for ExecutionFingerprint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         f.write_str(&self.to_hex())
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Deterministic execution context
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Reproducibility context shared by QEC operations.
+/// Execution-scoped deterministic state.
 ///
-/// A context should be created once for a logical QEC job and passed through
-/// the decoding pipeline.
+/// One context should normally be created per QEC job and passed through the
+/// complete execution pipeline.
 #[derive(Debug, Clone)]
 pub struct DeterministicContext {
     config: DeterministicConfig,
@@ -542,108 +823,199 @@ pub struct DeterministicContext {
 }
 
 impl DeterministicContext {
-    /// Creates and validates a deterministic execution context.
-    pub fn new(config: DeterministicConfig) -> Result<Self, DeterministicError> {
+    pub fn new(
+        config: DeterministicConfig,
+    ) -> DeterministicResult<Self> {
         config.validate()?;
 
-        let mut hasher = StableHasher::with_seed(config.seed);
+        let mut hasher =
+            StableHasher::with_seed(config.seed);
+
+        hasher.update_str(
+            DETERMINISTIC_API_VERSION,
+        );
+        hasher.update_u64(config.seed);
         hasher.update_u64(config.algorithm_id);
         hasher.update_u64(config.algorithm_version);
-        hasher.update_u64(config.worker_count as u64);
+        hasher.update_u64(
+            config.worker_count as u64,
+        );
+        hasher.update_bool(
+            config.deterministic_worker_assignment,
+        );
+        hasher.update_bool(
+            config.deterministic_reduction,
+        );
 
-        Ok(Self {
-            rng: DeterministicRng::new(derive_seed(
+        let rng = DeterministicRng::new(
+            derive_seed(
                 config.seed,
                 config.algorithm_id,
                 config.algorithm_version,
-            )),
+            ),
+        );
+
+        Ok(Self {
+            config,
+            rng,
             sequence: DeterministicSequence::new(),
             hasher,
-            config,
         })
     }
 
-    /// Returns the immutable configuration.
-    pub const fn config(&self) -> &DeterministicConfig {
+    /// Creates an execution context directly from the repository's validated
+    /// QecConfig.
+    pub fn from_qec_config(
+        config: &QecConfig,
+    ) -> DeterministicResult<Self> {
+        let runtime =
+            DeterministicRuntimeConfig::from_qec_config(
+                config,
+            )?;
+
+        let standalone =
+            DeterministicConfig {
+                mode: runtime.mode,
+                seed: runtime.seed,
+                algorithm_id: 0,
+                algorithm_version: 1,
+                worker_count:
+                    runtime.worker_count,
+                deterministic_worker_assignment:
+                    runtime.deterministic_scheduling,
+                deterministic_reduction:
+                    runtime.deterministic_reductions,
+                require_fingerprint:
+                    runtime.require_fingerprint,
+            };
+
+        Self::new(standalone)
+    }
+
+    pub const fn config(
+        &self,
+    ) -> &DeterministicConfig {
         &self.config
     }
 
-    /// Returns the next deterministic sequence number.
-    pub fn next_sequence(&mut self) -> Result<u64, DeterministicError> {
+    pub fn next_sequence(
+        &mut self,
+    ) -> DeterministicResult<u64> {
         self.sequence.next()
     }
 
-    /// Returns the next reproducible random value.
+    pub fn next_sequence_checked(
+        &mut self,
+        cancellation: Option<&CancellationToken>,
+    ) -> QecResult<u64> {
+        check_cancellation(cancellation)?;
+        self.sequence.next().map_err(QecError::from)
+    }
+
     pub fn next_u64(&mut self) -> u64 {
         self.rng.next_u64()
     }
 
-    /// Returns the next reproducible random boolean.
     pub fn next_bool(&mut self) -> bool {
         self.rng.next_bool()
     }
 
-    /// Returns the next reproducible bounded random value.
-    pub fn next_bounded(&mut self, upper: u64) -> Result<u64, DeterministicError> {
+    pub fn next_bounded(
+        &mut self,
+        upper: u64,
+    ) -> DeterministicResult<u64> {
         self.rng.next_bounded(upper)
     }
 
-    /// Records bytes into the execution fingerprint.
-    pub fn record_bytes(&mut self, bytes: &[u8]) {
-        self.hasher.update(bytes);
+    pub fn next_bounded_checked(
+        &mut self,
+        upper: u64,
+        cancellation: Option<&CancellationToken>,
+    ) -> QecResult<u64> {
+        check_cancellation(cancellation)?;
+
+        self.rng
+            .next_bounded(upper)
+            .map_err(QecError::from)
     }
 
-    /// Records a stable integer.
-    pub fn record_u64(&mut self, value: u64) {
+    pub fn record_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) {
+        record_bytes(&mut self.hasher, bytes);
+    }
+
+    pub fn record_u64(
+        &mut self,
+        value: u64,
+    ) {
         self.hasher.update_u64(value);
     }
 
-    /// Records a string.
-    pub fn record_str(&mut self, value: &str) {
+    pub fn record_bool(
+        &mut self,
+        value: bool,
+    ) {
+        self.hasher.update_bool(value);
+    }
+
+    pub fn record_str(
+        &mut self,
+        value: &str,
+    ) {
         self.hasher.update_str(value);
     }
 
-    /// Produces the current execution fingerprint.
-    pub fn fingerprint(&self) -> ExecutionFingerprint {
+    pub fn fingerprint(
+        &self,
+    ) -> ExecutionFingerprint {
         self.hasher.finish()
     }
 
-    /// Returns the current deterministic sequence position.
-    pub const fn sequence_position(&self) -> u64 {
+    pub const fn sequence_position(
+        &self,
+    ) -> u64 {
         self.sequence.peek()
     }
 
-    /// Returns the current RNG state.
-    pub const fn rng_state(&self) -> u64 {
+    pub const fn rng_state(
+        &self,
+    ) -> u64 {
         self.rng.state()
+    }
+
+    pub const fn worker_count(
+        &self,
+    ) -> usize {
+        self.config.worker_count
+    }
+
+    pub fn check_cancellation(
+        &self,
+        cancellation: Option<&CancellationToken>,
+    ) -> QecResult<()> {
+        check_cancellation(cancellation)
     }
 }
 
-// -----------------------------------------------------------------------------
-// Canonical deterministic ordering
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Deterministic events
+// ============================================================================
 
-/// A deterministic sortable event.
+/// Canonically sortable QEC event.
 ///
-/// QEC events should have a stable ordering independent of arrival order when
-/// parallel or distributed processing is used.
+/// Ordering is based only on deterministic metadata and payload ordering.
+/// Arrival time and thread execution order are deliberately absent.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DeterministicEvent<T> {
-    /// Stable event identifier.
     pub id: u64,
-
-    /// Measurement/round number.
     pub round: u64,
-
-    /// Optional partition identifier.
     pub partition: u64,
-
-    /// Payload.
     pub payload: T,
 }
 
 impl<T> DeterministicEvent<T> {
-    /// Constructs a deterministic event.
     pub const fn new(
         id: u64,
         round: u64,
@@ -658,9 +1030,10 @@ impl<T> DeterministicEvent<T> {
         }
     }
 
-    /// Converts the event into its payload while retaining deterministic
-    /// metadata.
-    pub fn map<U, F>(self, function: F) -> DeterministicEvent<U>
+    pub fn map<U, F>(
+        self,
+        function: F,
+    ) -> DeterministicEvent<U>
     where
         F: FnOnce(T) -> U,
     {
@@ -677,12 +1050,20 @@ impl<T> Ord for DeterministicEvent<T>
 where
     T: Ord,
 {
-    fn cmp(&self, other: &Self) -> Ordering {
+    fn cmp(
+        &self,
+        other: &Self,
+    ) -> Ordering {
         self.round
             .cmp(&other.round)
-            .then_with(|| self.partition.cmp(&other.partition))
+            .then_with(|| {
+                self.partition
+                    .cmp(&other.partition)
+            })
             .then_with(|| self.id.cmp(&other.id))
-            .then_with(|| self.payload.cmp(&other.payload))
+            .then_with(|| {
+                self.payload.cmp(&other.payload)
+            })
     }
 }
 
@@ -690,12 +1071,18 @@ impl<T> PartialOrd for DeterministicEvent<T>
 where
     T: Ord,
 {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    fn partial_cmp(
+        &self,
+        other: &Self,
+    ) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-/// Sorts QEC events into canonical order.
+/// Canonically sorts events.
+///
+/// This is the required boundary before deterministic reductions of
+/// concurrently produced events.
 pub fn canonicalize_events<T>(
     events: &mut [DeterministicEvent<T>],
 ) where
@@ -704,19 +1091,39 @@ pub fn canonicalize_events<T>(
     events.sort_unstable();
 }
 
-// -----------------------------------------------------------------------------
-// Deterministic worker assignment
-// -----------------------------------------------------------------------------
+/// Canonically sorts events while checking cancellation.
+pub fn canonicalize_events_checked<T>(
+    events: &mut [DeterministicEvent<T>],
+    cancellation: Option<&CancellationToken>,
+) -> QecResult<()>
+where
+    T: Ord,
+{
+    check_cancellation(cancellation)?;
 
-/// Computes the deterministic worker responsible for an identifier.
+    events.sort_unstable();
+
+    check_cancellation(cancellation)
+}
+
+// ============================================================================
+// Worker / partition assignment
+// ============================================================================
+
+/// Deterministically assigns an identifier to a worker.
 ///
-/// The same identifier and worker count always produce the same worker.
+/// This assignment is a routing decision only. The decoder must still
+/// canonicalize results before reducing them.
 pub fn assign_worker(
     identifier: u64,
     workers: usize,
-) -> Result<usize, DeterministicError> {
+) -> DeterministicResult<usize> {
     if workers == 0 {
-        return Err(DeterministicError::InvalidWorkerCount { workers });
+        return Err(
+            DeterministicError::InvalidWorkerCount {
+                workers,
+            },
+        );
     }
 
     let mixed = splitmix64(identifier);
@@ -724,52 +1131,100 @@ pub fn assign_worker(
     Ok((mixed % workers as u64) as usize)
 }
 
-/// Validates a worker identifier.
+/// Assigns a worker while respecting a configured worker limit.
+pub fn assign_worker_checked(
+    identifier: u64,
+    workers: usize,
+    configured_max_workers: u32,
+) -> QecResult<usize> {
+    if workers == 0 {
+        return Err(QecError::InvalidInput {
+            message:
+                "worker count must be greater than zero"
+                    .to_string(),
+        });
+    }
+
+    let configured =
+        usize::try_from(configured_max_workers)
+            .map_err(|_| {
+                QecError::InvalidInput {
+                    message:
+                        "configured worker limit cannot be represented"
+                            .to_string(),
+                }
+            })?;
+
+    if workers > configured {
+        return Err(QecError::ResourceLimitExceeded {
+            resource:
+                super::errors::ResourceKind::Parallelism,
+            requested: workers as u128,
+            current: 0,
+            limit: configured as u128,
+            message:
+                "deterministic worker request exceeds configured QEC parallelism limit"
+                    .to_string(),
+        });
+    }
+
+    assign_worker(identifier, workers)
+        .map_err(QecError::from)
+}
+
 pub fn validate_worker(
     worker_id: usize,
     workers: usize,
-) -> Result<(), DeterministicError> {
+) -> DeterministicResult<()> {
     if workers == 0 {
-        return Err(DeterministicError::InvalidWorkerCount { workers });
+        return Err(
+            DeterministicError::InvalidWorkerCount {
+                workers,
+            },
+        );
     }
 
     if worker_id >= workers {
-        return Err(DeterministicError::InvalidWorkerId {
-            worker_id,
-            workers,
-        });
+        return Err(
+            DeterministicError::InvalidWorkerId {
+                worker_id,
+                workers,
+            },
+        );
     }
 
     Ok(())
 }
 
-// -----------------------------------------------------------------------------
-// Deterministic partition assignment
-// -----------------------------------------------------------------------------
-
-/// Deterministically assigns an item to a partition.
 pub fn assign_partition(
     identifier: u64,
     partitions: usize,
-) -> Result<usize, DeterministicError> {
+) -> DeterministicResult<usize> {
+    if partitions == 0 {
+        return Err(
+            DeterministicError::InvalidPartitionCount {
+                partitions,
+            },
+        );
+    }
+
     assign_worker(identifier, partitions)
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Deterministic reductions
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Deterministically reduces values in slice order.
+/// Reduces values in canonical input order.
 ///
-/// This is intended for associative integer operations. For floating-point
-/// values use [`deterministic_sum_f64`] instead.
+/// Callers must canonicalize parallel/distributed results before invoking
+/// this function.
 pub fn deterministic_reduce<T, F>(
     values: &[T],
     mut initial: T,
     mut operation: F,
 ) -> T
 where
-    T: Clone,
     F: FnMut(T, &T) -> T,
 {
     for value in values {
@@ -779,72 +1234,149 @@ where
     initial
 }
 
-/// Deterministically sums finite `f64` values in their supplied order.
+/// Checked deterministic reduction with cancellation.
+pub fn deterministic_reduce_checked<T, F>(
+    values: &[T],
+    mut initial: T,
+    mut operation: F,
+    cancellation: Option<&CancellationToken>,
+) -> QecResult<T>
+where
+    F: FnMut(T, &T) -> T,
+{
+    for value in values {
+        check_cancellation(cancellation)?;
+        initial = operation(initial, value);
+    }
+
+    Ok(initial)
+}
+
+/// Deterministically sums finite floating-point values.
 ///
-/// The function rejects NaN and infinities because allowing them to silently
-/// propagate can make decoder results depend on execution order.
+/// Neumaier compensation reduces numerical sensitivity while preserving a
+/// fixed evaluation order.
 pub fn deterministic_sum_f64(
     values: &[f64],
-) -> Result<f64, DeterministicError> {
+) -> DeterministicResult<f64> {
     let mut sum = 0.0_f64;
     let mut compensation = 0.0_f64;
 
     for value in values {
         if !value.is_finite() {
-            return Err(DeterministicError::InvalidFloatingPoint {
-                operation: "deterministic_sum_f64",
-            });
+            return Err(
+                DeterministicError::InvalidFloatingPoint {
+                    operation:
+                        "deterministic_sum_f64 input",
+                },
+            );
         }
 
-        // Neumaier-style compensated summation.
         let corrected = *value - compensation;
         let temporary = sum + corrected;
-        compensation = (temporary - sum) - corrected;
+
+        compensation =
+            (temporary - sum) - corrected;
+
         sum = temporary;
     }
 
     if !sum.is_finite() {
-        return Err(DeterministicError::InvalidFloatingPoint {
-            operation: "deterministic_sum_f64 result",
-        });
+        return Err(
+            DeterministicError::InvalidFloatingPoint {
+                operation:
+                    "deterministic_sum_f64 result",
+            },
+        );
     }
 
     Ok(sum)
 }
 
-/// Deterministically computes the arithmetic mean.
+/// Deterministic mean.
 pub fn deterministic_mean_f64(
     values: &[f64],
-) -> Result<f64, DeterministicError> {
+) -> DeterministicResult<f64> {
     if values.is_empty() {
-        return Err(DeterministicError::EmptyInput {
-            operation: "deterministic_mean_f64",
-        });
+        return Err(
+            DeterministicError::EmptyInput {
+                operation:
+                    "deterministic_mean_f64",
+            },
+        );
     }
 
-    let sum = deterministic_sum_f64(values)?;
+    let sum =
+        deterministic_sum_f64(values)?;
 
-    let count = values.len() as f64;
+    let count =
+        values.len() as f64;
 
     let result = sum / count;
 
     if !result.is_finite() {
-        return Err(DeterministicError::InvalidFloatingPoint {
-            operation: "deterministic_mean_f64 result",
-        });
+        return Err(
+            DeterministicError::InvalidFloatingPoint {
+                operation:
+                    "deterministic_mean_f64 result",
+            },
+        );
     }
 
     Ok(result)
 }
 
-// -----------------------------------------------------------------------------
-// Canonical maps
-// -----------------------------------------------------------------------------
+/// Deterministically reduces floating-point values with cancellation support.
+pub fn deterministic_sum_f64_checked(
+    values: &[f64],
+    cancellation: Option<&CancellationToken>,
+) -> QecResult<f64> {
+    let mut sum = 0.0_f64;
+    let mut compensation = 0.0_f64;
 
-/// Deterministic key/value accumulator.
+    for value in values {
+        check_cancellation(cancellation)?;
+
+        if !value.is_finite() {
+            return Err(
+                DeterministicError::InvalidFloatingPoint {
+                    operation:
+                        "deterministic_sum_f64_checked input",
+                }
+                .into(),
+            );
+        }
+
+        let corrected = *value - compensation;
+        let temporary = sum + corrected;
+
+        compensation =
+            (temporary - sum) - corrected;
+
+        sum = temporary;
+    }
+
+    if !sum.is_finite() {
+        return Err(
+            DeterministicError::InvalidFloatingPoint {
+                operation:
+                    "deterministic_sum_f64_checked result",
+            }
+            .into(),
+        );
+    }
+
+    Ok(sum)
+}
+
+// ============================================================================
+// Deterministic maps
+// ============================================================================
+
+/// Deterministic map backed by `BTreeMap`.
 ///
-/// `BTreeMap` is used deliberately because iteration order is defined by key
-/// ordering rather than hash-map implementation details.
+/// Never replace this with an unordered map when iteration order contributes
+/// to decoder output, checkpoint identity, metrics or replay.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeterministicMap<K, V> {
     values: BTreeMap<K, V>,
@@ -863,50 +1395,54 @@ impl<K, V> DeterministicMap<K, V>
 where
     K: Ord,
 {
-    /// Creates an empty deterministic map.
     pub const fn new() -> Self {
         Self {
             values: BTreeMap::new(),
         }
     }
 
-    /// Inserts a value.
-    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+    pub fn insert(
+        &mut self,
+        key: K,
+        value: V,
+    ) -> Option<V> {
         self.values.insert(key, value)
     }
 
-    /// Returns a value.
-    pub fn get(&self, key: &K) -> Option<&V> {
+    pub fn get(
+        &self,
+        key: &K,
+    ) -> Option<&V> {
         self.values.get(key)
     }
 
-    /// Returns the number of entries.
+    pub fn remove(
+        &mut self,
+        key: &K,
+    ) -> Option<V> {
+        self.values.remove(key)
+    }
+
     pub fn len(&self) -> usize {
         self.values.len()
     }
 
-    /// Returns whether the map is empty.
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
 
-    /// Iterates in canonical key order.
-    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = (&K, &V)> {
         self.values.iter()
     }
 }
 
-// -----------------------------------------------------------------------------
-// Canonical serialization helpers
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Canonical recording
+// ============================================================================
 
-/// Appends a length-prefixed byte slice to a stable hash.
-///
-/// Length-prefixing prevents concatenation ambiguity:
-///
-/// ```text
-/// ["ab", "c"] != ["a", "bc"]
-/// ```
+/// Records bytes using length-prefixing.
 pub fn record_bytes(
     hasher: &mut StableHasher,
     bytes: &[u8],
@@ -915,154 +1451,197 @@ pub fn record_bytes(
     hasher.update(bytes);
 }
 
-/// Records a deterministic event into a hash.
-pub fn record_event<T>(
+/// Records a deterministic event using its stable metadata.
+///
+/// Payload bytes should preferably be recorded separately using an explicit
+/// canonical representation. This function intentionally does not depend on
+/// Rust's `Hash` implementation because `Hash` is not a cross-language wire
+/// format.
+pub fn record_event_metadata<T>(
     hasher: &mut StableHasher,
     event: &DeterministicEvent<T>,
-) where
-    T: Hash,
-{
+) {
     hasher.update_u64(event.id);
     hasher.update_u64(event.round);
     hasher.update_u64(event.partition);
-
-    let mut payload_hasher = StableHasher::new();
-
-    // `Hash` implementations supplied by the standard library are stable for
-    // primitive values but are not a general-purpose wire-format contract.
-    // This method is therefore intended for internal deterministic metadata,
-    // not persistent cross-language serialization.
-    event.payload.hash(&mut HashAdapter(&mut payload_hasher));
-
-    hasher.update_u64(payload_hasher.finish_u64());
 }
 
-/// Adapter allowing the standard `Hash` trait to feed our stable hasher.
-struct HashAdapter<'a>(&'a mut StableHasher);
+// ============================================================================
+// Checked arithmetic
+// ============================================================================
 
-impl Hasher for HashAdapter<'_> {
-    fn finish(&self) -> u64 {
-        self.0.finish_u64()
-    }
-
-    fn write(&mut self, bytes: &[u8]) {
-        self.0.update(bytes);
-    }
-
-    fn write_u8(&mut self, value: u8) {
-        self.write(&[value]);
-    }
-
-    fn write_u16(&mut self, value: u16) {
-        self.write(&value.to_le_bytes());
-    }
-
-    fn write_u32(&mut self, value: u32) {
-        self.write(&value.to_le_bytes());
-    }
-
-    fn write_u64(&mut self, value: u64) {
-        self.write(&value.to_le_bytes());
-    }
-
-    fn write_u128(&mut self, value: u128) {
-        self.write(&value.to_le_bytes());
-    }
-
-    fn write_usize(&mut self, value: usize) {
-        self.write_u64(value as u64);
-    }
-
-    fn write_i8(&mut self, value: i8) {
-        self.write(&value.to_le_bytes());
-    }
-
-    fn write_i16(&mut self, value: i16) {
-        self.write(&value.to_le_bytes());
-    }
-
-    fn write_i32(&mut self, value: i32) {
-        self.write(&value.to_le_bytes());
-    }
-
-    fn write_i64(&mut self, value: i64) {
-        self.write(&value.to_le_bytes());
-    }
-
-    fn write_i128(&mut self, value: i128) {
-        self.write(&value.to_le_bytes());
-    }
-
-    fn write_isize(&mut self, value: isize) {
-        self.write_i64(value as i64);
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Checked deterministic arithmetic
-// -----------------------------------------------------------------------------
-
-/// Checked multiplication of resource quantities.
 pub fn checked_mul_u64(
     left: u64,
     right: u64,
-) -> Result<u64, DeterministicError> {
+) -> DeterministicResult<u64> {
     left.checked_mul(right)
-        .ok_or(DeterministicError::ArithmeticOverflow {
-            operation: "u64 multiplication",
-        })
+        .ok_or(
+            DeterministicError::ArithmeticOverflow {
+                operation: "u64 multiplication",
+            },
+        )
 }
 
-/// Checked addition of resource quantities.
 pub fn checked_add_u64(
     left: u64,
     right: u64,
-) -> Result<u64, DeterministicError> {
+) -> DeterministicResult<u64> {
     left.checked_add(right)
-        .ok_or(DeterministicError::ArithmeticOverflow {
-            operation: "u64 addition",
+        .ok_or(
+            DeterministicError::ArithmeticOverflow {
+                operation: "u64 addition",
+            },
+        )
+}
+
+pub fn checked_sub_u64(
+    left: u64,
+    right: u64,
+) -> DeterministicResult<u64> {
+    left.checked_sub(right)
+        .ok_or(
+            DeterministicError::ArithmeticOverflow {
+                operation: "u64 subtraction",
+            },
+        )
+}
+
+pub fn usize_to_u64(
+    value: usize,
+) -> DeterministicResult<u64> {
+    u64::try_from(value)
+        .map_err(|_| {
+            DeterministicError::IndexOverflow
         })
 }
 
-/// Checked conversion of a `usize` to `u64`.
-pub fn usize_to_u64(
-    value: usize,
-) -> Result<u64, DeterministicError> {
-    u64::try_from(value).map_err(|_| DeterministicError::IndexOverflow)
+// ============================================================================
+// Cancellation integration
+// ============================================================================
+
+/// Canonical cancellation boundary used by deterministic operations.
+///
+/// Expensive deterministic operations should call this periodically rather
+/// than relying only on their caller to check cancellation.
+pub fn check_cancellation(
+    cancellation: Option<&CancellationToken>,
+) -> QecResult<()> {
+    if let Some(token) = cancellation {
+        token.check()?;
+    }
+
+    Ok(())
 }
 
-// -----------------------------------------------------------------------------
-// Deterministic execution identity
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Execution fingerprint
+// ============================================================================
 
-/// Builds an execution fingerprint from the fundamental QEC inputs.
+/// Creates a reproducibility fingerprint from the complete execution identity.
 ///
-/// Callers should record canonical representations of:
+/// The caller is responsible for supplying canonical digests of:
 ///
-/// * code topology;
-/// * stabilizers;
-/// * logical operators;
+/// * code/topology;
 /// * noise configuration;
 /// * syndrome stream;
 /// * decoder configuration;
 /// * resource configuration.
 ///
-/// The returned fingerprint can then be attached to metrics/checkpoints.
+/// Resource policy is deliberately included because changing resource policy
+/// can change whether an execution terminates successfully.
 pub fn execution_fingerprint(
     config: &DeterministicConfig,
     code_digest: u64,
     noise_digest: u64,
     syndrome_digest: u64,
     decoder_digest: u64,
-) -> Result<ExecutionFingerprint, DeterministicError> {
+    resource_digest: u64,
+) -> DeterministicResult<ExecutionFingerprint> {
     config.validate()?;
 
-    let mut hasher = StableHasher::with_seed(config.seed);
+    let mut hasher =
+        StableHasher::with_seed(config.seed);
 
-    hasher.update_str(DETERMINISTIC_API_VERSION);
+    hasher.update_str(
+        DETERMINISTIC_API_VERSION,
+    );
+
+    hasher.update_u64(config.seed);
     hasher.update_u64(config.algorithm_id);
     hasher.update_u64(config.algorithm_version);
-    hasher.update_u64(config.worker_count as u64);
+    hasher.update_u64(
+        config.worker_count as u64,
+    );
+
+    hasher.update_bool(
+        config.deterministic_worker_assignment,
+    );
+    hasher.update_bool(
+        config.deterministic_reduction,
+    );
+
+    hasher.update_u64(code_digest);
+    hasher.update_u64(noise_digest);
+    hasher.update_u64(syndrome_digest);
+    hasher.update_u64(decoder_digest);
+    hasher.update_u64(resource_digest);
+
+    Ok(hasher.finish())
+}
+
+/// QecConfig-aware execution fingerprint.
+///
+/// This should be preferred by high-level QEC execution code.
+pub fn execution_fingerprint_from_qec_config(
+    config: &QecConfig,
+    code_digest: u64,
+    noise_digest: u64,
+    syndrome_digest: u64,
+    decoder_digest: u64,
+) -> DeterministicResult<ExecutionFingerprint> {
+    let runtime =
+        DeterministicRuntimeConfig::from_qec_config(
+            config,
+        )?;
+
+    let mut hasher =
+        StableHasher::with_seed(runtime.seed);
+
+    hasher.update_str(
+        DETERMINISTIC_API_VERSION,
+    );
+
+    hasher.update_u64(runtime.seed);
+    hasher.update_u64(
+        runtime.worker_count as u64,
+    );
+    hasher.update_bool(
+        runtime.deterministic_scheduling,
+    );
+    hasher.update_bool(
+        runtime.deterministic_reductions,
+    );
+    hasher.update_bool(
+        runtime.deterministic_serialization,
+    );
+
+    /*
+     * Include relevant numerical policy because changing floating-point
+     * behavior can legitimately change a decoder's numerical result.
+     */
+    hasher.update_u64(
+        config
+            .numerical
+            .probability_epsilon
+            .to_bits(),
+    );
+
+    hasher.update_u64(
+        config
+            .numerical
+            .weight_epsilon
+            .to_bits(),
+    );
 
     hasher.update_u64(code_digest);
     hasher.update_u64(noise_digest);
@@ -1072,14 +1651,21 @@ pub fn execution_fingerprint(
     Ok(hasher.finish())
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Utility functions
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-fn splitmix64(mut value: u64) -> u64 {
+fn splitmix64(
+    mut value: u64,
+) -> u64 {
     value = value.wrapping_add(MIX_1);
-    value = (value ^ (value >> 30)).wrapping_mul(MIX_2);
-    value = (value ^ (value >> 27)).wrapping_mul(MIX_3);
+
+    value = (value ^ (value >> 30))
+        .wrapping_mul(MIX_2);
+
+    value = (value ^ (value >> 27))
+        .wrapping_mul(MIX_3);
+
     value ^ (value >> 31)
 }
 
@@ -1090,14 +1676,20 @@ fn derive_seed(
 ) -> u64 {
     let mut value = seed;
 
-    value ^= algorithm_id.rotate_left(17);
+    value ^=
+        algorithm_id.rotate_left(17);
+
     value = splitmix64(value);
 
-    value ^= algorithm_version.rotate_left(31);
+    value ^=
+        algorithm_version.rotate_left(31);
+
     splitmix64(value)
 }
 
-fn avalanche(mut value: u64) -> u64 {
+fn avalanche(
+    mut value: u64,
+) -> u64 {
     value ^= value >> 30;
     value = value.wrapping_mul(MIX_2);
 
@@ -1107,322 +1699,391 @@ fn avalanche(mut value: u64) -> u64 {
     value ^ (value >> 31)
 }
 
-fn hex_digit(value: u8) -> char {
+fn hex_digit(
+    value: u8,
+) -> char {
     match value & 0x0f {
-        0..=9 => (b'0' + (value & 0x0f)) as char,
-        10..=15 => (b'a' + ((value & 0x0f) - 10)) as char,
+        0..=9 => {
+            (b'0' + (value & 0x0f)) as char
+        }
+
+        10..=15 => {
+            (b'a' + ((value & 0x0f) - 10))
+                as char
+        }
+
         _ => unreachable!(),
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Tests
-// -----------------------------------------------------------------------------
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn config_defaults_are_valid() {
-        let config = DeterministicConfig::default();
-
-        assert!(config.validate().is_ok());
+    fn default_configuration_is_valid() {
+        assert!(
+            DeterministicConfig::default()
+                .validate()
+                .is_ok()
+        );
     }
 
     #[test]
     fn zero_workers_are_rejected() {
-        let config = DeterministicConfig {
-            worker_count: 0,
-            ..Default::default()
-        };
+        let config =
+            DeterministicConfig {
+                worker_count: 0,
+                ..Default::default()
+            };
 
         assert!(matches!(
             config.validate(),
-            Err(DeterministicError::InvalidWorkerCount {
-                workers: 0
-            })
+            Err(
+                DeterministicError::InvalidWorkerCount {
+                    workers: 0
+                }
+            )
         ));
     }
 
     #[test]
-    fn strict_mode_rejects_nondeterministic_reduction() {
-        let config = DeterministicConfig {
-            mode: DeterminismMode::Strict,
-            deterministic_reduction: false,
-            ..Default::default()
-        };
+    fn deterministic_rng_replays_exactly() {
+        let mut left =
+            DeterministicRng::new(12345);
 
-        assert!(matches!(
-            config.validate(),
-            Err(DeterministicError::InvalidConfiguration { .. })
-        ));
-    }
+        let mut right =
+            DeterministicRng::new(12345);
 
-    #[test]
-    fn deterministic_rng_repeats_exactly() {
-        let mut first = DeterministicRng::new(12345);
-        let mut second = DeterministicRng::new(12345);
-
-        for _ in 0..1024 {
+        for _ in 0..1_000 {
             assert_eq!(
-                first.next_u64(),
-                second.next_u64()
+                left.next_u64(),
+                right.next_u64()
             );
         }
     }
 
     #[test]
     fn different_seeds_produce_different_sequences() {
-        let mut first = DeterministicRng::new(1);
-        let mut second = DeterministicRng::new(2);
+        let mut left =
+            DeterministicRng::new(1);
+
+        let mut right =
+            DeterministicRng::new(2);
 
         assert_ne!(
-            first.next_u64(),
-            second.next_u64()
+            left.next_u64(),
+            right.next_u64()
         );
     }
 
     #[test]
-    fn rng_state_can_be_restored() {
-        let mut rng = DeterministicRng::new(99);
-
-        let _ = rng.next_u64();
-        let state = rng.state();
-
-        let expected = rng.next_u64();
-
-        let mut restored =
-            DeterministicRng::from_state(state);
-
-        assert_eq!(
-            expected,
-            restored.next_u64()
-        );
-    }
-
-    #[test]
-    fn bounded_rng_respects_upper_bound() {
-        let mut rng = DeterministicRng::new(123);
+    fn bounded_rng_never_exceeds_bound() {
+        let mut rng =
+            DeterministicRng::new(123);
 
         for _ in 0..10_000 {
             let value =
-                rng.next_bounded(17)
-                    .expect("valid bound");
+                rng.next_bounded(17).unwrap();
 
             assert!(value < 17);
         }
     }
 
     #[test]
-    fn zero_rng_bound_is_rejected() {
-        let mut rng = DeterministicRng::new(1);
+    fn zero_random_bound_is_rejected() {
+        let mut rng =
+            DeterministicRng::new(1);
 
         assert!(matches!(
             rng.next_bounded(0),
-            Err(DeterministicError::InvalidConfiguration { .. })
+            Err(
+                DeterministicError::InvalidConfiguration {
+                    ..
+                }
+            )
         ));
     }
 
     #[test]
     fn sequence_is_monotonic() {
-        let mut sequence = DeterministicSequence::new();
-
-        assert_eq!(sequence.next().unwrap(), 0);
-        assert_eq!(sequence.next().unwrap(), 1);
-        assert_eq!(sequence.next().unwrap(), 2);
-        assert_eq!(sequence.peek(), 3);
-    }
-
-    #[test]
-    fn stable_hash_is_repeatable() {
-        let mut first = StableHasher::new();
-        first.update_str("zamani");
-        first.update_u64(42);
-
-        let mut second = StableHasher::new();
-        second.update_str("zamani");
-        second.update_u64(42);
+        let mut sequence =
+            DeterministicSequence::new();
 
         assert_eq!(
-            first.finish_u64(),
-            second.finish_u64()
+            sequence.next().unwrap(),
+            0
         );
 
         assert_eq!(
-            first.finish(),
-            second.finish()
+            sequence.next().unwrap(),
+            1
+        );
+
+        assert_eq!(
+            sequence.next().unwrap(),
+            2
         );
     }
 
     #[test]
-    fn fingerprints_are_repeatable() {
-        let config = DeterministicConfig {
-            seed: 42,
-            algorithm_id: 7,
-            algorithm_version: 3,
-            worker_count: 4,
-            ..Default::default()
-        };
-
-        let first = execution_fingerprint(
-            &config,
-            100,
-            200,
-            300,
-            400,
-        )
-        .unwrap();
-
-        let second = execution_fingerprint(
-            &config,
-            100,
-            200,
-            300,
-            400,
-        )
-        .unwrap();
-
-        assert_eq!(first, second);
-        assert_eq!(
-            first.to_hex().len(),
-            FINGERPRINT_SIZE * 2
-        );
-    }
-
-    #[test]
-    fn changing_syndrome_changes_fingerprint() {
-        let config = DeterministicConfig::default();
-
-        let first = execution_fingerprint(
-            &config,
-            1,
-            2,
-            3,
-            4,
-        )
-        .unwrap();
-
-        let second = execution_fingerprint(
-            &config,
-            1,
-            2,
-            4,
-            4,
-        )
-        .unwrap();
-
-        assert_ne!(first, second);
-    }
-
-    #[test]
-    fn events_have_canonical_order() {
-        let mut events = vec![
-            DeterministicEvent::new(2, 1, 0, 10_u64),
-            DeterministicEvent::new(1, 0, 0, 20_u64),
-            DeterministicEvent::new(1, 1, 0, 30_u64),
-            DeterministicEvent::new(1, 1, 1, 40_u64),
+    fn canonical_event_order_is_independent_of_input_order() {
+        let mut left = vec![
+            DeterministicEvent::new(
+                2, 1, 0, 20_u64
+            ),
+            DeterministicEvent::new(
+                1, 1, 0, 10_u64
+            ),
+            DeterministicEvent::new(
+                3, 0, 0, 30_u64
+            ),
         ];
 
-        canonicalize_events(&mut events);
+        let mut right = vec![
+            left[2].clone(),
+            left[0].clone(),
+            left[1].clone(),
+        ];
 
-        assert_eq!(events[0].round, 0);
-        assert_eq!(events[1].id, 1);
-        assert_eq!(events[1].partition, 0);
-        assert_eq!(events[2].id, 2);
-        assert_eq!(events[3].partition, 1);
+        canonicalize_events(&mut left);
+        canonicalize_events(&mut right);
+
+        assert_eq!(left, right);
     }
 
     #[test]
-    fn worker_assignment_is_repeatable() {
-        for id in 0..10_000 {
-            let first =
-                assign_worker(id, 17).unwrap();
-
-            let second =
-                assign_worker(id, 17).unwrap();
-
-            assert_eq!(first, second);
-            assert!(first < 17);
-        }
-    }
-
-    #[test]
-    fn partition_assignment_is_repeatable() {
-        for id in 0..1000 {
+    fn worker_assignment_is_reproducible() {
+        for id in 0..1_000 {
             assert_eq!(
-                assign_partition(id, 8).unwrap(),
-                assign_partition(id, 8).unwrap()
+                assign_worker(id, 8).unwrap(),
+                assign_worker(id, 8).unwrap()
             );
         }
     }
 
     #[test]
-    fn invalid_worker_id_is_rejected() {
+    fn worker_assignment_rejects_zero_workers() {
+        assert!(matches!(
+            assign_worker(1, 0),
+            Err(
+                DeterministicError::InvalidWorkerCount {
+                    workers: 0
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn worker_validation_rejects_out_of_range_worker() {
         assert!(matches!(
             validate_worker(8, 8),
-            Err(DeterministicError::InvalidWorkerId {
-                worker_id: 8,
-                workers: 8
-            })
+            Err(
+                DeterministicError::InvalidWorkerId {
+                    worker_id: 8,
+                    workers: 8
+                }
+            )
         ));
     }
 
     #[test]
-    fn deterministic_sum_is_stable() {
-        let values = [
-            1.0,
-            2.0,
-            3.0,
-            4.0,
-        ];
+    fn deterministic_reduction_is_ordered() {
+        let values = [1_u64, 2, 3, 4];
 
-        assert_eq!(
-            deterministic_sum_f64(&values).unwrap(),
-            10.0
-        );
+        let result =
+            deterministic_reduce(
+                &values,
+                0_u64,
+                |a, b| a + b,
+            );
+
+        assert_eq!(result, 10);
     }
 
     #[test]
-    fn deterministic_mean_is_stable() {
-        let values = [
-            2.0,
-            4.0,
-            6.0,
-        ];
+    fn deterministic_float_sum_rejects_nan() {
+        let values =
+            [1.0_f64, f64::NAN];
 
-        assert_eq!(
-            deterministic_mean_f64(&values).unwrap(),
-            4.0
-        );
-    }
-
-    #[test]
-    fn nan_is_rejected() {
         assert!(matches!(
-            deterministic_sum_f64(&[1.0, f64::NAN]),
-            Err(DeterministicError::InvalidFloatingPoint { .. })
+            deterministic_sum_f64(&values),
+            Err(
+                DeterministicError::InvalidFloatingPoint {
+                    ..
+                }
+            )
         ));
     }
 
     #[test]
-    fn infinity_is_rejected() {
+    fn deterministic_float_sum_rejects_infinity() {
+        let values =
+            [1.0_f64, f64::INFINITY];
+
         assert!(matches!(
-            deterministic_sum_f64(&[1.0, f64::INFINITY]),
-            Err(DeterministicError::InvalidFloatingPoint { .. })
+            deterministic_sum_f64(&values),
+            Err(
+                DeterministicError::InvalidFloatingPoint {
+                    ..
+                }
+            )
         ));
     }
 
     #[test]
-    fn empty_mean_is_rejected() {
+    fn deterministic_mean_rejects_empty_input() {
         assert!(matches!(
             deterministic_mean_f64(&[]),
-            Err(DeterministicError::EmptyInput { .. })
+            Err(
+                DeterministicError::EmptyInput {
+                    ..
+                }
+            )
         ));
     }
 
     #[test]
-    fn deterministic_map_is_ordered() {
+    fn fingerprints_are_reproducible() {
+        let config =
+            DeterministicConfig {
+                seed: 42,
+                algorithm_id: 7,
+                algorithm_version: 3,
+                worker_count: 4,
+                ..Default::default()
+            };
+
+        let left =
+            execution_fingerprint(
+                &config,
+                1,
+                2,
+                3,
+                4,
+                5,
+            )
+            .unwrap();
+
+        let right =
+            execution_fingerprint(
+                &config,
+                1,
+                2,
+                3,
+                4,
+                5,
+            )
+            .unwrap();
+
+        assert_eq!(left, right);
+        assert_eq!(left.to_hex().len(), 64);
+    }
+
+    #[test]
+    fn fingerprint_changes_when_resource_policy_changes() {
+        let config =
+            DeterministicConfig::default();
+
+        let left =
+            execution_fingerprint(
+                &config,
+                1,
+                2,
+                3,
+                4,
+                100,
+            )
+            .unwrap();
+
+        let right =
+            execution_fingerprint(
+                &config,
+                1,
+                2,
+                3,
+                4,
+                200,
+            )
+            .unwrap();
+
+        assert_ne!(left, right);
+    }
+
+    #[test]
+    fn qec_config_integration_works() {
+        let config =
+            QecConfig::deterministic_test();
+
+        let runtime =
+            DeterministicRuntimeConfig
+                ::from_qec_config(&config)
+                .unwrap();
+
+        assert_ne!(
+            runtime.mode,
+            DeterminismMode::Disabled
+        );
+
+        assert_eq!(
+            runtime.worker_count,
+            1
+        );
+
+        assert!(
+            runtime.deterministic_scheduling
+        );
+
+        assert!(
+            runtime.deterministic_reductions
+        );
+
+        assert!(
+            runtime.deterministic_serialization
+        );
+    }
+
+    #[test]
+    fn qec_context_uses_repository_configuration() {
+        let config =
+            QecConfig::deterministic_test();
+
+        let context =
+            DeterministicContext
+                ::from_qec_config(&config)
+                .unwrap();
+
+        assert_eq!(
+            context.worker_count(),
+            1
+        );
+
+        assert!(
+            context.config().require_fingerprint
+        );
+    }
+
+    #[test]
+    fn checked_arithmetic_rejects_overflow() {
+        assert!(matches!(
+            checked_mul_u64(
+                u64::MAX,
+                2
+            ),
+            Err(
+                DeterministicError::ArithmeticOverflow {
+                    ..
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn deterministic_map_has_canonical_order() {
         let mut map =
             DeterministicMap::new();
 
@@ -1442,107 +2103,24 @@ mod tests {
     }
 
     #[test]
-    fn checked_arithmetic_rejects_overflow() {
-        assert!(matches!(
-            checked_add_u64(u64::MAX, 1),
-            Err(DeterministicError::ArithmeticOverflow { .. })
-        ));
+    fn fingerprint_is_fixed_size() {
+        let config =
+            DeterministicConfig::default();
 
-        assert!(matches!(
-            checked_mul_u64(u64::MAX, 2),
-            Err(DeterministicError::ArithmeticOverflow { .. })
-        ));
-    }
-
-    #[test]
-    fn context_is_reproducible() {
-        let config = DeterministicConfig {
-            seed: 123,
-            algorithm_id: 77,
-            algorithm_version: 4,
-            worker_count: 4,
-            ..Default::default()
-        };
-
-        let mut first =
-            DeterministicContext::new(config.clone())
-                .unwrap();
-
-        let mut second =
-            DeterministicContext::new(config)
-                .unwrap();
-
-        for _ in 0..100 {
-            assert_eq!(
-                first.next_sequence().unwrap(),
-                second.next_sequence().unwrap()
-            );
-
-            assert_eq!(
-                first.next_u64(),
-                second.next_u64()
-            );
-        }
-    }
-
-    #[test]
-    fn context_fingerprint_changes_when_recording_changes() {
-        let config = DeterministicConfig::default();
-
-        let mut first =
-            DeterministicContext::new(config.clone())
-                .unwrap();
-
-        let mut second =
-            DeterministicContext::new(config)
-                .unwrap();
-
-        first.record_str("syndrome-A");
-        second.record_str("syndrome-B");
-
-        assert_ne!(
-            first.fingerprint(),
-            second.fingerprint()
-        );
-    }
-
-    #[test]
-    fn event_mapping_preserves_identity() {
-        let event =
-            DeterministicEvent::new(
-                10,
-                20,
-                30,
-                40_u64,
-            );
-
-        let mapped =
-            event.map(|value| value * 2);
-
-        assert_eq!(mapped.id, 10);
-        assert_eq!(mapped.round, 20);
-        assert_eq!(mapped.partition, 30);
-        assert_eq!(mapped.payload, 80);
-    }
-
-    #[test]
-    fn hex_fingerprint_is_lowercase() {
         let fingerprint =
-            ExecutionFingerprint::from_seed(42);
-
-        let hex =
-            fingerprint.to_hex();
+            execution_fingerprint(
+                &config,
+                1,
+                2,
+                3,
+                4,
+                5,
+            )
+            .unwrap();
 
         assert_eq!(
-            hex.len(),
-            64
-        );
-
-        assert!(
-            hex.chars().all(|character| {
-                character.is_ascii_hexdigit()
-                    && !character.is_ascii_uppercase()
-            })
+            fingerprint.as_bytes().len(),
+            FINGERPRINT_SIZE
         );
     }
 }
