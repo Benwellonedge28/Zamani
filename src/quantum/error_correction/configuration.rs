@@ -1,88 +1,115 @@
 //! Zamani Quantum Error-Correction Configuration
 //!
-//! Production-grade configuration boundary for the QEC subsystem.
+//! Production configuration boundary for the QEC subsystem.
 //!
-//! Design:
+//! Architectural contract:
 //!
-//!     Untrusted Configuration
-//!              |
-//!              v
-//!     Parse / Construct
-//!              |
-//!              v
-//!     Structural Validation
-//!              |
-//!              v
-//!     Resource / Security Validation
-//!              |
-//!              v
-//!     Validated QecConfig
-//!              |
-//!              +----------------------+
-//!              |                      |
-//!              v                      v
-//!        Local Execution         QPU Execution
-//!              |                      |
-//!       CPU/GPU/Accelerator     Hardware Adapter
-//!              |                      |
-//!              +----------+-----------+
+//! ```text
+//!                    UNTRUSTED INPUT
 //!                         |
 //!                         v
-//!                    QEC Pipeline
+//!                    QecConfig
+//!                         |
+//!              +----------+----------+
+//!              |                     |
+//!              v                     v
+//!          QecLimits             Security
+//!          limits.rs             policy
+//!              |
+//!              v
+//!       Cross-component validation
+//!              |
+//!              v
+//!       Capability requirements
+//!              |
+//!              v
+//!       Resource preflight
+//!              |
+//!              v
+//!       ResourceManager
+//!              |
+//!              v
+//!        QEC execution
+//!       /            \
+//! Classical          QPU
+//! execution        adapter
+//! ```
 //!
-//! This module intentionally owns configuration policy rather than
-//! implementing decoding, scheduling, backend execution, or capability
-//! authorization itself.
+//! ## Ownership rules
 //!
-//! Important:
-//! - Configuration validation must happen before expensive allocation.
-//! - No configuration may imply unlimited resources.
-//! - QPU support is backend-neutral and vendor-neutral.
-//! - Secrets, credentials, API tokens, and private keys do not belong here.
-//! - Remote QPU access is explicitly opt-in.
-//! - Configuration must be serializable and versionable.
-//! - Invalid configuration returns an error instead of panicking.
+//! * `configuration.rs` owns configuration composition and cross-component
+//!   validation.
+//! * `limits.rs` owns the canonical `QecLimits` resource policy.
+//! * `backend.rs` owns the canonical `BackendKind`.
+//! * `capabilities.rs` owns capability authorization.
+//! * `resources.rs` owns runtime resource accounting.
+//! * `errors.rs` owns the global QEC error hierarchy.
+//! * `qpu_adapter.rs` owns physical QPU interaction.
+//!
+//! Configuration never allocates resources, starts workers, accesses hardware,
+//! performs network I/O, or silently grants capabilities.
+//!
+//! Secrets, credentials, private keys, API tokens and device authentication
+//! material must never be stored in this configuration.
+
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Current configuration schema version.
-///
-/// Persisted configurations should record this value so future versions
-/// can reject or migrate incompatible configuration data explicitly.
-pub const CONFIGURATION_SCHEMA_VERSION: u32 = 1;
+use super::backend::BackendKind;
+use super::limits::QecLimits;
 
-/// Maximum representable timeout used by this module.
+// ============================================================================
+// Schema and safety ceilings
+// ============================================================================
+
+/// Configuration schema version.
 ///
-/// This is deliberately finite so malformed external values cannot express
-/// an accidental "effectively infinite" timeout.
+/// Increment when serialized configuration semantics change.
+pub const CONFIGURATION_SCHEMA_VERSION: u32 = 2;
+
+/// Maximum timeout accepted by configuration validation.
+///
+/// Runtime resource enforcement remains the responsibility of the resource
+/// manager and scheduler.
 pub const MAX_TIMEOUT_MS: u64 = 7 * 24 * 60 * 60 * 1_000;
 
-/// Maximum permitted parallelism.
-pub const MAX_PARALLELISM: u32 = 1_000_000;
+/// Maximum parallelism accepted by configuration validation.
+pub const MAX_PARALLELISM: usize = 1_000_000;
 
-/// Maximum permitted QPU shots in one configured operation.
+/// Maximum QPU shots accepted by configuration validation.
+///
+/// The actual execution limit is additionally checked against
+/// `QecLimits::max_qpu_shots`.
 pub const MAX_QPU_SHOTS: u64 = 1_000_000_000;
 
-/// Maximum permitted checkpoint interval.
+/// Maximum checkpoint interval.
 pub const MAX_CHECKPOINT_INTERVAL_EVENTS: u64 = 10_000_000_000;
 
-/// Configuration result type.
+/// Configuration result.
 pub type ConfigurationResult<T> = Result<T, ConfigurationError>;
 
-/// Production configuration for the complete QEC execution pipeline.
+// ============================================================================
+// Root configuration
+// ============================================================================
+
+/// Complete configuration for one QEC execution context.
+///
+/// This object is declarative. It does not itself allocate resources or
+/// execute anything.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct QecConfig {
-    /// Persistent schema version.
+    /// Serialized configuration schema version.
     pub schema_version: u32,
 
     /// Human-readable configuration name.
     pub name: String,
 
-    /// Global resource limits.
+    /// Canonical resource policy from `limits.rs`.
     pub limits: QecLimits,
 
-    /// Decoder configuration.
+    /// Decoder policy.
     pub decoder: DecoderConfig,
 
     /// Numerical safety policy.
@@ -112,7 +139,7 @@ pub struct QecConfig {
     /// Scheduler policy.
     pub scheduler: SchedulerConfig,
 
-    /// Memory-management policy.
+    /// Memory policy.
     pub memory: MemoryConfig,
 
     /// Cache policy.
@@ -125,9 +152,11 @@ pub struct QecConfig {
     pub security: SecurityConfig,
 
     /// Capability requirements.
+    ///
+    /// These are requirements, not grants.
     pub capabilities: CapabilityConfig,
 
-    /// QPU execution policy.
+    /// Physical QPU policy.
     pub qpu: QpuConfig,
 }
 
@@ -139,13 +168,14 @@ impl Default for QecConfig {
 
 impl QecConfig {
     /// Conservative production configuration.
-    ///
-    /// This configuration intentionally avoids unbounded resources.
+    #[must_use]
     pub fn production() -> Self {
         Self {
             schema_version: CONFIGURATION_SCHEMA_VERSION,
-            name: "zamani-qec-production".to_string(),
+            name: "zamani-qec-production".to_owned(),
+
             limits: QecLimits::default(),
+
             decoder: DecoderConfig::default(),
             numerical: NumericalPolicy::default(),
             backend: BackendConfig::default(),
@@ -165,36 +195,38 @@ impl QecConfig {
         }
     }
 
-    /// Deterministic local configuration suitable for reproducible tests.
+    /// Deterministic configuration suitable for reproducible tests.
+    #[must_use]
     pub fn deterministic_test() -> Self {
         let mut config = Self::production();
 
         config.determinism.enabled = true;
         config.determinism.seed = Some(0x5A4D_414E_4951_4543);
+        config.determinism.deterministic_scheduling = true;
+        config.determinism.deterministic_reductions = true;
+        config.determinism.deterministic_serialization = true;
+
+        config.parallelism.enabled = false;
         config.parallelism.max_workers = 1;
         config.parallelism.deterministic_reductions = true;
+
         config.streaming.deterministic_order = true;
 
         config
     }
 
-    /// Validate the entire configuration before execution.
+    /// Validate the entire configuration.
+    ///
+    /// This is a pure validation operation. No allocation or execution occurs.
     pub fn validate(&self) -> ConfigurationResult<()> {
-        if self.schema_version != CONFIGURATION_SCHEMA_VERSION {
-            return Err(ConfigurationError::UnsupportedSchemaVersion {
-                expected: CONFIGURATION_SCHEMA_VERSION,
-                found: self.schema_version,
-            });
-        }
+        self.validate_schema()?;
+        self.validate_identity()?;
 
-        if self.name.trim().is_empty() {
-            return Err(ConfigurationError::InvalidValue {
-                field: "name",
-                reason: "configuration name must not be empty",
-            });
-        }
+        // Canonical resource policy.
+        self.limits
+            .validate()
+            .map_err(ConfigurationError::LimitPolicy)?;
 
-        self.limits.validate()?;
         self.decoder.validate()?;
         self.numerical.validate()?;
         self.backend.validate()?;
@@ -215,180 +247,407 @@ impl QecConfig {
         self.validate_cross_component_invariants()
     }
 
-    /// Validate relationships between otherwise-valid configuration sections.
+    fn validate_schema(&self) -> ConfigurationResult<()> {
+        if self.schema_version != CONFIGURATION_SCHEMA_VERSION {
+            return Err(
+                ConfigurationError::UnsupportedSchemaVersion {
+                    expected: CONFIGURATION_SCHEMA_VERSION,
+                    found: self.schema_version,
+                },
+            );
+        }
+
+        Ok(())
+    }
+
+    fn validate_identity(&self) -> ConfigurationResult<()> {
+        if self.name.trim().is_empty() {
+            return Err(ConfigurationError::InvalidValue {
+                field: "name",
+                reason: "configuration name must not be empty",
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Validates relationships between configuration domains.
+    ///
+    /// This is where configuration becomes an execution contract rather than
+    /// a collection of independent structs.
     fn validate_cross_component_invariants(&self) -> ConfigurationResult<()> {
+        // ------------------------------------------------------------------
+        // Resource policy
+        // ------------------------------------------------------------------
+
         if self.memory.max_bytes > self.limits.max_memory_bytes {
             return Err(ConfigurationError::InvalidValue {
                 field: "memory.max_bytes",
-                reason: "memory budget exceeds limits.max_memory_bytes",
+                reason: "memory budget exceeds canonical QecLimits",
+            });
+        }
+
+        if self.memory.reserve_bytes >= self.memory.max_bytes {
+            return Err(ConfigurationError::InvalidValue {
+                field: "memory.reserve_bytes",
+                reason: "memory reserve must be smaller than memory budget",
             });
         }
 
         if self.parallelism.max_workers > self.limits.max_parallelism {
             return Err(ConfigurationError::InvalidValue {
                 field: "parallelism.max_workers",
-                reason: "parallelism exceeds limits.max_parallelism",
+                reason: "parallelism exceeds canonical QecLimits",
             });
         }
 
-        if self.streaming.buffer_capacity_events > self.limits.max_syndrome_events {
+        if self.streaming.buffer_capacity_events
+            > self.limits.max_stream_buffer_events
+        {
             return Err(ConfigurationError::InvalidValue {
                 field: "streaming.buffer_capacity_events",
-                reason: "streaming buffer exceeds maximum syndrome events",
+                reason: "stream buffer exceeds canonical QecLimits",
             });
         }
 
-        if self.partitioning.enabled && self.partitioning.partitions == 0 {
+        if self.decoder.max_iterations as usize
+            > self.limits.max_decoder_iterations
+        {
             return Err(ConfigurationError::InvalidValue {
-                field: "partitioning.partitions",
-                reason: "enabled partitioning requires at least one partition",
+                field: "decoder.max_iterations",
+                reason: "decoder iteration budget exceeds canonical QecLimits",
             });
         }
+
+        if self.checkpointing.max_size_bytes
+            > self.limits.max_checkpoint_size_bytes
+        {
+            return Err(ConfigurationError::InvalidValue {
+                field: "checkpointing.max_size_bytes",
+                reason: "checkpoint size exceeds canonical QecLimits",
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Partitioning
+        // ------------------------------------------------------------------
+
+        if self.partitioning.enabled {
+            if self.partitioning.partitions as usize
+                > self.limits.max_partitions
+            {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "partitioning.partitions",
+                    reason: "partition count exceeds canonical QecLimits",
+                });
+            }
+
+            if self.partitioning.max_events_per_partition
+                > self.limits.max_syndrome_events as u64
+            {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "partitioning.max_events_per_partition",
+                    reason: "partition event budget exceeds canonical QecLimits",
+                });
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Distributed execution
+        // ------------------------------------------------------------------
 
         if self.distributed.enabled && !self.partitioning.enabled {
             return Err(ConfigurationError::InvalidValue {
                 field: "distributed.enabled",
-                reason: "distributed execution requires partitioning to be enabled",
+                reason: "distributed execution requires partitioning",
             });
         }
 
-        if self.backend.requires_qpu() && !self.qpu.enabled {
-            return Err(ConfigurationError::BackendRequiresQpu);
+        if self.distributed.enabled
+            && !self.distributed.require_encrypted_transport
+        {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "distributed QEC requires encrypted transport",
+            ));
         }
 
-        if self.backend.requires_accelerator() && !self.capabilities.accelerator {
-            return Err(ConfigurationError::InvalidValue {
-                field: "capabilities.accelerator",
-                reason: "accelerated backend requires accelerator capability",
-            });
+        if self.distributed.enabled
+            && !self.distributed.require_authenticated_workers
+        {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "distributed QEC requires authenticated workers",
+            ));
         }
 
-        if self.backend.requires_distributed() && !self.capabilities.distributed_execution {
-            return Err(ConfigurationError::InvalidValue {
-                field: "capabilities.distributed_execution",
-                reason: "distributed backend requires distributed capability",
-            });
-        }
-
-        if self.determinism.enabled && !self.parallelism.deterministic_reductions {
-            return Err(ConfigurationError::InvalidValue {
-                field: "parallelism.deterministic_reductions",
-                reason: "deterministic mode requires deterministic reductions",
-            });
-        }
-
-        if self.qpu.enabled && !self.capabilities.qpu_execution {
-            return Err(ConfigurationError::InvalidValue {
-                field: "capabilities.qpu_execution",
-                reason: "QPU execution requires explicit QPU capability",
-            });
-        }
-
-        if self.qpu.allow_remote && !self.security.allow_remote_execution {
-            return Err(ConfigurationError::InvalidValue {
-                field: "qpu.allow_remote",
-                reason: "remote QPU execution is disabled by security policy",
-            });
-        }
-
-        if self.qpu.enabled
-            && self.qpu.shots > self.limits.max_qpu_shots
+        if self.distributed.worker_count as usize
+            > self.limits.max_parallelism
         {
             return Err(ConfigurationError::InvalidValue {
-                field: "qpu.shots",
-                reason: "QPU shots exceed configured QPU resource limit",
+                field: "distributed.worker_count",
+                reason: "worker count exceeds canonical parallelism limit",
             });
+        }
+
+        // ------------------------------------------------------------------
+        // Backend
+        // ------------------------------------------------------------------
+
+        if self.backend.kind == BackendKind::Qpu {
+            if !self.qpu.enabled {
+                return Err(ConfigurationError::BackendRequiresQpu);
+            }
+
+            if !self.capabilities.qpu_access {
+                return Err(ConfigurationError::CapabilityRequired {
+                    capability: "qec.qpu_access",
+                });
+            }
+        }
+
+        if self.backend.kind == BackendKind::ParallelCpu
+            && !self.capabilities.parallel_execution
+        {
+            return Err(ConfigurationError::CapabilityRequired {
+                capability: "qec.parallel_execution",
+            });
+        }
+
+        if matches!(
+            self.backend.kind,
+            BackendKind::Gpu | BackendKind::Accelerator
+        ) && !self.capabilities.accelerator
+        {
+            return Err(ConfigurationError::CapabilityRequired {
+                capability: "qec.use_accelerator",
+            });
+        }
+
+        if self.backend.kind == BackendKind::Distributed
+            && !self.capabilities.distributed_execution
+        {
+            return Err(ConfigurationError::CapabilityRequired {
+                capability: "qec.distributed_execution",
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Determinism
+        // ------------------------------------------------------------------
+
+        if self.determinism.enabled {
+            if !self.determinism.deterministic_scheduling {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "determinism.deterministic_scheduling",
+                    reason: "deterministic mode requires deterministic scheduling",
+                });
+            }
+
+            if !self.determinism.deterministic_reductions {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "determinism.deterministic_reductions",
+                    reason: "deterministic mode requires deterministic reductions",
+                });
+            }
+
+            if !self.determinism.deterministic_serialization {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "determinism.deterministic_serialization",
+                    reason: "deterministic mode requires deterministic serialization",
+                });
+            }
+
+            if !self.capabilities.deterministic_execution {
+                return Err(ConfigurationError::CapabilityRequired {
+                    capability: "qec.deterministic_execution",
+                });
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Streaming
+        // ------------------------------------------------------------------
+
+        if self.streaming.enabled && !self.capabilities.streaming_syndrome {
+            return Err(ConfigurationError::CapabilityRequired {
+                capability: "qec.streaming_syndrome",
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Checkpointing
+        // ------------------------------------------------------------------
+
+        if self.checkpointing.enabled && !self.capabilities.checkpoint {
+            return Err(ConfigurationError::CapabilityRequired {
+                capability: "qec.checkpoint",
+            });
+        }
+
+        if self.checkpointing.enabled
+            && !self.security.verify_checkpoints
+        {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "checkpoint verification cannot be disabled",
+            ));
+        }
+
+        // ------------------------------------------------------------------
+        // Memory
+        // ------------------------------------------------------------------
+
+        if !self.capabilities.allocate_memory {
+            return Err(ConfigurationError::CapabilityRequired {
+                capability: "qec.allocate_memory",
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // QPU
+        // ------------------------------------------------------------------
+
+        if self.qpu.enabled {
+            if self.backend.kind != BackendKind::Qpu {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "qpu.enabled",
+                    reason: "QPU configuration requires BackendKind::Qpu",
+                });
+            }
+
+            if !self.capabilities.qpu_access {
+                return Err(ConfigurationError::CapabilityRequired {
+                    capability: "qec.qpu_access",
+                });
+            }
+
+            if !self.capabilities.qpu_submit {
+                return Err(ConfigurationError::CapabilityRequired {
+                    capability: "qec.qpu_submit",
+                });
+            }
+
+            if !self.capabilities.qpu_read_results {
+                return Err(ConfigurationError::CapabilityRequired {
+                    capability: "qec.qpu_read_results",
+                });
+            }
+
+            if self.qpu.verify_calibration
+                && !self.capabilities.qpu_calibration
+            {
+                return Err(ConfigurationError::CapabilityRequired {
+                    capability: "qec.qpu_calibration",
+                });
+            }
+
+            if self.qpu.allow_remote {
+                if !self.security.allow_remote_execution {
+                    return Err(
+                        ConfigurationError::SecurityPolicyViolation(
+                            "remote QPU execution is disabled by security policy",
+                        ),
+                    );
+                }
+
+                if !self.qpu.require_authenticated_device {
+                    return Err(
+                        ConfigurationError::SecurityPolicyViolation(
+                            "remote QPU execution requires authenticated devices",
+                        ),
+                    );
+                }
+
+                if !self.qpu.require_encrypted_transport {
+                    return Err(
+                        ConfigurationError::SecurityPolicyViolation(
+                            "remote QPU execution requires encrypted transport",
+                        ),
+                    );
+                }
+
+                if !self.capabilities.remote_execution {
+                    return Err(ConfigurationError::CapabilityRequired {
+                        capability: "remote execution",
+                    });
+                }
+            }
+
+            if self.qpu.shots > self.limits.max_qpu_shots {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "qpu.shots",
+                    reason: "QPU shots exceed canonical QecLimits",
+                });
+            }
+
+            if self.qpu.max_circuits > self.limits.max_qpu_circuits {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "qpu.max_circuits",
+                    reason: "QPU circuit count exceeds canonical QecLimits",
+                });
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Remote telemetry
+        // ------------------------------------------------------------------
+
+        if self.telemetry.export_remote {
+            if !self.security.allow_remote_execution {
+                return Err(ConfigurationError::SecurityPolicyViolation(
+                    "remote telemetry requires explicit remote-execution policy",
+                ));
+            }
+
+            if !self.security.protect_sensitive_metadata {
+                return Err(ConfigurationError::SecurityPolicyViolation(
+                    "remote telemetry requires sensitive-metadata protection",
+                ));
+            }
         }
 
         Ok(())
     }
-}
 
-/// Global resource limits.
-///
-/// These limits are intentionally finite and configurable. They prevent
-/// constructors or external workloads from converting large integer inputs
-/// into catastrophic allocations.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct QecLimits {
-    pub max_code_distance: u64,
-    pub max_qubits: u64,
-    pub max_stabilizers: u64,
-    pub max_syndrome_events: u64,
-    pub max_rounds: u64,
-    pub max_graph_nodes: u64,
-    pub max_graph_edges: u64,
-    pub max_memory_bytes: u64,
-    pub max_decoder_time_ms: u64,
-    pub max_parallelism: u32,
-    pub max_checkpoint_size_bytes: u64,
-    pub max_qpu_shots: u64,
-    pub max_qpu_circuits: u64,
-}
+    /// Returns the canonical backend kind used by the execution layer.
+    #[must_use]
+    pub const fn backend_kind(&self) -> BackendKind {
+        self.backend.kind
+    }
 
-impl Default for QecLimits {
-    fn default() -> Self {
-        Self {
-            max_code_distance: 1_000,
-            max_qubits: 10_000_000,
-            max_stabilizers: 10_000_000,
-            max_syndrome_events: 100_000_000,
-            max_rounds: 10_000_000,
-            max_graph_nodes: 100_000_000,
-            max_graph_edges: 500_000_000,
-            max_memory_bytes: 16 * 1024 * 1024 * 1024,
-            max_decoder_time_ms: 24 * 60 * 60 * 1_000,
-            max_parallelism: 256,
-            max_checkpoint_size_bytes: 4 * 1024 * 1024 * 1024,
-            max_qpu_shots: MAX_QPU_SHOTS,
-            max_qpu_circuits: 1_000_000,
-        }
+    /// Returns whether this configuration requires physical QPU access.
+    #[must_use]
+    pub const fn requires_qpu(&self) -> bool {
+        self.backend.kind == BackendKind::Qpu
+    }
+
+    /// Returns whether this configuration permits remote execution.
+    #[must_use]
+    pub const fn permits_remote_execution(&self) -> bool {
+        self.security.allow_remote_execution
+    }
+
+    /// Returns whether deterministic execution is mandatory.
+    #[must_use]
+    pub const fn requires_determinism(&self) -> bool {
+        self.determinism.enabled
+    }
+
+    /// Returns a validated resource policy.
+    ///
+    /// Callers should still perform runtime reservation through
+    /// `ResourceManager`; this method does not reserve anything.
+    pub fn validated_limits(&self) -> ConfigurationResult<QecLimits> {
+        self.limits
+            .validate()
+            .map_err(ConfigurationError::LimitPolicy)?;
+
+        Ok(self.limits)
     }
 }
 
-impl QecLimits {
-    pub fn validate(&self) -> ConfigurationResult<()> {
-        check_nonzero("limits.max_code_distance", self.max_code_distance)?;
-        check_nonzero("limits.max_qubits", self.max_qubits)?;
-        check_nonzero("limits.max_stabilizers", self.max_stabilizers)?;
-        check_nonzero("limits.max_syndrome_events", self.max_syndrome_events)?;
-        check_nonzero("limits.max_rounds", self.max_rounds)?;
-        check_nonzero("limits.max_graph_nodes", self.max_graph_nodes)?;
-        check_nonzero("limits.max_graph_edges", self.max_graph_edges)?;
-        check_nonzero("limits.max_memory_bytes", self.max_memory_bytes)?;
-        check_nonzero("limits.max_decoder_time_ms", self.max_decoder_time_ms)?;
-        check_nonzero("limits.max_parallelism", self.max_parallelism)?;
-        check_nonzero(
-            "limits.max_checkpoint_size_bytes",
-            self.max_checkpoint_size_bytes,
-        )?;
+// ============================================================================
+// Decoder
+// ============================================================================
 
-        if self.max_decoder_time_ms > MAX_TIMEOUT_MS {
-            return Err(ConfigurationError::InvalidValue {
-                field: "limits.max_decoder_time_ms",
-                reason: "decoder time exceeds hard safety ceiling",
-            });
-        }
-
-        if self.max_parallelism > MAX_PARALLELISM {
-            return Err(ConfigurationError::InvalidValue {
-                field: "limits.max_parallelism",
-                reason: "parallelism exceeds hard safety ceiling",
-            });
-        }
-
-        if self.max_qpu_shots == 0 || self.max_qpu_shots > MAX_QPU_SHOTS {
-            return Err(ConfigurationError::InvalidValue {
-                field: "limits.max_qpu_shots",
-                reason: "QPU shot limit is outside the supported safety range",
-            });
-        }
-
-        Ok(())
-    }
-}
-
-/// Decoder selection and algorithm policy.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DecoderConfig {
     pub strategy: DecoderStrategy,
@@ -419,22 +678,30 @@ impl DecoderConfig {
         if self.max_iterations == 0 {
             return Err(ConfigurationError::InvalidValue {
                 field: "decoder.max_iterations",
-                reason: "maximum decoder iterations must be greater than zero",
+                reason: "must be greater than zero",
             });
         }
 
         if self.allow_fallback && self.fallback_strategy.is_none() {
             return Err(ConfigurationError::InvalidValue {
                 field: "decoder.fallback_strategy",
-                reason: "fallback strategy must be configured when fallback is enabled",
+                reason: "fallback strategy is required when fallback is enabled",
             });
+        }
+
+        if let Some(fallback) = self.fallback_strategy {
+            if fallback == self.strategy {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "decoder.fallback_strategy",
+                    reason: "fallback strategy must differ from primary strategy",
+                });
+            }
         }
 
         Ok(())
     }
 }
 
-/// Supported decoder families.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum DecoderStrategy {
     Mwpm,
@@ -446,7 +713,6 @@ pub enum DecoderStrategy {
     Custom,
 }
 
-/// Policy for logical decoding failures.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum LogicalFailurePolicy {
     Report,
@@ -455,7 +721,10 @@ pub enum LogicalFailurePolicy {
     Abort,
 }
 
-/// Numerical safety policy.
+// ============================================================================
+// Numerical policy
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NumericalPolicy {
     pub reject_nan: bool,
@@ -500,7 +769,14 @@ impl NumericalPolicy {
         if self.probability_epsilon >= 1.0 {
             return Err(ConfigurationError::InvalidValue {
                 field: "numerical.probability_epsilon",
-                reason: "probability epsilon must be less than one",
+                reason: "must be less than one",
+            });
+        }
+
+        if self.weight_epsilon >= 1.0 {
+            return Err(ConfigurationError::InvalidValue {
+                field: "numerical.weight_epsilon",
+                reason: "must be less than one",
             });
         }
 
@@ -528,7 +804,10 @@ pub enum FloatingPointMode {
     Fast,
 }
 
-/// Execution backend configuration.
+// ============================================================================
+// Backend configuration
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BackendConfig {
     pub kind: BackendKind,
@@ -559,13 +838,6 @@ impl BackendConfig {
             });
         }
 
-        if matches!(self.kind, BackendKind::Qpu) && self.device_id.is_none() {
-            return Err(ConfigurationError::InvalidValue {
-                field: "backend.device_id",
-                reason: "QPU backend requires an explicit device identifier",
-            });
-        }
-
         if self.require_hardware && self.allow_software_fallback {
             return Err(ConfigurationError::InvalidValue {
                 field: "backend.allow_software_fallback",
@@ -573,44 +845,59 @@ impl BackendConfig {
             });
         }
 
+        if self.kind == BackendKind::Qpu {
+            let device_id = self.device_id.as_deref().unwrap_or("").trim();
+
+            if device_id.is_empty() {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "backend.device_id",
+                    reason: "QPU backend requires an explicit device ID",
+                });
+            }
+
+            if !self.require_hardware {
+                return Err(ConfigurationError::InvalidValue {
+                    field: "backend.require_hardware",
+                    reason: "physical QPU backend must require hardware",
+                });
+            }
+        }
+
         Ok(())
     }
 
-    pub fn requires_qpu(&self) -> bool {
-        matches!(self.kind, BackendKind::Qpu)
+    #[must_use]
+    pub const fn requires_qpu(&self) -> bool {
+        self.kind == BackendKind::Qpu
     }
 
-    pub fn requires_accelerator(&self) -> bool {
+    #[must_use]
+    pub const fn requires_accelerator(&self) -> bool {
         matches!(
             self.kind,
-            BackendKind::Gpu
-                | BackendKind::Accelerator
-                | BackendKind::QpuHybrid
+            BackendKind::Gpu | BackendKind::Accelerator
         )
     }
 
-    pub fn requires_distributed(&self) -> bool {
-        matches!(self.kind, BackendKind::Distributed)
+    #[must_use]
+    pub const fn requires_distributed(&self) -> bool {
+        self.kind == BackendKind::Distributed
+    }
+
+    #[must_use]
+    pub const fn is_software(&self) -> bool {
+        !matches!(self.kind, BackendKind::Qpu)
     }
 }
 
-/// Supported execution backends.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum BackendKind {
-    Cpu,
-    ParallelCpu,
-    Gpu,
-    Accelerator,
-    Distributed,
-    Qpu,
-    QpuHybrid,
-}
+// ============================================================================
+// Parallelism
+// ============================================================================
 
-/// Parallelism configuration.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParallelismConfig {
     pub enabled: bool,
-    pub max_workers: u32,
+    pub max_workers: usize,
     pub deterministic_reductions: bool,
     pub chunk_size: usize,
     pub work_stealing: bool,
@@ -640,7 +927,7 @@ impl ParallelismConfig {
         if self.max_workers > MAX_PARALLELISM {
             return Err(ConfigurationError::InvalidValue {
                 field: "parallelism.max_workers",
-                reason: "exceeds hard safety ceiling",
+                reason: "exceeds configuration safety ceiling",
             });
         }
 
@@ -651,11 +938,21 @@ impl ParallelismConfig {
             });
         }
 
+        if !self.enabled && self.max_workers != 1 {
+            return Err(ConfigurationError::InvalidValue {
+                field: "parallelism.max_workers",
+                reason: "disabled parallelism must use one worker",
+            });
+        }
+
         Ok(())
     }
 }
 
-/// Deterministic execution configuration.
+// ============================================================================
+// Determinism
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DeterminismConfig {
     pub enabled: bool,
@@ -679,17 +976,14 @@ impl Default for DeterminismConfig {
 
 impl DeterminismConfig {
     pub fn validate(&self) -> ConfigurationResult<()> {
-        if self.enabled && !self.deterministic_scheduling {
+        if self.enabled
+            && (!self.deterministic_scheduling
+                || !self.deterministic_reductions
+                || !self.deterministic_serialization)
+        {
             return Err(ConfigurationError::InvalidValue {
-                field: "determinism.deterministic_scheduling",
-                reason: "deterministic mode requires deterministic scheduling",
-            });
-        }
-
-        if self.enabled && !self.deterministic_reductions {
-            return Err(ConfigurationError::InvalidValue {
-                field: "determinism.deterministic_reductions",
-                reason: "deterministic mode requires deterministic reductions",
+                field: "determinism",
+                reason: "enabled deterministic mode requires all deterministic controls",
             });
         }
 
@@ -697,7 +991,10 @@ impl DeterminismConfig {
     }
 }
 
-/// Checkpoint configuration.
+// ============================================================================
+// Checkpointing
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CheckpointConfig {
     pub enabled: bool,
@@ -727,34 +1024,31 @@ impl Default for CheckpointConfig {
 
 impl CheckpointConfig {
     pub fn validate(&self) -> ConfigurationResult<()> {
-        if self.enabled {
-            if self.interval_events == 0 {
-                return Err(ConfigurationError::InvalidValue {
-                    field: "checkpointing.interval_events",
-                    reason: "must be greater than zero when checkpointing is enabled",
-                });
-            }
+        if !self.enabled {
+            return Ok(());
+        }
 
-            if self.interval_events > MAX_CHECKPOINT_INTERVAL_EVENTS {
-                return Err(ConfigurationError::InvalidValue {
-                    field: "checkpointing.interval_events",
-                    reason: "checkpoint interval exceeds hard safety ceiling",
-                });
-            }
+        if self.interval_events == 0
+            || self.interval_events > MAX_CHECKPOINT_INTERVAL_EVENTS
+        {
+            return Err(ConfigurationError::InvalidValue {
+                field: "checkpointing.interval_events",
+                reason: "checkpoint interval is outside the supported range",
+            });
+        }
 
-            if self.max_size_bytes == 0 {
-                return Err(ConfigurationError::InvalidValue {
-                    field: "checkpointing.max_size_bytes",
-                    reason: "checkpoint size must be greater than zero",
-                });
-            }
+        if self.max_size_bytes == 0 {
+            return Err(ConfigurationError::InvalidValue {
+                field: "checkpointing.max_size_bytes",
+                reason: "must be greater than zero",
+            });
+        }
 
-            if self.retain_count == 0 {
-                return Err(ConfigurationError::InvalidValue {
-                    field: "checkpointing.retain_count",
-                    reason: "retain_count must be greater than zero",
-                });
-            }
+        if self.retain_count == 0 {
+            return Err(ConfigurationError::InvalidValue {
+                field: "checkpointing.retain_count",
+                reason: "must be greater than zero",
+            });
         }
 
         Ok(())
@@ -773,7 +1067,10 @@ pub enum CheckpointCompression {
     Zstd,
 }
 
-/// Streaming syndrome configuration.
+// ============================================================================
+// Streaming
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct StreamingConfig {
     pub enabled: bool,
@@ -799,29 +1096,31 @@ impl Default for StreamingConfig {
 
 impl StreamingConfig {
     pub fn validate(&self) -> ConfigurationResult<()> {
-        if self.enabled {
-            if self.buffer_capacity_events == 0 {
-                return Err(ConfigurationError::InvalidValue {
-                    field: "streaming.buffer_capacity_events",
-                    reason: "must be greater than zero",
-                });
-            }
+        if !self.enabled {
+            return Ok(());
+        }
 
-            if self.batch_size == 0 {
-                return Err(ConfigurationError::InvalidValue {
-                    field: "streaming.batch_size",
-                    reason: "must be greater than zero",
-                });
-            }
+        if self.buffer_capacity_events == 0 {
+            return Err(ConfigurationError::InvalidValue {
+                field: "streaming.buffer_capacity_events",
+                reason: "must be greater than zero",
+            });
+        }
 
-            if self.drop_on_overflow
-                && matches!(self.backpressure, BackpressurePolicy::Block)
-            {
-                return Err(ConfigurationError::InvalidValue {
-                    field: "streaming.drop_on_overflow",
-                    reason: "cannot drop events while using blocking backpressure",
-                });
-            }
+        if self.batch_size == 0 {
+            return Err(ConfigurationError::InvalidValue {
+                field: "streaming.batch_size",
+                reason: "must be greater than zero",
+            });
+        }
+
+        if self.drop_on_overflow
+            && self.backpressure == BackpressurePolicy::Block
+        {
+            return Err(ConfigurationError::InvalidValue {
+                field: "streaming.drop_on_overflow",
+                reason: "cannot drop events with blocking backpressure",
+            });
         }
 
         Ok(())
@@ -835,7 +1134,10 @@ pub enum BackpressurePolicy {
     SpillToCheckpoint,
 }
 
-/// Partitioning configuration.
+// ============================================================================
+// Partitioning
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PartitionConfig {
     pub enabled: bool,
@@ -854,24 +1156,18 @@ impl Default for PartitionConfig {
             max_events_per_partition: 10_000_000,
             overlap_events: 1_024,
             preserve_boundaries: true,
-            boundary_reconciliation: BoundaryReconciliation::GlobalMatching,
+            boundary_reconciliation:
+                BoundaryReconciliation::GlobalMatching,
         }
     }
 }
 
 impl PartitionConfig {
     pub fn validate(&self) -> ConfigurationResult<()> {
-        if self.enabled && self.partitions == 0 {
+        if self.partitions == 0 {
             return Err(ConfigurationError::InvalidValue {
                 field: "partitioning.partitions",
                 reason: "must be greater than zero",
-            });
-        }
-
-        if self.enabled && !self.preserve_boundaries {
-            return Err(ConfigurationError::InvalidValue {
-                field: "partitioning.preserve_boundaries",
-                reason: "QEC partitioning cannot disable boundary preservation",
             });
         }
 
@@ -880,6 +1176,12 @@ impl PartitionConfig {
                 field: "partitioning.max_events_per_partition",
                 reason: "must be greater than zero",
             });
+        }
+
+        if self.enabled && !self.preserve_boundaries {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "partitioned QEC must preserve mathematical boundaries",
+            ));
         }
 
         Ok(())
@@ -893,7 +1195,10 @@ pub enum BoundaryReconciliation {
     Exact,
 }
 
-/// Distributed execution configuration.
+// ============================================================================
+// Distributed
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DistributedConfig {
     pub enabled: bool,
@@ -921,23 +1226,33 @@ impl Default for DistributedConfig {
 
 impl DistributedConfig {
     pub fn validate(&self) -> ConfigurationResult<()> {
-        if self.enabled && self.worker_count == 0 {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        if self.worker_count == 0 {
             return Err(ConfigurationError::InvalidValue {
                 field: "distributed.worker_count",
                 reason: "must be greater than zero",
             });
         }
 
-        if self.enabled && self.max_in_flight_partitions == 0 {
+        if self.max_in_flight_partitions == 0 {
             return Err(ConfigurationError::InvalidValue {
                 field: "distributed.max_in_flight_partitions",
                 reason: "must be greater than zero",
             });
         }
 
-        if self.enabled && !self.require_encrypted_transport {
+        if !self.require_authenticated_workers {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "distributed QEC transport must use encryption".to_string(),
+                "distributed workers must be authenticated",
+            ));
+        }
+
+        if !self.require_encrypted_transport {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "distributed transport must be encrypted",
             ));
         }
 
@@ -952,7 +1267,10 @@ pub enum CoordinatorMode {
     Embedded,
 }
 
-/// Scheduler configuration.
+// ============================================================================
+// Scheduler
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SchedulerConfig {
     pub enabled: bool,
@@ -998,7 +1316,13 @@ impl SchedulerConfig {
 
         if !self.enable_cancellation {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "production QEC scheduling must support cancellation".to_string(),
+                "QEC scheduling must support cancellation",
+            ));
+        }
+
+        if !self.enable_backpressure {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "QEC scheduling must support backpressure",
             ));
         }
 
@@ -1020,7 +1344,10 @@ pub enum PriorityPolicy {
     FIFO,
 }
 
-/// Memory management policy.
+// ============================================================================
+// Memory
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MemoryConfig {
     pub max_bytes: u64,
@@ -1060,20 +1387,19 @@ impl MemoryConfig {
         if self.reserve_bytes >= self.max_bytes {
             return Err(ConfigurationError::InvalidValue {
                 field: "memory.reserve_bytes",
-                reason: "reserve must be smaller than maximum memory",
+                reason: "reserve must be smaller than memory budget",
             });
         }
 
         if !self.bounded_buffers {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "production QEC configuration requires bounded buffers".to_string(),
+                "production QEC requires bounded buffers",
             ));
         }
 
         if !self.fail_on_budget_exhaustion {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "production QEC configuration must fail safely on memory exhaustion"
-                    .to_string(),
+                "memory exhaustion must fail safely",
             ));
         }
 
@@ -1088,7 +1414,10 @@ pub enum EvictionPolicy {
     LeastFrequentlyUsed,
 }
 
-/// Cache configuration.
+// ============================================================================
+// Cache
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CacheConfig {
     pub enabled: bool,
@@ -1120,16 +1449,26 @@ impl Default for CacheConfig {
 
 impl CacheConfig {
     pub fn validate(&self) -> ConfigurationResult<()> {
-        if self.enabled && self.max_bytes == 0 {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        if self.max_bytes == 0 {
             return Err(ConfigurationError::InvalidValue {
                 field: "cache.max_bytes",
-                reason: "must be greater than zero when caching is enabled",
+                reason: "must be greater than zero",
             });
         }
 
-        if self.enabled && !self.recompute_on_corruption {
+        if !self.verify_integrity {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "cache corruption must trigger discard/recomputation".to_string(),
+                "QEC cache integrity verification cannot be disabled",
+            ));
+        }
+
+        if !self.recompute_on_corruption {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "corrupt cache entries must be discarded and recomputed",
             ));
         }
 
@@ -1137,7 +1476,10 @@ impl CacheConfig {
     }
 }
 
-/// Telemetry configuration.
+// ============================================================================
+// Telemetry
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TelemetryConfig {
     pub enabled: bool,
@@ -1170,12 +1512,11 @@ impl Default for TelemetryConfig {
 impl TelemetryConfig {
     pub fn validate(&self) -> ConfigurationResult<()> {
         if !self.sampling_rate.is_finite()
-            || self.sampling_rate < 0.0
-            || self.sampling_rate > 1.0
+            || !(0.0..=1.0).contains(&self.sampling_rate)
         {
             return Err(ConfigurationError::InvalidValue {
                 field: "telemetry.sampling_rate",
-                reason: "sampling rate must be finite and between zero and one",
+                reason: "must be finite and between zero and one",
             });
         }
 
@@ -1190,7 +1531,10 @@ impl TelemetryConfig {
     }
 }
 
-/// Security configuration.
+// ============================================================================
+// Security
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SecurityConfig {
     pub validate_external_input: bool,
@@ -1226,25 +1570,37 @@ impl SecurityConfig {
     pub fn validate(&self) -> ConfigurationResult<()> {
         if !self.validate_external_input {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "external QEC configuration validation cannot be disabled".to_string(),
+                "external configuration validation cannot be disabled",
             ));
         }
 
         if !self.reject_malformed_input {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "malformed QEC input must be rejected".to_string(),
+                "malformed input must be rejected",
             ));
         }
 
         if !self.reject_resource_bombs {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "resource-bomb protection cannot be disabled".to_string(),
+                "resource-bomb protection cannot be disabled",
             ));
         }
 
         if !self.require_encrypted_transport {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "encrypted transport is required for production QEC".to_string(),
+                "encrypted transport is required for production QEC",
+            ));
+        }
+
+        if !self.protect_sensitive_metadata {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "sensitive metadata protection cannot be disabled",
+            ));
+        }
+
+        if !self.audit_capability_usage {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "capability auditing cannot be disabled",
             ));
         }
 
@@ -1252,10 +1608,15 @@ impl SecurityConfig {
     }
 }
 
+// ============================================================================
+// Capability requirements
+// ============================================================================
+
 /// Capability requirements.
 ///
-/// These are requirements, not grants. Actual authorization belongs to the
-/// capability subsystem.
+/// These booleans express what the workload needs. They are not authority.
+/// The actual `CapabilitySet`/grant machinery in `capabilities.rs` must still
+/// authorize the operation.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CapabilityConfig {
     pub decode: bool,
@@ -1265,7 +1626,19 @@ pub struct CapabilityConfig {
     pub allocate_memory: bool,
     pub accelerator: bool,
     pub distributed_execution: bool,
-    pub qpu_execution: bool,
+    pub streaming_syndrome: bool,
+    pub checkpoint: bool,
+    pub deterministic_execution: bool,
+    pub read_metrics: bool,
+    pub emit_telemetry: bool,
+    pub parallel_execution: bool,
+    pub qpu_access: bool,
+    pub qpu_inspect: bool,
+    pub qpu_submit: bool,
+    pub qpu_read_results: bool,
+    pub qpu_calibration: bool,
+    pub qpu_error_correction: bool,
+    pub qpu_syndrome_extraction: bool,
     pub remote_execution: bool,
 }
 
@@ -1279,7 +1652,21 @@ impl Default for CapabilityConfig {
             allocate_memory: true,
             accelerator: false,
             distributed_execution: false,
-            qpu_execution: false,
+            streaming_syndrome: true,
+            checkpoint: true,
+            deterministic_execution: false,
+            read_metrics: true,
+            emit_telemetry: true,
+            parallel_execution: true,
+
+            qpu_access: false,
+            qpu_inspect: false,
+            qpu_submit: false,
+            qpu_read_results: false,
+            qpu_calibration: false,
+            qpu_error_correction: false,
+            qpu_syndrome_extraction: false,
+
             remote_execution: false,
         }
     }
@@ -1287,87 +1674,72 @@ impl Default for CapabilityConfig {
 
 impl CapabilityConfig {
     pub fn validate(&self) -> ConfigurationResult<()> {
-        if self.qpu_execution && !self.allocate_memory {
-            return Err(ConfigurationError::InvalidValue {
-                field: "capabilities.allocate_memory",
-                reason: "QPU execution requires resource-management capability",
+        if self.qpu_submit && !self.qpu_access {
+            return Err(ConfigurationError::CapabilityDependency {
+                capability: "qec.qpu_submit",
+                requires: "qec.qpu_access",
             });
         }
 
-        if self.remote_execution && !self.qpu_execution {
-            // Remote execution may eventually be used by non-QPU backends,
-            // but it must be explicitly represented by the backend/security
-            // layer before being enabled.
+        if self.qpu_read_results && !self.qpu_access {
+            return Err(ConfigurationError::CapabilityDependency {
+                capability: "qec.qpu_read_results",
+                requires: "qec.qpu_access",
+            });
+        }
+
+        if self.qpu_calibration && !self.qpu_inspect {
+            return Err(ConfigurationError::CapabilityDependency {
+                capability: "qec.qpu_calibration",
+                requires: "qec.qpu_inspect",
+            });
+        }
+
+        if self.qpu_error_correction
+            && !self.qpu_syndrome_extraction
+        {
+            return Err(ConfigurationError::CapabilityDependency {
+                capability: "qec.qpu_error_correction",
+                requires: "qec.qpu_syndrome_extraction",
+            });
+        }
+
+        if self.remote_execution && !self.qpu_access {
+            return Err(ConfigurationError::CapabilityDependency {
+                capability: "remote execution",
+                requires: "qec.qpu_access",
+            });
         }
 
         Ok(())
     }
 }
 
-/// Production QPU configuration.
-///
-/// This configuration is intentionally vendor-neutral. Vendor-specific
-/// credentials, SDK handles, network clients, and private authentication
-/// material must remain outside persistent QEC configuration.
+// ============================================================================
+// QPU
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct QpuConfig {
     pub enabled: bool,
-
-    /// Hardware adapter identifier.
     pub adapter: QpuAdapter,
-
-    /// Device identifier supplied by the adapter.
     pub device_id: Option<String>,
-
-    /// Number of shots requested for a circuit.
     pub shots: u64,
-
-    /// Maximum circuits submitted by one QEC operation.
     pub max_circuits: u64,
-
-    /// Whether the adapter must verify that calibration data is available.
     pub verify_calibration: bool,
-
-    /// Optional calibration epoch/version required by the workload.
     pub required_calibration_epoch: Option<String>,
-
-    /// Reset qubits before execution.
     pub reset_before_run: bool,
-
-    /// Readout strategy.
     pub readout_mode: QpuReadoutMode,
-
-    /// QPU measurement timeout.
     pub measurement_timeout_ms: u64,
-
-    /// Queue/admission timeout.
     pub queue_timeout_ms: u64,
-
-    /// Hardware execution policy.
     pub execution_policy: QpuExecutionPolicy,
-
-    /// Connectivity model.
     pub connectivity: QpuConnectivity,
-
-    /// QPU error model.
     pub error_model: QpuErrorModel,
-
-    /// Permit remote hardware.
     pub allow_remote: bool,
-
-    /// Require hardware-level authentication.
     pub require_authenticated_device: bool,
-
-    /// Require encrypted communication.
     pub require_encrypted_transport: bool,
-
-    /// Permit software simulation fallback.
     pub allow_simulator_fallback: bool,
-
-    /// Require the QPU result to be verified before being accepted.
     pub verify_results: bool,
-
-    /// Maximum number of concurrent QPU jobs.
     pub max_in_flight_jobs: u32,
 }
 
@@ -1379,18 +1751,26 @@ impl Default for QpuConfig {
             device_id: None,
             shots: 1_024,
             max_circuits: 1,
+
             verify_calibration: true,
             required_calibration_epoch: None,
+
             reset_before_run: true,
             readout_mode: QpuReadoutMode::Counts,
+
             measurement_timeout_ms: 60_000,
             queue_timeout_ms: 300_000,
-            execution_policy: QpuExecutionPolicy::RejectIfUnavailable,
+
+            execution_policy:
+                QpuExecutionPolicy::RejectIfUnavailable,
+
             connectivity: QpuConnectivity::HardwareDefined,
             error_model: QpuErrorModel::HardwareReported,
+
             allow_remote: false,
             require_authenticated_device: true,
             require_encrypted_transport: true,
+
             allow_simulator_fallback: false,
             verify_results: true,
             max_in_flight_jobs: 1,
@@ -1409,14 +1789,14 @@ impl QpuConfig {
         if device_id.is_empty() {
             return Err(ConfigurationError::InvalidValue {
                 field: "qpu.device_id",
-                reason: "enabled QPU execution requires an explicit device ID",
+                reason: "enabled QPU execution requires a device ID",
             });
         }
 
         if self.shots == 0 || self.shots > MAX_QPU_SHOTS {
             return Err(ConfigurationError::InvalidValue {
                 field: "qpu.shots",
-                reason: "QPU shots are outside the supported safety range",
+                reason: "QPU shot count is outside supported bounds",
             });
         }
 
@@ -1444,23 +1824,25 @@ impl QpuConfig {
             self.queue_timeout_ms,
         )?;
 
-        if self.allow_remote && !self.require_encrypted_transport {
+        if self.allow_remote
+            && !self.require_authenticated_device
+        {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "remote QPU execution requires encrypted transport".to_string(),
+                "remote QPU requires authenticated device",
             ));
         }
 
-        if self.allow_remote && !self.require_authenticated_device {
+        if self.allow_remote
+            && !self.require_encrypted_transport
+        {
             return Err(ConfigurationError::SecurityPolicyViolation(
-                "remote QPU execution requires authenticated devices".to_string(),
+                "remote QPU requires encrypted transport",
             ));
         }
 
         if self.allow_simulator_fallback
-            && matches!(
-                self.execution_policy,
-                QpuExecutionPolicy::RequireHardware
-            )
+            && self.execution_policy
+                == QpuExecutionPolicy::RequireHardware
         {
             return Err(ConfigurationError::InvalidValue {
                 field: "qpu.allow_simulator_fallback",
@@ -1468,11 +1850,16 @@ impl QpuConfig {
             });
         }
 
+        if self.verify_results == false {
+            return Err(ConfigurationError::SecurityPolicyViolation(
+                "QPU result verification cannot be disabled",
+            ));
+        }
+
         Ok(())
     }
 }
 
-/// Vendor-neutral QPU adapter selection.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum QpuAdapter {
     Custom,
@@ -1486,7 +1873,6 @@ pub enum QpuAdapter {
     TrappedIon,
 }
 
-/// QPU execution availability policy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum QpuExecutionPolicy {
     RequireHardware,
@@ -1494,7 +1880,6 @@ pub enum QpuExecutionPolicy {
     AllowSimulatorFallback,
 }
 
-/// QPU readout representation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum QpuReadoutMode {
     Counts,
@@ -1503,7 +1888,6 @@ pub enum QpuReadoutMode {
     RawBitstrings,
 }
 
-/// QPU physical connectivity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum QpuConnectivity {
     HardwareDefined,
@@ -1514,7 +1898,6 @@ pub enum QpuConnectivity {
     Custom,
 }
 
-/// QPU error-model source.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum QpuErrorModel {
     HardwareReported,
@@ -1523,44 +1906,95 @@ pub enum QpuErrorModel {
     None,
 }
 
-/// Configuration errors.
-///
-/// These are intentionally configuration-focused. The future `errors.rs`
-/// module can map these into the global `QecError` hierarchy.
+// ============================================================================
+// Errors
+// ============================================================================
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConfigurationError {
     InvalidValue {
         field: &'static str,
         reason: &'static str,
     },
+
     UnsupportedSchemaVersion {
         expected: u32,
         found: u32,
     },
+
     BackendRequiresQpu,
-    SecurityPolicyViolation(String),
+
+    CapabilityRequired {
+        capability: &'static str,
+    },
+
+    CapabilityDependency {
+        capability: &'static str,
+        requires: &'static str,
+    },
+
+    SecurityPolicyViolation(&'static str),
+
+    LimitPolicy(super::limits::LimitError),
 }
 
 impl fmt::Display for ConfigurationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::InvalidValue { field, reason } => {
-                write!(formatter, "invalid configuration field `{field}`: {reason}")
-            }
-
-            Self::UnsupportedSchemaVersion { expected, found } => {
                 write!(
                     formatter,
-                    "unsupported configuration schema version: expected {expected}, found {found}"
+                    "invalid configuration field `{field}`: {reason}"
+                )
+            }
+
+            Self::UnsupportedSchemaVersion {
+                expected,
+                found,
+            } => {
+                write!(
+                    formatter,
+                    "unsupported configuration schema version: \
+                     expected {expected}, found {found}"
                 )
             }
 
             Self::BackendRequiresQpu => {
-                write!(formatter, "selected backend requires QPU configuration")
+                write!(
+                    formatter,
+                    "selected backend requires QPU configuration"
+                )
+            }
+
+            Self::CapabilityRequired { capability } => {
+                write!(
+                    formatter,
+                    "required capability is not configured: {capability}"
+                )
+            }
+
+            Self::CapabilityDependency {
+                capability,
+                requires,
+            } => {
+                write!(
+                    formatter,
+                    "capability `{capability}` requires `{requires}`"
+                )
             }
 
             Self::SecurityPolicyViolation(reason) => {
-                write!(formatter, "security policy violation: {reason}")
+                write!(
+                    formatter,
+                    "security policy violation: {reason}"
+                )
+            }
+
+            Self::LimitPolicy(error) => {
+                write!(formatter, "invalid QEC resource policy: {error}")
             }
         }
     }
@@ -1568,16 +2002,9 @@ impl fmt::Display for ConfigurationError {
 
 impl std::error::Error for ConfigurationError {}
 
-fn check_nonzero(field: &'static str, value: u64) -> ConfigurationResult<()> {
-    if value == 0 {
-        return Err(ConfigurationError::InvalidValue {
-            field,
-            reason: "value must be greater than zero",
-        });
-    }
-
-    Ok(())
-}
+// ============================================================================
+// Helpers
+// ============================================================================
 
 fn validate_finite_nonnegative(
     field: &'static str,
@@ -1607,12 +2034,16 @@ fn validate_timeout(
     if value > MAX_TIMEOUT_MS {
         return Err(ConfigurationError::InvalidValue {
             field,
-            reason: "timeout exceeds hard safety ceiling",
+            reason: "timeout exceeds configuration safety ceiling",
         });
     }
 
     Ok(())
 }
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -1620,28 +2051,63 @@ mod tests {
 
     #[test]
     fn production_configuration_is_valid() {
-        let config = QecConfig::production();
-        assert!(config.validate().is_ok());
+        assert!(QecConfig::production().validate().is_ok());
     }
 
     #[test]
     fn deterministic_configuration_is_valid() {
-        let config = QecConfig::deterministic_test();
-        assert!(config.validate().is_ok());
+        assert!(QecConfig::deterministic_test().validate().is_ok());
     }
 
     #[test]
-    fn zero_memory_is_rejected() {
+    fn invalid_schema_is_rejected() {
         let mut config = QecConfig::production();
+        config.schema_version += 1;
+
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigurationError::UnsupportedSchemaVersion { .. })
+        ));
+    }
+
+    #[test]
+    fn invalid_resource_policy_is_rejected() {
+        let mut config = QecConfig::production();
+
         config.limits.max_memory_bytes = 0;
+
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigurationError::LimitPolicy(_))
+        ));
+    }
+
+    #[test]
+    fn memory_cannot_exceed_canonical_limit() {
+        let mut config = QecConfig::production();
+
+        config.memory.max_bytes =
+            config.limits.max_memory_bytes.saturating_add(1);
 
         assert!(config.validate().is_err());
     }
 
     #[test]
-    fn memory_budget_cannot_exceed_global_limit() {
+    fn decoder_cannot_exceed_canonical_iteration_limit() {
         let mut config = QecConfig::production();
-        config.memory.max_bytes = config.limits.max_memory_bytes + 1;
+
+        config.decoder.max_iterations =
+            config.limits.max_decoder_iterations as u64 + 1;
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn deterministic_mode_requires_capability() {
+        let mut config = QecConfig::production();
+
+        config.determinism.enabled = true;
+        config.capabilities.deterministic_execution = false;
 
         assert!(config.validate().is_err());
     }
@@ -1651,13 +2117,14 @@ mod tests {
         let mut config = QecConfig::production();
 
         config.determinism.enabled = true;
-        config.parallelism.deterministic_reductions = false;
+        config.capabilities.deterministic_execution = true;
+        config.determinism.deterministic_reductions = false;
 
         assert!(config.validate().is_err());
     }
 
     #[test]
-    fn distributed_execution_requires_partitioning() {
+    fn distributed_requires_partitioning() {
         let mut config = QecConfig::production();
 
         config.distributed.enabled = true;
@@ -1667,7 +2134,19 @@ mod tests {
     }
 
     #[test]
-    fn distributed_execution_requires_encryption() {
+    fn distributed_requires_authentication() {
+        let mut config = QecConfig::production();
+
+        config.partitioning.enabled = true;
+        config.distributed.enabled = true;
+        config.capabilities.distributed_execution = true;
+        config.distributed.require_authenticated_workers = false;
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn distributed_requires_encryption() {
         let mut config = QecConfig::production();
 
         config.partitioning.enabled = true;
@@ -1679,83 +2158,106 @@ mod tests {
     }
 
     #[test]
-    fn qpu_requires_explicit_capability() {
+    fn qpu_requires_qpu_backend() {
         let mut config = QecConfig::production();
 
-        config.backend.kind = BackendKind::Qpu;
-        config.backend.device_id = Some("qpu-0".to_string());
         config.qpu.enabled = true;
-        config.qpu.device_id = Some("qpu-0".to_string());
+        config.qpu.device_id = Some("qpu-0".into());
+        config.backend.kind = BackendKind::Cpu;
 
         assert!(config.validate().is_err());
     }
 
     #[test]
-    fn qpu_configuration_can_be_enabled_safely() {
+    fn qpu_requires_capability_chain() {
         let mut config = QecConfig::production();
 
         config.backend.kind = BackendKind::Qpu;
-        config.backend.device_id = Some("qpu-0".to_string());
-
-        config.capabilities.qpu_execution = true;
+        config.backend.device_id = Some("qpu-0".into());
+        config.backend.require_hardware = true;
 
         config.qpu.enabled = true;
-        config.qpu.device_id = Some("qpu-0".to_string());
-        config.qpu.shots = 10_000;
+        config.qpu.device_id = Some("qpu-0".into());
+
+        // Intentionally missing QPU capabilities.
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn qpu_configuration_can_be_authorized() {
+        let mut config = QecConfig::production();
+
+        config.backend.kind = BackendKind::Qpu;
+        config.backend.device_id = Some("qpu-0".into());
+        config.backend.require_hardware = true;
+
+        config.capabilities.qpu_access = true;
+        config.capabilities.qpu_submit = true;
+        config.capabilities.qpu_read_results = true;
+        config.capabilities.qpu_inspect = true;
+        config.capabilities.qpu_calibration = true;
+
+        config.qpu.enabled = true;
+        config.qpu.device_id = Some("qpu-0".into());
 
         assert!(config.validate().is_ok());
     }
 
     #[test]
-    fn remote_qpu_requires_security_policy() {
+    fn qpu_shot_limit_is_enforced() {
         let mut config = QecConfig::production();
 
         config.backend.kind = BackendKind::Qpu;
-        config.backend.device_id = Some("remote-qpu".to_string());
+        config.backend.device_id = Some("qpu-0".into());
+        config.backend.require_hardware = true;
 
-        config.capabilities.qpu_execution = true;
+        config.capabilities.qpu_access = true;
+        config.capabilities.qpu_submit = true;
+        config.capabilities.qpu_read_results = true;
+        config.capabilities.qpu_inspect = true;
+        config.capabilities.qpu_calibration = true;
+
         config.qpu.enabled = true;
-        config.qpu.device_id = Some("remote-qpu".to_string());
+        config.qpu.device_id = Some("qpu-0".into());
+
+        config.qpu.shots =
+            config.limits.max_qpu_shots.saturating_add(1);
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn remote_qpu_requires_remote_policy() {
+        let mut config = QecConfig::production();
+
+        config.backend.kind = BackendKind::Qpu;
+        config.backend.device_id = Some("remote-qpu".into());
+        config.backend.require_hardware = true;
+
+        config.capabilities.qpu_access = true;
+        config.capabilities.qpu_submit = true;
+        config.capabilities.qpu_read_results = true;
+        config.capabilities.qpu_inspect = true;
+        config.capabilities.qpu_calibration = true;
+
+        config.qpu.enabled = true;
+        config.qpu.device_id = Some("remote-qpu".into());
         config.qpu.allow_remote = true;
 
         assert!(config.validate().is_err());
     }
 
     #[test]
-    fn qpu_shot_bomb_is_rejected() {
+    fn cache_integrity_cannot_be_disabled() {
         let mut config = QecConfig::production();
 
-        config.backend.kind = BackendKind::Qpu;
-        config.backend.device_id = Some("qpu-0".to_string());
-
-        config.capabilities.qpu_execution = true;
-        config.qpu.enabled = true;
-        config.qpu.device_id = Some("qpu-0".to_string());
-        config.qpu.shots = MAX_QPU_SHOTS + 1;
+        config.cache.verify_integrity = false;
 
         assert!(config.validate().is_err());
     }
 
     #[test]
-    fn invalid_probability_epsilon_is_rejected() {
-        let mut config = QecConfig::production();
-        config.numerical.probability_epsilon = f64::NAN;
-
-        assert!(config.validate().is_err());
-    }
-
-    #[test]
-    fn malformed_streaming_configuration_is_rejected() {
-        let mut config = QecConfig::production();
-
-        config.streaming.enabled = true;
-        config.streaming.batch_size = 0;
-
-        assert!(config.validate().is_err());
-    }
-
-    #[test]
-    fn cache_corruption_must_be_recoverable() {
+    fn corrupt_cache_must_be_recomputable() {
         let mut config = QecConfig::production();
 
         config.cache.recompute_on_corruption = false;
@@ -1764,45 +2266,38 @@ mod tests {
     }
 
     #[test]
-    fn configuration_round_trips_through_json() {
+    fn json_round_trip_preserves_configuration() {
         let config = QecConfig::production();
 
-        let serialized =
-            serde_json::to_string(&config).expect("configuration should serialize");
+        let encoded =
+            serde_json::to_string(&config)
+                .expect("configuration should serialize");
 
-        let restored: QecConfig =
-            serde_json::from_str(&serialized).expect("configuration should deserialize");
+        let decoded: QecConfig =
+            serde_json::from_str(&encoded)
+                .expect("configuration should deserialize");
 
-        assert_eq!(config, restored);
-        assert!(restored.validate().is_ok());
+        assert_eq!(config, decoded);
+        assert!(decoded.validate().is_ok());
     }
 
     #[test]
-    fn schema_version_is_checked() {
-        let mut config = QecConfig::production();
-        config.schema_version += 1;
-
-        match config.validate() {
-            Err(ConfigurationError::UnsupportedSchemaVersion { .. }) => {}
-            other => panic!("unexpected validation result: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn qpu_hybrid_requires_accelerator_capability() {
+    fn qpu_result_verification_cannot_be_disabled() {
         let mut config = QecConfig::production();
 
-        config.backend.kind = BackendKind::QpuHybrid;
-        config.capabilities.accelerator = false;
+        config.backend.kind = BackendKind::Qpu;
+        config.backend.device_id = Some("qpu-0".into());
+        config.backend.require_hardware = true;
 
-        assert!(config.validate().is_err());
-    }
+        config.capabilities.qpu_access = true;
+        config.capabilities.qpu_submit = true;
+        config.capabilities.qpu_read_results = true;
+        config.capabilities.qpu_inspect = true;
+        config.capabilities.qpu_calibration = true;
 
-    #[test]
-    fn memory_reserve_cannot_equal_budget() {
-        let mut config = QecConfig::production();
-
-        config.memory.reserve_bytes = config.memory.max_bytes;
+        config.qpu.enabled = true;
+        config.qpu.device_id = Some("qpu-0".into());
+        config.qpu.verify_results = false;
 
         assert!(config.validate().is_err());
     }
