@@ -2,67 +2,97 @@
 //!
 //! This module is the canonical public error boundary for the QEC subsystem.
 //!
-//! Architectural rule:
+//! # Architectural contract
 //!
 //! ```text
-//!                    UNTRUSTED INPUT
-//!                          │
-//!                          ▼
-//!                    VALIDATION
-//!                          │
-//!                          ▼
-//!                 MODULE-SPECIFIC ERROR
-//!                          │
-//!                          ▼
-//!                      QecError
-//!                          │
-//!          ┌───────────────┼────────────────┐
-//!          ▼               ▼                ▼
-//!       caller          telemetry        recovery
+//! untrusted input
+//!       │
+//!       ▼
+//!   validation
+//!       │
+//!       ▼
+//! module-specific error
+//!       │
+//!       ▼
+//!    QecError
+//!       │
+//!   ┌───┼──────────────┐
+//!   ▼   ▼              ▼
+//! caller telemetry   recovery
 //! ```
 //!
-//! Individual implementation modules may retain specialized internal error
-//! types when that improves local diagnostics. Public/high-level APIs should
-//! convert those errors into `QecError`.
+//! `errors.rs` owns error representation and classification.
+//! It does not own resource policy, allocation, cancellation state,
+//! authorization, configuration, telemetry transport, or decoder policy.
 //!
-//! Design goals:
+//! # Design goals
 //!
-//! - No panic-based validation.
-//! - Stable machine-readable error classification.
-//! - Human-readable diagnostics.
-//! - Explicit resource-limit failures.
-//! - Explicit memory and time failures.
-//! - Explicit cancellation.
-//! - Explicit decoder failures.
-//! - Explicit numerical failures.
-//! - Safe handling of malformed/untrusted input.
-//! - Deterministic classification.
-//! - Compatibility with `Result<T, QecError>`.
-//! - No dependence on diagnostic strings for programmatic recovery.
+//! - deterministic machine-readable classification;
+//! - stable error codes;
+//! - human-readable diagnostics;
+//! - explicit resource exhaustion;
+//! - explicit memory exhaustion;
+//! - explicit time/deadline exhaustion;
+//! - explicit cancellation;
+//! - explicit capability denial;
+//! - explicit version incompatibility;
+//! - explicit checkpoint/cache failures;
+//! - explicit backend/QPU failures;
+//! - explicit numerical failures;
+//! - safe conversion of lower-level errors;
+//! - no panic-based validation;
+//! - no dependency on diagnostic strings for recovery logic;
+//! - compatibility with Rust 1.97.1.
 //!
-//! `QecError` intentionally does not own the resource policy itself.
-//! Resource policy belongs to the limits/resource-management layers.
-//! This module only provides the canonical error representation.
+//! # Integration
+//!
+//! Foundation modules may remain independent from this module when required
+//! to avoid dependency cycles. In particular:
+//!
+//! ```text
+//! arithmetic.rs
+//!      │
+//!      └── ArithmeticError
+//!              │
+//!              ▼
+//!       higher-level boundary
+//!              │
+//!              ▼
+//!          QecError
+//! ```
+//!
+//! `limits.rs`, `memory.rs`, `resources.rs`, `cancellation.rs`,
+//! `validation.rs`, decoders, checkpointing, caching, distributed execution,
+//! and QPU execution may use `QecError` directly.
+//!
+//! # Rust compatibility
+//!
+//! This file intentionally uses only stable standard-library facilities
+//! available to the repository's pinned Rust 1.97.1 toolchain.
 
 use core::fmt;
 use std::error::Error;
 use std::time::Duration;
 
 // ============================================================================
-// Result
+// Canonical result
 // ============================================================================
 
 /// Canonical result type for public QEC APIs.
 pub type QecResult<T> = Result<T, QecError>;
 
 // ============================================================================
-// QecError
+// Canonical error
 // ============================================================================
 
 /// Canonical error returned by the Quantum Error Correction subsystem.
+///
+/// Variants are intentionally explicit. Callers should use [`QecError::kind`]
+/// or [`QecError::code`] for programmatic handling rather than parsing
+/// diagnostic strings.
 #[derive(Debug, Clone, PartialEq)]
 pub enum QecError {
-    /// Generic invalid external or user-provided input.
+    /// Generic malformed or invalid caller input.
     InvalidInput {
         message: String,
     },
@@ -72,7 +102,7 @@ pub enum QecError {
         message: String,
     },
 
-    /// Invalid stabilizer definition or stabilizer algebra.
+    /// Invalid stabilizer definition or algebraic state.
     InvalidStabilizer {
         message: String,
     },
@@ -87,13 +117,13 @@ pub enum QecError {
         message: String,
     },
 
-    /// Probability is outside the mathematically valid domain.
+    /// Probability outside the valid mathematical domain.
     InvalidProbability {
         probability: f64,
         message: String,
     },
 
-    /// A configured QEC resource limit was exceeded.
+    /// A configured non-memory resource limit was exceeded.
     ResourceLimitExceeded {
         resource: ResourceKind,
         requested: u128,
@@ -102,7 +132,7 @@ pub enum QecError {
         message: String,
     },
 
-    /// A memory-specific resource limit was exceeded.
+    /// A memory-specific limit was exceeded.
     MemoryLimitExceeded {
         requested_bytes: u64,
         current_bytes: u64,
@@ -110,15 +140,22 @@ pub enum QecError {
         message: String,
     },
 
-    /// A time/deadline limit was exceeded.
+    /// A time or deadline limit was exceeded.
     TimeLimitExceeded {
         elapsed_nanos: u64,
         limit_nanos: u64,
         message: String,
     },
 
-    /// The operation was explicitly cancelled.
+    /// Cooperative cancellation was requested.
     CancellationRequested {
+        message: String,
+    },
+
+    /// A required capability was not granted.
+    CapabilityDenied {
+        capability: String,
+        operation: String,
         message: String,
     },
 
@@ -128,22 +165,57 @@ pub enum QecError {
         message: String,
     },
 
-    /// A numerical operation produced an unsafe or invalid result.
+    /// A numerical operation could not be completed safely.
     NumericalFailure {
         operation: NumericalOperation,
         message: String,
     },
 
-    /// The requested configuration or capability is unsupported.
+    /// A requested feature or configuration is unsupported.
     UnsupportedConfiguration {
         feature: String,
         message: String,
     },
 
-    /// An internal implementation invariant was violated.
+    /// A version/schema compatibility check failed.
+    VersionMismatch {
+        component: String,
+        expected: String,
+        actual: String,
+        message: String,
+    },
+
+    /// A checkpoint was structurally invalid.
+    CheckpointInvalid {
+        message: String,
+    },
+
+    /// A checkpoint failed integrity validation.
+    CheckpointCorrupt {
+        message: String,
+    },
+
+    /// A cache entry failed validation.
+    CacheInvalid {
+        message: String,
+    },
+
+    /// A classical backend failed.
+    BackendFailure {
+        backend: String,
+        message: String,
+    },
+
+    /// A QPU operation failed.
+    QpuFailure {
+        backend: String,
+        operation: String,
+        message: String,
+    },
+
+    /// An internal invariant was violated.
     ///
-    /// This represents a programming defect rather than malformed input.
-    /// It must not be used as a substitute for normal validation.
+    /// This represents a software defect, not normal malformed input.
     InternalInvariantViolation {
         invariant: String,
         message: String,
@@ -151,51 +223,68 @@ pub enum QecError {
 }
 
 // ============================================================================
-// ResourceKind
+// Resource classification
 // ============================================================================
 
-/// Canonical high-level resource dimensions understood by the QEC policy.
+/// Canonical resource dimensions understood by QEC resource policy.
+///
+/// `limits.rs` owns policy. `resources.rs` owns runtime accounting.
+/// `errors.rs` only identifies the resource associated with a failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ResourceKind {
     CodeDistance,
     Qubits,
     Stabilizers,
+    StabilizerWeight,
     SyndromeEvents,
     MeasurementRounds,
     GraphNodes,
     GraphEdges,
     DecoderIterations,
+    DecoderOperations,
     Parallelism,
-    CheckpointSize,
+    Workers,
     MemoryBytes,
+    CheckpointSize,
+    Checkpoints,
     QpuShots,
     QpuCircuits,
-    AllocationCount,
+    Allocations,
     Partitions,
     StreamBuffer,
+    LogicalWeight,
+    Operations,
+    Time,
     Custom,
 }
 
 impl ResourceKind {
-    /// Stable machine-readable resource identifier.
+    /// Stable machine-readable identifier.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::CodeDistance => "code_distance",
             Self::Qubits => "qubits",
             Self::Stabilizers => "stabilizers",
+            Self::StabilizerWeight => "stabilizer_weight",
             Self::SyndromeEvents => "syndrome_events",
             Self::MeasurementRounds => "measurement_rounds",
             Self::GraphNodes => "graph_nodes",
             Self::GraphEdges => "graph_edges",
             Self::DecoderIterations => "decoder_iterations",
+            Self::DecoderOperations => "decoder_operations",
             Self::Parallelism => "parallelism",
-            Self::CheckpointSize => "checkpoint_size",
+            Self::Workers => "workers",
             Self::MemoryBytes => "memory_bytes",
+            Self::CheckpointSize => "checkpoint_size",
+            Self::Checkpoints => "checkpoints",
             Self::QpuShots => "qpu_shots",
             Self::QpuCircuits => "qpu_circuits",
-            Self::AllocationCount => "allocation_count",
+            Self::Allocations => "allocations",
             Self::Partitions => "partitions",
             Self::StreamBuffer => "stream_buffer",
+            Self::LogicalWeight => "logical_weight",
+            Self::Operations => "operations",
+            Self::Time => "time",
             Self::Custom => "custom",
         }
     }
@@ -208,10 +297,12 @@ impl fmt::Display for ResourceKind {
 }
 
 // ============================================================================
-// DecoderKind
+// Decoder classification
 // ============================================================================
 
 /// Decoder responsible for a decoding failure.
+///
+/// This is descriptive classification, not decoder authorization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DecoderKind {
     SurfaceCode,
@@ -222,11 +313,12 @@ pub enum DecoderKind {
     LookupTable,
     Streaming,
     Distributed,
+    Identity,
     Custom,
 }
 
 impl DecoderKind {
-    /// Stable machine-readable decoder identifier.
+    /// Stable machine-readable identifier.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::SurfaceCode => "surface_code",
@@ -237,6 +329,7 @@ impl DecoderKind {
             Self::LookupTable => "lookup_table",
             Self::Streaming => "streaming",
             Self::Distributed => "distributed",
+            Self::Identity => "identity",
             Self::Custom => "custom",
         }
     }
@@ -249,10 +342,12 @@ impl fmt::Display for DecoderKind {
 }
 
 // ============================================================================
-// NumericalOperation
+// Numerical classification
 // ============================================================================
 
 /// Numerical operation associated with a numerical failure.
+///
+/// This intentionally matches the responsibilities of `arithmetic.rs`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NumericalOperation {
     ProbabilityValidation,
@@ -262,6 +357,14 @@ pub enum NumericalOperation {
     CoordinateCalculation,
     IntegerConversion,
     FloatingPointConversion,
+    Addition,
+    Subtraction,
+    Multiplication,
+    Division,
+    Exponentiation,
+    Combination,
+    MemorySizeCalculation,
+    IndexCalculation,
     Accumulation,
     Normalization,
     MatchingWeight,
@@ -273,7 +376,7 @@ pub enum NumericalOperation {
 }
 
 impl NumericalOperation {
-    /// Stable machine-readable operation identifier.
+    /// Stable machine-readable identifier.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ProbabilityValidation => "probability_validation",
@@ -283,6 +386,14 @@ impl NumericalOperation {
             Self::CoordinateCalculation => "coordinate_calculation",
             Self::IntegerConversion => "integer_conversion",
             Self::FloatingPointConversion => "floating_point_conversion",
+            Self::Addition => "addition",
+            Self::Subtraction => "subtraction",
+            Self::Multiplication => "multiplication",
+            Self::Division => "division",
+            Self::Exponentiation => "exponentiation",
+            Self::Combination => "combination",
+            Self::MemorySizeCalculation => "memory_size_calculation",
+            Self::IndexCalculation => "index_calculation",
             Self::Accumulation => "accumulation",
             Self::Normalization => "normalization",
             Self::MatchingWeight => "matching_weight",
@@ -302,12 +413,12 @@ impl fmt::Display for NumericalOperation {
 }
 
 // ============================================================================
-// Error classification
+// Stable error kind
 // ============================================================================
 
 /// Stable high-level error category.
 ///
-/// Callers should use this instead of matching human-readable strings.
+/// Use this enum for control flow and recovery decisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum QecErrorKind {
     InvalidInput,
@@ -320,9 +431,16 @@ pub enum QecErrorKind {
     MemoryLimitExceeded,
     TimeLimitExceeded,
     CancellationRequested,
+    CapabilityDenied,
     DecoderFailure,
     NumericalFailure,
     UnsupportedConfiguration,
+    VersionMismatch,
+    CheckpointInvalid,
+    CheckpointCorrupt,
+    CacheInvalid,
+    BackendFailure,
+    QpuFailure,
     InternalInvariantViolation,
 }
 
@@ -340,9 +458,16 @@ impl QecErrorKind {
             Self::MemoryLimitExceeded => "memory_limit_exceeded",
             Self::TimeLimitExceeded => "time_limit_exceeded",
             Self::CancellationRequested => "cancellation_requested",
+            Self::CapabilityDenied => "capability_denied",
             Self::DecoderFailure => "decoder_failure",
             Self::NumericalFailure => "numerical_failure",
             Self::UnsupportedConfiguration => "unsupported_configuration",
+            Self::VersionMismatch => "version_mismatch",
+            Self::CheckpointInvalid => "checkpoint_invalid",
+            Self::CheckpointCorrupt => "checkpoint_corrupt",
+            Self::CacheInvalid => "cache_invalid",
+            Self::BackendFailure => "backend_failure",
+            Self::QpuFailure => "qpu_failure",
             Self::InternalInvariantViolation => "internal_invariant_violation",
         }
     }
@@ -358,29 +483,30 @@ impl fmt::Display for QecErrorKind {
 // Error severity
 // ============================================================================
 
-/// Operational severity of a QEC failure.
+/// Operational severity of a QEC error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum QecErrorSeverity {
-    /// The caller supplied invalid data.
+    /// Caller supplied invalid input.
     Input,
 
-    /// The configured workload exceeded a deliberate safety boundary.
+    /// Workload exceeded an intentional safety/resource boundary.
     Resource,
 
-    /// The operation was deliberately stopped.
+    /// Work was deliberately stopped.
     Cancellation,
 
-    /// The requested operation could not be completed correctly.
+    /// An operational subsystem failed.
     Operational,
 
-    /// The requested feature/configuration is unsupported.
+    /// Configuration or compatibility prevented execution.
     Configuration,
 
-    /// Indicates a likely software defect.
+    /// A software invariant was violated.
     Internal,
 }
 
 impl QecErrorSeverity {
+    /// Stable machine-readable severity.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Input => "input",
@@ -400,40 +526,46 @@ impl fmt::Display for QecErrorSeverity {
 }
 
 // ============================================================================
-// Constructors and classification
+// Constructors
 // ============================================================================
 
 impl QecError {
+    /// Creates an invalid-input error.
     pub fn invalid_input(message: impl Into<String>) -> Self {
         Self::InvalidInput {
             message: message.into(),
         }
     }
 
+    /// Creates an invalid-topology error.
     pub fn invalid_topology(message: impl Into<String>) -> Self {
         Self::InvalidTopology {
             message: message.into(),
         }
     }
 
+    /// Creates an invalid-stabilizer error.
     pub fn invalid_stabilizer(message: impl Into<String>) -> Self {
         Self::InvalidStabilizer {
             message: message.into(),
         }
     }
 
+    /// Creates an invalid-syndrome error.
     pub fn invalid_syndrome(message: impl Into<String>) -> Self {
         Self::InvalidSyndrome {
             message: message.into(),
         }
     }
 
+    /// Creates an invalid-graph error.
     pub fn invalid_graph(message: impl Into<String>) -> Self {
         Self::InvalidGraph {
             message: message.into(),
         }
     }
 
+    /// Creates an invalid-probability error.
     pub fn invalid_probability(
         probability: f64,
         message: impl Into<String>,
@@ -444,6 +576,7 @@ impl QecError {
         }
     }
 
+    /// Creates a generic resource-limit failure.
     pub fn resource_limit(
         resource: ResourceKind,
         requested: u128,
@@ -460,6 +593,7 @@ impl QecError {
         }
     }
 
+    /// Creates a memory-limit failure.
     pub fn memory_limit(
         requested_bytes: u64,
         current_bytes: u64,
@@ -474,6 +608,7 @@ impl QecError {
         }
     }
 
+    /// Creates a time-limit failure.
     pub fn time_limit(
         elapsed_nanos: u64,
         limit_nanos: u64,
@@ -486,12 +621,27 @@ impl QecError {
         }
     }
 
+    /// Creates a cancellation failure.
     pub fn cancelled(message: impl Into<String>) -> Self {
         Self::CancellationRequested {
             message: message.into(),
         }
     }
 
+    /// Creates a capability-denied failure.
+    pub fn capability_denied(
+        capability: impl Into<String>,
+        operation: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::CapabilityDenied {
+            capability: capability.into(),
+            operation: operation.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Creates a decoder failure.
     pub fn decoder_failure(
         decoder: DecoderKind,
         message: impl Into<String>,
@@ -502,6 +652,7 @@ impl QecError {
         }
     }
 
+    /// Creates a numerical failure.
     pub fn numerical_failure(
         operation: NumericalOperation,
         message: impl Into<String>,
@@ -512,6 +663,7 @@ impl QecError {
         }
     }
 
+    /// Creates an unsupported-configuration failure.
     pub fn unsupported(
         feature: impl Into<String>,
         message: impl Into<String>,
@@ -522,6 +674,67 @@ impl QecError {
         }
     }
 
+    /// Creates a version mismatch.
+    pub fn version_mismatch(
+        component: impl Into<String>,
+        expected: impl Into<String>,
+        actual: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::VersionMismatch {
+            component: component.into(),
+            expected: expected.into(),
+            actual: actual.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Creates an invalid-checkpoint failure.
+    pub fn checkpoint_invalid(message: impl Into<String>) -> Self {
+        Self::CheckpointInvalid {
+            message: message.into(),
+        }
+    }
+
+    /// Creates a corrupt-checkpoint failure.
+    pub fn checkpoint_corrupt(message: impl Into<String>) -> Self {
+        Self::CheckpointCorrupt {
+            message: message.into(),
+        }
+    }
+
+    /// Creates an invalid-cache failure.
+    pub fn cache_invalid(message: impl Into<String>) -> Self {
+        Self::CacheInvalid {
+            message: message.into(),
+        }
+    }
+
+    /// Creates a classical backend failure.
+    pub fn backend_failure(
+        backend: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::BackendFailure {
+            backend: backend.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Creates a QPU failure.
+    pub fn qpu_failure(
+        backend: impl Into<String>,
+        operation: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::QpuFailure {
+            backend: backend.into(),
+            operation: operation.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Creates an internal invariant failure.
     pub fn invariant(
         invariant: impl Into<String>,
         message: impl Into<String>,
@@ -532,7 +745,11 @@ impl QecError {
         }
     }
 
-    /// Stable high-level classification.
+    // ========================================================================
+    // Classification
+    // ========================================================================
+
+    /// Returns the stable high-level error category.
     pub const fn kind(&self) -> QecErrorKind {
         match self {
             Self::InvalidInput { .. } => QecErrorKind::InvalidInput,
@@ -551,55 +768,27 @@ impl QecError {
             Self::CancellationRequested { .. } => {
                 QecErrorKind::CancellationRequested
             }
+            Self::CapabilityDenied { .. } => QecErrorKind::CapabilityDenied,
             Self::DecoderFailure { .. } => QecErrorKind::DecoderFailure,
             Self::NumericalFailure { .. } => QecErrorKind::NumericalFailure,
             Self::UnsupportedConfiguration { .. } => {
                 QecErrorKind::UnsupportedConfiguration
             }
+            Self::VersionMismatch { .. } => QecErrorKind::VersionMismatch,
+            Self::CheckpointInvalid { .. } => QecErrorKind::CheckpointInvalid,
+            Self::CheckpointCorrupt { .. } => QecErrorKind::CheckpointCorrupt,
+            Self::CacheInvalid { .. } => QecErrorKind::CacheInvalid,
+            Self::BackendFailure { .. } => QecErrorKind::BackendFailure,
+            Self::QpuFailure { .. } => QecErrorKind::QpuFailure,
             Self::InternalInvariantViolation { .. } => {
                 QecErrorKind::InternalInvariantViolation
             }
         }
     }
 
-    /// Stable machine-readable error code.
+    /// Returns the stable machine-readable error code.
     pub const fn code(&self) -> &'static str {
-        match self {
-            Self::InvalidInput { .. } => "QEC-INPUT-001",
-            Self::InvalidTopology { .. } => "QEC-TOPOLOGY-001",
-            Self::InvalidStabilizer { .. } => "QEC-STABILIZER-001",
-            Self::InvalidSyndrome { .. } => "QEC-SYNDROME-001",
-            Self::InvalidGraph { .. } => "QEC-GRAPH-001",
-            Self::InvalidProbability { .. } => "QEC-PROBABILITY-001",
-            Self::ResourceLimitExceeded { .. } => "QEC-RESOURCE-001",
-            Self::MemoryLimitExceeded { .. } => "QEC-MEMORY-001",
-            Self::TimeLimitExceeded { .. } => "QEC-TIME-001",
-            Self::CancellationRequested { .. } => "QEC-CANCEL-001",
-            Self::DecoderFailure { .. } => "QEC-DECODER-001",
-            Self::NumericalFailure { .. } => "QEC-NUMERICAL-001",
-            Self::UnsupportedConfiguration { .. } => "QEC-CONFIG-001",
-            Self::InternalInvariantViolation { .. } => "QEC-INTERNAL-001",
-        }
-    }
-
-    /// Returns the canonical diagnostic message.
-    pub fn message(&self) -> &str {
-        match self {
-            Self::InvalidInput { message }
-            | Self::InvalidTopology { message }
-            | Self::InvalidStabilizer { message }
-            | Self::InvalidSyndrome { message }
-            | Self::InvalidGraph { message }
-            | Self::CancellationRequested { message }
-            | Self::InvalidProbability { message, .. }
-            | Self::ResourceLimitExceeded { message, .. }
-            | Self::MemoryLimitExceeded { message, .. }
-            | Self::TimeLimitExceeded { message, .. }
-            | Self::DecoderFailure { message, .. }
-            | Self::NumericalFailure { message, .. }
-            | Self::UnsupportedConfiguration { message, .. }
-            | Self::InternalInvariantViolation { message, .. } => message,
-        }
+        self.kind().as_str()
     }
 
     /// Returns the operational severity.
@@ -616,21 +805,71 @@ impl QecError {
             | Self::MemoryLimitExceeded { .. }
             | Self::TimeLimitExceeded { .. } => QecErrorSeverity::Resource,
 
-            Self::CancellationRequested { .. } => QecErrorSeverity::Cancellation,
-
-            Self::DecoderFailure { .. }
-            | Self::NumericalFailure { .. } => QecErrorSeverity::Operational,
-
-            Self::UnsupportedConfiguration { .. } => {
-                QecErrorSeverity::Configuration
+            Self::CancellationRequested { .. } => {
+                QecErrorSeverity::Cancellation
             }
 
-            Self::InternalInvariantViolation { .. } => QecErrorSeverity::Internal,
+            Self::UnsupportedConfiguration { .. }
+            | Self::VersionMismatch { .. } => QecErrorSeverity::Configuration,
+
+            Self::InternalInvariantViolation { .. } => {
+                QecErrorSeverity::Internal
+            }
+
+            Self::CapabilityDenied { .. }
+            | Self::DecoderFailure { .. }
+            | Self::NumericalFailure { .. }
+            | Self::CheckpointInvalid { .. }
+            | Self::CheckpointCorrupt { .. }
+            | Self::CacheInvalid { .. }
+            | Self::BackendFailure { .. }
+            | Self::QpuFailure { .. } => QecErrorSeverity::Operational,
         }
     }
 
-    /// Returns whether the error originated from caller-controlled input.
-    pub const fn is_input_error(&self) -> bool {
+    /// Returns the decoder involved in the error, when applicable.
+    pub const fn decoder(&self) -> Option<DecoderKind> {
+        match self {
+            Self::DecoderFailure { decoder, .. } => Some(*decoder),
+            _ => None,
+        }
+    }
+
+    /// Returns the resource involved in the error, when applicable.
+    pub const fn resource(&self) -> Option<ResourceKind> {
+        match self {
+            Self::ResourceLimitExceeded { resource, .. } => Some(*resource),
+            Self::MemoryLimitExceeded { .. } => Some(ResourceKind::MemoryBytes),
+            Self::TimeLimitExceeded { .. } => Some(ResourceKind::Time),
+            _ => None,
+        }
+    }
+
+    /// Returns the numerical operation involved in the error, when applicable.
+    pub const fn numerical_operation(&self) -> Option<NumericalOperation> {
+        match self {
+            Self::NumericalFailure { operation, .. } => Some(*operation),
+            _ => None,
+        }
+    }
+
+    /// Returns whether this failure is caused by resource exhaustion.
+    pub const fn is_resource_failure(&self) -> bool {
+        matches!(
+            self,
+            Self::ResourceLimitExceeded { .. }
+                | Self::MemoryLimitExceeded { .. }
+                | Self::TimeLimitExceeded { .. }
+        )
+    }
+
+    /// Returns whether this failure is cancellation.
+    pub const fn is_cancelled(&self) -> bool {
+        matches!(self, Self::CancellationRequested { .. })
+    }
+
+    /// Returns whether this failure indicates invalid caller input.
+    pub const fn is_input_failure(&self) -> bool {
         matches!(
             self,
             Self::InvalidInput { .. }
@@ -642,108 +881,436 @@ impl QecError {
         )
     }
 
-    /// Returns whether the error represents resource exhaustion.
-    pub const fn is_resource_error(&self) -> bool {
-        matches!(
-            self,
-            Self::ResourceLimitExceeded { .. }
-                | Self::MemoryLimitExceeded { .. }
-                | Self::TimeLimitExceeded { .. }
-        )
-    }
-
-    /// Returns whether the operation was cancelled.
-    pub const fn is_cancellation(&self) -> bool {
-        matches!(self, Self::CancellationRequested { .. })
-    }
-
-    /// Returns whether the error represents an implementation defect.
-    pub const fn is_internal(&self) -> bool {
+    /// Returns whether this failure indicates an internal programming defect.
+    pub const fn is_internal_failure(&self) -> bool {
         matches!(self, Self::InternalInvariantViolation { .. })
     }
 
-    /// Returns the affected resource if this is a resource error.
-    pub const fn resource(&self) -> Option<ResourceKind> {
+    /// Returns the primary diagnostic message.
+    pub fn message(&self) -> &str {
         match self {
-            Self::ResourceLimitExceeded { resource, .. } => Some(*resource),
+            Self::InvalidInput { message }
+            | Self::InvalidTopology { message }
+            | Self::InvalidStabilizer { message }
+            | Self::InvalidSyndrome { message }
+            | Self::InvalidGraph { message }
+            | Self::CancellationRequested { message }
+            | Self::CheckpointInvalid { message }
+            | Self::CheckpointCorrupt { message }
+            | Self::CacheInvalid { message } => message,
 
-            Self::MemoryLimitExceeded { .. } => {
-                Some(ResourceKind::MemoryBytes)
+            Self::InvalidProbability { message, .. } => message,
+
+            Self::ResourceLimitExceeded { message, .. } => message,
+
+            Self::MemoryLimitExceeded { message, .. } => message,
+
+            Self::TimeLimitExceeded { message, .. } => message,
+
+            Self::CapabilityDenied { message, .. } => message,
+
+            Self::DecoderFailure { message, .. } => message,
+
+            Self::NumericalFailure { message, .. } => message,
+
+            Self::UnsupportedConfiguration { message, .. } => message,
+
+            Self::VersionMismatch { message, .. } => message,
+
+            Self::BackendFailure { message, .. } => message,
+
+            Self::QpuFailure { message, .. } => message,
+
+            Self::InternalInvariantViolation { message, .. } => message,
+        }
+    }
+
+    /// Returns the capability name for a capability failure.
+    pub fn capability(&self) -> Option<&str> {
+        match self {
+            Self::CapabilityDenied { capability, .. } => Some(capability),
+            _ => None,
+        }
+    }
+
+    /// Returns the operation for a capability or QPU failure.
+    pub fn operation(&self) -> Option<&str> {
+        match self {
+            Self::CapabilityDenied { operation, .. }
+            | Self::QpuFailure { operation, .. } => Some(operation),
+            _ => None,
+        }
+    }
+
+    /// Returns the backend name for a backend/QPU failure.
+    pub fn backend(&self) -> Option<&str> {
+        match self {
+            Self::BackendFailure { backend, .. }
+            | Self::QpuFailure { backend, .. } => Some(backend),
+            _ => None,
+        }
+    }
+
+    /// Returns the expected version for a version mismatch.
+    pub fn expected_version(&self) -> Option<&str> {
+        match self {
+            Self::VersionMismatch { expected, .. } => Some(expected),
+            _ => None,
+        }
+    }
+
+    /// Returns the actual version for a version mismatch.
+    pub fn actual_version(&self) -> Option<&str> {
+        match self {
+            Self::VersionMismatch { actual, .. } => Some(actual),
+            _ => None,
+        }
+    }
+
+    /// Returns the component for a version mismatch.
+    pub fn component(&self) -> Option<&str> {
+        match self {
+            Self::VersionMismatch { component, .. } => Some(component),
+            _ => None,
+        }
+    }
+
+    /// Returns the requested resource amount for resource failures.
+    pub fn requested_resource(&self) -> Option<u128> {
+        match self {
+            Self::ResourceLimitExceeded { requested, .. } => Some(*requested),
+            Self::MemoryLimitExceeded {
+                requested_bytes, ..
+            } => Some(u128::from(*requested_bytes)),
+            _ => None,
+        }
+    }
+
+    /// Returns the current resource usage for resource failures.
+    pub fn current_resource(&self) -> Option<u128> {
+        match self {
+            Self::ResourceLimitExceeded { current, .. } => Some(*current),
+            Self::MemoryLimitExceeded { current_bytes, .. } => {
+                Some(u128::from(*current_bytes))
             }
-
-            Self::TimeLimitExceeded { .. } => None,
-
             _ => None,
         }
     }
 
-    /// Returns the decoder associated with a decoder failure.
-    pub const fn decoder(&self) -> Option<DecoderKind> {
+    /// Returns the configured resource limit for resource failures.
+    pub fn resource_limit_value(&self) -> Option<u128> {
         match self {
-            Self::DecoderFailure { decoder, .. } => Some(*decoder),
+            Self::ResourceLimitExceeded { limit, .. } => Some(*limit),
+            Self::MemoryLimitExceeded { limit_bytes, .. } => {
+                Some(u128::from(*limit_bytes))
+            }
             _ => None,
         }
     }
 
-    /// Returns the numerical operation associated with a numerical failure.
-    pub const fn numerical_operation(
-        &self,
-    ) -> Option<NumericalOperation> {
+    /// Returns the elapsed duration for a time-limit failure.
+    pub fn elapsed(&self) -> Option<Duration> {
         match self {
-            Self::NumericalFailure { operation, .. } => Some(*operation),
+            Self::TimeLimitExceeded { elapsed_nanos, .. } => {
+                Some(Duration::from_nanos(*elapsed_nanos))
+            }
             _ => None,
         }
     }
 
-    /// Conservative retry policy.
-    ///
-    /// A retry without changing configuration/input is only considered safe
-    /// when the error represents a transient execution condition. Since the
-    /// current QEC runtime does not encode transient-vs-permanent resource
-    /// exhaustion separately, resource failures are conservatively marked
-    /// non-retryable.
-    pub const fn is_retryable(&self) -> bool {
+    /// Returns the configured time limit for a time-limit failure.
+    pub fn time_limit_duration(&self) -> Option<Duration> {
         match self {
-            Self::InvalidInput { .. }
-            | Self::InvalidTopology { .. }
-            | Self::InvalidStabilizer { .. }
-            | Self::InvalidSyndrome { .. }
-            | Self::InvalidGraph { .. }
-            | Self::InvalidProbability { .. }
-            | Self::ResourceLimitExceeded { .. }
-            | Self::MemoryLimitExceeded { .. }
-            | Self::TimeLimitExceeded { .. }
-            | Self::CancellationRequested { .. }
-            | Self::UnsupportedConfiguration { .. }
-            | Self::InternalInvariantViolation { .. } => false,
-
-            // Decoder and numerical failures may become recoverable when
-            // the caller selects a different decoder/backend/strategy.
-            Self::DecoderFailure { .. }
-            | Self::NumericalFailure { .. } => false,
+            Self::TimeLimitExceeded { limit_nanos, .. } => {
+                Some(Duration::from_nanos(*limit_nanos))
+            }
+            _ => None,
         }
     }
 }
 
 // ============================================================================
-// Display / std::error::Error
+// Display
 // ============================================================================
 
 impl fmt::Display for QecError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "[{}] {}",
-            self.code(),
-            self.message()
-        )
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidInput { message } => {
+                write!(f, "[{}] {}", self.code(), message)
+            }
+
+            Self::InvalidTopology { message } => {
+                write!(f, "[{}] {}", self.code(), message)
+            }
+
+            Self::InvalidStabilizer { message } => {
+                write!(f, "[{}] {}", self.code(), message)
+            }
+
+            Self::InvalidSyndrome { message } => {
+                write!(f, "[{}] {}", self.code(), message)
+            }
+
+            Self::InvalidGraph { message } => {
+                write!(f, "[{}] {}", self.code(), message)
+            }
+
+            Self::InvalidProbability {
+                probability,
+                message,
+            } => write!(
+                f,
+                "[{}] probability={}: {}",
+                self.code(),
+                probability,
+                message
+            ),
+
+            Self::ResourceLimitExceeded {
+                resource,
+                requested,
+                current,
+                limit,
+                message,
+            } => write!(
+                f,
+                "[{}] resource={} requested={} current={} limit={}: {}",
+                self.code(),
+                resource,
+                requested,
+                current,
+                limit,
+                message
+            ),
+
+            Self::MemoryLimitExceeded {
+                requested_bytes,
+                current_bytes,
+                limit_bytes,
+                message,
+            } => write!(
+                f,
+                "[{}] requested_bytes={} current_bytes={} limit_bytes={}: {}",
+                self.code(),
+                requested_bytes,
+                current_bytes,
+                limit_bytes,
+                message
+            ),
+
+            Self::TimeLimitExceeded {
+                elapsed_nanos,
+                limit_nanos,
+                message,
+            } => write!(
+                f,
+                "[{}] elapsed_nanos={} limit_nanos={}: {}",
+                self.code(),
+                elapsed_nanos,
+                limit_nanos,
+                message
+            ),
+
+            Self::CancellationRequested { message } => {
+                write!(f, "[{}] {}", self.code(), message)
+            }
+
+            Self::CapabilityDenied {
+                capability,
+                operation,
+                message,
+            } => write!(
+                f,
+                "[{}] capability={} operation={}: {}",
+                self.code(),
+                capability,
+                operation,
+                message
+            ),
+
+            Self::DecoderFailure { decoder, message } => {
+                write!(
+                    f,
+                    "[{}] decoder={}: {}",
+                    self.code(),
+                    decoder,
+                    message
+                )
+            }
+
+            Self::NumericalFailure {
+                operation,
+                message,
+            } => write!(
+                f,
+                "[{}] operation={}: {}",
+                self.code(),
+                operation,
+                message
+            ),
+
+            Self::UnsupportedConfiguration { feature, message } => {
+                write!(
+                    f,
+                    "[{}] feature={}: {}",
+                    self.code(),
+                    feature,
+                    message
+                )
+            }
+
+            Self::VersionMismatch {
+                component,
+                expected,
+                actual,
+                message,
+            } => write!(
+                f,
+                "[{}] component={} expected={} actual={}: {}",
+                self.code(),
+                component,
+                expected,
+                actual,
+                message
+            ),
+
+            Self::CheckpointInvalid { message } => {
+                write!(f, "[{}] {}", self.code(), message)
+            }
+
+            Self::CheckpointCorrupt { message } => {
+                write!(f, "[{}] {}", self.code(), message)
+            }
+
+            Self::CacheInvalid { message } => {
+                write!(f, "[{}] {}", self.code(), message)
+            }
+
+            Self::BackendFailure { backend, message } => {
+                write!(
+                    f,
+                    "[{}] backend={}: {}",
+                    self.code(),
+                    backend,
+                    message
+                )
+            }
+
+            Self::QpuFailure {
+                backend,
+                operation,
+                message,
+            } => write!(
+                f,
+                "[{}] backend={} operation={}: {}",
+                self.code(),
+                backend,
+                operation,
+                message
+            ),
+
+            Self::InternalInvariantViolation {
+                invariant,
+                message,
+            } => write!(
+                f,
+                "[{}] invariant={}: {}",
+                self.code(),
+                invariant,
+                message
+            ),
+        }
     }
 }
 
 impl Error for QecError {}
 
 // ============================================================================
-// Primitive conversions
+// Arithmetic integration
+// ============================================================================
+
+/// Converts the foundational arithmetic error model into the canonical QEC
+/// numerical error boundary.
+///
+/// `arithmetic.rs` intentionally remains independent from `errors.rs`.
+/// This conversion belongs here, at the integration boundary.
+impl From<crate::quantum::error_correction::arithmetic::ArithmeticError>
+    for QecError
+{
+    fn from(
+        error: crate::quantum::error_correction::arithmetic::ArithmeticError,
+    ) -> Self {
+        use crate::quantum::error_correction::arithmetic::ArithmeticError;
+
+        let operation = match error {
+            ArithmeticError::IntegerOverflow
+            | ArithmeticError::IntegerUnderflow
+            | ArithmeticError::IntegerMultiplicationOverflow => {
+                NumericalOperation::Addition
+            }
+
+            ArithmeticError::DivisionByZero
+            | ArithmeticError::InvalidDenominator => {
+                NumericalOperation::Division
+            }
+
+            ArithmeticError::AbsoluteValueOverflow => {
+                NumericalOperation::IntegerConversion
+            }
+
+            ArithmeticError::NaN
+            | ArithmeticError::Infinite
+            | ArithmeticError::NonFinite
+            | ArithmeticError::NumericalOverflow => {
+                NumericalOperation::FloatingPointConversion
+            }
+
+            ArithmeticError::InvalidProbability
+            | ArithmeticError::NegativeProbability => {
+                NumericalOperation::ProbabilityValidation
+            }
+
+            ArithmeticError::LogarithmOfZero
+            | ArithmeticError::LogarithmOfNegative => {
+                NumericalOperation::LogProbability
+            }
+
+            ArithmeticError::NegativeWeight => {
+                NumericalOperation::WeightCalculation
+            }
+
+            ArithmeticError::InvalidDistance => {
+                NumericalOperation::DistanceCalculation
+            }
+
+            ArithmeticError::LimitExceeded => {
+                NumericalOperation::MemorySizeCalculation
+            }
+
+            ArithmeticError::ConversionOverflow => {
+                NumericalOperation::IntegerConversion
+            }
+
+            ArithmeticError::ExponentiationOverflow => {
+                NumericalOperation::Exponentiation
+            }
+
+            ArithmeticError::CombinationOverflow => {
+                NumericalOperation::Combination
+            }
+
+            ArithmeticError::InvalidOperation => {
+                NumericalOperation::Custom
+            }
+        };
+
+        Self::numerical_failure(operation, error.to_string())
+    }
+}
+
+// ============================================================================
+// Convenience conversions for common standard-library errors
 // ============================================================================
 
 impl From<std::num::TryFromIntError> for QecError {
@@ -757,202 +1324,14 @@ impl From<std::num::TryFromIntError> for QecError {
 
 impl From<std::num::ParseIntError> for QecError {
     fn from(error: std::num::ParseIntError) -> Self {
-        Self::invalid_input(format!(
-            "integer parsing failed: {error}"
-        ))
+        Self::invalid_input(error.to_string())
     }
 }
 
 impl From<std::num::ParseFloatError> for QecError {
     fn from(error: std::num::ParseFloatError) -> Self {
-        Self::invalid_input(format!(
-            "floating-point parsing failed: {error}"
-        ))
+        Self::invalid_input(error.to_string())
     }
-}
-
-impl From<std::io::Error> for QecError {
-    fn from(error: std::io::Error) -> Self {
-        Self::invalid_input(format!("I/O operation failed: {error}"))
-    }
-}
-
-// ============================================================================
-// Resource-layer integration
-// ============================================================================
-
-/// Convert the resource manager's resource dimension into the canonical
-/// high-level QEC resource dimension.
-///
-/// This keeps `resources.rs` independent of `errors.rs` while allowing public
-/// APIs to expose only `QecError`.
-impl From<crate::quantum::error_correction::resources::ResourceKind>
-    for ResourceKind
-{
-    fn from(
-        resource: crate::quantum::error_correction::resources::ResourceKind,
-    ) -> Self {
-        use crate::quantum::error_correction::resources::ResourceKind as R;
-
-        match resource {
-            R::MemoryBytes => Self::MemoryBytes,
-            R::SyndromeEvents => Self::SyndromeEvents,
-            R::GraphNodes => Self::GraphNodes,
-            R::GraphEdges => Self::GraphEdges,
-            R::DecoderIterations => Self::DecoderIterations,
-            R::ParallelWorkers => Self::Parallelism,
-        }
-    }
-}
-
-/// Converts runtime resource-manager failures into the canonical QEC error.
-impl From<
-    crate::quantum::error_correction::resources::ResourceError,
-> for QecError {
-    fn from(
-        error: crate::quantum::error_correction::resources::ResourceError,
-    ) -> Self {
-        use crate::quantum::error_correction::resources::ResourceError as R;
-
-        match error {
-            R::InvalidLimit { reason } => {
-                Self::invalid_input(format!(
-                    "invalid resource policy: {reason}"
-                ))
-            }
-
-            R::LimitExceeded {
-                resource,
-                requested,
-                current,
-                limit,
-            } => {
-                let resource = ResourceKind::from(resource);
-
-                if resource == ResourceKind::MemoryBytes {
-                    Self::memory_limit(
-                        requested,
-                        current,
-                        limit,
-                        format!(
-                            "memory resource limit exceeded: \
-                             requested {requested} bytes, \
-                             current {current} bytes, \
-                             limit {limit} bytes"
-                        ),
-                    )
-                } else {
-                    Self::resource_limit(
-                        resource,
-                        u128::from(requested),
-                        u128::from(current),
-                        u128::from(limit),
-                        format!(
-                            "{resource} resource limit exceeded: \
-                             requested {requested}, \
-                             current {current}, \
-                             limit {limit}"
-                        ),
-                    )
-                }
-            }
-
-            R::ParallelismLimitExceeded {
-                requested,
-                current,
-                limit,
-            } => Self::resource_limit(
-                ResourceKind::Parallelism,
-                requested as u128,
-                current as u128,
-                limit as u128,
-                format!(
-                    "parallelism limit exceeded: \
-                     requested {requested}, \
-                     current {current}, \
-                     limit {limit}"
-                ),
-            ),
-
-            R::QuotaExceeded {
-                resource,
-                requested,
-                current,
-                limit,
-            } => {
-                let resource = ResourceKind::from(resource);
-
-                Self::resource_limit(
-                    resource,
-                    u128::from(requested),
-                    u128::from(current),
-                    u128::from(limit),
-                    format!(
-                        "{resource} operation quota exceeded: \
-                         requested {requested}, \
-                         current {current}, \
-                         quota {limit}"
-                    ),
-                )
-            }
-
-            R::ParallelismQuotaExceeded {
-                requested,
-                current,
-                limit,
-            } => Self::resource_limit(
-                ResourceKind::Parallelism,
-                requested as u128,
-                current as u128,
-                limit as u128,
-                format!(
-                    "parallelism operation quota exceeded: \
-                     requested {requested}, \
-                     current {current}, \
-                     quota {limit}"
-                ),
-            ),
-
-            R::ArithmeticOverflow { resource } => {
-                let resource = ResourceKind::from(resource);
-
-                Self::numerical_failure(
-                    NumericalOperation::IntegerConversion,
-                    format!(
-                        "resource accounting overflow for {resource}"
-                    ),
-                )
-            }
-
-            R::WallTimeLimitExceeded { elapsed, limit } => {
-                Self::time_limit(
-                    duration_to_nanos_saturating(elapsed),
-                    duration_to_nanos_saturating(limit),
-                    format!(
-                        "QEC wall-time limit exceeded: \
-                         elapsed {:?}, limit {:?}",
-                        elapsed, limit
-                    ),
-                )
-            }
-
-            R::Cancelled => Self::cancelled(
-                "QEC resource manager reported cancellation",
-            ),
-        }
-    }
-}
-
-// ============================================================================
-// Optional high-level conversions
-// ============================================================================
-
-/// Convert a `Duration` to nanoseconds without overflowing `u64`.
-fn duration_to_nanos_saturating(duration: Duration) -> u64 {
-    duration
-        .as_nanos()
-        .try_into()
-        .unwrap_or(u64::MAX)
 }
 
 // ============================================================================
@@ -964,109 +1343,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn result_alias_works() {
-        let result: QecResult<u32> = Ok(42);
-        assert_eq!(result.unwrap(), 42);
+    fn canonical_result_is_usable() {
+        let result: QecResult<u64> = Ok(42);
+        assert_eq!(result, Ok(42));
     }
 
     #[test]
-    fn error_codes_are_stable() {
-        assert_eq!(
-            QecError::invalid_input("bad input").code(),
-            "QEC-INPUT-001"
-        );
+    fn stable_kind_and_code_are_consistent() {
+        let error = QecError::invalid_topology("invalid boundary");
 
-        assert_eq!(
-            QecError::invalid_topology("bad topology").code(),
-            "QEC-TOPOLOGY-001"
-        );
-
-        assert_eq!(
-            QecError::resource_limit(
-                ResourceKind::GraphNodes,
-                101,
-                100,
-                100,
-                "too many nodes",
-            )
-            .code(),
-            "QEC-RESOURCE-001"
-        );
+        assert_eq!(error.kind(), QecErrorKind::InvalidTopology);
+        assert_eq!(error.code(), "invalid_topology");
+        assert_eq!(error.severity(), QecErrorSeverity::Input);
     }
 
     #[test]
-    fn error_kind_is_stable() {
-        let error = QecError::invalid_syndrome("invalid syndrome");
-
-        assert_eq!(
-            error.kind(),
-            QecErrorKind::InvalidSyndrome
-        );
-
-        assert_eq!(
-            error.kind().as_str(),
-            "invalid_syndrome"
-        );
-    }
-
-    #[test]
-    fn severity_is_classified_correctly() {
-        assert_eq!(
-            QecError::invalid_input("bad").severity(),
-            QecErrorSeverity::Input
-        );
-
-        assert_eq!(
-            QecError::memory_limit(100, 90, 90, "memory").severity(),
-            QecErrorSeverity::Resource
-        );
-
-        assert_eq!(
-            QecError::cancelled("cancelled").severity(),
-            QecErrorSeverity::Cancellation
-        );
-
-        assert_eq!(
-            QecError::invariant("broken", "internal").severity(),
-            QecErrorSeverity::Internal
-        );
-    }
-
-    #[test]
-    fn resource_classification_works() {
+    fn resource_errors_are_classified_correctly() {
         let error = QecError::resource_limit(
-            ResourceKind::GraphEdges,
+            ResourceKind::GraphNodes,
             101,
             100,
             100,
-            "too many edges",
+            "graph node limit exceeded",
         );
 
-        assert!(error.is_resource_error());
-        assert!(!error.is_input_error());
-        assert_eq!(
-            error.resource(),
-            Some(ResourceKind::GraphEdges)
-        );
+        assert!(error.is_resource_failure());
+        assert_eq!(error.resource(), Some(ResourceKind::GraphNodes));
+        assert_eq!(error.requested_resource(), Some(101));
+        assert_eq!(error.current_resource(), Some(100));
+        assert_eq!(error.resource_limit_value(), Some(100));
     }
 
     #[test]
-    fn memory_is_a_resource_error() {
+    fn memory_errors_are_resource_failures() {
         let error =
-            QecError::memory_limit(1024, 2048, 2048, "memory exhausted");
+            QecError::memory_limit(2048, 4096, 4096, "memory denied");
 
-        assert!(error.is_resource_error());
+        assert!(error.is_resource_failure());
         assert_eq!(
             error.resource(),
             Some(ResourceKind::MemoryBytes)
         );
+        assert_eq!(error.requested_resource(), Some(2048));
     }
 
     #[test]
     fn cancellation_is_not_a_generic_failure() {
-        let error = QecError::cancelled("user requested cancellation");
+        let error = QecError::cancelled("deadline reached");
 
-        assert!(error.is_cancellation());
+        assert!(error.is_cancelled());
         assert_eq!(
             error.kind(),
             QecErrorKind::CancellationRequested
@@ -1079,28 +1404,27 @@ mod tests {
 
     #[test]
     fn decoder_metadata_is_available() {
-        let error = QecError::decoder_failure(
-            DecoderKind::Mwpm,
-            "matching failed",
-        );
+        let error =
+            QecError::decoder_failure(DecoderKind::Mwpm, "matching failed");
 
         assert_eq!(error.decoder(), Some(DecoderKind::Mwpm));
-        assert_eq!(error.kind(), QecErrorKind::DecoderFailure);
-        assert_eq!(error.code(), "QEC-DECODER-001");
+        assert_eq!(
+            error.kind(),
+            QecErrorKind::DecoderFailure
+        );
     }
 
     #[test]
     fn numerical_metadata_is_available() {
         let error = QecError::numerical_failure(
-            NumericalOperation::DistanceCalculation,
-            "distance calculation exceeded numeric range",
+            NumericalOperation::Combination,
+            "overflow",
         );
 
         assert_eq!(
             error.numerical_operation(),
-            Some(NumericalOperation::DistanceCalculation)
+            Some(NumericalOperation::Combination)
         );
-
         assert_eq!(
             error.kind(),
             QecErrorKind::NumericalFailure
@@ -1108,41 +1432,92 @@ mod tests {
     }
 
     #[test]
-    fn display_contains_machine_code() {
-        let error = QecError::invalid_input("invalid qubit index");
+    fn capability_failure_is_explicit() {
+        let error = QecError::capability_denied(
+            "qpu_submit",
+            "submit_circuit",
+            "capability not granted",
+        );
+
+        assert_eq!(
+            error.kind(),
+            QecErrorKind::CapabilityDenied
+        );
+        assert_eq!(error.capability(), Some("qpu_submit"));
+        assert_eq!(error.operation(), Some("submit_circuit"));
+    }
+
+    #[test]
+    fn version_mismatch_exposes_versions() {
+        let error = QecError::version_mismatch(
+            "checkpoint",
+            "2.1",
+            "1.0",
+            "schema mismatch",
+        );
+
+        assert_eq!(
+            error.kind(),
+            QecErrorKind::VersionMismatch
+        );
+        assert_eq!(error.component(), Some("checkpoint"));
+        assert_eq!(error.expected_version(), Some("2.1"));
+        assert_eq!(error.actual_version(), Some("1.0"));
+    }
+
+    #[test]
+    fn qpu_failure_does_not_expose_credentials() {
+        let error = QecError::qpu_failure(
+            "backend-a",
+            "submit",
+            "submission rejected",
+        );
 
         let rendered = error.to_string();
 
-        assert!(rendered.contains("QEC-INPUT-001"));
-        assert!(rendered.contains("invalid qubit index"));
+        assert!(rendered.contains("backend-a"));
+        assert!(rendered.contains("submission rejected"));
+        assert!(!rendered.contains("password"));
+        assert!(!rendered.contains("secret"));
+        assert!(!rendered.contains("token"));
+        assert!(!rendered.contains("api_key"));
     }
 
     #[test]
-    fn integer_conversion_becomes_numerical_error() {
-        let result: Result<u8, _> = u8::try_from(1000u16);
+    fn internal_invariant_is_classified_as_internal() {
+        let error =
+            QecError::invariant("decoder state", "unreachable state");
 
-        let error = result.unwrap_err();
-        let qec_error: QecError = error.into();
+        assert!(error.is_internal_failure());
+        assert_eq!(
+            error.severity(),
+            QecErrorSeverity::Internal
+        );
+    }
+
+    #[test]
+    fn arithmetic_error_maps_to_numerical_failure() {
+        use crate::quantum::error_correction::arithmetic::ArithmeticError;
+
+        let error: QecError = ArithmeticError::CombinationOverflow.into();
 
         assert_eq!(
-            qec_error.kind(),
+            error.kind(),
             QecErrorKind::NumericalFailure
         );
-
         assert_eq!(
-            qec_error.numerical_operation(),
-            Some(NumericalOperation::IntegerConversion)
+            error.numerical_operation(),
+            Some(NumericalOperation::Combination)
         );
     }
 
     #[test]
-    fn duration_conversion_saturates() {
-        let duration = Duration::from_secs(u64::MAX);
+    fn display_contains_stable_code() {
+        let error = QecError::invalid_input("bad input");
+        let text = error.to_string();
 
-        assert_eq!(
-            duration_to_nanos_saturating(duration),
-            u64::MAX
-        );
+        assert!(text.starts_with("[invalid_input]"));
+        assert!(text.contains("bad input"));
     }
 
     #[test]
@@ -1151,12 +1526,10 @@ mod tests {
             ResourceKind::GraphNodes.as_str(),
             "graph_nodes"
         );
-
         assert_eq!(
             ResourceKind::MemoryBytes.as_str(),
             "memory_bytes"
         );
-
         assert_eq!(
             ResourceKind::QpuShots.as_str(),
             "qpu_shots"
@@ -1165,11 +1538,7 @@ mod tests {
 
     #[test]
     fn decoder_kind_identifiers_are_stable() {
-        assert_eq!(
-            DecoderKind::Mwpm.as_str(),
-            "mwpm"
-        );
-
+        assert_eq!(DecoderKind::Mwpm.as_str(), "mwpm");
         assert_eq!(
             DecoderKind::UnionFind.as_str(),
             "union_find"
@@ -1179,13 +1548,28 @@ mod tests {
     #[test]
     fn numerical_operation_identifiers_are_stable() {
         assert_eq!(
-            NumericalOperation::DistanceCalculation.as_str(),
-            "distance_calculation"
+            NumericalOperation::Combination.as_str(),
+            "combination"
+        );
+        assert_eq!(
+            NumericalOperation::MemorySizeCalculation.as_str(),
+            "memory_size_calculation"
+        );
+    }
+
+    #[test]
+    fn time_limit_round_trip_is_safe() {
+        let error =
+            QecError::time_limit(5_000_000, 10_000_000, "deadline");
+
+        assert_eq!(
+            error.elapsed(),
+            Some(Duration::from_nanos(5_000_000))
         );
 
         assert_eq!(
-            NumericalOperation::StatisticalEstimate.as_str(),
-            "statistical_estimate"
+            error.time_limit_duration(),
+            Some(Duration::from_nanos(10_000_000))
         );
     }
 }
