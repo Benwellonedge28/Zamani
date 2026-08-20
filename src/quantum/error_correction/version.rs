@@ -1,149 +1,192 @@
-//! Zamani Quantum Error Correction Versioning
+//! Zamani Quantum Error Correction — Canonical Versioning
 //!
-//! Canonical version and compatibility layer for the QEC subsystem.
+//! This module is the foundational version/compatibility contract for the
+//! entire QEC subsystem.
 //!
-//! Versioned artifacts include:
+//! # Architectural position
 //!
-//! - algorithms
-//! - configuration
-//! - checkpoints
-//! - syndrome streams
-//! - decoding graphs
-//! - simulation artifacts
-//! - noise models
-//! - decoder results
-//! - execution backends
-//! - capabilities
-//! - QPU interfaces
-//! - QPU execution schemas
+//! `version.rs` is intentionally independent of all higher-level QEC modules.
+//! It may therefore be used by:
 //!
-//! Architectural contract:
+//! - errors.rs
+//! - configuration.rs
+//! - checkpoint.rs
+//! - cache.rs
+//! - replay.rs
+//! - syndrome.rs
+//! - decoding_graph.rs
+//! - decoder_result.rs
+//! - backend.rs
+//! - capabilities.rs
+//! - distributed.rs
+//! - QPU integration
+//!
+//! It MUST NOT depend on those modules.
+//!
+//! # Compatibility rule
+//!
+//! Version metadata is security-sensitive input. Never interpret an external
+//! artifact before validating its version metadata.
 //!
 //! ```text
-//! UNTRUSTED ARTIFACT
-//!       │
-//!       ▼
+//! untrusted artifact
+//!        |
+//!        v
 //! ArtifactHeader
-//!       │
-//!       ▼
-//! Protocol validation
-//!       │
-//!       ▼
-//! Artifact/version validation
-//!       │
-//!       ▼
-//! Component compatibility
-//!       │
-//!       ▼
-//! Configuration compatibility
-//!       │
-//!       ▼
-//! Backend/QPU compatibility
-//!       │
-//!       ▼
-//! EXECUTION
+//!        |
+//!        v
+//! protocol validation
+//!        |
+//!        v
+//! artifact-kind validation
+//!        |
+//!        v
+//! version compatibility
+//!        |
+//!        v
+//! feature compatibility
+//!        |
+//!        v
+//! execution-target compatibility
+//!        |
+//!        v
+//! trusted artifact
 //! ```
 //!
-//! Version compatibility is NEVER inferred from a version number alone.
-//!
+//! A newer artifact is never silently interpreted as an older artifact.
 //! A major-version mismatch is incompatible unless an explicit migration
-//! layer is introduced in the future.
+//! mechanism exists outside this module.
 //!
-//! Newer artifacts must never be silently interpreted as older artifacts.
+//! # Integration contract
 //!
-//! This module intentionally does not depend on external serialization
-//! libraries. It provides metadata and compatibility primitives which can be
-//! consumed by checkpointing, caching, replay, distributed execution,
-//! simulation, backend and QPU layers.
+//! Higher-level modules should use:
 //!
-//! Version errors remain locally typed because version metadata must be
-//! validated before an artifact is trusted. High-level callers may convert
-//! them to `QecError` at the public API boundary.
+//! - [`Version::current`] for the subsystem version.
+//! - [`ArtifactKind::current_version`] for artifact schemas.
+//! - [`VersionManifest::current`] when creating a complete manifest.
+//! - [`ArtifactHeader`] for persisted/transmitted artifact metadata.
+//! - [`check_compatibility`] before interpreting an artifact.
+//! - [`require_compatible`] when incompatibility must fail immediately.
+//!
+//! `errors.rs` should convert [`VersionError`] into the canonical `QecError`.
+//!
+//! # Rust compatibility
+//!
+//! This implementation intentionally uses no external dependencies and is
+//! suitable for Rust 1.97.1.
 
 use core::cmp::Ordering;
 use core::fmt;
 use core::str::FromStr;
 
 // ============================================================================
-// Protocol versions
+// Protocol identity
 // ============================================================================
 
-/// Current Zamani QEC versioning protocol major version.
-pub const VERSION_PROTOCOL_MAJOR: u16 = 2;
+/// Versioning protocol major version.
+///
+/// A change here means the interpretation rules of version metadata changed.
+pub const VERSION_PROTOCOL_MAJOR: u16 = 3;
 
-/// Current Zamani QEC versioning protocol minor version.
+/// Versioning protocol minor version.
+///
+/// Minor protocol changes must remain backwards-readable.
 pub const VERSION_PROTOCOL_MINOR: u16 = 0;
 
-/// Maximum accepted external version-string length.
+/// Maximum accepted textual version length.
 pub const MAX_VERSION_STRING_LENGTH: usize = 64;
 
-/// Maximum accepted artifact/component identifier length.
+/// Maximum artifact identifier length.
 pub const MAX_ARTIFACT_ID_LENGTH: usize = 128;
 
-/// Maximum accepted provider/device identifier length.
+/// Maximum provider/device identifier length.
 pub const MAX_IDENTIFIER_LENGTH: usize = 128;
 
+/// Maximum feature-name length.
+pub const MAX_FEATURE_NAME_LENGTH: usize = 128;
+
+/// Maximum number of feature bits represented by [`FeatureFlags`].
+pub const FEATURE_FLAG_BITS: usize = 64;
+
 // ============================================================================
-// Current artifact versions
+// Current QEC versions
 // ============================================================================
 
-/// Current algorithm schema/version.
-pub const CURRENT_ALGORITHM_VERSION: Version = Version::new(2, 0, 0);
+/// Current QEC algorithm contract.
+pub const CURRENT_ALGORITHM_VERSION: Version = Version::new(3, 0, 0);
 
-/// Current configuration schema/version.
-pub const CURRENT_CONFIGURATION_VERSION: Version = Version::new(2, 0, 0);
+/// Current QEC configuration schema.
+pub const CURRENT_CONFIGURATION_VERSION: Version = Version::new(3, 0, 0);
 
-/// Current checkpoint schema/version.
-pub const CURRENT_CHECKPOINT_VERSION: Version = Version::new(2, 0, 0);
+/// Current checkpoint schema.
+pub const CURRENT_CHECKPOINT_VERSION: Version = Version::new(3, 0, 0);
 
-/// Current syndrome representation/version.
-pub const CURRENT_SYNDROME_VERSION: Version = Version::new(2, 0, 0);
+/// Current syndrome representation.
+pub const CURRENT_SYNDROME_VERSION: Version = Version::new(3, 0, 0);
 
-/// Current decoding-graph representation/version.
-pub const CURRENT_GRAPH_VERSION: Version = Version::new(2, 0, 0);
+/// Current decoding-graph representation.
+pub const CURRENT_GRAPH_VERSION: Version = Version::new(3, 0, 0);
 
-/// Current simulation artifact/version.
-pub const CURRENT_SIMULATION_VERSION: Version = Version::new(2, 0, 0);
+/// Current simulation artifact representation.
+pub const CURRENT_SIMULATION_VERSION: Version = Version::new(3, 0, 0);
 
-/// Current noise-model representation/version.
-pub const CURRENT_NOISE_MODEL_VERSION: Version = Version::new(1, 0, 0);
+/// Current noise-model representation.
+pub const CURRENT_NOISE_MODEL_VERSION: Version = Version::new(2, 0, 0);
 
-/// Current decoder-result representation/version.
-pub const CURRENT_DECODER_RESULT_VERSION: Version = Version::new(1, 0, 0);
+/// Current decoder-result representation.
+pub const CURRENT_DECODER_RESULT_VERSION: Version = Version::new(2, 0, 0);
 
-/// Current execution-backend representation/version.
-pub const CURRENT_BACKEND_VERSION: Version = Version::new(2, 0, 0);
+/// Current execution-backend representation.
+pub const CURRENT_BACKEND_VERSION: Version = Version::new(3, 0, 0);
 
-/// Current capability representation/version.
-pub const CURRENT_CAPABILITY_VERSION: Version = Version::new(2, 0, 0);
+/// Current capability representation.
+pub const CURRENT_CAPABILITY_VERSION: Version = Version::new(3, 0, 0);
 
-/// Current QPU interface/API version.
+/// Current QPU interface contract.
 pub const CURRENT_QPU_INTERFACE_VERSION: Version = Version::new(2, 0, 0);
 
 /// Current QPU execution schema.
-pub const CURRENT_QPU_EXECUTION_VERSION: Version = Version::new(1, 0, 0);
+pub const CURRENT_QPU_EXECUTION_VERSION: Version = Version::new(2, 0, 0);
 
-/// Current decoder-output schema.
-pub const CURRENT_DECODER_OUTPUT_VERSION: Version = CURRENT_DECODER_RESULT_VERSION;
+/// Current decoder output contract.
+///
+/// Kept as an explicit alias for callers that distinguish decoder output from
+/// the persisted decoder-result schema.
+pub const CURRENT_DECODER_OUTPUT_VERSION: Version =
+    CURRENT_DECODER_RESULT_VERSION;
+
+/// Current replay artifact schema.
+pub const CURRENT_REPLAY_VERSION: Version = Version::new(1, 0, 0);
+
+/// Current cache artifact schema.
+pub const CURRENT_CACHE_VERSION: Version = Version::new(1, 0, 0);
+
+/// Current partition artifact schema.
+pub const CURRENT_PARTITION_VERSION: Version = Version::new(1, 0, 0);
+
+/// Current distributed execution schema.
+pub const CURRENT_DISTRIBUTED_VERSION: Version = Version::new(1, 0, 0);
+
+/// Current streaming schema.
+pub const CURRENT_STREAMING_VERSION: Version = Version::new(1, 0, 0);
+
+/// Current version of the complete QEC subsystem contract.
+pub const CURRENT_QEC_VERSION: Version = CURRENT_ALGORITHM_VERSION;
 
 // ============================================================================
 // Semantic version
 // ============================================================================
 
-/// Semantic version used by the QEC subsystem.
-///
-/// ```text
-/// MAJOR.MINOR.PATCH
-/// ```
+/// Semantic version used by QEC contracts and schemas.
 ///
 /// Major:
-/// incompatible API/schema/semantic changes.
+/// incompatible API, schema, or semantic change.
 ///
 /// Minor:
 /// backwards-compatible functionality.
 ///
 /// Patch:
-/// backwards-compatible corrections.
+/// backwards-compatible correction.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Version {
     pub major: u16,
@@ -152,6 +195,7 @@ pub struct Version {
 }
 
 impl Version {
+    /// Creates a version.
     pub const fn new(major: u16, minor: u16, patch: u16) -> Self {
         Self {
             major,
@@ -160,54 +204,70 @@ impl Version {
         }
     }
 
+    /// Zero/uninitialized version.
     pub const fn zero() -> Self {
         Self::new(0, 0, 0)
     }
 
-    /// Whether two versions belong to the same compatibility family.
+    /// Returns the current QEC subsystem version.
+    pub const fn current() -> Self {
+        CURRENT_QEC_VERSION
+    }
+
+    /// Returns true when the major versions match.
     pub const fn same_major(self, other: Self) -> bool {
         self.major == other.major
     }
 
-    /// Whether this version is older than another version.
-    pub const fn is_older_than(self, other: Self) -> bool {
-        self.cmp_const(other) == Ordering::Less
+    /// Returns true when the version is exactly equal.
+    pub const fn is_exact(self, other: Self) -> bool {
+        self.major == other.major
+            && self.minor == other.minor
+            && self.patch == other.patch
     }
 
-    /// Whether this version is newer than another version.
-    pub const fn is_newer_than(self, other: Self) -> bool {
-        self.cmp_const(other) == Ordering::Greater
+    /// Returns true when this version is older.
+    pub fn is_older_than(self, other: Self) -> bool {
+        self < other
     }
 
-    /// Deterministic compact representation.
+    /// Returns true when this version is newer.
+    pub fn is_newer_than(self, other: Self) -> bool {
+        self > other
+    }
+
+    /// Deterministic packed representation.
+    ///
+    /// This is intended for comparison/hash material, not textual encoding.
     pub const fn packed(self) -> u64 {
         ((self.major as u64) << 32)
             | ((self.minor as u64) << 16)
             | self.patch as u64
     }
 
-    const fn cmp_const(self, other: Self) -> Ordering {
-        if self.major < other.major {
-            Ordering::Less
-        } else if self.major > other.major {
-            Ordering::Greater
-        } else if self.minor < other.minor {
-            Ordering::Less
-        } else if self.minor > other.minor {
-            Ordering::Greater
-        } else if self.patch < other.patch {
-            Ordering::Less
-        } else if self.patch > other.patch {
-            Ordering::Greater
-        } else {
-            Ordering::Equal
-        }
+    /// Determines whether `self` may be used by an implementation supporting
+    /// `supported`, under the default same-major policy.
+    pub fn is_compatible_with(self, supported: Self) -> bool {
+        check_version_pair(self, supported, CompatibilityPolicy::SameMajor)
+            .is_compatible()
+    }
+
+    /// Requires compatibility under the default same-major policy.
+    pub fn require_compatible(
+        self,
+        supported: Self,
+    ) -> Result<(), VersionError> {
+        require_version_compatible(
+            self,
+            supported,
+            CompatibilityPolicy::SameMajor,
+        )
     }
 }
 
 impl Default for Version {
     fn default() -> Self {
-        CURRENT_ALGORITHM_VERSION
+        Self::current()
     }
 }
 
@@ -236,26 +296,33 @@ impl FromStr for Version {
     type Err = VersionError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        if value.is_empty() {
-            return Err(VersionError::Empty);
-        }
-
-        if value.len() > MAX_VERSION_STRING_LENGTH {
-            return Err(VersionError::TooLong);
-        }
-
-        let mut parts = value.split('.');
-
-        let major = parse_component(parts.next(), "major")?;
-        let minor = parse_component(parts.next(), "minor")?;
-        let patch = parse_component(parts.next(), "patch")?;
-
-        if parts.next().is_some() {
-            return Err(VersionError::InvalidFormat);
-        }
-
-        Ok(Self::new(major, minor, patch))
+        parse_version(value)
     }
+}
+
+/// Parses a strict `MAJOR.MINOR.PATCH` version.
+pub fn parse_version(value: &str) -> Result<Version, VersionError> {
+    if value.is_empty() {
+        return Err(VersionError::Empty);
+    }
+
+    if value.len() > MAX_VERSION_STRING_LENGTH {
+        return Err(VersionError::TooLong {
+            max: MAX_VERSION_STRING_LENGTH,
+        });
+    }
+
+    let mut parts = value.split('.');
+
+    let major = parse_component(parts.next(), "major")?;
+    let minor = parse_component(parts.next(), "minor")?;
+    let patch = parse_component(parts.next(), "patch")?;
+
+    if parts.next().is_some() {
+        return Err(VersionError::InvalidFormat);
+    }
+
+    Ok(Version::new(major, minor, patch))
 }
 
 fn parse_component(
@@ -282,9 +349,6 @@ fn parse_component(
 // ============================================================================
 
 /// Independently versioned QEC artifact.
-///
-/// Keep this enum synchronized with the persistent formats used by
-/// checkpointing, caching, replay, simulation and QPU execution.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ArtifactKind {
     Algorithm,
@@ -299,9 +363,15 @@ pub enum ArtifactKind {
     Capability,
     QpuInterface,
     QpuExecution,
+    Replay,
+    Cache,
+    Partition,
+    Streaming,
+    Distributed,
 }
 
 impl ArtifactKind {
+    /// Stable wire/storage identifier.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Algorithm => "algorithm",
@@ -316,9 +386,15 @@ impl ArtifactKind {
             Self::Capability => "capability",
             Self::QpuInterface => "qpu_interface",
             Self::QpuExecution => "qpu_execution",
+            Self::Replay => "replay",
+            Self::Cache => "cache",
+            Self::Partition => "partition",
+            Self::Streaming => "streaming",
+            Self::Distributed => "distributed",
         }
     }
 
+    /// Current schema/contract version for this artifact.
     pub const fn current_version(self) -> Version {
         match self {
             Self::Algorithm => CURRENT_ALGORITHM_VERSION,
@@ -333,7 +409,43 @@ impl ArtifactKind {
             Self::Capability => CURRENT_CAPABILITY_VERSION,
             Self::QpuInterface => CURRENT_QPU_INTERFACE_VERSION,
             Self::QpuExecution => CURRENT_QPU_EXECUTION_VERSION,
+            Self::Replay => CURRENT_REPLAY_VERSION,
+            Self::Cache => CURRENT_CACHE_VERSION,
+            Self::Partition => CURRENT_PARTITION_VERSION,
+            Self::Streaming => CURRENT_STREAMING_VERSION,
+            Self::Distributed => CURRENT_DISTRIBUTED_VERSION,
         }
+    }
+
+    /// Returns true when this artifact is persistent or externally
+    /// transferable and therefore requires explicit version validation.
+    pub const fn is_persistent(self) -> bool {
+        matches!(
+            self,
+            Self::Checkpoint
+                | Self::Syndrome
+                | Self::DecodingGraph
+                | Self::Simulation
+                | Self::NoiseModel
+                | Self::DecoderResult
+                | Self::Replay
+                | Self::Cache
+                | Self::Partition
+                | Self::Streaming
+                | Self::Distributed
+        )
+    }
+
+    /// Returns true when the artifact can cross a trust boundary.
+    pub const fn is_security_boundary(self) -> bool {
+        matches!(
+            self,
+            Self::Checkpoint
+                | Self::Capability
+                | Self::QpuInterface
+                | Self::QpuExecution
+                | Self::Distributed
+        )
     }
 }
 
@@ -344,10 +456,10 @@ impl fmt::Display for ArtifactKind {
 }
 
 // ============================================================================
-// Execution targets
+// Execution target
 // ============================================================================
 
-/// Execution environment associated with a versioned artifact.
+/// Execution environment associated with an artifact.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ExecutionTarget {
     ClassicalCpu,
@@ -378,7 +490,7 @@ impl ExecutionTarget {
         }
     }
 
-    /// Whether this target requires QPU metadata.
+    /// Returns true when QPU metadata/authorization is required.
     pub const fn requires_qpu(self) -> bool {
         matches!(
             self,
@@ -388,30 +500,19 @@ impl ExecutionTarget {
         )
     }
 
-    /// Whether two targets can directly share the same executable artifact.
+    /// Determines whether two execution targets can share an artifact
+    /// without target-specific migration.
     pub const fn compatible_with(self, other: Self) -> bool {
-        if self == other {
+        if self as u8 == other as u8 {
             return true;
         }
 
         matches!(
             (self, other),
-            (
-                Self::ClassicalCpu,
-                Self::ParallelCpu
-            )
-                | (
-                    Self::ParallelCpu,
-                    Self::ClassicalCpu
-                )
-                | (
-                    Self::Simulator,
-                    Self::Emulator
-                )
-                | (
-                    Self::Emulator,
-                    Self::Simulator
-                )
+            (Self::ClassicalCpu, Self::ParallelCpu)
+                | (Self::ParallelCpu, Self::ClassicalCpu)
+                | (Self::Simulator, Self::Emulator)
+                | (Self::Emulator, Self::Simulator)
         )
     }
 }
@@ -423,33 +524,108 @@ impl fmt::Display for ExecutionTarget {
 }
 
 // ============================================================================
+// Feature flags
+// ============================================================================
+
+/// Compact deterministic feature bitmap.
+///
+/// Feature flags are part of compatibility. A version match alone is not
+/// sufficient when an artifact requires an unsupported feature.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct FeatureFlags(u64);
+
+impl FeatureFlags {
+    pub const NONE: Self = Self(0);
+
+    pub const STREAMING: u8 = 0;
+    pub const PARTITIONING: u8 = 1;
+    pub const DISTRIBUTED: u8 = 2;
+    pub const GPU: u8 = 3;
+    pub const ACCELERATOR: u8 = 4;
+    pub const QPU: u8 = 5;
+    pub const CHECKPOINTING: u8 = 6;
+    pub const REPLAY: u8 = 7;
+    pub const DETERMINISTIC: u8 = 8;
+    pub const RESOURCE_ACCOUNTING: u8 = 9;
+    pub const CAPABILITY_SECURITY: u8 = 10;
+    pub const STATISTICAL_VERIFICATION: u8 = 11;
+    pub const LOGICAL_EQUIVALENCE: u8 = 12;
+
+    /// Creates flags from a raw bitmap.
+    pub const fn from_bits(bits: u64) -> Self {
+        Self(bits)
+    }
+
+    /// Returns the raw bitmap.
+    pub const fn bits(self) -> u64 {
+        self.0
+    }
+
+    /// Returns true when a feature bit is enabled.
+    pub const fn contains(self, bit: u8) -> bool {
+        if bit >= FEATURE_FLAG_BITS as u8 {
+            return false;
+        }
+
+        self.0 & (1u64 << bit) != 0
+    }
+
+    /// Enables a feature.
+    pub const fn with(self, bit: u8) -> Self {
+        if bit >= FEATURE_FLAG_BITS as u8 {
+            return self;
+        }
+
+        Self(self.0 | (1u64 << bit))
+    }
+
+    /// Removes a feature.
+    pub const fn without(self, bit: u8) -> Self {
+        if bit >= FEATURE_FLAG_BITS as u8 {
+            return self;
+        }
+
+        Self(self.0 & !(1u64 << bit))
+    }
+
+    /// Returns true when all required features are available.
+    pub const fn supports(self, required: Self) -> bool {
+        self.0 & required.0 == required.0
+    }
+}
+
+// ============================================================================
 // Compatibility policy
 // ============================================================================
 
-/// Explicit compatibility policy.
-///
-/// Compatibility is never inferred implicitly.
+/// Explicit version compatibility policy.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CompatibilityPolicy {
-    /// Exact version required.
+    /// Exact major/minor/patch match.
     Exact,
 
-    /// Same major version, with an artifact that is not newer than the
-    /// supported implementation.
+    /// Same major version; artifact must not be newer than the supported
+    /// implementation.
     SameMajor,
 
-    /// Older versions within the same major family may be read.
+    /// Same major family; older versions may be read.
     BackwardCompatible,
 
-    /// Older compatible artifacts may be read but must not be written back
-    /// using their old schema.
+    /// Same-major legacy artifacts may be read but must not be written back
+    /// without migration.
     ReadOnlyLegacy,
 
-    /// Artifact is explicitly rejected.
+    /// Explicit rejection.
     Reject,
 }
 
-/// Relationship between two versions/artifacts.
+impl Default for CompatibilityPolicy {
+    fn default() -> Self {
+        Self::SameMajor
+    }
+}
+
+/// Result of comparing artifact and supported versions.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Compatibility {
     Exact,
@@ -458,6 +634,8 @@ pub enum Compatibility {
     Incompatible,
     NewerThanSupported,
     TargetMismatch,
+    MissingFeature,
+    ProtocolMismatch,
 }
 
 impl Compatibility {
@@ -473,19 +651,23 @@ impl Compatibility {
     pub const fn is_exact(self) -> bool {
         matches!(self, Self::Exact)
     }
+
+    pub const fn requires_migration(self) -> bool {
+        matches!(self, Self::LegacyCompatible)
+    }
 }
 
 // ============================================================================
 // Version manifest
 // ============================================================================
 
-/// Complete QEC version manifest.
+/// Complete version manifest for a QEC execution environment.
 ///
-/// A manifest should accompany persistent state and execution artifacts.
+/// This structure is the cross-module version contract.
 ///
-/// This allows a checkpoint, graph, syndrome stream, decoder result or QPU
-/// job to be rejected before its payload is interpreted under the wrong
-/// schema.
+/// `configuration`, `checkpoint`, `syndrome`, `graph`, decoder-result,
+/// backend, capability, QPU, streaming, partition and distributed modules
+/// may embed or reference this manifest.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VersionManifest {
     pub protocol_major: u16,
@@ -504,15 +686,52 @@ pub struct VersionManifest {
     pub qpu_interface: Version,
     pub qpu_execution: Version,
 
+    pub replay: Version,
+    pub cache: Version,
+    pub partition: Version,
+    pub streaming: Version,
+    pub distributed: Version,
+
     pub target: ExecutionTarget,
+    pub features: FeatureFlags,
 }
 
 impl VersionManifest {
-    /// Construct a manifest for the currently supported implementation.
+    /// Creates a manifest for the current implementation.
     pub const fn current(target: ExecutionTarget) -> Self {
+        let mut features = FeatureFlags::NONE
+            .with(FeatureFlags::DETERMINISTIC)
+            .with(FeatureFlags::RESOURCE_ACCOUNTING)
+            .with(FeatureFlags::CHECKPOINTING)
+            .with(FeatureFlags::REPLAY)
+            .with(FeatureFlags::CAPABILITY_SECURITY)
+            .with(FeatureFlags::LOGICAL_EQUIVALENCE)
+            .with(FeatureFlags::STATISTICAL_VERIFICATION);
+
+        if target.requires_qpu() {
+            features = features.with(FeatureFlags::QPU);
+        }
+
+        if matches!(
+            target,
+            ExecutionTarget::ParallelCpu
+                | ExecutionTarget::Gpu
+                | ExecutionTarget::Accelerator
+        ) {
+            features = features.with(FeatureFlags::STREAMING);
+        }
+
+        if matches!(target, ExecutionTarget::Distributed) {
+            features = features
+                .with(FeatureFlags::STREAMING)
+                .with(FeatureFlags::PARTITIONING)
+                .with(FeatureFlags::DISTRIBUTED);
+        }
+
         Self {
             protocol_major: VERSION_PROTOCOL_MAJOR,
             protocol_minor: VERSION_PROTOCOL_MINOR,
+
             algorithm: CURRENT_ALGORITHM_VERSION,
             configuration: CURRENT_CONFIGURATION_VERSION,
             checkpoint: CURRENT_CHECKPOINT_VERSION,
@@ -525,11 +744,47 @@ impl VersionManifest {
             capability: CURRENT_CAPABILITY_VERSION,
             qpu_interface: CURRENT_QPU_INTERFACE_VERSION,
             qpu_execution: CURRENT_QPU_EXECUTION_VERSION,
+
+            replay: CURRENT_REPLAY_VERSION,
+            cache: CURRENT_CACHE_VERSION,
+            partition: CURRENT_PARTITION_VERSION,
+            streaming: CURRENT_STREAMING_VERSION,
+            distributed: CURRENT_DISTRIBUTED_VERSION,
+
             target,
+            features,
         }
     }
 
-    /// Validate protocol metadata.
+    /// Returns the version belonging to an artifact kind.
+    pub const fn version_of(&self, kind: ArtifactKind) -> Version {
+        match kind {
+            ArtifactKind::Algorithm => self.algorithm,
+            ArtifactKind::Configuration => self.configuration,
+            ArtifactKind::Checkpoint => self.checkpoint,
+            ArtifactKind::Syndrome => self.syndrome,
+            ArtifactKind::DecodingGraph => self.graph,
+            ArtifactKind::Simulation => self.simulation,
+            ArtifactKind::NoiseModel => self.noise_model,
+            ArtifactKind::DecoderResult => self.decoder_result,
+            ArtifactKind::Backend => self.backend,
+            ArtifactKind::Capability => self.capability,
+            ArtifactKind::QpuInterface => self.qpu_interface,
+            ArtifactKind::QpuExecution => self.qpu_execution,
+            ArtifactKind::Replay => self.replay,
+            ArtifactKind::Cache => self.cache,
+            ArtifactKind::Partition => self.partition,
+            ArtifactKind::Streaming => self.streaming,
+            ArtifactKind::Distributed => self.distributed,
+        }
+    }
+
+    /// Returns the currently supported version for an artifact kind.
+    pub const fn current_version_of(kind: ArtifactKind) -> Version {
+        kind.current_version()
+    }
+
+    /// Validates protocol-level metadata.
     pub fn validate(&self) -> Result<(), VersionError> {
         if self.protocol_major == 0 {
             return Err(VersionError::InvalidProtocolVersion);
@@ -549,114 +804,58 @@ impl VersionManifest {
             });
         }
 
-        if self.target.requires_qpu()
-            && self.qpu_interface.major == 0
-        {
-            return Err(VersionError::InvalidQpuVersion);
+        if self.target.requires_qpu() {
+            if self.qpu_interface.major == 0 {
+                return Err(VersionError::InvalidQpuVersion);
+            }
+
+            if self.qpu_execution.major == 0 {
+                return Err(VersionError::InvalidQpuVersion);
+            }
+
+            if !self.features.contains(FeatureFlags::QPU) {
+                return Err(VersionError::MissingRequiredFeature(
+                    "qpu",
+                ));
+            }
         }
 
         Ok(())
     }
 
-    /// Return the version belonging to an artifact.
-    pub const fn version_of(&self, kind: ArtifactKind) -> Version {
-        match kind {
-            ArtifactKind::Algorithm => self.algorithm,
-            ArtifactKind::Configuration => self.configuration,
-            ArtifactKind::Checkpoint => self.checkpoint,
-            ArtifactKind::Syndrome => self.syndrome,
-            ArtifactKind::DecodingGraph => self.graph,
-            ArtifactKind::Simulation => self.simulation,
-            ArtifactKind::NoiseModel => self.noise_model,
-            ArtifactKind::DecoderResult => self.decoder_result,
-            ArtifactKind::Backend => self.backend,
-            ArtifactKind::Capability => self.capability,
-            ArtifactKind::QpuInterface => self.qpu_interface,
-            ArtifactKind::QpuExecution => self.qpu_execution,
-        }
-    }
-
-    /// Determine compatibility of an artifact with the currently supported
-    /// implementation.
-    pub fn compatibility(
+    /// Checks whether this manifest is compatible with a supported manifest.
+    pub fn compatibility_with(
         &self,
-        kind: ArtifactKind,
+        supported: &Self,
         policy: CompatibilityPolicy,
-    ) -> Compatibility {
-        let found = self.version_of(kind);
-        let current = kind.current_version();
+    ) -> CompatibilityReport {
+        let mut report = CompatibilityReport::new();
 
-        match policy {
-            CompatibilityPolicy::Exact => {
-                if found == current {
-                    Compatibility::Exact
-                } else if found > current {
-                    Compatibility::NewerThanSupported
-                } else {
-                    Compatibility::Incompatible
-                }
-            }
-
-            CompatibilityPolicy::SameMajor => {
-                if found == current {
-                    Compatibility::Exact
-                } else if found > current {
-                    Compatibility::NewerThanSupported
-                } else if found.major == current.major {
-                    Compatibility::Compatible
-                } else {
-                    Compatibility::Incompatible
-                }
-            }
-
-            CompatibilityPolicy::BackwardCompatible => {
-                if found == current {
-                    Compatibility::Exact
-                } else if found > current {
-                    Compatibility::NewerThanSupported
-                } else if found.major == current.major {
-                    Compatibility::LegacyCompatible
-                } else {
-                    Compatibility::Incompatible
-                }
-            }
-
-            CompatibilityPolicy::ReadOnlyLegacy => {
-                if found == current {
-                    Compatibility::Exact
-                } else if found < current
-                    && found.major == current.major
-                {
-                    Compatibility::LegacyCompatible
-                } else if found > current {
-                    Compatibility::NewerThanSupported
-                } else {
-                    Compatibility::Incompatible
-                }
-            }
-
-            CompatibilityPolicy::Reject => Compatibility::Incompatible,
+        if self.protocol_major != supported.protocol_major {
+            report.compatibility = Compatibility::ProtocolMismatch;
+            report.reason = CompatibilityReason::ProtocolMajorMismatch;
+            return report;
         }
-    }
 
-    /// Compare this manifest against another manifest.
-    ///
-    /// This is important for distributed execution, checkpoints, replay and
-    /// cache validation because compatibility is not always a comparison
-    /// against the locally installed "current" version.
-    pub fn is_compatible_with(
-        &self,
-        other: &Self,
-        policy: CompatibilityPolicy,
-    ) -> Result<(), VersionError> {
-        self.validate()?;
-        other.validate()?;
+        if self.protocol_minor > supported.protocol_minor {
+            report.compatibility = Compatibility::NewerThanSupported;
+            report.reason = CompatibilityReason::NewerProtocol;
+            return report;
+        }
 
-        if !self.target.compatible_with(other.target) {
-            return Err(VersionError::TargetMismatch {
-                expected: self.target,
-                found: other.target,
-            });
+        if !self
+            .target
+            .compatible_with(supported.target)
+        {
+            report.compatibility = Compatibility::TargetMismatch;
+            report.reason = CompatibilityReason::ExecutionTargetMismatch;
+            return report;
+        }
+
+        if !supported.features.supports(self.features) {
+            report.compatibility = Compatibility::MissingFeature;
+            report.reason = CompatibilityReason::RequiredFeatureUnavailable;
+            return report;
         }
 
         let kinds = [
@@ -672,106 +871,66 @@ impl VersionManifest {
             ArtifactKind::Capability,
             ArtifactKind::QpuInterface,
             ArtifactKind::QpuExecution,
+            ArtifactKind::Replay,
+            ArtifactKind::Cache,
+            ArtifactKind::Partition,
+            ArtifactKind::Streaming,
+            ArtifactKind::Distributed,
         ];
 
+        let mut saw_legacy = false;
+
         for kind in kinds {
-            let left = self.version_of(kind);
-            let right = other.version_of(kind);
+            let artifact = self.version_of(kind);
+            let current = supported.version_of(kind);
 
-            match policy {
-                CompatibilityPolicy::Exact => {
-                    if left != right {
-                        return Err(VersionError::ManifestMismatch {
-                            artifact: kind,
-                            expected: left,
-                            found: right,
-                        });
-                    }
-                }
+            let compatibility =
+                check_version_pair(artifact, current, policy);
 
-                CompatibilityPolicy::SameMajor
-                | CompatibilityPolicy::BackwardCompatible
-                | CompatibilityPolicy::ReadOnlyLegacy => {
-                    if left.major != right.major {
-                        return Err(VersionError::ManifestMismatch {
-                            artifact: kind,
-                            expected: left,
-                            found: right,
-                        });
-                    }
+            if !compatibility.is_compatible() {
+                report.compatibility = compatibility;
+                report.failed_artifact = Some(kind);
+                report.reason =
+                    CompatibilityReason::ArtifactVersionMismatch;
+                return report;
+            }
 
-                    if right > left {
-                        return Err(VersionError::NewerArtifact {
-                            kind,
-                            found: right,
-                            supported: left,
-                        });
-                    }
-                }
-
-                CompatibilityPolicy::Reject => {
-                    return Err(VersionError::Rejected);
-                }
+            if compatibility.requires_migration() {
+                saw_legacy = true;
+                report.legacy_artifact = Some(kind);
             }
         }
 
-        Ok(())
-    }
-
-    /// Require compatibility with the current implementation.
-    pub fn require_compatible(
-        &self,
-        kind: ArtifactKind,
-        policy: CompatibilityPolicy,
-    ) -> Result<Compatibility, VersionError> {
-        self.validate()?;
-
-        let compatibility = self.compatibility(kind, policy);
-
-        if !compatibility.is_compatible() {
-            return Err(match compatibility {
-                Compatibility::NewerThanSupported => {
-                    VersionError::NewerArtifact {
-                        kind,
-                        found: self.version_of(kind),
-                        supported: kind.current_version(),
-                    }
-                }
-
-                Compatibility::TargetMismatch => {
-                    VersionError::TargetMismatch {
-                        expected: self.target,
-                        found: self.target,
-                    }
-                }
-
-                _ => VersionError::IncompatibleArtifact {
-                    kind,
-                    found: self.version_of(kind),
-                    expected: kind.current_version(),
-                },
-            });
+        if saw_legacy {
+            report.compatibility = Compatibility::LegacyCompatible;
+            report.reason = CompatibilityReason::LegacyArtifact;
+        } else if self == supported {
+            report.compatibility = Compatibility::Exact;
+            report.reason = CompatibilityReason::ExactMatch;
+        } else {
+            report.compatibility = Compatibility::Compatible;
+            report.reason = CompatibilityReason::SameMajorCompatible;
         }
 
-        Ok(compatibility)
+        report
     }
 
-    /// Determine whether this manifest is entirely current.
-    pub fn is_current(&self) -> bool {
-        self.protocol_major == VERSION_PROTOCOL_MAJOR
-            && self.protocol_minor == VERSION_PROTOCOL_MINOR
-            && self.algorithm == CURRENT_ALGORITHM_VERSION
-            && self.configuration == CURRENT_CONFIGURATION_VERSION
-            && self.checkpoint == CURRENT_CHECKPOINT_VERSION
-            && self.syndrome == CURRENT_SYNDROME_VERSION
-            && self.graph == CURRENT_GRAPH_VERSION
-            && self.simulation == CURRENT_SIMULATION_VERSION
-            && self.noise_model == CURRENT_NOISE_MODEL_VERSION
-            && self.decoder_result == CURRENT_DECODER_RESULT_VERSION
-            && self.backend == CURRENT_BACKEND_VERSION
-            && self.capability == CURRENT_CAPABILITY_VERSION
-            && self.qpu_interface == CURRENT_QPU_INTERFACE_VERSION
-            && self.qpu_execution == CURRENT_QPU_EXECUTION_VERSION
+    /// Requires compatibility with another manifest.
+    pub fn require_compatible(
+        &self,
+        supported: &Self,
+        policy: CompatibilityPolicy,
+    ) -> Result<(), VersionError> {
+        let report = self.compatibility_with(supported, policy);
+
+        if report.compatibility.is_compatible() {
+            Ok(())
+        } else {
+            Err(VersionError::ManifestIncompatible {
+                artifact: report.failed_artifact,
+                compatibility: report.compatibility,
+            })
+        }
     }
 }
 
@@ -782,498 +941,43 @@ impl Default for VersionManifest {
 }
 
 // ============================================================================
-// Component version
-// ============================================================================
-
-/// Version identity for a concrete algorithm, backend, decoder, noise model
-/// or QPU provider.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ComponentVersion {
-    pub artifact: ArtifactKind,
-    pub artifact_id: String,
-    pub version: Version,
-}
-
-impl ComponentVersion {
-    pub fn new(
-        artifact: ArtifactKind,
-        artifact_id: impl Into<String>,
-        version: Version,
-    ) -> Result<Self, VersionError> {
-        let artifact_id = artifact_id.into();
-
-        validate_identifier(
-            &artifact_id,
-            "artifact_id",
-        )?;
-
-        Ok(Self {
-            artifact,
-            artifact_id,
-            version,
-        })
-    }
-
-    /// Stable component identity.
-    pub fn identity(&self) -> String {
-        format!(
-            "{}:{}@{}",
-            self.artifact,
-            self.artifact_id,
-            self.version
-        )
-    }
-
-    /// Validate this component against another component.
-    pub fn compatible_with(
-        &self,
-        other: &Self,
-        policy: CompatibilityPolicy,
-    ) -> Result<Compatibility, VersionError> {
-        if self.artifact != other.artifact {
-            return Err(VersionError::ArtifactKindMismatch {
-                expected: self.artifact,
-                found: other.artifact,
-            });
-        }
-
-        if self.artifact_id != other.artifact_id {
-            return Err(VersionError::ComponentIdentityMismatch {
-                expected: self.artifact_id.clone(),
-                found: other.artifact_id.clone(),
-            });
-        }
-
-        let left = self.version;
-        let right = other.version;
-
-        let result = match policy {
-            CompatibilityPolicy::Exact => {
-                if left == right {
-                    Compatibility::Exact
-                } else if right > left {
-                    Compatibility::NewerThanSupported
-                } else {
-                    Compatibility::Incompatible
-                }
-            }
-
-            CompatibilityPolicy::SameMajor => {
-                if left == right {
-                    Compatibility::Exact
-                } else if right > left {
-                    Compatibility::NewerThanSupported
-                } else if left.major == right.major {
-                    Compatibility::Compatible
-                } else {
-                    Compatibility::Incompatible
-                }
-            }
-
-            CompatibilityPolicy::BackwardCompatible
-            | CompatibilityPolicy::ReadOnlyLegacy => {
-                if left == right {
-                    Compatibility::Exact
-                } else if right > left {
-                    Compatibility::NewerThanSupported
-                } else if left.major == right.major {
-                    Compatibility::LegacyCompatible
-                } else {
-                    Compatibility::Incompatible
-                }
-            }
-
-            CompatibilityPolicy::Reject => Compatibility::Incompatible,
-        };
-
-        if result.is_compatible() {
-            Ok(result)
-        } else {
-            Err(VersionError::ComponentVersionMismatch {
-                artifact: self.artifact,
-                expected: left,
-                found: right,
-            })
-        }
-    }
-}
-
-// ============================================================================
-// QPU version
-// ============================================================================
-
-/// Version information for a physical or virtual QPU.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct QpuVersion {
-    pub provider: String,
-    pub device_family: String,
-    pub device_id: Option<String>,
-
-    /// QEC-facing QPU interface version.
-    pub interface_version: Version,
-
-    /// Device firmware version.
-    pub firmware_version: Version,
-
-    /// Classical control-stack version.
-    pub control_stack_version: Version,
-
-    /// Calibration schema/version.
-    pub calibration_version: Version,
-
-    /// Whether dynamic circuits are supported.
-    pub dynamic_circuits: bool,
-
-    /// Whether hybrid CPU/QPU execution is supported.
-    pub hybrid_execution: bool,
-}
-
-impl QpuVersion {
-    pub fn new(
-        provider: impl Into<String>,
-        device_family: impl Into<String>,
-        interface_version: Version,
-        firmware_version: Version,
-        control_stack_version: Version,
-        calibration_version: Version,
-    ) -> Result<Self, VersionError> {
-        let provider = provider.into();
-        let device_family = device_family.into();
-
-        validate_identifier(&provider, "provider")?;
-        validate_identifier(
-            &device_family,
-            "device_family",
-        )?;
-
-        Ok(Self {
-            provider,
-            device_family,
-            device_id: None,
-            interface_version,
-            firmware_version,
-            control_stack_version,
-            calibration_version,
-            dynamic_circuits: false,
-            hybrid_execution: false,
-        })
-    }
-
-    pub fn with_device_id(
-        mut self,
-        device_id: impl Into<String>,
-    ) -> Result<Self, VersionError> {
-        let device_id = device_id.into();
-
-        validate_identifier(
-            &device_id,
-            "device_id",
-        )?;
-
-        self.device_id = Some(device_id);
-
-        Ok(self)
-    }
-
-    pub fn with_dynamic_circuits(
-        mut self,
-        supported: bool,
-    ) -> Self {
-        self.dynamic_circuits = supported;
-        self
-    }
-
-    pub fn with_hybrid_execution(
-        mut self,
-        supported: bool,
-    ) -> Self {
-        self.hybrid_execution = supported;
-        self
-    }
-
-    /// Check whether this QPU can satisfy an interface requirement.
-    pub fn supports_interface(
-        &self,
-        required: Version,
-    ) -> bool {
-        self.interface_version.major == required.major
-            && self.interface_version >= required
-    }
-
-    /// Check whether the QPU can participate in the requested execution
-    /// target.
-    pub fn supports_target(
-        &self,
-        target: ExecutionTarget,
-    ) -> bool {
-        match target {
-            ExecutionTarget::Qpu => true,
-
-            ExecutionTarget::HybridCpuQpu
-            | ExecutionTarget::HybridAcceleratorQpu => {
-                self.hybrid_execution
-            }
-
-            _ => true,
-        }
-    }
-
-    /// Stable non-secret QPU identity.
-    pub fn identity(&self) -> String {
-        match &self.device_id {
-            Some(id) => {
-                format!(
-                    "{}:{}:{}",
-                    self.provider,
-                    self.device_family,
-                    id
-                )
-            }
-
-            None => {
-                format!(
-                    "{}:{}",
-                    self.provider,
-                    self.device_family
-                )
-            }
-        }
-    }
-
-    /// Validate QPU metadata.
-    pub fn validate(&self) -> Result<(), VersionError> {
-        validate_identifier(
-            &self.provider,
-            "provider",
-        )?;
-
-        validate_identifier(
-            &self.device_family,
-            "device_family",
-        )?;
-
-        if let Some(id) = &self.device_id {
-            validate_identifier(id, "device_id")?;
-        }
-
-        if self.interface_version.major == 0 {
-            return Err(VersionError::InvalidQpuVersion);
-        }
-
-        Ok(())
-    }
-}
-
-// ============================================================================
-// Execution version
-// ============================================================================
-
-/// Version information for a concrete execution environment.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ExecutionVersion {
-    pub target: ExecutionTarget,
-    pub component: ComponentVersion,
-    pub manifest: VersionManifest,
-    pub qpu: Option<QpuVersion>,
-}
-
-impl ExecutionVersion {
-    pub fn classical(
-        component_id: impl Into<String>,
-        version: Version,
-    ) -> Result<Self, VersionError> {
-        let component = ComponentVersion::new(
-            ArtifactKind::Backend,
-            component_id,
-            version,
-        )?;
-
-        Ok(Self {
-            target: ExecutionTarget::ClassicalCpu,
-            component,
-            manifest: VersionManifest::current(
-                ExecutionTarget::ClassicalCpu,
-            ),
-            qpu: None,
-        })
-    }
-
-    pub fn simulator(
-        component_id: impl Into<String>,
-        version: Version,
-    ) -> Result<Self, VersionError> {
-        let component = ComponentVersion::new(
-            ArtifactKind::Backend,
-            component_id,
-            version,
-        )?;
-
-        Ok(Self {
-            target: ExecutionTarget::Simulator,
-            component,
-            manifest: VersionManifest::current(
-                ExecutionTarget::Simulator,
-            ),
-            qpu: None,
-        })
-    }
-
-    pub fn qpu(
-        component_id: impl Into<String>,
-        version: Version,
-        qpu: QpuVersion,
-    ) -> Result<Self, VersionError> {
-        qpu.validate()?;
-
-        if !qpu.supports_interface(
-            CURRENT_QPU_INTERFACE_VERSION,
-        ) {
-            return Err(
-                VersionError::QpuInterfaceMismatch {
-                    required: CURRENT_QPU_INTERFACE_VERSION,
-                    found: qpu.interface_version,
-                },
-            );
-        }
-
-        let component = ComponentVersion::new(
-            ArtifactKind::Backend,
-            component_id,
-            version,
-        )?;
-
-        Ok(Self {
-            target: ExecutionTarget::Qpu,
-            component,
-            manifest: VersionManifest::current(
-                ExecutionTarget::Qpu,
-            ),
-            qpu: Some(qpu),
-        })
-    }
-
-    pub fn hybrid_qpu(
-        component_id: impl Into<String>,
-        version: Version,
-        qpu: QpuVersion,
-    ) -> Result<Self, VersionError> {
-        qpu.validate()?;
-
-        if !qpu.hybrid_execution {
-            return Err(
-                VersionError::QpuTargetUnsupported {
-                    target: ExecutionTarget::HybridCpuQpu,
-                },
-            );
-        }
-
-        let component = ComponentVersion::new(
-            ArtifactKind::Backend,
-            component_id,
-            version,
-        )?;
-
-        Ok(Self {
-            target: ExecutionTarget::HybridCpuQpu,
-            component,
-            manifest: VersionManifest::current(
-                ExecutionTarget::HybridCpuQpu,
-            ),
-            qpu: Some(qpu),
-        })
-    }
-
-    pub fn validate(&self) -> Result<(), VersionError> {
-        self.manifest.validate()?;
-
-        if self.manifest.target != self.target {
-            return Err(
-                VersionError::ExecutionTargetMismatch {
-                    expected: self.target,
-                    found: self.manifest.target,
-                },
-            );
-        }
-
-        if self.target.requires_qpu() {
-            let qpu = self
-                .qpu
-                .as_ref()
-                .ok_or(VersionError::MissingQpuMetadata)?;
-
-            qpu.validate()?;
-
-            if !qpu.supports_target(self.target) {
-                return Err(
-                    VersionError::QpuTargetUnsupported {
-                        target: self.target,
-                    },
-                );
-            }
-        } else if self.qpu.is_some() {
-            return Err(
-                VersionError::UnexpectedQpuMetadata,
-            );
-        }
-
-        Ok(())
-    }
-}
-
-// ============================================================================
 // Artifact header
 // ============================================================================
 
-/// Persistent artifact header.
+/// Minimal version envelope that can be placed in front of an artifact.
 ///
-/// This must be validated before the payload is interpreted.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// This is deliberately payload-independent so checkpoint, cache, replay,
+/// distributed and QPU modules can use the same contract.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ArtifactHeader {
-    pub magic: [u8; 4],
     pub protocol_major: u16,
     pub protocol_minor: u16,
-    pub artifact: ArtifactKind,
+    pub kind: ArtifactKind,
     pub version: Version,
     pub target: ExecutionTarget,
+    pub features: FeatureFlags,
 }
 
 impl ArtifactHeader {
-    /// Magic value for Zamani QEC artifacts.
-    pub const MAGIC: [u8; 4] = *b"ZQEC";
-
-    pub const fn new(
-        artifact: ArtifactKind,
-        version: Version,
+    /// Creates a header using the current version for an artifact.
+    pub const fn current(
+        kind: ArtifactKind,
         target: ExecutionTarget,
     ) -> Self {
+        let manifest = VersionManifest::current(target);
+
         Self {
-            magic: Self::MAGIC,
             protocol_major: VERSION_PROTOCOL_MAJOR,
             protocol_minor: VERSION_PROTOCOL_MINOR,
-            artifact,
-            version,
+            kind,
+            version: kind.current_version(),
             target,
+            features: manifest.features,
         }
     }
 
-    /// Construct a header using the currently supported version.
-    pub const fn current(
-        artifact: ArtifactKind,
-        target: ExecutionTarget,
-    ) -> Self {
-        Self::new(
-            artifact,
-            artifact.current_version(),
-            target,
-        )
-    }
-
-    /// Validate the header itself.
+    /// Validates the header itself.
     pub fn validate(&self) -> Result<(), VersionError> {
-        if self.magic != Self::MAGIC {
-            return Err(VersionError::InvalidMagic);
-        }
-
         if self.protocol_major != VERSION_PROTOCOL_MAJOR {
             return Err(VersionError::ProtocolMismatch {
                 expected_major: VERSION_PROTOCOL_MAJOR,
@@ -1288,227 +992,353 @@ impl ArtifactHeader {
             });
         }
 
-        if self.version.major == 0 {
-            return Err(VersionError::InvalidArtifactVersion {
-                kind: self.artifact,
-            });
+        if self.version == Version::zero() {
+            return Err(VersionError::InvalidArtifactVersion(
+                self.kind,
+            ));
+        }
+
+        if self.target.requires_qpu()
+            && !self.features.contains(FeatureFlags::QPU)
+        {
+            return Err(VersionError::MissingRequiredFeature(
+                "qpu",
+            ));
         }
 
         Ok(())
     }
 
-    /// Whether the artifact uses the current schema.
-    pub fn is_current(&self) -> bool {
-        self.version == self.artifact.current_version()
+    /// Compares the header against the current implementation.
+    pub fn compatibility(
+        &self,
+        policy: CompatibilityPolicy,
+    ) -> Compatibility {
+        if self
+            .validate()
+            .is_err()
+        {
+            return Compatibility::Incompatible;
+        }
+
+        check_version_pair(
+            self.version,
+            self.kind.current_version(),
+            policy,
+        )
     }
 
-    /// Convert the header into a one-artifact manifest.
-    pub const fn manifest(&self) -> VersionManifest {
-        VersionManifest::current(self.target)
+    /// Requires this header to be compatible with the current implementation.
+    pub fn require_compatible(
+        &self,
+        policy: CompatibilityPolicy,
+    ) -> Result<(), VersionError> {
+        self.validate()?;
+
+        let compatibility = self.compatibility(policy);
+
+        if compatibility.is_compatible() {
+            Ok(())
+        } else {
+            Err(VersionError::ArtifactIncompatible {
+                kind: self.kind,
+                found: self.version,
+                supported: self.kind.current_version(),
+                compatibility,
+            })
+        }
     }
 }
 
 // ============================================================================
-// Upgrade policy
+// Compatibility report
 // ============================================================================
 
-/// Policy for persisted-artifact upgrades.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UpgradePolicy {
-    /// Require exact current versions.
-    Strict,
-
-    /// Permit explicitly compatible older versions.
-    Compatible,
-
-    /// Permit compatible older versions and require migration before write.
-    MigrateOnRead,
-
-    /// Permit legacy reads but prohibit writing legacy format.
-    ReadLegacyOnly,
+/// Detailed result of a manifest compatibility check.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompatibilityReport {
+    pub compatibility: Compatibility,
+    pub reason: CompatibilityReason,
+    pub failed_artifact: Option<ArtifactKind>,
+    pub legacy_artifact: Option<ArtifactKind>,
 }
 
-impl UpgradePolicy {
-    pub const fn compatibility_policy(
-        self,
-    ) -> CompatibilityPolicy {
-        match self {
-            Self::Strict => CompatibilityPolicy::Exact,
-            Self::Compatible => {
-                CompatibilityPolicy::BackwardCompatible
-            }
-            Self::MigrateOnRead => {
-                CompatibilityPolicy::BackwardCompatible
-            }
-            Self::ReadLegacyOnly => {
-                CompatibilityPolicy::ReadOnlyLegacy
-            }
+impl CompatibilityReport {
+    pub const fn new() -> Self {
+        Self {
+            compatibility: Compatibility::Incompatible,
+            reason: CompatibilityReason::NotChecked,
+            failed_artifact: None,
+            legacy_artifact: None,
         }
     }
 
-    pub const fn permits_migration(self) -> bool {
-        matches!(self, Self::MigrateOnRead)
+    pub const fn is_compatible(&self) -> bool {
+        self.compatibility.is_compatible()
     }
 
-    /// Whether this policy permits writing a legacy artifact.
-    pub const fn permits_legacy_write(self) -> bool {
-        false
-    }
-}
-
-// ============================================================================
-// Validation status
-// ============================================================================
-
-/// Result of validating an artifact.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ValidationStatus {
-    Current,
-    Compatible,
-    Legacy,
-}
-
-impl ValidationStatus {
-    pub const fn requires_migration(self) -> bool {
-        matches!(self, Self::Legacy)
+    pub const fn requires_migration(&self) -> bool {
+        self.compatibility.requires_migration()
     }
 }
 
+impl Default for CompatibilityReport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Machine-readable explanation for a compatibility result.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CompatibilityReason {
+    NotChecked,
+    ExactMatch,
+    SameMajorCompatible,
+    LegacyArtifact,
+    ProtocolMajorMismatch,
+    NewerProtocol,
+    ArtifactVersionMismatch,
+    ExecutionTargetMismatch,
+    RequiredFeatureUnavailable,
+}
+
 // ============================================================================
-// Artifact validation
+// Generic compatibility helpers
 // ============================================================================
 
-/// Validate a persistent artifact header.
-pub fn validate_artifact(
-    header: &ArtifactHeader,
-    policy: UpgradePolicy,
-) -> Result<ValidationStatus, VersionError> {
-    header.validate()?;
+/// Compares an artifact version against a supported implementation version.
+pub fn check_version_pair(
+    artifact: Version,
+    supported: Version,
+    policy: CompatibilityPolicy,
+) -> Compatibility {
+    match policy {
+        CompatibilityPolicy::Reject => Compatibility::Incompatible,
 
-    let current = header.artifact.current_version();
-
-    match policy.compatibility_policy() {
         CompatibilityPolicy::Exact => {
-            if header.version == current {
-                Ok(ValidationStatus::Current)
-            } else if header.version > current {
-                Err(VersionError::NewerArtifact {
-                    kind: header.artifact,
-                    found: header.version,
-                    supported: current,
-                })
+            if artifact == supported {
+                Compatibility::Exact
+            } else if artifact > supported {
+                Compatibility::NewerThanSupported
             } else {
-                Err(VersionError::IncompatibleArtifact {
-                    kind: header.artifact,
-                    found: header.version,
-                    expected: current,
-                })
+                Compatibility::Incompatible
             }
         }
 
-        CompatibilityPolicy::SameMajor
-        | CompatibilityPolicy::BackwardCompatible
-        | CompatibilityPolicy::ReadOnlyLegacy => {
-            if header.version == current {
-                Ok(ValidationStatus::Current)
-            } else if header.version > current {
-                Err(VersionError::NewerArtifact {
-                    kind: header.artifact,
-                    found: header.version,
-                    supported: current,
-                })
-            } else if header.version.major == current.major {
-                Ok(ValidationStatus::Legacy)
+        CompatibilityPolicy::SameMajor => {
+            if artifact == supported {
+                Compatibility::Exact
+            } else if artifact.major != supported.major {
+                Compatibility::Incompatible
+            } else if artifact > supported {
+                Compatibility::NewerThanSupported
             } else {
-                Err(VersionError::IncompatibleArtifact {
-                    kind: header.artifact,
-                    found: header.version,
-                    expected: current,
-                })
+                Compatibility::Compatible
             }
         }
 
-        CompatibilityPolicy::Reject => {
-            Err(VersionError::Rejected)
+        CompatibilityPolicy::BackwardCompatible => {
+            if artifact == supported {
+                Compatibility::Exact
+            } else if artifact.major != supported.major {
+                Compatibility::Incompatible
+            } else if artifact > supported {
+                Compatibility::NewerThanSupported
+            } else {
+                Compatibility::Compatible
+            }
+        }
+
+        CompatibilityPolicy::ReadOnlyLegacy => {
+            if artifact == supported {
+                Compatibility::Exact
+            } else if artifact.major != supported.major {
+                Compatibility::Incompatible
+            } else if artifact > supported {
+                Compatibility::NewerThanSupported
+            } else {
+                Compatibility::LegacyCompatible
+            }
         }
     }
 }
 
-// ============================================================================
-// QPU compatibility
-// ============================================================================
-
-/// Require a specific QPU interface version.
-pub fn require_qpu_interface(
-    qpu: &QpuVersion,
-    required: Version,
-) -> Result<(), VersionError> {
-    qpu.validate()?;
-
-    if !qpu.supports_interface(required) {
-        return Err(
-            VersionError::QpuInterfaceMismatch {
-                required,
-                found: qpu.interface_version,
-            },
-        );
-    }
-
-    Ok(())
+/// Checks compatibility using an explicit policy.
+pub fn is_compatible_with(
+    artifact: Version,
+    supported: Version,
+    policy: CompatibilityPolicy,
+) -> bool {
+    check_version_pair(artifact, supported, policy)
+        .is_compatible()
 }
 
-/// Validate QPU compatibility with an execution target.
-pub fn validate_qpu_target(
-    qpu: &QpuVersion,
-    target: ExecutionTarget,
+/// Requires compatibility using an explicit policy.
+pub fn require_compatible(
+    artifact: Version,
+    supported: Version,
+    policy: CompatibilityPolicy,
 ) -> Result<(), VersionError> {
-    qpu.validate()?;
+    require_version_compatible(artifact, supported, policy)
+}
 
-    if !target.requires_qpu() {
-        return Err(
-            VersionError::QpuTargetUnsupported {
-                target,
-            },
-        );
+/// Internal/common version compatibility failure boundary.
+pub fn require_version_compatible(
+    artifact: Version,
+    supported: Version,
+    policy: CompatibilityPolicy,
+) -> Result<(), VersionError> {
+    let compatibility =
+        check_version_pair(artifact, supported, policy);
+
+    if compatibility.is_compatible() {
+        Ok(())
+    } else {
+        Err(VersionError::Incompatible {
+            artifact,
+            supported,
+            compatibility,
+        })
+    }
+}
+
+// ============================================================================
+// Version requirements
+// ============================================================================
+
+/// Explicit requirements for a consumer of a versioned artifact.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VersionRequirement {
+    pub artifact: ArtifactKind,
+    pub minimum: Version,
+    pub maximum: Option<Version>,
+    pub policy: CompatibilityPolicy,
+    pub required_features: FeatureFlags,
+    pub target: Option<ExecutionTarget>,
+}
+
+impl VersionRequirement {
+    /// Creates a requirement for the current artifact version.
+    pub const fn current(artifact: ArtifactKind) -> Self {
+        Self {
+            artifact,
+            minimum: artifact.current_version(),
+            maximum: Some(artifact.current_version()),
+            policy: CompatibilityPolicy::Exact,
+            required_features: FeatureFlags::NONE,
+            target: None,
+        }
     }
 
-    if !qpu.supports_target(target) {
-        return Err(
-            VersionError::QpuTargetUnsupported {
-                target,
-            },
-        );
-    }
+    /// Validates an artifact header against this requirement.
+    pub fn validate(
+        &self,
+        header: &ArtifactHeader,
+    ) -> Result<(), VersionError> {
+        header.validate()?;
 
-    Ok(())
+        if header.kind != self.artifact {
+            return Err(VersionError::ArtifactKindMismatch {
+                expected: self.artifact,
+                found: header.kind,
+            });
+        }
+
+        if !header.features.supports(self.required_features) {
+            return Err(VersionError::MissingFeatures);
+        }
+
+        if let Some(target) = self.target {
+            if !header.target.compatible_with(target) {
+                return Err(VersionError::ExecutionTargetMismatch {
+                    expected: target,
+                    found: header.target,
+                });
+            }
+        }
+
+        if header.version < self.minimum {
+            return Err(VersionError::BelowMinimumVersion {
+                artifact: self.artifact,
+                minimum: self.minimum,
+                found: header.version,
+            });
+        }
+
+        if let Some(maximum) = self.maximum {
+            if header.version > maximum {
+                return Err(VersionError::AboveMaximumVersion {
+                    artifact: self.artifact,
+                    maximum,
+                    found: header.version,
+                });
+            }
+        }
+
+        header.require_compatible(self.policy)
+    }
 }
 
 // ============================================================================
 // Identifier validation
 // ============================================================================
 
+/// Validates an externally supplied artifact identifier.
+///
+/// Identifiers are deliberately conservative because they may appear in
+/// checkpoint, cache, distributed, telemetry or QPU metadata.
+pub fn validate_artifact_identifier(
+    value: &str,
+) -> Result<(), VersionError> {
+    validate_identifier(
+        value,
+        MAX_ARTIFACT_ID_LENGTH,
+        "artifact identifier",
+    )
+}
+
+/// Validates an externally supplied provider/device identifier.
+pub fn validate_provider_identifier(
+    value: &str,
+) -> Result<(), VersionError> {
+    validate_identifier(
+        value,
+        MAX_IDENTIFIER_LENGTH,
+        "provider/device identifier",
+    )
+}
+
 fn validate_identifier(
     value: &str,
-    field: &'static str,
+    max: usize,
+    name: &'static str,
 ) -> Result<(), VersionError> {
     if value.is_empty() {
-        return Err(VersionError::EmptyIdentifier(field));
+        return Err(VersionError::EmptyIdentifier(name));
     }
 
-    if value.len() > MAX_IDENTIFIER_LENGTH {
-        return Err(VersionError::IdentifierTooLong(field));
+    if value.len() > max {
+        return Err(VersionError::IdentifierTooLong {
+            name,
+            max,
+        });
     }
 
-    if !value.bytes().all(|byte| {
-        byte.is_ascii_alphanumeric()
-            || matches!(
-                byte,
-                b'-' | b'_' | b'.' | b':'
-            )
-    }) {
-        return Err(
-            VersionError::InvalidIdentifier(field)
-        );
+    if !value.is_ascii() {
+        return Err(VersionError::InvalidIdentifier(name));
+    }
+
+    if !value
+        .bytes()
+        .all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(
+                    byte,
+                    b'-' | b'_' | b'.' | b':'
+                )
+        })
+    {
+        return Err(VersionError::InvalidIdentifier(name));
     }
 
     Ok(())
@@ -1518,17 +1348,25 @@ fn validate_identifier(
 // Version errors
 // ============================================================================
 
-/// Errors generated by the versioning subsystem.
+/// Local versioning error.
 ///
-/// These errors intentionally remain independent from `QecError` so malformed
-/// version metadata can be rejected before the artifact is trusted.
+/// `errors.rs` should convert this into the canonical `QecError`:
 ///
-/// High-level QEC APIs may convert these into `QecError::InvalidInput` or
-/// `QecError::UnsupportedConfiguration` at their public boundary.
+/// ```text
+/// VersionError
+///      ↓
+/// QecError::VersionMismatch / InvalidInput
+/// ```
+///
+/// `version.rs` intentionally does not depend on `errors.rs`, preventing a
+/// foundation-layer cycle.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VersionError {
     Empty,
-    TooLong,
+
+    TooLong {
+        max: usize,
+    },
 
     InvalidFormat,
 
@@ -1550,42 +1388,17 @@ pub enum VersionError {
         found: u16,
     },
 
-    EmptyArtifactId,
-
-    ArtifactIdTooLong,
-
-    InvalidArtifactId,
-
-    EmptyIdentifier(&'static str),
-
-    IdentifierTooLong(&'static str),
-
-    InvalidIdentifier(&'static str),
-
-    InvalidMagic,
-
-    InvalidArtifactVersion {
-        kind: ArtifactKind,
-    },
-
     InvalidQpuVersion,
 
-    MissingQpuMetadata,
+    InvalidArtifactVersion(ArtifactKind),
 
-    UnexpectedQpuMetadata,
+    MissingRequiredFeature(&'static str),
 
-    QpuInterfaceMismatch {
-        required: Version,
-        found: Version,
-    },
+    MissingFeatures,
 
-    QpuTargetUnsupported {
-        target: ExecutionTarget,
-    },
-
-    TargetMismatch {
-        expected: ExecutionTarget,
-        found: ExecutionTarget,
+    ArtifactKindMismatch {
+        expected: ArtifactKind,
+        found: ArtifactKind,
     },
 
     ExecutionTargetMismatch {
@@ -1593,58 +1406,58 @@ pub enum VersionError {
         found: ExecutionTarget,
     },
 
-    ArtifactKindMismatch {
-        expected: ArtifactKind,
-        found: ArtifactKind,
-    },
-
-    ComponentIdentityMismatch {
-        expected: String,
-        found: String,
-    },
-
-    ComponentVersionMismatch {
+    BelowMinimumVersion {
         artifact: ArtifactKind,
-        expected: Version,
+        minimum: Version,
         found: Version,
     },
 
-    ManifestMismatch {
+    AboveMaximumVersion {
         artifact: ArtifactKind,
-        expected: Version,
+        maximum: Version,
         found: Version,
     },
 
-    IncompatibleArtifact {
-        kind: ArtifactKind,
-        found: Version,
-        expected: Version,
+    Incompatible {
+        artifact: Version,
+        supported: Version,
+        compatibility: Compatibility,
     },
 
-    NewerArtifact {
+    ArtifactIncompatible {
         kind: ArtifactKind,
         found: Version,
         supported: Version,
+        compatibility: Compatibility,
     },
 
-    Rejected,
+    ManifestIncompatible {
+        artifact: Option<ArtifactKind>,
+        compatibility: Compatibility,
+    },
+
+    EmptyIdentifier(&'static str),
+
+    IdentifierTooLong {
+        name: &'static str,
+        max: usize,
+    },
+
+    InvalidIdentifier(&'static str),
 }
 
 impl fmt::Display for VersionError {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Empty => {
-                f.write_str(
-                    "version string is empty",
-                )
+                f.write_str("version is empty")
             }
 
-            Self::TooLong => {
-                f.write_str(
-                    "version string exceeds maximum length",
+            Self::TooLong { max } => {
+                write!(
+                    f,
+                    "version exceeds maximum length of {}",
+                    max
                 )
             }
 
@@ -1657,7 +1470,7 @@ impl fmt::Display for VersionError {
             Self::MissingComponent(name) => {
                 write!(
                     f,
-                    "missing {} version component",
+                    "version is missing {} component",
                     name
                 )
             }
@@ -1665,7 +1478,7 @@ impl fmt::Display for VersionError {
             Self::InvalidComponent(name) => {
                 write!(
                     f,
-                    "invalid {} version component",
+                    "version contains invalid {} component",
                     name
                 )
             }
@@ -1679,9 +1492,7 @@ impl fmt::Display for VersionError {
             }
 
             Self::InvalidProtocolVersion => {
-                f.write_str(
-                    "invalid QEC protocol version",
-                )
+                f.write_str("invalid versioning protocol")
             }
 
             Self::ProtocolMismatch {
@@ -1690,7 +1501,8 @@ impl fmt::Display for VersionError {
             } => {
                 write!(
                     f,
-                    "QEC protocol major mismatch: expected {}, found {}",
+                    "versioning protocol major mismatch: \
+                     expected {}, found {}",
                     expected_major,
                     found_major
                 )
@@ -1702,131 +1514,36 @@ impl fmt::Display for VersionError {
             } => {
                 write!(
                     f,
-                    "QEC protocol minor {} is newer than supported {}",
+                    "versioning protocol minor {} is newer \
+                     than supported {}",
                     found,
                     supported
                 )
             }
 
-            Self::EmptyArtifactId => {
-                f.write_str(
-                    "artifact identifier is empty",
-                )
+            Self::InvalidQpuVersion => {
+                f.write_str("invalid QPU version metadata")
             }
 
-            Self::ArtifactIdTooLong => {
-                f.write_str(
-                    "artifact identifier is too long",
-                )
-            }
-
-            Self::InvalidArtifactId => {
-                f.write_str(
-                    "artifact identifier contains invalid characters",
-                )
-            }
-
-            Self::EmptyIdentifier(field) => {
+            Self::InvalidArtifactVersion(kind) => {
                 write!(
                     f,
-                    "{} identifier is empty",
-                    field
-                )
-            }
-
-            Self::IdentifierTooLong(field) => {
-                write!(
-                    f,
-                    "{} identifier is too long",
-                    field
-                )
-            }
-
-            Self::InvalidIdentifier(field) => {
-                write!(
-                    f,
-                    "{} identifier contains invalid characters",
-                    field
-                )
-            }
-
-            Self::InvalidMagic => {
-                f.write_str(
-                    "invalid QEC artifact magic",
-                )
-            }
-
-            Self::InvalidArtifactVersion {
-                kind,
-            } => {
-                write!(
-                    f,
-                    "invalid version for {} artifact",
+                    "invalid version for artifact {}",
                     kind
                 )
             }
 
-            Self::InvalidQpuVersion => {
+            Self::MissingRequiredFeature(feature) => {
+                write!(
+                    f,
+                    "required feature '{}' is missing",
+                    feature
+                )
+            }
+
+            Self::MissingFeatures => {
                 f.write_str(
-                    "invalid QPU version metadata",
-                )
-            }
-
-            Self::MissingQpuMetadata => {
-                f.write_str(
-                    "QPU execution target requires QPU metadata",
-                )
-            }
-
-            Self::UnexpectedQpuMetadata => {
-                f.write_str(
-                    "non-QPU execution target contains QPU metadata",
-                )
-            }
-
-            Self::QpuInterfaceMismatch {
-                required,
-                found,
-            } => {
-                write!(
-                    f,
-                    "QPU interface mismatch: required {}, found {}",
-                    required,
-                    found
-                )
-            }
-
-            Self::QpuTargetUnsupported {
-                target,
-            } => {
-                write!(
-                    f,
-                    "QPU does not support execution target {}",
-                    target
-                )
-            }
-
-            Self::TargetMismatch {
-                expected,
-                found,
-            } => {
-                write!(
-                    f,
-                    "execution target mismatch: expected {}, found {}",
-                    expected,
-                    found
-                )
-            }
-
-            Self::ExecutionTargetMismatch {
-                expected,
-                found,
-            } => {
-                write!(
-                    f,
-                    "execution version target mismatch: expected {}, found {}",
-                    expected,
-                    found
+                    "artifact requires unsupported feature flags",
                 )
             }
 
@@ -1842,84 +1559,120 @@ impl fmt::Display for VersionError {
                 )
             }
 
-            Self::ComponentIdentityMismatch {
+            Self::ExecutionTargetMismatch {
                 expected,
                 found,
             } => {
                 write!(
                     f,
-                    "component identity mismatch: expected {}, found {}",
+                    "execution target mismatch: expected {}, found {}",
                     expected,
                     found
                 )
             }
 
-            Self::ComponentVersionMismatch {
+            Self::BelowMinimumVersion {
                 artifact,
-                expected,
+                minimum,
                 found,
             } => {
                 write!(
                     f,
-                    "{} component version mismatch: expected {}, found {}",
+                    "{} version {} is below required minimum {}",
                     artifact,
-                    expected,
-                    found
-                )
-            }
-
-            Self::ManifestMismatch {
-                artifact,
-                expected,
-                found,
-            } => {
-                write!(
-                    f,
-                    "{} manifest version mismatch: expected {}, found {}",
-                    artifact,
-                    expected,
-                    found
-                )
-            }
-
-            Self::IncompatibleArtifact {
-                kind,
-                found,
-                expected,
-            } => {
-                write!(
-                    f,
-                    "incompatible {} artifact: found {}, expected {}",
-                    kind,
                     found,
-                    expected
+                    minimum
                 )
             }
 
-            Self::NewerArtifact {
+            Self::AboveMaximumVersion {
+                artifact,
+                maximum,
+                found,
+            } => {
+                write!(
+                    f,
+                    "{} version {} exceeds maximum {}",
+                    artifact,
+                    found,
+                    maximum
+                )
+            }
+
+            Self::Incompatible {
+                artifact,
+                supported,
+                compatibility,
+            } => {
+                write!(
+                    f,
+                    "version {} is incompatible with supported {} ({:?})",
+                    artifact,
+                    supported,
+                    compatibility
+                )
+            }
+
+            Self::ArtifactIncompatible {
                 kind,
                 found,
                 supported,
+                compatibility,
             } => {
                 write!(
                     f,
-                    "{} artifact version {} is newer than supported {}",
+                    "{} artifact version {} is incompatible \
+                     with supported {} ({:?})",
                     kind,
                     found,
-                    supported
+                    supported,
+                    compatibility
                 )
             }
 
-            Self::Rejected => {
-                f.write_str(
-                    "artifact rejected by compatibility policy",
+            Self::ManifestIncompatible {
+                artifact,
+                compatibility,
+            } => {
+                match artifact {
+                    Some(kind) => write!(
+                        f,
+                        "version manifest incompatible at {} ({:?})",
+                        kind,
+                        compatibility
+                    ),
+
+                    None => write!(
+                        f,
+                        "version manifest incompatible ({:?})",
+                        compatibility
+                    ),
+                }
+            }
+
+            Self::EmptyIdentifier(name) => {
+                write!(f, "{} is empty", name)
+            }
+
+            Self::IdentifierTooLong { name, max } => {
+                write!(
+                    f,
+                    "{} exceeds maximum length {}",
+                    name,
+                    max
+                )
+            }
+
+            Self::InvalidIdentifier(name) => {
+                write!(
+                    f,
+                    "{} contains invalid characters",
+                    name
                 )
             }
         }
     }
 }
-
-impl std::error::Error for VersionError {}
 
 // ============================================================================
 // Tests
@@ -1934,6 +1687,7 @@ mod tests {
         let version = Version::new(12, 34, 56);
         let text = version.to_string();
 
+        assert_eq!(text, "12.34.56");
         assert_eq!(
             text.parse::<Version>().unwrap(),
             version
@@ -1941,330 +1695,272 @@ mod tests {
     }
 
     #[test]
-    fn malformed_version_is_rejected() {
+    fn version_rejects_invalid_formats() {
+        assert!("".parse::<Version>().is_err());
         assert!("1".parse::<Version>().is_err());
         assert!("1.2".parse::<Version>().is_err());
         assert!("1.2.3.4".parse::<Version>().is_err());
         assert!("a.2.3".parse::<Version>().is_err());
-        assert!("1.b.3".parse::<Version>().is_err());
-        assert!("1.2.c".parse::<Version>().is_err());
+        assert!("1.-2.3".parse::<Version>().is_err());
     }
 
     #[test]
-    fn version_ordering_is_deterministic() {
-        assert!(
-            Version::new(1, 0, 0)
-                < Version::new(1, 1, 0)
-        );
+    fn exact_version_is_compatible() {
+        let version = Version::new(2, 0, 0);
 
-        assert!(
-            Version::new(1, 1, 0)
-                < Version::new(1, 1, 1)
-        );
-
-        assert!(
-            Version::new(2, 0, 0)
-                > Version::new(1, 99, 99)
+        assert_eq!(
+            check_version_pair(
+                version,
+                version,
+                CompatibilityPolicy::Exact
+            ),
+            Compatibility::Exact
         );
     }
 
     #[test]
-    fn artifact_versions_are_registered() {
+    fn newer_artifact_is_rejected() {
         assert_eq!(
-            ArtifactKind::Algorithm.current_version(),
-            CURRENT_ALGORITHM_VERSION
+            check_version_pair(
+                Version::new(3, 0, 0),
+                Version::new(2, 0, 0),
+                CompatibilityPolicy::SameMajor
+            ),
+            Compatibility::Incompatible
         );
 
         assert_eq!(
-            ArtifactKind::NoiseModel.current_version(),
-            CURRENT_NOISE_MODEL_VERSION
-        );
-
-        assert_eq!(
-            ArtifactKind::DecoderResult.current_version(),
-            CURRENT_DECODER_RESULT_VERSION
-        );
-
-        assert_eq!(
-            ArtifactKind::QpuExecution.current_version(),
-            CURRENT_QPU_EXECUTION_VERSION
+            check_version_pair(
+                Version::new(2, 1, 0),
+                Version::new(2, 0, 0),
+                CompatibilityPolicy::SameMajor
+            ),
+            Compatibility::NewerThanSupported
         );
     }
 
     #[test]
-    fn current_manifest_is_current() {
+    fn older_same_major_artifact_is_compatible() {
+        assert_eq!(
+            check_version_pair(
+                Version::new(2, 0, 0),
+                Version::new(2, 1, 0),
+                CompatibilityPolicy::SameMajor
+            ),
+            Compatibility::Compatible
+        );
+    }
+
+    #[test]
+    fn read_only_legacy_is_explicit() {
+        assert_eq!(
+            check_version_pair(
+                Version::new(2, 0, 0),
+                Version::new(2, 1, 0),
+                CompatibilityPolicy::ReadOnlyLegacy
+            ),
+            Compatibility::LegacyCompatible
+        );
+    }
+
+    #[test]
+    fn major_mismatch_is_rejected() {
+        assert_eq!(
+            check_version_pair(
+                Version::new(1, 0, 0),
+                Version::new(2, 0, 0),
+                CompatibilityPolicy::SameMajor
+            ),
+            Compatibility::Incompatible
+        );
+    }
+
+    #[test]
+    fn feature_flags_are_subset_checked() {
+        let supported = FeatureFlags::NONE
+            .with(FeatureFlags::QPU)
+            .with(FeatureFlags::DETERMINISTIC);
+
+        let required = FeatureFlags::NONE
+            .with(FeatureFlags::QPU);
+
+        assert!(supported.supports(required));
+
+        let missing = FeatureFlags::NONE
+            .with(FeatureFlags::GPU);
+
+        assert!(!supported.supports(missing));
+    }
+
+    #[test]
+    fn current_manifest_validates() {
         let manifest =
             VersionManifest::current(
                 ExecutionTarget::ClassicalCpu,
             );
 
         assert!(manifest.validate().is_ok());
-        assert!(manifest.is_current());
     }
 
     #[test]
-    fn future_protocol_is_rejected() {
-        let mut manifest =
-            VersionManifest::current(
-                ExecutionTarget::ClassicalCpu,
-            );
+    fn current_qpu_manifest_contains_qpu_feature() {
+        let manifest =
+            VersionManifest::current(ExecutionTarget::Qpu);
 
-        manifest.protocol_major += 1;
-
-        assert!(matches!(
-            manifest.validate(),
-            Err(VersionError::ProtocolMismatch { .. })
-        ));
-    }
-
-    #[test]
-    fn future_minor_protocol_is_rejected() {
-        let mut manifest =
-            VersionManifest::current(
-                ExecutionTarget::ClassicalCpu,
-            );
-
-        manifest.protocol_minor += 1;
-
-        assert!(matches!(
-            manifest.validate(),
-            Err(VersionError::NewerProtocolMinor { .. })
-        ));
-    }
-
-    #[test]
-    fn artifact_header_is_validated_before_payload() {
-        let header = ArtifactHeader::current(
-            ArtifactKind::Checkpoint,
-            ExecutionTarget::ClassicalCpu,
-        );
-
-        assert!(header.validate().is_ok());
-        assert!(header.is_current());
-    }
-
-    #[test]
-    fn invalid_magic_is_rejected() {
-        let mut header = ArtifactHeader::current(
-            ArtifactKind::Checkpoint,
-            ExecutionTarget::ClassicalCpu,
-        );
-
-        header.magic = *b"NOPE";
-
-        assert!(matches!(
-            header.validate(),
-            Err(VersionError::InvalidMagic)
-        ));
-    }
-
-    #[test]
-    fn strict_artifact_validation_requires_exact_version() {
-        let mut header = ArtifactHeader::current(
-            ArtifactKind::Checkpoint,
-            ExecutionTarget::ClassicalCpu,
-        );
-
-        header.version = Version::new(1, 0, 0);
-
-        assert!(validate_artifact(
-            &header,
-            UpgradePolicy::Strict
-        )
-        .is_err());
-    }
-
-    #[test]
-    fn compatible_legacy_artifact_is_detected() {
-        let mut header = ArtifactHeader::current(
-            ArtifactKind::Checkpoint,
-            ExecutionTarget::ClassicalCpu,
-        );
-
-        header.version = Version::new(
-            CURRENT_CHECKPOINT_VERSION.major,
-            0,
-            1,
-        );
-
-        let result = validate_artifact(
-            &header,
-            UpgradePolicy::Compatible,
-        );
-
-        assert_eq!(
-            result.unwrap(),
-            ValidationStatus::Legacy
-        );
-    }
-
-    #[test]
-    fn newer_artifact_is_never_silently_accepted() {
-        let mut header = ArtifactHeader::current(
-            ArtifactKind::Checkpoint,
-            ExecutionTarget::ClassicalCpu,
-        );
-
-        header.version = Version::new(
-            CURRENT_CHECKPOINT_VERSION.major + 1,
-            0,
-            0,
-        );
-
-        assert!(matches!(
-            validate_artifact(
-                &header,
-                UpgradePolicy::Compatible
-            ),
-            Err(VersionError::NewerArtifact { .. })
-        ));
-    }
-
-    #[test]
-    fn component_identity_is_stable() {
-        let component = ComponentVersion::new(
-            ArtifactKind::Algorithm,
-            "mwpm",
-            Version::new(2, 1, 0),
-        )
-        .unwrap();
-
-        assert_eq!(
-            component.identity(),
-            "algorithm:mwpm@2.1.0"
-        );
-    }
-
-    #[test]
-    fn component_identity_is_validated() {
+        assert!(manifest.validate().is_ok());
         assert!(
-            ComponentVersion::new(
-                ArtifactKind::Algorithm,
-                "mwpm decoder",
-                Version::new(1, 0, 0)
-            )
-            .is_err()
+            manifest
+                .features
+                .contains(FeatureFlags::QPU)
         );
     }
 
     #[test]
-    fn manifest_comparison_detects_mismatch() {
-        let a = VersionManifest::current(
-            ExecutionTarget::ClassicalCpu,
-        );
-
-        let mut b = a.clone();
-        b.decoder_result =
-            Version::new(2, 0, 0);
-
-        assert!(
-            a.is_compatible_with(
-                &b,
-                CompatibilityPolicy::Exact
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn incompatible_targets_are_rejected() {
-        let cpu = VersionManifest::current(
-            ExecutionTarget::ClassicalCpu,
-        );
-
-        let qpu = VersionManifest::current(
-            ExecutionTarget::Qpu,
-        );
-
-        assert!(
-            cpu.is_compatible_with(
-                &qpu,
-                CompatibilityPolicy::Exact
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn qpu_metadata_is_required_for_qpu_execution() {
-        let execution = ExecutionVersion {
-            target: ExecutionTarget::Qpu,
-            component: ComponentVersion::new(
-                ArtifactKind::Backend,
-                "test-qpu",
-                Version::new(1, 0, 0),
-            )
-            .unwrap(),
-            manifest: VersionManifest::current(
+    fn qpu_header_requires_qpu_feature() {
+        let mut header =
+            ArtifactHeader::current(
+                ArtifactKind::QpuExecution,
                 ExecutionTarget::Qpu,
-            ),
-            qpu: None,
-        };
+            );
 
-        assert!(matches!(
-            execution.validate(),
-            Err(VersionError::MissingQpuMetadata)
-        ));
+        header.features =
+            FeatureFlags::NONE;
+
+        assert!(header.validate().is_err());
     }
 
     #[test]
-    fn qpu_interface_mismatch_is_rejected() {
-        let qpu = QpuVersion::new(
-            "test",
-            "simulator",
-            Version::new(1, 0, 0),
-            Version::new(1, 0, 0),
-            Version::new(1, 0, 0),
-            Version::new(1, 0, 0),
-        )
-        .unwrap();
-
-        assert!(
-            require_qpu_interface(
-                &qpu,
-                Version::new(2, 0, 0)
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn hybrid_qpu_requires_hybrid_support() {
-        let qpu = QpuVersion::new(
-            "test",
-            "qpu",
-            Version::new(2, 0, 0),
-            Version::new(1, 0, 0),
-            Version::new(1, 0, 0),
-            Version::new(1, 0, 0),
-        )
-        .unwrap();
-
-        assert!(
-            ExecutionVersion::hybrid_qpu(
-                "backend",
-                Version::new(1, 0, 0),
-                qpu
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn qpu_identity_contains_no_secret_metadata() {
-        let qpu = QpuVersion::new(
-            "provider",
-            "family",
-            Version::new(2, 0, 0),
-            Version::new(1, 0, 0),
-            Version::new(1, 0, 0),
-            Version::new(1, 0, 0),
-        )
-        .unwrap();
+    fn artifact_header_uses_current_version() {
+        let header =
+            ArtifactHeader::current(
+                ArtifactKind::Checkpoint,
+                ExecutionTarget::ClassicalCpu,
+            );
 
         assert_eq!(
-            qpu.identity(),
-            "provider:family"
+            header.version,
+            CURRENT_CHECKPOINT_VERSION
         );
+
+        assert!(
+            header
+                .require_compatible(
+                    CompatibilityPolicy::SameMajor
+                )
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn requirement_rejects_wrong_kind() {
+        let requirement =
+            VersionRequirement::current(
+                ArtifactKind::Checkpoint,
+            );
+
+        let header =
+            ArtifactHeader::current(
+                ArtifactKind::Syndrome,
+                ExecutionTarget::ClassicalCpu,
+            );
+
+        assert!(requirement.validate(&header).is_err());
+    }
+
+    #[test]
+    fn identifiers_are_conservative() {
+        assert!(
+            validate_artifact_identifier(
+                "checkpoint-v3"
+            )
+            .is_ok()
+        );
+
+        assert!(
+            validate_provider_identifier(
+                "provider:device_v1"
+            )
+            .is_ok()
+        );
+
+        assert!(
+            validate_artifact_identifier(
+                "invalid identifier"
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn target_compatibility_is_explicit() {
+        assert!(
+            ExecutionTarget::ClassicalCpu
+                .compatible_with(
+                    ExecutionTarget::ParallelCpu
+                )
+        );
+
+        assert!(
+            !ExecutionTarget::Qpu
+                .compatible_with(
+                    ExecutionTarget::Gpu
+                )
+        );
+    }
+
+    #[test]
+    fn manifest_comparison_is_exact_for_current_manifests() {
+        let a =
+            VersionManifest::current(
+                ExecutionTarget::ClassicalCpu,
+            );
+
+        let b = a.clone();
+
+        let report = a.compatibility_with(
+            &b,
+            CompatibilityPolicy::SameMajor,
+        );
+
+        assert_eq!(
+            report.compatibility,
+            Compatibility::Exact
+        );
+
+        assert!(report.is_compatible());
+    }
+
+    #[test]
+    fn manifest_rejects_newer_protocol() {
+        let mut artifact =
+            VersionManifest::current(
+                ExecutionTarget::ClassicalCpu,
+            );
+
+        artifact.protocol_minor =
+            VERSION_PROTOCOL_MINOR + 1;
+
+        let supported =
+            VersionManifest::current(
+                ExecutionTarget::ClassicalCpu,
+            );
+
+        let report = artifact.compatibility_with(
+            &supported,
+            CompatibilityPolicy::SameMajor,
+        );
+
+        assert_eq!(
+            report.compatibility,
+            Compatibility::NewerThanSupported
+        );
+    }
+
+    #[test]
+    fn packed_version_is_deterministic() {
+        let a = Version::new(1, 2, 3);
+        let b = Version::new(1, 2, 3);
+
+        assert_eq!(a.packed(), b.packed());
     }
 }
