@@ -1,95 +1,149 @@
-//! Zamani Quantum Error Correction — capability-based authorization.
+//! Zamani Quantum Error Correction — capability authorization boundary.
 //!
-//! This module is the security boundary between an already-validated QEC
-//! workload and execution privileges.
+//! This module owns authorization for QEC operations.
 //!
-//! Architectural contract:
+//! # Ownership
+//!
+//! `capabilities.rs` owns:
+//!
+//! - capability identifiers;
+//! - capability sets;
+//! - capability requirements;
+//! - capability grants;
+//! - attenuation/delegation;
+//! - expiration;
+//! - monotonic revocation;
+//! - backend capability requirements;
+//! - QPU operation requirements;
+//! - resource-aware authorization preflight;
+//! - compatibility with `configuration.rs` capability requirements.
+//!
+//! This module does NOT own:
+//!
+//! - resource policy (`limits.rs`);
+//! - runtime resource accounting (`resources.rs`);
+//! - memory allocation (`memory.rs`);
+//! - validation of mathematical QEC objects (`validation.rs`);
+//! - backend execution (`backend.rs`);
+//! - physical QPU I/O (`qpu_adapter.rs`);
+//! - telemetry transport (`telemetry.rs`);
+//! - credentials or private keys.
+//!
+//! # Security model
 //!
 //! ```text
-//!                         UNTRUSTED REQUEST
-//!                               │
-//!                               ▼
-//!                         QecConfig
-//!                               │
-//!                               ▼
-//!                         QecLimits
-//!                               │
-//!                               ▼
-//!                    Capability authorization
-//!                               │
-//!              ┌────────────────┼────────────────┐
-//!              │                │                │
-//!              ▼                ▼                ▼
-//!          CPU decode      Accelerator        QPU adapter
-//!              │                │                │
-//!              └────────────────┼────────────────┘
-//!                               ▼
-//!                         Resource preflight
-//!                               │
-//!                               ▼
-//!                            Execute
+//!                    QEC REQUEST
+//!                         |
+//!                         v
+//!                 validate input
+//!                         |
+//!                         v
+//!                    QecConfig
+//!                         |
+//!                         v
+//!                capability requirement
+//!                         |
+//!                         v
+//!              CapabilityAuthority
+//!                         |
+//!          +--------------+--------------+
+//!          |              |              |
+//!          v              v              v
+//!       capability     expiration     revocation
+//!       membership       check           check
+//!          |              |              |
+//!          +--------------+--------------+
+//!                         |
+//!                         v
+//!                  resource preflight
+//!                         |
+//!                         v
+//!                      execute
 //! ```
 //!
-//! ## Security invariants
+//! # Security invariants
 //!
-//! * Deny by default.
-//! * No capability implies no privilege.
-//! * Capabilities are explicit and independently scoped.
-//! * Capability possession never implies arbitrary resource usage.
-//! * `QpuAccess` never implies `QpuSubmit`.
-//! * `QpuSubmit` never implies `QpuReadResults`.
-//! * QPU capabilities are never inherited from GPU/accelerator capabilities.
-//! * Backend support and authorization are separate concepts.
-//! * `QecLimits` is the canonical resource policy.
-//! * This module does not define a competing resource-limit model.
-//! * Expired grants are rejected.
-//! * Revoked grants are rejected.
-//! * Revocation is monotonic.
-//! * Delegated capabilities can only be attenuated.
-//! * Authorization is deterministic.
-//! * No capability operation silently escalates privileges.
-//! * Deterministic execution is explicitly represented.
-//! * Resource preflight occurs before expensive execution.
-//! * Credentials, private keys, network addresses and device secrets do not
-//!   belong in this module.
+//! 1. Authorization is deny-by-default.
+//! 2. Capability possession never bypasses `QecLimits`.
+//! 3. `QpuAccess` does not imply `QpuSubmit`.
+//! 4. `QpuSubmit` does not imply `QpuReadResults`.
+//! 5. `QpuCalibration` does not imply submission.
+//! 6. QPU capabilities are independent from GPU/accelerator capabilities.
+//! 7. Backend support and authorization are separate concepts.
+//! 8. Delegation can only attenuate privileges.
+//! 9. Delegation cannot create a capability absent from the parent.
+//! 10. Expired grants are rejected.
+//! 11. Revoked grants remain revoked.
+//! 12. Authorization is deterministic.
+//! 13. Resource authorization is performed against canonical `QecLimits`.
+//! 14. This module never allocates execution resources.
+//! 15. This module never accesses QPU credentials.
+//! 16. Capability requirements in `configuration.rs` are requirements,
+//!     not authority.
+//! 17. Configuration booleans cannot silently grant runtime privileges.
 //!
-//! QPU execution remains a control-plane authorization concern here.
-//! Actual physical QPU I/O belongs in `qpu_adapter.rs` / the backend adapter.
+//! # Rust compatibility
+//!
+//! The implementation intentionally uses stable standard-library APIs and is
+//! compatible with the repository's Rust 1.97.1 target.
+//!
+//! # Integration contract
+//!
+//! `configuration.rs`
+//!     -> `CapabilityConfig`
+//!     -> `CapabilitySet::from_config()`
+//!
+//! `backend.rs`
+//!     -> `Capability::required_for_backend()`
+//!
+//! `qpu_adapter.rs`
+//!     -> `QpuOperation::required_capabilities()`
+//!
+//! `decoder.rs`
+//!     -> `Capability::Decode`
+//!
+//! `streaming.rs`
+//!     -> `Capability::StreamingSyndrome`
+//!
+//! `partition.rs` / `distributed.rs`
+//!     -> `Capability::DistributedExecution`
+//!
+//! `checkpoint.rs`
+//!     -> `Capability::Checkpoint`
+//!
+//! `limits.rs`
+//!     -> `ResourceRequest`
+//!     -> `CapabilityAuthority::authorize_with_resources()`
+//!
+//! `errors.rs`
+//!     -> `QecError::CapabilityDenied` / resource errors.
+//!
+//! No later module needs to modify this file merely to add its own execution
+//! path. New operations should select an existing capability or, if a truly
+//! new security domain exists, add a new stable capability identifier here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use std::collections::BTreeSet;
-use std::fmt;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use core::fmt;
+use std::collections::{BTreeMap, BTreeSet};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::{Deserialize, Serialize};
 
 use super::backend::BackendKind;
-use super::configuration::QecLimits;
+use super::configuration::CapabilityConfig;
 use super::errors::{QecError, QecResult, ResourceKind};
-
-// ============================================================================
-// Compatibility
-// ============================================================================
-
-/// Canonical execution backend.
-///
-/// `backend.rs` owns the actual backend model. This alias prevents this
-/// authorization layer from creating a competing backend enumeration.
-pub use super::backend::BackendKind as ExecutionBackend;
+use super::limits::{LimitKind, QecLimits};
 
 // ============================================================================
 // Capability identifiers
 // ============================================================================
 
-/// Stable identifier for a QEC capability.
+/// Stable identifier for a QEC authorization capability.
 ///
-/// Numeric IDs are intentionally stable because they may appear in:
-///
-/// * authorization records;
-/// * audit logs;
-/// * telemetry;
-/// * checkpoints;
-/// * security tests;
-/// * policy files.
+/// Numeric identifiers are stable and must not be reused for a different
+/// security meaning once persisted in checkpoints, audit records or policy
+/// documents.
 #[repr(u16)]
 #[derive(
     Debug,
@@ -100,15 +154,17 @@ pub use super::backend::BackendKind as ExecutionBackend;
     Hash,
     PartialOrd,
     Ord,
+    Serialize,
+    Deserialize,
 )]
 pub enum Capability {
-    /// Decode a validated syndrome/error representation.
+    /// Decode a validated QEC input.
     Decode = 1,
 
-    /// Execute QEC simulation.
+    /// Run a QEC simulation.
     Simulate = 2,
 
-    /// Execute threshold/performance experiments.
+    /// Run benchmark/threshold experiments.
     Benchmark = 3,
 
     /// Inspect validated QEC topology.
@@ -117,7 +173,7 @@ pub enum Capability {
     /// Request QEC-managed memory.
     AllocateMemory = 5,
 
-    /// Use a hardware/software accelerator.
+    /// Use an accelerator.
     UseAccelerator = 6,
 
     /// Execute through distributed workers.
@@ -126,34 +182,34 @@ pub enum Capability {
     /// Consume incremental syndrome data.
     StreamingSyndrome = 8,
 
-    /// Create/resume QEC checkpoints.
+    /// Create or restore checkpoints.
     Checkpoint = 9,
 
-    /// Request deterministic execution.
+    /// Require deterministic execution.
     DeterministicExecution = 10,
 
-    /// Read decoder/QEC metrics.
+    /// Read QEC metrics.
     ReadMetrics = 11,
 
-    /// Emit telemetry.
+    /// Emit QEC telemetry.
     EmitTelemetry = 12,
 
     /// Use CPU parallelism.
     ParallelExecution = 13,
 
-    /// Establish QPU authorization context.
+    /// Enter the QPU authorization domain.
     QpuAccess = 14,
 
     /// Inspect QPU metadata.
     QpuInspect = 15,
 
-    /// Submit a circuit/workload to a QPU.
+    /// Submit work to a QPU.
     QpuSubmit = 16,
 
     /// Read QPU measurement results.
     QpuReadResults = 17,
 
-    /// Read calibration information.
+    /// Read QPU calibration information.
     QpuCalibration = 18,
 
     /// Perform hardware-backed QEC.
@@ -161,15 +217,20 @@ pub enum Capability {
 
     /// Perform hardware syndrome extraction.
     QpuSyndromeExtraction = 20,
+
+    /// Perform explicitly authorized remote execution.
+    RemoteExecution = 21,
 }
 
 impl Capability {
     /// Stable numeric identifier.
+    #[must_use]
     pub const fn id(self) -> u16 {
         self as u16
     }
 
-    /// Stable machine-readable name.
+    /// Stable machine-readable capability name.
+    #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Decode => "qec.decode",
@@ -194,10 +255,12 @@ impl Capability {
             Self::QpuSyndromeExtraction => {
                 "qec.qpu_syndrome_extraction"
             }
+            Self::RemoteExecution => "qec.remote_execution",
         }
     }
 
-    /// Whether the capability belongs to the QPU security domain.
+    /// Whether this capability belongs to the QPU security domain.
+    #[must_use]
     pub const fn is_qpu(self) -> bool {
         matches!(
             self,
@@ -211,7 +274,8 @@ impl Capability {
         )
     }
 
-    /// Whether the capability may cause physical hardware execution.
+    /// Whether the capability can directly cause physical hardware work.
+    #[must_use]
     pub const fn can_execute_hardware(self) -> bool {
         matches!(
             self,
@@ -221,7 +285,11 @@ impl Capability {
         )
     }
 
-    /// Required capability for a backend.
+    /// Returns the minimum backend capability.
+    ///
+    /// `None` means the backend itself requires no additional capability
+    /// beyond the operation-specific capability.
+    #[must_use]
     pub const fn required_for_backend(
         backend: BackendKind,
     ) -> Option<Self> {
@@ -230,8 +298,7 @@ impl Capability {
                 Some(Self::ParallelExecution)
             }
 
-            BackendKind::Gpu
-            | BackendKind::Accelerator => {
+            BackendKind::Gpu | BackendKind::Accelerator => {
                 Some(Self::UseAccelerator)
             }
 
@@ -239,9 +306,7 @@ impl Capability {
                 Some(Self::DistributedExecution)
             }
 
-            BackendKind::Qpu => {
-                Some(Self::QpuAccess)
-            }
+            BackendKind::Qpu => Some(Self::QpuAccess),
 
             BackendKind::Cpu
             | BackendKind::Simulator
@@ -264,34 +329,38 @@ impl fmt::Display for Capability {
 // Capability sets
 // ============================================================================
 
-/// Deterministic set of capabilities.
+/// Deterministic capability set.
 ///
-/// A set is used instead of a `Vec` so:
+/// `BTreeSet` guarantees:
 ///
-/// * duplicates are impossible;
-/// * authorization order is deterministic;
-/// * subset checks are straightforward;
-/// * attenuation is explicit.
+/// - no duplicate capabilities;
+/// - stable iteration order;
+/// - deterministic serialization;
+/// - deterministic subset/intersection operations.
 #[derive(
     Debug,
     Clone,
     PartialEq,
     Eq,
     Default,
+    Serialize,
+    Deserialize,
 )]
 pub struct CapabilitySet {
     inner: BTreeSet<Capability>,
 }
 
 impl CapabilitySet {
-    /// Creates an empty capability set.
+    /// Creates an empty set.
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             inner: BTreeSet::new(),
         }
     }
 
-    /// Creates a set from an iterator.
+    /// Creates a set from capabilities.
+    #[must_use]
     pub fn from_iter<I>(
         capabilities: I,
     ) -> Self
@@ -303,7 +372,89 @@ impl CapabilitySet {
         }
     }
 
-    /// Adds a capability.
+    /// Creates a set from the existing configuration contract.
+    ///
+    /// The configuration booleans are requirements only. Converting them to
+    /// a set does not itself grant authority.
+    #[must_use]
+    pub fn from_config(
+        config: &CapabilityConfig,
+    ) -> Self {
+        let mut set = Self::new();
+
+        macro_rules! add {
+            ($field:ident, $capability:expr) => {
+                if config.$field {
+                    set.insert($capability);
+                }
+            };
+        }
+
+        add!(decode, Capability::Decode);
+        add!(simulate, Capability::Simulate);
+        add!(benchmark, Capability::Benchmark);
+        add!(
+            inspect_topology,
+            Capability::InspectTopology
+        );
+        add!(
+            allocate_memory,
+            Capability::AllocateMemory
+        );
+        add!(
+            accelerator,
+            Capability::UseAccelerator
+        );
+        add!(
+            distributed_execution,
+            Capability::DistributedExecution
+        );
+        add!(
+            streaming_syndrome,
+            Capability::StreamingSyndrome
+        );
+        add!(checkpoint, Capability::Checkpoint);
+        add!(
+            deterministic_execution,
+            Capability::DeterministicExecution
+        );
+        add!(read_metrics, Capability::ReadMetrics);
+        add!(
+            emit_telemetry,
+            Capability::EmitTelemetry
+        );
+        add!(
+            parallel_execution,
+            Capability::ParallelExecution
+        );
+        add!(qpu_access, Capability::QpuAccess);
+        add!(qpu_inspect, Capability::QpuInspect);
+        add!(qpu_submit, Capability::QpuSubmit);
+        add!(
+            qpu_read_results,
+            Capability::QpuReadResults
+        );
+        add!(
+            qpu_calibration,
+            Capability::QpuCalibration
+        );
+        add!(
+            qpu_error_correction,
+            Capability::QpuErrorCorrection
+        );
+        add!(
+            qpu_syndrome_extraction,
+            Capability::QpuSyndromeExtraction
+        );
+        add!(
+            remote_execution,
+            Capability::RemoteExecution
+        );
+
+        set
+    }
+
+    /// Inserts a capability.
     pub fn insert(
         &mut self,
         capability: Capability,
@@ -319,7 +470,8 @@ impl CapabilitySet {
         self.inner.remove(&capability)
     }
 
-    /// Checks membership.
+    /// Checks whether a capability exists.
+    #[must_use]
     pub fn contains(
         &self,
         capability: Capability,
@@ -328,28 +480,32 @@ impl CapabilitySet {
     }
 
     /// Number of capabilities.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    /// Whether the set is empty.
+    /// Returns whether the set is empty.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    /// Returns an iterator in stable order.
+    /// Returns stable capability iteration.
     pub fn iter(
         &self,
     ) -> impl Iterator<Item = &Capability> {
         self.inner.iter()
     }
 
-    /// Returns a vector in stable order.
+    /// Returns stable vector representation.
+    #[must_use]
     pub fn to_vec(&self) -> Vec<Capability> {
         self.inner.iter().copied().collect()
     }
 
-    /// Returns true if this set contains every capability in `required`.
+    /// Returns whether all required capabilities are present.
+    #[must_use]
     pub fn contains_all(
         &self,
         required: &CapabilitySet,
@@ -360,7 +516,8 @@ impl CapabilitySet {
             .all(|capability| self.contains(*capability))
     }
 
-    /// Returns the intersection with another capability set.
+    /// Returns the intersection with another set.
+    #[must_use]
     pub fn intersection(
         &self,
         other: &CapabilitySet,
@@ -374,39 +531,38 @@ impl CapabilitySet {
         }
     }
 
-    /// Returns whether this set contains any QPU capability.
-    pub fn contains_qpu_capability(&self) -> bool {
-        self.inner.iter().any(|capability| {
-            capability.is_qpu()
-        })
-    }
-
-    /// Returns a reduced set suitable for delegation.
+    /// Returns a strictly attenuated capability set.
     ///
-    /// Delegation is an attenuation operation:
+    /// Delegation is always:
     ///
-    /// ```text
-    /// parent capabilities
-    ///          │
-    ///          ▼
-    ///       requested
-    ///          │
-    ///          ▼
-    /// intersection
-    ///          │
-    ///          ▼
-    /// child capabilities
-    /// ```
+    /// `child = parent ∩ requested`
+    #[must_use]
     pub fn attenuate(
         &self,
         requested: &CapabilitySet,
     ) -> CapabilitySet {
         self.intersection(requested)
     }
+
+    /// Returns whether any QPU capability is present.
+    #[must_use]
+    pub fn contains_qpu_capability(&self) -> bool {
+        self.inner
+            .iter()
+            .any(|capability| capability.is_qpu())
+    }
+
+    /// Returns whether any hardware-execution capability is present.
+    #[must_use]
+    pub fn can_execute_hardware(&self) -> bool {
+        self.inner
+            .iter()
+            .any(|capability| capability.can_execute_hardware())
+    }
 }
 
 // ============================================================================
-// QPU operations
+// QPU operation model
 // ============================================================================
 
 /// Explicit QPU operation scope.
@@ -417,29 +573,32 @@ impl CapabilitySet {
     PartialEq,
     Eq,
     Hash,
+    Serialize,
+    Deserialize,
 )]
 pub enum QpuOperation {
-    /// Inspect immutable device metadata.
+    /// Inspect immutable QPU metadata.
     Inspect,
 
     /// Read calibration information.
     ReadCalibration,
 
-    /// Submit an arbitrary circuit/workload.
+    /// Submit a circuit.
     SubmitCircuit,
 
     /// Read measurement results.
     ReadResults,
 
-    /// Execute hardware-backed QEC.
+    /// Perform hardware-backed QEC.
     ErrorCorrection,
 
-    /// Execute hardware syndrome extraction.
+    /// Perform hardware syndrome extraction.
     SyndromeExtraction,
 }
 
 impl QpuOperation {
-    /// Capability required by this operation.
+    /// Returns the operation-specific capability.
+    #[must_use]
     pub const fn required_capability(
         self,
     ) -> Capability {
@@ -461,10 +620,13 @@ impl QpuOperation {
         }
     }
 
-    /// Returns the complete capability requirement.
+    /// Returns the complete requirement for this operation.
     ///
-    /// Every QPU operation requires `QpuAccess` in addition to its
-    /// operation-specific permission.
+    /// Every QPU operation requires both:
+    ///
+    /// - `QpuAccess`;
+    /// - its operation-specific capability.
+    #[must_use]
     pub fn required_capabilities(
         self,
     ) -> CapabilitySet {
@@ -476,13 +638,99 @@ impl QpuOperation {
 }
 
 // ============================================================================
+// Generic operation requirements
+// ============================================================================
+
+/// Standard QEC operation.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
+pub enum QecOperation {
+    Decode,
+    Simulate,
+    Benchmark,
+    InspectTopology,
+    AllocateMemory,
+    Stream,
+    Checkpoint,
+    DeterministicExecution,
+    ReadMetrics,
+    EmitTelemetry,
+    ParallelExecution,
+    DistributedExecution,
+    UseAccelerator,
+    RemoteExecution,
+}
+
+impl QecOperation {
+    /// Returns the capability required by the operation.
+    #[must_use]
+    pub const fn required_capability(
+        self,
+    ) -> Capability {
+        match self {
+            Self::Decode => Capability::Decode,
+            Self::Simulate => Capability::Simulate,
+            Self::Benchmark => Capability::Benchmark,
+            Self::InspectTopology => {
+                Capability::InspectTopology
+            }
+            Self::AllocateMemory => {
+                Capability::AllocateMemory
+            }
+            Self::Stream => {
+                Capability::StreamingSyndrome
+            }
+            Self::Checkpoint => Capability::Checkpoint,
+            Self::DeterministicExecution => {
+                Capability::DeterministicExecution
+            }
+            Self::ReadMetrics => Capability::ReadMetrics,
+            Self::EmitTelemetry => {
+                Capability::EmitTelemetry
+            }
+            Self::ParallelExecution => {
+                Capability::ParallelExecution
+            }
+            Self::DistributedExecution => {
+                Capability::DistributedExecution
+            }
+            Self::UseAccelerator => {
+                Capability::UseAccelerator
+            }
+            Self::RemoteExecution => {
+                Capability::RemoteExecution
+            }
+        }
+    }
+
+    /// Converts the operation into a capability set.
+    #[must_use]
+    pub fn required_capabilities(
+        self,
+    ) -> CapabilitySet {
+        CapabilitySet::from_iter([
+            self.required_capability(),
+        ])
+    }
+}
+
+// ============================================================================
 // Resource request
 // ============================================================================
 
-/// Resource requirements supplied to the capability preflight boundary.
+/// Resource requirements presented to authorization preflight.
 ///
-/// This type deliberately mirrors canonical `QecLimits` dimensions instead
-/// of defining another resource-policy structure.
+/// This structure is deliberately a request, not a policy.
+///
+/// `QecLimits` remains the only production resource ceiling.
 #[derive(
     Debug,
     Clone,
@@ -490,173 +738,245 @@ impl QpuOperation {
     PartialEq,
     Eq,
     Default,
+    Serialize,
+    Deserialize,
 )]
 pub struct ResourceRequest {
-    pub code_distance: u64,
-    pub qubits: u64,
-    pub stabilizers: u64,
-    pub syndrome_events: u64,
-    pub rounds: u64,
-    pub graph_nodes: u64,
-    pub graph_edges: u64,
+    pub code_distance: usize,
+    pub qubits: usize,
+    pub stabilizers: usize,
+    pub syndrome_events: usize,
+    pub rounds: usize,
+    pub graph_nodes: usize,
+    pub graph_edges: usize,
     pub memory_bytes: u64,
-    pub decoder_time_ms: u64,
-    pub parallelism: u32,
-    pub checkpoint_bytes: u64,
+    pub decoder_time_ns: u64,
+    pub parallelism: usize,
+    pub checkpoint_size_bytes: u64,
+    pub partitions: usize,
+    pub stream_buffer_events: usize,
+    pub decoder_iterations: usize,
+    pub stabilizer_weight: usize,
+    pub logical_operator_weight: usize,
+    pub qubits_per_partition: usize,
     pub qpu_shots: u64,
     pub qpu_circuits: u64,
-
-    /// Whether the execution has been configured for deterministic behavior.
-    ///
-    /// This must be supplied by `configuration.rs` / the execution context.
-    /// It is intentionally not inferred from resource usage.
-    pub deterministic: bool,
+    pub verification_operations: u64,
 }
 
 impl ResourceRequest {
-    /// Empty resource request.
+    /// Empty request.
+    #[must_use]
     pub const fn empty() -> Self {
-        Self::default()
-    }
-
-    /// Validates the request itself.
-    pub fn validate(
-        &self,
-    ) -> Result<(), CapabilityError> {
-        let values = [
-            self.code_distance,
-            self.qubits,
-            self.stabilizers,
-            self.syndrome_events,
-            self.rounds,
-            self.graph_nodes,
-            self.graph_edges,
-            self.memory_bytes,
-            self.decoder_time_ms,
-            self.checkpoint_bytes,
-            self.qpu_shots,
-            self.qpu_circuits,
-        ];
-
-        if values.iter().any(|value| *value == u64::MAX) {
-            return Err(
-                CapabilityError::InvalidResourceRequest,
-            );
+        Self {
+            code_distance: 0,
+            qubits: 0,
+            stabilizers: 0,
+            syndrome_events: 0,
+            rounds: 0,
+            graph_nodes: 0,
+            graph_edges: 0,
+            memory_bytes: 0,
+            decoder_time_ns: 0,
+            parallelism: 0,
+            checkpoint_size_bytes: 0,
+            partitions: 0,
+            stream_buffer_events: 0,
+            decoder_iterations: 0,
+            stabilizer_weight: 0,
+            logical_operator_weight: 0,
+            qubits_per_partition: 0,
+            qpu_shots: 0,
+            qpu_circuits: 0,
+            verification_operations: 0,
         }
-
-        Ok(())
     }
 
-    /// Checks the request against canonical QEC limits.
-    pub fn permitted_by(
-        &self,
-        limits: &QecLimits,
-    ) -> bool {
-        self.code_distance
-            <= limits.max_code_distance
-            && self.qubits <= limits.max_qubits
-            && self.stabilizers <= limits.max_stabilizers
-            && self.syndrome_events
-                <= limits.max_syndrome_events
-            && self.rounds <= limits.max_rounds
-            && self.graph_nodes
-                <= limits.max_graph_nodes
-            && self.graph_edges
-                <= limits.max_graph_edges
-            && self.memory_bytes
-                <= limits.max_memory_bytes
-            && self.decoder_time_ms
-                <= limits.max_decoder_time_ms
-            && self.parallelism
-                <= limits.max_parallelism
-            && self.checkpoint_bytes
-                <= limits.max_checkpoint_size_bytes
-            && self.qpu_shots
-                <= limits.max_qpu_shots
-            && self.qpu_circuits
-                <= limits.max_qpu_circuits
-    }
-
-    /// Returns the first violated canonical resource dimension.
+    /// Returns the first policy violation.
+    #[must_use]
     pub fn first_violation(
         &self,
         limits: &QecLimits,
-    ) -> Option<(ResourceKind, u128, u128)> {
+    ) -> Option<(LimitKind, u128, u128)> {
         let checks = [
             (
-                ResourceKind::CodeDistance,
-                self.code_distance,
-                limits.max_code_distance,
+                LimitKind::CodeDistance,
+                self.code_distance as u128,
+                limits.max_code_distance as u128,
             ),
             (
-                ResourceKind::Qubits,
-                self.qubits,
-                limits.max_qubits,
+                LimitKind::Qubits,
+                self.qubits as u128,
+                limits.max_qubits as u128,
             ),
             (
-                ResourceKind::Stabilizers,
-                self.stabilizers,
-                limits.max_stabilizers,
+                LimitKind::Stabilizers,
+                self.stabilizers as u128,
+                limits.max_stabilizers as u128,
             ),
             (
-                ResourceKind::SyndromeEvents,
-                self.syndrome_events,
-                limits.max_syndrome_events,
+                LimitKind::SyndromeEvents,
+                self.syndrome_events as u128,
+                limits.max_syndrome_events as u128,
             ),
             (
-                ResourceKind::MeasurementRounds,
-                self.rounds,
-                limits.max_rounds,
+                LimitKind::MeasurementRounds,
+                self.rounds as u128,
+                limits.max_rounds as u128,
             ),
             (
-                ResourceKind::GraphNodes,
-                self.graph_nodes,
-                limits.max_graph_nodes,
+                LimitKind::GraphNodes,
+                self.graph_nodes as u128,
+                limits.max_graph_nodes as u128,
             ),
             (
-                ResourceKind::GraphEdges,
-                self.graph_edges,
-                limits.max_graph_edges,
+                LimitKind::GraphEdges,
+                self.graph_edges as u128,
+                limits.max_graph_edges as u128,
             ),
             (
-                ResourceKind::MemoryBytes,
-                self.memory_bytes,
-                limits.max_memory_bytes,
+                LimitKind::MemoryBytes,
+                self.memory_bytes as u128,
+                limits.max_memory_bytes as u128,
             ),
             (
-                ResourceKind::Parallelism,
-                self.parallelism as u64,
-                limits.max_parallelism as u64,
+                LimitKind::DecoderTimeNs,
+                self.decoder_time_ns as u128,
+                limits.max_decoder_time_ns as u128,
             ),
             (
-                ResourceKind::CheckpointSize,
-                self.checkpoint_bytes,
-                limits.max_checkpoint_size_bytes,
+                LimitKind::Parallelism,
+                self.parallelism as u128,
+                limits.max_parallelism as u128,
             ),
             (
-                ResourceKind::QpuShots,
-                self.qpu_shots,
-                limits.max_qpu_shots,
+                LimitKind::CheckpointSizeBytes,
+                self.checkpoint_size_bytes as u128,
+                limits.max_checkpoint_size_bytes as u128,
             ),
             (
-                ResourceKind::QpuCircuits,
-                self.qpu_circuits,
-                limits.max_qpu_circuits,
+                LimitKind::Partitions,
+                self.partitions as u128,
+                limits.max_partitions as u128,
+            ),
+            (
+                LimitKind::StreamBufferEvents,
+                self.stream_buffer_events as u128,
+                limits.max_stream_buffer_events as u128,
+            ),
+            (
+                LimitKind::DecoderIterations,
+                self.decoder_iterations as u128,
+                limits.max_decoder_iterations as u128,
+            ),
+            (
+                LimitKind::StabilizerWeight,
+                self.stabilizer_weight as u128,
+                limits.max_stabilizer_weight as u128,
+            ),
+            (
+                LimitKind::LogicalOperatorWeight,
+                self.logical_operator_weight as u128,
+                limits.max_logical_operator_weight as u128,
+            ),
+            (
+                LimitKind::QubitsPerPartition,
+                self.qubits_per_partition as u128,
+                limits.max_qubits_per_partition as u128,
+            ),
+            (
+                LimitKind::QpuShots,
+                self.qpu_shots as u128,
+                limits.max_qpu_shots as u128,
+            ),
+            (
+                LimitKind::QpuCircuits,
+                self.qpu_circuits as u128,
+                limits.max_qpu_circuits as u128,
+            ),
+            (
+                LimitKind::VerificationOperations,
+                self.verification_operations as u128,
+                limits.max_verification_operations as u128,
             ),
         ];
 
         checks
             .into_iter()
             .find(|(_, requested, maximum)| {
-                requested > maximum
+                *requested > *maximum
             })
-            .map(|(kind, requested, maximum)| {
-                (
-                    kind,
-                    requested as u128,
-                    maximum as u128,
-                )
-            })
+    }
+
+    /// Checks the request against canonical limits.
+    pub fn validate_against(
+        &self,
+        limits: &QecLimits,
+    ) -> QecResult<()> {
+        if let Some((resource, requested, maximum)) =
+            self.first_violation(limits)
+        {
+            return Err(QecError::ResourceLimitExceeded {
+                resource: resource_to_error_kind(resource),
+                requested,
+                current: 0,
+                limit: maximum,
+                message: format!(
+                    "resource request exceeds canonical QEC limit: {resource}"
+                ),
+            });
+        }
+
+        Ok(())
+    }
+}
+
+fn resource_to_error_kind(
+    kind: LimitKind,
+) -> ResourceKind {
+    match kind {
+        LimitKind::CodeDistance => {
+            ResourceKind::CodeDistance
+        }
+        LimitKind::Qubits => ResourceKind::Qubits,
+        LimitKind::Stabilizers => {
+            ResourceKind::Stabilizers
+        }
+        LimitKind::SyndromeEvents => {
+            ResourceKind::SyndromeEvents
+        }
+        LimitKind::MeasurementRounds => {
+            ResourceKind::MeasurementRounds
+        }
+        LimitKind::GraphNodes => ResourceKind::GraphNodes,
+        LimitKind::GraphEdges => ResourceKind::GraphEdges,
+        LimitKind::MemoryBytes => ResourceKind::MemoryBytes,
+        LimitKind::DecoderTimeNs => ResourceKind::Time,
+        LimitKind::Parallelism => ResourceKind::Parallelism,
+        LimitKind::CheckpointSizeBytes => {
+            ResourceKind::CheckpointSize
+        }
+        LimitKind::Partitions => ResourceKind::Partitions,
+        LimitKind::StreamBufferEvents => {
+            ResourceKind::StreamBuffer
+        }
+        LimitKind::DecoderIterations => {
+            ResourceKind::DecoderIterations
+        }
+        LimitKind::StabilizerWeight => {
+            ResourceKind::StabilizerWeight
+        }
+        LimitKind::LogicalOperatorWeight => {
+            ResourceKind::LogicalWeight
+        }
+        LimitKind::QubitsPerPartition => {
+            ResourceKind::Qubits
+        }
+        LimitKind::QpuShots => ResourceKind::QpuShots,
+        LimitKind::QpuCircuits => ResourceKind::QpuCircuits,
+        LimitKind::VerificationOperations => {
+            ResourceKind::Operations
+        }
     }
 }
 
@@ -664,10 +984,10 @@ impl ResourceRequest {
 // Capability grants
 // ============================================================================
 
-/// Stable capability-grant identifier.
+/// Stable identifier for a capability grant.
 ///
-/// This identifier is an authorization identifier, not a cryptographic
-/// identity and not a UUID generator.
+/// This is an authorization-record identifier, not a secret and not a
+/// cryptographic credential.
 #[derive(
     Debug,
     Clone,
@@ -677,701 +997,533 @@ impl ResourceRequest {
     Hash,
     PartialOrd,
     Ord,
+    Serialize,
+    Deserialize,
 )]
-pub struct CapabilityId(u128);
+pub struct GrantId(pub u128);
 
-impl CapabilityId {
-    /// Constructs an identifier from two stable 64-bit components.
-    pub const fn from_parts(
-        high: u64,
-        low: u64,
-    ) -> Self {
-        Self(((high as u128) << 64) | low as u128)
+impl GrantId {
+    /// Creates a grant identifier from an explicit value.
+    ///
+    /// Callers that require cryptographically random identifiers should
+    /// generate the value outside this module using an approved RNG.
+    #[must_use]
+    pub const fn new(value: u128) -> Self {
+        Self(value)
     }
 
     /// Returns the raw identifier.
-    pub const fn raw(
-        self,
-    ) -> u128 {
+    #[must_use]
+    pub const fn value(self) -> u128 {
         self.0
     }
 }
 
-/// Immutable authorization grant.
+impl fmt::Display for GrantId {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        write!(f, "{:032x}", self.0)
+    }
+}
+
+/// Capability grant.
 ///
-/// A grant binds:
+/// A grant is valid only when:
 ///
-/// * capabilities;
-/// * backend scope;
-/// * canonical QEC limits;
-/// * expiration;
-/// * deterministic-execution requirement.
-///
-/// Revocation is maintained by `CapabilityContext`.
+/// - it is known by the authority;
+/// - it has not been revoked;
+/// - it has not expired;
+/// - the requested operation is contained in its capabilities.
 #[derive(
     Debug,
     Clone,
     PartialEq,
     Eq,
+    Serialize,
+    Deserialize,
 )]
 pub struct CapabilityGrant {
-    id: CapabilityId,
-    capabilities: CapabilitySet,
-    backend: BackendKind,
-    limits: QecLimits,
-    issued_at: u64,
-    expires_at: Option<u64>,
-    deterministic_required: bool,
+    pub id: GrantId,
+    pub capabilities: CapabilitySet,
+    pub issued_at_unix_seconds: u64,
+    pub expires_at_unix_seconds: Option<u64>,
+    pub parent: Option<GrantId>,
 }
 
 impl CapabilityGrant {
-    /// Creates a capability grant.
-    pub fn new(
-        id: CapabilityId,
+    /// Creates a non-expiring grant.
+    #[must_use]
+    pub const fn new(
+        id: GrantId,
         capabilities: CapabilitySet,
-        backend: BackendKind,
-        limits: QecLimits,
+        issued_at_unix_seconds: u64,
+    ) -> Self {
+        Self {
+            id,
+            capabilities,
+            issued_at_unix_seconds,
+            expires_at_unix_seconds: None,
+            parent: None,
+        }
+    }
+
+    /// Creates a time-limited grant.
+    pub fn with_expiry(
+        id: GrantId,
+        capabilities: CapabilitySet,
+        issued_at_unix_seconds: u64,
+        expires_at_unix_seconds: u64,
     ) -> Result<Self, CapabilityError> {
-        if capabilities.is_empty() {
+        if expires_at_unix_seconds
+            <= issued_at_unix_seconds
+        {
             return Err(
-                CapabilityError::EmptyGrant,
+                CapabilityError::InvalidGrantLifetime,
             );
         }
-
-        limits.validate().map_err(
-            CapabilityError::InvalidCanonicalLimits,
-        )?;
-
-        Self::validate_backend_requirements(
-            &capabilities,
-            backend,
-        )?;
-
-        let deterministic_required =
-            capabilities.contains(
-                Capability::DeterministicExecution,
-            );
 
         Ok(Self {
             id,
             capabilities,
-            backend,
-            limits,
-            issued_at: current_unix_seconds(),
-            expires_at: None,
-            deterministic_required,
+            issued_at_unix_seconds,
+            expires_at_unix_seconds: Some(
+                expires_at_unix_seconds,
+            ),
+            parent: None,
         })
     }
 
-    /// Adds an expiration timestamp.
-    pub fn with_expiration(
-        mut self,
-        expires_at: u64,
-    ) -> Result<Self, CapabilityError> {
-        if expires_at <= self.issued_at {
-            return Err(
-                CapabilityError::InvalidExpiration,
-            );
-        }
-
-        self.expires_at = Some(expires_at);
-        Ok(self)
-    }
-
-    /// Returns the grant ID.
-    pub const fn id(
-        &self,
-    ) -> CapabilityId {
-        self.id
-    }
-
-    /// Returns the capabilities.
-    pub const fn capabilities(
-        &self,
-    ) -> &CapabilitySet {
-        &self.capabilities
-    }
-
-    /// Returns the backend scope.
-    pub const fn backend(
-        &self,
-    ) -> BackendKind {
-        self.backend
-    }
-
-    /// Returns canonical QEC limits.
-    pub const fn limits(
-        &self,
-    ) -> &QecLimits {
-        &self.limits
-    }
-
-    /// Returns whether the grant has expired.
+    /// Returns whether the grant has expired at `now`.
+    #[must_use]
     pub fn is_expired(
         &self,
-        now: u64,
+        now_unix_seconds: u64,
     ) -> bool {
-        self.expires_at
-            .is_some_and(|expiry| now >= expiry)
-    }
-
-    /// Returns whether deterministic execution is required.
-    pub const fn requires_determinism(
-        &self,
-    ) -> bool {
-        self.deterministic_required
-    }
-
-    /// Checks capability membership.
-    pub fn contains(
-        &self,
-        capability: Capability,
-    ) -> bool {
-        self.capabilities.contains(capability)
-    }
-
-    fn validate_backend_requirements(
-        capabilities: &CapabilitySet,
-        backend: BackendKind,
-    ) -> Result<(), CapabilityError> {
-        if let Some(required) =
-            Capability::required_for_backend(backend)
-        {
-            if !capabilities.contains(required) {
-                return Err(
-                    CapabilityError::MissingCapability(
-                        required,
-                    ),
-                );
-            }
+        match self.expires_at_unix_seconds {
+            Some(expiry) => now_unix_seconds >= expiry,
+            None => false,
         }
-
-        if backend != BackendKind::Qpu
-            && capabilities
-                .contains(Capability::QpuSubmit)
-        {
-            return Err(
-                CapabilityError::QpuCapabilityRequiresQpuBackend,
-            );
-        }
-
-        if backend != BackendKind::Qpu
-            && capabilities.contains(
-                Capability::QpuErrorCorrection,
-            )
-        {
-            return Err(
-                CapabilityError::QpuCapabilityRequiresQpuBackend,
-            );
-        }
-
-        if backend != BackendKind::Qpu
-            && capabilities.contains(
-                Capability::QpuSyndromeExtraction,
-            )
-        {
-            return Err(
-                CapabilityError::QpuCapabilityRequiresQpuBackend,
-            );
-        }
-
-        Ok(())
     }
 
     /// Creates an attenuated child grant.
     ///
-    /// Delegation cannot:
-    ///
-    /// * add capabilities;
-    /// * widen resource limits;
-    /// * widen backend scope;
-    /// * extend the parent's expiration.
-    pub fn delegate(
+    /// A child can never possess a capability that the parent does not have.
+    pub fn attenuate(
         &self,
-        child_id: CapabilityId,
-        requested_capabilities: &CapabilitySet,
-        requested_limits: &QecLimits,
-        expires_at: Option<u64>,
+        child_id: GrantId,
+        requested: &CapabilitySet,
+        issued_at_unix_seconds: u64,
+        expires_at_unix_seconds: Option<u64>,
     ) -> Result<Self, CapabilityError> {
-        let capabilities = self
-            .capabilities
-            .attenuate(requested_capabilities);
-
-        if capabilities.is_empty() {
+        if self.is_expired(issued_at_unix_seconds) {
             return Err(
-                CapabilityError::EmptyDelegation,
-            );
-        }
-
-        ensure_limits_are_not_wider(
-            &self.limits,
-            requested_limits,
-        )?;
-
-        if let Some(child_expiry) = expires_at {
-            if let Some(parent_expiry) =
-                self.expires_at
-            {
-                if child_expiry > parent_expiry {
-                    return Err(
-                        CapabilityError::DelegationExtendsExpiry,
-                    );
-                }
-            }
-
-            if child_expiry <= self.issued_at {
-                return Err(
-                    CapabilityError::InvalidExpiration,
-                );
-            }
-        }
-
-        let mut child =
-            Self::new(
-                child_id,
-                capabilities,
-                self.backend,
-                requested_limits.clone(),
-            )?;
-
-        child.expires_at =
-            expires_at.or(self.expires_at);
-
-        Ok(child)
-    }
-}
-
-// ============================================================================
-// Authorization context
-// ============================================================================
-
-/// Runtime authorization context.
-///
-/// The context is fail-closed and monotonic with respect to revocation.
-#[derive(
-    Debug,
-    Clone,
-    Default,
-)]
-pub struct CapabilityContext {
-    grants: Vec<CapabilityGrant>,
-    revoked: BTreeSet<CapabilityId>,
-}
-
-impl CapabilityContext {
-    /// Creates an empty authorization context.
-    pub const fn new() -> Self {
-        Self {
-            grants: Vec::new(),
-            revoked: BTreeSet::new(),
-        }
-    }
-
-    /// Registers a grant.
-    pub fn grant(
-        &mut self,
-        grant: CapabilityGrant,
-    ) -> Result<(), CapabilityError> {
-        if self.revoked.contains(&grant.id) {
-            return Err(
-                CapabilityError::GrantAlreadyRevoked(
-                    grant.id,
-                ),
-            );
-        }
-
-        if self
-            .grants
-            .iter()
-            .any(|existing| existing.id == grant.id)
-        {
-            return Err(
-                CapabilityError::DuplicateGrant(
-                    grant.id,
-                ),
-            );
-        }
-
-        self.grants.push(grant);
-
-        self.grants.sort_by_key(
-            |grant| grant.id,
-        );
-
-        Ok(())
-    }
-
-    /// Monotonically revokes a grant.
-    pub fn revoke(
-        &mut self,
-        id: CapabilityId,
-    ) -> bool {
-        self.revoked.insert(id)
-    }
-
-    /// Returns whether a grant is revoked.
-    pub fn is_revoked(
-        &self,
-        id: CapabilityId,
-    ) -> bool {
-        self.revoked.contains(&id)
-    }
-
-    /// Authorizes one capability.
-    pub fn authorize(
-        &self,
-        capability: Capability,
-        backend: BackendKind,
-        request: &ResourceRequest,
-        now: u64,
-    ) -> Result<(), CapabilityError> {
-        let required =
-            CapabilitySet::from_iter([capability]);
-
-        self.authorize_set(
-            &required,
-            backend,
-            request,
-            now,
-        )
-    }
-
-    /// Authorizes an entire capability set against one grant.
-    ///
-    /// Requiring one grant to satisfy the complete operation prevents
-    /// privilege composition across unrelated grants.
-    pub fn authorize_set(
-        &self,
-        required: &CapabilitySet,
-        backend: BackendKind,
-        request: &ResourceRequest,
-        now: u64,
-    ) -> Result<(), CapabilityError> {
-        request.validate()?;
-
-        if required.is_empty() {
-            return Err(
-                CapabilityError::EmptyRequirement,
-            );
-        }
-
-        let grant = self
-            .find_grant(
-                required,
-                backend,
-                now,
-            )?;
-
-        if grant.requires_determinism()
-            && !request.deterministic
-        {
-            return Err(
-                CapabilityError::DeterminismRequired,
-            );
-        }
-
-        if let Some((
-            resource,
-            requested,
-            maximum,
-        )) = request.first_violation(
-            &grant.limits,
-        ) {
-            return Err(
-                CapabilityError::ResourceLimitExceeded {
-                    resource,
-                    requested,
-                    maximum,
+                CapabilityError::ExpiredGrant {
+                    grant_id: self.id,
                 },
             );
         }
 
-        Ok(())
-    }
+        let capabilities =
+            self.capabilities.attenuate(requested);
 
-    /// Authorizes a QPU operation.
-    ///
-    /// Both `QpuAccess` and the operation-specific capability must exist
-    /// within the same valid grant.
-    pub fn authorize_qpu(
-        &self,
-        operation: QpuOperation,
-        request: &ResourceRequest,
-        now: u64,
-    ) -> Result<(), CapabilityError> {
-        let required =
-            operation.required_capabilities();
-
-        self.authorize_set(
-            &required,
-            BackendKind::Qpu,
-            request,
-            now,
-        )
-    }
-
-    /// Locates a valid grant for a complete capability set.
-    pub fn find_grant(
-        &self,
-        required: &CapabilitySet,
-        backend: BackendKind,
-        now: u64,
-    ) -> Result<&CapabilityGrant, CapabilityError> {
-        for grant in &self.grants {
-            if self.revoked.contains(&grant.id) {
-                continue;
+        if let Some(expiry) = expires_at_unix_seconds {
+            if expiry <= issued_at_unix_seconds {
+                return Err(
+                    CapabilityError::InvalidGrantLifetime,
+                );
             }
 
-            if grant.backend != backend {
-                continue;
+            if let Some(parent_expiry) =
+                self.expires_at_unix_seconds
+            {
+                if expiry > parent_expiry {
+                    return Err(
+                        CapabilityError::DelegationBeyondParentExpiry,
+                    );
+                }
             }
-
-            if !grant.capabilities.contains_all(
-                required,
-            ) {
-                continue;
-            }
-
-            if grant.is_expired(now) {
-                continue;
-            }
-
-            return Ok(grant);
         }
 
-        if self
-            .grants
-            .iter()
-            .any(|grant| {
-                grant.backend == backend
-                    && grant
-                        .capabilities
-                        .contains_all(required)
-            })
-        {
+        Ok(Self {
+            id: child_id,
+            capabilities,
+            issued_at_unix_seconds,
+            expires_at_unix_seconds:
+                expires_at_unix_seconds.or(
+                    self.expires_at_unix_seconds,
+                ),
+            parent: Some(self.id),
+        })
+    }
+}
+
+// ============================================================================
+// Authorization authority
+// ============================================================================
+
+/// In-process capability authority.
+///
+/// The authority owns the grant registry and revocation set.
+///
+/// It does not create cryptographic identity. Identity/authentication belongs
+/// to the surrounding security system. This component answers one narrower
+/// question:
+///
+/// > "Does this already-authenticated execution context possess the requested
+/// > QEC capability?"
+#[derive(Debug, Default)]
+pub struct CapabilityAuthority {
+    grants: BTreeMap<GrantId, CapabilityGrant>,
+    revoked: BTreeSet<GrantId>,
+}
+
+impl CapabilityAuthority {
+    /// Creates an empty authority.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a grant.
+    ///
+    /// Reusing an existing grant ID is rejected. This prevents accidental
+    /// replacement of an existing authorization record.
+    pub fn register(
+        &mut self,
+        grant: CapabilityGrant,
+    ) -> Result<(), CapabilityError> {
+        if self.grants.contains_key(&grant.id) {
             return Err(
-                CapabilityError::CapabilityExpiredOrRevoked,
+                CapabilityError::DuplicateGrant {
+                    grant_id: grant.id,
+                },
             );
         }
 
-        Err(
-            CapabilityError::MissingCapabilitySet(
-                required.clone(),
-            ),
+        if self.revoked.contains(&grant.id) {
+            return Err(
+                CapabilityError::GrantAlreadyRevoked {
+                    grant_id: grant.id,
+                },
+            );
+        }
+
+        self.grants.insert(grant.id, grant);
+
+        Ok(())
+    }
+
+    /// Revokes a grant permanently.
+    ///
+    /// Revocation is monotonic: there is intentionally no un-revoke API.
+    pub fn revoke(
+        &mut self,
+        grant_id: GrantId,
+    ) -> Result<(), CapabilityError> {
+        if !self.grants.contains_key(&grant_id) {
+            return Err(
+                CapabilityError::UnknownGrant { grant_id },
+            );
+        }
+
+        self.revoked.insert(grant_id);
+
+        Ok(())
+    }
+
+    /// Checks whether a grant has been revoked.
+    #[must_use]
+    pub fn is_revoked(
+        &self,
+        grant_id: GrantId,
+    ) -> bool {
+        self.revoked.contains(&grant_id)
+    }
+
+    /// Returns a registered grant.
+    #[must_use]
+    pub fn grant(
+        &self,
+        grant_id: GrantId,
+    ) -> Option<&CapabilityGrant> {
+        self.grants.get(&grant_id)
+    }
+
+    /// Authorizes a capability requirement.
+    pub fn authorize(
+        &self,
+        grant_id: GrantId,
+        required: &CapabilitySet,
+        now_unix_seconds: u64,
+    ) -> QecResult<()> {
+        let grant = self
+            .grants
+            .get(&grant_id)
+            .ok_or_else(|| {
+                QecError::CapabilityDenied {
+                    capability: required_names(required),
+                    operation: "authorization".to_owned(),
+                    message: format!(
+                        "unknown capability grant: {grant_id}"
+                    ),
+                }
+            })?;
+
+        if self.revoked.contains(&grant_id) {
+            return Err(QecError::CapabilityDenied {
+                capability: required_names(required),
+                operation: "authorization".to_owned(),
+                message: format!(
+                    "capability grant has been revoked: {grant_id}"
+                ),
+            });
+        }
+
+        if grant.is_expired(now_unix_seconds) {
+            return Err(QecError::CapabilityDenied {
+                capability: required_names(required),
+                operation: "authorization".to_owned(),
+                message: format!(
+                    "capability grant has expired: {grant_id}"
+                ),
+            });
+        }
+
+        if !grant.capabilities.contains_all(required) {
+            return Err(QecError::CapabilityDenied {
+                capability: required_names(required),
+                operation: "authorization".to_owned(),
+                message:
+                    "required capability is not present in the grant"
+                        .to_owned(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Performs authorization and canonical resource preflight together.
+    ///
+    /// Authorization does not replace runtime accounting. A later execution
+    /// layer must still reserve actual resources through `resources.rs`.
+    pub fn authorize_with_resources(
+        &self,
+        grant_id: GrantId,
+        required: &CapabilitySet,
+        request: &ResourceRequest,
+        limits: &QecLimits,
+        now_unix_seconds: u64,
+    ) -> QecResult<()> {
+        self.authorize(
+            grant_id,
+            required,
+            now_unix_seconds,
+        )?;
+
+        request.validate_against(limits)?;
+
+        Ok(())
+    }
+
+    /// Authorizes a backend.
+    pub fn authorize_backend(
+        &self,
+        grant_id: GrantId,
+        backend: BackendKind,
+        now_unix_seconds: u64,
+    ) -> QecResult<()> {
+        let required =
+            Capability::required_for_backend(backend)
+                .map(|capability| {
+                    CapabilitySet::from_iter([capability])
+                })
+                .unwrap_or_else(CapabilitySet::new);
+
+        if required.is_empty() {
+            return Ok(());
+        }
+
+        self.authorize(
+            grant_id,
+            &required,
+            now_unix_seconds,
         )
     }
 
-    /// Returns the number of registered grants.
-    pub fn grant_count(
+    /// Authorizes an explicit QPU operation.
+    pub fn authorize_qpu(
         &self,
-    ) -> usize {
+        grant_id: GrantId,
+        operation: QpuOperation,
+        now_unix_seconds: u64,
+    ) -> QecResult<()> {
+        self.authorize(
+            grant_id,
+            &operation.required_capabilities(),
+            now_unix_seconds,
+        )
+    }
+
+    /// Delegates an attenuated grant.
+    ///
+    /// The parent grant must be registered and valid at delegation time.
+    pub fn delegate(
+        &mut self,
+        parent_id: GrantId,
+        child_id: GrantId,
+        requested: &CapabilitySet,
+        issued_at_unix_seconds: u64,
+        expires_at_unix_seconds: Option<u64>,
+    ) -> Result<(), CapabilityError> {
+        let parent = self
+            .grants
+            .get(&parent_id)
+            .ok_or(
+                CapabilityError::UnknownGrant {
+                    grant_id: parent_id,
+                },
+            )?;
+
+        if self.revoked.contains(&parent_id) {
+            return Err(
+                CapabilityError::RevokedGrant {
+                    grant_id: parent_id,
+                },
+            );
+        }
+
+        let child = parent.attenuate(
+            child_id,
+            requested,
+            issued_at_unix_seconds,
+            expires_at_unix_seconds,
+        )?;
+
+        self.register(child)
+    }
+
+    /// Returns the number of registered grants.
+    #[must_use]
+    pub fn grant_count(&self) -> usize {
         self.grants.len()
     }
 
-    /// Returns the number of active grants.
-    pub fn active_grant_count(
-        &self,
-        now: u64,
-    ) -> usize {
-        self.grants
-            .iter()
-            .filter(|grant| {
-                !self.revoked.contains(
-                    &grant.id,
-                )
-                    && !grant.is_expired(now)
-            })
-            .count()
+    /// Returns the number of revoked grants.
+    #[must_use]
+    pub fn revoked_count(&self) -> usize {
+        self.revoked.len()
     }
 }
 
+fn required_names(
+    required: &CapabilitySet,
+) -> String {
+    required
+        .iter()
+        .map(|capability| capability.name())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 // ============================================================================
-// High-level policies
+// Capability preflight
 // ============================================================================
 
-/// Safe predefined capability policies.
-///
-/// These are convenience constructors, not authorization bypasses.
+/// Result of authorization preflight.
 #[derive(
     Debug,
     Clone,
-    Copy,
     PartialEq,
     Eq,
 )]
-pub enum CapabilityPolicy {
-    CpuDecoder,
-    ParallelDecoder,
-    Simulation,
-    Benchmark,
-    TopologyInspection,
-    AcceleratorDecoder,
-    DistributedDecoder,
-    QpuQec,
-    QpuSyndromeExtraction,
+pub struct AuthorizationDecision {
+    pub granted: bool,
+    pub capabilities: CapabilitySet,
 }
 
-impl CapabilityPolicy {
-    /// Capabilities associated with this policy.
-    pub fn capabilities(
-        self,
-    ) -> CapabilitySet {
-        match self {
-            Self::CpuDecoder => {
-                CapabilitySet::from_iter([
-                    Capability::Decode,
-                    Capability::ReadMetrics,
-                ])
-            }
-
-            Self::ParallelDecoder => {
-                CapabilitySet::from_iter([
-                    Capability::Decode,
-                    Capability::ReadMetrics,
-                    Capability::ParallelExecution,
-                ])
-            }
-
-            Self::Simulation => {
-                CapabilitySet::from_iter([
-                    Capability::Simulate,
-                    Capability::ReadMetrics,
-                    Capability::DeterministicExecution,
-                ])
-            }
-
-            Self::Benchmark => {
-                CapabilitySet::from_iter([
-                    Capability::Benchmark,
-                    Capability::ReadMetrics,
-                ])
-            }
-
-            Self::TopologyInspection => {
-                CapabilitySet::from_iter([
-                    Capability::InspectTopology,
-                ])
-            }
-
-            Self::AcceleratorDecoder => {
-                CapabilitySet::from_iter([
-                    Capability::Decode,
-                    Capability::ReadMetrics,
-                    Capability::UseAccelerator,
-                ])
-            }
-
-            Self::DistributedDecoder => {
-                CapabilitySet::from_iter([
-                    Capability::Decode,
-                    Capability::ReadMetrics,
-                    Capability::DistributedExecution,
-                    Capability::ParallelExecution,
-                ])
-            }
-
-            Self::QpuQec => {
-                CapabilitySet::from_iter([
-                    Capability::QpuAccess,
-                    Capability::QpuInspect,
-                    Capability::QpuSubmit,
-                    Capability::QpuReadResults,
-                    Capability::QpuErrorCorrection,
-                ])
-            }
-
-            Self::QpuSyndromeExtraction => {
-                CapabilitySet::from_iter([
-                    Capability::QpuAccess,
-                    Capability::QpuInspect,
-                    Capability::QpuSubmit,
-                    Capability::QpuReadResults,
-                    Capability::QpuSyndromeExtraction,
-                ])
-            }
+impl AuthorizationDecision {
+    /// Creates an allowed decision.
+    #[must_use]
+    pub fn allow(
+        capabilities: CapabilitySet,
+    ) -> Self {
+        Self {
+            granted: true,
+            capabilities,
         }
     }
 
-    /// Backend associated with the policy.
-    pub const fn backend(
-        self,
-    ) -> BackendKind {
-        match self {
-            Self::CpuDecoder
-            | Self::Simulation
-            | Self::Benchmark
-            | Self::TopologyInspection => {
-                BackendKind::Cpu
-            }
-
-            Self::ParallelDecoder => {
-                BackendKind::ParallelCpu
-            }
-
-            Self::AcceleratorDecoder => {
-                BackendKind::Accelerator
-            }
-
-            Self::DistributedDecoder => {
-                BackendKind::Distributed
-            }
-
-            Self::QpuQec
-            | Self::QpuSyndromeExtraction => {
-                BackendKind::Qpu
-            }
+    /// Creates a denied decision.
+    #[must_use]
+    pub fn deny() -> Self {
+        Self {
+            granted: false,
+            capabilities: CapabilitySet::new(),
         }
-    }
-
-    /// Canonical limits for the policy.
-    ///
-    /// These are sourced from `QecLimits`; this module does not maintain a
-    /// second independent resource-policy structure.
-    pub fn limits(
-        self,
-    ) -> QecLimits {
-        let mut limits =
-            QecLimits::default();
-
-        match self {
-            Self::TopologyInspection => {
-                limits.max_syndrome_events = 1;
-                limits.max_rounds = 1;
-                limits.max_graph_nodes = 1;
-                limits.max_graph_edges = 1;
-            }
-
-            Self::Simulation => {
-                limits.max_parallelism =
-                    limits.max_parallelism.min(64);
-            }
-
-            Self::Benchmark => {
-                limits.max_parallelism =
-                    limits.max_parallelism.min(64);
-            }
-
-            Self::QpuQec
-            | Self::QpuSyndromeExtraction => {
-                limits.max_parallelism =
-                    limits.max_parallelism.min(256);
-            }
-
-            _ => {}
-        }
-
-        limits
     }
 }
 
 // ============================================================================
-// Errors
+// Configuration integration
 // ============================================================================
 
-/// Capability-layer error.
+/// Converts configuration requirements into an authorization set.
 ///
-/// This remains specialized internally, but converts into the canonical
-/// `QecError` at the public subsystem boundary.
+/// This function intentionally does not create a grant.
+///
+/// `CapabilityConfig` describes required capabilities; an authenticated
+/// execution context must still provide an authorized `CapabilityGrant`.
+#[must_use]
+pub fn requirements_from_config(
+    config: &CapabilityConfig,
+) -> CapabilitySet {
+    CapabilitySet::from_config(config)
+}
+
+/// Checks whether a configuration requirement set is satisfied by a grant.
+pub fn authorize_config(
+    authority: &CapabilityAuthority,
+    grant_id: GrantId,
+    config: &CapabilityConfig,
+    now_unix_seconds: u64,
+) -> QecResult<()> {
+    let required =
+        requirements_from_config(config);
+
+    authority.authorize(
+        grant_id,
+        &required,
+        now_unix_seconds,
+    )
+}
+
+// ============================================================================
+// Current time helper
+// ============================================================================
+
+/// Returns current Unix time in seconds.
+///
+/// This is intentionally a small boundary helper. Deterministic tests should
+/// supply explicit timestamps to authorization functions instead of calling
+/// this function.
+pub fn current_unix_seconds() -> Result<u64, CapabilityError> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .map_err(|_| CapabilityError::ClockBeforeUnixEpoch)
+}
+
+// ============================================================================
+// Capability errors
+// ============================================================================
+
+/// Local errors produced by the capability authority.
+///
+/// Public operation boundaries should convert these to `QecError` where
+/// appropriate. Authorization itself already returns `QecError` for denied
+/// execution.
 #[derive(
     Debug,
     Clone,
@@ -1379,49 +1531,33 @@ impl CapabilityPolicy {
     Eq,
 )]
 pub enum CapabilityError {
-    EmptyGrant,
-
-    EmptyRequirement,
-
-    EmptyDelegation,
-
-    MissingCapability(Capability),
-
-    MissingCapabilitySet(CapabilitySet),
-
-    QpuAccessDenied,
-
-    QpuOperationDenied(QpuOperation),
-
-    QpuCapabilityRequiresQpuBackend,
-
-    DuplicateGrant(CapabilityId),
-
-    GrantAlreadyRevoked(CapabilityId),
-
-    CapabilityExpired(CapabilityId),
-
-    CapabilityExpiredOrRevoked,
-
-    ResourceLimitExceeded {
-        resource: ResourceKind,
-        requested: u128,
-        maximum: u128,
+    UnknownGrant {
+        grant_id: GrantId,
     },
+
+    DuplicateGrant {
+        grant_id: GrantId,
+    },
+
+    GrantAlreadyRevoked {
+        grant_id: GrantId,
+    },
+
+    RevokedGrant {
+        grant_id: GrantId,
+    },
+
+    ExpiredGrant {
+        grant_id: GrantId,
+    },
+
+    InvalidGrantLifetime,
+
+    DelegationBeyondParentExpiry,
 
     InvalidResourceRequest,
 
-    InvalidCanonicalLimits(String),
-
-    InvalidExpiration,
-
-    DeterminismRequired,
-
-    DelegationExtendsExpiry,
-
-    DelegationWidensLimits,
-
-    DelegationChangesBackend,
+    ClockBeforeUnixEpoch,
 }
 
 impl fmt::Display for CapabilityError {
@@ -1430,136 +1566,57 @@ impl fmt::Display for CapabilityError {
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
-            Self::EmptyGrant => {
+            Self::UnknownGrant { grant_id } => {
+                write!(f, "unknown capability grant: {grant_id}")
+            }
+
+            Self::DuplicateGrant { grant_id } => {
+                write!(
+                    f,
+                    "capability grant already exists: {grant_id}"
+                )
+            }
+
+            Self::GrantAlreadyRevoked { grant_id } => {
+                write!(
+                    f,
+                    "capability grant has already been revoked: {grant_id}"
+                )
+            }
+
+            Self::RevokedGrant { grant_id } => {
+                write!(
+                    f,
+                    "capability grant has been revoked: {grant_id}"
+                )
+            }
+
+            Self::ExpiredGrant { grant_id } => {
+                write!(
+                    f,
+                    "capability grant has expired: {grant_id}"
+                )
+            }
+
+            Self::InvalidGrantLifetime => {
                 f.write_str(
-                    "capability grant contains no capabilities",
+                    "capability grant expiration must be after issuance",
                 )
             }
 
-            Self::EmptyRequirement => {
+            Self::DelegationBeyondParentExpiry => {
                 f.write_str(
-                    "authorization request contains no required capabilities",
-                )
-            }
-
-            Self::EmptyDelegation => {
-                f.write_str(
-                    "delegation would produce an empty capability set",
-                )
-            }
-
-            Self::MissingCapability(capability) => {
-                write!(
-                    f,
-                    "missing required capability: {capability}"
-                )
-            }
-
-            Self::MissingCapabilitySet(capabilities) => {
-                write!(
-                    f,
-                    "missing required capability set: {:?}",
-                    capabilities.to_vec()
-                )
-            }
-
-            Self::QpuAccessDenied => {
-                f.write_str(
-                    "QPU access denied",
-                )
-            }
-
-            Self::QpuOperationDenied(operation) => {
-                write!(
-                    f,
-                    "QPU operation {operation:?} denied"
-                )
-            }
-
-            Self::QpuCapabilityRequiresQpuBackend => {
-                f.write_str(
-                    "QPU execution capabilities require the QPU backend",
-                )
-            }
-
-            Self::DuplicateGrant(id) => {
-                write!(
-                    f,
-                    "capability grant {id:?} already exists"
-                )
-            }
-
-            Self::GrantAlreadyRevoked(id) => {
-                write!(
-                    f,
-                    "capability grant {id:?} is already revoked"
-                )
-            }
-
-            Self::CapabilityExpired(id) => {
-                write!(
-                    f,
-                    "capability grant {id:?} has expired"
-                )
-            }
-
-            Self::CapabilityExpiredOrRevoked => {
-                f.write_str(
-                    "matching capability grant is expired or revoked",
-                )
-            }
-
-            Self::ResourceLimitExceeded {
-                resource,
-                requested,
-                maximum,
-            } => {
-                write!(
-                    f,
-                    "resource {resource} requested={requested} maximum={maximum}"
+                    "delegated grant cannot outlive its parent grant",
                 )
             }
 
             Self::InvalidResourceRequest => {
-                f.write_str(
-                    "invalid QEC resource request",
-                )
+                f.write_str("invalid QEC resource request")
             }
 
-            Self::InvalidCanonicalLimits(message) => {
-                write!(
-                    f,
-                    "invalid canonical QEC limits: {message}"
-                )
-            }
-
-            Self::InvalidExpiration => {
+            Self::ClockBeforeUnixEpoch => {
                 f.write_str(
-                    "capability expiration must be later than issuance",
-                )
-            }
-
-            Self::DeterminismRequired => {
-                f.write_str(
-                    "capability requires deterministic execution",
-                )
-            }
-
-            Self::DelegationExtendsExpiry => {
-                f.write_str(
-                    "delegated capability cannot outlive its parent",
-                )
-            }
-
-            Self::DelegationWidensLimits => {
-                f.write_str(
-                    "delegated capability cannot widen resource limits",
-                )
-            }
-
-            Self::DelegationChangesBackend => {
-                f.write_str(
-                    "delegated capability cannot change backend scope",
+                    "system clock is before the Unix epoch",
                 )
             }
         }
@@ -1569,174 +1626,6 @@ impl fmt::Display for CapabilityError {
 impl std::error::Error for CapabilityError {}
 
 // ============================================================================
-// QecError integration
-// ============================================================================
-
-impl From<CapabilityError> for QecError {
-    fn from(
-        error: CapabilityError,
-    ) -> Self {
-        match error {
-            CapabilityError::ResourceLimitExceeded {
-                resource,
-                requested,
-                maximum,
-            } => QecError::ResourceLimitExceeded {
-                resource,
-                requested,
-                current: 0,
-                limit: maximum,
-                message:
-                    "QEC capability resource preflight rejected the request"
-                        .to_string(),
-            },
-
-            CapabilityError::InvalidCanonicalLimits(
-                message,
-            ) => QecError::UnsupportedConfiguration {
-                feature: "capability_limits".to_string(),
-                message,
-            },
-
-            CapabilityError::InvalidResourceRequest
-            | CapabilityError::EmptyGrant
-            | CapabilityError::EmptyRequirement
-            | CapabilityError::EmptyDelegation
-            | CapabilityError::InvalidExpiration
-            | CapabilityError::DelegationExtendsExpiry
-            | CapabilityError::DelegationWidensLimits
-            | CapabilityError::DelegationChangesBackend
-            | CapabilityError::QpuCapabilityRequiresQpuBackend => {
-                QecError::InvalidInput {
-                    message: error.to_string(),
-                }
-            }
-
-            CapabilityError::MissingCapability(_)
-            | CapabilityError::MissingCapabilitySet(_)
-            | CapabilityError::QpuAccessDenied
-            | CapabilityError::QpuOperationDenied(_)
-            | CapabilityError::DuplicateGrant(_)
-            | CapabilityError::GrantAlreadyRevoked(_)
-            | CapabilityError::CapabilityExpired(_)
-            | CapabilityError::CapabilityExpiredOrRevoked
-            | CapabilityError::DeterminismRequired => {
-                QecError::UnsupportedConfiguration {
-                    feature:
-                        "qec_capability_authorization"
-                            .to_string(),
-                    message: error.to_string(),
-                }
-            }
-        }
-    }
-}
-
-// ============================================================================
-// Construction helpers
-// ============================================================================
-
-/// Creates a policy-backed capability grant.
-pub fn grant_for_policy(
-    id: CapabilityId,
-    policy: CapabilityPolicy,
-) -> Result<CapabilityGrant, CapabilityError> {
-    CapabilityGrant::new(
-        id,
-        policy.capabilities(),
-        policy.backend(),
-        policy.limits(),
-    )
-}
-
-/// Creates a QPU QEC grant.
-pub fn grant_qpu_error_correction(
-    id: CapabilityId,
-) -> Result<CapabilityGrant, CapabilityError> {
-    grant_for_policy(
-        id,
-        CapabilityPolicy::QpuQec,
-    )
-}
-
-/// Creates a QPU syndrome-extraction grant.
-pub fn grant_qpu_syndrome_extraction(
-    id: CapabilityId,
-) -> Result<CapabilityGrant, CapabilityError> {
-    grant_for_policy(
-        id,
-        CapabilityPolicy::QpuSyndromeExtraction,
-    )
-}
-
-/// Authorizes an operation and converts failure directly to the canonical
-/// QEC error boundary.
-pub fn authorize_or_error(
-    context: &CapabilityContext,
-    required: &CapabilitySet,
-    backend: BackendKind,
-    request: &ResourceRequest,
-    now: u64,
-) -> QecResult<()> {
-    context
-        .authorize_set(
-            required,
-            backend,
-            request,
-            now,
-        )
-        .map_err(QecError::from)
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-fn ensure_limits_are_not_wider(
-    parent: &QecLimits,
-    child: &QecLimits,
-) -> Result<(), CapabilityError> {
-    if child.max_code_distance
-        > parent.max_code_distance
-        || child.max_qubits > parent.max_qubits
-        || child.max_stabilizers
-            > parent.max_stabilizers
-        || child.max_syndrome_events
-            > parent.max_syndrome_events
-        || child.max_rounds > parent.max_rounds
-        || child.max_graph_nodes
-            > parent.max_graph_nodes
-        || child.max_graph_edges
-            > parent.max_graph_edges
-        || child.max_memory_bytes
-            > parent.max_memory_bytes
-        || child.max_decoder_time_ms
-            > parent.max_decoder_time_ms
-        || child.max_parallelism
-            > parent.max_parallelism
-        || child.max_checkpoint_size_bytes
-            > parent.max_checkpoint_size_bytes
-        || child.max_qpu_shots
-            > parent.max_qpu_shots
-        || child.max_qpu_circuits
-            > parent.max_qpu_circuits
-    {
-        return Err(
-            CapabilityError::DelegationWidensLimits,
-        );
-    }
-
-    Ok(())
-}
-
-fn current_unix_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .as_secs()
-}
-
-// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1744,450 +1633,346 @@ fn current_unix_seconds() -> u64 {
 mod tests {
     use super::*;
 
-    fn id(value: u64) -> CapabilityId {
-        CapabilityId::from_parts(0, value)
-    }
-
-    fn request() -> ResourceRequest {
-        ResourceRequest {
-            code_distance: 3,
-            qubits: 100,
-            stabilizers: 100,
-            syndrome_events: 100,
-            rounds: 10,
-            graph_nodes: 100,
-            graph_edges: 200,
-            memory_bytes: 1024 * 1024,
-            decoder_time_ms: 100,
-            parallelism: 1,
-            checkpoint_bytes: 0,
-            qpu_shots: 0,
-            qpu_circuits: 0,
-            deterministic: false,
-        }
-    }
-
-    #[test]
-    fn empty_grant_is_rejected() {
-        let result = CapabilityGrant::new(
-            id(1),
-            CapabilitySet::new(),
-            BackendKind::Cpu,
-            QecLimits::default(),
-        );
-
-        assert_eq!(
-            result,
-            Err(CapabilityError::EmptyGrant)
-        );
-    }
-
-    #[test]
-    fn cpu_decoder_is_authorized() {
-        let grant = grant_for_policy(
-            id(1),
-            CapabilityPolicy::CpuDecoder,
+    fn grant(
+        capabilities: CapabilitySet,
+    ) -> CapabilityGrant {
+        CapabilityGrant::new(
+            GrantId::new(1),
+            capabilities,
+            100,
         )
-        .unwrap();
-
-        let mut context =
-            CapabilityContext::new();
-
-        context.grant(grant).unwrap();
-
-        context
-            .authorize(
-                Capability::Decode,
-                BackendKind::Cpu,
-                &request(),
-                current_unix_seconds(),
-            )
-            .unwrap();
     }
 
     #[test]
-    fn missing_capability_is_denied() {
-        let grant = grant_for_policy(
-            id(1),
-            CapabilityPolicy::CpuDecoder,
-        )
-        .unwrap();
-
-        let mut context =
-            CapabilityContext::new();
-
-        context.grant(grant).unwrap();
-
-        let result = context.authorize(
-            Capability::Checkpoint,
-            BackendKind::Cpu,
-            &request(),
-            current_unix_seconds(),
+    fn capability_ids_are_stable() {
+        assert_eq!(Capability::Decode.id(), 1);
+        assert_eq!(Capability::QpuAccess.id(), 14);
+        assert_eq!(Capability::QpuSubmit.id(), 16);
+        assert_eq!(
+            Capability::QpuReadResults.id(),
+            17
         );
-
-        assert!(matches!(
-            result,
-            Err(
-                CapabilityError::MissingCapability(
-                    Capability::Checkpoint
-                )
-            )
-        ));
     }
 
     #[test]
-    fn qpu_access_does_not_imply_submission() {
-        let grant = CapabilityGrant::new(
-            id(1),
-            CapabilitySet::from_iter([
-                Capability::QpuAccess,
-            ]),
-            BackendKind::Qpu,
-            QecLimits::default(),
-        )
-        .unwrap();
-
-        let mut context =
-            CapabilityContext::new();
-
-        context.grant(grant).unwrap();
-
-        let result = context.authorize_qpu(
-            QpuOperation::SubmitCircuit,
-            &request(),
-            current_unix_seconds(),
-        );
-
-        assert!(matches!(
-            result,
-            Err(
-                CapabilityError::MissingCapabilitySet(_)
-            )
-        ));
-    }
-
-    #[test]
-    fn qpu_submission_requires_qpu_backend() {
-        let result = CapabilityGrant::new(
-            id(1),
-            CapabilitySet::from_iter([
-                Capability::QpuAccess,
-                Capability::QpuSubmit,
-            ]),
-            BackendKind::Cpu,
-            QecLimits::default(),
+    fn capability_names_are_stable() {
+        assert_eq!(
+            Capability::Decode.name(),
+            "qec.decode"
         );
 
         assert_eq!(
-            result,
-            Err(
-                CapabilityError::QpuCapabilityRequiresQpuBackend
-            )
+            Capability::QpuSubmit.name(),
+            "qec.qpu_submit"
         );
     }
 
     #[test]
-    fn accelerator_requires_accelerator_capability() {
-        let result = CapabilityGrant::new(
-            id(1),
-            CapabilitySet::from_iter([
-                Capability::Decode,
-            ]),
-            BackendKind::Gpu,
-            QecLimits::default(),
-        );
+    fn empty_set_denies_everything() {
+        let set = CapabilitySet::new();
 
-        assert_eq!(
-            result,
-            Err(
-                CapabilityError::MissingCapability(
-                    Capability::UseAccelerator
-                )
-            )
-        );
+        assert!(!set.contains(Capability::Decode));
+        assert!(!set.contains(Capability::QpuSubmit));
     }
 
     #[test]
-    fn distributed_requires_distributed_capability() {
-        let result = CapabilityGrant::new(
-            id(1),
-            CapabilitySet::from_iter([
-                Capability::Decode,
-            ]),
-            BackendKind::Distributed,
-            QecLimits::default(),
-        );
-
-        assert_eq!(
-            result,
-            Err(
-                CapabilityError::MissingCapability(
-                    Capability::DistributedExecution
-                )
-            )
-        );
-    }
-
-    #[test]
-    fn parallel_cpu_requires_parallel_capability() {
-        let result = CapabilityGrant::new(
-            id(1),
-            CapabilitySet::from_iter([
-                Capability::Decode,
-            ]),
-            BackendKind::ParallelCpu,
-            QecLimits::default(),
-        );
-
-        assert_eq!(
-            result,
-            Err(
-                CapabilityError::MissingCapability(
-                    Capability::ParallelExecution
-                )
-            )
-        );
-    }
-
-    #[test]
-    fn resource_preflight_is_enforced() {
-        let mut limits =
-            QecLimits::default();
-
-        limits.max_qubits = 10;
-
-        let grant = CapabilityGrant::new(
-            id(1),
-            CapabilitySet::from_iter([
-                Capability::Decode,
-            ]),
-            BackendKind::Cpu,
-            limits,
-        )
-        .unwrap();
-
-        let mut context =
-            CapabilityContext::new();
-
-        context.grant(grant).unwrap();
-
-        let mut workload = request();
-        workload.qubits = 11;
-
-        let result = context.authorize(
+    fn attenuation_cannot_escalate() {
+        let parent = CapabilitySet::from_iter([
             Capability::Decode,
-            BackendKind::Cpu,
-            &workload,
-            current_unix_seconds(),
-        );
+            Capability::ReadMetrics,
+        ]);
 
-        assert!(matches!(
-            result,
-            Err(
-                CapabilityError::ResourceLimitExceeded {
-                    resource: ResourceKind::Qubits,
-                    ..
-                }
-            )
-        ));
-    }
-
-    #[test]
-    fn deterministic_capability_requires_deterministic_request() {
-        let grant = CapabilityGrant::new(
-            id(1),
-            CapabilitySet::from_iter([
-                Capability::Simulate,
-                Capability::DeterministicExecution,
-            ]),
-            BackendKind::Cpu,
-            QecLimits::default(),
-        )
-        .unwrap();
-
-        let mut context =
-            CapabilityContext::new();
-
-        context.grant(grant).unwrap();
-
-        let result = context.authorize(
-            Capability::Simulate,
-            BackendKind::Cpu,
-            &request(),
-            current_unix_seconds(),
-        );
-
-        assert_eq!(
-            result,
-            Err(
-                CapabilityError::DeterminismRequired
-            )
-        );
-    }
-
-    #[test]
-    fn deterministic_capability_accepts_deterministic_request() {
-        let grant = CapabilityGrant::new(
-            id(1),
-            CapabilitySet::from_iter([
-                Capability::Simulate,
-                Capability::DeterministicExecution,
-            ]),
-            BackendKind::Cpu,
-            QecLimits::default(),
-        )
-        .unwrap();
-
-        let mut context =
-            CapabilityContext::new();
-
-        context.grant(grant).unwrap();
-
-        let mut workload = request();
-        workload.deterministic = true;
-
-        context
-            .authorize(
-                Capability::Simulate,
-                BackendKind::Cpu,
-                &workload,
-                current_unix_seconds(),
-            )
-            .unwrap();
-    }
-
-    #[test]
-    fn revocation_is_monotonic() {
-        let grant = grant_for_policy(
-            id(1),
-            CapabilityPolicy::CpuDecoder,
-        )
-        .unwrap();
-
-        let mut context =
-            CapabilityContext::new();
-
-        context.grant(grant).unwrap();
-
-        assert!(context.revoke(id(1)));
-        assert!(!context.revoke(id(1)));
-
-        let result = context.authorize(
+        let requested = CapabilitySet::from_iter([
             Capability::Decode,
-            BackendKind::Cpu,
-            &request(),
-            current_unix_seconds(),
-        );
+            Capability::QpuSubmit,
+        ]);
 
-        assert_eq!(
-            result,
-            Err(
-                CapabilityError::CapabilityExpiredOrRevoked
-            )
-        );
+        let child = parent.attenuate(&requested);
+
+        assert!(child.contains(Capability::Decode));
+        assert!(!child.contains(Capability::QpuSubmit));
+        assert!(!child.contains(Capability::ReadMetrics));
     }
 
     #[test]
-    fn delegation_can_only_attenuate() {
-        let parent = grant_for_policy(
-            id(1),
-            CapabilityPolicy::QpuQec,
-        )
-        .unwrap();
-
-        let requested =
-            CapabilitySet::from_iter([
-                Capability::QpuAccess,
-                Capability::QpuReadResults,
-            ]);
-
-        let child_limits =
-            parent.limits().clone();
-
-        let child = parent
-            .delegate(
-                id(2),
-                &requested,
-                &child_limits,
-                None,
-            )
-            .unwrap();
+    fn qpu_submit_requires_access_and_submit() {
+        let required =
+            QpuOperation::SubmitCircuit
+                .required_capabilities();
 
         assert!(
-            child.contains(
-                Capability::QpuAccess
-            )
+            required.contains(Capability::QpuAccess)
         );
 
         assert!(
-            child.contains(
+            required.contains(Capability::QpuSubmit)
+        );
+
+        assert!(
+            !required.contains(
+                Capability::QpuReadResults
+            )
+        );
+    }
+
+    #[test]
+    fn qpu_read_results_is_independent_from_submit() {
+        let submit =
+            QpuOperation::SubmitCircuit
+                .required_capabilities();
+
+        let read =
+            QpuOperation::ReadResults
+                .required_capabilities();
+
+        assert!(
+            submit.contains(Capability::QpuSubmit)
+        );
+
+        assert!(
+            !submit.contains(
                 Capability::QpuReadResults
             )
         );
 
         assert!(
-            !child.contains(
-                Capability::QpuSubmit
+            read.contains(
+                Capability::QpuReadResults
             )
+        );
+
+        assert!(
+            !read.contains(Capability::QpuSubmit)
         );
     }
 
     #[test]
-    fn delegation_cannot_widen_limits() {
-        let parent = grant_for_policy(
-            id(1),
-            CapabilityPolicy::CpuDecoder,
-        )
-        .unwrap();
+    fn configuration_conversion_preserves_requirements() {
+        let mut config =
+            CapabilityConfig::default();
 
-        let mut child_limits =
-            parent.limits().clone();
+        config.qpu_access = true;
+        config.qpu_submit = true;
 
-        child_limits.max_qubits += 1;
+        let set =
+            CapabilitySet::from_config(&config);
 
-        let result = parent.delegate(
-            id(2),
-            parent.capabilities(),
-            &child_limits,
-            None,
-        );
+        assert!(set.contains(
+            Capability::QpuAccess
+        ));
 
-        assert_eq!(
-            result,
-            Err(
-                CapabilityError::DelegationWidensLimits
-            )
-        );
+        assert!(set.contains(
+            Capability::QpuSubmit
+        ));
     }
 
     #[test]
-    fn capability_set_attenuation_is_intersection() {
-        let parent =
+    fn grant_authorization_succeeds() {
+        let capabilities =
             CapabilitySet::from_iter([
                 Capability::Decode,
-                Capability::ReadMetrics,
-                Capability::QpuAccess,
             ]);
 
-        let requested =
+        let mut authority =
+            CapabilityAuthority::new();
+
+        authority
+            .register(grant(capabilities))
+            .expect("grant registration");
+
+        let required =
             CapabilitySet::from_iter([
-                Capability::ReadMetrics,
+                Capability::Decode,
+            ]);
+
+        assert!(
+            authority
+                .authorize(
+                    GrantId::new(1),
+                    &required,
+                    101,
+                )
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn missing_capability_is_denied() {
+        let capabilities =
+            CapabilitySet::from_iter([
+                Capability::Decode,
+            ]);
+
+        let mut authority =
+            CapabilityAuthority::new();
+
+        authority
+            .register(grant(capabilities))
+            .expect("grant registration");
+
+        let required =
+            CapabilitySet::from_iter([
                 Capability::QpuSubmit,
             ]);
 
-        let child =
-            parent.attenuate(&requested);
+        assert!(
+            authority
+                .authorize(
+                    GrantId::new(1),
+                    &required,
+                    101,
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn revoked_grant_is_denied() {
+        let capabilities =
+            CapabilitySet::from_iter([
+                Capability::Decode,
+            ]);
+
+        let mut authority =
+            CapabilityAuthority::new();
+
+        authority
+            .register(grant(capabilities))
+            .expect("grant registration");
+
+        authority
+            .revoke(GrantId::new(1))
+            .expect("revocation");
+
+        let required =
+            CapabilitySet::from_iter([
+                Capability::Decode,
+            ]);
 
         assert!(
-            child.contains(
-                Capability::ReadMetrics
+            authority
+                .authorize(
+                    GrantId::new(1),
+                    &required,
+                    101,
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn expired_grant_is_denied() {
+        let grant =
+            CapabilityGrant::with_expiry(
+                GrantId::new(1),
+                CapabilitySet::from_iter([
+                    Capability::Decode,
+                ]),
+                100,
+                200,
             )
+            .expect("valid lifetime");
+
+        let mut authority =
+            CapabilityAuthority::new();
+
+        authority
+            .register(grant)
+            .expect("grant registration");
+
+        let required =
+            CapabilitySet::from_iter([
+                Capability::Decode,
+            ]);
+
+        assert!(
+            authority
+                .authorize(
+                    GrantId::new(1),
+                    &required,
+                    200,
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn delegation_is_attenuated() {
+        let parent =
+            CapabilityGrant::new(
+                GrantId::new(1),
+                CapabilitySet::from_iter([
+                    Capability::Decode,
+                    Capability::ReadMetrics,
+                ]),
+                100,
+            );
+
+        let child =
+            parent
+                .attenuate(
+                    GrantId::new(2),
+                    &CapabilitySet::from_iter([
+                        Capability::Decode,
+                        Capability::QpuSubmit,
+                    ]),
+                    101,
+                    None,
+                )
+                .expect("delegation");
+
+        assert!(
+            child
+                .capabilities
+                .contains(Capability::Decode)
         );
 
         assert!(
-            !child.contains(
-                Capability::QpuSubmit
-            )
+            !child
+                .capabilities
+                .contains(
+                    Capability::QpuSubmit
+                )
+        );
+    }
+
+    #[test]
+    fn resource_request_uses_canonical_limits() {
+        let limits = QecLimits::default();
+
+        let request = ResourceRequest {
+            qubits: limits.max_qubits + 1,
+            ..ResourceRequest::empty()
+        };
+
+        assert!(
+            request
+                .first_violation(&limits)
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn backend_requirement_is_explicit() {
+        assert_eq!(
+            Capability::required_for_backend(
+                BackendKind::Qpu
+            ),
+            Some(Capability::QpuAccess)
+        );
+
+        assert_eq!(
+            Capability::required_for_backend(
+                BackendKind::ParallelCpu
+            ),
+            Some(Capability::ParallelExecution)
+        );
+
+        assert_eq!(
+            Capability::required_for_backend(
+                BackendKind::Cpu
+            ),
+            None
         );
     }
 }
