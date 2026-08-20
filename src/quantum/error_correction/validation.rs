@@ -1,236 +1,207 @@
 //! Zamani Quantum Error Correction — Cross-Module Validation.
 //!
-//! This module is the validation boundary between potentially untrusted or
-//! externally constructed QEC objects and the core decoding algorithms.
+//! # Architectural contract
 //!
-//! Design principles
-//! -----------------
+//! `validation.rs` is the cross-module validation boundary for QEC.
 //!
-//! 1. Validation must happen before expensive decoding.
-//! 2. Validation must never panic on malformed input.
-//! 3. Validation must be deterministic.
-//! 4. Validation must not silently repair invalid data.
-//! 5. Local modules remain responsible for their own invariants.
-//! 6. This module verifies cross-module consistency.
-//! 7. Validation must not allocate proportional to an attacker-controlled
-//!    value without first checking configured limits.
-//!
-//! The intended pipeline is:
+//! It verifies that already-constructed or externally supplied QEC objects
+//! satisfy the invariants required by downstream algorithms.
 //!
 //! ```text
-//! Untrusted / external input
-//!          |
-//!          v
-//!     QEC validation
-//!          |
-//!     +----+----+
-//!     |         |
-//!   valid     invalid
-//!     |         |
-//!     v         v
-//!  decoder    QecValidationError
+//!                 QecLimits
+//!                    │
+//!                    ▼
+//!             validation.rs
+//!                    │
+//!       ┌────────────┼────────────┐
+//!       ▼            ▼            ▼
+//!  SurfaceCode   Stabilizers   Syndrome
+//!       │            │            │
+//!       └────────────┼────────────┘
+//!                    ▼
+//!             validated input
+//!                    │
+//!                    ▼
+//!             decoder / QPU
 //! ```
 //!
-//! This module deliberately does not implement decoding, simulation, noise
-//! generation, graph construction, or correction. It only establishes that
-//! objects entering those systems satisfy their declared invariants.
+//! # Ownership
+//!
+//! This module owns:
+//!
+//! - cross-module invariant validation;
+//! - validation reports;
+//! - validation-specific diagnostics;
+//! - resource-policy preflight through `QecLimits`;
+//! - canonical conversion to `QecError`.
+//!
+//! This module does NOT own:
+//!
+//! - resource policy (`limits.rs`);
+//! - runtime resource accounting (`resources.rs`);
+//! - memory allocation (`memory.rs`);
+//! - cancellation state (`cancellation.rs`);
+//! - decoder algorithms;
+//! - topology construction;
+//! - syndrome construction;
+//! - authorization;
+//! - telemetry;
+//! - QPU execution.
+//!
+//! # Critical architectural rule
+//!
+//! `QecLimits` is the single source of truth for production resource policy.
+//!
+//! `ValidationLimits` is retained only as a type alias for source
+//! compatibility. It is NOT a second policy structure.
+//!
+//! # Integration
+//!
+//! `limits.rs`
+//!     Owns all declarative resource ceilings.
+//!
+//! `errors.rs`
+//!     Owns the canonical public QEC error boundary.
+//!
+//! `memory.rs`
+//!     Owns memory admission/allocation enforcement.
+//!
+//! `resources.rs`
+//!     Owns runtime resource accounting.
+//!
+//! `surface_code.rs`
+//!     Owns mathematical surface-code topology.
+//!
+//! `stabilizer.rs`
+//!     Owns Pauli/stabilizer algebra.
+//!
+//! `syndrome.rs`
+//!     Owns syndrome and detection-event representations.
+//!
+//! `decoder.rs`
+//!     Must validate inputs before decoder execution.
+//!
+//! `qpu_adapter.rs`
+//!     Must validate QPU-derived objects before they enter decoding.
+//!
+//! `streaming.rs`
+//!     Must use the same `QecLimits` policy for bounded streams.
+//!
+//! `partition.rs`
+//!     Must use the same policy for partition admission.
+//!
+//! `checkpoint.rs`
+//!     Must validate restored objects before execution.
+//!
+//! No later module should create another independent validation-limit system.
+//!
+//! # Rust
+//!
+//! Target: Rust 1.97.1.
+//!
+//! `unsafe` is forbidden.
 
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::fmt;
 use std::collections::BTreeSet;
-use std::fmt;
 
+use super::errors::{
+    QecError,
+    QecResult,
+    ResourceKind,
+};
+use super::limits::{
+    LimitError,
+    LimitKind,
+    QecLimits,
+};
 use super::stabilizer::{
     PauliString,
     QubitIndex,
     StabilizerGroup,
 };
-use super::surface_code::{
-    SurfaceCode,
-};
+use super::surface_code::SurfaceCode;
 use super::syndrome::{
     DetectionEvent,
-    Syndrome,
     StabilizerId,
+    Syndrome,
 };
 
 // ============================================================================
-// Validation limits
+// Compatibility
 // ============================================================================
 
-/// Conservative validation-level default for the maximum number of data
-/// qubits accepted by one validation operation.
+/// Compatibility alias for the former validation-specific policy.
 ///
-/// This is intentionally a validation guard rather than a universal QEC
-/// hardware limit. A future `limits.rs` configuration layer can override the
-/// policy used by higher-level APIs.
-pub const DEFAULT_MAX_QUBITS: usize = 100_000_000;
-
-/// Default maximum number of stabilizers accepted by one validation
-/// operation.
-pub const DEFAULT_MAX_STABILIZERS: usize = 100_000_000;
-
-/// Default maximum number of syndrome measurements validated in one object.
-pub const DEFAULT_MAX_SYNDROME_MEASUREMENTS: usize = 1_000_000;
-
-/// Default maximum number of detection events validated in one batch.
-pub const DEFAULT_MAX_DETECTION_EVENTS: usize = 10_000_000;
-
-/// Default maximum stabilizer support size.
+/// This is intentionally an alias rather than a new structure.
 ///
-/// Surface-code stabilizers normally have weight two or four, but this
-/// validator remains generic enough for future QEC families.
-pub const DEFAULT_MAX_STABILIZER_WEIGHT: usize = 1_000_000;
-
-// ============================================================================
-// Validation policy
-// ============================================================================
-
-/// Resource and structural limits used during validation.
-///
-/// Validation is deliberately policy-driven. Algorithms should not contain
-/// hidden resource assumptions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ValidationLimits {
-    /// Maximum number of data qubits.
-    pub max_qubits: usize,
-
-    /// Maximum number of stabilizers.
-    pub max_stabilizers: usize,
-
-    /// Maximum syndrome measurements.
-    pub max_syndrome_measurements: usize,
-
-    /// Maximum detection events in one validation batch.
-    pub max_detection_events: usize,
-
-    /// Maximum support size for one stabilizer/operator.
-    pub max_stabilizer_weight: usize,
-}
-
-impl Default for ValidationLimits {
-    fn default() -> Self {
-        Self {
-            max_qubits: DEFAULT_MAX_QUBITS,
-            max_stabilizers: DEFAULT_MAX_STABILIZERS,
-            max_syndrome_measurements:
-                DEFAULT_MAX_SYNDROME_MEASUREMENTS,
-            max_detection_events:
-                DEFAULT_MAX_DETECTION_EVENTS,
-            max_stabilizer_weight:
-                DEFAULT_MAX_STABILIZER_WEIGHT,
-        }
-    }
-}
-
-impl ValidationLimits {
-    /// Validates the validation policy itself.
-    pub fn validate(self) -> Result<(), ValidationError> {
-        if self.max_qubits == 0 {
-            return Err(
-                ValidationError::InvalidValidationLimit {
-                    field: "max_qubits",
-                },
-            );
-        }
-
-        if self.max_stabilizers == 0 {
-            return Err(
-                ValidationError::InvalidValidationLimit {
-                    field: "max_stabilizers",
-                },
-            );
-        }
-
-        if self.max_syndrome_measurements == 0 {
-            return Err(
-                ValidationError::InvalidValidationLimit {
-                    field: "max_syndrome_measurements",
-                },
-            );
-        }
-
-        if self.max_detection_events == 0 {
-            return Err(
-                ValidationError::InvalidValidationLimit {
-                    field: "max_detection_events",
-                },
-            );
-        }
-
-        if self.max_stabilizer_weight == 0 {
-            return Err(
-                ValidationError::InvalidValidationLimit {
-                    field: "max_stabilizer_weight",
-                },
-            );
-        }
-
-        Ok(())
-    }
-}
+/// `QecLimits` remains the only production resource policy.
+pub type ValidationLimits = QecLimits;
 
 // ============================================================================
 // Validation errors
 // ============================================================================
 
-/// Unified validation error for cross-module QEC invariants.
+/// Cross-module validation error.
 ///
-/// Module-specific errors remain available from their respective modules.
-/// This type provides a stable boundary for callers that need one validation
-/// result type.
+/// This type describes structural and semantic validation failures before
+/// they cross the public QEC API boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValidationError {
-    /// The validation policy itself is invalid.
-    InvalidValidationLimit {
-        field: &'static str,
+    /// The canonical resource policy is invalid.
+    InvalidLimits {
+        message: String,
     },
 
-    /// An object exceeds a configured resource boundary.
+    /// A resource request exceeds the canonical QEC policy.
     ResourceLimitExceeded {
-        resource: &'static str,
-        limit: usize,
-        actual: usize,
+        resource: LimitKind,
+        requested: u128,
+        maximum: u128,
     },
 
-    /// The surface-code distance is invalid.
+    /// Surface-code distance is mathematically invalid.
     InvalidCodeDistance {
         distance: usize,
     },
 
-    /// The number of qubits implied by the code is inconsistent.
+    /// A code's physical-qubit count does not match its declared topology.
     QubitCountMismatch {
         expected: usize,
         actual: usize,
     },
 
-    /// A qubit identifier is outside the declared qubit space.
+    /// A qubit identifier is outside the declared qubit domain.
     QubitOutOfRange {
         qubit: QubitIndex,
         num_qubits: usize,
     },
 
-    /// A qubit appears more than once in a support list.
+    /// A qubit occurs more than once in a support.
     DuplicateQubit {
         qubit: QubitIndex,
     },
 
-    /// A stabilizer identifier appears more than once.
+    /// A stabilizer identifier occurs more than once.
     DuplicateStabilizer {
         stabilizer: StabilizerId,
     },
 
-    /// A stabilizer support is empty.
+    /// A stabilizer has no support.
     EmptyStabilizer {
         stabilizer: StabilizerId,
     },
 
-    /// A stabilizer support exceeds the configured limit.
+    /// A stabilizer exceeds the canonical stabilizer-weight limit.
     StabilizerWeightExceeded {
         stabilizer: StabilizerId,
         limit: usize,
         actual: usize,
     },
 
-    /// Two stabilizer generators do not commute.
+    /// Two stabilizers fail to commute.
     NonCommutingStabilizers {
         first: usize,
         second: usize,
@@ -242,47 +213,56 @@ pub enum ValidationError {
         actual: usize,
     },
 
-    /// A logical operator is the identity.
+    /// A Pauli operator exceeds its permitted weight.
+    OperatorWeightExceeded {
+        limit: usize,
+        actual: usize,
+    },
+
+    /// A logical operator is identity.
     IdentityLogicalOperator {
         name: &'static str,
     },
 
-    /// Logical X and Z do not have the required anticommutation relation.
+    /// Logical X and Z do not anticommute.
     InvalidLogicalAnticommutation,
 
-    /// A logical operator does not commute with a stabilizer.
+    /// A logical operator fails to commute with a stabilizer.
     LogicalOperatorViolatesStabilizer {
         stabilizer: usize,
         logical: &'static str,
     },
 
-    /// Syndrome size exceeds the configured bound.
+    /// Syndrome exceeds the canonical event limit.
     SyndromeSizeExceeded {
         limit: usize,
         actual: usize,
     },
 
-    /// Syndrome identifiers are inconsistent with the expected stabilizer
-    /// set.
+    /// Syndrome stabilizer domain differs from the validated stabilizer set.
     SyndromeStabilizerMismatch,
 
-    /// A detection-event batch exceeds the configured bound.
+    /// Detection-event batch exceeds the canonical event limit.
     DetectionEventCountExceeded {
         limit: usize,
         actual: usize,
     },
 
-    /// Detection event references a stabilizer that is not part of the
-    /// validated stabilizer set.
+    /// Detection event references an unknown stabilizer.
     UnknownDetectionStabilizer {
         stabilizer: StabilizerId,
     },
 
-    /// An event is marked inactive. Detection-event streams should only
-    /// contain actual events.
+    /// A detection event is not active.
     InactiveDetectionEvent,
 
-    /// A wrapped module-level validation error.
+    /// Two events occupy the same round/stabilizer slot.
+    DuplicateDetectionEvent {
+        round: u64,
+        stabilizer: StabilizerId,
+    },
+
+    /// A lower-level QEC module rejected its own invariant.
     ModuleError {
         module: &'static str,
         message: String,
@@ -295,29 +275,27 @@ impl fmt::Display for ValidationError {
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
-            Self::InvalidValidationLimit { field } => {
-                write!(
-                    f,
-                    "invalid validation limit: {field} must be non-zero"
-                )
+            Self::InvalidLimits { message } => {
+                write!(f, "invalid QEC limits: {message}")
             }
 
             Self::ResourceLimitExceeded {
                 resource,
-                limit,
-                actual,
+                requested,
+                maximum,
             } => {
                 write!(
                     f,
-                    "{resource} exceeds validation limit: \
-                     limit={limit}, actual={actual}"
+                    "resource limit exceeded: {resource}, \
+                     requested={requested}, maximum={maximum}"
                 )
             }
 
             Self::InvalidCodeDistance { distance } => {
                 write!(
                     f,
-                    "invalid surface-code distance: {distance}"
+                    "invalid surface-code distance: {distance}; \
+                     distance must be odd and >= 3"
                 )
             }
 
@@ -327,7 +305,8 @@ impl fmt::Display for ValidationError {
             } => {
                 write!(
                     f,
-                    "qubit-count mismatch: expected={expected}, actual={actual}"
+                    "qubit-count mismatch: expected={expected}, \
+                     actual={actual}"
                 )
             }
 
@@ -380,7 +359,7 @@ impl fmt::Display for ValidationError {
             } => {
                 write!(
                     f,
-                    "stabilizers {first} and {second} anticommute"
+                    "stabilizers {first} and {second} do not commute"
                 )
             }
 
@@ -390,8 +369,19 @@ impl fmt::Display for ValidationError {
             } => {
                 write!(
                     f,
-                    "operator dimension mismatch: \
-                     expected={expected}, actual={actual}"
+                    "operator dimension mismatch: expected={expected}, \
+                     actual={actual}"
+                )
+            }
+
+            Self::OperatorWeightExceeded {
+                limit,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "operator weight exceeds limit: \
+                     limit={limit}, actual={actual}"
                 )
             }
 
@@ -403,9 +393,8 @@ impl fmt::Display for ValidationError {
             }
 
             Self::InvalidLogicalAnticommutation => {
-                write!(
-                    f,
-                    "logical X and logical Z do not anticommute"
+                f.write_str(
+                    "logical X and logical Z do not anticommute",
                 )
             }
 
@@ -415,7 +404,7 @@ impl fmt::Display for ValidationError {
             } => {
                 write!(
                     f,
-                    "logical operator {logical} anticommutes \
+                    "logical operator {logical} does not commute \
                      with stabilizer {stabilizer}"
                 )
             }
@@ -426,15 +415,14 @@ impl fmt::Display for ValidationError {
             } => {
                 write!(
                     f,
-                    "syndrome exceeds validation limit: \
+                    "syndrome exceeds limit: \
                      limit={limit}, actual={actual}"
                 )
             }
 
             Self::SyndromeStabilizerMismatch => {
-                write!(
-                    f,
-                    "syndrome stabilizer set is inconsistent"
+                f.write_str(
+                    "syndrome stabilizer domain is inconsistent",
                 )
             }
 
@@ -444,7 +432,7 @@ impl fmt::Display for ValidationError {
             } => {
                 write!(
                     f,
-                    "detection-event batch exceeds validation limit: \
+                    "detection-event count exceeds limit: \
                      limit={limit}, actual={actual}"
                 )
             }
@@ -454,14 +442,25 @@ impl fmt::Display for ValidationError {
             } => {
                 write!(
                     f,
-                    "detection event references unknown stabilizer {stabilizer}"
+                    "detection event references unknown \
+                     stabilizer {stabilizer}"
                 )
             }
 
             Self::InactiveDetectionEvent => {
+                f.write_str(
+                    "detection event is inactive",
+                )
+            }
+
+            Self::DuplicateDetectionEvent {
+                round,
+                stabilizer,
+            } => {
                 write!(
                     f,
-                    "detection-event batch contains an inactive event"
+                    "duplicate detection event at round {round}, \
+                     stabilizer {stabilizer}"
                 )
             }
 
@@ -481,26 +480,387 @@ impl fmt::Display for ValidationError {
 impl std::error::Error for ValidationError {}
 
 // ============================================================================
+// Canonical error integration
+// ============================================================================
+
+impl From<LimitError> for ValidationError {
+    fn from(error: LimitError) -> Self {
+        match error {
+            LimitError::InvalidLimit {
+                resource,
+                value,
+            } => Self::InvalidLimits {
+                message: format!(
+                    "{resource} has invalid value {value}"
+                ),
+            },
+
+            LimitError::Exceeded {
+                resource,
+                requested,
+                maximum,
+            } => Self::ResourceLimitExceeded {
+                resource,
+                requested,
+                maximum,
+            },
+
+            LimitError::ArithmeticOverflow {
+                resource,
+            } => Self::ModuleError {
+                module: "limits",
+                message: format!(
+                    "arithmetic overflow while validating {resource}"
+                ),
+            },
+
+            LimitError::InconsistentLimits {
+                resource,
+                related_resource,
+                reason,
+            } => Self::InvalidLimits {
+                message: format!(
+                    "{resource} conflicts with \
+                     {related_resource}: {reason}"
+                ),
+            },
+
+            LimitError::UnsupportedSchema {
+                found,
+                expected,
+            } => Self::InvalidLimits {
+                message: format!(
+                    "unsupported limits schema: \
+                     found={found}, expected={expected}"
+                ),
+            },
+        }
+    }
+}
+
+impl From<ValidationError> for QecError {
+    fn from(error: ValidationError) -> Self {
+        match error {
+            ValidationError::InvalidLimits { message } => {
+                QecError::InvalidInput { message }
+            }
+
+            ValidationError::ResourceLimitExceeded {
+                resource,
+                requested,
+                maximum,
+            } => {
+                QecError::ResourceLimitExceeded {
+                    resource: match resource {
+                        LimitKind::CodeDistance =>
+                            ResourceKind::CodeDistance,
+                        LimitKind::Qubits =>
+                            ResourceKind::Qubits,
+                        LimitKind::Stabilizers =>
+                            ResourceKind::Stabilizers,
+                        LimitKind::SyndromeEvents =>
+                            ResourceKind::SyndromeEvents,
+                        LimitKind::MeasurementRounds =>
+                            ResourceKind::MeasurementRounds,
+                        LimitKind::GraphNodes =>
+                            ResourceKind::GraphNodes,
+                        LimitKind::GraphEdges =>
+                            ResourceKind::GraphEdges,
+                        LimitKind::MemoryBytes =>
+                            ResourceKind::MemoryBytes,
+                        LimitKind::DecoderTimeNs =>
+                            ResourceKind::Time,
+                        LimitKind::Parallelism =>
+                            ResourceKind::Parallelism,
+                        LimitKind::CheckpointSizeBytes =>
+                            ResourceKind::CheckpointSize,
+                        LimitKind::Partitions =>
+                            ResourceKind::Partitions,
+                        LimitKind::StreamBufferEvents =>
+                            ResourceKind::StreamBuffer,
+                        LimitKind::DecoderIterations =>
+                            ResourceKind::DecoderIterations,
+                        LimitKind::StabilizerWeight =>
+                            ResourceKind::StabilizerWeight,
+                        LimitKind::LogicalOperatorWeight =>
+                            ResourceKind::LogicalWeight,
+                        LimitKind::QubitsPerPartition =>
+                            ResourceKind::Qubits,
+                        LimitKind::QpuShots =>
+                            ResourceKind::QpuShots,
+                        LimitKind::QpuCircuits =>
+                            ResourceKind::QpuCircuits,
+                        LimitKind::VerificationOperations =>
+                            ResourceKind::Operations,
+                    },
+                    requested,
+                    current: 0,
+                    limit: maximum,
+                    message:
+                        "QEC validation resource preflight failed"
+                            .to_owned(),
+                }
+            }
+
+            ValidationError::InvalidCodeDistance {
+                distance,
+            } => {
+                QecError::InvalidTopology {
+                    message: format!(
+                        "invalid surface-code distance {distance}"
+                    ),
+                }
+            }
+
+            ValidationError::QubitCountMismatch {
+                expected,
+                actual,
+            } => {
+                QecError::InvalidTopology {
+                    message: format!(
+                        "qubit count mismatch: \
+                         expected={expected}, actual={actual}"
+                    ),
+                }
+            }
+
+            ValidationError::QubitOutOfRange {
+                qubit,
+                num_qubits,
+            } => {
+                QecError::InvalidTopology {
+                    message: format!(
+                        "qubit {qubit} outside domain \
+                         0..{num_qubits}"
+                    ),
+                }
+            }
+
+            ValidationError::DuplicateQubit { qubit } => {
+                QecError::InvalidStabilizer {
+                    message: format!(
+                        "duplicate qubit {qubit}"
+                    ),
+                }
+            }
+
+            ValidationError::DuplicateStabilizer {
+                stabilizer,
+            } => {
+                QecError::InvalidStabilizer {
+                    message: format!(
+                        "duplicate stabilizer {stabilizer}"
+                    ),
+                }
+            }
+
+            ValidationError::EmptyStabilizer {
+                stabilizer,
+            } => {
+                QecError::InvalidStabilizer {
+                    message: format!(
+                        "empty stabilizer {stabilizer}"
+                    ),
+                }
+            }
+
+            ValidationError::StabilizerWeightExceeded {
+                stabilizer,
+                limit,
+                actual,
+            } => {
+                QecError::ResourceLimitExceeded {
+                    resource:
+                        ResourceKind::StabilizerWeight,
+                    requested: actual as u128,
+                    current: 0,
+                    limit: limit as u128,
+                    message: format!(
+                        "stabilizer {stabilizer} \
+                         exceeds configured weight limit"
+                    ),
+                }
+            }
+
+            ValidationError::NonCommutingStabilizers {
+                first,
+                second,
+            } => {
+                QecError::InvalidStabilizer {
+                    message: format!(
+                        "stabilizers {first} and {second} \
+                         do not commute"
+                    ),
+                }
+            }
+
+            ValidationError::OperatorDimensionMismatch {
+                expected,
+                actual,
+            } => {
+                QecError::InvalidStabilizer {
+                    message: format!(
+                        "operator dimension mismatch: \
+                         expected={expected}, actual={actual}"
+                    ),
+                }
+            }
+
+            ValidationError::OperatorWeightExceeded {
+                limit,
+                actual,
+            } => {
+                QecError::ResourceLimitExceeded {
+                    resource:
+                        ResourceKind::LogicalWeight,
+                    requested: actual as u128,
+                    current: 0,
+                    limit: limit as u128,
+                    message:
+                        "operator weight exceeds configured limit"
+                            .to_owned(),
+                }
+            }
+
+            ValidationError::IdentityLogicalOperator {
+                name,
+            } => {
+                QecError::InvalidStabilizer {
+                    message: format!(
+                        "logical operator {name} is identity"
+                    ),
+                }
+            }
+
+            ValidationError::InvalidLogicalAnticommutation => {
+                QecError::InvalidStabilizer {
+                    message:
+                        "logical X and Z do not anticommute"
+                            .to_owned(),
+                }
+            }
+
+            ValidationError::LogicalOperatorViolatesStabilizer {
+                stabilizer,
+                logical,
+            } => {
+                QecError::InvalidStabilizer {
+                    message: format!(
+                        "logical operator {logical} \
+                         violates stabilizer {stabilizer}"
+                    ),
+                }
+            }
+
+            ValidationError::SyndromeSizeExceeded {
+                limit,
+                actual,
+            } => {
+                QecError::ResourceLimitExceeded {
+                    resource:
+                        ResourceKind::SyndromeEvents,
+                    requested: actual as u128,
+                    current: 0,
+                    limit: limit as u128,
+                    message:
+                        "syndrome exceeds configured limit"
+                            .to_owned(),
+                }
+            }
+
+            ValidationError::SyndromeStabilizerMismatch => {
+                QecError::InvalidSyndrome {
+                    message:
+                        "syndrome stabilizer domain mismatch"
+                            .to_owned(),
+                }
+            }
+
+            ValidationError::DetectionEventCountExceeded {
+                limit,
+                actual,
+            } => {
+                QecError::ResourceLimitExceeded {
+                    resource:
+                        ResourceKind::SyndromeEvents,
+                    requested: actual as u128,
+                    current: 0,
+                    limit: limit as u128,
+                    message:
+                        "detection-event count exceeds \
+                         configured limit"
+                            .to_owned(),
+                }
+            }
+
+            ValidationError::UnknownDetectionStabilizer {
+                stabilizer,
+            } => {
+                QecError::InvalidSyndrome {
+                    message: format!(
+                        "unknown detection-event stabilizer \
+                         {stabilizer}"
+                    ),
+                }
+            }
+
+            ValidationError::InactiveDetectionEvent => {
+                QecError::InvalidSyndrome {
+                    message:
+                        "inactive detection event supplied"
+                            .to_owned(),
+                }
+            }
+
+            ValidationError::DuplicateDetectionEvent {
+                round,
+                stabilizer,
+            } => {
+                QecError::InvalidSyndrome {
+                    message: format!(
+                        "duplicate detection event at \
+                         round {round}, stabilizer {stabilizer}"
+                    ),
+                }
+            }
+
+            ValidationError::ModuleError {
+                module,
+                message,
+            } => {
+                QecError::InvalidInput {
+                    message: format!(
+                        "{module}: {message}"
+                    ),
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
 // Validation report
 // ============================================================================
 
-/// Deterministic summary produced by a successful validation operation.
+/// Deterministic summary returned by successful validation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ValidationReport {
     /// Number of validated data qubits.
     pub qubits: usize,
 
-    /// Number of validated stabilizers.
+    /// Number of validated stabilizer generators.
     pub stabilizers: usize,
 
-    /// Number of validated syndrome measurements, if applicable.
+    /// Number of syndrome measurements.
     pub syndrome_measurements: usize,
 
-    /// Number of validated detection events, if applicable.
+    /// Number of detection events.
     pub detection_events: usize,
 }
 
 impl ValidationReport {
+    /// Empty report for callers validating an object without topology.
+    #[must_use]
     pub const fn empty() -> Self {
         Self {
             qubits: 0,
@@ -512,30 +872,36 @@ impl ValidationReport {
 }
 
 // ============================================================================
-// Surface-code validation
+// Resource preflight helpers
 // ============================================================================
 
-/// Validates a complete surface code and all cross-object invariants.
-///
-/// This is the preferred validation entry point before passing a
-/// `SurfaceCode` into expensive decoding or simulation.
-pub fn validate_surface_code(
-    code: &SurfaceCode,
-) -> Result<ValidationReport, ValidationError> {
-    validate_surface_code_with_limits(
-        code,
-        ValidationLimits::default(),
-    )
+/// Validates the canonical QEC resource policy itself.
+pub fn validate_limits(
+    limits: &QecLimits,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
+    Ok(())
 }
 
-/// Validates a surface code using an explicit resource policy.
-pub fn validate_surface_code_with_limits(
-    code: &SurfaceCode,
-    limits: ValidationLimits,
-) -> Result<ValidationReport, ValidationError> {
+/// Validates an arbitrary resource request against canonical policy.
+pub fn validate_resource_request(
+    limits: &QecLimits,
+    resource: LimitKind,
+    requested: u128,
+) -> Result<(), ValidationError> {
     limits.validate()?;
+    limits.check(resource, requested)?;
+    Ok(())
+}
 
-    let distance = code.distance();
+/// Validates a code's primary resource requirements.
+pub fn validate_code_resources(
+    limits: &QecLimits,
+    distance: usize,
+    qubits: usize,
+    stabilizers: usize,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
 
     if distance < 3
         || distance % 2 == 0
@@ -547,44 +913,154 @@ pub fn validate_surface_code_with_limits(
         );
     }
 
-    let qubits =
-        code.num_data_qubits();
+    limits.validate_code_size(
+        distance,
+        qubits,
+        stabilizers,
+    )?;
 
-    let stabilizers =
-        code.num_stabilizers();
+    Ok(())
+}
 
-    if qubits > limits.max_qubits {
-        return Err(
-            ValidationError::ResourceLimitExceeded {
-                resource: "data qubits",
-                limit: limits.max_qubits,
-                actual: qubits,
-            },
-        );
-    }
+/// Validates a memory preflight request.
+///
+/// Actual reservation remains the responsibility of `memory.rs`.
+pub fn validate_memory_request(
+    limits: &QecLimits,
+    bytes: u64,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
+    limits.validate_memory(bytes)?;
+    Ok(())
+}
 
-    if stabilizers
-        > limits.max_stabilizers
-    {
-        return Err(
-            ValidationError::ResourceLimitExceeded {
-                resource: "stabilizers",
-                limit: limits.max_stabilizers,
-                actual: stabilizers,
-            },
-        );
-    }
+/// Validates a decoding graph preflight request.
+pub fn validate_graph_request(
+    limits: &QecLimits,
+    nodes: usize,
+    edges: usize,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
+    limits.validate_graph(nodes, edges)?;
+    Ok(())
+}
+
+/// Validates syndrome resource requirements.
+pub fn validate_syndrome_resources(
+    limits: &QecLimits,
+    events: usize,
+    rounds: usize,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
+    limits.validate_syndrome(events, rounds)?;
+    Ok(())
+}
+
+/// Validates decoder work admission.
+pub fn validate_decoder_resources(
+    limits: &QecLimits,
+    iterations: usize,
+    time_ns: u64,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
+    limits.validate_decoder_work(
+        iterations,
+        time_ns,
+    )?;
+    Ok(())
+}
+
+/// Validates partition admission.
+pub fn validate_partition_resources(
+    limits: &QecLimits,
+    partitions: usize,
+    qubits_per_partition: usize,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
+    limits.validate_partition(
+        partitions,
+        qubits_per_partition,
+    )?;
+    Ok(())
+}
+
+/// Validates streaming buffer admission.
+pub fn validate_stream_resources(
+    limits: &QecLimits,
+    buffer_events: usize,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
+    limits.validate_stream(buffer_events)?;
+    Ok(())
+}
+
+/// Validates checkpoint size admission.
+pub fn validate_checkpoint_resources(
+    limits: &QecLimits,
+    bytes: u64,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
+    limits.validate_checkpoint(bytes)?;
+    Ok(())
+}
+
+/// Validates QPU shot/circuit admission.
+pub fn validate_qpu_resources(
+    limits: &QecLimits,
+    shots: u64,
+    circuits: u64,
+) -> Result<(), ValidationError> {
+    limits.validate()?;
+    limits.validate_qpu(shots, circuits)?;
+    Ok(())
+}
+
+// ============================================================================
+// Surface-code validation
+// ============================================================================
+
+/// Validates a surface code using canonical default QEC policy.
+pub fn validate_surface_code(
+    code: &SurfaceCode,
+) -> Result<ValidationReport, ValidationError> {
+    validate_surface_code_with_limits(
+        code,
+        &QecLimits::default(),
+    )
+}
+
+/// Validates a surface code against the canonical QEC resource policy.
+///
+/// This function verifies an existing topology. It does not construct or
+/// allocate topology data.
+pub fn validate_surface_code_with_limits(
+    code: &SurfaceCode,
+    limits: &QecLimits,
+) -> Result<ValidationReport, ValidationError> {
+    limits.validate()?;
+
+    let distance = code.distance();
+    let qubits = code.num_data_qubits();
+    let stabilizers = code.num_stabilizers();
+
+    validate_code_resources(
+        limits,
+        distance,
+        qubits,
+        stabilizers,
+    )?;
 
     let expected_qubits =
         distance
             .checked_mul(distance)
-            .ok_or(
-                ValidationError::ResourceLimitExceeded {
-                    resource: "surface-code qubits",
-                    limit: limits.max_qubits,
-                    actual: usize::MAX,
-                },
-            )?;
+            .ok_or_else(|| {
+                ValidationError::ModuleError {
+                    module: "validation",
+                    message:
+                        "surface-code qubit count overflow"
+                            .to_owned(),
+                }
+            })?;
 
     if qubits != expected_qubits {
         return Err(
@@ -595,19 +1071,16 @@ pub fn validate_surface_code_with_limits(
         );
     }
 
-    // Validate every data-qubit index and coordinate mapping.
+    // The SurfaceCode object is deterministic and already exposes its
+    // physical qubit representation. We nevertheless verify the domain and
+    // coordinate mapping at the cross-module boundary.
     let mut seen_qubits =
         BTreeSet::new();
 
-    for qubit in
-        code.data_qubits()
-    {
-        let index =
-            qubit.index();
+    for data_qubit in code.data_qubits() {
+        let index = data_qubit.index();
 
-        if index.index()
-            >= qubits
-        {
+        if index.index() >= qubits {
             return Err(
                 ValidationError::QubitOutOfRange {
                     qubit: index,
@@ -616,8 +1089,7 @@ pub fn validate_surface_code_with_limits(
             );
         }
 
-        if !seen_qubits.insert(index)
-        {
+        if !seen_qubits.insert(index) {
             return Err(
                 ValidationError::DuplicateQubit {
                     qubit: index,
@@ -634,23 +1106,20 @@ pub fn validate_surface_code_with_limits(
                     }
                 })?;
 
-        if mapped
-            != qubit.coordinate()
-        {
+        if mapped != data_qubit.coordinate() {
             return Err(
                 ValidationError::ModuleError {
                     module: "surface_code",
                     message: format!(
-                        "qubit {index} coordinate mapping is inconsistent"
+                        "coordinate mapping for {index} \
+                         is inconsistent"
                     ),
                 },
             );
         }
     }
 
-    if seen_qubits.len()
-        != qubits
-    {
+    if seen_qubits.len() != qubits {
         return Err(
             ValidationError::QubitCountMismatch {
                 expected: qubits,
@@ -659,22 +1128,19 @@ pub fn validate_surface_code_with_limits(
         );
     }
 
-    // Validate explicit stabilizer topology.
+    // Validate explicit topology representation.
     let mut seen_stabilizers =
         BTreeSet::new();
 
-    for stabilizer in
-        code.stabilizers()
-    {
-        let id =
-            stabilizer.id();
+    for stabilizer in code.stabilizers() {
+        let id = stabilizer.id();
+        let stabilizer_id =
+            StabilizerId::new(id);
 
-        if !seen_stabilizers.insert(id)
-        {
+        if !seen_stabilizers.insert(id) {
             return Err(
                 ValidationError::DuplicateStabilizer {
-                    stabilizer:
-                        StabilizerId::new(id),
+                    stabilizer: stabilizer_id,
                 },
             );
         }
@@ -685,8 +1151,7 @@ pub fn validate_surface_code_with_limits(
         if support.is_empty() {
             return Err(
                 ValidationError::EmptyStabilizer {
-                    stabilizer:
-                        StabilizerId::new(id),
+                    stabilizer: stabilizer_id,
                 },
             );
         }
@@ -696,12 +1161,10 @@ pub fn validate_surface_code_with_limits(
         {
             return Err(
                 ValidationError::StabilizerWeightExceeded {
-                    stabilizer:
-                        StabilizerId::new(id),
+                    stabilizer: stabilizer_id,
                     limit:
                         limits.max_stabilizer_weight,
-                    actual:
-                        support.len(),
+                    actual: support.len(),
                 },
             );
         }
@@ -709,11 +1172,8 @@ pub fn validate_surface_code_with_limits(
         let mut local =
             BTreeSet::new();
 
-        for &qubit in
-            support
-        {
-            if !local.insert(qubit)
-            {
+        for &qubit in support {
+            if !local.insert(qubit) {
                 return Err(
                     ValidationError::DuplicateQubit {
                         qubit,
@@ -745,7 +1205,8 @@ pub fn validate_surface_code_with_limits(
         );
     }
 
-    // Delegate algebraic validation to the canonical stabilizer subsystem.
+    // Delegate mathematical stabilizer validation to stabilizer.rs rather
+    // than duplicating its algebra here.
     let group =
         code.stabilizer_group()
             .map_err(|error| {
@@ -760,16 +1221,14 @@ pub fn validate_surface_code_with_limits(
         limits,
     )?;
 
-    // Logical operators are part of the surface-code contract.
+    // Validate logical-normalizer invariants.
     let logical_x =
         code.logical_x();
 
     let logical_z =
         code.logical_z();
 
-    if logical_x.operator()
-        .is_identity()
-    {
+    if logical_x.operator().is_identity() {
         return Err(
             ValidationError::IdentityLogicalOperator {
                 name: logical_x.name(),
@@ -777,9 +1236,7 @@ pub fn validate_surface_code_with_limits(
         );
     }
 
-    if logical_z.operator()
-        .is_identity()
-    {
+    if logical_z.operator().is_identity() {
         return Err(
             ValidationError::IdentityLogicalOperator {
                 name: logical_z.name(),
@@ -787,36 +1244,38 @@ pub fn validate_surface_code_with_limits(
         );
     }
 
-    validate_operator_dimension(
+    validate_pauli_string(
         logical_x.operator(),
         qubits,
+        limits,
     )?;
 
-    validate_operator_dimension(
+    validate_pauli_string(
         logical_z.operator(),
         qubits,
+        limits,
     )?;
 
-    if !logical_x
-        .operator()
-        .anticommutes_with(
-            logical_z.operator(),
-        )
-        .map_err(|error| {
-            ValidationError::ModuleError {
-                module: "stabilizer",
-                message: error.to_string(),
-            }
-        })?
-    {
+    let logical_anticommutes =
+        logical_x
+            .operator()
+            .anticommutes_with(
+                logical_z.operator(),
+            )
+            .map_err(|error| {
+                ValidationError::ModuleError {
+                    module: "stabilizer",
+                    message: error.to_string(),
+                }
+            })?;
+
+    if !logical_anticommutes {
         return Err(
             ValidationError::InvalidLogicalAnticommutation,
         );
     }
 
-    for generator in
-        group.generators()
-    {
+    for generator in group.generators() {
         for (name, logical) in [
             (
                 logical_x.name(),
@@ -864,25 +1323,24 @@ pub fn validate_surface_code_with_limits(
 // Stabilizer validation
 // ============================================================================
 
-/// Validates a stabilizer group independently of a particular code family.
+/// Validates a stabilizer group against canonical QEC limits.
+///
+/// Algebraic validation remains implemented by `stabilizer.rs`.
 pub fn validate_stabilizer_group(
     group: &StabilizerGroup,
-    limits: ValidationLimits,
+    limits: &QecLimits,
 ) -> Result<ValidationReport, ValidationError> {
     limits.validate()?;
 
-    let qubits =
-        group.num_qubits();
-
-    let stabilizers =
-        group.len();
+    let qubits = group.num_qubits();
+    let stabilizers = group.len();
 
     if qubits > limits.max_qubits {
         return Err(
             ValidationError::ResourceLimitExceeded {
-                resource: "stabilizer-group qubits",
-                limit: limits.max_qubits,
-                actual: qubits,
+                resource: LimitKind::Qubits,
+                requested: qubits as u128,
+                maximum: limits.max_qubits as u128,
             },
         );
     }
@@ -892,13 +1350,19 @@ pub fn validate_stabilizer_group(
     {
         return Err(
             ValidationError::ResourceLimitExceeded {
-                resource: "stabilizer-group generators",
-                limit: limits.max_stabilizers,
-                actual: stabilizers,
+                resource:
+                    LimitKind::Stabilizers,
+                requested:
+                    stabilizers as u128,
+                maximum:
+                    limits.max_stabilizers
+                        as u128,
             },
         );
     }
 
+    // Let the canonical algebra layer establish commutation, dimensions,
+    // rank-related invariants, and internal consistency.
     group.validate()
         .map_err(|error| {
             ValidationError::ModuleError {
@@ -910,18 +1374,14 @@ pub fn validate_stabilizer_group(
     let mut ids =
         BTreeSet::new();
 
-    for generator in
-        group.generators()
-    {
-        if !ids.insert(
-            generator.id(),
-        ) {
+    for generator in group.generators() {
+        let id = generator.id();
+
+        if !ids.insert(id) {
             return Err(
                 ValidationError::DuplicateStabilizer {
                     stabilizer:
-                        StabilizerId::new(
-                            generator.id(),
-                        ),
+                        StabilizerId::new(id),
                 },
             );
         }
@@ -929,9 +1389,10 @@ pub fn validate_stabilizer_group(
         let operator =
             generator.operator();
 
-        validate_operator_dimension(
+        validate_pauli_string(
             operator,
             qubits,
+            limits,
         )?;
 
         let weight =
@@ -941,9 +1402,7 @@ pub fn validate_stabilizer_group(
             return Err(
                 ValidationError::EmptyStabilizer {
                     stabilizer:
-                        StabilizerId::new(
-                            generator.id(),
-                        ),
+                        StabilizerId::new(id),
                 },
             );
         }
@@ -954,9 +1413,7 @@ pub fn validate_stabilizer_group(
             return Err(
                 ValidationError::StabilizerWeightExceeded {
                     stabilizer:
-                        StabilizerId::new(
-                            generator.id(),
-                        ),
+                        StabilizerId::new(id),
                     limit:
                         limits.max_stabilizer_weight,
                     actual: weight,
@@ -974,14 +1431,14 @@ pub fn validate_stabilizer_group(
 }
 
 // ============================================================================
-// Pauli operator validation
+// Pauli validation
 // ============================================================================
 
 /// Validates a Pauli string against a declared qubit count.
 pub fn validate_pauli_string(
     operator: &PauliString,
     num_qubits: usize,
-    limits: ValidationLimits,
+    limits: &QecLimits,
 ) -> Result<(), ValidationError> {
     limits.validate()?;
 
@@ -990,32 +1447,38 @@ pub fn validate_pauli_string(
     {
         return Err(
             ValidationError::ResourceLimitExceeded {
-                resource: "operator qubits",
-                limit: limits.max_qubits,
-                actual: num_qubits,
+                resource: LimitKind::Qubits,
+                requested:
+                    num_qubits as u128,
+                maximum:
+                    limits.max_qubits as u128,
             },
         );
     }
 
-    validate_operator_dimension(
-        operator,
-        num_qubits,
-    )
-}
-
-/// Internal dimension check shared by operator validators.
-fn validate_operator_dimension(
-    operator: &PauliString,
-    expected: usize,
-) -> Result<(), ValidationError> {
     let actual =
         operator.num_qubits();
 
-    if actual != expected {
+    if actual != num_qubits {
         return Err(
             ValidationError::OperatorDimensionMismatch {
-                expected,
+                expected: num_qubits,
                 actual,
+            },
+        );
+    }
+
+    let weight =
+        operator.weight();
+
+    if weight
+        > limits.max_logical_operator_weight
+    {
+        return Err(
+            ValidationError::OperatorWeightExceeded {
+                limit:
+                    limits.max_logical_operator_weight,
+                actual: weight,
             },
         );
     }
@@ -1027,11 +1490,13 @@ fn validate_operator_dimension(
 // Syndrome validation
 // ============================================================================
 
-/// Validates a complete syndrome against a validated stabilizer group.
+/// Validates a complete syndrome against a stabilizer group.
+///
+/// The syndrome and stabilizer domain must match exactly.
 pub fn validate_syndrome(
     syndrome: &Syndrome,
     stabilizers: &StabilizerGroup,
-    limits: ValidationLimits,
+    limits: &QecLimits,
 ) -> Result<ValidationReport, ValidationError> {
     limits.validate()?;
 
@@ -1039,12 +1504,12 @@ pub fn validate_syndrome(
         syndrome.len();
 
     if measurement_count
-        > limits.max_syndrome_measurements
+        > limits.max_syndrome_events
     {
         return Err(
             ValidationError::SyndromeSizeExceeded {
                 limit:
-                    limits.max_syndrome_measurements,
+                    limits.max_syndrome_events,
                 actual:
                     measurement_count,
             },
@@ -1056,7 +1521,8 @@ pub fn validate_syndrome(
         limits,
     )?;
 
-    let expected_ids: BTreeSet<StabilizerId> =
+    let expected_ids:
+        BTreeSet<StabilizerId> =
         stabilizers
             .generators()
             .iter()
@@ -1067,7 +1533,8 @@ pub fn validate_syndrome(
             })
             .collect();
 
-    let actual_ids: BTreeSet<StabilizerId> =
+    let actual_ids:
+        BTreeSet<StabilizerId> =
         syndrome
             .stabilizer_ids()
             .collect();
@@ -1093,24 +1560,25 @@ pub fn validate_syndrome(
 // Detection-event validation
 // ============================================================================
 
-/// Validates a detection-event batch against a stabilizer group.
+/// Validates detection events against a stabilizer group.
 ///
-/// Detection events must reference known stabilizers and must represent
-/// active events. The batch size is checked before deeper validation.
+/// A detection-event identity is `(measurement_round, stabilizer_id)`.
+///
+/// The same identity cannot occur twice in one batch.
 pub fn validate_detection_events(
     events: &[DetectionEvent],
     stabilizers: &StabilizerGroup,
-    limits: ValidationLimits,
+    limits: &QecLimits,
 ) -> Result<ValidationReport, ValidationError> {
     limits.validate()?;
 
     if events.len()
-        > limits.max_detection_events
+        > limits.max_syndrome_events
     {
         return Err(
             ValidationError::DetectionEventCountExceeded {
                 limit:
-                    limits.max_detection_events,
+                    limits.max_syndrome_events,
                 actual:
                     events.len(),
             },
@@ -1122,7 +1590,8 @@ pub fn validate_detection_events(
         limits,
     )?;
 
-    let known: BTreeSet<StabilizerId> =
+    let known:
+        BTreeSet<StabilizerId> =
         stabilizers
             .generators()
             .iter()
@@ -1136,9 +1605,7 @@ pub fn validate_detection_events(
     let mut seen =
         BTreeSet::new();
 
-    for event in
-        events
-    {
+    for event in events {
         if !event.value() {
             return Err(
                 ValidationError::InactiveDetectionEvent,
@@ -1158,13 +1625,16 @@ pub fn validate_detection_events(
             );
         }
 
-        // One stabilizer should occur at most once in a single event batch.
+        let round =
+            event.round().value();
+
         if !seen.insert((
-            event.round().value(),
+            round,
             stabilizer,
         )) {
             return Err(
-                ValidationError::DuplicateStabilizer {
+                ValidationError::DuplicateDetectionEvent {
+                    round,
                     stabilizer,
                 },
             );
@@ -1183,17 +1653,26 @@ pub fn validate_detection_events(
 }
 
 // ============================================================================
-// Combined validation
+// Combined pipeline validation
 // ============================================================================
 
-/// Validates the complete surface-code → stabilizer → syndrome pipeline.
+/// Validates the complete:
 ///
-/// This is the recommended high-level entry point when all three objects are
-/// available before decoding.
+/// ```text
+/// SurfaceCode
+///     ↓
+/// StabilizerGroup
+///     ↓
+/// Syndrome
+///     ↓
+/// decoder input
+/// ```
+///
+/// This is the preferred high-level validation boundary before decoding.
 pub fn validate_pipeline(
     code: &SurfaceCode,
     syndrome: &Syndrome,
-    limits: ValidationLimits,
+    limits: &QecLimits,
 ) -> Result<ValidationReport, ValidationError> {
     let code_report =
         validate_surface_code_with_limits(
@@ -1230,6 +1709,62 @@ pub fn validate_pipeline(
 }
 
 // ============================================================================
+// QecResult convenience API
+// ============================================================================
+
+/// Canonical-result wrapper for surface-code validation.
+pub fn validate_surface_code_result(
+    code: &SurfaceCode,
+    limits: &QecLimits,
+) -> QecResult<ValidationReport> {
+    validate_surface_code_with_limits(
+        code,
+        limits,
+    )
+    .map_err(QecError::from)
+}
+
+/// Canonical-result wrapper for stabilizer validation.
+pub fn validate_stabilizer_group_result(
+    group: &StabilizerGroup,
+    limits: &QecLimits,
+) -> QecResult<ValidationReport> {
+    validate_stabilizer_group(
+        group,
+        limits,
+    )
+    .map_err(QecError::from)
+}
+
+/// Canonical-result wrapper for syndrome validation.
+pub fn validate_syndrome_result(
+    syndrome: &Syndrome,
+    stabilizers: &StabilizerGroup,
+    limits: &QecLimits,
+) -> QecResult<ValidationReport> {
+    validate_syndrome(
+        syndrome,
+        stabilizers,
+        limits,
+    )
+    .map_err(QecError::from)
+}
+
+/// Canonical-result wrapper for detection-event validation.
+pub fn validate_detection_events_result(
+    events: &[DetectionEvent],
+    stabilizers: &StabilizerGroup,
+    limits: &QecLimits,
+) -> QecResult<ValidationReport> {
+    validate_detection_events(
+        events,
+        stabilizers,
+        limits,
+    )
+    .map_err(QecError::from)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1238,29 +1773,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_limits_are_valid() {
+    fn canonical_limits_are_valid() {
         assert!(
-            ValidationLimits::default()
+            QecLimits::default()
                 .validate()
                 .is_ok()
         );
     }
 
     #[test]
-    fn zero_limit_is_rejected() {
-        let limits =
-            ValidationLimits {
-                max_qubits: 0,
-                ..ValidationLimits::default()
-            };
+    fn validation_limits_is_only_an_alias() {
+        let limits:
+            ValidationLimits =
+            QecLimits::default();
 
         assert_eq!(
-            limits.validate(),
-            Err(
-                ValidationError::InvalidValidationLimit {
-                    field: "max_qubits",
-                }
-            )
+            limits.schema_version,
+            QecLimits::default()
+                .schema_version
+        );
+    }
+
+    #[test]
+    fn zero_canonical_limit_is_rejected() {
+        let limits =
+            QecLimits {
+                max_qubits: 0,
+                ..QecLimits::default()
+            };
+
+        assert!(
+            validate_limits(&limits)
+                .is_err()
         );
     }
 
@@ -1269,11 +1813,14 @@ mod tests {
         let operator =
             PauliString::identity(5);
 
+        let limits =
+            QecLimits::default();
+
         assert!(
             validate_pauli_string(
                 &operator,
                 4,
-                ValidationLimits::default(),
+                &limits,
             )
             .is_err()
         );
@@ -1282,14 +1829,14 @@ mod tests {
             validate_pauli_string(
                 &operator,
                 5,
-                ValidationLimits::default(),
+                &limits,
             )
             .is_ok()
         );
     }
 
     #[test]
-    fn surface_code_validation_succeeds_for_distance_three() {
+    fn distance_three_surface_code_validates() {
         let code =
             SurfaceCode::new(3)
                 .expect(
@@ -1304,13 +1851,14 @@ mod tests {
 
         assert!(
             result.is_ok(),
-            "validation failed: {result:?}"
+            "validation failed: {:?}",
+            result.err()
         );
 
         let report =
             result.expect(
-                "validated code should \
-                 produce a report",
+                "distance-3 validation \
+                 should succeed",
             );
 
         assert_eq!(
@@ -1325,27 +1873,72 @@ mod tests {
     }
 
     #[test]
-    fn stabilizer_validation_is_deterministic() {
-        let code =
-            SurfaceCode::new(3)
-                .expect(
-                    "distance-3 surface code \
-                     should construct",
-                );
+    fn code_resource_validation_rejects_excessive_distance() {
+        let limits =
+            QecLimits {
+                max_code_distance: 3,
+                ..QecLimits::default()
+            };
 
-        let first =
-            validate_surface_code(
-                &code,
+        let result =
+            validate_code_resources(
+                &limits,
+                5,
+                25,
+                24,
             );
 
-        let second =
-            validate_surface_code(
-                &code,
+        assert!(
+            result.is_err()
+        );
+    }
+
+    #[test]
+    fn code_resource_validation_rejects_excessive_qubits() {
+        let limits =
+            QecLimits {
+                max_qubits: 4,
+                max_stabilizers: 4,
+                ..QecLimits::default()
+            };
+
+        let result =
+            validate_code_resources(
+                &limits,
+                3,
+                9,
+                8,
             );
 
-        assert_eq!(
-            first,
-            second
+        assert!(
+            result.is_err()
+        );
+    }
+
+    #[test]
+    fn resource_request_uses_canonical_policy() {
+        let limits =
+            QecLimits {
+                max_qubits: 8,
+                ..QecLimits::default()
+            };
+
+        assert!(
+            validate_resource_request(
+                &limits,
+                LimitKind::Qubits,
+                8,
+            )
+            .is_ok()
+        );
+
+        assert!(
+            validate_resource_request(
+                &limits,
+                LimitKind::Qubits,
+                9,
+            )
+            .is_err()
         );
     }
 }
