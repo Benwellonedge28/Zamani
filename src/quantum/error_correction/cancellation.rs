@@ -1,13 +1,65 @@
 //! Cooperative cancellation infrastructure for Zamani Quantum Error Correction.
 //!
-//! Cancellation is part of the QEC execution contract. Expensive operations
-//! must bind a [`CancellationToken`] and poll it at safe points. Cancellation
-//! is cooperative: no thread is force-killed while it may be mutating QEC
-//! state.
+//! # Architectural contract
 //!
-//! The implementation is deliberately runtime-agnostic and is suitable for
-//! decoders, streaming, simulation, checkpointing, partition reconciliation,
-//! distributed coordination and QPU submission/polling.
+//! `cancellation.rs` owns cancellation state and propagation only.
+//!
+//! It does NOT own:
+//! - QEC workload limits;
+//! - memory allocation;
+//! - resource accounting;
+//! - scheduling policy;
+//! - decoder policy;
+//! - authorization;
+//! - telemetry transport;
+//! - checkpoint serialization.
+//!
+//! The dependency direction is:
+//!
+//! ```text
+//! errors.rs
+//!     │
+//!     ▼
+//! cancellation.rs
+//!     │
+//!     ├── decoder.rs
+//!     ├── streaming.rs
+//!     ├── partition.rs
+//!     ├── distributed.rs
+//!     ├── scheduler.rs
+//!     ├── checkpoint.rs
+//!     ├── simulation.rs
+//!     └── QPU execution
+//! ```
+//!
+//! `limits.rs` remains independent:
+//!
+//! ```text
+//! limits.rs       = what work is permitted
+//! resources.rs    = what work is being consumed
+//! memory.rs       = allocation enforcement
+//! cancellation.rs = whether work should stop
+//! ```
+//!
+//! # Cancellation guarantees
+//!
+//! 1. Cancellation is cooperative.
+//! 2. Cancellation is monotonic: active -> cancelled.
+//! 3. Repeated cancellation is idempotent.
+//! 4. Parent cancellation propagates to descendants.
+//! 5. Child cancellation never cancels its parent.
+//! 6. Deadlines never extend an existing deadline.
+//! 7. Cancellation checks are deterministic.
+//! 8. Cancellation callbacks execute at most once.
+//! 9. Callback panics cannot prevent cancellation propagation.
+//! 10. Cancellation errors use the canonical `QecError` boundary.
+//! 11. Cancellation does not silently become success.
+//! 12. Worker threads are never forcefully terminated.
+//!
+//! # Rust compatibility
+//!
+//! This implementation targets Rust 1.97.1 and uses only stable standard
+//! library facilities.
 
 use core::fmt;
 use std::sync::{
@@ -19,35 +71,35 @@ use std::time::{Duration, Instant};
 
 use super::errors::{QecError, QecResult};
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Cancellation reason
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Why an operation stopped cooperatively.
+/// Reason why an operation became cancelled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CancellationReason {
-    /// Cancellation was explicitly requested by the caller.
+    /// Explicit cancellation requested by the owner.
     Requested,
 
-    /// A parent operation cancelled this child operation.
+    /// Cancellation propagated from a parent operation.
     ParentCancelled,
 
-    /// The configured deadline elapsed.
+    /// The operation deadline expired.
     DeadlineExceeded,
 
-    /// A cancellation checkpoint budget was exceeded.
+    /// The cancellation polling budget was exhausted.
     BudgetExceeded,
 
-    /// The owning scheduler shut down the workload.
+    /// The scheduler shut down the workload.
     SchedulerShutdown,
 
     /// A distributed coordinator shut down the workload.
     DistributedShutdown,
 
-    /// The operation was superseded by another operation.
+    /// The operation was superseded.
     Superseded,
 
-    /// Application-specific cancellation reason.
+    /// Application-defined cancellation.
     Custom(String),
 }
 
@@ -70,24 +122,47 @@ impl CancellationReason {
 impl fmt::Display for CancellationReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Custom(message) => {
-                write!(f, "custom cancellation: {message}")
-            }
+            Self::Custom(message) => write!(f, "custom cancellation: {message}"),
             other => f.write_str(other.as_str()),
         }
     }
 }
 
-// -----------------------------------------------------------------------------
-// Shared cancellation state
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Cancellation metadata
+// ============================================================================
 
+/// Immutable metadata describing the cancellation transition.
 #[derive(Debug, Clone)]
-struct CancellationMetadata {
+pub struct CancellationMetadata {
     reason: CancellationReason,
     requested_at: Instant,
     generation: u64,
 }
+
+impl CancellationMetadata {
+    /// Returns the cancellation reason.
+    pub fn reason(&self) -> &CancellationReason {
+        &self.reason
+    }
+
+    /// Returns when cancellation was committed.
+    pub fn requested_at(&self) -> Instant {
+        self.requested_at
+    }
+
+    /// Returns the cancellation generation.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+}
+
+// ============================================================================
+// Shared state
+// ============================================================================
+
+type CancellationCallback =
+    Arc<dyn Fn(CancellationReason) + Send + Sync + 'static>;
 
 struct CancellationState {
     cancelled: AtomicBool,
@@ -98,12 +173,23 @@ struct CancellationState {
     wait_lock: Mutex<()>,
     wait_condvar: Condvar,
 
-    callbacks:
-        Mutex<Vec<Arc<dyn Fn(CancellationReason) + Send + Sync + 'static>>>,
+    callbacks: Mutex<Vec<CancellationCallback>>,
 }
 
 impl fmt::Debug for CancellationState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let metadata = self
+            .metadata
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+
+        let callback_count = self
+            .callbacks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .len();
+
         f.debug_struct("CancellationState")
             .field(
                 "cancelled",
@@ -113,22 +199,8 @@ impl fmt::Debug for CancellationState {
                 "generation",
                 &self.generation.load(Ordering::Acquire),
             )
-            .field(
-                "metadata",
-                &self
-                    .metadata
-                    .read()
-                    .ok()
-                    .and_then(|guard| guard.clone()),
-            )
-            .field(
-                "callback_count",
-                &self
-                    .callbacks
-                    .lock()
-                    .map(|guard| guard.len())
-                    .unwrap_or(0),
-            )
+            .field("metadata", &metadata)
+            .field("callback_count", &callback_count)
             .finish()
     }
 }
@@ -145,7 +217,7 @@ impl CancellationState {
         }
     }
 
-    /// Transition active -> cancelled exactly once.
+    /// Commits cancellation exactly once.
     fn cancel(&self, reason: CancellationReason) -> bool {
         if self.cancelled.swap(true, Ordering::AcqRel) {
             return false;
@@ -169,25 +241,9 @@ impl CancellationState {
             });
         }
 
-        /*
-         * Wake waiters before callbacks. Cancellation state is already
-         * committed at this point, so callbacks cannot prevent propagation.
-         */
+        // State is committed before callbacks execute.
         self.wait_condvar.notify_all();
 
-        /*
-         * Drain callbacks under the callback mutex.
-
-         * This closes the registration race:
-         *
-         *   cancel()        on_cancel()
-         *      |                |
-         *      |                |
-         *      +--- callback lock
-         *
-         * A callback is therefore either drained by cancel(), or observed as
-         * already cancelled and invoked immediately by on_cancel().
-         */
         let callbacks = {
             let mut guard = self
                 .callbacks
@@ -200,11 +256,6 @@ impl CancellationState {
         for callback in callbacks {
             let callback_reason = reason.clone();
 
-            /*
-             * A callback must never prevent cancellation from completing.
-             * Cancellation remains committed even if application callback
-             * code panics.
-             */
             let _ = std::panic::catch_unwind(
                 std::panic::AssertUnwindSafe(|| {
                     callback(callback_reason);
@@ -215,12 +266,8 @@ impl CancellationState {
         true
     }
 
-    fn reason(&self) -> Option<CancellationReason> {
-        self.metadata
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .as_ref()
-            .map(|metadata| metadata.reason.clone())
+    fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
     }
 
     fn metadata(&self) -> Option<CancellationMetadata> {
@@ -230,107 +277,23 @@ impl CancellationState {
             .clone()
     }
 
+    fn reason(&self) -> Option<CancellationReason> {
+        self.metadata().map(|metadata| metadata.reason)
+    }
+
     fn generation(&self) -> u64 {
         self.generation.load(Ordering::Acquire)
     }
-}
 
-// -----------------------------------------------------------------------------
-// Cancellation source
-// -----------------------------------------------------------------------------
-
-/// Owner-side cancellation controller.
-///
-/// Sources belong to callers, schedulers, supervisors, or distributed
-/// coordinators. Workers normally receive only a [`CancellationToken`].
-#[derive(Clone)]
-pub struct CancellationSource {
-    state: Arc<CancellationState>,
-}
-
-impl fmt::Debug for CancellationSource {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CancellationSource")
-            .field("state", &self.state)
-            .finish()
-    }
-}
-
-impl CancellationSource {
-    /// Creates an independent cancellation source.
-    pub fn new() -> Self {
-        Self {
-            state: Arc::new(CancellationState::new()),
-        }
-    }
-
-    /// Creates a source and its corresponding token.
-    pub fn new_pair() -> (Self, CancellationToken) {
-        let source = Self::new();
-        let token = source.token();
-
-        (source, token)
-    }
-
-    /// Returns a token observing this source.
-    pub fn token(&self) -> CancellationToken {
-        CancellationToken {
-            state: Arc::clone(&self.state),
-            parent: None,
-            deadline: None,
-        }
-    }
-
-    /// Requests normal cancellation.
-    pub fn cancel(&self) -> bool {
-        self.cancel_with_reason(CancellationReason::Requested)
-    }
-
-    /// Requests cancellation with an explicit reason.
-    pub fn cancel_with_reason(
-        &self,
-        reason: CancellationReason,
-    ) -> bool {
-        self.state.cancel(reason)
-    }
-
-    /// Returns whether this source is cancelled.
-    pub fn is_cancelled(&self) -> bool {
-        self.state.cancelled.load(Ordering::Acquire)
-    }
-
-    /// Returns the source's cancellation reason.
-    pub fn reason(&self) -> Option<CancellationReason> {
-        self.state.reason()
-    }
-
-    /// Returns the cancellation generation.
-    pub fn generation(&self) -> u64 {
-        self.state.generation()
-    }
-
-    /// Registers a callback.
-
-    /// The callback executes at most once.
-    ///
-    /// If cancellation already happened, the callback is invoked immediately.
-    pub fn on_cancel<F>(&self, callback: F)
-    where
-        F: Fn(CancellationReason) + Send + Sync + 'static,
-    {
-        let callback:
-            Arc<dyn Fn(CancellationReason) + Send + Sync + 'static> =
-            Arc::new(callback);
-
+    fn register_callback(&self, callback: CancellationCallback) {
         let immediate_reason = {
             let mut callbacks = self
-                .state
                 .callbacks
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-            if self.state.cancelled.load(Ordering::Acquire) {
-                self.state.reason()
+            if self.is_cancelled() {
+                self.reason()
             } else {
                 callbacks.push(callback.clone());
                 None
@@ -345,18 +308,95 @@ impl CancellationSource {
             );
         }
     }
+}
+
+// ============================================================================
+// Cancellation source
+// ============================================================================
+
+/// Owner-side cancellation controller.
+///
+/// A source is normally retained by the caller, scheduler, supervisor, or
+/// coordinator. Workers should normally receive only a token.
+#[derive(Clone)]
+pub struct CancellationSource {
+    state: Arc<CancellationState>,
+}
+
+impl fmt::Debug for CancellationSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CancellationSource")
+            .field("state", &self.state)
+            .finish()
+    }
+}
+
+impl CancellationSource {
+    /// Creates an active cancellation source.
+    pub fn new() -> Self {
+        Self {
+            state: Arc::new(CancellationState::new()),
+        }
+    }
+
+    /// Creates a source and token together.
+    pub fn new_pair() -> (Self, CancellationToken) {
+        let source = Self::new();
+        let token = source.token();
+
+        (source, token)
+    }
+
+    /// Creates an observing token.
+    pub fn token(&self) -> CancellationToken {
+        CancellationToken {
+            state: Arc::clone(&self.state),
+            parent: None,
+            deadline: None,
+        }
+    }
+
+    /// Requests ordinary cancellation.
+    pub fn cancel(&self) -> bool {
+        self.cancel_with_reason(CancellationReason::Requested)
+    }
+
+    /// Requests cancellation with a specific reason.
+    pub fn cancel_with_reason(&self, reason: CancellationReason) -> bool {
+        self.state.cancel(reason)
+    }
+
+    /// Returns whether cancellation has been committed.
+    pub fn is_cancelled(&self) -> bool {
+        self.state.is_cancelled()
+    }
+
+    /// Returns the source cancellation reason.
+    pub fn reason(&self) -> Option<CancellationReason> {
+        self.state.reason()
+    }
+
+    /// Returns complete cancellation metadata.
+    pub fn metadata(&self) -> Option<CancellationMetadata> {
+        self.state.metadata()
+    }
+
+    /// Returns the cancellation generation.
+    pub fn generation(&self) -> u64 {
+        self.state.generation()
+    }
+
+    /// Registers a callback executed at most once.
+    pub fn on_cancel<F>(&self, callback: F)
+    where
+        F: Fn(CancellationReason) + Send + Sync + 'static,
+    {
+        self.state.register_callback(Arc::new(callback));
+    }
 
     /// Creates an independently cancellable child operation.
-    ///
-    /// Parent cancellation is always visible to the returned child token.
-    pub fn child(&self) -> (CancellationSource, CancellationToken) {
-        let child = Self::new();
-
-        let token = child
-            .token()
-            .with_parent(self.token());
-
-        (child, token)
+    pub fn child(&self) -> ChildCancellation {
+        ChildCancellation::new(self.token())
     }
 }
 
@@ -366,30 +406,19 @@ impl Default for CancellationSource {
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Cancellation token
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Cheap, cloneable, thread-safe cooperative cancellation token.
+/// Cloneable cooperative cancellation token.
 ///
-/// Every expensive QEC operation should receive one of these.
+/// A token observes local cancellation, parent cancellation, and deadlines.
+/// Expensive QEC operations should receive a token and poll it at safe
+/// boundaries.
 #[derive(Clone)]
 pub struct CancellationToken {
     state: Arc<CancellationState>,
-
-    /*
-     * Parent state is intentionally separate from the local state.
-     *
-     * This gives the child:
-     *
-     *   parent cancellation -> child observes it
-     *
-     * without allowing:
-     *
-     *   child cancellation -> parent cancellation.
-     */
     parent: Option<Arc<CancellationState>>,
-
     deadline: Option<Instant>,
 }
 
@@ -405,25 +434,9 @@ impl fmt::Debug for CancellationToken {
 }
 
 impl CancellationToken {
-    /// Creates an active token.
+    /// Creates a new active token.
     pub fn new() -> Self {
         CancellationSource::new().token()
-    }
-
-    /// Links this token to a parent token.
-    ///
-    /// Existing deadlines are never extended.
-    fn with_parent(mut self, parent: Self) -> Self {
-        self.deadline = match (self.deadline, parent.deadline) {
-            (Some(child), Some(parent)) => {
-                Some(child.min(parent))
-            }
-            (child, parent) => child.or(parent),
-        };
-
-        self.parent = Some(parent.state);
-
-        self
     }
 
     /// Creates a token with a relative deadline.
@@ -444,20 +457,30 @@ impl CancellationToken {
         }
     }
 
-    /// Returns true when this token, its parent, or its deadline is cancelled.
-    ///
-    /// Deadline cancellation is materialized into local cancellation state so
-    /// that callbacks, waiters, generations, and diagnostics observe the same
-    /// state transition.
+    /// Creates a child token observing the supplied parent.
+    fn with_parent(mut self, parent: CancellationToken) -> Self {
+        self.deadline = match (self.deadline, parent.deadline) {
+            (Some(child), Some(parent)) => Some(child.min(parent)),
+            (child, parent) => child.or(parent),
+        };
+
+        self.parent = Some(parent.state);
+
+        self
+    }
+
+    /// Returns whether this token is cancelled.
     pub fn is_cancelled(&self) -> bool {
-        if self.state.cancelled.load(Ordering::Acquire) {
+        if self.state.is_cancelled() {
             return true;
         }
 
-        if let Some(parent) = &self.parent {
-            if parent.cancelled.load(Ordering::Acquire) {
-                return true;
-            }
+        if self
+            .parent
+            .as_ref()
+            .is_some_and(|parent| parent.is_cancelled())
+        {
+            return true;
         }
 
         if self
@@ -476,35 +499,28 @@ impl CancellationToken {
 
     /// Returns the effective cancellation reason.
     pub fn reason(&self) -> Option<CancellationReason> {
-        /*
-         * Parent cancellation takes precedence because the child operation
-         * itself did not request the shutdown.
-         */
         if let Some(parent) = &self.parent {
-            if parent.cancelled.load(Ordering::Acquire) {
-                return parent
-                    .reason()
-                    .or(Some(CancellationReason::ParentCancelled));
+            if parent.is_cancelled() {
+                return Some(CancellationReason::ParentCancelled);
             }
         }
 
-        if self.is_cancelled() {
-            return self.state.reason();
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+            && !self.state.is_cancelled()
+        {
+            let _ = self
+                .state
+                .cancel(CancellationReason::DeadlineExceeded);
         }
 
-        None
+        self.state.reason()
     }
 
-    /// Returns the configured effective deadline.
-    pub fn deadline(&self) -> Option<Instant> {
-        self.deadline
-    }
-
-    /// Returns remaining time until the effective deadline.
-    pub fn remaining(&self) -> Option<Duration> {
-        self.deadline.map(|deadline| {
-            deadline.saturating_duration_since(Instant::now())
-        })
+    /// Returns local cancellation metadata.
+    pub fn metadata(&self) -> Option<CancellationMetadata> {
+        self.state.metadata()
     }
 
     /// Returns this token's local cancellation generation.
@@ -512,8 +528,23 @@ impl CancellationToken {
         self.state.generation()
     }
 
-    /// Canonical cancellation boundary for QEC algorithms.
-    #[inline]
+    /// Returns the effective deadline.
+    pub fn deadline(&self) -> Option<Instant> {
+        self.deadline
+    }
+
+    /// Returns whether a deadline is configured.
+    pub const fn has_deadline(&self) -> bool {
+        self.deadline.is_some()
+    }
+
+    /// Returns remaining time until the effective deadline.
+    pub fn remaining(&self) -> Option<Duration> {
+        self.deadline
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+    }
+
+    /// Canonical cancellation boundary.
     pub fn check(&self) -> QecResult<()> {
         if !self.is_cancelled() {
             return Ok(());
@@ -528,39 +559,56 @@ impl CancellationToken {
         )))
     }
 
-    /// Requests cancellation of this token's local operation.
-    ///
-    /// Prefer retaining a [`CancellationSource`] when ownership of
-    /// cancellation should remain separate from workers.
-    pub fn request(&self) -> bool {
-        self.state.cancel(CancellationReason::Requested)
-    }
-
-    /// Checks cancellation and returns the supplied value unchanged.
-    pub fn checkpoint<T>(&self, value: T) -> QecResult<T> {
-        self.check()?;
-        Ok(value)
-    }
-
-    /// Cheap polling entry point for decoder loops.
+    /// Alias for `check`, suitable for hot loops.
     #[inline]
     pub fn poll(&self) -> QecResult<()> {
         self.check()
     }
 
-    /// Sleeps until cancellation or the requested duration.
+    /// Checks cancellation and returns the supplied value.
+    pub fn checkpoint<T>(&self, value: T) -> QecResult<T> {
+        self.check()?;
+        Ok(value)
+    }
+
+    /// Requests cancellation of the local token state.
     ///
-    /// If a deadline occurs first, the effective wait is shortened.
-    pub fn sleep_or_cancel(
-        &self,
-        duration: Duration,
-    ) -> QecResult<()> {
+    /// This exists for backwards compatibility and for locally owned tokens.
+    /// Worker code should normally not call it; ownership should remain with
+    /// `CancellationSource`.
+    pub fn request(&self) -> bool {
+        self.state.cancel(CancellationReason::Requested)
+    }
+
+    /// Creates a child cancellation context.
+    pub fn child(&self) -> ChildCancellation {
+        ChildCancellation::new(self.clone())
+    }
+
+    /// Creates a token with a deadline that is no later than the current one.
+    pub fn with_timeout_from_now(&self, duration: Duration) -> Self {
+        let candidate = Instant::now().checked_add(duration);
+
+        let deadline = match (self.deadline, candidate) {
+            (Some(existing), Some(candidate)) => Some(existing.min(candidate)),
+            (existing, candidate) => existing.or(candidate),
+        };
+
+        Self {
+            state: Arc::clone(&self.state),
+            parent: self.parent.clone(),
+            deadline,
+        }
+    }
+
+    /// Sleeps until cancellation, deadline, or the requested duration.
+    pub fn sleep_or_cancel(&self, duration: Duration) -> QecResult<()> {
         self.check()?;
 
-        let effective_duration = match self.remaining() {
-            Some(remaining) => remaining.min(duration),
-            None => duration,
-        };
+        let effective_duration = self
+            .remaining()
+            .map(|remaining| remaining.min(duration))
+            .unwrap_or(duration);
 
         let guard = self
             .state
@@ -583,37 +631,6 @@ impl CancellationToken {
 
         self.check()
     }
-
-    /// Adds a deadline without extending an existing one.
-    pub fn with_timeout_from_now(
-        &self,
-        duration: Duration,
-    ) -> Self {
-        let candidate = Instant::now().checked_add(duration);
-
-        let deadline = match (self.deadline, candidate) {
-            (Some(existing), Some(candidate)) => {
-                Some(existing.min(candidate))
-            }
-            (existing, candidate) => existing.or(candidate),
-        };
-
-        Self {
-            state: Arc::clone(&self.state),
-            parent: self.parent.clone(),
-            deadline,
-        }
-    }
-
-    /// Creates an independently cancellable child context.
-    pub fn child(&self) -> ChildCancellation {
-        ChildCancellation::new(self.clone())
-    }
-
-    /// Returns whether this token has a deadline.
-    pub const fn has_deadline(&self) -> bool {
-        self.deadline.is_some()
-    }
 }
 
 impl Default for CancellationToken {
@@ -622,14 +639,13 @@ impl Default for CancellationToken {
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Child cancellation
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Independently cancellable child context.
+/// Independently cancellable child operation.
 ///
-/// Parent cancellation remains authoritative, while child cancellation is
-/// local to the child operation.
+/// Parent cancellation is authoritative. Child cancellation is local.
 #[derive(Clone, Debug)]
 pub struct ChildCancellation {
     parent: CancellationToken,
@@ -638,7 +654,7 @@ pub struct ChildCancellation {
 }
 
 impl ChildCancellation {
-    /// Creates a child context.
+    /// Creates a child operation.
     pub fn new(parent: CancellationToken) -> Self {
         let source = CancellationSource::new();
 
@@ -658,52 +674,60 @@ impl ChildCancellation {
         self.token.clone()
     }
 
-    /// Cancels only the child.
+    /// Cancels only this child.
     pub fn cancel(&self) -> bool {
         self.source.cancel()
     }
 
-    /// Cancels only the child with an explicit reason.
-    pub fn cancel_with_reason(
-        &self,
-        reason: CancellationReason,
-    ) -> bool {
+    /// Cancels only this child with a reason.
+    pub fn cancel_with_reason(&self, reason: CancellationReason) -> bool {
         self.source.cancel_with_reason(reason)
     }
 
-    /// Checks parent and child state.
+    /// Returns whether parent or child is cancelled.
+    pub fn is_cancelled(&self) -> bool {
+        self.parent.is_cancelled() || self.token.is_cancelled()
+    }
+
+    /// Checks parent and child cancellation.
     pub fn check(&self) -> QecResult<()> {
         self.parent.check()?;
         self.token.check()
     }
 
-    /// Returns whether either parent or child is cancelled.
-    pub fn is_cancelled(&self) -> bool {
-        self.parent.is_cancelled()
-            || self.token.is_cancelled()
-    }
-
     /// Returns the effective reason.
     pub fn reason(&self) -> Option<CancellationReason> {
         if self.parent.is_cancelled() {
-            self.parent
-                .reason()
-                .or(Some(CancellationReason::ParentCancelled))
+            Some(CancellationReason::ParentCancelled)
         } else {
             self.token.reason()
         }
     }
+
+    /// Registers a child-local callback.
+    pub fn on_cancel<F>(&self, callback: F)
+    where
+        F: Fn(CancellationReason) + Send + Sync + 'static,
+    {
+        self.source.on_cancel(callback);
+    }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Cancellation budget
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Bounds cancellation-checkpoint consumption.
+/// Bounds the number of cancellation checkpoints.
 ///
-/// This is intentionally separate from QEC algorithmic resource limits:
-/// `QecLimits::decoder_iterations` should govern work, while this budget
-/// governs cancellation polling overhead.
+/// This is intentionally independent from `QecLimits`.
+///
+/// ```text
+/// QecLimits
+///     = maximum permitted workload
+///
+/// CancellationBudget
+///     = maximum cancellation polling/checkpoint overhead
+/// ```
 #[derive(Debug)]
 pub struct CancellationBudget {
     maximum_checks: Option<u64>,
@@ -719,7 +743,7 @@ impl CancellationBudget {
         }
     }
 
-    /// Creates a bounded checkpoint budget.
+    /// Creates a bounded budget.
     pub const fn new(maximum_checks: u64) -> Self {
         Self {
             maximum_checks: Some(maximum_checks),
@@ -727,21 +751,23 @@ impl CancellationBudget {
         }
     }
 
-    /// Number of checkpoints consumed.
-    pub fn checks(&self) -> u64 {
-        self.checks.load(Ordering::Relaxed)
-    }
-
-    /// Configured checkpoint limit.
+    /// Returns the configured maximum.
     pub const fn maximum_checks(&self) -> Option<u64> {
         self.maximum_checks
     }
 
-    /// Performs a budget-aware cancellation check.
-    pub fn check(
-        &self,
-        token: &CancellationToken,
-    ) -> QecResult<()> {
+    /// Returns consumed checks.
+    pub fn checks(&self) -> u64 {
+        self.checks.load(Ordering::Acquire)
+    }
+
+    /// Resets the budget.
+    pub fn reset(&self) {
+        self.checks.store(0, Ordering::Release);
+    }
+
+    /// Checks cancellation and consumes one budget unit.
+    pub fn check(&self, token: &CancellationToken) -> QecResult<()> {
         token.check()?;
 
         let current = self
@@ -760,44 +786,37 @@ impl CancellationBudget {
 
         Ok(())
     }
-
-    /// Resets consumed checkpoint count.
-    pub fn reset(&self) {
-        self.checks.store(0, Ordering::Release);
-    }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Polling policy
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Controls cancellation polling frequency.
+/// Controls cancellation polling frequency in hot loops.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PollingPolicy {
-    /// Poll every N iterations.
+    /// Poll at least every N iterations.
     pub every_iterations: u64,
 
-    /// Also poll when this wall-clock interval expires.
+    /// Poll when this wall-clock interval expires.
     pub interval: Option<Duration>,
 }
 
 impl PollingPolicy {
-    /// Production-oriented default.
+    /// Production default.
     pub const DEFAULT: Self = Self {
         every_iterations: 1_024,
         interval: Some(Duration::from_millis(10)),
     };
 
-    /// Poll every iteration.
+    /// Maximum responsiveness.
     pub const EVERY_ITERATION: Self = Self {
         every_iterations: 1,
         interval: None,
     };
 
     /// Creates an iteration-based policy.
-    pub const fn every_iterations(
-        every_iterations: u64,
-    ) -> Self {
+    pub const fn every_iterations(every_iterations: u64) -> Self {
         Self {
             every_iterations: if every_iterations == 0 {
                 1
@@ -808,13 +827,8 @@ impl PollingPolicy {
         }
     }
 
-    /// Determines whether polling should occur.
-    #[inline]
-    pub fn should_poll(
-        &self,
-        iteration: u64,
-        last_poll: Instant,
-    ) -> bool {
+    /// Determines whether a poll is due.
+    pub fn should_poll(&self, iteration: u64, last_poll: Instant) -> bool {
         if iteration == 0 {
             return true;
         }
@@ -824,9 +838,7 @@ impl PollingPolicy {
         }
 
         self.interval
-            .is_some_and(|interval| {
-                last_poll.elapsed() >= interval
-            })
+            .is_some_and(|interval| last_poll.elapsed() >= interval)
     }
 }
 
@@ -836,11 +848,11 @@ impl Default for PollingPolicy {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Polling controller
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Cancellation poller
+// ============================================================================
 
-/// Stateful polling helper for hot decoder loops.
+/// Stateful polling helper for expensive loops.
 #[derive(Debug)]
 pub struct CancellationPoller {
     policy: PollingPolicy,
@@ -859,21 +871,14 @@ impl CancellationPoller {
     }
 
     /// Conditionally checks cancellation.
-    #[inline]
-    pub fn poll(
-        &mut self,
-        token: &CancellationToken,
-    ) -> QecResult<()> {
+    pub fn poll(&mut self, token: &CancellationToken) -> QecResult<()> {
         let iteration = self.iterations;
 
         self.iterations = self
             .iterations
             .saturating_add(1);
 
-        if self.policy.should_poll(
-            iteration,
-            self.last_poll,
-        ) {
+        if self.policy.should_poll(iteration, self.last_poll) {
             token.check()?;
             self.last_poll = Instant::now();
         }
@@ -882,82 +887,102 @@ impl CancellationPoller {
     }
 
     /// Forces an immediate check.
-    pub fn force_poll(
-        &mut self,
-        token: &CancellationToken,
-    ) -> QecResult<()> {
+    pub fn force_poll(&mut self, token: &CancellationToken) -> QecResult<()> {
         token.check()?;
         self.last_poll = Instant::now();
         Ok(())
     }
 
-    /// Number of iterations observed.
+    /// Returns observed iterations.
     pub fn iterations(&self) -> u64 {
         self.iterations
     }
 
-    /// Resets the polling controller.
+    /// Returns the polling policy.
+    pub fn policy(&self) -> PollingPolicy {
+        self.policy
+    }
+
+    /// Resets the poller.
     pub fn reset(&mut self) {
         self.iterations = 0;
         self.last_poll = Instant::now();
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Scoped cancellation guard
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Cancels its child source when dropped unless disarmed.
+/// Cancels a source when dropped unless disarmed.
+///
+/// Useful for scheduler jobs, temporary decoder workers, and speculative
+/// execution.
 #[derive(Debug)]
 pub struct CancellationGuard {
     source: CancellationSource,
     cancel_on_drop: bool,
+    reason: CancellationReason,
 }
 
 impl CancellationGuard {
+    /// Creates a guard that cancels on drop.
     pub fn new(source: CancellationSource) -> Self {
         Self {
             source,
             cancel_on_drop: true,
+            reason: CancellationReason::Superseded,
         }
     }
 
+    /// Creates a guard with an explicit drop reason.
+    pub fn with_reason(
+        source: CancellationSource,
+        reason: CancellationReason,
+    ) -> Self {
+        Self {
+            source,
+            cancel_on_drop: true,
+            reason,
+        }
+    }
+
+    /// Returns the guarded source.
     pub fn source(&self) -> &CancellationSource {
         &self.source
     }
 
-    /// Prevents automatic cancellation on drop.
+    /// Prevents cancellation on drop.
     pub fn disarm(&mut self) {
         self.cancel_on_drop = false;
     }
 
     /// Explicitly cancels the guarded operation.
-    pub fn cancel(&self) {
-        let _ = self.source.cancel_with_reason(
-            CancellationReason::Superseded,
-        );
+    pub fn cancel(&self) -> bool {
+        self.source
+            .cancel_with_reason(self.reason.clone())
     }
 }
 
 impl Drop for CancellationGuard {
     fn drop(&mut self) {
         if self.cancel_on_drop {
-            let _ = self.source.cancel_with_reason(
-                CancellationReason::Superseded,
-            );
+            let _ = self
+                .source
+                .cancel_with_reason(self.reason.clone());
         }
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Cancellable execution helper
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// Executes an operation inside a cancellation boundary.
+/// Runs an operation inside a cancellation boundary.
 ///
-/// The operation receives the token and is responsible for polling it at
-/// internal safe points. A final check prevents returning a successful result
-/// after cancellation occurred during the final part of the operation.
+/// A cancellation check occurs both before and after the operation. This
+/// prevents an operation that completed after cancellation from being reported
+/// as successful.
 pub fn run_cancellable<T, F>(
     token: &CancellationToken,
     operation: F,
@@ -974,17 +999,21 @@ where
     Ok(result)
 }
 
-// -----------------------------------------------------------------------------
-// Thread lifecycle helper
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Worker lifecycle
+// ============================================================================
 
-/// Joins a worker while respecting cooperative cancellation.
+/// Joins a worker while respecting a bounded cooperative wait.
 ///
-/// Rust does not provide safe forceful thread termination. If the worker does
-/// not terminate within `wait`, cancellation is requested and the function
-/// returns a cancellation error.
+/// Rust intentionally does not provide safe forceful thread termination.
 ///
-/// The worker itself must honor the supplied cancellation token.
+/// If the worker does not finish before `wait`:
+///
+/// 1. cancellation is requested;
+/// 2. the worker is allowed to observe it;
+/// 3. a cancellation error is returned.
+///
+/// The worker must therefore use the supplied cancellation token.
 pub fn join_or_cancel<T>(
     handle: thread::JoinHandle<T>,
     source: &CancellationSource,
@@ -993,19 +1022,18 @@ pub fn join_or_cancel<T>(
 where
     T: Send + 'static,
 {
-    if source.is_cancelled() {
-        if handle.is_finished() {
-            return handle.join().map_err(|_| {
-                QecError::invariant(
-                    "worker_thread_join",
-                    "QEC worker thread terminated with a panic",
-                )
-            });
-        }
+    if handle.is_finished() {
+        return handle.join().map_err(|_| {
+            QecError::invariant(
+                "worker_thread_join",
+                "QEC worker thread terminated with a panic",
+            )
+        });
+    }
 
+    if source.is_cancelled() {
         return Err(QecError::cancelled(
-            "worker join refused because cancellation \
-             was already requested",
+            "worker join aborted because cancellation was already requested",
         ));
     }
 
@@ -1018,8 +1046,8 @@ where
             );
 
             return Err(QecError::cancelled(
-                "worker did not terminate within the \
-                 configured cancellation wait interval",
+                "worker did not terminate within the configured \
+                 cancellation wait interval",
             ));
         }
 
@@ -1034,18 +1062,15 @@ where
     })
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Tests
-// -----------------------------------------------------------------------------
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use std::sync::atomic::{
-        AtomicUsize,
-        Ordering,
-    };
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     fn source_starts_active() {
@@ -1053,6 +1078,7 @@ mod tests {
 
         assert!(!source.is_cancelled());
         assert!(source.reason().is_none());
+        assert_eq!(source.generation(), 0);
     }
 
     #[test]
@@ -1068,22 +1094,16 @@ mod tests {
 
     #[test]
     fn cancellation_produces_qec_error() {
-        let (source, token) =
-            CancellationSource::new_pair();
+        let (source, token) = CancellationSource::new_pair();
 
         source.cancel();
 
         let error = token
             .check()
-            .expect_err(
-                "cancelled token must fail",
-            );
+            .expect_err("cancelled token must fail");
 
         assert!(error.is_cancellation());
-        assert_eq!(
-            error.code(),
-            "QEC-CANCEL-001"
-        );
+        assert_eq!(error.code(), "QEC-CANCEL-001");
     }
 
     #[test]
@@ -1096,62 +1116,65 @@ mod tests {
 
         assert_eq!(
             source.reason(),
-            Some(
-                CancellationReason::SchedulerShutdown
-            )
+            Some(CancellationReason::SchedulerShutdown)
         );
     }
 
     #[test]
-    fn deadline_materializes_cancellation_state() {
-        let token =
-            CancellationToken::with_timeout(
-                Duration::from_millis(1),
-            );
+    fn cancellation_metadata_is_recorded() {
+        let source = CancellationSource::new();
+
+        source.cancel();
+
+        let metadata = source
+            .metadata()
+            .expect("metadata must exist after cancellation");
+
+        assert_eq!(metadata.generation(), 1);
+        assert_eq!(
+            metadata.reason(),
+            &CancellationReason::Requested
+        );
+    }
+
+    #[test]
+    fn deadline_materializes_local_cancellation() {
+        let token = CancellationToken::with_timeout(
+            Duration::from_millis(1),
+        );
 
         thread::sleep(Duration::from_millis(5));
 
         assert!(token.is_cancelled());
-
         assert_eq!(
             token.reason(),
-            Some(
-                CancellationReason::DeadlineExceeded
-            )
+            Some(CancellationReason::DeadlineExceeded)
         );
-
         assert!(token.generation() >= 1);
     }
 
     #[test]
-    fn parent_cancellation_is_observed_by_child() {
-        let parent =
-            CancellationSource::new();
-
-        let child =
-            parent.token().child();
+    fn parent_cancellation_reaches_child() {
+        let parent = CancellationSource::new();
+        let child = parent.token().child();
 
         parent.cancel_with_reason(
             CancellationReason::SchedulerShutdown,
         );
 
         assert!(child.is_cancelled());
-
         assert_eq!(
             child.reason(),
-            Some(
-                CancellationReason::SchedulerShutdown
-            )
+            Some(CancellationReason::ParentCancelled)
         );
+
+        assert!(child.check().is_err());
     }
 
     #[test]
     fn child_cancellation_does_not_cancel_parent() {
-        let parent =
-            CancellationSource::new();
-
-        let child =
-            parent.token().child();
+        let parent = CancellationSource::new();
+        let child = parent.token().child();
 
         assert!(child.cancel());
 
@@ -1160,150 +1183,165 @@ mod tests {
     }
 
     #[test]
-    fn timeout_never_extends_parent_deadline() {
-        let token =
-            CancellationToken::with_timeout(
-                Duration::from_secs(1),
-            );
+    fn deadline_never_extends() {
+        let token = CancellationToken::with_timeout(
+            Duration::from_secs(1),
+        );
 
-        let shortened =
-            token.with_timeout_from_now(
-                Duration::from_millis(1),
-            );
+        let shortened = token.with_timeout_from_now(
+            Duration::from_millis(1),
+        );
 
         assert!(
             shortened
                 .remaining()
-                .expect("deadline exists")
+                .expect("deadline must exist")
                 <= Duration::from_millis(1)
         );
     }
 
     #[test]
     fn callback_runs_once() {
-        let source =
-            CancellationSource::new();
+        let source = CancellationSource::new();
 
-        let calls =
-            Arc::new(AtomicUsize::new(0));
-
-        let calls_clone =
-            Arc::clone(&calls);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_clone = Arc::clone(&calls);
 
         source.on_cancel(move |_| {
-            calls_clone.fetch_add(
-                1,
-                Ordering::SeqCst,
-            );
+            calls_clone.fetch_add(1, Ordering::SeqCst);
         });
 
         assert!(source.cancel());
         assert!(!source.cancel());
 
-        assert_eq!(
-            calls.load(Ordering::SeqCst),
-            1
-        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
     #[test]
-    fn callback_registered_after_cancel_runs_immediately() {
-        let source =
-            CancellationSource::new();
+    fn callback_registered_after_cancellation_runs_immediately() {
+        let source = CancellationSource::new();
 
         source.cancel();
 
-        let calls =
-            Arc::new(AtomicUsize::new(0));
-
-        let calls_clone =
-            Arc::clone(&calls);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_clone = Arc::clone(&calls);
 
         source.on_cancel(move |_| {
-            calls_clone.fetch_add(
-                1,
-                Ordering::SeqCst,
-            );
+            calls_clone.fetch_add(1, Ordering::SeqCst);
         });
 
-        assert_eq!(
-            calls.load(Ordering::SeqCst),
-            1
-        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
     #[test]
-    fn budget_enforces_limit() {
-        let token =
-            CancellationToken::new();
+    fn callback_panic_does_not_break_cancellation() {
+        let source = CancellationSource::new();
 
-        let budget =
-            CancellationBudget::new(1);
+        source.on_cancel(|_| {
+            panic!("callback failure must not break cancellation");
+        });
 
-        assert!(
-            budget.check(&token).is_ok()
-        );
-
-        assert!(
-            budget.check(&token).is_err()
-        );
+        assert!(source.cancel());
+        assert!(source.is_cancelled());
     }
 
     #[test]
-    fn poller_polls_first_iteration() {
-        let token =
-            CancellationToken::new();
+    fn cancellation_budget_enforces_limit() {
+        let source = CancellationSource::new();
+        let token = source.token();
+
+        let budget = CancellationBudget::new(2);
+
+        assert!(budget.check(&token).is_ok());
+        assert!(budget.check(&token).is_ok());
+
+        let result = budget.check(&token);
+
+        assert!(result.is_err());
+        assert_eq!(budget.checks(), 3);
+    }
+
+    #[test]
+    fn cancellation_budget_can_reset() {
+        let source = CancellationSource::new();
+        let token = source.token();
+
+        let budget = CancellationBudget::new(1);
+
+        assert!(budget.check(&token).is_ok());
+        assert!(budget.check(&token).is_err());
+
+        budget.reset();
+
+        assert_eq!(budget.checks(), 0);
+        assert!(budget.check(&token).is_ok());
+    }
+
+    #[test]
+    fn polling_policy_never_uses_zero_interval() {
+        let policy = PollingPolicy::every_iterations(0);
+
+        assert_eq!(policy.every_iterations, 1);
+    }
+
+    #[test]
+    fn poller_counts_iterations() {
+        let source = CancellationSource::new();
+        let token = source.token();
 
         let mut poller =
-            CancellationPoller::new(
-                PollingPolicy::every_iterations(
-                    100
-                )
-            );
+            CancellationPoller::new(PollingPolicy::EVERY_ITERATION);
 
-        assert!(
-            poller.poll(&token).is_ok()
-        );
+        assert!(poller.poll(&token).is_ok());
+        assert!(poller.poll(&token).is_ok());
 
-        assert_eq!(
-            poller.iterations(),
-            1
-        );
+        assert_eq!(poller.iterations(), 2);
+    }
+
+    #[test]
+    fn run_cancellable_returns_success_when_active() {
+        let source = CancellationSource::new();
+        let token = source.token();
+
+        let value = run_cancellable(&token, |_| Ok(42))
+            .expect("operation should succeed");
+
+        assert_eq!(value, 42);
+    }
+
+    #[test]
+    fn run_cancellable_rejects_pre_cancelled_operation() {
+        let source = CancellationSource::new();
+        let token = source.token();
+
+        source.cancel();
+
+        let result = run_cancellable(&token, |_| Ok(42));
+
+        assert!(result.is_err());
     }
 
     #[test]
     fn guard_cancels_on_drop() {
-        let source =
-            CancellationSource::new();
+        let source = CancellationSource::new();
 
         {
-            let _guard =
-                CancellationGuard::new(
-                    source.clone()
-                );
+            let _guard = CancellationGuard::new(source.clone());
         }
 
         assert!(source.is_cancelled());
-
         assert_eq!(
             source.reason(),
-            Some(
-                CancellationReason::Superseded
-            )
+            Some(CancellationReason::Superseded)
         );
     }
 
     #[test]
     fn guard_can_be_disarmed() {
-        let source =
-            CancellationSource::new();
+        let source = CancellationSource::new();
 
         {
-            let mut guard =
-                CancellationGuard::new(
-                    source.clone()
-                );
-
+            let mut guard = CancellationGuard::new(source.clone());
             guard.disarm();
         }
 
@@ -1311,50 +1349,35 @@ mod tests {
     }
 
     #[test]
-    fn run_cancellable_checks_before_and_after() {
-        let source =
-            CancellationSource::new();
+    fn child_callback_is_local() {
+        let parent = CancellationSource::new();
+        let child = parent.token().child();
 
-        let token =
-            source.token();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_clone = Arc::clone(&calls);
 
-        let result =
-            run_cancellable(
-                &token,
-                |_| Ok::<_, QecError>(42),
-            );
+        child.on_cancel(move |_| {
+            calls_clone.fetch_add(1, Ordering::SeqCst);
+        });
 
-        assert_eq!(
-            result.expect("operation succeeds"),
-            42
-        );
+        child.cancel();
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!parent.is_cancelled());
     }
 
     #[test]
-    fn cancellation_metadata_is_stable() {
-        let source =
-            CancellationSource::new();
+    fn sleep_or_cancel_returns_after_requested_duration() {
+        let source = CancellationSource::new();
+        let token = source.token();
 
-        source.cancel_with_reason(
-            CancellationReason::Custom(
-                "test".into()
-            )
-        );
+        let started = Instant::now();
 
-        let metadata =
-            source
-                .state
-                .metadata()
-                .expect("metadata");
+        token
+            .sleep_or_cancel(Duration::from_millis(1))
+            .expect("sleep should complete");
 
-        assert_eq!(
-            metadata.generation,
-            1
-        );
-
-        assert!(
-            metadata.requested_at.elapsed()
-                < Duration::from_secs(1)
-        );
+        assert!(started.elapsed() >= Duration::from_micros(500));
+        assert!(!token.is_cancelled());
     }
 }
