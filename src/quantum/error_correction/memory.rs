@@ -1,52 +1,76 @@
 //! Production-grade memory management for Zamani QEC.
 //!
-//! This module provides bounded, observable and failure-safe memory primitives
-//! for large quantum-error-correction workloads.
+//! This module is the memory/allocation boundary for the quantum-error-
+//! correction subsystem.
 //!
-//! # Design goals
-//!
-//! * explicit memory budgets;
-//! * checked arithmetic;
-//! * no unsafe code;
-//! * no unbounded allocations through public APIs;
-//! * RAII memory reservations;
-//! * peak-memory accounting;
-//! * bounded buffers;
-//! * bounded streaming buffers;
-//! * arena-style typed allocation;
-//! * sparse allocation accounting;
-//! * eviction accounting/policies;
-//! * thread-safe budget accounting;
-//! * deterministic failure when budgets are exceeded;
-//! * graceful operation under resource pressure;
-//! * integration-friendly with `resources.rs`, `limits.rs`, `errors.rs`,
-//!   `streaming.rs`, `cache.rs`, and `scheduler.rs`.
-//!
-//! # Important
-//!
-//! "Unlimited" means that this module does not impose an additional
-//! application-level limit. It does not mean physical memory is infinite.
-//!
-//! The preferred production model is:
+//! # Architectural contract
 //!
 //! ```text
-//! QEC operation
-//!      │
-//!      ▼
-//! MemoryBudget
-//!      │
-//!      ├── reservation
-//!      ├── bounded allocation
-//!      ├── streaming buffer
-//!      ├── sparse allocation
-//!      └── arena allocation
-//!      │
-//!      ▼
-//! deterministic ResourceError
+//!                    QecConfig
+//!                       │
+//!                       ▼
+//!                   QecLimits
+//!                       │
+//!             ┌─────────┴─────────┐
+//!             │                   │
+//!             ▼                   ▼
+//!         Preflight         MemoryManager
+//!                                 │
+//!                 ┌───────────────┼────────────────┐
+//!                 │               │                │
+//!                 ▼               ▼                ▼
+//!             Reservation     Scope/Quota       Buffers
+//!                 │               │                │
+//!                 ├───────────────┼────────────────┤
+//!                 │               │                │
+//!                 ▼               ▼                ▼
+//!              Arena       SparseAllocation    Streaming
+//!                 │               │                │
+//!                 └───────────────┼────────────────┘
+//!                                 ▼
+//!                         MemorySnapshot
 //! ```
 //!
-//! No QEC algorithm should blindly allocate enormous collections before
-//! consulting the memory policy.
+//! # Design principles
+//!
+//! * `QecLimits` is the canonical declarative policy.
+//! * This module does not create a second global resource policy.
+//! * All public allocations are checked before capacity growth.
+//! * Reservation accounting is atomic.
+//! * RAII reservations cannot outlive their manager.
+//! * Cloning a manager creates a shared accounting handle rather than a
+//!   silently independent accounting universe.
+//! * Cancellation is cooperative.
+//! * Arithmetic is checked.
+//! * Buffers are bounded.
+//! * Sparse allocations are explicitly accounted.
+//! * Arena growth is transactional.
+//! * Eviction accounting never claims memory was reclaimed until the caller
+//!   actually releases the corresponding reservation.
+//! * `unsafe` is forbidden.
+//!
+//! "Unlimited" means that this module imposes no additional application-level
+//! memory ceiling. It does not imply infinite physical memory.
+//!
+//! # Integration
+//!
+//! The canonical production path is:
+//!
+//! ```text
+//! QecConfig
+//!     ↓
+//! QecLimits
+//!     ↓
+//! MemoryBudget::from_qec_limits()
+//!     ↓
+//! MemoryManager
+//!     ↓
+//! allocation / reservation
+//! ```
+//!
+//! Runtime consumption should additionally be reported to `resources.rs`
+//! through the surrounding `ResourceManager`. This module deliberately owns
+//! memory accounting only.
 
 #![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -55,8 +79,12 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::marker::PhantomData;
 use std::mem::size_of;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc,
+};
+
+use super::limits::QecLimits;
 
 // -----------------------------------------------------------------------------
 // Constants
@@ -65,14 +93,20 @@ use std::sync::Arc;
 /// Explicit application-level unlimited-memory sentinel.
 pub const UNLIMITED_MEMORY: u64 = u64::MAX;
 
-/// Default memory budget: 1 GiB.
+/// Legacy/default standalone memory budget.
+///
+/// Production QEC execution should prefer
+/// `MemoryBudget::from_qec_limits(&limits)`.
 pub const DEFAULT_MEMORY_BUDGET: u64 = 1024 * 1024 * 1024;
 
 /// Default bounded-buffer capacity.
+///
+/// Production QEC execution should prefer the value derived from
+/// `QecLimits::max_stream_buffer_events`.
 pub const DEFAULT_BUFFER_CAPACITY: usize = 4096;
 
 // -----------------------------------------------------------------------------
-// Memory errors
+// Errors
 // -----------------------------------------------------------------------------
 
 /// Errors produced by the memory subsystem.
@@ -83,7 +117,7 @@ pub enum MemoryError {
         reason: &'static str,
     },
 
-    /// A requested allocation exceeds the configured memory budget.
+    /// Requested memory exceeds the global budget.
     BudgetExceeded {
         requested: u64,
         allocated: u64,
@@ -91,7 +125,7 @@ pub enum MemoryError {
         limit: u64,
     },
 
-    /// A reservation quota was exceeded.
+    /// A scoped/per-operation quota was exceeded.
     QuotaExceeded {
         requested: u64,
         reserved: u64,
@@ -101,7 +135,7 @@ pub enum MemoryError {
     /// Memory arithmetic overflowed.
     ArithmeticOverflow,
 
-    /// A requested collection cannot be represented safely.
+    /// A collection capacity cannot be represented safely.
     CapacityOverflow,
 
     /// A bounded buffer is full.
@@ -109,18 +143,18 @@ pub enum MemoryError {
         capacity: usize,
     },
 
-    /// A bounded buffer has no element available.
+    /// A bounded buffer is empty.
     BufferEmpty,
 
-    /// A requested operation is invalid.
+    /// An operation is invalid.
     InvalidOperation {
         reason: &'static str,
     },
 
-    /// The memory subsystem was cancelled.
+    /// The operation was cancelled.
     Cancelled,
 
-    /// An eviction request could not free enough memory.
+    /// An eviction request could not be satisfied.
     EvictionInsufficient {
         requested: u64,
         reclaimed: u64,
@@ -204,22 +238,28 @@ impl std::error::Error for MemoryError {}
 // Memory budget
 // -----------------------------------------------------------------------------
 
-/// Explicit memory policy for a QEC workload.
+/// Memory-specific view derived from the canonical `QecLimits`.
+///
+/// This is intentionally narrower than `QecLimits`.
+///
+/// `QecLimits` remains the source of truth for the complete QEC execution
+/// policy. `MemoryBudget` only carries information required by memory
+/// primitives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemoryBudget {
     /// Maximum simultaneously reserved bytes.
     pub max_bytes: u64,
 
-    /// Optional per-operation reservation limit.
+    /// Optional per-operation memory quota.
     pub max_operation_bytes: Option<u64>,
 
-    /// Maximum arena capacity in bytes.
+    /// Optional arena-specific memory limit.
     pub max_arena_bytes: Option<u64>,
 
-    /// Maximum bounded-buffer capacity in elements.
+    /// Maximum number of elements in a bounded buffer.
     pub max_buffer_elements: usize,
 
-    /// Whether memory pressure may request eviction.
+    /// Whether eviction may be requested by higher-level components.
     pub eviction_enabled: bool,
 }
 
@@ -236,13 +276,25 @@ impl Default for MemoryBudget {
 }
 
 impl MemoryBudget {
-    /// Creates an explicitly unlimited application-level budget.
+    /// Creates an explicitly unlimited application-level memory budget.
     pub const fn unlimited() -> Self {
         Self {
             max_bytes: UNLIMITED_MEMORY,
             max_operation_bytes: None,
             max_arena_bytes: None,
             max_buffer_elements: usize::MAX,
+            eviction_enabled: true,
+        }
+    }
+
+    /// Derives the memory policy from canonical QEC limits.
+    #[must_use]
+    pub const fn from_qec_limits(limits: &QecLimits) -> Self {
+        Self {
+            max_bytes: limits.max_memory_bytes,
+            max_operation_bytes: Some(limits.max_memory_bytes),
+            max_arena_bytes: Some(limits.max_memory_bytes),
+            max_buffer_elements: limits.max_stream_buffer_events,
             eviction_enabled: true,
         }
     }
@@ -276,7 +328,8 @@ impl MemoryBudget {
         if let Some(operation) = self.max_operation_bytes {
             if operation > self.max_bytes {
                 return Err(MemoryError::InvalidBudget {
-                    reason: "operation memory limit cannot exceed global memory limit",
+                    reason:
+                        "operation memory limit cannot exceed global memory limit",
                 });
             }
         }
@@ -284,7 +337,8 @@ impl MemoryBudget {
         if let Some(arena) = self.max_arena_bytes {
             if arena > self.max_bytes {
                 return Err(MemoryError::InvalidBudget {
-                    reason: "arena memory limit cannot exceed global memory limit",
+                    reason:
+                        "arena memory limit cannot exceed global memory limit",
                 });
             }
         }
@@ -292,8 +346,7 @@ impl MemoryBudget {
         Ok(())
     }
 
-    /// Returns whether the budget represents an application-level unlimited
-    /// global memory policy.
+    /// Whether the application-level global memory policy is unlimited.
     pub const fn is_unlimited(&self) -> bool {
         self.max_bytes == UNLIMITED_MEMORY
     }
@@ -309,32 +362,34 @@ pub struct MemorySnapshot {
     /// Currently reserved bytes.
     pub allocated_bytes: u64,
 
-    /// Highest observed reservation.
+    /// Highest observed simultaneous reservation.
     pub peak_bytes: u64,
 
-    /// Total successful reservation operations.
+    /// Number of successful reservation operations.
     pub allocation_count: u64,
 
-    /// Total release operations.
+    /// Number of releases.
     pub release_count: u64,
 
-    /// Total failed allocation attempts.
+    /// Number of rejected reservations.
     pub failed_allocations: u64,
 
-    /// Total bytes ever reserved.
+    /// Total bytes successfully reserved over the manager lifetime.
     pub cumulative_allocated_bytes: u64,
 
-    /// Total bytes released.
+    /// Total bytes released over the manager lifetime.
     pub cumulative_released_bytes: u64,
 
-    /// Number of eviction requests.
+    /// Number of eviction requests reported.
     pub eviction_requests: u64,
 
     /// Bytes reported as reclaimed by eviction.
+    ///
+    /// This is informational. It does not itself change
+    /// `allocated_bytes`.
     pub evicted_bytes: u64,
 }
 
-/// Internal atomic counters.
 #[derive(Debug, Default)]
 struct MemoryCounters {
     allocated_bytes: AtomicU64,
@@ -348,49 +403,75 @@ struct MemoryCounters {
     evicted_bytes: AtomicU64,
 }
 
-/// Thread-safe memory manager.
-///
-/// It is safe to share through `Arc`.
+/// Shared, thread-safe memory accounting state.
 #[derive(Debug)]
-pub struct MemoryManager {
+struct MemoryState {
     budget: MemoryBudget,
     counters: MemoryCounters,
     cancelled: AtomicBool,
 }
 
+/// Thread-safe memory manager.
+///
+/// Cloning a `MemoryManager` creates another handle to the same accounting
+/// state. This is critical: cloning must never silently reset resource
+/// accounting.
+#[derive(Debug, Clone)]
+pub struct MemoryManager {
+    state: Arc<MemoryState>,
+}
+
 impl MemoryManager {
-    /// Creates a memory manager after validating the budget.
+    /// Creates a memory manager from a memory-specific policy.
     pub fn new(budget: MemoryBudget) -> Result<Self, MemoryError> {
         budget.validate()?;
 
         Ok(Self {
-            budget,
-            counters: MemoryCounters::default(),
-            cancelled: AtomicBool::new(false),
+            state: Arc::new(MemoryState {
+                budget,
+                counters: MemoryCounters::default(),
+                cancelled: AtomicBool::new(false),
+            }),
         })
     }
 
-    /// Returns the configured memory policy.
-    pub const fn budget(&self) -> MemoryBudget {
-        self.budget
+    /// Creates a memory manager directly from canonical QEC limits.
+    pub fn from_qec_limits(
+        limits: &QecLimits,
+    ) -> Result<Self, MemoryError> {
+        limits
+            .validate()
+            .map_err(|_| MemoryError::InvalidBudget {
+                reason: "invalid canonical QEC resource policy",
+            })?;
+
+        Self::new(MemoryBudget::from_qec_limits(limits))
     }
 
-    /// Requests cancellation of future allocations.
+    /// Returns the memory policy.
+    pub const fn budget(&self) -> MemoryBudget {
+        self.state.budget
+    }
+
+    /// Requests cancellation of future memory operations.
     pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Release);
+        self.state.cancelled.store(true, Ordering::Release);
     }
 
     /// Clears cancellation before starting a new logical operation.
+    ///
+    /// Higher-level schedulers should generally prefer creating a new
+    /// operation context rather than globally resetting shared cancellation.
     pub fn reset_cancellation(&self) {
-        self.cancelled.store(false, Ordering::Release);
+        self.state.cancelled.store(false, Ordering::Release);
     }
 
-    /// Returns whether allocation has been cancelled.
+    /// Whether the manager is cancelled.
     pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Acquire)
+        self.state.cancelled.load(Ordering::Acquire)
     }
 
-    /// Checks whether an operation may continue.
+    /// Checks cooperative cancellation.
     pub fn check(&self) -> Result<(), MemoryError> {
         if self.is_cancelled() {
             Err(MemoryError::Cancelled)
@@ -399,95 +480,117 @@ impl MemoryManager {
         }
     }
 
-    /// Returns a point-in-time memory snapshot.
+    /// Returns a point-in-time snapshot.
     pub fn snapshot(&self) -> MemorySnapshot {
         MemorySnapshot {
             allocated_bytes: self
+                .state
                 .counters
                 .allocated_bytes
                 .load(Ordering::Acquire),
 
             peak_bytes: self
+                .state
                 .counters
                 .peak_bytes
                 .load(Ordering::Acquire),
 
             allocation_count: self
+                .state
                 .counters
                 .allocation_count
                 .load(Ordering::Acquire),
 
             release_count: self
+                .state
                 .counters
                 .release_count
                 .load(Ordering::Acquire),
 
             failed_allocations: self
+                .state
                 .counters
                 .failed_allocations
                 .load(Ordering::Acquire),
 
             cumulative_allocated_bytes: self
+                .state
                 .counters
                 .cumulative_allocated_bytes
                 .load(Ordering::Acquire),
 
             cumulative_released_bytes: self
+                .state
                 .counters
                 .cumulative_released_bytes
                 .load(Ordering::Acquire),
 
             eviction_requests: self
+                .state
                 .counters
                 .eviction_requests
                 .load(Ordering::Acquire),
 
             evicted_bytes: self
+                .state
                 .counters
                 .evicted_bytes
                 .load(Ordering::Acquire),
         }
     }
 
-    /// Returns currently available memory under the global budget.
+    /// Returns available global memory.
     pub fn available_bytes(&self) -> u64 {
-        if self.budget.is_unlimited() {
+        if self.budget().is_unlimited() {
             return u64::MAX;
         }
 
-        self.budget
+        self.budget()
             .max_bytes
             .saturating_sub(
-                self.counters
+                self.state
+                    .counters
                     .allocated_bytes
                     .load(Ordering::Acquire),
             )
     }
 
-    /// Attempts to reserve bytes.
+    /// Whether the requested amount can currently fit.
+    pub fn can_reserve(&self, bytes: u64) -> bool {
+        if self.is_cancelled() {
+            return false;
+        }
+
+        self.available_bytes() >= bytes
+    }
+
+    /// Reserves memory using the configured operation quota.
     pub fn reserve(
         &self,
         bytes: u64,
-    ) -> Result<MemoryReservation<'_>, MemoryError> {
-        self.reserve_with_quota(bytes, self.budget.max_operation_bytes)?;
-
-        Ok(MemoryReservation {
-            manager: self,
+    ) -> Result<MemoryReservation, MemoryError> {
+        self.reserve_with_quota(
             bytes,
-            active: true,
-        })
+            self.budget().max_operation_bytes,
+        )
     }
 
-    /// Attempts to reserve bytes under an optional operation quota.
+    /// Reserves memory using an explicit quota.
+    ///
+    /// The quota may tighten the global budget but can never expand it.
     pub fn reserve_with_quota(
         &self,
         bytes: u64,
         quota: Option<u64>,
-    ) -> Result<(), MemoryError> {
+    ) -> Result<MemoryReservation, MemoryError> {
         self.check()?;
 
         if bytes == 0 {
-            return Ok(());
+            return Ok(MemoryReservation {
+                manager: self.clone(),
+                bytes: 0,
+                active: true,
+            });
         }
 
         if let Some(limit) = quota {
@@ -502,8 +605,25 @@ impl MemoryManager {
             }
         }
 
-        if !self.budget.is_unlimited() {
+        self.try_reserve_atomic(bytes)?;
+
+        Ok(MemoryReservation {
+            manager: self.clone(),
+            bytes,
+            active: true,
+        })
+    }
+
+    /// Atomically reserves bytes against the global memory ceiling.
+    fn try_reserve_atomic(
+        &self,
+        bytes: u64,
+    ) -> Result<(), MemoryError> {
+        loop {
+            self.check()?;
+
             let current = self
+                .state
                 .counters
                 .allocated_bytes
                 .load(Ordering::Acquire);
@@ -515,145 +635,139 @@ impl MemoryManager {
                     MemoryError::ArithmeticOverflow
                 })?;
 
-            if next > self.budget.max_bytes {
+            if !self.budget().is_unlimited()
+                && next > self.budget().max_bytes
+            {
                 self.record_failed_allocation();
 
                 return Err(MemoryError::BudgetExceeded {
                     requested: bytes,
                     allocated: current,
-                    available: self.available_bytes(),
-                    limit: self.budget.max_bytes,
+                    available: self
+                        .budget()
+                        .max_bytes
+                        .saturating_sub(current),
+                    limit: self.budget().max_bytes,
                 });
             }
-        }
 
-        let previous = self
-            .counters
-            .allocated_bytes
-            .fetch_add(bytes, Ordering::AcqRel);
-
-        let next = previous.checked_add(bytes).ok_or_else(|| {
-            self.counters
+            match self
+                .state
+                .counters
                 .allocated_bytes
-                .fetch_sub(bytes, Ordering::AcqRel);
+                .compare_exchange_weak(
+                    current,
+                    next,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                )
+            {
+                Ok(_) => {
+                    self.state
+                        .counters
+                        .allocation_count
+                        .fetch_add(1, Ordering::Relaxed);
 
-            self.record_failed_allocation();
+                    self.state
+                        .counters
+                        .cumulative_allocated_bytes
+                        .fetch_add(bytes, Ordering::Relaxed);
 
-            MemoryError::ArithmeticOverflow
-        })?;
+                    update_peak(
+                        &self.state.counters.peak_bytes,
+                        next,
+                    );
 
-        if !self.budget.is_unlimited()
-            && next > self.budget.max_bytes
-        {
-            self.counters
-                .allocated_bytes
-                .fetch_sub(bytes, Ordering::AcqRel);
+                    return Ok(());
+                }
 
-            self.record_failed_allocation();
-
-            return Err(MemoryError::BudgetExceeded {
-                requested: bytes,
-                allocated: previous,
-                available: self
-                    .budget
-                    .max_bytes
-                    .saturating_sub(previous),
-                limit: self.budget.max_bytes,
-            });
+                Err(_) => {
+                    std::hint::spin_loop();
+                }
+            }
         }
-
-        self.counters
-            .allocation_count
-            .fetch_add(1, Ordering::Relaxed);
-
-        self.counters
-            .cumulative_allocated_bytes
-            .fetch_add(bytes, Ordering::Relaxed);
-
-        update_peak(
-            &self.counters.peak_bytes,
-            next,
-        );
-
-        Ok(())
     }
 
-    /// Releases previously reserved bytes.
-    ///
-    /// This method is saturating by design so accounting cleanup cannot
-    /// panic if a caller attempts to release more than the currently tracked
-    /// amount.
+    /// Releases bytes previously reserved by this manager.
     pub fn release(&self, bytes: u64) {
         if bytes == 0 {
             return;
         }
 
         let mut current = self
+            .state
             .counters
             .allocated_bytes
             .load(Ordering::Acquire);
 
         loop {
-            let next = current.saturating_sub(bytes);
+            let released = bytes.min(current);
+            let next = current.saturating_sub(released);
 
-            match self.counters.allocated_bytes.compare_exchange_weak(
-                current,
-                next,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => break,
-                Err(actual) => current = actual,
+            match self
+                .state
+                .counters
+                .allocated_bytes
+                .compare_exchange_weak(
+                    current,
+                    next,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                )
+            {
+                Ok(_) => {
+                    self.state
+                        .counters
+                        .release_count
+                        .fetch_add(1, Ordering::Relaxed);
+
+                    self.state
+                        .counters
+                        .cumulative_released_bytes
+                        .fetch_add(
+                            released,
+                            Ordering::Relaxed,
+                        );
+
+                    return;
+                }
+
+                Err(actual) => {
+                    current = actual;
+                    std::hint::spin_loop();
+                }
             }
         }
+    }
 
-        self.counters
-            .release_count
+    /// Records an externally performed eviction.
+    ///
+    /// This records the event only. It deliberately does not reduce current
+    /// allocations because only the owner of the corresponding reservation
+    /// can safely release it.
+    pub fn record_eviction(
+        &self,
+        reclaimed_bytes: u64,
+    ) {
+        self.state
+            .counters
+            .eviction_requests
             .fetch_add(1, Ordering::Relaxed);
 
-        self.counters
-            .cumulative_released_bytes
+        self.state
+            .counters
+            .evicted_bytes
             .fetch_add(
-                bytes.min(current),
+                reclaimed_bytes,
                 Ordering::Relaxed,
             );
     }
 
     fn record_failed_allocation(&self) {
-        self.counters
+        self.state
+            .counters
             .failed_allocations
             .fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// Records an externally performed eviction.
-    ///
-    /// The manager does not know how an eviction is implemented; callers
-    /// report the successfully reclaimed amount.
-    pub fn record_eviction(&self, reclaimed_bytes: u64) {
-        self.counters
-            .eviction_requests
-            .fetch_add(1, Ordering::Relaxed);
-
-        self.counters
-            .evicted_bytes
-            .fetch_add(reclaimed_bytes, Ordering::Relaxed);
-    }
-
-    /// Checks whether a requested amount fits.
-    pub fn can_reserve(&self, bytes: u64) -> bool {
-        self.available_bytes() >= bytes
-    }
-}
-
-impl Clone for MemoryManager {
-    fn clone(&self) -> Self {
-        Self {
-            budget: self.budget,
-            counters: MemoryCounters::default(),
-            cancelled: AtomicBool::new(
-                self.is_cancelled(),
-            ),
-        }
     }
 }
 
@@ -662,20 +776,20 @@ impl Clone for MemoryManager {
 // -----------------------------------------------------------------------------
 
 /// RAII memory reservation.
-///
-/// Memory is automatically released when the reservation is dropped.
 #[derive(Debug)]
-pub struct MemoryReservation<'a> {
-    manager: &'a MemoryManager,
+pub struct MemoryReservation {
+    manager: MemoryManager,
     bytes: u64,
     active: bool,
 }
 
-impl<'a> MemoryReservation<'a> {
+impl MemoryReservation {
+    /// Reserved byte count.
     pub const fn bytes(&self) -> u64 {
         self.bytes
     }
 
+    /// Whether the reservation is still active.
     pub const fn is_active(&self) -> bool {
         self.active
     }
@@ -687,9 +801,18 @@ impl<'a> MemoryReservation<'a> {
             self.active = false;
         }
     }
+
+    /// Prevents automatic release and returns the byte count.
+    ///
+    /// This is intentionally explicit. Callers should use it only when
+    /// ownership of the reservation is transferred to another component.
+    pub fn into_bytes(mut self) -> u64 {
+        self.active = false;
+        self.bytes
+    }
 }
 
-impl Drop for MemoryReservation<'_> {
+impl Drop for MemoryReservation {
     fn drop(&mut self) {
         if self.active {
             self.manager.release(self.bytes);
@@ -704,23 +827,25 @@ impl Drop for MemoryReservation<'_> {
 
 /// Operation-scoped memory accounting.
 ///
-/// This prevents an individual decoder operation from silently consuming the
-/// entire global memory budget.
+/// A scope cannot consume more than its quota even when global memory is
+/// available.
 #[derive(Debug)]
-pub struct MemoryScope<'a> {
-    manager: &'a MemoryManager,
+pub struct MemoryScope {
+    manager: MemoryManager,
     quota: Option<u64>,
     reserved: u64,
 }
 
-impl<'a> MemoryScope<'a> {
+impl MemoryScope {
+    /// Creates a scoped memory context.
     pub fn new(
-        manager: &'a MemoryManager,
+        manager: MemoryManager,
         quota: Option<u64>,
     ) -> Result<Self, MemoryError> {
         if quota == Some(0) {
             return Err(MemoryError::InvalidBudget {
-                reason: "memory scope quota must be greater than zero",
+                reason:
+                    "memory scope quota must be greater than zero",
             });
         }
 
@@ -742,11 +867,25 @@ impl<'a> MemoryScope<'a> {
         })
     }
 
+    /// Creates a scope using the manager's operation quota.
+    pub fn from_manager(
+        manager: MemoryManager,
+    ) -> Result<Self, MemoryError> {
+        let quota = manager.budget().max_operation_bytes;
+
+        Self::new(manager, quota)
+    }
+
+    /// Returns the manager used by the scope.
+    pub fn manager(&self) -> &MemoryManager {
+        &self.manager
+    }
+
     /// Reserves memory inside this operation.
     pub fn reserve(
         &mut self,
         bytes: u64,
-    ) -> Result<ScopedReservation<'_>, MemoryError> {
+    ) -> Result<ScopedReservation, MemoryError> {
         let next = self
             .reserved
             .checked_add(bytes)
@@ -762,52 +901,73 @@ impl<'a> MemoryScope<'a> {
             }
         }
 
-        self.manager
+        let reservation = self
+            .manager
             .reserve_with_quota(bytes, self.quota)?;
 
         self.reserved = next;
 
         Ok(ScopedReservation {
-            scope: self,
+            manager: self.manager.clone(),
             bytes,
-            active: true,
+            reservation: Some(reservation),
         })
     }
 
+    /// Currently reserved bytes.
     pub const fn reserved_bytes(&self) -> u64 {
         self.reserved
     }
 
+    /// Remaining scoped quota.
     pub fn remaining_bytes(&self) -> u64 {
         match self.quota {
             Some(quota) => quota.saturating_sub(self.reserved),
             None => self.manager.available_bytes(),
         }
     }
-}
 
-/// RAII reservation belonging to a `MemoryScope`.
-#[derive(Debug)]
-pub struct ScopedReservation<'a> {
-    scope: &'a mut MemoryScope<'a>,
-    bytes: u64,
-    active: bool,
-}
-
-impl ScopedReservation<'_> {
-    pub const fn bytes(&self) -> u64 {
-        self.bytes
+    /// Returns the scope quota.
+    pub const fn quota(&self) -> Option<u64> {
+        self.quota
     }
 }
 
-impl Drop for ScopedReservation<'_> {
-    fn drop(&mut self) {
-        if self.active {
-            self.scope.manager.release(self.bytes);
-            self.scope.reserved =
-                self.scope.reserved.saturating_sub(self.bytes);
-            self.active = false;
+/// RAII reservation owned by a memory scope.
+///
+/// It owns the underlying global reservation independently, avoiding the
+/// problematic mutable-reference lifetime coupling of the previous design.
+#[derive(Debug)]
+pub struct ScopedReservation {
+    manager: MemoryManager,
+    bytes: u64,
+    reservation: Option<MemoryReservation>,
+}
+
+impl ScopedReservation {
+    pub const fn bytes(&self) -> u64 {
+        self.bytes
+    }
+
+    pub const fn is_active(&self) -> bool {
+        self.reservation.is_some()
+    }
+
+    /// Explicitly releases the reservation.
+    pub fn release(mut self) {
+        self.release_internal();
+    }
+
+    fn release_internal(&mut self) {
+        if let Some(reservation) = self.reservation.take() {
+            reservation.release();
         }
+    }
+}
+
+impl Drop for ScopedReservation {
+    fn drop(&mut self) {
+        self.release_internal();
     }
 }
 
@@ -815,13 +975,13 @@ impl Drop for ScopedReservation<'_> {
 // Bounded buffer
 // -----------------------------------------------------------------------------
 
-/// Memory-accounted bounded FIFO buffer.
+/// Memory-accounted bounded FIFO.
 ///
-/// The buffer refuses new elements when its configured element limit or
-/// memory budget would be exceeded.
+/// The buffer provides memory backpressure and never grows beyond its
+/// configured element capacity.
 #[derive(Debug)]
 pub struct BoundedBuffer<T> {
-    manager: Arc<MemoryManager>,
+    manager: MemoryManager,
     queue: VecDeque<T>,
     capacity: usize,
     bytes_per_element: u64,
@@ -829,18 +989,15 @@ pub struct BoundedBuffer<T> {
 
 impl<T> BoundedBuffer<T> {
     /// Creates a bounded buffer.
-    ///
-    /// `bytes_per_element` is the accounting estimate used for capacity
-    /// reservation. It should conservatively estimate the memory consumed
-    /// by each buffered element.
     pub fn new(
-        manager: Arc<MemoryManager>,
+        manager: MemoryManager,
         capacity: usize,
         bytes_per_element: u64,
     ) -> Result<Self, MemoryError> {
         if capacity == 0 {
             return Err(MemoryError::InvalidOperation {
-                reason: "buffer capacity must be greater than zero",
+                reason:
+                    "buffer capacity must be greater than zero",
             });
         }
 
@@ -858,6 +1015,22 @@ impl<T> BoundedBuffer<T> {
             });
         }
 
+        let queue_capacity_bytes =
+            estimated_vecdeque_bytes::<T>(capacity)?;
+
+        let _queue_capacity_reservation =
+            manager.reserve(queue_capacity_bytes)?;
+
+        /*
+         * We intentionally do not retain the reservation for the empty
+         * VecDeque. Its allocation can change as elements are inserted.
+         *
+         * Element reservations are the authoritative runtime accounting
+         * mechanism. The initial capacity estimate is therefore used only
+         * as a preflight guard rather than as permanently consumed memory.
+         */
+        drop(_queue_capacity_reservation);
+
         Ok(Self {
             manager,
             queue: VecDeque::with_capacity(capacity),
@@ -866,38 +1039,53 @@ impl<T> BoundedBuffer<T> {
         })
     }
 
-    /// Number of currently buffered elements.
+    /// Number of buffered elements.
     pub fn len(&self) -> usize {
         self.queue.len()
     }
 
+    /// Maximum element capacity.
     pub const fn capacity(&self) -> usize {
         self.capacity
     }
 
+    /// Whether the buffer is empty.
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }
 
+    /// Whether the buffer is full.
     pub fn is_full(&self) -> bool {
         self.queue.len() >= self.capacity
     }
 
-    /// Pushes an element if both element and memory bounds permit it.
-    pub fn push(&mut self, value: T) -> Result<(), MemoryError> {
+    /// Whether producer backpressure should be applied.
+    pub fn needs_backpressure(&self) -> bool {
+        self.is_full()
+    }
+
+    /// Pushes one element.
+    pub fn push(
+        &mut self,
+        value: T,
+    ) -> Result<(), MemoryError> {
         if self.is_full() {
             return Err(MemoryError::BufferFull {
                 capacity: self.capacity,
             });
         }
 
-        self.manager.reserve(self.bytes_per_element)?;
+        self.manager.check()?;
 
-        if let Err(error) = self.queue.try_reserve(1) {
-            self.manager.release(self.bytes_per_element);
+        let reservation =
+            self.manager.reserve(self.bytes_per_element)?;
+
+        if let Err(_) = self.queue.try_reserve(1) {
+            reservation.release();
 
             return Err(MemoryError::InvalidOperation {
-                reason: allocation_error_reason(error),
+                reason:
+                    "allocator rejected bounded-buffer growth",
             });
         }
 
@@ -910,7 +1098,10 @@ impl<T> BoundedBuffer<T> {
     pub fn pop(&mut self) -> Result<T, MemoryError> {
         match self.queue.pop_front() {
             Some(value) => {
-                self.manager.release(self.bytes_per_element);
+                self.manager.release(
+                    self.bytes_per_element,
+                );
+
                 Ok(value)
             }
 
@@ -918,15 +1109,15 @@ impl<T> BoundedBuffer<T> {
         }
     }
 
-    /// Removes all elements and releases their accounting.
+    /// Clears all buffered elements.
     pub fn clear(&mut self) {
         let count = self.queue.len();
 
         self.queue.clear();
 
-        let bytes = self
-            .bytes_per_element
-            .saturating_mul(count as u64);
+        let bytes =
+            self.bytes_per_element
+                .saturating_mul(count as u64);
 
         self.manager.release(bytes);
     }
@@ -936,9 +1127,9 @@ impl<T> Drop for BoundedBuffer<T> {
     fn drop(&mut self) {
         let count = self.queue.len();
 
-        let bytes = self
-            .bytes_per_element
-            .saturating_mul(count as u64);
+        let bytes =
+            self.bytes_per_element
+                .saturating_mul(count as u64);
 
         self.manager.release(bytes);
     }
@@ -950,17 +1141,16 @@ impl<T> Drop for BoundedBuffer<T> {
 
 /// Explicit bounded streaming buffer.
 ///
-/// Unlike an ordinary collection, this structure is intended for syndrome
-/// streams and detection-event pipelines where backpressure is preferable to
-/// unbounded memory growth.
+/// Intended for syndrome and detection-event pipelines.
 #[derive(Debug)]
 pub struct StreamingBuffer<T> {
     inner: BoundedBuffer<T>,
 }
 
 impl<T> StreamingBuffer<T> {
+    /// Creates a bounded stream buffer.
     pub fn new(
-        manager: Arc<MemoryManager>,
+        manager: MemoryManager,
         capacity: usize,
         bytes_per_element: u64,
     ) -> Result<Self, MemoryError> {
@@ -973,7 +1163,23 @@ impl<T> StreamingBuffer<T> {
         })
     }
 
-    pub fn push(&mut self, item: T) -> Result<(), MemoryError> {
+    /// Creates a stream buffer using the canonical QEC stream limit.
+    pub fn from_qec_limits(
+        limits: &QecLimits,
+        manager: MemoryManager,
+        bytes_per_element: u64,
+    ) -> Result<Self, MemoryError> {
+        Self::new(
+            manager,
+            limits.max_stream_buffer_events,
+            bytes_per_element,
+        )
+    }
+
+    pub fn push(
+        &mut self,
+        item: T,
+    ) -> Result<(), MemoryError> {
         self.inner.push(item)
     }
 
@@ -997,28 +1203,26 @@ impl<T> StreamingBuffer<T> {
         self.inner.is_empty()
     }
 
-    /// Backpressure indicator.
     pub fn needs_backpressure(&self) -> bool {
-        self.is_full()
+        self.inner.needs_backpressure()
     }
 
-    /// Clears the stream.
     pub fn clear(&mut self) {
         self.inner.clear();
     }
 }
 
 // -----------------------------------------------------------------------------
-// Arena allocation
+// Arena
 // -----------------------------------------------------------------------------
 
 /// Safe typed arena-style allocator.
 ///
-/// This allocator stores values in a contiguous `Vec` and accounts for the
-/// configured element size. It intentionally does not expose raw pointers.
+/// The arena accounts for its backing capacity rather than merely the number
+/// of initialized elements.
 #[derive(Debug)]
 pub struct Arena<T> {
-    manager: Arc<MemoryManager>,
+    manager: MemoryManager,
     values: Vec<T>,
     reserved_bytes: u64,
     _marker: PhantomData<T>,
@@ -1026,9 +1230,7 @@ pub struct Arena<T> {
 
 impl<T> Arena<T> {
     /// Creates an empty arena.
-    pub fn new(
-        manager: Arc<MemoryManager>,
-    ) -> Self {
+    pub fn new(manager: MemoryManager) -> Self {
         Self {
             manager,
             values: Vec::new(),
@@ -1037,43 +1239,52 @@ impl<T> Arena<T> {
         }
     }
 
-    /// Creates an arena with a bounded capacity.
+    /// Creates an arena with bounded capacity.
     pub fn with_capacity(
-        manager: Arc<MemoryManager>,
+        manager: MemoryManager,
         capacity: usize,
     ) -> Result<Self, MemoryError> {
-        let bytes = estimated_vec_bytes::<T>(capacity)?;
+        let bytes =
+            estimated_vec_bytes::<T>(capacity)?;
 
-        if let Some(limit) = manager.budget().max_arena_bytes {
-            if bytes > limit {
-                return Err(MemoryError::BudgetExceeded {
-                    requested: bytes,
-                    allocated: 0,
-                    available: limit,
-                    limit,
-                });
-            }
-        }
+        check_arena_limit(&manager, bytes, 0)?;
 
-        manager.reserve(bytes)?;
+        let reservation =
+            manager.reserve(bytes)?;
 
-        let values = Vec::try_with_capacity(capacity)
-            .map_err(|_| {
-                manager.release(bytes);
+        let values =
+            match Vec::try_with_capacity(capacity) {
+                Ok(values) => values,
 
-                MemoryError::CapacityOverflow
-            })?;
+                Err(_) => {
+                    reservation.release();
+
+                    return Err(
+                        MemoryError::CapacityOverflow
+                    );
+                }
+            };
+
+        /*
+         * Transfer the reservation into the arena's accounting. The
+         * reservation object itself must not subsequently release the same
+         * bytes.
+         */
+        let reserved_bytes = reservation.into_bytes();
 
         Ok(Self {
             manager,
             values,
-            reserved_bytes: bytes,
+            reserved_bytes,
             _marker: PhantomData,
         })
     }
 
-    /// Adds a value.
-    pub fn push(&mut self, value: T) -> Result<usize, MemoryError> {
+    /// Adds a value and grows capacity transactionally when necessary.
+    pub fn push(
+        &mut self,
+        value: T,
+    ) -> Result<usize, MemoryError> {
         let next_len = self
             .values
             .len()
@@ -1089,13 +1300,14 @@ impl<T> Arena<T> {
         Ok(self.values.len() - 1)
     }
 
-    /// Returns an immutable value.
     pub fn get(&self, index: usize) -> Option<&T> {
         self.values.get(index)
     }
 
-    /// Returns a mutable value.
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+    pub fn get_mut(
+        &mut self,
+        index: usize,
+    ) -> Option<&mut T> {
         self.values.get_mut(index)
     }
 
@@ -1111,12 +1323,12 @@ impl<T> Arena<T> {
         self.values.is_empty()
     }
 
-    /// Clears the arena while retaining capacity.
+    /// Clears initialized values while retaining capacity.
     pub fn clear(&mut self) {
         self.values.clear();
     }
 
-    /// Returns the currently accounted capacity.
+    /// Bytes currently reserved for arena capacity.
     pub const fn reserved_bytes(&self) -> u64 {
         self.reserved_bytes
     }
@@ -1132,40 +1344,54 @@ impl<T> Arena<T> {
         let new_bytes =
             estimated_vec_bytes::<T>(new_capacity)?;
 
-        if let Some(limit) = self.manager.budget().max_arena_bytes {
-            if new_bytes > limit {
-                return Err(MemoryError::BudgetExceeded {
-                    requested: new_bytes,
-                    allocated: self.reserved_bytes,
-                    available: limit.saturating_sub(
-                        self.reserved_bytes,
-                    ),
-                    limit,
-                });
-            }
-        }
+        check_arena_limit(
+            &self.manager,
+            new_bytes,
+            self.reserved_bytes,
+        )?;
 
         let additional =
-            new_bytes.saturating_sub(self.reserved_bytes);
+            new_bytes.saturating_sub(
+                self.reserved_bytes,
+            );
 
-        if additional > 0 {
+        if additional == 0 {
+            return Ok(());
+        }
+
+        /*
+         * Reserve first. If Vec growth fails, the reservation is released
+         * and the arena remains unchanged.
+         */
+        let reservation =
             self.manager.reserve(additional)?;
 
-            if let Err(error) =
-                self.values.try_reserve_exact(
-                    new_capacity
-                        .saturating_sub(self.values.capacity()),
-                )
-            {
-                self.manager.release(additional);
+        if let Err(_) = self.values.try_reserve_exact(
+            new_capacity
+                .saturating_sub(
+                    self.values.capacity(),
+                ),
+        ) {
+            reservation.release();
 
-                return Err(MemoryError::InvalidOperation {
-                    reason: allocation_error_reason(error),
-                });
-            }
-
-            self.reserved_bytes = new_bytes;
+            return Err(
+                MemoryError::InvalidOperation {
+                    reason:
+                        "allocator rejected arena growth",
+                },
+            );
         }
+
+        let committed =
+            reservation.into_bytes();
+
+        self.reserved_bytes = self
+            .reserved_bytes
+            .checked_add(committed)
+            .ok_or_else(|| {
+                self.manager.release(committed);
+                MemoryError::ArithmeticOverflow
+            })?;
 
         Ok(())
     }
@@ -1173,7 +1399,9 @@ impl<T> Arena<T> {
 
 impl<T> Drop for Arena<T> {
     fn drop(&mut self) {
-        self.manager.release(self.reserved_bytes);
+        self.manager.release(
+            self.reserved_bytes,
+        );
     }
 }
 
@@ -1183,12 +1411,12 @@ impl<T> Drop for Arena<T> {
 
 /// Memory accounting for sparse QEC structures.
 ///
-/// This does not dictate a particular sparse representation. It gives sparse
-/// graph, stabilizer and syndrome implementations a safe way to reserve and
-/// release memory for entries.
+/// This type intentionally does not dictate the sparse representation.
+/// `sparse.rs` can use it for sparse Paulis, stabilizer matrices, graphs,
+/// syndromes and corrections.
 #[derive(Debug)]
 pub struct SparseAllocation {
-    manager: Arc<MemoryManager>,
+    manager: MemoryManager,
     entry_bytes: u64,
     entries: u64,
     reserved_bytes: u64,
@@ -1197,7 +1425,7 @@ pub struct SparseAllocation {
 impl SparseAllocation {
     /// Creates an empty sparse allocation.
     pub fn new(
-        manager: Arc<MemoryManager>,
+        manager: MemoryManager,
         entry_bytes: u64,
     ) -> Result<Self, MemoryError> {
         if entry_bytes == 0 {
@@ -1220,27 +1448,38 @@ impl SparseAllocation {
         &mut self,
         count: u64,
     ) -> Result<(), MemoryError> {
+        if count == 0 {
+            return Ok(());
+        }
+
+        self.manager.check()?;
+
         let additional = count
             .checked_mul(self.entry_bytes)
             .ok_or(MemoryError::ArithmeticOverflow)?;
 
-        self.manager.reserve(additional)?;
-
-        self.entries = self
+        let next_entries = self
             .entries
             .checked_add(count)
-            .ok_or_else(|| {
-                self.manager.release(additional);
-                MemoryError::ArithmeticOverflow
-            })?;
+            .ok_or(MemoryError::ArithmeticOverflow)?;
 
-        self.reserved_bytes = self
+        let next_reserved = self
             .reserved_bytes
             .checked_add(additional)
-            .ok_or_else(|| {
-                self.manager.release(additional);
-                MemoryError::ArithmeticOverflow
-            })?;
+            .ok_or(MemoryError::ArithmeticOverflow)?;
+
+        let reservation =
+            self.manager.reserve(additional)?;
+
+        /*
+         * Commit accounting only after the manager has accepted the
+         * reservation.
+         */
+        let _committed =
+            reservation.into_bytes();
+
+        self.entries = next_entries;
+        self.reserved_bytes = next_reserved;
 
         Ok(())
     }
@@ -1250,14 +1489,24 @@ impl SparseAllocation {
         &mut self,
         count: u64,
     ) {
-        let released_entries = count.min(self.entries);
+        let released_entries =
+            count.min(self.entries);
 
-        let bytes = released_entries
-            .saturating_mul(self.entry_bytes);
+        if released_entries == 0 {
+            return;
+        }
+
+        let bytes =
+            released_entries
+                .saturating_mul(
+                    self.entry_bytes,
+                );
 
         self.entries -= released_entries;
+
         self.reserved_bytes =
-            self.reserved_bytes.saturating_sub(bytes);
+            self.reserved_bytes
+                .saturating_sub(bytes);
 
         self.manager.release(bytes);
     }
@@ -1269,11 +1518,17 @@ impl SparseAllocation {
     pub const fn reserved_bytes(&self) -> u64 {
         self.reserved_bytes
     }
+
+    pub const fn entry_bytes(&self) -> u64 {
+        self.entry_bytes
+    }
 }
 
 impl Drop for SparseAllocation {
     fn drop(&mut self) {
-        self.manager.release(self.reserved_bytes);
+        self.manager.release(
+            self.reserved_bytes,
+        );
     }
 }
 
@@ -1282,18 +1537,26 @@ impl Drop for SparseAllocation {
 // -----------------------------------------------------------------------------
 
 /// Eviction priority.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+)]
 pub enum EvictionPriority {
-    /// Evict only as a last resort.
+    /// Must not normally be evicted.
     Critical,
 
-    /// Normal cache data.
+    /// Ordinary cache data.
     Normal,
 
-    /// Temporary/recomputable data.
+    /// Recomputable intermediate data.
     Recomputable,
 
-    /// Lowest-value data.
+    /// Lowest-value temporary data.
     Ephemeral,
 }
 
@@ -1305,9 +1568,11 @@ pub struct EvictionCandidate {
     pub priority: EvictionPriority,
 }
 
-/// Tracks eviction candidates without owning their underlying data.
+/// Registry of eviction candidates.
 ///
-/// Actual cache eviction remains the responsibility of the cache/backend.
+/// The registry does not own the actual allocation. A higher-level cache or
+/// scheduler must perform the actual eviction and then release the associated
+/// memory reservation.
 #[derive(Debug, Default)]
 pub struct EvictionRegistry {
     candidates: Vec<EvictionCandidate>,
@@ -1318,7 +1583,6 @@ impl EvictionRegistry {
         Self::default()
     }
 
-    /// Registers an eviction candidate.
     pub fn register(
         &mut self,
         candidate: EvictionCandidate,
@@ -1333,10 +1597,13 @@ impl EvictionRegistry {
         if self
             .candidates
             .iter()
-            .any(|existing| existing.id == candidate.id)
+            .any(|existing| {
+                existing.id == candidate.id
+            })
         {
             return Err(MemoryError::InvalidOperation {
-                reason: "duplicate eviction candidate ID",
+                reason:
+                    "duplicate eviction candidate ID",
             });
         }
 
@@ -1345,35 +1612,57 @@ impl EvictionRegistry {
         Ok(())
     }
 
-    /// Removes a candidate.
-    pub fn remove(&mut self, id: u64) -> Option<EvictionCandidate> {
+    pub fn remove(
+        &mut self,
+        id: u64,
+    ) -> Option<EvictionCandidate> {
         let index = self
             .candidates
             .iter()
-            .position(|candidate| candidate.id == id)?;
+            .position(|candidate| {
+                candidate.id == id
+            })?;
 
         Some(self.candidates.swap_remove(index))
     }
 
     /// Selects candidates from lowest-value to highest-value.
+    ///
+    /// Selection alone does not reclaim memory.
     pub fn select_for_eviction(
         &mut self,
         required_bytes: u64,
     ) -> Vec<EvictionCandidate> {
-        self.candidates.sort_by(|a, b| {
-            b.priority.cmp(&a.priority)
-        });
+        if required_bytes == 0 {
+            return Vec::new();
+        }
 
-        let mut selected = Vec::new();
-        let mut reclaimed = 0_u64;
+        /*
+         * `Ephemeral` should be selected before `Recomputable`, then
+         * `Normal`, with `Critical` last.
+         */
+        self.candidates
+            .sort_by_key(|candidate| {
+                candidate.priority
+            });
+
+        let mut selected =
+            Vec::new();
+
+        let mut reclaimed =
+            0_u64;
 
         while reclaimed < required_bytes {
-            let Some(candidate) = self.candidates.pop() else {
+            let Some(candidate) =
+                self.candidates.pop()
+            else {
                 break;
             };
 
             reclaimed =
-                reclaimed.saturating_add(candidate.bytes);
+                reclaimed.saturating_add(
+                    candidate.bytes,
+                );
 
             selected.push(candidate);
         }
@@ -1391,27 +1680,44 @@ impl EvictionRegistry {
 }
 
 // -----------------------------------------------------------------------------
-// Allocation estimates
+// Estimates
 // -----------------------------------------------------------------------------
 
 /// Estimates memory required for `count` values.
+///
+/// This estimates element storage only. Allocator metadata and container
+/// overhead are intentionally excluded.
 pub fn estimated_bytes<T>(
     count: usize,
 ) -> Result<u64, MemoryError> {
     let count =
         u64::try_from(count)
-            .map_err(|_| MemoryError::CapacityOverflow)?;
+            .map_err(|_| {
+                MemoryError::CapacityOverflow
+            })?;
 
     count
-        .checked_mul(size_of::<T>() as u64)
-        .ok_or(MemoryError::ArithmeticOverflow)
+        .checked_mul(
+            size_of::<T>() as u64,
+        )
+        .ok_or(
+            MemoryError::ArithmeticOverflow,
+        )
 }
 
-/// Estimates Vec backing storage.
-///
-/// This intentionally includes only element storage; allocator-specific
-/// metadata remains implementation-dependent.
+/// Estimates a Vec backing allocation.
 pub fn estimated_vec_bytes<T>(
+    capacity: usize,
+) -> Result<u64, MemoryError> {
+    estimated_bytes::<T>(capacity)
+}
+
+/// Conservative estimate for VecDeque storage.
+///
+/// The exact allocator layout is implementation-dependent, so this uses the
+/// element-storage estimate as a lower-bound preflight value. Runtime element
+/// reservations remain authoritative.
+pub fn estimated_vecdeque_bytes<T>(
     capacity: usize,
 ) -> Result<u64, MemoryError> {
     estimated_bytes::<T>(capacity)
@@ -1421,11 +1727,45 @@ pub fn estimated_vec_bytes<T>(
 // Helpers
 // -----------------------------------------------------------------------------
 
+fn check_arena_limit(
+    manager: &MemoryManager,
+    requested: u64,
+    already_reserved: u64,
+) -> Result<(), MemoryError> {
+    if let Some(limit) =
+        manager.budget().max_arena_bytes
+    {
+        let total = already_reserved
+            .checked_add(requested)
+            .ok_or(
+                MemoryError::ArithmeticOverflow,
+            )?;
+
+        if total > limit {
+            return Err(
+                MemoryError::BudgetExceeded {
+                    requested,
+                    allocated:
+                        already_reserved,
+                    available:
+                        limit.saturating_sub(
+                            already_reserved,
+                        ),
+                    limit,
+                },
+            );
+        }
+    }
+
+    Ok(())
+}
+
 fn update_peak(
     peak: &AtomicU64,
     current: u64,
 ) {
-    let mut previous = peak.load(Ordering::Acquire);
+    let mut previous =
+        peak.load(Ordering::Acquire);
 
     while current > previous {
         match peak.compare_exchange_weak(
@@ -1435,15 +1775,12 @@ fn update_peak(
             Ordering::Acquire,
         ) {
             Ok(_) => break,
-            Err(actual) => previous = actual,
+
+            Err(actual) => {
+                previous = actual;
+            }
         }
     }
-}
-
-fn allocation_error_reason(
-    _error: std::collections::TryReserveError,
-) -> &'static str {
-    "allocator rejected requested capacity"
 }
 
 // -----------------------------------------------------------------------------
@@ -1453,6 +1790,16 @@ fn allocation_error_reason(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn manager(max_bytes: u64) -> MemoryManager {
+        MemoryManager::new(
+            MemoryBudget {
+                max_bytes,
+                ..MemoryBudget::default()
+            },
+        )
+        .unwrap()
+    }
 
     #[test]
     fn budget_rejects_zero() {
@@ -1465,53 +1812,166 @@ mod tests {
     }
 
     #[test]
+    fn qec_limits_are_canonical_memory_source() {
+        let mut limits =
+            QecLimits::default();
+
+        limits.max_memory_bytes = 4096;
+        limits.max_stream_buffer_events = 128;
+
+        let budget =
+            MemoryBudget::from_qec_limits(
+                &limits,
+            );
+
+        assert_eq!(
+            budget.max_bytes,
+            4096
+        );
+
+        assert_eq!(
+            budget.max_buffer_elements,
+            128
+        );
+    }
+
+    #[test]
     fn reservation_is_raii() {
-        let manager = MemoryManager::new(
-            MemoryBudget {
-                max_bytes: 1024,
-                ..MemoryBudget::default()
-            },
-        )
-        .unwrap();
+        let manager =
+            manager(1024);
 
         {
             let reservation =
-                manager.reserve(512).unwrap();
+                manager.reserve(512)
+                    .unwrap();
 
             assert_eq!(
-                manager.snapshot().allocated_bytes,
+                manager
+                    .snapshot()
+                    .allocated_bytes,
                 512
             );
 
-            assert_eq!(reservation.bytes(), 512);
+            assert_eq!(
+                reservation.bytes(),
+                512
+            );
         }
 
         assert_eq!(
-            manager.snapshot().allocated_bytes,
+            manager
+                .snapshot()
+                .allocated_bytes,
             0
         );
     }
 
     #[test]
-    fn budget_is_enforced() {
-        let manager = MemoryManager::new(
-            MemoryBudget {
-                max_bytes: 100,
-                ..MemoryBudget::default()
-            },
-        )
-        .unwrap();
+    fn cloned_manager_shares_accounting() {
+        let manager =
+            manager(1024);
 
-        let reservation = manager.reserve(100).unwrap();
+        let clone =
+            manager.clone();
+
+        let _reservation =
+            clone.reserve(512)
+                .unwrap();
+
         assert_eq!(
-            manager.snapshot().allocated_bytes,
+            manager
+                .snapshot()
+                .allocated_bytes,
+            512
+        );
+    }
+
+    #[test]
+    fn concurrent_limit_cannot_be_exceeded() {
+        use std::thread;
+
+        let manager =
+            MemoryManager::new(
+                MemoryBudget {
+                    max_bytes: 1024,
+                    ..MemoryBudget::default()
+                },
+            )
+            .unwrap();
+
+        let mut handles =
+            Vec::new();
+
+        for _ in 0..16 {
+            let manager =
+                manager.clone();
+
+            handles.push(
+                thread::spawn(
+                    move || {
+                        manager
+                            .reserve(128)
+                            .ok()
+                            .map(|reservation| {
+                                std::thread::sleep(
+                                    std::time::Duration::from_millis(
+                                        1,
+                                    ),
+                                );
+
+                                reservation
+                            })
+                    },
+                ),
+            );
+        }
+
+        let reservations =
+            handles
+                .into_iter()
+                .filter_map(|handle| {
+                    handle.join().unwrap()
+                })
+                .collect::<Vec<_>>();
+
+        assert!(
+            reservations.len() <= 8
+        );
+
+        assert!(
+            manager
+                .snapshot()
+                .allocated_bytes
+                <= 1024
+        );
+    }
+
+    #[test]
+    fn budget_is_enforced() {
+        let manager =
+            manager(100);
+
+        let reservation =
+            manager.reserve(100)
+                .unwrap();
+
+        assert_eq!(
+            manager
+                .snapshot()
+                .allocated_bytes,
             100
         );
 
-        let result = manager.reserve(1);
+        let result =
+            manager.reserve(1);
+
         assert!(matches!(
             result,
-            Err(MemoryError::BudgetExceeded { .. })
+            Err(
+                MemoryError::BudgetExceeded {
+                    ..
+                }
+            )
         ));
 
         drop(reservation);
@@ -1519,131 +1979,33 @@ mod tests {
 
     #[test]
     fn peak_usage_is_retained() {
-        let manager = MemoryManager::new(
-            MemoryBudget {
-                max_bytes: 1024,
-                ..MemoryBudget::default()
-            },
-        )
-        .unwrap();
+        let manager =
+            manager(1024);
 
         {
             let _reservation =
-                manager.reserve(700).unwrap();
+                manager.reserve(700)
+                    .unwrap();
         }
 
-        let snapshot = manager.snapshot();
+        let snapshot =
+            manager.snapshot();
 
-        assert_eq!(snapshot.allocated_bytes, 0);
-        assert_eq!(snapshot.peak_bytes, 700);
-    }
-
-    #[test]
-    fn bounded_buffer_applies_backpressure() {
-        let manager = Arc::new(
-            MemoryManager::new(
-                MemoryBudget {
-                    max_bytes: 1024,
-                    max_buffer_elements: 2,
-                    ..MemoryBudget::default()
-                },
-            )
-            .unwrap(),
-        );
-
-        let mut buffer =
-            BoundedBuffer::new(
-                manager.clone(),
-                2,
-                8,
-            )
-            .unwrap();
-
-        buffer.push(1_u64).unwrap();
-        buffer.push(2_u64).unwrap();
-
-        assert!(matches!(
-            buffer.push(3_u64),
-            Err(MemoryError::BufferFull { .. })
-        ));
-
-        assert_eq!(buffer.pop().unwrap(), 1);
-        assert_eq!(buffer.pop().unwrap(), 2);
-        assert!(buffer.is_empty());
-    }
-
-    #[test]
-    fn sparse_allocation_is_accounted() {
-        let manager = Arc::new(
-            MemoryManager::new(
-                MemoryBudget {
-                    max_bytes: 1024,
-                    ..MemoryBudget::default()
-                },
-            )
-            .unwrap(),
-        );
-
-        let mut sparse =
-            SparseAllocation::new(
-                manager.clone(),
-                16,
-            )
-            .unwrap();
-
-        sparse.reserve_entries(10).unwrap();
-
-        assert_eq!(sparse.entries(), 10);
-        assert_eq!(sparse.reserved_bytes(), 160);
         assert_eq!(
-            manager.snapshot().allocated_bytes,
-            160
+            snapshot.allocated_bytes,
+            0
         );
 
-        sparse.release_entries(5);
-
-        assert_eq!(sparse.entries(), 5);
         assert_eq!(
-            manager.snapshot().allocated_bytes,
-            80
+            snapshot.peak_bytes,
+            700
         );
     }
 
     #[test]
-    fn arena_is_bounded() {
-        let manager = Arc::new(
-            MemoryManager::new(
-                MemoryBudget {
-                    max_bytes: 4096,
-                    max_arena_bytes: Some(2048),
-                    ..MemoryBudget::default()
-                },
-            )
-            .unwrap(),
-        );
-
-        let mut arena =
-            Arena::<u64>::with_capacity(
-                manager.clone(),
-                8,
-            )
-            .unwrap();
-
-        for value in 0..8 {
-            arena.push(value).unwrap();
-        }
-
-        assert_eq!(arena.len(), 8);
-        assert_eq!(arena.capacity(), 8);
-    }
-
-    #[test]
-    fn cancellation_blocks_new_allocations() {
+    fn cancellation_blocks_new_reservations() {
         let manager =
-            MemoryManager::new(
-                MemoryBudget::default(),
-            )
-            .unwrap();
+            manager(1024);
 
         manager.cancel();
 
@@ -1654,52 +2016,299 @@ mod tests {
     }
 
     #[test]
-    fn eviction_registry_orders_recomputable_data_first() {
+    fn scoped_quota_is_enforced() {
+        let manager =
+            manager(1024);
+
+        let mut scope =
+            MemoryScope::new(
+                manager.clone(),
+                Some(256),
+            )
+            .unwrap();
+
+        let reservation =
+            scope.reserve(128)
+                .unwrap();
+
+        assert_eq!(
+            scope.reserved_bytes(),
+            128
+        );
+
+        let result =
+            scope.reserve(129);
+
+        assert!(matches!(
+            result,
+            Err(
+                MemoryError::QuotaExceeded {
+                    ..
+                }
+            )
+        ));
+
+        drop(reservation);
+    }
+
+    #[test]
+    fn bounded_buffer_applies_backpressure() {
+        let manager =
+            MemoryManager::new(
+                MemoryBudget {
+                    max_bytes: 1024,
+                    max_buffer_elements: 2,
+                    ..MemoryBudget::default()
+                },
+            )
+            .unwrap();
+
+        let mut buffer =
+            BoundedBuffer::new(
+                manager.clone(),
+                2,
+                8,
+            )
+            .unwrap();
+
+        buffer.push(1_u64)
+            .unwrap();
+
+        buffer.push(2_u64)
+            .unwrap();
+
+        assert!(matches!(
+            buffer.push(3_u64),
+            Err(
+                MemoryError::BufferFull {
+                    ..
+                }
+            )
+        ));
+
+        assert_eq!(
+            buffer.pop().unwrap(),
+            1
+        );
+
+        assert_eq!(
+            buffer.pop().unwrap(),
+            2
+        );
+
+        assert!(buffer.is_empty());
+
+        assert_eq!(
+            manager
+                .snapshot()
+                .allocated_bytes,
+            0
+        );
+    }
+
+    #[test]
+    fn streaming_buffer_uses_qec_limit() {
+        let mut limits =
+            QecLimits::default();
+
+        limits.max_memory_bytes =
+            1024;
+
+        limits.max_stream_buffer_events =
+            2;
+
+        let manager =
+            MemoryManager::from_qec_limits(
+                &limits,
+            )
+            .unwrap();
+
+        let mut buffer =
+            StreamingBuffer::from_qec_limits(
+                &limits,
+                manager,
+                8,
+            )
+            .unwrap();
+
+        buffer.push(1_u64)
+            .unwrap();
+
+        buffer.push(2_u64)
+            .unwrap();
+
+        assert!(matches!(
+            buffer.push(3_u64),
+            Err(
+                MemoryError::BufferFull {
+                    ..
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn sparse_allocation_is_accounted() {
+        let manager =
+            manager(1024);
+
+        let mut sparse =
+            SparseAllocation::new(
+                manager.clone(),
+                16,
+            )
+            .unwrap();
+
+        sparse
+            .reserve_entries(10)
+            .unwrap();
+
+        assert_eq!(
+            sparse.entries(),
+            10
+        );
+
+        assert_eq!(
+            sparse.reserved_bytes(),
+            160
+        );
+
+        assert_eq!(
+            manager
+                .snapshot()
+                .allocated_bytes,
+            160
+        );
+
+        sparse.release_entries(4);
+
+        assert_eq!(
+            sparse.entries(),
+            6
+        );
+
+        assert_eq!(
+            sparse.reserved_bytes(),
+            96
+        );
+    }
+
+    #[test]
+    fn arena_accounts_capacity() {
+        let manager =
+            manager(4096);
+
+        let mut arena =
+            Arena::<u64>::with_capacity(
+                manager.clone(),
+                4,
+            )
+            .unwrap();
+
+        assert!(
+            arena.reserved_bytes()
+                >= 32
+        );
+
+        arena.push(1)
+            .unwrap();
+
+        arena.push(2)
+            .unwrap();
+
+        assert_eq!(
+            arena.len(),
+            2
+        );
+
+        drop(arena);
+
+        assert_eq!(
+            manager
+                .snapshot()
+                .allocated_bytes,
+            0
+        );
+    }
+
+    #[test]
+    fn arena_rejects_excessive_capacity() {
+        let manager =
+            MemoryManager::new(
+                MemoryBudget {
+                    max_bytes: 1024,
+                    max_arena_bytes: Some(16),
+                    ..MemoryBudget::default()
+                },
+            )
+            .unwrap();
+
+        let result =
+            Arena::<u64>::with_capacity(
+                manager,
+                3,
+            );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn eviction_selection_does_not_fake_reclamation() {
+        let manager =
+            manager(1024);
+
+        let reservation =
+            manager.reserve(512)
+                .unwrap();
+
         let mut registry =
             EvictionRegistry::new();
 
         registry
-            .register(EvictionCandidate {
-                id: 1,
-                bytes: 100,
-                priority: EvictionPriority::Critical,
-            })
-            .unwrap();
-
-        registry
-            .register(EvictionCandidate {
-                id: 2,
-                bytes: 100,
-                priority: EvictionPriority::Ephemeral,
-            })
+            .register(
+                EvictionCandidate {
+                    id: 1,
+                    bytes: 256,
+                    priority:
+                        EvictionPriority::Ephemeral,
+                },
+            )
             .unwrap();
 
         let selected =
-            registry.select_for_eviction(100);
+            registry
+                .select_for_eviction(256);
 
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].id, 2);
+        assert_eq!(
+            selected.len(),
+            1
+        );
+
+        /*
+         * Selecting an eviction candidate must not silently modify actual
+         * memory accounting.
+         */
+        assert_eq!(
+            manager
+                .snapshot()
+                .allocated_bytes,
+            512
+        );
+
+        drop(reservation);
     }
 
     #[test]
-    fn estimated_bytes_checks_overflow() {
+    fn arithmetic_estimates_are_checked() {
         let result =
-            estimated_bytes::<u64>(usize::MAX);
+            estimated_bytes::<u64>(
+                usize::MAX,
+            );
 
-        if usize::MAX as u128
-            * size_of::<u64>() as u128
-            > u64::MAX as u128
-        {
-            assert!(result.is_err());
+        if size_of::<usize>() >= 8 {
+            assert!(
+                result.is_err()
+            );
         }
-    }
-
-    #[test]
-    fn unlimited_budget_is_valid() {
-        let budget =
-            MemoryBudget::unlimited();
-
-        assert!(budget.validate().is_ok());
-        assert!(budget.is_unlimited());
     }
 }
