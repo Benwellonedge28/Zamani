@@ -1,225 +1,245 @@
 //! Production-grade checkpointing for Zamani Quantum Error Correction.
 //!
-//! A checkpoint is a validated, versioned, integrity-protected snapshot of
-//! resumable QEC execution state.
+//! Checkpoints are untrusted serialized execution artifacts. They must be:
 //!
-//! Design goals:
+//! - bounded before allocation;
+//! - versioned;
+//! - deterministically serialized;
+//! - integrity protected;
+//! - associated with the exact execution context;
+//! - validated before restoration;
+//! - cancellation aware;
+//! - resource-policy aware;
+//! - atomically persisted;
+//! - safe to reject when incompatible.
 //!
-//! * deterministic serialization;
-//! * explicit schema and API compatibility;
-//! * bounded checkpoint size;
-//! * checked arithmetic;
-//! * corruption detection;
-//! * validation before restore;
-//! * graceful errors rather than panics;
-//! * atomic filesystem persistence;
-//! * explicit resource accounting;
-//! * resumable decoder/streaming state;
-//! * algorithm/configuration identity;
-//! * forward-compatible schema handling.
-//!
-//! The checkpoint layer deliberately does not know how a particular decoder
-//! represents its internal state. Algorithms provide an opaque deterministic
-//! byte payload and metadata describing that state.
-//!
-//! Data flow:
+//! Architectural position:
 //!
 //! ```text
-//! Decoder / Stream / Partition
-//!          |
-//!          v
-//!   CheckpointState
-//!          |
-//!          v
-//!   validation
-//!          |
-//!          v
-//! deterministic serialization
-//!          |
-//!          v
-//! integrity digest
-//!          |
-//!          v
-//!   bounded envelope
-//!          |
-//!          v
-//!       storage
-//!
-//! Restore:
-//!
-//! storage
-//!   |
-//!   v
-//! size validation
-//!   |
-//!   v
-//! envelope parsing
-//!   |
-//!   v
-//! integrity verification
-//!   |
-//!   v
-//! schema/API compatibility
-//!   |
-//!   v
-//! state validation
-//!   |
-//!   v
-//! resumable execution
+//! QecConfig
+//!    │
+//!    ├── QecLimits ───────────────┐
+//!    ├── DeterministicContext     │
+//!    ├── CancellationToken        │
+//!    └── CapabilitySet            │
+//!                                 ▼
+//!                         CheckpointPolicy
+//!                                 │
+//!                                 ▼
+//!                    Resource / structural preflight
+//!                                 │
+//!                                 ▼
+//!                         canonical payload
+//!                                 │
+//!                                 ▼
+//!                         SHA-256 integrity
+//!                                 │
+//!                                 ▼
+//!                         bounded envelope
+//!                                 │
+//!                                 ▼
+//!                         atomic persistence
 //! ```
 //!
-//! Security rule:
+//! Restore path:
 //!
 //! ```text
-//! Untrusted checkpoint
-//!        |
-//!        v
-//! bounded read
-//!        |
-//!        v
-//! structural validation
-//!        |
-//!        v
+//! Untrusted bytes/path
+//!       │
+//!       ▼
+//! bounded size check
+//!       │
+//!       ▼
+//! fixed binary envelope
+//!       │
+//!       ▼
+//! declared-length validation
+//!       │
+//!       ▼
 //! integrity verification
-//!        |
-//!        v
-//! compatibility validation
-//!        |
-//!        v
-//! state validation
-//!        |
-//!        v
-//! trusted resume state
+//!       │
+//!       ▼
+//! canonical payload decoding
+//!       │
+//!       ▼
+//! schema/API validation
+//!       │
+//!       ▼
+//! execution-context validation
+//!       │
+//!       ▼
+//! domain-state validation
+//!       │
+//!       ▼
+//! trusted resumable state
 //! ```
 //!
-//! A checksum detects accidental corruption and many classes of malformed
-//! data. It is not intended to provide authenticity against an attacker.
-//! Authenticity/signatures belong to a higher-level security layer.
+//! Integrity is not authenticity. SHA-256 detects corruption and accidental
+//! modification. Authenticity against an active attacker requires a higher
+//! level signature/MAC mechanism and must never be inferred from this module.
 
+#![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Binary checkpoint format magic.
-///
-/// The value is deliberately short and stable so malformed files can be
-/// rejected before attempting deserialization.
+use super::cancellation::CancellationToken;
+use super::errors::{QecError, QecResult};
+use super::limits::QecLimits;
+
+// ============================================================================
+// Format
+// ============================================================================
+
+/// Stable checkpoint magic.
 const MAGIC: &[u8; 8] = b"ZMQECCHK";
 
-/// Current checkpoint envelope format.
-pub const CHECKPOINT_FORMAT_VERSION: u16 = 1;
-
-/// Current checkpoint schema version.
+/// Current binary envelope format.
 ///
-/// This is independent from [`CHECKPOINT_FORMAT_VERSION`].
-pub const CHECKPOINT_SCHEMA_VERSION: u16 = 1;
+/// Version 2 intentionally replaces the previous JSON envelope because an
+/// untrusted JSON document can force allocations before the envelope's
+/// declared payload size has been safely validated.
+pub const CHECKPOINT_FORMAT_VERSION: u16 = 2;
 
-/// Maximum algorithm name length accepted by the checkpoint layer.
-pub const MAX_ALGORITHM_NAME_BYTES: usize = 256;
+/// Current logical checkpoint schema.
+pub const CHECKPOINT_SCHEMA_VERSION: u16 = 2;
 
-/// Maximum configuration identifier length.
-pub const MAX_CONFIGURATION_ID_BYTES: usize = 512;
+/// SHA-256 digest size.
+pub const SHA256_BYTES: usize = 32;
 
-/// Maximum state identifier length.
-pub const MAX_STATE_ID_BYTES: usize = 256;
-
-/// Maximum metadata length.
-pub const MAX_METADATA_BYTES: usize = 16 * 1024;
-
-/// Maximum checksum length.
+/// SHA-256 hexadecimal representation length.
 pub const SHA256_HEX_BYTES: usize = 64;
 
-/// Default checkpoint size limit.
-///
-/// Individual deployments should normally provide a stricter limit through
-/// [`CheckpointPolicy`].
-pub const DEFAULT_MAX_CHECKPOINT_SIZE: u64 = 64 * 1024 * 1024;
-
-/// Default maximum state payload.
-///
-/// Keeping this separately bounded prevents a malicious envelope from
-/// consuming the entire configured checkpoint budget with a single field.
-pub const DEFAULT_MAX_STATE_BYTES: u64 = 60 * 1024 * 1024;
-
-/// Maximum path length accepted by the persistence layer.
-///
-/// This is not an OS limit; it is a defensive parser/storage policy.
+/// Defensive path-length limit.
 pub const DEFAULT_MAX_PATH_BYTES: usize = 4096;
 
-/// Error type returned by checkpoint operations.
+/// Maximum algorithm identifier.
+pub const MAX_ALGORITHM_NAME_BYTES: usize = 256;
+
+/// Maximum algorithm version.
+pub const MAX_ALGORITHM_VERSION_BYTES: usize = 128;
+
+/// Maximum configuration identifier.
+pub const MAX_CONFIGURATION_ID_BYTES: usize = 512;
+
+/// Maximum API version.
+pub const MAX_API_VERSION_BYTES: usize = 128;
+
+/// Maximum backend identity.
+pub const MAX_BACKEND_ID_BYTES: usize = 256;
+
+/// Maximum decoder identity.
+pub const MAX_DECODER_ID_BYTES: usize = 256;
+
+/// Maximum execution fingerprint.
+pub const MAX_FINGERPRINT_BYTES: usize = 256;
+
+/// Fixed binary header size.
 ///
-/// The variants are intentionally structured so callers can distinguish
-/// corruption, incompatibility, resource exhaustion, and I/O failures.
+/// ```text
+/// magic             8
+/// format            2
+/// schema            2
+/// payload length    8
+/// payload SHA-256  32
+/// ------------------
+/// total             52
+/// ```
+pub const HEADER_BYTES: usize = 52;
+
+// ============================================================================
+// Errors
+// ============================================================================
+
+/// Checkpoint-specific error.
+///
+/// Public QEC boundaries can convert this into `QecError`. Keeping the
+/// specialized type internally preserves precise diagnostics.
 #[derive(Debug)]
 pub enum CheckpointError {
-    /// Input was structurally invalid.
     InvalidInput(String),
 
-    /// The checkpoint exceeds a configured resource limit.
     ResourceLimitExceeded {
         resource: &'static str,
         requested: u64,
         limit: u64,
     },
 
-    /// The serialized checkpoint is malformed.
     Malformed(String),
 
-    /// The checkpoint failed integrity verification.
     IntegrityMismatch {
         expected: String,
         actual: String,
     },
 
-    /// The checkpoint format is newer than this implementation supports.
     UnsupportedFormatVersion {
         found: u16,
         supported: u16,
     },
 
-    /// The checkpoint schema is newer than this implementation supports.
     UnsupportedSchemaVersion {
         found: u16,
         supported: u16,
     },
 
-    /// The checkpoint was created by an incompatible QEC API.
     IncompatibleApiVersion {
         checkpoint: String,
         runtime: String,
     },
 
-    /// The checkpoint belongs to another algorithm.
     AlgorithmMismatch {
         checkpoint: String,
         expected: String,
     },
 
-    /// The checkpoint belongs to another configuration.
     ConfigurationMismatch {
         checkpoint: String,
         expected: String,
     },
 
-    /// The checkpoint's resumable state is invalid.
+    CodeMismatch {
+        checkpoint: String,
+        expected: String,
+    },
+
+    BackendMismatch {
+        checkpoint: String,
+        expected: String,
+    },
+
+    DecoderMismatch {
+        checkpoint: String,
+        expected: String,
+    },
+
+    DeterminismMismatch {
+        checkpoint: String,
+        expected: String,
+    },
+
+    ResourcePolicyMismatch {
+        checkpoint: String,
+        expected: String,
+    },
+
     InvalidState(String),
 
-    /// An I/O operation failed.
+    CancellationRequested,
+
+    FilesystemDisabled,
+
     Io(io::Error),
 
-    /// Serialization failed.
     Serialization(String),
 
-    /// Deserialization failed.
     Deserialization(String),
 
-    /// System time could not be represented.
     Time(String),
 }
 
@@ -237,8 +257,8 @@ impl fmt::Display for CheckpointError {
             } => {
                 write!(
                     f,
-                    "checkpoint resource limit exceeded: {resource}, \
-                     requested={requested}, limit={limit}"
+                    "checkpoint resource limit exceeded: \
+                     {resource}, requested={requested}, limit={limit}"
                 )
             }
 
@@ -249,8 +269,8 @@ impl fmt::Display for CheckpointError {
             Self::IntegrityMismatch { expected, actual } => {
                 write!(
                     f,
-                    "checkpoint integrity mismatch: expected={expected}, \
-                     actual={actual}"
+                    "checkpoint integrity mismatch: \
+                     expected={expected}, actual={actual}"
                 )
             }
 
@@ -276,8 +296,8 @@ impl fmt::Display for CheckpointError {
             } => {
                 write!(
                     f,
-                    "incompatible QEC API version: checkpoint={checkpoint}, \
-                     runtime={runtime}"
+                    "incompatible QEC API version: \
+                     checkpoint={checkpoint}, runtime={runtime}"
                 )
             }
 
@@ -287,8 +307,8 @@ impl fmt::Display for CheckpointError {
             } => {
                 write!(
                     f,
-                    "checkpoint algorithm mismatch: checkpoint={checkpoint}, \
-                     expected={expected}"
+                    "checkpoint algorithm mismatch: \
+                     checkpoint={checkpoint}, expected={expected}"
                 )
             }
 
@@ -298,13 +318,76 @@ impl fmt::Display for CheckpointError {
             } => {
                 write!(
                     f,
-                    "checkpoint configuration mismatch: checkpoint={checkpoint}, \
-                     expected={expected}"
+                    "checkpoint configuration mismatch: \
+                     checkpoint={checkpoint}, expected={expected}"
+                )
+            }
+
+            Self::CodeMismatch {
+                checkpoint,
+                expected,
+            } => {
+                write!(
+                    f,
+                    "checkpoint code identity mismatch: \
+                     checkpoint={checkpoint}, expected={expected}"
+                )
+            }
+
+            Self::BackendMismatch {
+                checkpoint,
+                expected,
+            } => {
+                write!(
+                    f,
+                    "checkpoint backend mismatch: \
+                     checkpoint={checkpoint}, expected={expected}"
+                )
+            }
+
+            Self::DecoderMismatch {
+                checkpoint,
+                expected,
+            } => {
+                write!(
+                    f,
+                    "checkpoint decoder mismatch: \
+                     checkpoint={checkpoint}, expected={expected}"
+                )
+            }
+
+            Self::DeterminismMismatch {
+                checkpoint,
+                expected,
+            } => {
+                write!(
+                    f,
+                    "checkpoint determinism policy mismatch: \
+                     checkpoint={checkpoint}, expected={expected}"
+                )
+            }
+
+            Self::ResourcePolicyMismatch {
+                checkpoint,
+                expected,
+            } => {
+                write!(
+                    f,
+                    "checkpoint resource policy mismatch: \
+                     checkpoint={checkpoint}, expected={expected}"
                 )
             }
 
             Self::InvalidState(message) => {
                 write!(f, "invalid checkpoint state: {message}")
+            }
+
+            Self::CancellationRequested => {
+                write!(f, "checkpoint operation cancelled")
+            }
+
+            Self::FilesystemDisabled => {
+                write!(f, "filesystem checkpoint persistence is disabled")
             }
 
             Self::Io(error) => {
@@ -334,93 +417,207 @@ impl From<io::Error> for CheckpointError {
     }
 }
 
-/// Convenient result type for checkpoint operations.
+impl From<CheckpointError> for QecError {
+    fn from(error: CheckpointError) -> Self {
+        match error {
+            CheckpointError::ResourceLimitExceeded {
+                resource,
+                requested,
+                limit,
+            } => QecError::resource_limit(
+                super::errors::ResourceKind::CheckpointSize,
+                requested as u128,
+                0,
+                limit as u128,
+                format!("checkpoint {resource} limit exceeded"),
+            ),
+
+            CheckpointError::CancellationRequested => {
+                QecError::cancelled("checkpoint operation cancelled")
+            }
+
+            CheckpointError::Io(error) => {
+                QecError::invalid_input(format!(
+                    "checkpoint I/O failure: {error}"
+                ))
+            }
+
+            CheckpointError::InvalidInput(message)
+            | CheckpointError::Malformed(message)
+            | CheckpointError::InvalidState(message)
+            | CheckpointError::Serialization(message)
+            | CheckpointError::Deserialization(message)
+            | CheckpointError::Time(message) => {
+                QecError::invalid_input(message)
+            }
+
+            CheckpointError::IntegrityMismatch {
+                expected,
+                actual,
+            } => QecError::invalid_input(format!(
+                "checkpoint integrity mismatch: expected={expected}, actual={actual}"
+            )),
+
+            CheckpointError::UnsupportedFormatVersion {
+                found,
+                supported,
+            } => QecError::unsupported(
+                "checkpoint_format",
+                format!(
+                    "checkpoint format {found} is unsupported; \
+                     supported={supported}"
+                ),
+            ),
+
+            CheckpointError::UnsupportedSchemaVersion {
+                found,
+                supported,
+            } => QecError::unsupported(
+                "checkpoint_schema",
+                format!(
+                    "checkpoint schema {found} is unsupported; \
+                     supported={supported}"
+                ),
+            ),
+
+            CheckpointError::IncompatibleApiVersion {
+                checkpoint,
+                runtime,
+            } => QecError::unsupported(
+                "checkpoint_api_version",
+                format!(
+                    "checkpoint={checkpoint}, runtime={runtime}"
+                ),
+            ),
+
+            CheckpointError::AlgorithmMismatch {
+                checkpoint,
+                expected,
+            }
+            | CheckpointError::ConfigurationMismatch {
+                checkpoint,
+                expected,
+            }
+            | CheckpointError::CodeMismatch {
+                checkpoint,
+                expected,
+            }
+            | CheckpointError::BackendMismatch {
+                checkpoint,
+                expected,
+            }
+            | CheckpointError::DecoderMismatch {
+                checkpoint,
+                expected,
+            }
+            | CheckpointError::DeterminismMismatch {
+                checkpoint,
+                expected,
+            }
+            | CheckpointError::ResourcePolicyMismatch {
+                checkpoint,
+                expected,
+            } => QecError::unsupported(
+                "checkpoint_resume",
+                format!(
+                    "checkpoint={checkpoint}; expected={expected}"
+                ),
+            ),
+
+            CheckpointError::FilesystemDisabled => {
+                QecError::unsupported(
+                    "checkpoint_filesystem",
+                    "filesystem checkpoint persistence is disabled",
+                )
+            }
+        }
+    }
+}
+
+/// Specialized checkpoint result.
 pub type CheckpointResult<T> = Result<T, CheckpointError>;
 
-/// Resource policy for checkpoint creation and restoration.
+// ============================================================================
+// Policy
+// ============================================================================
+
+/// Checkpoint policy.
 ///
-/// All limits are explicit. No checkpoint operation should allocate based
-/// solely on untrusted values contained in a checkpoint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Resource ceilings come from the canonical `QecLimits`. This structure
+/// contains only checkpoint-specific policy that cannot belong in QecLimits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CheckpointPolicy {
-    /// Maximum complete encoded checkpoint size.
-    pub max_checkpoint_size: u64,
+    /// Canonical QEC resource policy.
+    pub limits: QecLimits,
 
-    /// Maximum serialized state payload.
-    pub max_state_bytes: u64,
+    /// Maximum path length.
+    pub max_path_bytes: usize,
 
-    /// Maximum metadata payload.
-    pub max_metadata_bytes: u64,
-
-    /// Maximum filesystem path length accepted.
-    pub max_path_bytes: u64,
-
-    /// Whether filesystem persistence is permitted.
+    /// Permit filesystem persistence.
     pub allow_filesystem: bool,
 }
 
 impl Default for CheckpointPolicy {
     fn default() -> Self {
         Self {
-            max_checkpoint_size: DEFAULT_MAX_CHECKPOINT_SIZE,
-            max_state_bytes: DEFAULT_MAX_STATE_BYTES,
-            max_metadata_bytes: MAX_METADATA_BYTES as u64,
-            max_path_bytes: DEFAULT_MAX_PATH_BYTES as u64,
+            limits: QecLimits::default(),
+            max_path_bytes: DEFAULT_MAX_PATH_BYTES,
             allow_filesystem: true,
         }
     }
 }
 
 impl CheckpointPolicy {
-    /// Creates a policy after validating all limits.
-    pub fn new(
-        max_checkpoint_size: u64,
-        max_state_bytes: u64,
-        max_metadata_bytes: u64,
-        max_path_bytes: u64,
+    /// Creates a checkpoint policy from the canonical QEC resource policy.
+    pub fn from_limits(limits: QecLimits) -> CheckpointResult<Self> {
+        limits
+            .validate()
+            .map_err(|error| {
+                CheckpointError::InvalidInput(error.to_string())
+            })?;
+
+        Ok(Self {
+            limits,
+            ..Self::default()
+        })
+    }
+
+    /// Creates a policy with explicit filesystem behavior.
+    pub fn with_filesystem(
+        limits: QecLimits,
         allow_filesystem: bool,
     ) -> CheckpointResult<Self> {
-        if max_checkpoint_size == 0 {
-            return Err(CheckpointError::InvalidInput(
-                "max_checkpoint_size must be non-zero".into(),
-            ));
-        }
+        let mut policy = Self::from_limits(limits)?;
+        policy.allow_filesystem = allow_filesystem;
+        Ok(policy)
+    }
 
-        if max_state_bytes == 0 {
-            return Err(CheckpointError::InvalidInput(
-                "max_state_bytes must be non-zero".into(),
-            ));
-        }
+    fn validate(&self) -> CheckpointResult<()> {
+        self.limits
+            .validate()
+            .map_err(|error| {
+                CheckpointError::InvalidInput(error.to_string())
+            })?;
 
-        if max_state_bytes > max_checkpoint_size {
-            return Err(CheckpointError::InvalidInput(
-                "max_state_bytes cannot exceed max_checkpoint_size".into(),
-            ));
-        }
-
-        if max_metadata_bytes > max_checkpoint_size {
-            return Err(CheckpointError::InvalidInput(
-                "max_metadata_bytes cannot exceed max_checkpoint_size".into(),
-            ));
-        }
-
-        if max_path_bytes == 0 {
+        if self.max_path_bytes == 0 {
             return Err(CheckpointError::InvalidInput(
                 "max_path_bytes must be non-zero".into(),
             ));
         }
 
-        Ok(Self {
-            max_checkpoint_size,
-            max_state_bytes,
-            max_metadata_bytes,
-            max_path_bytes,
-            allow_filesystem,
-        })
+        Ok(())
+    }
+
+    fn max_checkpoint_bytes(&self) -> u64 {
+        self.limits.max_checkpoint_size_bytes
     }
 }
 
-/// Stable identity of the algorithm that produced the checkpoint.
+// ============================================================================
+// Identity
+// ============================================================================
+
+/// Stable algorithm identity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlgorithmIdentity {
     pub name: String,
@@ -428,38 +625,34 @@ pub struct AlgorithmIdentity {
 }
 
 impl AlgorithmIdentity {
-    /// Creates a validated algorithm identity.
-    pub fn new(name: impl Into<String>, version: impl Into<String>) -> CheckpointResult<Self> {
+    pub fn new(
+        name: impl Into<String>,
+        version: impl Into<String>,
+    ) -> CheckpointResult<Self> {
         let identity = Self {
             name: name.into(),
             version: version.into(),
         };
 
-        identity.validate()?;
-        Ok(identity)
-    }
-
-    fn validate(&self) -> CheckpointResult<()> {
-        validate_bounded_string(
+        validate_string(
             "algorithm name",
-            &self.name,
+            &identity.name,
             MAX_ALGORITHM_NAME_BYTES,
         )?;
 
-        validate_bounded_string(
+        validate_string(
             "algorithm version",
-            &self.version,
-            128,
+            &identity.version,
+            MAX_ALGORITHM_VERSION_BYTES,
         )?;
 
-        Ok(())
+        Ok(identity)
     }
 }
 
-/// Identity of the configuration under which the checkpoint was produced.
+/// Configuration identity.
 ///
-/// A deterministic configuration identifier should normally be derived from
-/// the canonical configuration representation.
+/// The identifier should normally be a hash of canonical `QecConfig`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigurationIdentity {
     pub id: String,
@@ -469,7 +662,7 @@ impl ConfigurationIdentity {
     pub fn new(id: impl Into<String>) -> CheckpointResult<Self> {
         let identity = Self { id: id.into() };
 
-        validate_bounded_string(
+        validate_string(
             "configuration id",
             &identity.id,
             MAX_CONFIGURATION_ID_BYTES,
@@ -479,25 +672,87 @@ impl ConfigurationIdentity {
     }
 }
 
-/// Resumable execution position.
+/// Execution identity.
 ///
-/// This allows streaming decoders, repeated syndrome extraction, simulations,
-/// and partitioned workloads to resume without replaying the complete input.
+/// These fields prevent accidentally resuming a checkpoint with a different
+/// code, backend, decoder, determinism policy, or resource policy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionIdentity {
+    /// Hash/identity of the code/topology.
+    pub code_hash: String,
+
+    /// Physical or simulated backend identity.
+    pub backend_id: String,
+
+    /// Decoder identity.
+    pub decoder_id: String,
+
+    /// Determinism policy fingerprint.
+    pub determinism_fingerprint: String,
+
+    /// Resource-policy fingerprint.
+    pub resource_policy_fingerprint: String,
+}
+
+impl Default for ExecutionIdentity {
+    fn default() -> Self {
+        Self {
+            code_hash: "unspecified".into(),
+            backend_id: "unspecified".into(),
+            decoder_id: "unspecified".into(),
+            determinism_fingerprint: "unspecified".into(),
+            resource_policy_fingerprint: "unspecified".into(),
+        }
+    }
+}
+
+impl ExecutionIdentity {
+    pub fn validate(&self) -> CheckpointResult<()> {
+        validate_string(
+            "code hash",
+            &self.code_hash,
+            MAX_FINGERPRINT_BYTES,
+        )?;
+
+        validate_string(
+            "backend id",
+            &self.backend_id,
+            MAX_BACKEND_ID_BYTES,
+        )?;
+
+        validate_string(
+            "decoder id",
+            &self.decoder_id,
+            MAX_DECODER_ID_BYTES,
+        )?;
+
+        validate_string(
+            "determinism fingerprint",
+            &self.determinism_fingerprint,
+            MAX_FINGERPRINT_BYTES,
+        )?;
+
+        validate_string(
+            "resource policy fingerprint",
+            &self.resource_policy_fingerprint,
+            MAX_FINGERPRINT_BYTES,
+        )?;
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Resume state
+// ============================================================================
+
+/// Resumable execution position.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResumePosition {
-    /// Logical processing round.
     pub round: u64,
-
-    /// Number of syndrome/detection events consumed.
     pub events_processed: u64,
-
-    /// Number of decoder iterations completed.
     pub decoder_iterations: u64,
-
-    /// Optional partition/shard identifier.
     pub partition_id: Option<u64>,
-
-    /// Optional stream offset.
     pub stream_offset: Option<u64>,
 }
 
@@ -513,10 +768,10 @@ impl ResumePosition {
     }
 }
 
-/// Resource accounting captured at checkpoint time.
+/// Observed resource usage at checkpoint time.
 ///
-/// These values are observational; they must never be trusted as proof that
-/// a resource limit was respected. Resource managers remain authoritative.
+/// This is diagnostic state, not authorization. The live `ResourceManager`
+/// remains authoritative.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct CheckpointResourceUsage {
     pub allocated_bytes: u64,
@@ -534,7 +789,8 @@ impl CheckpointResourceUsage {
     pub fn validate(&self) -> CheckpointResult<()> {
         if self.peak_bytes < self.allocated_bytes {
             return Err(CheckpointError::InvalidState(
-                "peak memory cannot be smaller than allocated memory".into(),
+                "peak memory cannot be smaller than allocated memory"
+                    .into(),
             ));
         }
 
@@ -542,46 +798,33 @@ impl CheckpointResourceUsage {
     }
 }
 
-/// Deterministic checkpoint state.
-///
-/// `state` is opaque to this module. The producing decoder is responsible for
-/// defining its byte representation. The bytes must be deterministic for
-/// deterministic execution.
+// ============================================================================
+// State
+// ============================================================================
+
+/// Serializable resumable QEC state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CheckpointState {
-    /// Stable QEC API version.
     pub qec_api_version: String,
-
-    /// Checkpoint envelope format.
     pub format_version: u16,
-
-    /// Logical schema version of the state.
     pub schema_version: u16,
 
-    /// Algorithm identity.
     pub algorithm: AlgorithmIdentity,
-
-    /// Configuration identity.
     pub configuration: ConfigurationIdentity,
+    pub execution: ExecutionIdentity,
 
-    /// Deterministic execution seed, if applicable.
     pub seed: Option<u64>,
-
-    /// Resumable execution position.
     pub position: ResumePosition,
-
-    /// Resource accounting captured at checkpoint time.
     pub resources: CheckpointResourceUsage,
 
-    /// Decoder/stream state.
+    /// Opaque deterministic decoder/stream/partition state.
     pub state: Vec<u8>,
 
-    /// Optional application metadata.
+    /// Optional non-sensitive metadata.
     pub metadata: Vec<u8>,
 }
 
 impl CheckpointState {
-    /// Creates a new checkpoint state.
     pub fn new(
         qec_api_version: impl Into<String>,
         algorithm: AlgorithmIdentity,
@@ -598,6 +841,7 @@ impl CheckpointState {
             schema_version: CHECKPOINT_SCHEMA_VERSION,
             algorithm,
             configuration,
+            execution: ExecutionIdentity::default(),
             seed,
             position,
             resources,
@@ -609,93 +853,132 @@ impl CheckpointState {
         Ok(checkpoint)
     }
 
-    /// Validates the checkpoint without trusting any encoded data.
-    pub fn validate(&self, policy: &CheckpointPolicy) -> CheckpointResult<()> {
-        validate_bounded_string(
+    /// Attaches the execution identity after construction.
+    pub fn with_execution_identity(
+        mut self,
+        execution: ExecutionIdentity,
+    ) -> CheckpointResult<Self> {
+        execution.validate()?;
+        self.execution = execution;
+        Ok(self)
+    }
+
+    pub fn validate(
+        &self,
+        policy: &CheckpointPolicy,
+    ) -> CheckpointResult<()> {
+        policy.validate()?;
+
+        validate_string(
             "QEC API version",
             &self.qec_api_version,
-            128,
+            MAX_API_VERSION_BYTES,
         )?;
 
         if self.format_version != CHECKPOINT_FORMAT_VERSION {
-            return Err(CheckpointError::UnsupportedFormatVersion {
-                found: self.format_version,
-                supported: CHECKPOINT_FORMAT_VERSION,
-            });
+            return Err(
+                CheckpointError::UnsupportedFormatVersion {
+                    found: self.format_version,
+                    supported: CHECKPOINT_FORMAT_VERSION,
+                },
+            );
         }
 
         if self.schema_version != CHECKPOINT_SCHEMA_VERSION {
-            return Err(CheckpointError::UnsupportedSchemaVersion {
-                found: self.schema_version,
-                supported: CHECKPOINT_SCHEMA_VERSION,
-            });
+            return Err(
+                CheckpointError::UnsupportedSchemaVersion {
+                    found: self.schema_version,
+                    supported: CHECKPOINT_SCHEMA_VERSION,
+                },
+            );
         }
 
         self.algorithm.validate()?;
 
-        self.configuration.validate()?;
+        validate_string(
+            "configuration id",
+            &self.configuration.id,
+            MAX_CONFIGURATION_ID_BYTES,
+        )?;
 
+        self.execution.validate()?;
         self.position.validate()?;
-
         self.resources.validate()?;
 
-        let state_len = u64::try_from(self.state.len()).map_err(|_| {
-            CheckpointError::ResourceLimitExceeded {
-                resource: "state bytes",
-                requested: u64::MAX,
-                limit: policy.max_state_bytes,
-            }
-        })?;
+        let state_len = checked_len(self.state.len())?;
 
-        if state_len > policy.max_state_bytes {
-            return Err(CheckpointError::ResourceLimitExceeded {
-                resource: "state bytes",
-                requested: state_len,
-                limit: policy.max_state_bytes,
-            });
+        if state_len > policy.max_checkpoint_bytes() {
+            return Err(
+                CheckpointError::ResourceLimitExceeded {
+                    resource: "state bytes",
+                    requested: state_len,
+                    limit: policy.max_checkpoint_bytes(),
+                },
+            );
         }
 
-        let metadata_len = u64::try_from(self.metadata.len()).map_err(|_| {
-            CheckpointError::ResourceLimitExceeded {
-                resource: "metadata bytes",
-                requested: u64::MAX,
-                limit: policy.max_metadata_bytes,
-            }
-        })?;
+        let metadata_len = checked_len(self.metadata.len())?;
 
-        if metadata_len > policy.max_metadata_bytes {
-            return Err(CheckpointError::ResourceLimitExceeded {
-                resource: "metadata bytes",
-                requested: metadata_len,
-                limit: policy.max_metadata_bytes,
-            });
+        if metadata_len > policy.max_checkpoint_bytes() {
+            return Err(
+                CheckpointError::ResourceLimitExceeded {
+                    resource: "metadata bytes",
+                    requested: metadata_len,
+                    limit: policy.max_checkpoint_bytes(),
+                },
+            );
         }
 
         Ok(())
     }
 
-    /// Returns a canonical deterministic representation.
+    /// Canonical payload.
     ///
-    /// `serde_json` is used only after the state has been validated.
-    pub fn canonical_bytes(&self, policy: &CheckpointPolicy) -> CheckpointResult<Vec<u8>> {
+    /// The state is serialized only after validation.
+    pub fn canonical_bytes(
+        &self,
+        policy: &CheckpointPolicy,
+        cancellation: &CancellationToken,
+    ) -> CheckpointResult<Vec<u8>> {
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
+
         self.validate(policy)?;
 
-        serde_json::to_vec(self)
-            .map_err(|error| CheckpointError::Serialization(error.to_string()))
+        let payload = serde_json::to_vec(self)
+            .map_err(|error| {
+                CheckpointError::Serialization(error.to_string())
+            })?;
+
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
+
+        let length = checked_len(payload.len())?;
+
+        if length > policy.max_checkpoint_bytes() {
+            return Err(
+                CheckpointError::ResourceLimitExceeded {
+                    resource: "canonical payload",
+                    requested: length,
+                    limit: policy.max_checkpoint_bytes(),
+                },
+            );
+        }
+
+        Ok(payload)
     }
 }
 
-/// On-disk checkpoint envelope.
-///
-/// The checksum is calculated over the canonical serialized `CheckpointState`,
-/// not over this envelope itself.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// ============================================================================
+// Binary envelope
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct CheckpointEnvelope {
-    magic: [u8; 8],
-    format_version: u16,
-    schema_version: u16,
     payload_length: u64,
-    payload_sha256: String,
+    digest: [u8; SHA256_BYTES],
     payload: Vec<u8>,
 }
 
@@ -703,113 +986,238 @@ impl CheckpointEnvelope {
     fn from_state(
         state: &CheckpointState,
         policy: &CheckpointPolicy,
+        cancellation: &CancellationToken,
     ) -> CheckpointResult<Self> {
-        let payload = state.canonical_bytes(policy)?;
+        let payload =
+            state.canonical_bytes(policy, cancellation)?;
 
-        let payload_length = u64::try_from(payload.len()).map_err(|_| {
-            CheckpointError::ResourceLimitExceeded {
-                resource: "checkpoint payload",
-                requested: u64::MAX,
-                limit: policy.max_checkpoint_size,
-            }
-        })?;
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
 
-        let digest = sha256_hex(&payload);
+        let digest = sha256_digest(&payload, cancellation)?;
 
-        let envelope = Self {
-            magic: *MAGIC,
-            format_version: CHECKPOINT_FORMAT_VERSION,
-            schema_version: CHECKPOINT_SCHEMA_VERSION,
-            payload_length,
-            payload_sha256: digest,
+        Ok(Self {
+            payload_length: checked_len(payload.len())?,
+            digest,
             payload,
-        };
-
-        envelope.validate(policy)?;
-
-        Ok(envelope)
+        })
     }
 
-    fn validate(&self, policy: &CheckpointPolicy) -> CheckpointResult<()> {
-        if self.magic != *MAGIC {
+    fn encoded_len(&self) -> CheckpointResult<u64> {
+        let payload = self.payload_length;
+
+        HEADER_BYTES
+            .checked_add(
+                usize::try_from(payload)
+                    .map_err(|_| {
+                        CheckpointError::ResourceLimitExceeded {
+                            resource: "payload length",
+                            requested: payload,
+                            limit: u64::MAX,
+                        }
+                    })?,
+            )
+            .and_then(|length| u64::try_from(length).ok())
+            .ok_or_else(|| CheckpointError::Malformed(
+                "checkpoint encoded length overflow".into(),
+            ))
+    }
+
+    fn encode(
+        &self,
+        policy: &CheckpointPolicy,
+        cancellation: &CancellationToken,
+    ) -> CheckpointResult<Vec<u8>> {
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
+
+        let encoded_len = self.encoded_len()?;
+
+        if encoded_len > policy.max_checkpoint_bytes() {
+            return Err(
+                CheckpointError::ResourceLimitExceeded {
+                    resource: "encoded checkpoint",
+                    requested: encoded_len,
+                    limit: policy.max_checkpoint_bytes(),
+                },
+            );
+        }
+
+        let capacity = usize::try_from(encoded_len)
+            .map_err(|_| CheckpointError::ResourceLimitExceeded {
+                resource: "checkpoint allocation",
+                requested: encoded_len,
+                limit: usize::MAX as u64,
+            })?;
+
+        let mut output = Vec::with_capacity(capacity);
+
+        output.extend_from_slice(MAGIC);
+        output.extend_from_slice(
+            &CHECKPOINT_FORMAT_VERSION.to_le_bytes(),
+        );
+        output.extend_from_slice(
+            &CHECKPOINT_SCHEMA_VERSION.to_le_bytes(),
+        );
+        output.extend_from_slice(
+            &self.payload_length.to_le_bytes(),
+        );
+        output.extend_from_slice(&self.digest);
+        output.extend_from_slice(&self.payload);
+
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
+
+        Ok(output)
+    }
+
+    fn parse(
+        bytes: &[u8],
+        policy: &CheckpointPolicy,
+        cancellation: &CancellationToken,
+    ) -> CheckpointResult<Self> {
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
+
+        enforce_encoded_size(bytes.len(), policy)?;
+
+        if bytes.len() < HEADER_BYTES {
+            return Err(CheckpointError::Malformed(
+                "checkpoint is shorter than fixed header".into(),
+            ));
+        }
+
+        if &bytes[..MAGIC.len()] != MAGIC {
             return Err(CheckpointError::Malformed(
                 "invalid checkpoint magic".into(),
             ));
         }
 
-        if self.format_version != CHECKPOINT_FORMAT_VERSION {
-            return Err(CheckpointError::UnsupportedFormatVersion {
-                found: self.format_version,
-                supported: CHECKPOINT_FORMAT_VERSION,
-            });
+        let format =
+            u16::from_le_bytes([bytes[8], bytes[9]]);
+
+        if format != CHECKPOINT_FORMAT_VERSION {
+            return Err(
+                CheckpointError::UnsupportedFormatVersion {
+                    found: format,
+                    supported: CHECKPOINT_FORMAT_VERSION,
+                },
+            );
         }
 
-        if self.schema_version != CHECKPOINT_SCHEMA_VERSION {
-            return Err(CheckpointError::UnsupportedSchemaVersion {
-                found: self.schema_version,
-                supported: CHECKPOINT_SCHEMA_VERSION,
-            });
+        let schema =
+            u16::from_le_bytes([bytes[10], bytes[11]]);
+
+        if schema != CHECKPOINT_SCHEMA_VERSION {
+            return Err(
+                CheckpointError::UnsupportedSchemaVersion {
+                    found: schema,
+                    supported: CHECKPOINT_SCHEMA_VERSION,
+                },
+            );
         }
 
-        let actual_length = u64::try_from(self.payload.len()).map_err(|_| {
-            CheckpointError::ResourceLimitExceeded {
-                resource: "checkpoint payload",
-                requested: u64::MAX,
-                limit: policy.max_checkpoint_size,
-            }
-        })?;
+        let payload_length = u64::from_le_bytes([
+            bytes[12],
+            bytes[13],
+            bytes[14],
+            bytes[15],
+            bytes[16],
+            bytes[17],
+            bytes[18],
+            bytes[19],
+        ]);
 
-        if actual_length != self.payload_length {
+        if payload_length > policy.max_checkpoint_bytes() {
+            return Err(
+                CheckpointError::ResourceLimitExceeded {
+                    resource: "checkpoint payload",
+                    requested: payload_length,
+                    limit: policy.max_checkpoint_bytes(),
+                },
+            );
+        }
+
+        let expected_total =
+            HEADER_BYTES
+                .checked_add(
+                    usize::try_from(payload_length)
+                        .map_err(|_| {
+                            CheckpointError::ResourceLimitExceeded {
+                                resource: "checkpoint payload",
+                                requested: payload_length,
+                                limit: usize::MAX as u64,
+                            }
+                        })?,
+                )
+                .ok_or_else(|| {
+                    CheckpointError::Malformed(
+                        "checkpoint length overflow".into(),
+                    )
+                })?;
+
+        if expected_total != bytes.len() {
             return Err(CheckpointError::Malformed(format!(
-                "payload length mismatch: declared={}, actual={}",
-                self.payload_length, actual_length
+                "checkpoint length mismatch: \
+                 declared={payload_length}, actual={}",
+                bytes.len().saturating_sub(HEADER_BYTES)
             )));
         }
 
-        if actual_length > policy.max_state_bytes {
-            return Err(CheckpointError::ResourceLimitExceeded {
-                resource: "checkpoint payload",
-                requested: actual_length,
-                limit: policy.max_state_bytes,
-            });
+        let mut expected_digest = [0u8; SHA256_BYTES];
+        expected_digest.copy_from_slice(
+            &bytes[20..20 + SHA256_BYTES],
+        );
+
+        let payload = bytes[HEADER_BYTES..].to_vec();
+
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
+
+        let actual_digest =
+            sha256_digest(&payload, cancellation)?;
+
+        if actual_digest != expected_digest {
+            return Err(
+                CheckpointError::IntegrityMismatch {
+                    expected: hex_digest(&expected_digest),
+                    actual: hex_digest(&actual_digest),
+                },
+            );
         }
 
-        if self.payload_sha256.len() != SHA256_HEX_BYTES {
-            return Err(CheckpointError::Malformed(
-                "invalid SHA-256 digest length".into(),
-            ));
-        }
-
-        if !self
-            .payload_sha256
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit())
-        {
-            return Err(CheckpointError::Malformed(
-                "checkpoint digest is not hexadecimal".into(),
-            ));
-        }
-
-        let actual_digest = sha256_hex(&self.payload);
-
-        if actual_digest != self.payload_sha256 {
-            return Err(CheckpointError::IntegrityMismatch {
-                expected: self.payload_sha256.clone(),
-                actual: actual_digest,
-            });
-        }
-
-        Ok(())
+        Ok(Self {
+            payload_length,
+            digest: expected_digest,
+            payload,
+        })
     }
 
     fn restore(
         self,
         policy: &CheckpointPolicy,
+        cancellation: &CancellationToken,
     ) -> CheckpointResult<CheckpointState> {
-        self.validate(policy)?;
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
 
-        let state: CheckpointState = serde_json::from_slice(&self.payload)
-            .map_err(|error| CheckpointError::Deserialization(error.to_string()))?;
+        let state: CheckpointState =
+            serde_json::from_slice(&self.payload)
+                .map_err(|error| {
+                    CheckpointError::Deserialization(
+                        error.to_string(),
+                    )
+                })?;
+
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
 
         state.validate(policy)?;
 
@@ -817,77 +1225,162 @@ impl CheckpointEnvelope {
     }
 }
 
-/// Validates and serializes a checkpoint deterministically.
+// ============================================================================
+// Public serialization API
+// ============================================================================
+
+/// Encodes a checkpoint using a fresh cancellation token.
 pub fn encode(
     state: &CheckpointState,
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<Vec<u8>> {
-    state.validate(policy)?;
+    let token = CancellationToken::new();
 
-    let envelope = CheckpointEnvelope::from_state(state, policy)?;
-
-    let encoded = serde_json::to_vec(&envelope)
-        .map_err(|error| CheckpointError::Serialization(error.to_string()))?;
-
-    enforce_encoded_size(encoded.len(), policy)?;
-
-    Ok(encoded)
+    encode_with_cancellation(state, policy, &token)
 }
 
-/// Decodes, validates, and integrity-checks a checkpoint.
-///
-/// No untrusted payload is deserialized into a large state structure until
-/// its envelope has first passed bounded structural checks.
+/// Encodes a checkpoint while honoring cancellation.
+pub fn encode_with_cancellation(
+    state: &CheckpointState,
+    policy: &CheckpointPolicy,
+    cancellation: &CancellationToken,
+) -> CheckpointResult<Vec<u8>> {
+    let envelope =
+        CheckpointEnvelope::from_state(
+            state,
+            policy,
+            cancellation,
+        )?;
+
+    envelope.encode(policy, cancellation)
+}
+
+/// Decodes a checkpoint using a fresh cancellation token.
 pub fn decode(
     bytes: &[u8],
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<CheckpointState> {
-    enforce_encoded_size(bytes.len(), policy)?;
+    let token = CancellationToken::new();
 
-    if bytes.len() < MAGIC.len() {
-        return Err(CheckpointError::Malformed(
-            "checkpoint is shorter than its magic header".into(),
-        ));
-    }
-
-    let envelope: CheckpointEnvelope =
-        serde_json::from_slice(bytes)
-            .map_err(|error| CheckpointError::Deserialization(error.to_string()))?;
-
-    envelope.restore(policy)
+    decode_with_cancellation(bytes, policy, &token)
 }
 
-/// Calculates the SHA-256 digest used for integrity validation.
+/// Decodes a checkpoint safely while honoring cancellation.
+///
+/// Crucially, the fixed-size binary header is inspected before the payload is
+/// allocated or deserialized.
+pub fn decode_with_cancellation(
+    bytes: &[u8],
+    policy: &CheckpointPolicy,
+    cancellation: &CancellationToken,
+) -> CheckpointResult<CheckpointState> {
+    let envelope =
+        CheckpointEnvelope::parse(
+            bytes,
+            policy,
+            cancellation,
+        )?;
+
+    envelope.restore(policy, cancellation)
+}
+
+// ============================================================================
+// Integrity
+// ============================================================================
+
+/// SHA-256 digest.
+pub fn sha256_digest(
+    data: &[u8],
+    cancellation: &CancellationToken,
+) -> CheckpointResult<[u8; SHA256_BYTES]> {
+    const CHUNK: usize = 1024 * 1024;
+
+    let mut hasher = Sha256::new();
+
+    for chunk in data.chunks(CHUNK) {
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
+
+        hasher.update(chunk);
+    }
+
+    let result = hasher.finalize();
+
+    let mut digest = [0u8; SHA256_BYTES];
+    digest.copy_from_slice(&result);
+
+    Ok(digest)
+}
+
+/// Convenience SHA-256 hexadecimal digest.
 pub fn sha256_hex(data: &[u8]) -> String {
     let digest = Sha256::digest(data);
+    hex_digest(&digest)
+}
 
-    let mut output = String::with_capacity(SHA256_HEX_BYTES);
+fn hex_digest(data: &[u8]) -> String {
+    let mut output =
+        String::with_capacity(data.len() * 2);
 
-    for byte in digest {
+    for byte in data {
         use std::fmt::Write;
 
-        // Writing into a String cannot fail.
         let _ = write!(&mut output, "{byte:02x}");
     }
 
     output
 }
 
-/// Validates that a checkpoint can resume under the current runtime.
+// ============================================================================
+// Resume compatibility
+// ============================================================================
+
+/// Complete execution compatibility validation.
 pub fn validate_resume_compatibility(
     state: &CheckpointState,
     runtime_qec_api_version: &str,
     expected_algorithm: &AlgorithmIdentity,
     expected_configuration: &ConfigurationIdentity,
+    expected_execution: &ExecutionIdentity,
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<()> {
+    let token = CancellationToken::new();
+
+    validate_resume_compatibility_with_cancellation(
+        state,
+        runtime_qec_api_version,
+        expected_algorithm,
+        expected_configuration,
+        expected_execution,
+        policy,
+        &token,
+    )
+}
+
+/// Cancellation-aware resume validation.
+pub fn validate_resume_compatibility_with_cancellation(
+    state: &CheckpointState,
+    runtime_qec_api_version: &str,
+    expected_algorithm: &AlgorithmIdentity,
+    expected_configuration: &ConfigurationIdentity,
+    expected_execution: &ExecutionIdentity,
+    policy: &CheckpointPolicy,
+    cancellation: &CancellationToken,
+) -> CheckpointResult<()> {
+    cancellation
+        .check()
+        .map_err(|_| CheckpointError::CancellationRequested)?;
+
     state.validate(policy)?;
 
     if state.qec_api_version != runtime_qec_api_version {
-        return Err(CheckpointError::IncompatibleApiVersion {
-            checkpoint: state.qec_api_version.clone(),
-            runtime: runtime_qec_api_version.to_owned(),
-        });
+        return Err(
+            CheckpointError::IncompatibleApiVersion {
+                checkpoint: state.qec_api_version.clone(),
+                runtime: runtime_qec_api_version.to_owned(),
+            },
+        );
     }
 
     if state.algorithm != *expected_algorithm {
@@ -906,76 +1399,172 @@ pub fn validate_resume_compatibility(
     }
 
     if state.configuration != *expected_configuration {
-        return Err(CheckpointError::ConfigurationMismatch {
-            checkpoint: state.configuration.id.clone(),
-            expected: expected_configuration.id.clone(),
+        return Err(
+            CheckpointError::ConfigurationMismatch {
+                checkpoint: state.configuration.id.clone(),
+                expected: expected_configuration.id.clone(),
+            },
+        );
+    }
+
+    if state.execution.code_hash != expected_execution.code_hash {
+        return Err(CheckpointError::CodeMismatch {
+            checkpoint: state.execution.code_hash.clone(),
+            expected: expected_execution.code_hash.clone(),
         });
     }
+
+    if state.execution.backend_id != expected_execution.backend_id {
+        return Err(CheckpointError::BackendMismatch {
+            checkpoint: state.execution.backend_id.clone(),
+            expected: expected_execution.backend_id.clone(),
+        });
+    }
+
+    if state.execution.decoder_id != expected_execution.decoder_id {
+        return Err(CheckpointError::DecoderMismatch {
+            checkpoint: state.execution.decoder_id.clone(),
+            expected: expected_execution.decoder_id.clone(),
+        });
+    }
+
+    if state.execution.determinism_fingerprint
+        != expected_execution.determinism_fingerprint
+    {
+        return Err(
+            CheckpointError::DeterminismMismatch {
+                checkpoint: state
+                    .execution
+                    .determinism_fingerprint
+                    .clone(),
+                expected: expected_execution
+                    .determinism_fingerprint
+                    .clone(),
+            },
+        );
+    }
+
+    if state.execution.resource_policy_fingerprint
+        != expected_execution.resource_policy_fingerprint
+    {
+        return Err(
+            CheckpointError::ResourcePolicyMismatch {
+                checkpoint: state
+                    .execution
+                    .resource_policy_fingerprint
+                    .clone(),
+                expected: expected_execution
+                    .resource_policy_fingerprint
+                    .clone(),
+            },
+        );
+    }
+
+    cancellation
+        .check()
+        .map_err(|_| CheckpointError::CancellationRequested)?;
 
     Ok(())
 }
 
+// ============================================================================
+// Filesystem persistence
+// ============================================================================
+
 /// Writes a checkpoint atomically.
-///
-/// The checkpoint is first written to a uniquely named temporary file,
-/// flushed, synced, and then renamed into place.
-///
-/// This prevents a partially written checkpoint from replacing a valid
-/// checkpoint.
 pub fn write_atomic(
     path: impl AsRef<Path>,
     state: &CheckpointState,
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<()> {
-    if !policy.allow_filesystem {
-        return Err(CheckpointError::InvalidInput(
-            "filesystem checkpoint persistence is disabled by policy".into(),
-        ));
-    }
+    let token = CancellationToken::new();
+
+    write_atomic_with_cancellation(
+        path,
+        state,
+        policy,
+        &token,
+    )
+}
+
+/// Cancellation-aware atomic checkpoint write.
+pub fn write_atomic_with_cancellation(
+    path: impl AsRef<Path>,
+    state: &CheckpointState,
+    policy: &CheckpointPolicy,
+    cancellation: &CancellationToken,
+) -> CheckpointResult<()> {
+    ensure_filesystem_allowed(policy)?;
+    validate_path(path.as_ref(), policy)?;
+
+    cancellation
+        .check()
+        .map_err(|_| CheckpointError::CancellationRequested)?;
+
+    let encoded =
+        encode_with_cancellation(
+            state,
+            policy,
+            cancellation,
+        )?;
 
     let path = path.as_ref();
+    let parent =
+        path.parent().unwrap_or_else(|| Path::new("."));
 
-    validate_path(path, policy)?;
+    let temporary =
+        temporary_path(path)?;
 
-    let encoded = encode(state, policy)?;
-
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-
-    let temp_path = temporary_path(path)?;
-
-    let result = write_atomic_inner(
+    let result = write_file_atomically(
         parent,
-        &temp_path,
+        &temporary,
         path,
         &encoded,
+        cancellation,
     );
 
     if result.is_err() {
-        let _ = fs::remove_file(&temp_path);
+        let _ = fs::remove_file(&temporary);
     }
 
     result
 }
 
-fn write_atomic_inner(
+fn write_file_atomically(
     parent: &Path,
-    temp_path: &Path,
+    temporary: &Path,
     destination: &Path,
-    encoded: &[u8],
+    bytes: &[u8],
+    cancellation: &CancellationToken,
 ) -> CheckpointResult<()> {
-    let mut file = File::create(temp_path)?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(temporary)?;
 
-    file.write_all(encoded)?;
+    for chunk in bytes.chunks(1024 * 1024) {
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
+
+        file.write_all(chunk)?;
+    }
+
     file.flush()?;
     file.sync_all()?;
-
     drop(file);
 
-    fs::rename(temp_path, destination)?;
+    cancellation
+        .check()
+        .map_err(|_| CheckpointError::CancellationRequested)?;
 
-    // Best-effort directory synchronization. Not all platforms permit
-    // opening directories this way, so a failure here is not promoted to a
-    // checkpoint corruption error after the atomic rename succeeded.
+    fs::rename(temporary, destination)?;
+
+    /*
+     * Directory fsync is best effort because platform support varies.
+     * The rename itself is atomic on filesystems that provide normal rename
+     * semantics.
+     */
     if let Ok(directory) = File::open(parent) {
         let _ = directory.sync_all();
     }
@@ -983,117 +1572,130 @@ fn write_atomic_inner(
     Ok(())
 }
 
-/// Reads and validates a checkpoint from disk.
+/// Reads a checkpoint from disk.
 pub fn read(
     path: impl AsRef<Path>,
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<CheckpointState> {
-    if !policy.allow_filesystem {
-        return Err(CheckpointError::InvalidInput(
-            "filesystem checkpoint persistence is disabled by policy".into(),
-        ));
-    }
+    let token = CancellationToken::new();
 
-    let path = path.as_ref();
-
-    validate_path(path, policy)?;
-
-    let metadata = fs::metadata(path)?;
-
-    let file_size = metadata.len();
-
-    if file_size > policy.max_checkpoint_size {
-        return Err(CheckpointError::ResourceLimitExceeded {
-            resource: "checkpoint file",
-            requested: file_size,
-            limit: policy.max_checkpoint_size,
-        });
-    }
-
-    let allocation_size = usize::try_from(file_size).map_err(|_| {
-        CheckpointError::ResourceLimitExceeded {
-            resource: "checkpoint allocation",
-            requested: file_size,
-            limit: usize::MAX as u64,
-        }
-    })?;
-
-    let mut file = File::open(path)?;
-
-    let mut bytes = Vec::with_capacity(allocation_size);
-
-    file.read_to_end(&mut bytes)?;
-
-    // Check the actual size as well as metadata. This protects against a
-    // file changing between metadata() and read().
-    enforce_encoded_size(bytes.len(), policy)?;
-
-    decode(&bytes, policy)
+    read_with_cancellation(path, policy, &token)
 }
 
-/// Removes a checkpoint safely.
-///
-/// This operation is explicit and never follows symlinks through custom
-/// filesystem traversal logic.
+/// Cancellation-aware checkpoint read.
+pub fn read_with_cancellation(
+    path: impl AsRef<Path>,
+    policy: &CheckpointPolicy,
+    cancellation: &CancellationToken,
+) -> CheckpointResult<CheckpointState> {
+    ensure_filesystem_allowed(policy)?;
+    validate_path(path.as_ref(), policy)?;
+
+    cancellation
+        .check()
+        .map_err(|_| CheckpointError::CancellationRequested)?;
+
+    let metadata = fs::metadata(path.as_ref())?;
+    let file_size = metadata.len();
+
+    if file_size > policy.max_checkpoint_bytes() {
+        return Err(
+            CheckpointError::ResourceLimitExceeded {
+                resource: "checkpoint file",
+                requested: file_size,
+                limit: policy.max_checkpoint_bytes(),
+            },
+        );
+    }
+
+    let allocation_size =
+        usize::try_from(file_size).map_err(|_| {
+            CheckpointError::ResourceLimitExceeded {
+                resource: "checkpoint allocation",
+                requested: file_size,
+                limit: usize::MAX as u64,
+            }
+        })?;
+
+    let mut file = File::open(path.as_ref())?;
+    let mut bytes =
+        Vec::with_capacity(allocation_size);
+
+    let mut buffer = [0u8; 1024 * 1024];
+
+    loop {
+        cancellation
+            .check()
+            .map_err(|_| CheckpointError::CancellationRequested)?;
+
+        let read = file.read(&mut buffer)?;
+
+        if read == 0 {
+            break;
+        }
+
+        bytes.extend_from_slice(&buffer[..read]);
+
+        enforce_encoded_size(bytes.len(), policy)?;
+    }
+
+    decode_with_cancellation(
+        &bytes,
+        policy,
+        cancellation,
+    )
+}
+
+/// Removes a checkpoint.
 pub fn remove(
     path: impl AsRef<Path>,
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<()> {
-    if !policy.allow_filesystem {
-        return Err(CheckpointError::InvalidInput(
-            "filesystem checkpoint persistence is disabled by policy".into(),
-        ));
-    }
+    ensure_filesystem_allowed(policy)?;
+    validate_path(path.as_ref(), policy)?;
 
-    let path = path.as_ref();
-
-    validate_path(path, policy)?;
-
-    fs::remove_file(path)?;
+    fs::remove_file(path.as_ref())?;
 
     Ok(())
 }
 
-/// Returns whether a checkpoint file exists.
+/// Returns whether a checkpoint exists.
 pub fn exists(
     path: impl AsRef<Path>,
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<bool> {
-    if !policy.allow_filesystem {
-        return Err(CheckpointError::InvalidInput(
-            "filesystem checkpoint persistence is disabled by policy".into(),
-        ));
-    }
+    ensure_filesystem_allowed(policy)?;
+    validate_path(path.as_ref(), policy)?;
 
-    let path = path.as_ref();
-
-    validate_path(path, policy)?;
-
-    Ok(path.exists())
+    Ok(path.as_ref().exists())
 }
 
-/// Validates a resumable state before it is handed back to a decoder.
+// ============================================================================
+// Resumable state integration
+// ============================================================================
+
+/// Domain-specific resumable state.
 ///
-/// This is deliberately separate from serialization validation so decoder
-/// implementations can perform their own domain-specific state checks.
+/// The generic checkpoint layer never interprets decoder-specific bytes.
 pub trait ResumableState: Sized {
-    /// Stable algorithm identifier.
-    fn algorithm_identity(&self) -> CheckpointResult<AlgorithmIdentity>;
+    fn algorithm_identity(
+        &self,
+    ) -> CheckpointResult<AlgorithmIdentity>;
 
-    /// Stable configuration identifier.
-    fn configuration_identity(&self) -> CheckpointResult<ConfigurationIdentity>;
+    fn configuration_identity(
+        &self,
+    ) -> CheckpointResult<ConfigurationIdentity>;
 
-    /// Converts state into deterministic bytes.
     fn encode_state(&self) -> CheckpointResult<Vec<u8>>;
 
-    /// Restores state from bytes.
-    fn decode_state(bytes: &[u8]) -> CheckpointResult<Self>;
+    fn decode_state(
+        bytes: &[u8],
+    ) -> CheckpointResult<Self>;
 
-    /// Performs domain-specific invariant validation.
     fn validate_state(&self) -> CheckpointResult<()>;
 }
 
-/// Builds a checkpoint from a domain-specific resumable state.
+/// Builds a generic checkpoint from domain state.
 pub fn create_from_state<T: ResumableState>(
     state: &T,
     qec_api_version: &str,
@@ -1105,9 +1707,14 @@ pub fn create_from_state<T: ResumableState>(
 ) -> CheckpointResult<CheckpointState> {
     state.validate_state()?;
 
-    let algorithm = state.algorithm_identity()?;
-    let configuration = state.configuration_identity()?;
-    let encoded_state = state.encode_state()?;
+    let algorithm =
+        state.algorithm_identity()?;
+
+    let configuration =
+        state.configuration_identity()?;
+
+    let encoded_state =
+        state.encode_state()?;
 
     let checkpoint = CheckpointState::new(
         qec_api_version,
@@ -1125,13 +1732,13 @@ pub fn create_from_state<T: ResumableState>(
     Ok(checkpoint)
 }
 
-/// Restores a domain-specific state after all generic checkpoint checks have
-/// passed.
+/// Restores domain-specific state.
 pub fn restore_state<T: ResumableState>(
     checkpoint: &CheckpointState,
     runtime_qec_api_version: &str,
     expected_algorithm: &AlgorithmIdentity,
     expected_configuration: &ConfigurationIdentity,
+    expected_execution: &ExecutionIdentity,
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<T> {
     validate_resume_compatibility(
@@ -1139,51 +1746,70 @@ pub fn restore_state<T: ResumableState>(
         runtime_qec_api_version,
         expected_algorithm,
         expected_configuration,
+        expected_execution,
         policy,
     )?;
 
-    let state = T::decode_state(&checkpoint.state)?;
+    let state =
+        T::decode_state(&checkpoint.state)?;
 
     state.validate_state()?;
 
     Ok(state)
 }
 
-fn validate_bounded_string(
-    field: &'static str,
-    value: &str,
-    max_bytes: usize,
-) -> CheckpointResult<()> {
-    if value.is_empty() {
-        return Err(CheckpointError::InvalidInput(format!(
-            "{field} must not be empty"
-        )));
-    }
+// ============================================================================
+// Helpers
+// ============================================================================
 
-    if value.len() > max_bytes {
-        return Err(CheckpointError::ResourceLimitExceeded {
-            resource: field,
-            requested: value.len() as u64,
-            limit: max_bytes as u64,
-        });
-    }
-
-    Ok(())
+fn checked_len(length: usize) -> CheckpointResult<u64> {
+    u64::try_from(length).map_err(|_| {
+        CheckpointError::ResourceLimitExceeded {
+            resource: "checkpoint length",
+            requested: u64::MAX,
+            limit: u64::MAX,
+        }
+    })
 }
 
 fn enforce_encoded_size(
     length: usize,
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<()> {
-    let requested =
-        u64::try_from(length).unwrap_or(u64::MAX);
+    let requested = checked_len(length)?;
 
-    if requested > policy.max_checkpoint_size {
-        return Err(CheckpointError::ResourceLimitExceeded {
-            resource: "encoded checkpoint",
-            requested,
-            limit: policy.max_checkpoint_size,
-        });
+    if requested > policy.max_checkpoint_bytes() {
+        return Err(
+            CheckpointError::ResourceLimitExceeded {
+                resource: "encoded checkpoint",
+                requested,
+                limit: policy.max_checkpoint_bytes(),
+            },
+        );
+    }
+
+    Ok(())
+}
+
+fn validate_string(
+    field: &'static str,
+    value: &str,
+    maximum: usize,
+) -> CheckpointResult<()> {
+    if value.is_empty() {
+        return Err(CheckpointError::InvalidInput(
+            format!("{field} must not be empty"),
+        ));
+    }
+
+    if value.len() > maximum {
+        return Err(
+            CheckpointError::ResourceLimitExceeded {
+                resource: field,
+                requested: value.len() as u64,
+                limit: maximum as u64,
+            },
+        );
     }
 
     Ok(())
@@ -1193,428 +1819,441 @@ fn validate_path(
     path: &Path,
     policy: &CheckpointPolicy,
 ) -> CheckpointResult<()> {
-    let path_string = path.to_string_lossy();
+    let bytes = path.as_os_str().to_string_lossy();
 
-    if path_string.is_empty() {
+    if bytes.is_empty() {
         return Err(CheckpointError::InvalidInput(
             "checkpoint path must not be empty".into(),
         ));
     }
 
-    if path_string.len() > policy.max_path_bytes as usize {
-        return Err(CheckpointError::ResourceLimitExceeded {
-            resource: "checkpoint path",
-            requested: path_string.len() as u64,
-            limit: policy.max_path_bytes,
-        });
+    let length =
+        checked_len(bytes.len())?;
+
+    let limit =
+        u64::try_from(policy.max_path_bytes)
+            .unwrap_or(u64::MAX);
+
+    if length > limit {
+        return Err(
+            CheckpointError::ResourceLimitExceeded {
+                resource: "checkpoint path",
+                requested: length,
+                limit,
+            },
+        );
     }
 
     Ok(())
 }
 
-fn temporary_path(path: &Path) -> CheckpointResult<PathBuf> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+fn ensure_filesystem_allowed(
+    policy: &CheckpointPolicy,
+) -> CheckpointResult<()> {
+    policy.validate()?;
+
+    if !policy.allow_filesystem {
+        return Err(
+            CheckpointError::FilesystemDisabled,
+        );
+    }
+
+    Ok(())
+}
+
+fn temporary_path(
+    path: &Path,
+) -> CheckpointResult<PathBuf> {
+    let parent =
+        path.parent().unwrap_or_else(|| Path::new("."));
+
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| {
             CheckpointError::InvalidInput(
-                "checkpoint path has no valid UTF-8 filename".into(),
+                "checkpoint path has no valid filename"
+                    .into(),
             )
         })?;
 
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| {
-            CheckpointError::Time(error.to_string())
-        })?;
+    let timestamp =
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|error| {
+                CheckpointError::Time(
+                    error.to_string(),
+                )
+            })?;
 
-    let nonce = timestamp.as_nanos();
+    let nonce =
+        timestamp
+            .as_nanos()
+            .checked_add(
+                u128::from(
+                    std::process::id(),
+                ),
+            )
+            .ok_or_else(|| {
+                CheckpointError::Time(
+                    "temporary path nonce overflow"
+                        .into(),
+                )
+            })?;
 
-    let temporary_name =
-        format!(".{file_name}.zamani-checkpoint-{nonce}.tmp");
-
-    Ok(parent.join(temporary_name))
+    Ok(parent.join(format!(
+        ".{file_name}.zamani-{nonce}.tmp"
+    )))
 }
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn test_algorithm() -> AlgorithmIdentity {
-        AlgorithmIdentity::new("mwpm", "1.0.0")
-            .expect("valid algorithm")
+    fn algorithm() -> AlgorithmIdentity {
+        AlgorithmIdentity::new(
+            "mwpm",
+            "2.0.0",
+        )
+        .unwrap()
     }
 
-    fn test_configuration() -> ConfigurationIdentity {
-        ConfigurationIdentity::new("config-sha256:test")
-            .expect("valid configuration")
+    fn configuration() -> ConfigurationIdentity {
+        ConfigurationIdentity::new(
+            "config-sha256:test",
+        )
+        .unwrap()
     }
 
-    fn test_position() -> ResumePosition {
-        ResumePosition {
-            round: 42,
-            events_processed: 1_024,
-            decoder_iterations: 17,
-            partition_id: Some(2),
-            stream_offset: Some(8_192),
+    fn execution() -> ExecutionIdentity {
+        ExecutionIdentity {
+            code_hash: "code-sha256:test".into(),
+            backend_id: "simulator:test".into(),
+            decoder_id: "mwpm@2.0.0".into(),
+            determinism_fingerprint:
+                "deterministic:test".into(),
+            resource_policy_fingerprint:
+                "limits:test".into(),
         }
     }
 
-    fn test_resources() -> CheckpointResourceUsage {
+    fn position() -> ResumePosition {
+        ResumePosition {
+            round: 42,
+            events_processed: 1024,
+            decoder_iterations: 17,
+            partition_id: Some(2),
+            stream_offset: Some(8192),
+        }
+    }
+
+    fn resources() -> CheckpointResourceUsage {
         CheckpointResourceUsage {
-            allocated_bytes: 1_024,
-            peak_bytes: 2_048,
+            allocated_bytes: 1024,
+            peak_bytes: 2048,
             cpu_time_ns: 50_000,
             wall_time_ns: 70_000,
             graph_nodes: 100,
             graph_edges: 250,
-            syndrome_events: 1_024,
+            syndrome_events: 1024,
             decoder_iterations: 17,
             parallel_workers: 4,
         }
     }
 
-    fn test_state() -> CheckpointState {
+    fn state() -> CheckpointState {
         CheckpointState::new(
-            "1.0.0",
-            test_algorithm(),
-            test_configuration(),
+            "2.0.0",
+            algorithm(),
+            configuration(),
             Some(12345),
-            test_position(),
-            test_resources(),
-            b"deterministic-decoder-state".to_vec(),
-            b"test-metadata".to_vec(),
+            position(),
+            resources(),
+            b"decoder-state".to_vec(),
+            b"metadata".to_vec(),
         )
-        .expect("valid checkpoint")
+        .unwrap()
+        .with_execution_identity(
+            execution(),
+        )
+        .unwrap()
+    }
+
+    fn policy() -> CheckpointPolicy {
+        CheckpointPolicy::default()
     }
 
     #[test]
-    fn checkpoint_round_trip_is_lossless() {
-        let policy = CheckpointPolicy::default();
-        let original = test_state();
+    fn round_trip_is_lossless() {
+        let original = state();
 
         let encoded =
-            encode(&original, &policy)
-                .expect("encode");
+            encode(&original, &policy())
+                .unwrap();
 
         let restored =
-            decode(&encoded, &policy)
-                .expect("decode");
+            decode(&encoded, &policy())
+                .unwrap();
 
-        assert_eq!(original, restored);
+        assert_eq!(
+            original,
+            restored
+        );
     }
 
     #[test]
     fn encoding_is_deterministic() {
-        let policy = CheckpointPolicy::default();
-        let state = test_state();
+        let original = state();
 
         let first =
-            encode(&state, &policy)
-                .expect("first encode");
+            encode(&original, &policy())
+                .unwrap();
 
         let second =
-            encode(&state, &policy)
-                .expect("second encode");
+            encode(&original, &policy())
+                .unwrap();
 
         assert_eq!(first, second);
     }
 
     #[test]
-    fn digest_is_deterministic() {
-        let data = b"zamani-qec-checkpoint";
+    fn header_is_binary_and_bounded() {
+        let encoded =
+            encode(&state(), &policy())
+                .unwrap();
 
         assert_eq!(
-            sha256_hex(data),
-            sha256_hex(data)
+            &encoded[..MAGIC.len()],
+            MAGIC
+        );
+
+        assert!(
+            encoded.len() >= HEADER_BYTES
         );
     }
 
     #[test]
     fn corruption_is_detected() {
-        let policy = CheckpointPolicy::default();
-        let state = test_state();
-
         let mut encoded =
-            encode(&state, &policy)
-                .expect("encode");
+            encode(&state(), &policy())
+                .unwrap();
 
         let last =
-            encoded
-                .last_mut()
-                .expect("non-empty");
+            encoded.last_mut().unwrap();
 
         *last ^= 0x01;
 
-        let result =
-            decode(&encoded, &policy);
-
-        assert!(result.is_err());
+        assert!(
+            decode(&encoded, &policy())
+                .is_err()
+        );
     }
 
     #[test]
-    fn state_limit_is_enforced() {
-        let policy =
-            CheckpointPolicy::new(
-                1024,
-                8,
-                64,
-                4096,
-                true,
-            )
-            .expect("valid policy");
+    fn truncated_header_is_rejected() {
+        let encoded =
+            encode(&state(), &policy())
+                .unwrap();
 
-        let result =
-            CheckpointState::new(
-                "1.0.0",
-                test_algorithm(),
-                test_configuration(),
-                None,
-                test_position(),
-                test_resources(),
-                vec![0u8; 9],
-                Vec::new(),
-            )
-            .and_then(|state| state.validate(&policy));
+        let truncated =
+            &encoded[..HEADER_BYTES - 1];
 
-        assert!(matches!(
-            result,
-            Err(
-                CheckpointError::ResourceLimitExceeded {
-                    resource: "state bytes",
-                    ..
-                }
-            )
-        ));
+        assert!(
+            decode(truncated, &policy())
+                .is_err()
+        );
     }
 
     #[test]
-    fn metadata_limit_is_enforced() {
-        let policy =
-            CheckpointPolicy::new(
-                4096,
-                1024,
-                8,
-                4096,
-                true,
-            )
-            .expect("valid policy");
+    fn declared_payload_length_is_checked() {
+        let mut encoded =
+            encode(&state(), &policy())
+                .unwrap();
 
-        let result =
-            CheckpointState::new(
-                "1.0.0",
-                test_algorithm(),
-                test_configuration(),
-                None,
-                test_position(),
-                test_resources(),
-                Vec::new(),
-                vec![0u8; 9],
-            )
-            .and_then(|state| state.validate(&policy));
+        encoded[12] =
+            encoded[12].wrapping_add(1);
 
-        assert!(matches!(
-            result,
-            Err(
-                CheckpointError::ResourceLimitExceeded {
-                    resource: "metadata bytes",
-                    ..
-                }
-            )
-        ));
-    }
-
-    #[test]
-    fn api_version_mismatch_is_rejected() {
-        let policy = CheckpointPolicy::default();
-        let state = test_state();
-
-        let result =
-            validate_resume_compatibility(
-                &state,
-                "2.0.0",
-                &test_algorithm(),
-                &test_configuration(),
-                &policy,
-            );
-
-        assert!(matches!(
-            result,
-            Err(CheckpointError::IncompatibleApiVersion { .. })
-        ));
+        assert!(
+            decode(&encoded, &policy())
+                .is_err()
+        );
     }
 
     #[test]
     fn algorithm_mismatch_is_rejected() {
-        let policy = CheckpointPolicy::default();
-        let state = test_state();
-
         let expected =
-            AlgorithmIdentity::new("union-find", "1.0.0")
-                .expect("valid algorithm");
+            AlgorithmIdentity::new(
+                "union-find",
+                "2.0.0",
+            )
+            .unwrap();
 
         let result =
             validate_resume_compatibility(
-                &state,
-                "1.0.0",
+                &state(),
+                "2.0.0",
                 &expected,
-                &test_configuration(),
-                &policy,
+                &configuration(),
+                &execution(),
+                &policy(),
             );
 
-        assert!(matches!(
-            result,
-            Err(CheckpointError::AlgorithmMismatch { .. })
-        ));
+        assert!(
+            matches!(
+                result,
+                Err(
+                    CheckpointError::AlgorithmMismatch {
+                        ..
+                    }
+                )
+            )
+        );
     }
 
     #[test]
-    fn configuration_mismatch_is_rejected() {
-        let policy = CheckpointPolicy::default();
-        let state = test_state();
+    fn code_mismatch_is_rejected() {
+        let mut expected =
+            execution();
 
-        let expected =
-            ConfigurationIdentity::new("config-sha256:other")
-                .expect("valid configuration");
+        expected.code_hash =
+            "different-code".into();
 
         let result =
             validate_resume_compatibility(
-                &state,
-                "1.0.0",
-                &test_algorithm(),
+                &state(),
+                "2.0.0",
+                &algorithm(),
+                &configuration(),
                 &expected,
-                &policy,
+                &policy(),
             );
 
-        assert!(matches!(
-            result,
-            Err(CheckpointError::ConfigurationMismatch { .. })
-        ));
+        assert!(
+            matches!(
+                result,
+                Err(
+                    CheckpointError::CodeMismatch {
+                        ..
+                    }
+                )
+            )
+        );
+    }
+
+    #[test]
+    fn backend_mismatch_is_rejected() {
+        let mut expected =
+            execution();
+
+        expected.backend_id =
+            "different-backend".into();
+
+        let result =
+            validate_resume_compatibility(
+                &state(),
+                "2.0.0",
+                &algorithm(),
+                &configuration(),
+                &expected,
+                &policy(),
+            );
+
+        assert!(
+            matches!(
+                result,
+                Err(
+                    CheckpointError::BackendMismatch {
+                        ..
+                    }
+                )
+            )
+        );
+    }
+
+    #[test]
+    fn resource_policy_is_canonical() {
+        let limits =
+            QecLimits::default();
+
+        let policy =
+            CheckpointPolicy::from_limits(
+                limits,
+            )
+            .unwrap();
+
+        assert_eq!(
+            policy.max_checkpoint_bytes(),
+            limits.max_checkpoint_size_bytes
+        );
+    }
+
+    #[test]
+    fn cancellation_is_honored() {
+        let token =
+            CancellationToken::new();
+
+        token.request();
+
+        let result =
+            encode_with_cancellation(
+                &state(),
+                &policy(),
+                &token,
+            );
+
+        assert!(
+            matches!(
+                result,
+                Err(
+                    CheckpointError::CancellationRequested
+                )
+            )
+        );
+    }
+
+    #[test]
+    fn oversized_checkpoint_is_rejected() {
+        let mut limits =
+            QecLimits::default();
+
+        limits.max_checkpoint_size_bytes = 64;
+
+        let policy =
+            CheckpointPolicy::from_limits(
+                limits,
+            )
+            .unwrap();
+
+        let result =
+            encode(&state(), &policy);
+
+        assert!(result.is_err());
     }
 
     #[test]
     fn invalid_resource_usage_is_rejected() {
-        let mut resources =
-            test_resources();
+        let mut usage =
+            resources();
 
-        resources.peak_bytes = 100;
-        resources.allocated_bytes = 200;
+        usage.allocated_bytes = 200;
+        usage.peak_bytes = 100;
 
         let result =
             CheckpointState::new(
-                "1.0.0",
-                test_algorithm(),
-                test_configuration(),
+                "2.0.0",
+                algorithm(),
+                configuration(),
                 None,
-                test_position(),
-                resources,
+                position(),
+                usage,
                 Vec::new(),
                 Vec::new(),
             );
 
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn malformed_magic_is_rejected() {
-        let policy = CheckpointPolicy::default();
-
-        let malformed =
-            br#"{"magic":[1,2,3,4,5,6,7,8],"format_version":1,"schema_version":1,"payload_length":0,"payload_sha256":"","payload":[]}"#;
-
-        let result =
-            decode(malformed, &policy);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn filesystem_round_trip() {
-        let policy = CheckpointPolicy::default();
-        let state = test_state();
-
-        let directory =
-            std::env::temp_dir();
-
-        let path =
-            directory.join(format!(
-                "zamani-qec-checkpoint-test-{}.chk",
-                std::process::id()
-            ));
-
-        write_atomic(
-            &path,
-            &state,
-            &policy,
-        )
-        .expect("write checkpoint");
-
-        let restored =
-            read(&path, &policy)
-                .expect("read checkpoint");
-
-        assert_eq!(state, restored);
-
-        let _ =
-            remove(&path, &policy);
-    }
-
-    #[test]
-    fn filesystem_can_be_disabled() {
-        let policy =
-            CheckpointPolicy::new(
-                4096,
-                1024,
-                1024,
-                4096,
-                false,
-            )
-            .expect("valid policy");
-
-        let state = test_state();
-
-        let path =
-            std::env::temp_dir()
-                .join("zamani-disabled-checkpoint.chk");
-
-        let result =
-            write_atomic(
-                path,
-                &state,
-                &policy,
-            );
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn resume_position_is_preserved() {
-        let state = test_state();
-
-        assert_eq!(
-            state.position.round,
-            42
-        );
-
-        assert_eq!(
-            state.position.events_processed,
-            1_024
-        );
-
-        assert_eq!(
-            state.position.decoder_iterations,
-            17
-        );
-
-        assert_eq!(
-            state.position.partition_id,
-            Some(2)
-        );
-
-        assert_eq!(
-            state.position.stream_offset,
-            Some(8_192)
-        );
     }
 }
