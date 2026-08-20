@@ -1,76 +1,115 @@
-//! Canonical resource policy for the Zamani Quantum Error Correction
-//! subsystem.
+//! Canonical declarative resource policy for Zamani Quantum Error Correction.
 //!
-//! # Architectural role
+//! # Architectural contract
 //!
-//! `QecLimits` is the single declarative resource policy used by the QEC
-//! execution pipeline.
+//! `QecLimits` is the single source of truth for declarative QEC admission
+//! and preflight limits.
 //!
 //! ```text
-//!                    QecConfig
-//!                        |
-//!                        v
-//!                    QecLimits
-//!                        |
-//!          +-------------+-------------+
-//!          |             |             |
-//!          v             v             v
-//!     Preflight      ResourceManager  Algorithms
-//!          |             |             |
-//!          +-------------+-------------+
-//!                        |
-//!                        v
-//!                 ResourceSnapshot
+//!                         QecConfig
+//!                            |
+//!                            v
+//!                         QecLimits
+//!                            |
+//!          +-----------------+-----------------+
+//!          |                 |                 |
+//!          v                 v                 v
+//!      Validation       ResourceManager    Algorithms
+//!          |                 |                 |
+//!          +-----------------+-----------------+
+//!                            |
+//!                            v
+//!                    Runtime accounting
 //! ```
 //!
-//! The important distinction is:
+//! The responsibilities are deliberately separated:
 //!
 //! - `QecLimits` = what an execution is allowed to request.
-//! - `ResourceManager` = what an execution has actually consumed.
-//! - `ResourceSnapshot` = what an execution has consumed so far.
+//! - `resources.rs` = what an execution has actually consumed.
+//! - `memory.rs` = allocation/reservation enforcement.
+//! - `configuration.rs` = validated composition of the complete QEC policy.
 //!
-//! This module does not allocate memory, execute decoders, access QPUs,
-//! perform network I/O, or spawn workers.
+//! This module does NOT:
 //!
-//! # Safety goals
+//! - allocate memory;
+//! - execute decoders;
+//! - access a QPU;
+//! - perform network I/O;
+//! - spawn workers;
+//! - maintain runtime counters;
+//! - implement decoder-specific algorithms.
 //!
-//! * No resource check performs allocation.
-//! * No derived-resource calculation uses unchecked arithmetic.
-//! * Malformed requests return structured errors.
-//! * Every resource dimension has one canonical policy field.
-//! * Resource estimates can be performed before construction.
-//! * Limits are finite by default.
-//! * Larger workloads require explicit configuration.
-//! * Resource-limited execution must never be reported as successful
-//!   mathematical verification.
+//! # Design guarantees
 //!
-//! `QecLimits` is therefore a policy boundary, not a promise that a workload
-//! can physically execute at its configured maximum.
+//! 1. Every production resource ceiling has one canonical field.
+//! 2. Derived resource calculations use checked arithmetic.
+//! 3. Resource checks occur before allocation or execution.
+//! 4. Zero limits are rejected.
+//! 5. Invalid policy relationships are rejected.
+//! 6. Large workloads are bounded by explicit policy.
+//! 7. Runtime accounting remains in `resources.rs`.
+//! 8. Resource policy is independent of high-level QEC algorithms.
+//! 9. The API is deterministic and allocation-free.
+//! 10. Rust 1.97.1 compatible.
+//!
+//! # Integration contract
+//!
+//! `configuration.rs` should validate and embed `QecLimits`.
+//!
+//! `resources.rs` should use the scalar fields and `LimitKind` rather than
+//! introducing another production policy.
+//!
+//! `memory.rs` should use `validate_memory()` before reservations.
+//!
+//! `surface_code.rs` should use `validate_code_size()` before construction.
+//!
+//! `decoding_graph.rs` should use `validate_graph()` before allocation.
+//!
+//! `syndrome.rs` should use `validate_syndrome()`.
+//!
+//! `decoder.rs`, `mwpm.rs`, and `union_find.rs` should use
+//! `validate_decoder_work()`.
+//!
+//! `partition.rs` should use `validate_partition()`.
+//!
+//! `streaming.rs` should use `validate_stream()`.
+//!
+//! `checkpoint.rs` should use `validate_checkpoint()`.
+//!
+//! QPU integration should use `validate_qpu()`.
+//!
+//! Mathematical verification should use `validate_verification()`.
+//!
+//! No later module should create a second independent production limit
+//! structure.
 
 use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// Current schema version for the canonical QEC resource policy.
-pub const QEC_LIMITS_SCHEMA_VERSION: u32 = 2;
+/// Schema version for the canonical `QecLimits` representation.
+///
+/// Increment this when the serialized meaning or structure of `QecLimits`
+/// changes incompatibly.
+pub const QEC_LIMITS_SCHEMA_VERSION: u32 = 3;
 
-/* -------------------------------------------------------------------------- */
-/* Conservative defaults                                                     */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
+/* Conservative defaults                                                      */
+/* ========================================================================== */
 
 /// Default maximum surface-code distance.
 pub const DEFAULT_MAX_CODE_DISTANCE: usize = 10_001;
 
-/// Default maximum number of physical qubits.
+/// Default maximum physical qubit count.
 pub const DEFAULT_MAX_QUBITS: usize = 100_000_000;
 
-/// Default maximum number of stabilizers.
+/// Default maximum stabilizer count.
 pub const DEFAULT_MAX_STABILIZERS: usize = 100_000_000;
 
 /// Default maximum retained/processed syndrome events.
 pub const DEFAULT_MAX_SYNDROME_EVENTS: usize = 100_000_000;
 
-/// Default maximum number of measurement rounds.
+/// Default maximum measurement rounds.
 pub const DEFAULT_MAX_ROUNDS: usize = 10_000_000;
 
 /// Default maximum decoding-graph nodes.
@@ -80,10 +119,9 @@ pub const DEFAULT_MAX_GRAPH_NODES: usize = 500_000_000;
 pub const DEFAULT_MAX_GRAPH_EDGES: usize = 2_000_000_000;
 
 /// Default maximum memory budget: 64 GiB.
-pub const DEFAULT_MAX_MEMORY_BYTES: u64 =
-    64 * 1024 * 1024 * 1024;
+pub const DEFAULT_MAX_MEMORY_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 
-/// Default maximum decoder time: 24 hours.
+/// Default maximum decoder execution time: 24 hours.
 pub const DEFAULT_MAX_DECODER_TIME_NS: u64 =
     24 * 60 * 60 * 1_000_000_000;
 
@@ -94,53 +132,48 @@ pub const DEFAULT_MAX_PARALLELISM: usize = 1024;
 pub const DEFAULT_MAX_CHECKPOINT_SIZE_BYTES: u64 =
     16 * 1024 * 1024 * 1024;
 
-/// Default maximum partition count.
+/// Default maximum number of partitions.
 pub const DEFAULT_MAX_PARTITIONS: usize = 1_000_000;
 
-/// Default maximum stream-buffer size.
-pub const DEFAULT_MAX_STREAM_BUFFER_EVENTS: usize =
-    10_000_000;
+/// Default maximum stream-buffer events.
+pub const DEFAULT_MAX_STREAM_BUFFER_EVENTS: usize = 10_000_000;
 
 /// Default maximum decoder iterations.
-pub const DEFAULT_MAX_DECODER_ITERATIONS: usize =
-    10_000_000;
+pub const DEFAULT_MAX_DECODER_ITERATIONS: usize = 10_000_000;
 
 /// Default maximum stabilizer weight.
 pub const DEFAULT_MAX_STABILIZER_WEIGHT: usize = 64;
 
 /// Default maximum logical-operator weight.
-pub const DEFAULT_MAX_LOGICAL_OPERATOR_WEIGHT: usize =
-    100_000_000;
+pub const DEFAULT_MAX_LOGICAL_OPERATOR_WEIGHT: usize = 100_000_000;
 
-/// Default maximum qubits per partition.
-pub const DEFAULT_MAX_QUBITS_PER_PARTITION: usize =
-    10_000_000;
+/// Default maximum qubits in one partition.
+pub const DEFAULT_MAX_QUBITS_PER_PARTITION: usize = 10_000_000;
 
-/// Default maximum QPU shots.
+/// Default maximum QPU shots in one operation.
 pub const DEFAULT_MAX_QPU_SHOTS: u64 = 1_000_000_000;
 
 /// Default maximum QPU circuits in one operation.
 pub const DEFAULT_MAX_QPU_CIRCUITS: u64 = 1_000_000;
 
-/// Default maximum exact-verification operations.
+/// Default maximum mathematical-verification operations.
+pub const DEFAULT_MAX_VERIFICATION_OPERATIONS: u64 = 100_000_000;
+
+/* ========================================================================== */
+/* Limit kinds                                                                */
+/* ========================================================================== */
+
+/// Every declarative resource dimension controlled by `QecLimits`.
 ///
-/// Exact mathematical verification is intentionally much more restrictive
-/// than ordinary decoding because some algorithms scale exponentially.
-pub const DEFAULT_MAX_VERIFICATION_OPERATIONS: u64 =
-    100_000_000;
-
-/* -------------------------------------------------------------------------- */
-/* Resource kinds                                                             */
-/* -------------------------------------------------------------------------- */
-
-/// Canonical resource dimensions controlled by [`QecLimits`].
+/// This enum intentionally describes policy dimensions rather than runtime
+/// counters. Runtime resource kinds belong to `resources.rs`.
 #[derive(
     Clone,
     Copy,
     Debug,
     Eq,
-    PartialEq,
     Hash,
+    PartialEq,
     Serialize,
     Deserialize,
 )]
@@ -201,36 +234,42 @@ impl fmt::Display for LimitKind {
     }
 }
 
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 /* Errors                                                                     */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 
-/// Error returned when a configured resource policy or request is invalid.
+/// Error returned by resource-policy validation or preflight.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LimitError {
-    /// The policy itself contains an invalid zero value.
+    /// A configured limit is zero and therefore unusable.
     InvalidLimit {
         resource: LimitKind,
         value: u128,
     },
 
-    /// A requested resource exceeds its configured maximum.
+    /// A requested amount exceeds the configured policy.
     Exceeded {
         resource: LimitKind,
         requested: u128,
         maximum: u128,
     },
 
-    /// A derived-resource calculation overflowed.
+    /// A checked derived-resource calculation overflowed.
     ArithmeticOverflow {
         resource: LimitKind,
     },
 
-    /// Two limits violate an internal policy invariant.
+    /// Two policy dimensions contradict one another.
     InconsistentLimits {
         resource: LimitKind,
         related_resource: LimitKind,
         reason: &'static str,
+    },
+
+    /// The serialized policy uses an unsupported schema.
+    UnsupportedSchema {
+        found: u32,
+        expected: u32,
     },
 }
 
@@ -240,8 +279,8 @@ impl fmt::Display for LimitError {
             Self::InvalidLimit { resource, value } => {
                 write!(
                     f,
-                    "invalid QEC limit for {resource}: value {value} \
-                     must be greater than zero"
+                    "invalid QEC limit for {resource}: \
+                     {value} must be greater than zero"
                 )
             }
 
@@ -252,8 +291,8 @@ impl fmt::Display for LimitError {
             } => {
                 write!(
                     f,
-                    "{resource} limit exceeded: requested {requested}, \
-                     maximum {maximum}"
+                    "{resource} limit exceeded: \
+                     requested {requested}, maximum {maximum}"
                 )
             }
 
@@ -275,25 +314,29 @@ impl fmt::Display for LimitError {
                      {related_resource}: {reason}"
                 )
             }
+
+            Self::UnsupportedSchema { found, expected } => {
+                write!(
+                    f,
+                    "unsupported QEC limits schema {found}; \
+                     expected {expected}"
+                )
+            }
         }
     }
 }
 
 impl std::error::Error for LimitError {}
 
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 /* Canonical policy                                                           */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 
-/// Canonical resource policy for one QEC execution context.
+/// Canonical declarative resource policy for one QEC execution context.
 ///
-/// This is the **single source of truth for declarative QEC resource
-/// limits**. Configuration, preflight checks, surface-code construction,
-/// graph construction, decoders, streaming, partitioning, checkpointing and
-/// mathematical verification should consume this policy rather than invent
-/// local production ceilings.
+/// This is the single source of truth for production resource ceilings.
 ///
-/// The structure contains only scalar values and is therefore cheap to copy.
+/// It contains policy only. Runtime usage belongs to `resources.rs`.
 #[derive(
     Clone,
     Copy,
@@ -304,28 +347,28 @@ impl std::error::Error for LimitError {}
     Deserialize,
 )]
 pub struct QecLimits {
-    /// Schema version of this resource policy.
+    /// Schema version of this policy.
     pub schema_version: u32,
 
     /// Maximum supported code distance.
     pub max_code_distance: usize,
 
-    /// Maximum physical qubit count.
+    /// Maximum physical qubits.
     pub max_qubits: usize,
 
-    /// Maximum stabilizer count.
+    /// Maximum stabilizer generators.
     pub max_stabilizers: usize,
 
-    /// Maximum syndrome/detection-event count.
+    /// Maximum syndrome/detection events.
     pub max_syndrome_events: usize,
 
-    /// Maximum number of measurement rounds.
+    /// Maximum measurement rounds.
     pub max_rounds: usize,
 
-    /// Maximum decoding-graph node count.
+    /// Maximum decoding-graph nodes.
     pub max_graph_nodes: usize,
 
-    /// Maximum decoding-graph edge count.
+    /// Maximum decoding-graph edges.
     pub max_graph_edges: usize,
 
     /// Maximum memory budget in bytes.
@@ -334,7 +377,7 @@ pub struct QecLimits {
     /// Maximum decoder execution time in nanoseconds.
     pub max_decoder_time_ns: u64,
 
-    /// Maximum number of parallel workers.
+    /// Maximum parallel workers.
     pub max_parallelism: usize,
 
     /// Maximum checkpoint size in bytes.
@@ -343,28 +386,28 @@ pub struct QecLimits {
     /// Maximum number of partitions.
     pub max_partitions: usize,
 
-    /// Maximum events retained in one stream buffer.
+    /// Maximum events in one stream buffer.
     pub max_stream_buffer_events: usize,
 
     /// Maximum decoder iterations.
     pub max_decoder_iterations: usize,
 
-    /// Maximum number of data qubits touched by one stabilizer.
+    /// Maximum weight of one stabilizer.
     pub max_stabilizer_weight: usize,
 
     /// Maximum logical-operator weight.
     pub max_logical_operator_weight: usize,
 
-    /// Maximum qubits assigned to one partition.
+    /// Maximum qubits in one partition.
     pub max_qubits_per_partition: usize,
 
     /// Maximum QPU shots in one operation.
     pub max_qpu_shots: u64,
 
-    /// Maximum QPU circuits submitted by one operation.
+    /// Maximum QPU circuits in one operation.
     pub max_qpu_circuits: u64,
 
-    /// Maximum operations permitted by exact mathematical verification.
+    /// Maximum operations for exact mathematical verification.
     pub max_verification_operations: u64,
 }
 
@@ -375,7 +418,7 @@ impl Default for QecLimits {
 }
 
 impl QecLimits {
-    /// Creates the conservative production policy.
+    /// Creates the canonical conservative production policy.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -397,6 +440,7 @@ impl QecLimits {
                 DEFAULT_MAX_CHECKPOINT_SIZE_BYTES,
 
             max_partitions: DEFAULT_MAX_PARTITIONS,
+
             max_stream_buffer_events:
                 DEFAULT_MAX_STREAM_BUFFER_EVENTS,
 
@@ -420,51 +464,55 @@ impl QecLimits {
         }
     }
 
+    /* ---------------------------------------------------------------------- */
+    /* Policy validation                                                      */
+    /* ---------------------------------------------------------------------- */
+
     /// Validates the policy itself.
     ///
-    /// This must be called before the policy is accepted by `QecConfig`.
+    /// `configuration.rs` should call this before accepting a `QecLimits`
+    /// instance into a validated `QecConfig`.
     pub fn validate(&self) -> Result<(), LimitError> {
         if self.schema_version != QEC_LIMITS_SCHEMA_VERSION {
-            return Err(LimitError::InconsistentLimits {
-                resource: LimitKind::CodeDistance,
-                related_resource: LimitKind::Qubits,
-                reason: "unsupported QecLimits schema version",
+            return Err(LimitError::UnsupportedSchema {
+                found: self.schema_version,
+                expected: QEC_LIMITS_SCHEMA_VERSION,
             });
         }
 
         self.require_nonzero(
             LimitKind::CodeDistance,
-            self.max_code_distance,
+            self.max_code_distance as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::Qubits,
-            self.max_qubits,
+            self.max_qubits as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::Stabilizers,
-            self.max_stabilizers,
+            self.max_stabilizers as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::SyndromeEvents,
-            self.max_syndrome_events,
+            self.max_syndrome_events as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::MeasurementRounds,
-            self.max_rounds,
+            self.max_rounds as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::GraphNodes,
-            self.max_graph_nodes,
+            self.max_graph_nodes as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::GraphEdges,
-            self.max_graph_edges,
+            self.max_graph_edges as u128,
         )?;
 
         self.require_nonzero(
@@ -479,7 +527,7 @@ impl QecLimits {
 
         self.require_nonzero(
             LimitKind::Parallelism,
-            self.max_parallelism,
+            self.max_parallelism as u128,
         )?;
 
         self.require_nonzero(
@@ -489,85 +537,91 @@ impl QecLimits {
 
         self.require_nonzero(
             LimitKind::Partitions,
-            self.max_partitions,
+            self.max_partitions as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::StreamBufferEvents,
-            self.max_stream_buffer_events,
+            self.max_stream_buffer_events as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::DecoderIterations,
-            self.max_decoder_iterations,
+            self.max_decoder_iterations as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::StabilizerWeight,
-            self.max_stabilizer_weight,
+            self.max_stabilizer_weight as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::LogicalOperatorWeight,
-            self.max_logical_operator_weight,
+            self.max_logical_operator_weight as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::QubitsPerPartition,
-            self.max_qubits_per_partition,
+            self.max_qubits_per_partition as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::QpuShots,
-            self.max_qpu_shots,
+            self.max_qpu_shots as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::QpuCircuits,
-            self.max_qpu_circuits,
+            self.max_qpu_circuits as u128,
         )?;
 
         self.require_nonzero(
             LimitKind::VerificationOperations,
-            self.max_verification_operations,
+            self.max_verification_operations as u128,
         )?;
 
         /*
-         * A partition cannot legitimately contain more qubits than the
-         * entire workload is allowed to contain.
+         * These invariants are intentionally conservative and describe the
+         * canonical stabilizer-code execution model.
          */
+
+        if self.max_stabilizers > self.max_qubits {
+            return Err(LimitError::InconsistentLimits {
+                resource: LimitKind::Stabilizers,
+                related_resource: LimitKind::Qubits,
+                reason:
+                    "stabilizers cannot exceed qubits under the canonical \
+                     stabilizer-code policy",
+            });
+        }
+
         if self.max_qubits_per_partition > self.max_qubits {
             return Err(LimitError::InconsistentLimits {
                 resource: LimitKind::QubitsPerPartition,
                 related_resource: LimitKind::Qubits,
                 reason:
-                    "per-partition qubits exceed total allowed qubits",
+                    "per-partition qubits cannot exceed total allowed \
+                     qubits",
             });
         }
 
-        /*
-         * A stream buffer is itself a syndrome-event workload.
-         */
         if self.max_stream_buffer_events > self.max_syndrome_events {
             return Err(LimitError::InconsistentLimits {
                 resource: LimitKind::StreamBufferEvents,
                 related_resource: LimitKind::SyndromeEvents,
                 reason:
-                    "stream buffer exceeds total syndrome-event limit",
+                    "stream-buffer capacity cannot exceed the total \
+                     syndrome-event policy",
             });
         }
 
-        /*
-         * Checkpoints cannot exceed the complete memory policy.
-         */
-        if self.max_checkpoint_size_bytes
-            > self.max_memory_bytes
-        {
+        if self.max_logical_operator_weight > self.max_qubits {
             return Err(LimitError::InconsistentLimits {
-                resource: LimitKind::CheckpointSizeBytes,
-                related_resource: LimitKind::MemoryBytes,
+                resource: LimitKind::LogicalOperatorWeight,
+                related_resource: LimitKind::Qubits,
                 reason:
-                    "checkpoint size exceeds memory budget",
+                    "logical-operator weight cannot exceed total allowed \
+                     qubits",
             });
         }
 
@@ -580,719 +634,524 @@ impl QecLimits {
         value: u128,
     ) -> Result<(), LimitError> {
         if value == 0 {
-            return Err(LimitError::InvalidLimit {
-                resource,
-                value,
-            });
+            Err(LimitError::InvalidLimit { resource, value })
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Direct checks                                                          */
+    /* Generic checking                                                       */
     /* ---------------------------------------------------------------------- */
 
-    pub fn check_code_distance(
+    /// Checks an arbitrary resource request.
+    ///
+    /// This is the preferred primitive for new QEC modules when no
+    /// domain-specific helper below is appropriate.
+    pub fn check(
         &self,
-        requested: usize,
+        resource: LimitKind,
+        requested: u128,
     ) -> Result<(), LimitError> {
-        self.check_usize(
+        let maximum = self.maximum(resource);
+
+        if requested > maximum {
+            Err(LimitError::Exceeded {
+                resource,
+                requested,
+                maximum,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Returns a configured maximum as `u128`.
+    ///
+    /// `u128` prevents intermediate narrowing when callers perform
+    /// cross-platform comparisons.
+    #[must_use]
+    pub const fn maximum(&self, resource: LimitKind) -> u128 {
+        match resource {
+            LimitKind::CodeDistance => self.max_code_distance as u128,
+            LimitKind::Qubits => self.max_qubits as u128,
+            LimitKind::Stabilizers => self.max_stabilizers as u128,
+            LimitKind::SyndromeEvents => {
+                self.max_syndrome_events as u128
+            }
+            LimitKind::MeasurementRounds => self.max_rounds as u128,
+            LimitKind::GraphNodes => self.max_graph_nodes as u128,
+            LimitKind::GraphEdges => self.max_graph_edges as u128,
+            LimitKind::MemoryBytes => self.max_memory_bytes as u128,
+            LimitKind::DecoderTimeNs => {
+                self.max_decoder_time_ns as u128
+            }
+            LimitKind::Parallelism => self.max_parallelism as u128,
+            LimitKind::CheckpointSizeBytes => {
+                self.max_checkpoint_size_bytes as u128
+            }
+            LimitKind::Partitions => self.max_partitions as u128,
+            LimitKind::StreamBufferEvents => {
+                self.max_stream_buffer_events as u128
+            }
+            LimitKind::DecoderIterations => {
+                self.max_decoder_iterations as u128
+            }
+            LimitKind::StabilizerWeight => {
+                self.max_stabilizer_weight as u128
+            }
+            LimitKind::LogicalOperatorWeight => {
+                self.max_logical_operator_weight as u128
+            }
+            LimitKind::QubitsPerPartition => {
+                self.max_qubits_per_partition as u128
+            }
+            LimitKind::QpuShots => self.max_qpu_shots as u128,
+            LimitKind::QpuCircuits => self.max_qpu_circuits as u128,
+            LimitKind::VerificationOperations => {
+                self.max_verification_operations as u128
+            }
+        }
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Domain-specific preflight                                             */
+    /* ---------------------------------------------------------------------- */
+
+    /// Validates code distance and primary code resources.
+    pub fn validate_code_size(
+        &self,
+        distance: usize,
+        qubits: usize,
+        stabilizers: usize,
+    ) -> Result<(), LimitError> {
+        self.check(
             LimitKind::CodeDistance,
-            requested,
-            self.max_code_distance,
-        )
-    }
+            distance as u128,
+        )?;
 
-    pub fn check_qubits(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
+        self.check(
             LimitKind::Qubits,
-            requested,
-            self.max_qubits,
-        )
-    }
+            qubits as u128,
+        )?;
 
-    pub fn check_stabilizers(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
+        self.check(
             LimitKind::Stabilizers,
-            requested,
-            self.max_stabilizers,
+            stabilizers as u128,
         )
     }
 
-    pub fn check_syndrome_events(
+    /// Validates a memory reservation before allocation.
+    pub fn validate_memory(
         &self,
-        requested: usize,
+        bytes: u64,
     ) -> Result<(), LimitError> {
-        self.check_usize(
-            LimitKind::SyndromeEvents,
-            requested,
-            self.max_syndrome_events,
-        )
-    }
-
-    pub fn check_rounds(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
-            LimitKind::MeasurementRounds,
-            requested,
-            self.max_rounds,
-        )
-    }
-
-    pub fn check_graph_nodes(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
-            LimitKind::GraphNodes,
-            requested,
-            self.max_graph_nodes,
-        )
-    }
-
-    pub fn check_graph_edges(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
-            LimitKind::GraphEdges,
-            requested,
-            self.max_graph_edges,
-        )
-    }
-
-    pub fn check_memory(
-        &self,
-        requested: u64,
-    ) -> Result<(), LimitError> {
-        self.check_u64(
+        self.check(
             LimitKind::MemoryBytes,
-            requested,
-            self.max_memory_bytes,
+            bytes as u128,
         )
     }
 
-    pub fn check_decoder_time_ns(
+    /// Validates decoding-graph size before graph allocation.
+    pub fn validate_graph(
         &self,
-        requested: u64,
+        nodes: usize,
+        edges: usize,
     ) -> Result<(), LimitError> {
-        self.check_u64(
-            LimitKind::DecoderTimeNs,
-            requested,
-            self.max_decoder_time_ns,
+        self.check(
+            LimitKind::GraphNodes,
+            nodes as u128,
+        )?;
+
+        self.check(
+            LimitKind::GraphEdges,
+            edges as u128,
         )
     }
 
-    pub fn check_parallelism(
+    /// Validates syndrome-event and round counts.
+    pub fn validate_syndrome(
         &self,
-        requested: usize,
+        events: usize,
+        rounds: usize,
     ) -> Result<(), LimitError> {
-        self.check_usize(
-            LimitKind::Parallelism,
-            requested,
-            self.max_parallelism,
+        self.check(
+            LimitKind::SyndromeEvents,
+            events as u128,
+        )?;
+
+        self.check(
+            LimitKind::MeasurementRounds,
+            rounds as u128,
         )
     }
 
-    pub fn check_checkpoint_size(
+    /// Validates decoder iteration and time budgets.
+    pub fn validate_decoder_work(
         &self,
-        requested: u64,
+        iterations: usize,
+        time_ns: u64,
     ) -> Result<(), LimitError> {
-        self.check_u64(
-            LimitKind::CheckpointSizeBytes,
-            requested,
-            self.max_checkpoint_size_bytes,
-        )
-    }
-
-    pub fn check_partitions(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
-            LimitKind::Partitions,
-            requested,
-            self.max_partitions,
-        )
-    }
-
-    pub fn check_stream_buffer(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
-            LimitKind::StreamBufferEvents,
-            requested,
-            self.max_stream_buffer_events,
-        )
-    }
-
-    pub fn check_decoder_iterations(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
+        self.check(
             LimitKind::DecoderIterations,
-            requested,
-            self.max_decoder_iterations,
+            iterations as u128,
+        )?;
+
+        self.check(
+            LimitKind::DecoderTimeNs,
+            time_ns as u128,
         )
     }
 
-    pub fn check_stabilizer_weight(
+    /// Validates partition count and partition size.
+    pub fn validate_partition(
         &self,
-        requested: usize,
+        partitions: usize,
+        qubits_per_partition: usize,
     ) -> Result<(), LimitError> {
-        self.check_usize(
-            LimitKind::StabilizerWeight,
-            requested,
-            self.max_stabilizer_weight,
-        )
-    }
+        self.check(
+            LimitKind::Partitions,
+            partitions as u128,
+        )?;
 
-    pub fn check_logical_operator_weight(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
-            LimitKind::LogicalOperatorWeight,
-            requested,
-            self.max_logical_operator_weight,
-        )
-    }
-
-    pub fn check_qubits_per_partition(
-        &self,
-        requested: usize,
-    ) -> Result<(), LimitError> {
-        self.check_usize(
+        self.check(
             LimitKind::QubitsPerPartition,
-            requested,
-            self.max_qubits_per_partition,
+            qubits_per_partition as u128,
         )
     }
 
-    pub fn check_qpu_shots(
+    /// Validates bounded streaming capacity.
+    pub fn validate_stream(
         &self,
-        requested: u64,
+        buffer_events: usize,
     ) -> Result<(), LimitError> {
-        self.check_u64(
+        self.check(
+            LimitKind::StreamBufferEvents,
+            buffer_events as u128,
+        )
+    }
+
+    /// Validates checkpoint size before persistence.
+    pub fn validate_checkpoint(
+        &self,
+        bytes: u64,
+    ) -> Result<(), LimitError> {
+        self.check(
+            LimitKind::CheckpointSizeBytes,
+            bytes as u128,
+        )
+    }
+
+    /// Validates QPU shot/circuit budgets.
+    pub fn validate_qpu(
+        &self,
+        shots: u64,
+        circuits: u64,
+    ) -> Result<(), LimitError> {
+        self.check(
             LimitKind::QpuShots,
-            requested,
-            self.max_qpu_shots,
-        )
-    }
+            shots as u128,
+        )?;
 
-    pub fn check_qpu_circuits(
-        &self,
-        requested: u64,
-    ) -> Result<(), LimitError> {
-        self.check_u64(
+        self.check(
             LimitKind::QpuCircuits,
-            requested,
-            self.max_qpu_circuits,
+            circuits as u128,
         )
     }
 
-    pub fn check_verification_operations(
+    /// Validates exact mathematical verification work.
+    pub fn validate_verification(
         &self,
-        requested: u64,
+        operations: u64,
     ) -> Result<(), LimitError> {
-        self.check_u64(
+        self.check(
             LimitKind::VerificationOperations,
-            requested,
-            self.max_verification_operations,
+            operations as u128,
         )
     }
 
-    fn check_usize(
+    /// Validates stabilizer weight.
+    pub fn validate_stabilizer(
         &self,
-        resource: LimitKind,
-        requested: usize,
-        maximum: usize,
+        weight: usize,
     ) -> Result<(), LimitError> {
-        if requested > maximum {
-            return Err(LimitError::Exceeded {
-                resource,
-                requested: requested as u128,
-                maximum: maximum as u128,
-            });
-        }
-
-        Ok(())
+        self.check(
+            LimitKind::StabilizerWeight,
+            weight as u128,
+        )
     }
 
-    fn check_u64(
+    /// Validates logical-operator weight.
+    pub fn validate_logical_operator(
         &self,
-        resource: LimitKind,
-        requested: u64,
-        maximum: u64,
+        weight: usize,
     ) -> Result<(), LimitError> {
-        if requested > maximum {
-            return Err(LimitError::Exceeded {
-                resource,
-                requested: requested as u128,
-                maximum: maximum as u128,
-            });
-        }
+        self.check(
+            LimitKind::LogicalOperatorWeight,
+            weight as u128,
+        )
+    }
 
-        Ok(())
+    /// Validates parallel worker count.
+    pub fn validate_parallelism(
+        &self,
+        workers: usize,
+    ) -> Result<(), LimitError> {
+        self.check(
+            LimitKind::Parallelism,
+            workers as u128,
+        )
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Overflow-safe derived resource calculations                            */
+    /* Checked derived-resource calculations                                  */
     /* ---------------------------------------------------------------------- */
 
-    /// Checked `distance²` calculation for surface-code data-qubit count.
-    pub fn estimate_surface_code_qubits(
-        &self,
-        distance: usize,
-    ) -> Result<usize, LimitError> {
-        self.check_code_distance(distance)?;
-
-        let qubits = distance
-            .checked_mul(distance)
-            .ok_or(LimitError::ArithmeticOverflow {
-                resource: LimitKind::Qubits,
-            })?;
-
-        self.check_qubits(qubits)?;
-
-        Ok(qubits)
-    }
-
-    /// Estimates a square surface-code stabilizer count.
-    ///
-    /// The topology module remains responsible for the exact mathematical
-    /// stabilizer count. This helper is deliberately conservative and is
-    /// intended for preflight only.
-    pub fn estimate_surface_code_stabilizers(
-        &self,
-        distance: usize,
-    ) -> Result<usize, LimitError> {
-        self.check_code_distance(distance)?;
-
-        let d_minus_one = distance
-            .checked_sub(1)
-            .ok_or(LimitError::ArithmeticOverflow {
-                resource: LimitKind::Stabilizers,
-            })?;
-
-        let stabilizers = d_minus_one
-            .checked_mul(d_minus_one)
-            .and_then(|value| value.checked_add(
-                d_minus_one,
-            ))
-            .ok_or(LimitError::ArithmeticOverflow {
-                resource: LimitKind::Stabilizers,
-            })?;
-
-        self.check_stabilizers(stabilizers)?;
-
-        Ok(stabilizers)
-    }
-
-    /// Estimates a square lattice graph-node count.
-    pub fn estimate_surface_code_graph_nodes(
-        &self,
-        distance: usize,
-        rounds: usize,
-    ) -> Result<usize, LimitError> {
-        self.check_code_distance(distance)?;
-        self.check_rounds(rounds)?;
-
-        let stabilizers =
-            self.estimate_surface_code_stabilizers(distance)?;
-
-        let nodes = stabilizers
-            .checked_mul(rounds)
-            .ok_or(LimitError::ArithmeticOverflow {
-                resource: LimitKind::GraphNodes,
-            })?;
-
-        self.check_graph_nodes(nodes)?;
-
-        Ok(nodes)
-    }
-
-    /// Conservative graph-edge estimate.
-    ///
-    /// The exact graph builder owns topology-specific edge generation. This
-    /// method exists solely to prevent graph construction from starting when
-    /// the requested workload is already obviously impossible.
-    pub fn estimate_surface_code_graph_edges(
-        &self,
-        distance: usize,
-        rounds: usize,
-    ) -> Result<usize, LimitError> {
-        let nodes =
-            self.estimate_surface_code_graph_nodes(
-                distance,
-                rounds,
-            )?;
-
-        let edges = nodes
-            .checked_mul(4)
-            .and_then(|value| value.checked_add(
-                nodes,
-            ))
-            .ok_or(LimitError::ArithmeticOverflow {
-                resource: LimitKind::GraphEdges,
-            })?;
-
-        self.check_graph_edges(edges)?;
-
-        Ok(edges)
-    }
-
-    /// Checked multiplication for workload dimensions.
+    /// Performs checked multiplication and then applies the policy.
     pub fn checked_product(
         &self,
         resource: LimitKind,
-        lhs: usize,
-        rhs: usize,
-    ) -> Result<usize, LimitError> {
-        let value = lhs
-            .checked_mul(rhs)
-            .ok_or(LimitError::ArithmeticOverflow {
-                resource,
-            })?;
+        a: u64,
+        b: u64,
+    ) -> Result<u64, LimitError> {
+        let value = a.checked_mul(b).ok_or(
+            LimitError::ArithmeticOverflow { resource },
+        )?;
+
+        self.check(resource, value as u128)?;
 
         Ok(value)
     }
 
-    /// Checked addition for workload dimensions.
+    /// Performs checked addition and then applies the policy.
     pub fn checked_sum(
         &self,
         resource: LimitKind,
-        lhs: usize,
-        rhs: usize,
-    ) -> Result<usize, LimitError> {
-        lhs.checked_add(rhs).ok_or(
+        a: u64,
+        b: u64,
+    ) -> Result<u64, LimitError> {
+        let value = a.checked_add(b).ok_or(
             LimitError::ArithmeticOverflow { resource },
+        )?;
+
+        self.check(resource, value as u128)?;
+
+        Ok(value)
+    }
+
+    /// Calculates `count * bytes_per_item` safely.
+    pub fn checked_bytes(
+        &self,
+        count: u64,
+        bytes_per_item: u64,
+    ) -> Result<u64, LimitError> {
+        self.checked_product(
+            LimitKind::MemoryBytes,
+            count,
+            bytes_per_item,
         )
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Unified preflight                                                      */
-    /* ---------------------------------------------------------------------- */
-
-    /// Performs a complete bounded preflight for a generic QEC workload.
+    /// Calculates the number of edges in a complete undirected graph.
     ///
-    /// This function is intended to run before expensive construction.
-    pub fn preflight(
+    /// This is an estimator only. It performs no allocation.
+    pub fn checked_complete_graph_edges(
         &self,
-        request: &QecResourceRequest,
-    ) -> Result<QecResourceEstimate, LimitError> {
-        self.validate()?;
+        nodes: u64,
+    ) -> Result<u64, LimitError> {
+        if nodes < 2 {
+            return Ok(0);
+        }
 
-        self.check_code_distance(
-            request.code_distance,
-        )?;
-
-        self.check_qubits(request.qubits)?;
-        self.check_stabilizers(request.stabilizers)?;
-        self.check_syndrome_events(
-            request.syndrome_events,
-        )?;
-        self.check_rounds(request.rounds)?;
-        self.check_graph_nodes(
-            request.graph_nodes,
-        )?;
-        self.check_graph_edges(
-            request.graph_edges,
-        )?;
-        self.check_memory(request.memory_bytes)?;
-        self.check_decoder_time_ns(
-            request.decoder_time_ns,
-        )?;
-        self.check_parallelism(
-            request.parallelism,
-        )?;
-        self.check_checkpoint_size(
-            request.checkpoint_size_bytes,
-        )?;
-        self.check_partitions(request.partitions)?;
-        self.check_stream_buffer(
-            request.stream_buffer_events,
-        )?;
-        self.check_decoder_iterations(
-            request.decoder_iterations,
-        )?;
-        self.check_stabilizer_weight(
-            request.stabilizer_weight,
-        )?;
-        self.check_logical_operator_weight(
-            request.logical_operator_weight,
-        )?;
-        self.check_qubits_per_partition(
-            request.qubits_per_partition,
-        )?;
-        self.check_qpu_shots(request.qpu_shots)?;
-        self.check_qpu_circuits(
-            request.qpu_circuits,
-        )?;
-        self.check_verification_operations(
-            request.verification_operations,
+        let n_minus_one = nodes.checked_sub(1).ok_or(
+            LimitError::ArithmeticOverflow {
+                resource: LimitKind::GraphEdges,
+            },
         )?;
 
-        Ok(QecResourceEstimate::from_request(
-            *request,
-        ))
+        let product = nodes.checked_mul(n_minus_one).ok_or(
+            LimitError::ArithmeticOverflow {
+                resource: LimitKind::GraphEdges,
+            },
+        )?;
+
+        let edges = product / 2;
+
+        self.check(
+            LimitKind::GraphEdges,
+            edges as u128,
+        )?;
+
+        Ok(edges)
     }
-}
 
-/* -------------------------------------------------------------------------- */
-/* Preflight request and estimate                                             */
-/* -------------------------------------------------------------------------- */
+    /// Calculates `ceil(a / b)` safely.
+    pub fn checked_ceil_div(
+        &self,
+        resource: LimitKind,
+        a: u64,
+        b: u64,
+    ) -> Result<u64, LimitError> {
+        if b == 0 {
+            return Err(LimitError::ArithmeticOverflow { resource });
+        }
 
-/// Resource request used by constructors and execution planners before
-/// allocation.
-///
-/// This structure contains requested resources rather than observed usage.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    Eq,
-    PartialEq,
-    Serialize,
-    Deserialize,
-)]
-pub struct QecResourceRequest {
-    pub code_distance: usize,
-    pub qubits: usize,
-    pub stabilizers: usize,
-    pub syndrome_events: usize,
-    pub rounds: usize,
-    pub graph_nodes: usize,
-    pub graph_edges: usize,
-    pub memory_bytes: u64,
-    pub decoder_time_ns: u64,
-    pub parallelism: usize,
-    pub checkpoint_size_bytes: u64,
-    pub partitions: usize,
-    pub stream_buffer_events: usize,
-    pub decoder_iterations: usize,
-    pub stabilizer_weight: usize,
-    pub logical_operator_weight: usize,
-    pub qubits_per_partition: usize,
-    pub qpu_shots: u64,
-    pub qpu_circuits: u64,
-    pub verification_operations: u64,
-}
+        let adjusted = a.checked_add(b - 1).ok_or(
+            LimitError::ArithmeticOverflow { resource },
+        )?;
 
-/// Result of a successful resource preflight.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    PartialEq,
-    Serialize,
-    Deserialize,
-)]
-pub struct QecResourceEstimate {
-    pub requested: QecResourceRequest,
-}
+        let value = adjusted / b;
 
-impl QecResourceEstimate {
-    const fn from_request(
-        requested: QecResourceRequest,
+        self.check(resource, value as u128)?;
+
+        Ok(value)
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Explicit configuration helpers                                         */
+    /* ---------------------------------------------------------------------- */
+
+    #[must_use]
+    pub const fn with_max_memory_bytes(
+        mut self,
+        value: u64,
     ) -> Self {
-        Self { requested }
+        self.max_memory_bytes = value;
+        self
     }
 
     #[must_use]
-    pub const fn requested(
-        &self,
-    ) -> QecResourceRequest {
-        self.requested
+    pub const fn with_max_qubits(
+        mut self,
+        value: usize,
+    ) -> Self {
+        self.max_qubits = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_code_distance(
+        mut self,
+        value: usize,
+    ) -> Self {
+        self.max_code_distance = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_syndrome_events(
+        mut self,
+        value: usize,
+    ) -> Self {
+        self.max_syndrome_events = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_graph_nodes(
+        mut self,
+        value: usize,
+    ) -> Self {
+        self.max_graph_nodes = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_graph_edges(
+        mut self,
+        value: usize,
+    ) -> Self {
+        self.max_graph_edges = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_decoder_iterations(
+        mut self,
+        value: usize,
+    ) -> Self {
+        self.max_decoder_iterations = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_parallelism(
+        mut self,
+        value: usize,
+    ) -> Self {
+        self.max_parallelism = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_partitions(
+        mut self,
+        value: usize,
+    ) -> Self {
+        self.max_partitions = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_stream_buffer_events(
+        mut self,
+        value: usize,
+    ) -> Self {
+        self.max_stream_buffer_events = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_qpu_shots(
+        mut self,
+        value: u64,
+    ) -> Self {
+        self.max_qpu_shots = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_qpu_circuits(
+        mut self,
+        value: u64,
+    ) -> Self {
+        self.max_qpu_circuits = value;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_verification_operations(
+        mut self,
+        value: u64,
+    ) -> Self {
+        self.max_verification_operations = value;
+        self
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Surface-code-specific preflight                                           */
-/* -------------------------------------------------------------------------- */
-
-/// Resource estimate for surface-code construction.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    PartialEq,
-    Serialize,
-    Deserialize,
-)]
-pub struct SurfaceCodeResourceEstimate {
-    pub distance: usize,
-    pub rounds: usize,
-    pub data_qubits: usize,
-    pub stabilizers: usize,
-    pub graph_nodes: usize,
-    pub conservative_graph_edges: usize,
-}
-
-impl QecLimits {
-    /// Performs all resource checks necessary before constructing a
-    /// surface-code workload.
-    ///
-    /// This is the API that `surface_code.rs` should use before allocating
-    /// its qubit/stabilizer/topology vectors.
-    pub fn preflight_surface_code(
-        &self,
-        distance: usize,
-        rounds: usize,
-    ) -> Result<SurfaceCodeResourceEstimate, LimitError> {
-        self.validate()?;
-        self.check_code_distance(distance)?;
-        self.check_rounds(rounds)?;
-
-        let data_qubits =
-            self.estimate_surface_code_qubits(distance)?;
-
-        let stabilizers =
-            self.estimate_surface_code_stabilizers(distance)?;
-
-        let graph_nodes =
-            self.estimate_surface_code_graph_nodes(
-                distance,
-                rounds,
-            )?;
-
-        let conservative_graph_edges =
-            self.estimate_surface_code_graph_edges(
-                distance,
-                rounds,
-            )?;
-
-        Ok(SurfaceCodeResourceEstimate {
-            distance,
-            rounds,
-            data_qubits,
-            stabilizers,
-            graph_nodes,
-            conservative_graph_edges,
-        })
-    }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Runtime-resource compatibility                                             */
-/* -------------------------------------------------------------------------- */
-
-/*
- * `resources.rs` currently has its own ResourceLimits structure because it
- * also carries a runtime wall-time Duration. The canonical declarative
- * policy remains QecLimits.
- *
- * This adapter intentionally does not introduce a second set of ceilings.
- * Runtime resource accounting receives the values already approved here.
- */
-
-impl QecLimits {
-    /// Returns the runtime memory ceiling.
-    #[must_use]
-    pub const fn memory_budget_bytes(
-        &self,
-    ) -> u64 {
-        self.max_memory_bytes
-    }
-
-    /// Returns the runtime syndrome-event ceiling.
-    #[must_use]
-    pub const fn syndrome_event_budget(
-        &self,
-    ) -> u64 {
-        self.max_syndrome_events as u64
-    }
-
-    /// Returns the runtime graph-node ceiling.
-    #[must_use]
-    pub const fn graph_node_budget(
-        &self,
-    ) -> u64 {
-        self.max_graph_nodes as u64
-    }
-
-    /// Returns the runtime graph-edge ceiling.
-    #[must_use]
-    pub const fn graph_edge_budget(
-        &self,
-    ) -> u64 {
-        self.max_graph_edges as u64
-    }
-
-    /// Returns the runtime decoder-iteration ceiling.
-    #[must_use]
-    pub const fn decoder_iteration_budget(
-        &self,
-    ) -> u64 {
-        self.max_decoder_iterations as u64
-    }
-
-    /// Returns the runtime parallel-worker ceiling.
-    #[must_use]
-    pub const fn parallelism_budget(
-        &self,
-    ) -> usize {
-        self.max_parallelism
-    }
-
-    /// Returns the configured decoder deadline.
-    #[must_use]
-    pub const fn decoder_deadline_ns(
-        &self,
-    ) -> u64 {
-        self.max_decoder_time_ns
-    }
-}
-
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 /* Tests                                                                      */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn default_limits_are_valid() {
-        QecLimits::default()
-            .validate()
-            .expect("default limits must be valid");
+    fn defaults_are_valid() {
+        assert!(QecLimits::default().validate().is_ok());
     }
 
     #[test]
-    fn surface_code_preflight_rejects_before_allocation() {
-        let mut limits = QecLimits::default();
-
-        limits.max_code_distance = 3;
-        limits.max_qubits = 8;
-
-        let result =
-            limits.preflight_surface_code(3, 3);
-
-        assert!(result.is_ok());
-
-        limits.max_qubits = 4;
-
-        let result =
-            limits.preflight_surface_code(3, 3);
+    fn zero_limit_is_rejected() {
+        let limits = QecLimits {
+            max_qubits: 0,
+            ..QecLimits::default()
+        };
 
         assert!(matches!(
-            result,
-            Err(LimitError::Exceeded {
+            limits.validate(),
+            Err(LimitError::InvalidLimit {
                 resource: LimitKind::Qubits,
                 ..
             })
@@ -1300,135 +1159,167 @@ mod tests {
     }
 
     #[test]
-    fn distance_square_overflow_is_rejected() {
-        let limits = QecLimits::default();
+    fn scalar_limit_is_enforced() {
+        let limits = QecLimits::default().with_max_qubits(10);
 
-        let result =
-            limits.estimate_surface_code_qubits(
-                usize::MAX,
-            );
+        assert!(
+            limits
+                .check(LimitKind::Qubits, 10)
+                .is_ok()
+        );
 
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn stream_buffer_cannot_exceed_event_budget() {
-        let mut limits = QecLimits::default();
-
-        limits.max_syndrome_events = 100;
-        limits.max_stream_buffer_events = 101;
-
-        assert!(matches!(
-            limits.validate(),
-            Err(LimitError::InconsistentLimits {
-                resource:
-                    LimitKind::StreamBufferEvents,
-                related_resource:
-                    LimitKind::SyndromeEvents,
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn partition_cannot_exceed_total_qubits() {
-        let mut limits = QecLimits::default();
-
-        limits.max_qubits = 100;
-        limits.max_qubits_per_partition = 101;
-
-        assert!(matches!(
-            limits.validate(),
-            Err(LimitError::InconsistentLimits {
-                resource:
-                    LimitKind::QubitsPerPartition,
-                related_resource:
-                    LimitKind::Qubits,
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn checkpoint_cannot_exceed_memory_budget() {
-        let mut limits = QecLimits::default();
-
-        limits.max_memory_bytes = 1024;
-        limits.max_checkpoint_size_bytes = 2048;
-
-        assert!(matches!(
-            limits.validate(),
-            Err(LimitError::InconsistentLimits {
-                resource:
-                    LimitKind::CheckpointSizeBytes,
-                related_resource:
-                    LimitKind::MemoryBytes,
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn generic_preflight_checks_every_dimension() {
-        let limits = QecLimits::default();
-
-        let request = QecResourceRequest {
-            code_distance: 3,
-            qubits: 9,
-            stabilizers: 4,
-            syndrome_events: 10,
-            rounds: 3,
-            graph_nodes: 12,
-            graph_edges: 20,
-            memory_bytes: 4096,
-            decoder_time_ns: 1_000,
-            parallelism: 1,
-            checkpoint_size_bytes: 1024,
-            partitions: 1,
-            stream_buffer_events: 10,
-            decoder_iterations: 100,
-            stabilizer_weight: 4,
-            logical_operator_weight: 3,
-            qubits_per_partition: 9,
-            qpu_shots: 1,
-            qpu_circuits: 1,
-            verification_operations: 1,
-        };
-
-        let estimate =
-            limits.preflight(&request)
-                .expect("valid request must pass");
-
-        assert_eq!(
-            estimate.requested(),
-            request
+        assert!(
+            limits
+                .check(LimitKind::Qubits, 11)
+                .is_err()
         );
     }
 
     #[test]
-    fn direct_checks_are_deterministic() {
-        let limits = QecLimits {
-            max_code_distance: 5,
-            ..QecLimits::default()
-        };
+    fn code_size_is_checked_before_construction() {
+        let limits = QecLimits::default()
+            .with_max_code_distance(5)
+            .with_max_qubits(100);
 
-        assert!(limits.check_code_distance(5).is_ok());
+        assert!(
+            limits
+                .validate_code_size(5, 100, 100)
+                .is_ok()
+        );
+
+        assert!(
+            limits
+                .validate_code_size(6, 100, 100)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn memory_is_checked_before_allocation() {
+        let limits = QecLimits::default()
+            .with_max_memory_bytes(100);
+
+        assert!(
+            limits
+                .checked_bytes(10, 10)
+                .is_ok()
+        );
+
+        assert!(
+            limits
+                .checked_bytes(11, 10)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn complete_graph_estimate_is_checked() {
+        let limits = QecLimits::default()
+            .with_max_graph_edges(3);
+
+        assert_eq!(
+            limits
+                .checked_complete_graph_edges(3)
+                .unwrap(),
+            3
+        );
+
+        assert!(
+            limits
+                .checked_complete_graph_edges(4)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn overflow_is_reported() {
+        let limits = QecLimits::default();
 
         assert!(matches!(
-            limits.check_code_distance(6),
-            Err(LimitError::Exceeded {
-                resource: LimitKind::CodeDistance,
-                requested: 6,
-                maximum: 5,
+            limits.checked_product(
+                LimitKind::MemoryBytes,
+                u64::MAX,
+                2,
+            ),
+            Err(LimitError::ArithmeticOverflow {
+                resource: LimitKind::MemoryBytes,
             })
         ));
     }
 
     #[test]
-    fn schema_is_explicit() {
-        assert_eq!(
-            QecLimits::default().schema_version,
-            QEC_LIMITS_SCHEMA_VERSION
+    fn partition_invariant_is_enforced() {
+        let limits = QecLimits {
+            max_qubits: 100,
+            max_qubits_per_partition: 101,
+            ..QecLimits::default()
+        };
+
+        assert!(limits.validate().is_err());
+    }
+
+    #[test]
+    fn stream_invariant_is_enforced() {
+        let limits = QecLimits {
+            max_syndrome_events: 100,
+            max_stream_buffer_events: 101,
+            ..QecLimits::default()
+        };
+
+        assert!(limits.validate().is_err());
+    }
+
+    #[test]
+    fn logical_weight_invariant_is_enforced() {
+        let limits = QecLimits {
+            max_qubits: 100,
+            max_logical_operator_weight: 101,
+            ..QecLimits::default()
+        };
+
+        assert!(limits.validate().is_err());
+    }
+
+    #[test]
+    fn qpu_limits_are_independent() {
+        let limits = QecLimits::default()
+            .with_max_qpu_shots(100)
+            .with_max_qpu_circuits(2);
+
+        assert!(
+            limits
+                .validate_qpu(100, 2)
+                .is_ok()
+        );
+
+        assert!(
+            limits
+                .validate_qpu(101, 2)
+                .is_err()
+        );
+
+        assert!(
+            limits
+                .validate_qpu(100, 3)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn verification_budget_is_independent() {
+        let limits = QecLimits::default()
+            .with_max_verification_operations(100);
+
+        assert!(
+            limits
+                .validate_verification(100)
+                .is_ok()
+        );
+
+        assert!(
+            limits
+                .validate_verification(101)
+                .is_err()
         );
     }
 }
