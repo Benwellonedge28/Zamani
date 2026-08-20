@@ -2,7 +2,7 @@
 name = "zamani"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.97.1"
 authors = ["Samuel Mukandara <samuelmukandara@gmail.com>"]
 description = "Zamani: The Omniversal AGI Language & Operating Intelligence"
 repository = "https://github.com/Benwellonedge28/Zamani"
@@ -30,16 +30,16 @@ required-features = ["buildsystem"]
 name = "zamani_compiler"
 path = "src/lib.rs"
 
-
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
-# Lightweight, independently-buildable component features (see docker/ for
-# per-component container images). These compile standalone without pulling
-# in the rest of the aspirational `full` surface.
+
+# Lightweight, independently-buildable component features.
+# These compile standalone without pulling in the rest of the
+# aspirational `full` surface.
 lsp = []
 buildsystem = []
 full = []
