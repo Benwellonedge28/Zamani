@@ -67,28 +67,39 @@
 //! `limits.rs` remains the declarative resource policy.
 //! `resources.rs` remains resource enforcement/accounting.
 //! `metrics.rs` remains execution observability.
-//! `telemetry.rs` is only the bounded privacy/security export boundary.
+//! `telemetry.rs` is the bounded privacy/security export boundary.
 //!
-//! Telemetry never invents another resource policy.
+//! Telemetry never creates a second resource-policy system.
 //!
 //! # Failure isolation
 //!
-//! Telemetry failures must never change the result of a decoder.
+//! Telemetry failures must never change a decoder's correctness result.
 //!
-//! A production execution path should therefore use:
+//! Export failures are therefore recorded internally and do not propagate
+//! from the exporter into the QEC correctness path.
 //!
-//! ```text
-//! decode()
-//!    │
-//!    ├── correctness result
-//!    │
-//!    └── telemetry.record(...)
-//!             │
-//!             ├── success
-//!             └── failure → ignored/logged outside correctness path
-//! ```
+//! Explicit authorization failures are reported to the caller because they
+//! indicate a policy violation rather than an exporter failure.
 //!
-//! Remote telemetry is provider-neutral. This module performs no network I/O.
+//! # Integration contract
+//!
+//! This module depends only on:
+//!
+//! - `configuration.rs` for central telemetry configuration;
+//! - `metrics.rs` for aggregate execution metrics;
+//! - `resources.rs` for aggregate resource accounting;
+//! - `errors.rs` for the canonical QEC error boundary.
+//!
+//! Authorization is intentionally abstracted through `TelemetryAuthorization`.
+//! `capabilities.rs` may implement that trait without requiring this file to
+//! depend directly on the capability subsystem.
+//!
+//! Remote transport is provider-neutral. This module performs no network I/O.
+//!
+//! # Rust compatibility
+//!
+//! The implementation intentionally uses stable Rust APIs compatible with
+//! Rust 1.97.1.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
@@ -97,14 +108,8 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
-use super::capabilities::{
-    Capability,
-    CapabilityContext,
-    ExecutionBackend,
-    ResourceRequest,
-};
 use super::configuration::QecConfig;
 use super::errors::{QecError, QecResult};
 use super::metrics::{BackendKind, DecoderId, MetricsSnapshot};
@@ -137,14 +142,13 @@ pub enum TelemetryPolicy {
     /// Remote export is prohibited.
     LocalOnly,
 
-    /// Retain aggregate telemetry locally.
-    ///
-    /// This policy is explicitly aggregate-only.
+    /// Retain aggregate telemetry locally as aggregate observations.
     Aggregated,
 
     /// Permit aggregate telemetry to be exported remotely.
     ///
-    /// Remote export additionally requires `Capability::EmitTelemetry`.
+    /// Remote export additionally requires an authorization object supplied
+    /// by the caller.
     ExplicitRemote,
 }
 
@@ -154,7 +158,7 @@ impl TelemetryPolicy {
         !matches!(self, Self::Disabled)
     }
 
-    /// Returns whether remote export is permitted.
+    /// Returns whether remote export is permitted by policy.
     pub const fn permits_remote(self) -> bool {
         matches!(self, Self::ExplicitRemote)
     }
@@ -177,20 +181,40 @@ impl Default for TelemetryPolicy {
 }
 
 /* ========================================================================== */
+/* Authorization boundary                                                     */
+/* ========================================================================== */
+
+/// Authorization abstraction for telemetry export.
+///
+/// `telemetry.rs` deliberately does not depend on the concrete capability
+/// implementation. This prevents an architectural dependency cycle and
+/// allows `capabilities.rs` to implement this contract later.
+///
+/// The implementation supplied by the caller must perform the actual
+/// authorization decision.
+///
+/// Local-only telemetry does not require this trait.
+pub trait TelemetryAuthorization: Send + Sync {
+    /// Returns true when aggregate telemetry may cross the remote boundary.
+    fn permits_remote_telemetry(&self) -> bool;
+}
+
+/* ========================================================================== */
 /* Runtime configuration                                                       */
 /* ========================================================================== */
 
 /// Runtime telemetry configuration.
 ///
 /// `QecConfig` remains the persistent configuration source of truth.
-/// This structure contains only runtime controls that belong specifically
-/// to telemetry retention/export.
+///
+/// This structure contains only runtime controls specifically belonging to
+/// telemetry retention, sampling, and aggregate field selection.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TelemetryRuntimeConfig {
     /// Telemetry policy.
     pub policy: TelemetryPolicy,
 
-    /// Maximum records retained in memory.
+    /// Maximum number of records retained in memory.
     pub max_buffer_records: usize,
 
     /// Deterministic sampling probability in `[0, 1]`.
@@ -224,7 +248,7 @@ impl Default for TelemetryRuntimeConfig {
 }
 
 impl TelemetryRuntimeConfig {
-    /// Construct runtime telemetry configuration from validated QEC config.
+    /// Construct runtime telemetry configuration from the central QEC config.
     pub fn from_qec_config(
         config: &QecConfig,
     ) -> Result<Self, TelemetryError> {
@@ -304,10 +328,10 @@ pub enum TelemetryEventKind {
     /// Aggregate metrics.
     MetricsSnapshot,
 
-    /// Aggregate resources.
+    /// Aggregate resource usage.
     ResourceSnapshot,
 
-    /// Combined metrics/resource decoder summary.
+    /// Combined decoder execution summary.
     DecoderSummary,
 
     /// Aggregate QPU execution statistics.
@@ -332,7 +356,7 @@ impl TelemetryEventKind {
 
 /// Aggregate metrics representation suitable for telemetry.
 ///
-/// This intentionally contains counters and derived rates only.
+/// This contains counters and derived rates only.
 ///
 /// It does not contain individual syndrome events, corrections, circuits,
 /// measurement payloads, topology objects, or user data.
@@ -504,12 +528,14 @@ pub struct TelemetryQpuSummary {
 
     pub readout_error_rate: Option<f64>,
 
-    /// Optional caller-provided stable backend digest.
+    /// Caller-provided stable backend digest.
     ///
-    /// This is deliberately a digest rather than a raw backend identifier.
+    /// This must already be a redacted/non-secret identifier.
     pub backend_digest: Option<u64>,
 
-    /// Optional caller-provided stable calibration digest.
+    /// Caller-provided stable calibration digest.
+    ///
+    /// This must already be a redacted/non-secret identifier.
     pub calibration_digest: Option<u64>,
 }
 
@@ -518,6 +544,8 @@ pub struct TelemetryQpuSummary {
 /* ========================================================================== */
 
 /// Bounded aggregate telemetry record.
+///
+/// This is the only record type accepted by the exporter boundary.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TelemetryRecord {
     /// Monotonic process-local sequence number.
@@ -542,12 +570,20 @@ pub struct TelemetryRecord {
 
 /// Provider-neutral remote telemetry sink.
 ///
-/// The exporter owns network/storage security. This module deliberately does
-/// not handle URLs, sockets, TLS, credentials, tokens, or provider APIs.
+/// The exporter owns network/storage security.
+///
+/// This module deliberately does not handle:
+///
+/// - URLs;
+/// - sockets;
+/// - TLS;
+/// - credentials;
+/// - authentication tokens;
+/// - provider-specific APIs.
 pub trait TelemetryExporter: Send + Sync {
     /// Export one already-sanitized aggregate record.
     ///
-    /// Export failures are observational and must never alter QEC correctness.
+    /// Returning an error does not fail the QEC operation.
     fn export(&self, record: &TelemetryRecord) -> Result<(), String>;
 }
 
@@ -560,39 +596,42 @@ pub trait TelemetryExporter: Send + Sync {
 pub struct TelemetrySnapshot {
     pub policy: TelemetryPolicy,
 
+    /// Number of records currently retained.
     pub retained_records: usize,
 
+    /// Number of records accepted after sampling.
     pub emitted_records: u64,
+
+    /// Number of records rejected by deterministic sampling.
     pub sampled_out_records: u64,
+
+    /// Number of old records evicted because the bounded buffer was full.
     pub dropped_records: u64,
 
+    /// Number of remote exports accepted by the exporter.
     pub export_successes: u64,
+
+    /// Number of remote exports rejected by the exporter.
     pub export_failures: u64,
 }
 
 /* ========================================================================== */
-/* Collector                                                                    */
+/* Collector                                                                  */
 /* ========================================================================== */
 
 /// Thread-safe bounded telemetry collector.
 ///
 /// The collector is observational and non-authoritative.
 ///
-/// ```text
-/// decoder
-///    │
-///    ├──────────────► correctness result
-///    │
-///    └──────────────► MetricsSnapshot
-///                         │
-///                         ▼
-///                   TelemetryCollector
-///                         │
-///                 ┌───────┴────────┐
-///                 ▼                ▼
-///              local            remote
-///              buffer           exporter
-/// ```
+/// It may safely be shared between:
+///
+/// - decoder workers;
+/// - streaming execution;
+/// - partitioned execution;
+/// - distributed aggregation;
+/// - QPU execution layers.
+///
+/// It never stores unbounded execution history.
 pub struct TelemetryCollector {
     config: TelemetryRuntimeConfig,
 
@@ -611,7 +650,10 @@ pub struct TelemetryCollector {
 }
 
 impl fmt::Debug for TelemetryCollector {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter
             .debug_struct("TelemetryCollector")
             .field("config", &self.config)
@@ -648,6 +690,8 @@ impl TelemetryCollector {
     }
 
     /// Create a collector with explicitly enabled remote export.
+    ///
+    /// Authorization is still required when a record is emitted.
     pub fn with_exporter(
         config: TelemetryRuntimeConfig,
         exporter: Arc<dyn TelemetryExporter>,
@@ -666,7 +710,9 @@ impl TelemetryCollector {
     pub fn from_qec_config(
         config: &QecConfig,
     ) -> Result<Self, TelemetryError> {
-        Self::new(TelemetryRuntimeConfig::from_qec_config(config)?)
+        Self::new(
+            TelemetryRuntimeConfig::from_qec_config(config)?,
+        )
     }
 
     /// Return runtime configuration.
@@ -675,14 +721,24 @@ impl TelemetryCollector {
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Recording                                                                */
+    /* Recording                                                               */
     /* ---------------------------------------------------------------------- */
 
     /// Record aggregate metrics.
+    ///
+    /// Local telemetry never requires a remote authorization object.
     pub fn record_metrics(
         &self,
         metrics: &MetricsSnapshot,
-        authorization: Option<&CapabilityContext>,
+    ) -> QecResult<()> {
+        self.record_metrics_authorized(metrics, None)
+    }
+
+    /// Record aggregate metrics with optional remote authorization.
+    pub fn record_metrics_authorized(
+        &self,
+        metrics: &MetricsSnapshot,
+        authorization: Option<&dyn TelemetryAuthorization>,
     ) -> QecResult<()> {
         if !self.config.include_metrics {
             return Ok(());
@@ -701,7 +757,15 @@ impl TelemetryCollector {
     pub fn record_resources(
         &self,
         resources: &ResourceSnapshot,
-        authorization: Option<&CapabilityContext>,
+    ) -> QecResult<()> {
+        self.record_resources_authorized(resources, None)
+    }
+
+    /// Record aggregate resources with optional remote authorization.
+    pub fn record_resources_authorized(
+        &self,
+        resources: &ResourceSnapshot,
+        authorization: Option<&dyn TelemetryAuthorization>,
     ) -> QecResult<()> {
         if !self.config.include_resources {
             return Ok(());
@@ -721,7 +785,21 @@ impl TelemetryCollector {
         &self,
         metrics: &MetricsSnapshot,
         resources: &ResourceSnapshot,
-        authorization: Option<&CapabilityContext>,
+    ) -> QecResult<()> {
+        self.record_execution_authorized(
+            metrics,
+            resources,
+            None,
+        )
+    }
+
+    /// Record the preferred combined decoder execution summary with
+    /// optional remote authorization.
+    pub fn record_execution_authorized(
+        &self,
+        metrics: &MetricsSnapshot,
+        resources: &ResourceSnapshot,
+        authorization: Option<&dyn TelemetryAuthorization>,
     ) -> QecResult<()> {
         if !self.config.include_metrics
             && !self.config.include_resources
@@ -750,8 +828,6 @@ impl TelemetryCollector {
     ///
     /// Backend and calibration identifiers are accepted only as already
     /// redacted stable digests.
-    ///
-    /// This prevents telemetry from becoming a secret-handling boundary.
     pub fn record_qpu_summary(
         &self,
         shots: u64,
@@ -761,7 +837,30 @@ impl TelemetryCollector {
         readout_error_rate: Option<f64>,
         backend_digest: Option<u64>,
         calibration_digest: Option<u64>,
-        authorization: Option<&CapabilityContext>,
+    ) -> QecResult<()> {
+        self.record_qpu_summary_authorized(
+            shots,
+            queue_time,
+            execution_time,
+            measurement_count,
+            readout_error_rate,
+            backend_digest,
+            calibration_digest,
+            None,
+        )
+    }
+
+    /// Record aggregate QPU information with optional remote authorization.
+    pub fn record_qpu_summary_authorized(
+        &self,
+        shots: u64,
+        queue_time: Duration,
+        execution_time: Duration,
+        measurement_count: u64,
+        readout_error_rate: Option<f64>,
+        backend_digest: Option<u64>,
+        calibration_digest: Option<u64>,
+        authorization: Option<&dyn TelemetryAuthorization>,
     ) -> QecResult<()> {
         if !self.config.include_qpu_statistics {
             return Ok(());
@@ -804,7 +903,14 @@ impl TelemetryCollector {
     pub fn records(&self) -> Vec<TelemetryRecord> {
         match self.records.lock() {
             Ok(records) => records.iter().cloned().collect(),
-            Err(poisoned) => poisoned.into_inner().iter().cloned().collect(),
+
+            Err(poisoned) => {
+                poisoned
+                    .into_inner()
+                    .iter()
+                    .cloned()
+                    .collect()
+            }
         }
     }
 
@@ -812,6 +918,7 @@ impl TelemetryCollector {
     pub fn snapshot(&self) -> TelemetrySnapshot {
         let retained_records = match self.records.lock() {
             Ok(records) => records.len(),
+
             Err(poisoned) => poisoned.into_inner().len(),
         };
 
@@ -820,13 +927,17 @@ impl TelemetryCollector {
 
             retained_records,
 
-            emitted_records: self.emitted_records.load(Ordering::Relaxed),
+            emitted_records: self
+                .emitted_records
+                .load(Ordering::Relaxed),
 
             sampled_out_records: self
                 .sampled_out_records
                 .load(Ordering::Relaxed),
 
-            dropped_records: self.dropped_records.load(Ordering::Relaxed),
+            dropped_records: self
+                .dropped_records
+                .load(Ordering::Relaxed),
 
             export_successes: self
                 .export_successes
@@ -840,11 +951,15 @@ impl TelemetryCollector {
 
     /// Clear locally retained telemetry.
     ///
-    /// This cannot affect QEC correctness state.
+    /// Counters are intentionally preserved so clearing retention does not
+    /// destroy collector-level accounting.
     pub fn clear(&self) {
         match self.records.lock() {
             Ok(mut records) => records.clear(),
-            Err(poisoned) => poisoned.into_inner().clear(),
+
+            Err(poisoned) => {
+                poisoned.into_inner().clear();
+            }
         }
     }
 
@@ -858,24 +973,23 @@ impl TelemetryCollector {
         metrics: Option<TelemetryMetrics>,
         resources: Option<TelemetryResources>,
         qpu: Option<TelemetryQpuSummary>,
-        authorization: Option<&CapabilityContext>,
+        authorization: Option<&dyn TelemetryAuthorization>,
     ) -> QecResult<()> {
         if !self.config.policy.enabled() {
             return Ok(());
         }
 
-        /*
-         * Authorization is checked before retention/export so a remote
-         * telemetry record can never silently bypass the capability boundary.
-         */
-        self.authorize_emission(authorization)?;
+        self.authorize_remote(authorization)?;
 
         let sequence = self
             .sequence
             .fetch_add(1, Ordering::Relaxed)
             .saturating_add(1);
 
-        if !sample_sequence(sequence, self.config.sampling_rate) {
+        if !sample_sequence(
+            sequence,
+            self.config.sampling_rate,
+        ) {
             self.sampled_out_records
                 .fetch_add(1, Ordering::Relaxed);
 
@@ -896,11 +1010,9 @@ impl TelemetryCollector {
             .fetch_add(1, Ordering::Relaxed);
 
         /*
-         * Remote export occurs after bounded local retention.
+         * Remote export is deliberately best-effort.
          *
-         * Export failure is deliberately swallowed at the telemetry boundary.
-         * The caller may observe the export-failure counter, but QEC correctness
-         * is never affected.
+         * Export failures cannot alter the correctness result.
          */
         if self.config.policy.permits_remote() {
             if let Some(exporter) = &self.exporter {
@@ -953,9 +1065,10 @@ impl TelemetryCollector {
         dropped_records: &AtomicU64,
     ) {
         if records.len() >= capacity {
-            let _ = records.pop_front();
+            records.pop_front();
 
-            dropped_records.fetch_add(1, Ordering::Relaxed);
+            dropped_records
+                .fetch_add(1, Ordering::Relaxed);
         }
 
         records.push_back(record);
@@ -963,15 +1076,10 @@ impl TelemetryCollector {
 
     /// Enforce remote telemetry authorization.
     ///
-    /// Local telemetry does not require a capability because it remains inside
-    /// the QEC process.
-    ///
-    /// Remote telemetry requires:
-    ///
-    /// `Capability::EmitTelemetry`
-    fn authorize_emission(
+    /// Local telemetry never requires authorization.
+    fn authorize_remote(
         &self,
-        authorization: Option<&CapabilityContext>,
+        authorization: Option<&dyn TelemetryAuthorization>,
     ) -> QecResult<()> {
         if !self.config.policy.permits_remote() {
             return Ok(());
@@ -984,35 +1092,16 @@ impl TelemetryCollector {
             ));
         }
 
-        let context = authorization.ok_or_else(|| {
-            QecError::unsupported(
+        let authorized = authorization
+            .map(TelemetryAuthorization::permits_remote_telemetry)
+            .unwrap_or(false);
+
+        if !authorized {
+            return Err(QecError::unsupported(
                 "telemetry capability",
-                "remote telemetry requires explicit capability authorization",
-            )
-        })?;
-
-        /*
-         * Telemetry emission itself is not a QPU operation. The exporter
-         * remains an external service boundary and therefore requires the
-         * dedicated EmitTelemetry capability.
-         */
-        let request = ResourceRequest::default();
-
-        let now = unix_seconds();
-
-        context
-            .authorize(
-                Capability::EmitTelemetry,
-                ExecutionBackend::Cpu,
-                &request,
-                now,
-            )
-            .map_err(|error| {
-                QecError::unsupported(
-                    "telemetry capability",
-                    format!("telemetry emission denied: {error}"),
-                )
-            })?;
+                "remote telemetry requires explicit authorization",
+            ));
+        }
 
         Ok(())
     }
@@ -1024,7 +1113,9 @@ impl TelemetryCollector {
 
 /// Errors encountered while constructing or configuring telemetry.
 ///
-/// Runtime emission uses the canonical `QecError` boundary.
+/// Runtime exporter failures are intentionally not represented here because
+/// they are isolated from the correctness path and recorded in
+/// `TelemetrySnapshot::export_failures`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TelemetryError {
     /// Runtime configuration is invalid.
@@ -1038,7 +1129,10 @@ pub enum TelemetryError {
 }
 
 impl fmt::Display for TelemetryError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::InvalidConfiguration(message) => {
                 formatter.write_str(message)
@@ -1067,29 +1161,29 @@ impl std::error::Error for TelemetryError {}
 /* ========================================================================== */
 
 /// Convert a duration to a bounded nanosecond count.
+///
+/// Overflow is saturated rather than wrapped.
 fn duration_nanos(duration: Duration) -> u64 {
     duration
         .as_nanos()
         .min(u64::MAX as u128) as u64
 }
 
-/// Current Unix timestamp.
-///
-/// Used only for capability expiration checks.
-///
-/// The timestamp is never stored in telemetry.
-fn unix_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0)
-}
-
 /// Deterministic sampling.
 ///
-/// Sampling does not use thread-local/global RNG state. Consequently,
-/// sampling decisions are stable for a given sequence number.
-fn sample_sequence(sequence: u64, rate: f64) -> bool {
+/// Sampling does not use:
+///
+/// - thread-local RNG;
+/// - global RNG;
+/// - system time;
+/// - process scheduling.
+///
+/// Consequently, a sequence number always produces the same sampling
+/// decision for a given rate.
+fn sample_sequence(
+    sequence: u64,
+    rate: f64,
+) -> bool {
     if rate <= 0.0 {
         return false;
     }
@@ -1100,20 +1194,25 @@ fn sample_sequence(sequence: u64, rate: f64) -> bool {
 
     let hash = stable_digest_u64(sequence);
 
-    let fraction = (hash as f64) / (u64::MAX as f64);
+    let fraction =
+        (hash as f64) / (u64::MAX as f64);
 
     fraction < rate
 }
 
-/// Stable FNV-1a digest for deterministic sampling.
+/// Stable FNV-1a digest used only for deterministic sampling.
 ///
-/// This is not cryptographic.
+/// This is deliberately NOT a cryptographic hash and must never be used
+/// for authentication, integrity, or secrecy.
 fn stable_digest_u64(value: u64) -> u64 {
     let mut hash = 0xcbf29ce484222325u64;
 
     for byte in value.to_le_bytes() {
         hash ^= byte as u64;
-        hash = hash.wrapping_mul(0x100000001b3);
+
+        hash = hash.wrapping_mul(
+            0x100000001b3,
+        );
     }
 
     hash
@@ -1127,7 +1226,10 @@ fn stable_digest_u64(value: u64) -> u64 {
 mod tests {
     use super::*;
 
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::{
+        AtomicU64,
+        Ordering,
+    };
     use std::thread;
 
     struct TestExporter {
@@ -1146,7 +1248,7 @@ mod tests {
         fn failing() -> Self {
             Self {
                 calls: AtomicU64::new(0),
-                failures: AtomicU64::new(0),
+                failures: AtomicU64::new(1),
             }
         }
     }
@@ -1156,13 +1258,33 @@ mod tests {
             &self,
             _record: &TelemetryRecord,
         ) -> Result<(), String> {
-            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.calls
+                .fetch_add(1, Ordering::Relaxed);
 
             if self.failures.load(Ordering::Relaxed) > 0 {
-                Err("simulated exporter failure".to_owned())
+                Err(
+                    "simulated exporter failure"
+                        .to_owned(),
+                )
             } else {
                 Ok(())
             }
+        }
+    }
+
+    struct AllowRemote;
+
+    impl TelemetryAuthorization for AllowRemote {
+        fn permits_remote_telemetry(&self) -> bool {
+            true
+        }
+    }
+
+    struct DenyRemote;
+
+    impl TelemetryAuthorization for DenyRemote {
+        fn permits_remote_telemetry(&self) -> bool {
+            false
         }
     }
 
@@ -1199,179 +1321,268 @@ mod tests {
     #[test]
     fn telemetry_is_bounded() {
         let mut config =
-            configuration(TelemetryPolicy::LocalOnly);
+            configuration(
+                TelemetryPolicy::LocalOnly,
+            );
 
         config.max_buffer_records = 2;
 
         let collector =
-            TelemetryCollector::new(config).unwrap();
+            TelemetryCollector::new(config)
+                .unwrap();
 
         let metrics = empty_metrics();
 
         collector
-            .record_metrics(&metrics, None)
+            .record_metrics(&metrics)
             .unwrap();
 
         collector
-            .record_metrics(&metrics, None)
+            .record_metrics(&metrics)
             .unwrap();
 
         collector
-            .record_metrics(&metrics, None)
+            .record_metrics(&metrics)
             .unwrap();
 
-        let snapshot = collector.snapshot();
+        let snapshot =
+            collector.snapshot();
 
-        assert_eq!(snapshot.retained_records, 2);
-        assert_eq!(snapshot.dropped_records, 1);
-        assert_eq!(snapshot.emitted_records, 3);
+        assert_eq!(
+            snapshot.retained_records,
+            2
+        );
+
+        assert_eq!(
+            snapshot.dropped_records,
+            1
+        );
+
+        assert_eq!(
+            snapshot.emitted_records,
+            3
+        );
     }
 
     #[test]
     fn disabled_telemetry_retains_nothing() {
         let collector =
             TelemetryCollector::new(
-                configuration(TelemetryPolicy::Disabled),
+                configuration(
+                    TelemetryPolicy::Disabled,
+                ),
             )
             .unwrap();
 
-        let metrics = empty_metrics();
-
         collector
-            .record_metrics(&metrics, None)
+            .record_metrics(
+                &empty_metrics(),
+            )
             .unwrap();
 
-        let snapshot = collector.snapshot();
+        let snapshot =
+            collector.snapshot();
 
-        assert_eq!(snapshot.retained_records, 0);
-        assert_eq!(snapshot.emitted_records, 0);
+        assert_eq!(
+            snapshot.retained_records,
+            0
+        );
+
+        assert_eq!(
+            snapshot.emitted_records,
+            0
+        );
     }
 
     #[test]
     fn invalid_capacity_is_rejected() {
         let mut config =
-            configuration(TelemetryPolicy::LocalOnly);
+            configuration(
+                TelemetryPolicy::LocalOnly,
+            );
 
         config.max_buffer_records = 0;
 
         assert!(
-            TelemetryCollector::new(config).is_err()
+            TelemetryCollector::new(config)
+                .is_err()
         );
 
         config.max_buffer_records =
             MAX_BUFFER_CAPACITY + 1;
 
         assert!(
-            TelemetryCollector::new(config).is_err()
+            TelemetryCollector::new(config)
+                .is_err()
         );
     }
 
     #[test]
     fn invalid_sampling_rate_is_rejected() {
         let mut config =
-            configuration(TelemetryPolicy::LocalOnly);
+            configuration(
+                TelemetryPolicy::LocalOnly,
+            );
 
-        config.sampling_rate = f64::NAN;
+        config.sampling_rate =
+            f64::NAN;
 
         assert!(
-            TelemetryCollector::new(config).is_err()
+            TelemetryCollector::new(config)
+                .is_err()
         );
 
         config.sampling_rate = 1.1;
 
         assert!(
-            TelemetryCollector::new(config).is_err()
+            TelemetryCollector::new(config)
+                .is_err()
         );
 
         config.sampling_rate = -0.1;
 
         assert!(
-            TelemetryCollector::new(config).is_err()
+            TelemetryCollector::new(config)
+                .is_err()
         );
     }
 
     #[test]
     fn zero_sampling_retains_nothing() {
         let mut config =
-            configuration(TelemetryPolicy::LocalOnly);
+            configuration(
+                TelemetryPolicy::LocalOnly,
+            );
 
         config.sampling_rate = 0.0;
 
         let collector =
-            TelemetryCollector::new(config).unwrap();
+            TelemetryCollector::new(config)
+                .unwrap();
 
         let metrics = empty_metrics();
 
         for _ in 0..100 {
             collector
-                .record_metrics(&metrics, None)
+                .record_metrics(&metrics)
                 .unwrap();
         }
 
-        let snapshot = collector.snapshot();
+        let snapshot =
+            collector.snapshot();
 
-        assert_eq!(snapshot.retained_records, 0);
-        assert_eq!(snapshot.emitted_records, 0);
-        assert_eq!(snapshot.sampled_out_records, 100);
+        assert_eq!(
+            snapshot.retained_records,
+            0
+        );
+
+        assert_eq!(
+            snapshot.emitted_records,
+            0
+        );
+
+        assert_eq!(
+            snapshot.sampled_out_records,
+            100
+        );
     }
 
     #[test]
     fn full_sampling_retains_every_record() {
         let mut config =
-            configuration(TelemetryPolicy::LocalOnly);
+            configuration(
+                TelemetryPolicy::LocalOnly,
+            );
 
         config.sampling_rate = 1.0;
 
         let collector =
-            TelemetryCollector::new(config).unwrap();
+            TelemetryCollector::new(config)
+                .unwrap();
 
         let metrics = empty_metrics();
 
         for _ in 0..100 {
             collector
-                .record_metrics(&metrics, None)
+                .record_metrics(&metrics)
                 .unwrap();
         }
 
-        let snapshot = collector.snapshot();
+        let snapshot =
+            collector.snapshot();
 
-        assert_eq!(snapshot.retained_records, 100);
-        assert_eq!(snapshot.emitted_records, 100);
-        assert_eq!(snapshot.sampled_out_records, 0);
+        assert_eq!(
+            snapshot.retained_records,
+            100
+        );
+
+        assert_eq!(
+            snapshot.emitted_records,
+            100
+        );
+
+        assert_eq!(
+            snapshot.sampled_out_records,
+            0
+        );
     }
 
     #[test]
     fn deterministic_sampling_is_stable() {
-        let first: Vec<bool> = (1..10_000)
-            .map(|sequence| {
-                sample_sequence(sequence, 0.5)
-            })
-            .collect();
+        let first: Vec<bool> =
+            (1..10_000)
+                .map(|sequence| {
+                    sample_sequence(
+                        sequence,
+                        0.5,
+                    )
+                })
+                .collect();
 
-        let second: Vec<bool> = (1..10_000)
-            .map(|sequence| {
-                sample_sequence(sequence, 0.5)
-            })
-            .collect();
+        let second: Vec<bool> =
+            (1..10_000)
+                .map(|sequence| {
+                    sample_sequence(
+                        sequence,
+                        0.5,
+                    )
+                })
+                .collect();
 
-        assert_eq!(first, second);
+        assert_eq!(
+            first,
+            second
+        );
     }
 
     #[test]
     fn sampling_boundaries_are_correct() {
-        assert!(!sample_sequence(1, 0.0));
-        assert!(!sample_sequence(2, 0.0));
+        assert!(
+            !sample_sequence(1, 0.0)
+        );
 
-        assert!(sample_sequence(1, 1.0));
-        assert!(sample_sequence(2, 1.0));
+        assert!(
+            !sample_sequence(2, 0.0)
+        );
+
+        assert!(
+            sample_sequence(1, 1.0)
+        );
+
+        assert!(
+            sample_sequence(2, 1.0)
+        );
     }
 
     #[test]
     fn resource_conversion_is_aggregate_only() {
-        let resources = empty_resources();
+        let resources =
+            empty_resources();
 
         let telemetry =
-            TelemetryResources::from(&resources);
+            TelemetryResources::from(
+                &resources,
+            );
 
         assert_eq!(
             telemetry.allocated_bytes,
@@ -1401,10 +1612,13 @@ mod tests {
 
     #[test]
     fn metrics_conversion_is_aggregate_only() {
-        let metrics = empty_metrics();
+        let metrics =
+            empty_metrics();
 
         let telemetry =
-            TelemetryMetrics::from(&metrics);
+            TelemetryMetrics::from(
+                &metrics,
+            );
 
         assert_eq!(
             telemetry.decode_operations,
@@ -1417,7 +1631,8 @@ mod tests {
         );
 
         assert!(
-            !telemetry.had_logical_failure
+            !telemetry
+                .had_logical_failure
         );
     }
 
@@ -1431,39 +1646,51 @@ mod tests {
             )
             .unwrap();
 
-        let metrics = empty_metrics();
-        let resources = empty_resources();
+        let metrics =
+            empty_metrics();
+
+        let resources =
+            empty_resources();
 
         collector
             .record_execution(
                 &metrics,
                 &resources,
-                None,
             )
             .unwrap();
 
-        let records = collector.records();
+        let records =
+            collector.records();
 
-        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records.len(),
+            1
+        );
+
         assert_eq!(
             records[0].kind,
             TelemetryEventKind::DecoderSummary
         );
 
         assert!(
-            records[0].metrics.is_some()
+            records[0]
+                .metrics
+                .is_some()
         );
 
         assert!(
-            records[0].resources.is_some()
+            records[0]
+                .resources
+                .is_some()
         );
     }
 
     #[test]
     fn remote_export_requires_explicit_policy() {
-        let exporter = Arc::new(
-            TestExporter::successful(),
-        );
+        let exporter =
+            Arc::new(
+                TestExporter::successful(),
+            );
 
         assert!(
             TelemetryCollector::with_exporter(
@@ -1487,19 +1714,22 @@ mod tests {
             .unwrap();
 
         let result =
-            collector.record_metrics(
+            collector.record_metrics_authorized(
                 &empty_metrics(),
-                None,
+                Some(&AllowRemote),
             );
 
-        assert!(result.is_err());
+        assert!(
+            result.is_err()
+        );
     }
 
     #[test]
-    fn remote_export_requires_capability_context() {
-        let exporter = Arc::new(
-            TestExporter::successful(),
-        );
+    fn remote_export_requires_authorization() {
+        let exporter =
+            Arc::new(
+                TestExporter::successful(),
+            );
 
         let collector =
             TelemetryCollector::with_exporter(
@@ -1510,43 +1740,160 @@ mod tests {
             )
             .unwrap();
 
-        let result =
-            collector.record_metrics(
-                &empty_metrics(),
-                None,
-            );
+        let denied =
+            DenyRemote;
 
-        assert!(result.is_err());
+        let result =
+            collector
+                .record_metrics_authorized(
+                    &empty_metrics(),
+                    Some(&denied),
+                );
+
+        assert!(
+            result.is_err()
+        );
 
         assert_eq!(
-            exporter.calls.load(
-                Ordering::Relaxed
-            ),
+            exporter
+                .calls
+                .load(Ordering::Relaxed),
             0
         );
     }
 
     #[test]
+    fn remote_export_succeeds_when_authorized() {
+        let exporter =
+            Arc::new(
+                TestExporter::successful(),
+            );
+
+        let collector =
+            TelemetryCollector::with_exporter(
+                configuration(
+                    TelemetryPolicy::ExplicitRemote,
+                ),
+                exporter.clone(),
+            )
+            .unwrap();
+
+        let authorization =
+            AllowRemote;
+
+        collector
+            .record_metrics_authorized(
+                &empty_metrics(),
+                Some(&authorization),
+            )
+            .unwrap();
+
+        let snapshot =
+            collector.snapshot();
+
+        assert_eq!(
+            snapshot.export_successes,
+            1
+        );
+
+        assert_eq!(
+            snapshot.export_failures,
+            0
+        );
+
+        assert_eq!(
+            exporter.calls.load(
+                Ordering::Relaxed
+            ),
+            1
+        );
+    }
+
+    #[test]
+    fn exporter_failure_does_not_fail_qec_telemetry_record() {
+        let exporter =
+            Arc::new(
+                TestExporter::failing(),
+            );
+
+        let collector =
+            TelemetryCollector::with_exporter(
+                configuration(
+                    TelemetryPolicy::ExplicitRemote,
+                ),
+                exporter.clone(),
+            )
+            .unwrap();
+
+        let authorization =
+            AllowRemote;
+
+        let result =
+            collector
+                .record_metrics_authorized(
+                    &empty_metrics(),
+                    Some(&authorization),
+                );
+
+        assert!(
+            result.is_ok()
+        );
+
+        let snapshot =
+            collector.snapshot();
+
+        assert_eq!(
+            snapshot.export_successes,
+            0
+        );
+
+        assert_eq!(
+            snapshot.export_failures,
+            1
+        );
+
+        assert_eq!(
+            exporter.calls.load(
+                Ordering::Relaxed
+            ),
+            1
+        );
+
+        assert_eq!(
+            snapshot.retained_records,
+            1
+        );
+    }
+
+    #[test]
     fn remote_export_does_not_store_raw_identifiers() {
-        let summary = TelemetryQpuSummary {
-            shots: 10,
-            queue_time_nanos: 100,
-            execution_time_nanos: 200,
-            measurement_count: 20,
-            readout_error_rate: Some(0.01),
-            backend_digest: Some(1234),
-            calibration_digest: Some(5678),
-        };
+        let summary =
+            TelemetryQpuSummary {
+                shots: 10,
+                queue_time_nanos: 100,
+                execution_time_nanos: 200,
+                measurement_count: 20,
+                readout_error_rate:
+                    Some(0.01),
+                backend_digest:
+                    Some(1234),
+                calibration_digest:
+                    Some(5678),
+            };
 
         let debug =
             format!("{summary:?}");
 
         assert!(
-            !debug.contains("backend-secret")
+            !debug.contains(
+                "backend-secret"
+            )
         );
 
         assert!(
-            !debug.contains("calibration-secret")
+            !debug.contains(
+                "calibration-secret"
+            )
         );
     }
 
@@ -1570,7 +1917,6 @@ mod tests {
                     Some(f64::NAN),
                     None,
                     None,
-                    None,
                 )
                 .is_err()
         );
@@ -1585,7 +1931,6 @@ mod tests {
                     Some(1.1),
                     None,
                     None,
-                    None,
                 )
                 .is_err()
         );
@@ -1598,7 +1943,6 @@ mod tests {
                     Duration::ZERO,
                     10,
                     Some(-0.1),
-                    None,
                     None,
                     None,
                 )
@@ -1619,24 +1963,29 @@ mod tests {
         collector
             .record_metrics(
                 &empty_metrics(),
-                None,
             )
             .unwrap();
 
         assert_eq!(
-            collector.snapshot().retained_records,
+            collector
+                .snapshot()
+                .retained_records,
             1
         );
 
         collector.clear();
 
         assert_eq!(
-            collector.snapshot().retained_records,
+            collector
+                .snapshot()
+                .retained_records,
             0
         );
 
         assert_eq!(
-            collector.snapshot().emitted_records,
+            collector
+                .snapshot()
+                .emitted_records,
             1
         );
     }
@@ -1644,18 +1993,28 @@ mod tests {
     #[test]
     fn concurrent_recording_remains_bounded() {
         let mut config =
-            configuration(TelemetryPolicy::LocalOnly);
+            configuration(
+                TelemetryPolicy::LocalOnly,
+            );
 
-        config.max_buffer_records = 128;
+        config.max_buffer_records =
+            128;
 
-        let collector = Arc::new(
-            TelemetryCollector::new(config)
+        let collector =
+            Arc::new(
+                TelemetryCollector::new(
+                    config,
+                )
                 .unwrap(),
-        );
+            );
 
-        let metrics = Arc::new(empty_metrics());
+        let metrics =
+            Arc::new(
+                empty_metrics(),
+            );
 
-        let mut handles = Vec::new();
+        let mut handles =
+            Vec::new();
 
         for _ in 0..8 {
             let collector =
@@ -1665,21 +2024,24 @@ mod tests {
                 Arc::clone(&metrics);
 
             handles.push(
-                thread::spawn(move || {
-                    for _ in 0..1_000 {
-                        collector
-                            .record_metrics(
-                                &metrics,
-                                None,
-                            )
-                            .unwrap();
-                    }
-                }),
+                thread::spawn(
+                    move || {
+                        for _ in 0..1_000 {
+                            collector
+                                .record_metrics(
+                                    &metrics,
+                                )
+                                .unwrap();
+                        }
+                    },
+                ),
             );
         }
 
         for handle in handles {
-            handle.join().unwrap();
+            handle
+                .join()
+                .unwrap();
         }
 
         let snapshot =
@@ -1711,13 +2073,13 @@ mod tests {
             )
             .unwrap();
 
-        let metrics = empty_metrics();
+        let metrics =
+            empty_metrics();
 
         for _ in 0..10 {
             collector
                 .record_metrics(
                     &metrics,
-                    None,
                 )
                 .unwrap();
         }
@@ -1735,7 +2097,8 @@ mod tests {
 
     #[test]
     fn telemetry_contains_no_raw_qec_payload() {
-        let metrics = empty_metrics();
+        let metrics =
+            empty_metrics();
 
         let telemetry =
             TelemetryMetrics::from(
@@ -1746,33 +2109,47 @@ mod tests {
             format!("{telemetry:?}");
 
         assert!(
-            !debug.contains("circuit")
+            !debug.contains(
+                "circuit"
+            )
         );
 
         assert!(
-            !debug.contains("credential")
+            !debug.contains(
+                "credential"
+            )
         );
 
         assert!(
-            !debug.contains("private_key")
+            !debug.contains(
+                "private_key"
+            )
         );
 
         assert!(
-            !debug.contains("raw_measurement")
+            !debug.contains(
+                "raw_measurement"
+            )
         );
 
         assert!(
-            !debug.contains("syndrome_stream")
+            !debug.contains(
+                "syndrome_stream"
+            )
         );
     }
 
     #[test]
     fn duration_conversion_saturates() {
         let duration =
-            Duration::from_secs(u64::MAX);
+            Duration::from_secs(
+                u64::MAX,
+            );
 
         let nanos =
-            duration_nanos(duration);
+            duration_nanos(
+                duration,
+            );
 
         assert_eq!(
             nanos,
@@ -1783,23 +2160,97 @@ mod tests {
     #[test]
     fn policy_names_are_stable() {
         assert_eq!(
-            TelemetryPolicy::Disabled.as_str(),
+            TelemetryPolicy::Disabled
+                .as_str(),
             "disabled"
         );
 
         assert_eq!(
-            TelemetryPolicy::LocalOnly.as_str(),
+            TelemetryPolicy::LocalOnly
+                .as_str(),
             "local_only"
         );
 
         assert_eq!(
-            TelemetryPolicy::Aggregated.as_str(),
+            TelemetryPolicy::Aggregated
+                .as_str(),
             "aggregated"
         );
 
         assert_eq!(
-            TelemetryPolicy::ExplicitRemote.as_str(),
+            TelemetryPolicy::ExplicitRemote
+                .as_str(),
             "explicit_remote"
+        );
+    }
+
+    #[test]
+    fn authorization_is_not_required_for_local_telemetry() {
+        let collector =
+            TelemetryCollector::new(
+                configuration(
+                    TelemetryPolicy::LocalOnly,
+                ),
+            )
+            .unwrap();
+
+        collector
+            .record_metrics(
+                &empty_metrics(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            collector
+                .snapshot()
+                .retained_records,
+            1
+        );
+    }
+
+    #[test]
+    fn denied_remote_authorization_never_reaches_exporter() {
+        let exporter =
+            Arc::new(
+                TestExporter::successful(),
+            );
+
+        let collector =
+            TelemetryCollector::with_exporter(
+                configuration(
+                    TelemetryPolicy::ExplicitRemote,
+                ),
+                exporter.clone(),
+            )
+            .unwrap();
+
+        let denied =
+            DenyRemote;
+
+        let result =
+            collector
+                .record_execution_authorized(
+                    &empty_metrics(),
+                    &empty_resources(),
+                    Some(&denied),
+                );
+
+        assert!(
+            result.is_err()
+        );
+
+        assert_eq!(
+            exporter
+                .calls
+                .load(Ordering::Relaxed),
+            0
+        );
+
+        assert_eq!(
+            collector
+                .snapshot()
+                .retained_records,
+            0
         );
     }
 }
