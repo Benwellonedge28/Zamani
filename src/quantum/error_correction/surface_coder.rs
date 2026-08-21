@@ -1,69 +1,88 @@
 //! Zamani Quantum Error Correction — Surface-Code Decoder Integration.
 //!
-//! This module is the decoder-facing integration layer for `surface_code.rs`.
+//! # Responsibility
 //!
-//! Responsibilities:
+//! `surface_coder.rs` is the decoder-facing integration layer for
+//! `surface_code.rs`.
 //!
-//! * validate a surface-code topology before decoding;
-//! * validate syndrome dimensions;
-//! * convert topology into the generic stabilizer representation;
-//! * perform deterministic, bounded reference decoding;
-//! * enforce `QecLimits` before expensive work;
-//! * honor cooperative cancellation;
-//! * verify that the produced correction reproduces the requested syndrome;
-//! * expose deterministic detection-event information for scalable decoders;
-//! * remain independent from QPU/device execution;
-//! * leave Pauli-frame mutation to `pauli_frame.rs`.
+//! It owns:
 //!
-//! The reference decoder intentionally does NOT claim to be MWPM.
-//! It performs an exact increasing-weight search within an explicit budget.
-//! This makes it useful as a mathematically trustworthy reference decoder and
-//! test oracle for future MWPM/Union-Find implementations.
+//! - validated integration between `SurfaceCode` and the generic decoder API;
+//! - deterministic reference decoding;
+//! - bounded exact Pauli search;
+//! - syndrome validation;
+//! - detection-event extraction;
+//! - cancellation;
+//! - decoder-iteration accounting;
+//! - correction verification;
+//! - conversion to the canonical `DecodeResult`;
+//! - decoder identity and configuration.
 //!
-//! Production architecture:
+//! It does NOT own:
+//!
+//! - surface-code topology construction;
+//! - QPU execution;
+//! - circuit execution;
+//! - Pauli-frame mutation;
+//! - distributed execution;
+//! - streaming execution;
+//! - MWPM;
+//! - Union-Find;
+//! - global QEC resource-policy definition.
+//!
+//! `surface_code.rs` owns the mathematical topology.
+//! `decoder.rs` owns the generic decoder contract.
+//! `limits.rs` owns global resource policy.
+//! `cancellation.rs` owns cooperative cancellation.
+//! `stabilizer.rs` owns Pauli/stabilizer mathematics.
+//!
+//! # Architecture
 //!
 //! ```text
 //! SurfaceCode
-//!      │
-//!      ▼
+//!     │
+//!     ▼
 //! topology validation
-//!      │
-//!      ▼
-//! QecLimits + cancellation
-//!      │
-//!      ▼
-//! Syndrome validation
-//!      │
-//!      ▼
-//! deterministic bounded search
-//!      │
-//!      ▼
-//! PauliString correction
-//!      │
-//!      ▼
-//! syndrome re-validation
-//!      │
-//!      ▼
+//!     │
+//!     ▼
+//! QecLimits admission
+//!     │
+//!     ▼
+//! syndrome validation
+//!     │
+//!     ▼
+//! deterministic bounded reference search
+//!     │
+//!     ▼
+//! PauliString
+//!     │
+//!     ▼
+//! syndrome verification
+//!     │
+//!     ▼
 //! DecodeResult
-//!      │
-//!      ▼
-//! PauliFrame / logical layer / QPU adapter
+//!     │
+//!     ├──► PauliFrame
+//!     ├──► logical-equivalence layer
+//!     ├──► streaming layer
+//!     └──► future scalable decoders
 //! ```
 //!
-//! Future scalable decoders can consume the same validated topology and
-//! syndrome representation without changing this public boundary.
+//! This implementation is deliberately a **reference decoder**.
+//! It must never claim scalable performance comparable to MWPM or
+//! Union-Find.
 
 use core::fmt;
 
 use super::cancellation::CancellationToken;
 use super::decoder::{
+    validate_syndrome,
     Correction,
     DecodeResult,
     Decoder,
     DecoderError,
     DecoderId,
     Syndrome,
-    validate_syndrome,
 };
 use super::limits::{
     LimitError,
@@ -73,52 +92,121 @@ use super::stabilizer::{
     Pauli,
     PauliString,
     QubitIndex,
+    StabilizerGroup,
 };
 use super::surface_code::{
+    StabilizerKind,
     SurfaceCode,
     SurfaceCodeError,
-    StabilizerKind,
 };
 
-/// Stable identifier for the reference surface-code decoder.
+/// Stable decoder identity for the reference surface-code decoder.
 pub const SURFACE_CODE_DECODER_ID: DecoderId =
     DecoderId::new(1);
 
-/// Decoder name exposed to the execution layer.
+/// Human-readable decoder identity.
 pub const SURFACE_CODE_DECODER_NAME: &str =
     "surface-code-reference";
 
-/// Default maximum Pauli weight searched by the reference decoder.
+/// Default maximum Pauli weight explored by the reference decoder.
 ///
-/// This is an algorithmic search bound, not a replacement for `QecLimits`.
-/// Applications may explicitly raise it, subject to the global operation
-/// budget.
+/// This is an algorithmic bound. It is still subordinate to `QecLimits`.
 pub const DEFAULT_MAX_SEARCH_WEIGHT: usize = 3;
 
-/// Configuration for the reference surface-code decoder.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Configuration of the reference surface-code decoder.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+)]
 pub struct SurfaceDecoderConfig {
-    /// Maximum Pauli weight considered by the exact reference search.
+    /// Maximum Pauli weight searched.
     pub max_search_weight: usize,
 
-    /// Whether the correction must be verified against the requested
-    /// syndrome before being returned.
+    /// Whether a found correction must be verified before return.
     pub verify_correction: bool,
 }
 
 impl Default for SurfaceDecoderConfig {
     fn default() -> Self {
         Self {
-            max_search_weight: DEFAULT_MAX_SEARCH_WEIGHT,
+            max_search_weight:
+                DEFAULT_MAX_SEARCH_WEIGHT,
             verify_correction: true,
         }
     }
 }
 
-/// A localized detection event derived from a surface-code syndrome.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+impl SurfaceDecoderConfig {
+    /// Creates the default reference configuration.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            max_search_weight:
+                DEFAULT_MAX_SEARCH_WEIGHT,
+            verify_correction: true,
+        }
+    }
+
+    /// Creates a configuration with a specified search weight.
+    #[must_use]
+    pub const fn with_max_search_weight(
+        max_search_weight: usize,
+    ) -> Self {
+        Self {
+            max_search_weight,
+            verify_correction: true,
+        }
+    }
+
+    /// Enables or disables final correction verification.
+    #[must_use]
+    pub const fn with_verification(
+        mut self,
+        verify_correction: bool,
+    ) -> Self {
+        self.verify_correction =
+            verify_correction;
+        self
+    }
+
+    /// Validates the algorithm configuration.
+    pub fn validate(
+        &self,
+    ) -> Result<
+        (),
+        SurfaceCodeDecoderError,
+    > {
+        if self.max_search_weight == 0 {
+            return Err(
+                SurfaceCodeDecoderError::InvalidSearchWeight {
+                    weight: 0,
+                },
+            );
+        }
+
+        Ok(())
+    }
+}
+
+/// A deterministic detection event.
+///
+/// Detection events are derived from triggered stabilizers and contain only
+/// decoder-relevant topology information.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+)]
 pub struct DetectionEvent {
-    /// Stabilizer identifier.
+    /// Stable stabilizer identifier.
     pub stabilizer: usize,
 
     /// Stabilizer type.
@@ -126,6 +214,7 @@ pub struct DetectionEvent {
 }
 
 impl DetectionEvent {
+    /// Creates a detection event.
     #[must_use]
     pub const fn new(
         stabilizer: usize,
@@ -138,10 +227,43 @@ impl DetectionEvent {
     }
 }
 
+/// Resource accounting produced by the reference search.
+///
+/// This structure is intentionally local to the decoder integration layer.
+/// Global resource policy remains owned by `QecLimits`.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+)]
+pub struct SurfaceDecodeUsage {
+    /// Number of complete Pauli candidates evaluated.
+    pub iterations: usize,
+
+    /// Maximum Pauli weight reached.
+    pub maximum_weight_reached: usize,
+}
+
+impl SurfaceDecodeUsage {
+    /// Creates empty usage statistics.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            iterations: 0,
+            maximum_weight_reached: 0,
+        }
+    }
+}
+
 /// Reference surface-code decoder.
 ///
-/// This decoder owns neither quantum hardware nor a Pauli frame. It only
-/// computes a classical correction operator.
+/// The decoder owns a validated topology snapshot and the policy required
+/// for its reference search.
+///
+/// It does not own hardware, execution, or a Pauli frame.
 #[derive(Debug, Clone)]
 pub struct SurfaceCodeDecoder {
     code: SurfaceCode,
@@ -150,10 +272,13 @@ pub struct SurfaceCodeDecoder {
 }
 
 impl SurfaceCodeDecoder {
-    /// Creates a decoder using the default QEC resource policy.
+    /// Creates a reference decoder with the default QEC policy.
     pub fn new(
         code: SurfaceCode,
-    ) -> Result<Self, SurfaceCodeDecoderError> {
+    ) -> Result<
+        Self,
+        SurfaceCodeDecoderError,
+    > {
         Self::with_limits_and_config(
             code,
             QecLimits::default(),
@@ -161,11 +286,14 @@ impl SurfaceCodeDecoder {
         )
     }
 
-    /// Creates a decoder using explicit QEC limits.
+    /// Creates a decoder with an explicit QEC policy.
     pub fn new_with_limits(
         code: SurfaceCode,
         limits: &QecLimits,
-    ) -> Result<Self, SurfaceCodeDecoderError> {
+    ) -> Result<
+        Self,
+        SurfaceCodeDecoderError,
+    > {
         Self::with_limits_and_config(
             code,
             *limits,
@@ -173,25 +301,22 @@ impl SurfaceCodeDecoder {
         )
     }
 
-    /// Creates a decoder with complete explicit configuration.
+    /// Creates a decoder with explicit policy and algorithm configuration.
     pub fn with_limits_and_config(
         code: SurfaceCode,
         limits: QecLimits,
         config: SurfaceDecoderConfig,
-    ) -> Result<Self, SurfaceCodeDecoderError> {
+    ) -> Result<
+        Self,
+        SurfaceCodeDecoderError,
+    > {
+        config.validate()?;
+
         limits
             .validate()
             .map_err(
                 SurfaceCodeDecoderError::InvalidLimits,
             )?;
-
-        if config.max_search_weight == 0 {
-            return Err(
-                SurfaceCodeDecoderError::InvalidSearchWeight {
-                    weight: config.max_search_weight,
-                },
-            );
-        }
 
         code.validate_with_limits(&limits)
             .map_err(
@@ -199,20 +324,42 @@ impl SurfaceCodeDecoder {
             )?;
 
         /*
-         * The reference decoder searches over Pauli operators. The search
-         * budget is therefore bounded by the global decoder-iteration policy.
+         * The decoder must never introduce an independent resource policy.
          *
-         * We deliberately do not introduce another production resource
-         * ceiling here.
+         * The search weight is therefore checked against the global logical
+         * operator weight policy.
          */
         if config.max_search_weight
             > limits.max_logical_operator_weight
         {
             return Err(
-                SurfaceCodeDecoderError::SearchWeightExceedsPolicy {
-                    requested: config.max_search_weight,
-                    maximum: limits.max_logical_operator_weight,
-                },
+                SurfaceCodeDecoderError::
+                    SearchWeightExceedsPolicy {
+                        requested:
+                            config.max_search_weight,
+                        maximum:
+                            limits
+                                .max_logical_operator_weight,
+                    },
+            );
+        }
+
+        /*
+         * A search weight greater than the number of physical qubits can
+         * never produce a distinct Pauli support. Rejecting it here also
+         * prevents unnecessary recursive search.
+         */
+        if config.max_search_weight
+            > code.num_data_qubits()
+        {
+            return Err(
+                SurfaceCodeDecoderError::
+                    SearchWeightExceedsQubitCount {
+                        requested:
+                            config.max_search_weight,
+                        num_qubits:
+                            code.num_data_qubits(),
+                    },
             );
         }
 
@@ -231,7 +378,7 @@ impl SurfaceCodeDecoder {
         &self.code
     }
 
-    /// Returns the active global resource policy.
+    /// Returns the global QEC policy used by this decoder.
     #[must_use]
     pub const fn limits(
         &self,
@@ -239,7 +386,7 @@ impl SurfaceCodeDecoder {
         &self.limits
     }
 
-    /// Returns the decoder configuration.
+    /// Returns the decoder-specific algorithm configuration.
     #[must_use]
     pub const fn config(
         &self,
@@ -247,7 +394,7 @@ impl SurfaceCodeDecoder {
         self.config
     }
 
-    /// Returns the number of physical data qubits.
+    /// Returns the number of data qubits.
     #[must_use]
     pub fn num_qubits(
         &self,
@@ -255,26 +402,46 @@ impl SurfaceCodeDecoder {
         self.code.num_data_qubits()
     }
 
-    /// Converts a syndrome into deterministic detection events.
+    /// Returns the decoder identity.
+    #[must_use]
+    pub const fn decoder_id() -> DecoderId {
+        SURFACE_CODE_DECODER_ID
+    }
+
+    /// Returns the decoder name.
+    #[must_use]
+    pub const fn decoder_name() -> &'static str {
+        SURFACE_CODE_DECODER_NAME
+    }
+
+    /// Converts a validated syndrome into deterministic detection events.
     pub fn detection_events(
         &self,
         syndrome: &Syndrome,
-    ) -> Result<Vec<DetectionEvent>, SurfaceCodeDecoderError> {
+    ) -> Result<
+        Vec<DetectionEvent>,
+        SurfaceCodeDecoderError,
+    > {
         self.validate_syndrome(syndrome)?;
 
-        let mut events = Vec::new();
+        let mut events =
+            Vec::new();
 
-        for stabilizer_id in syndrome.triggered() {
-            let index = stabilizer_id.index();
+        for stabilizer_id in
+            syndrome.triggered()
+        {
+            let index =
+                stabilizer_id.index();
 
             let stabilizer = self
                 .code
                 .stabilizers()
                 .get(index)
                 .ok_or(
-                    SurfaceCodeDecoderError::UnknownStabilizer {
-                        stabilizer: index,
-                    },
+                    SurfaceCodeDecoderError::
+                        UnknownStabilizer {
+                            stabilizer: index,
+                        },
                 )?;
 
             events.push(
@@ -286,26 +453,28 @@ impl SurfaceCodeDecoder {
         }
 
         /*
-         * Syndrome iteration is already deterministic. Sorting here gives the
-         * decoder an explicit ordering contract independent of the underlying
-         * syndrome implementation.
+         * The decoder's observable ordering contract is explicit rather than
+         * relying on the implementation details of Syndrome::triggered().
          */
         events.sort_unstable();
 
         Ok(events)
     }
 
-    /// Validates a syndrome against the surface-code stabilizer count.
+    /// Validates a syndrome against the code's stabilizer group.
     pub fn validate_syndrome(
         &self,
         syndrome: &Syndrome,
-    ) -> Result<(), SurfaceCodeDecoderError> {
-        let stabilizers =
-            self.code
-                .stabilizer_group()
-                .map_err(
-                    SurfaceCodeDecoderError::SurfaceCode,
-                )?;
+    ) -> Result<
+        (),
+        SurfaceCodeDecoderError,
+    > {
+        let stabilizers = self
+            .code
+            .stabilizer_group()
+            .map_err(
+                SurfaceCodeDecoderError::SurfaceCode,
+            )?;
 
         validate_syndrome(
             syndrome,
@@ -316,33 +485,14 @@ impl SurfaceCodeDecoder {
         )
     }
 
-    /// Computes a deterministic reference correction.
-    ///
-    /// The search is:
-    ///
-    /// ```text
-    /// weight 0
-    ///    ↓
-    /// weight 1
-    ///    ↓
-    /// weight 2
-    ///    ↓
-    /// ...
-    /// ```
-    ///
-    /// until either:
-    ///
-    /// * a correction reproducing the requested syndrome is found;
-    /// * `max_search_weight` is reached;
-    /// * `QecLimits::max_decoder_iterations` is exhausted;
-    /// * cancellation is requested.
-    ///
-    /// This is intentionally a reference algorithm rather than a scalable
-    /// production decoder.
+    /// Performs reference decoding with a fresh cancellation token.
     pub fn decode_surface(
         &self,
         syndrome: &Syndrome,
-    ) -> Result<DecodeResult, SurfaceCodeDecoderError> {
+    ) -> Result<
+        DecodeResult,
+        SurfaceCodeDecoderError,
+    > {
         let cancellation =
             CancellationToken::new();
 
@@ -352,12 +502,30 @@ impl SurfaceCodeDecoder {
         )
     }
 
-    /// Decodes while honoring cooperative cancellation.
+    /// Performs bounded reference decoding with cooperative cancellation.
+    ///
+    /// Search order:
+    ///
+    /// ```text
+    /// weight 0
+    ///     ↓
+    /// weight 1
+    ///     ↓
+    /// weight 2
+    ///     ↓
+    /// ...
+    /// ```
+    ///
+    /// The first correction found is therefore the first correction under
+    /// the decoder's deterministic lexicographic ordering.
     pub fn decode_surface_with_cancellation(
         &self,
         syndrome: &Syndrome,
         cancellation: &CancellationToken,
-    ) -> Result<DecodeResult, SurfaceCodeDecoderError> {
+    ) -> Result<
+        DecodeResult,
+        SurfaceCodeDecoderError,
+    > {
         cancellation
             .check()
             .map_err(
@@ -366,6 +534,9 @@ impl SurfaceCodeDecoder {
 
         self.validate_syndrome(syndrome)?;
 
+        /*
+         * The zero-syndrome case is handled without entering the search.
+         */
         if syndrome.is_trivial() {
             let correction =
                 Correction::new(
@@ -383,14 +554,15 @@ impl SurfaceCodeDecoder {
             );
         }
 
-        let stabilizers =
-            self.code
-                .stabilizer_group()
-                .map_err(
-                    SurfaceCodeDecoderError::SurfaceCode,
-                )?;
+        let stabilizers = self
+            .code
+            .stabilizer_group()
+            .map_err(
+                SurfaceCodeDecoderError::SurfaceCode,
+            )?;
 
-        let mut operations = 0usize;
+        let mut usage =
+            SurfaceDecodeUsage::new();
 
         for weight in
             1..=self.config.max_search_weight
@@ -401,94 +573,124 @@ impl SurfaceCodeDecoder {
                     SurfaceCodeDecoderError::Cancellation,
                 )?;
 
-            self.search_weight(
-                syndrome,
-                weight,
-                &stabilizers,
-                cancellation,
-                &mut operations,
-            )?
-            .map(|operator| {
+            usage.maximum_weight_reached =
+                weight;
+
+            if let Some(operator) =
+                self.search_weight(
+                    syndrome,
+                    weight,
+                    &stabilizers,
+                    cancellation,
+                    &mut usage,
+                )?
+            {
                 let correction =
                     Correction::new(
                         operator,
                     );
 
                 if self.config.verify_correction {
-                    /*
-                     * Verification is mandatory at this boundary. A decoder
-                     * must never silently return a correction that does not
-                     * reproduce the requested syndrome.
-                     */
-                    let valid =
-                        super::decoder::validate_correction_for_syndrome(
-                            &correction,
-                            syndrome,
-                            &stabilizers,
-                        )
-                        .map_err(
-                            SurfaceCodeDecoderError::Decoder,
-                        )?;
-
-                    if !valid {
-                        return Err(
-                            SurfaceCodeDecoderError::CorrectionVerificationFailed,
-                        );
-                    }
+                    self.verify_correction(
+                        &correction,
+                        syndrome,
+                        &stabilizers,
+                    )?;
                 }
 
-                Ok(
+                let result =
                     DecodeResult::new(
                         SURFACE_CODE_DECODER_ID,
                         syndrome.clone(),
                         correction,
-                    )
+                    );
+
+                /*
+                 * Validate the complete result at the public boundary.
+                 * This prevents a mathematically valid correction from
+                 * becoming an invalid decoder result.
+                 */
+                super::decoder::validate_result(
+                    &result,
                 )
-            })
-            .transpose()?
-            .map_or(
-                Ok(None),
-                |result| Ok(Some(result)),
-            )?
-            .map_or(
-                Ok(()),
-                |result| {
-                    /*
-                     * Returning through this branch is handled below by the
-                     * explicit search wrapper.
-                     */
-                    let _ = result;
-                    Ok(())
-                },
-            )?;
+                .map_err(
+                    SurfaceCodeDecoderError::Decoder,
+                )?;
+
+                return Ok(result);
+            }
         }
 
         Err(
             SurfaceCodeDecoderError::SearchExhausted {
-                syndrome_weight: syndrome.weight(),
+                syndrome_weight:
+                    syndrome.weight(),
                 max_weight:
                     self.config.max_search_weight,
-                operations,
+                operations:
+                    usage.iterations,
             },
         )
     }
 
+    /// Verifies that a correction reproduces the requested syndrome.
+    fn verify_correction(
+        &self,
+        correction: &Correction,
+        syndrome: &Syndrome,
+        stabilizers: &StabilizerGroup,
+    ) -> Result<
+        (),
+        SurfaceCodeDecoderError,
+    > {
+        let valid =
+            super::decoder::
+                validate_correction_for_syndrome(
+                    correction,
+                    syndrome,
+                    stabilizers,
+                )
+                .map_err(
+                    SurfaceCodeDecoderError::Decoder,
+                )?;
+
+        if !valid {
+            return Err(
+                SurfaceCodeDecoderError::
+                    CorrectionVerificationFailed,
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Searches all supports of one Pauli weight.
     fn search_weight(
         &self,
         syndrome: &Syndrome,
         weight: usize,
-        stabilizers: &super::stabilizer::StabilizerGroup,
+        stabilizers: &StabilizerGroup,
         cancellation: &CancellationToken,
-        operations: &mut usize,
-    ) -> Result<Option<PauliString>, SurfaceCodeDecoderError> {
+        usage: &mut SurfaceDecodeUsage,
+    ) -> Result<
+        Option<PauliString>,
+        SurfaceCodeDecoderError,
+    > {
+        if weight == 0 {
+            return Ok(None);
+        }
+
         let num_qubits =
             self.num_qubits();
 
-        /*
-         * We enumerate supports lexicographically and then enumerate the
-         * non-identity Pauli labels in deterministic X/Y/Z order.
-         */
+        if weight > num_qubits {
+            return Ok(None);
+        }
+
         let mut support =
+            Vec::with_capacity(weight);
+
+        let mut paulis =
             Vec::with_capacity(weight);
 
         self.search_supports(
@@ -496,24 +698,30 @@ impl SurfaceCodeDecoder {
             weight,
             0,
             &mut support,
+            &mut paulis,
             stabilizers,
             cancellation,
-            operations,
+            usage,
             num_qubits,
         )
     }
 
+    /// Enumerates supports in lexicographic order.
     fn search_supports(
         &self,
         syndrome: &Syndrome,
         weight: usize,
         start: usize,
         support: &mut Vec<usize>,
-        stabilizers: &super::stabilizer::StabilizerGroup,
+        paulis: &mut Vec<Pauli>,
+        stabilizers: &StabilizerGroup,
         cancellation: &CancellationToken,
-        operations: &mut usize,
+        usage: &mut SurfaceDecodeUsage,
         num_qubits: usize,
-    ) -> Result<Option<PauliString>, SurfaceCodeDecoderError> {
+    ) -> Result<
+        Option<PauliString>,
+        SurfaceCodeDecoderError,
+    > {
         cancellation
             .check()
             .map_err(
@@ -525,33 +733,39 @@ impl SurfaceCodeDecoder {
                 syndrome,
                 support,
                 0,
-                &mut Vec::with_capacity(weight),
+                paulis,
                 stabilizers,
                 cancellation,
-                operations,
+                usage,
                 num_qubits,
             );
         }
 
         let remaining =
             weight
-                .checked_sub(support.len())
+                .checked_sub(
+                    support.len(),
+                )
                 .ok_or(
-                    SurfaceCodeDecoderError::ArithmeticOverflow,
+                    SurfaceCodeDecoderError::
+                        ArithmeticOverflow,
                 )?;
 
         if num_qubits < remaining {
             return Ok(None);
         }
 
-        let max_start =
+        let maximum_start =
             num_qubits
                 .checked_sub(remaining)
                 .ok_or(
-                    SurfaceCodeDecoderError::ArithmeticOverflow,
+                    SurfaceCodeDecoderError::
+                        ArithmeticOverflow,
                 )?;
 
-        for qubit in start..=max_start {
+        for qubit in
+            start..=maximum_start
+        {
             cancellation
                 .check()
                 .map_err(
@@ -564,11 +778,17 @@ impl SurfaceCodeDecoder {
                 self.search_supports(
                     syndrome,
                     weight,
-                    qubit + 1,
+                    qubit
+                        .checked_add(1)
+                        .ok_or(
+                            SurfaceCodeDecoderError::
+                                ArithmeticOverflow,
+                        )?,
                     support,
+                    paulis,
                     stabilizers,
                     cancellation,
-                    operations,
+                    usage,
                     num_qubits,
                 )?
             {
@@ -581,17 +801,21 @@ impl SurfaceCodeDecoder {
         Ok(None)
     }
 
+    /// Enumerates X/Y/Z assignments for a fixed support.
     fn search_paulis(
         &self,
         syndrome: &Syndrome,
         support: &[usize],
         position: usize,
         paulis: &mut Vec<Pauli>,
-        stabilizers: &super::stabilizer::StabilizerGroup,
+        stabilizers: &StabilizerGroup,
         cancellation: &CancellationToken,
-        operations: &mut usize,
+        usage: &mut SurfaceDecodeUsage,
         num_qubits: usize,
-    ) -> Result<Option<PauliString>, SurfaceCodeDecoderError> {
+    ) -> Result<
+        Option<PauliString>,
+        SurfaceCodeDecoderError,
+    > {
         cancellation
             .check()
             .map_err(
@@ -599,23 +823,32 @@ impl SurfaceCodeDecoder {
             )?;
 
         if position == support.len() {
-            *operations = operations
-                .checked_add(1)
-                .ok_or(
-                    SurfaceCodeDecoderError::ArithmeticOverflow,
-                )?;
+            /*
+             * Count only complete Pauli candidates.
+             */
+            usage.iterations =
+                usage
+                    .iterations
+                    .checked_add(1)
+                    .ok_or(
+                        SurfaceCodeDecoderError::
+                            ArithmeticOverflow,
+                    )?;
 
-            if *operations
+            if usage.iterations
                 > self.limits.max_decoder_iterations
             {
                 return Err(
-                    SurfaceCodeDecoderError::ResourceLimitExceeded {
-                        resource: "decoder iterations",
-                        requested: *operations,
-                        maximum:
-                            self.limits
-                                .max_decoder_iterations,
-                    },
+                    SurfaceCodeDecoderError::
+                        ResourceLimitExceeded {
+                            resource:
+                                "decoder iterations",
+                            requested:
+                                usage.iterations,
+                            maximum:
+                                self.limits
+                                    .max_decoder_iterations,
+                        },
                 );
             }
 
@@ -625,28 +858,44 @@ impl SurfaceCodeDecoder {
                 );
 
             for (&qubit, &pauli)
-                in support.iter().zip(
-                    paulis.iter(),
-                )
+                in support
+                    .iter()
+                    .zip(
+                        paulis.iter(),
+                    )
             {
                 operator
                     .set_pauli(
-                        QubitIndex::new(qubit),
+                        QubitIndex::new(
+                            qubit,
+                        ),
                         pauli,
                     )
                     .map_err(
-                        SurfaceCodeDecoderError::Stabilizer,
+                        |error| {
+                            SurfaceCodeDecoderError::
+                                Stabilizer(
+                                    error,
+                                )
+                        },
                     )?;
             }
 
             let produced =
                 stabilizers
-                    .syndrome(&operator)
+                    .syndrome(
+                        operator.operator(),
+                    )
                     .map_err(
-                        SurfaceCodeDecoderError::Stabilizer,
+                        |error| {
+                            SurfaceCodeDecoderError::
+                                Stabilizer(
+                                    error,
+                                )
+                        },
                     )?;
 
-            if &produced == syndrome {
+            if produced == *syndrome {
                 return Ok(Some(operator));
             }
 
@@ -658,11 +907,13 @@ impl SurfaceCodeDecoder {
          *
          * X → Y → Z
          */
-        for pauli in [
+        const PAULIS: [Pauli; 3] = [
             Pauli::X,
             Pauli::Y,
             Pauli::Z,
-        ] {
+        ];
+
+        for pauli in PAULIS {
             cancellation
                 .check()
                 .map_err(
@@ -679,7 +930,7 @@ impl SurfaceCodeDecoder {
                     paulis,
                     stabilizers,
                     cancellation,
-                    operations,
+                    usage,
                     num_qubits,
                 )?
             {
@@ -691,263 +942,315 @@ impl SurfaceCodeDecoder {
 
         Ok(None)
     }
-
-    /// Returns the deterministic set of syndrome events.
-    pub fn detection_event_count(
-        &self,
-        syndrome: &Syndrome,
-    ) -> Result<usize, SurfaceCodeDecoderError> {
-        Ok(
-            self.detection_events(syndrome)?.len()
-        )
-    }
 }
+
+/* ========================================================================== */
+/* Generic Decoder integration                                                */
+/* ========================================================================== */
 
 impl Decoder for SurfaceCodeDecoder {
     fn id(&self) -> DecoderId {
         SURFACE_CODE_DECODER_ID
     }
 
+    fn name(&self) -> &'static str {
+        SURFACE_CODE_DECODER_NAME
+    }
+
     fn decode(
         &self,
         syndrome: &Syndrome,
-    ) -> Result<DecodeResult, DecoderError> {
+    ) -> Result<
+        DecodeResult,
+        DecoderError,
+    > {
         self.decode_surface(syndrome)
-            .map_err(|error| error.into_decoder_error())
+            .map_err(
+                SurfaceCodeDecoderError::into_decoder_error,
+            )
     }
 }
 
-/// Decoder-specific integration errors.
+/* ========================================================================== */
+/* Errors                                                                     */
+/* ========================================================================== */
+
+/// Errors produced by the reference surface-code decoder.
 ///
-/// These are kept separate from the generic decoder interface so callers can
-/// retain precise diagnostic information. The `Decoder` trait maps them into
-/// `DecoderError` at the public generic boundary.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// These errors retain the distinction between:
+///
+/// - invalid input;
+/// - invalid topology;
+/// - resource rejection;
+/// - cancellation;
+/// - mathematical failure;
+/// - search exhaustion.
+///
+/// Higher-level execution layers may convert these into `QecError`.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+)]
 pub enum SurfaceCodeDecoderError {
-    InvalidLimits(LimitError),
-
-    SurfaceCode(SurfaceCodeError),
-
-    Decoder(DecoderError),
-
-    Stabilizer(
-        super::stabilizer::StabilizerError,
+    /// Surface-code topology is invalid.
+    SurfaceCode(
+        SurfaceCodeError,
     ),
 
+    /// Generic decoder-contract failure.
+    Decoder(
+        DecoderError,
+    ),
+
+    /// QEC resource policy is invalid.
+    InvalidLimits(
+        LimitError,
+    ),
+
+    /// Search weight was zero.
+    InvalidSearchWeight {
+        weight: usize,
+    },
+
+    /// Search weight exceeds the configured global policy.
+    SearchWeightExceedsPolicy {
+        requested: usize,
+        maximum: usize,
+    },
+
+    /// Search weight cannot exceed the number of physical qubits.
+    SearchWeightExceedsQubitCount {
+        requested: usize,
+        num_qubits: usize,
+    },
+
+    /// Syndrome refers to an unknown stabilizer.
+    UnknownStabilizer {
+        stabilizer: usize,
+    },
+
+    /// The decoder was cancelled.
     Cancellation(
-        super::errors::QecError,
+        super::cancellation::CancellationError,
     ),
 
+    /// Arithmetic overflow occurred while constructing the search.
+    ArithmeticOverflow,
+
+    /// Decoder iteration budget was exhausted.
     ResourceLimitExceeded {
         resource: &'static str,
         requested: usize,
         maximum: usize,
     },
 
-    InvalidSearchWeight {
-        weight: usize,
-    },
-
-    SearchWeightExceedsPolicy {
-        requested: usize,
-        maximum: usize,
-    },
-
-    UnknownStabilizer {
-        stabilizer: usize,
-    },
-
-    CorrectionVerificationFailed,
-
+    /// No correction was found inside the configured search region.
     SearchExhausted {
         syndrome_weight: usize,
         max_weight: usize,
         operations: usize,
     },
 
-    ArithmeticOverflow,
+    /// The candidate correction did not reproduce the syndrome.
+    CorrectionVerificationFailed,
+
+    /// Stabilizer mathematics failed.
+    Stabilizer(
+        super::stabilizer::StabilizerError,
+    ),
 }
 
 impl SurfaceCodeDecoderError {
-    fn into_decoder_error(
+    /// Converts the local error into the generic decoder error boundary.
+    #[must_use]
+    pub fn into_decoder_error(
         self,
     ) -> DecoderError {
         match self {
-            Self::Decoder(error) => error,
-
-            Self::Stabilizer(error) => {
-                DecoderError::Stabilizer(error)
+            Self::SurfaceCode(error) => {
+                DecoderError::Stabilizer(
+                    super::stabilizer::
+                        StabilizerError::InvalidGenerator {
+                            message:
+                                error.to_string(),
+                        },
+                )
             }
 
-            Self::SurfaceCode(error) => {
-                /*
-                 * Until DecoderError gains a dedicated topology/decode
-                 * variant, retain the diagnostic without fabricating a
-                 * stabilizer failure.
-                 */
-                DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: usize::MAX,
-                        reason: error.to_string(),
-                    },
-                )
+            Self::Decoder(error) => {
+                error
             }
 
             Self::InvalidLimits(error) => {
-                DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: usize::MAX,
-                        reason: format!(
-                            "invalid QEC limits: {error}"
-                        ),
-                    },
-                )
-            }
-
-            Self::Cancellation(error) => {
-                DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: usize::MAX,
-                        reason: format!(
-                            "QEC operation cancelled: {error}"
-                        ),
-                    },
-                )
-            }
-
-            Self::ResourceLimitExceeded {
-                resource,
-                requested,
-                maximum,
-            } => {
-                DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: usize::MAX,
-                        reason: format!(
-                            "resource limit exceeded for {resource}: requested {requested}, maximum {maximum}"
-                        ),
-                    },
-                )
+                DecoderError::InvalidResult {
+                    reason:
+                        "invalid QEC resource limits",
+                }
             }
 
             Self::InvalidSearchWeight {
-                weight,
+                ..
             } => {
-                DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: usize::MAX,
-                        reason: format!(
-                            "invalid search weight {weight}"
-                        ),
-                    },
-                )
+                DecoderError::InvalidResult {
+                    reason:
+                        "invalid reference-decoder search weight",
+                }
             }
 
             Self::SearchWeightExceedsPolicy {
-                requested,
-                maximum,
+                ..
             } => {
-                DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: usize::MAX,
-                        reason: format!(
-                            "search weight {requested} exceeds policy {maximum}"
-                        ),
-                    },
-                )
+                DecoderError::InvalidResult {
+                    reason:
+                        "reference search weight exceeds QEC policy",
+                }
+            }
+
+            Self::SearchWeightExceedsQubitCount {
+                ..
+            } => {
+                DecoderError::InvalidResult {
+                    reason:
+                        "reference search weight exceeds qubit count",
+                }
             }
 
             Self::UnknownStabilizer {
-                stabilizer,
+                ..
             } => {
-                DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: stabilizer,
-                        reason:
-                            "syndrome references unknown surface-code stabilizer"
-                                .to_string(),
-                    },
-                )
+                DecoderError::InvalidResult {
+                    reason:
+                        "syndrome references an unknown stabilizer",
+                }
             }
 
-            Self::CorrectionVerificationFailed => {
-                DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: usize::MAX,
-                        reason:
-                            "decoder correction failed syndrome verification"
-                                .to_string(),
-                    },
-                )
-            }
-
-            Self::SearchExhausted {
-                syndrome_weight,
-                max_weight,
-                operations,
-            } => {
-                DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: usize::MAX,
-                        reason: format!(
-                            "surface-code reference decoder exhausted search: syndrome weight {syndrome_weight}, max weight {max_weight}, operations {operations}"
-                        ),
-                    },
-                )
+            Self::Cancellation(
+                _,
+            ) => {
+                DecoderError::Cancelled
             }
 
             Self::ArithmeticOverflow => {
+                DecoderError::InvalidResult {
+                    reason:
+                        "reference decoder arithmetic overflow",
+                }
+            }
+
+            Self::ResourceLimitExceeded {
+                ..
+            } => {
+                DecoderError::InvalidResult {
+                    reason:
+                        "reference decoder resource limit exceeded",
+                }
+            }
+
+            Self::SearchExhausted {
+                ..
+            } => {
+                DecoderError::InvalidResult {
+                    reason:
+                        "reference decoder search exhausted",
+                }
+            }
+
+            Self::CorrectionVerificationFailed => {
+                DecoderError::InvalidResult {
+                    reason:
+                        "decoder correction failed syndrome verification",
+                }
+            }
+
+            Self::Stabilizer(error) => {
                 DecoderError::Stabilizer(
-                    super::stabilizer::StabilizerError::InvalidGenerator {
-                        index: usize::MAX,
-                        reason:
-                            "surface-code decoder arithmetic overflow"
-                                .to_string(),
-                    },
+                    error,
                 )
             }
         }
     }
 }
 
-impl fmt::Display for SurfaceCodeDecoderError {
+impl fmt::Display
+    for SurfaceCodeDecoderError
+{
     fn fmt(
         &self,
-        f: &mut fmt::Formatter<'_>,
+        formatter: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
-            Self::InvalidLimits(error) => {
-                write!(
-                    f,
-                    "invalid QEC limits: {error}"
-                )
-            }
-
             Self::SurfaceCode(error) => {
                 write!(
-                    f,
+                    formatter,
                     "surface-code error: {error}"
                 )
             }
 
             Self::Decoder(error) => {
                 write!(
-                    f,
+                    formatter,
                     "decoder error: {error}"
                 )
             }
 
-            Self::Stabilizer(error) => {
+            Self::InvalidLimits(error) => {
                 write!(
-                    f,
-                    "stabilizer error: {error}"
+                    formatter,
+                    "invalid QEC limits: {error}"
+                )
+            }
+
+            Self::InvalidSearchWeight {
+                weight,
+            } => {
+                write!(
+                    formatter,
+                    "reference search weight must be greater than zero; got {weight}"
+                )
+            }
+
+            Self::SearchWeightExceedsPolicy {
+                requested,
+                maximum,
+            } => {
+                write!(
+                    formatter,
+                    "search weight {requested} exceeds configured maximum {maximum}"
+                )
+            }
+
+            Self::SearchWeightExceedsQubitCount {
+                requested,
+                num_qubits,
+            } => {
+                write!(
+                    formatter,
+                    "search weight {requested} exceeds {num_qubits} physical qubits"
+                )
+            }
+
+            Self::UnknownStabilizer {
+                stabilizer,
+            } => {
+                write!(
+                    formatter,
+                    "unknown stabilizer {stabilizer}"
                 )
             }
 
             Self::Cancellation(error) => {
                 write!(
-                    f,
-                    "cancellation requested: {error}"
+                    formatter,
+                    "decoder cancelled: {error}"
+                )
+            }
+
+            Self::ArithmeticOverflow => {
+                write!(
+                    formatter,
+                    "reference decoder arithmetic overflow"
                 )
             }
 
@@ -957,43 +1260,8 @@ impl fmt::Display for SurfaceCodeDecoderError {
                 maximum,
             } => {
                 write!(
-                    f,
-                    "resource limit exceeded for {resource}: requested {requested}, maximum {maximum}"
-                )
-            }
-
-            Self::InvalidSearchWeight {
-                weight,
-            } => {
-                write!(
-                    f,
-                    "invalid search weight {weight}"
-                )
-            }
-
-            Self::SearchWeightExceedsPolicy {
-                requested,
-                maximum,
-            } => {
-                write!(
-                    f,
-                    "search weight {requested} exceeds policy {maximum}"
-                )
-            }
-
-            Self::UnknownStabilizer {
-                stabilizer,
-            } => {
-                write!(
-                    f,
-                    "unknown surface-code stabilizer {stabilizer}"
-                )
-            }
-
-            Self::CorrectionVerificationFailed => {
-                write!(
-                    f,
-                    "decoder correction failed syndrome verification"
+                    formatter,
+                    "{resource} limit exceeded: requested {requested}, maximum {maximum}"
                 )
             }
 
@@ -1003,29 +1271,82 @@ impl fmt::Display for SurfaceCodeDecoderError {
                 operations,
             } => {
                 write!(
-                    f,
-                    "reference decoder exhausted search for syndrome weight {syndrome_weight} at weight {max_weight} after {operations} operations"
+                    formatter,
+                    "reference search exhausted for syndrome weight {syndrome_weight}; maximum weight {max_weight}; operations {operations}"
                 )
             }
 
-            Self::ArithmeticOverflow => {
+            Self::CorrectionVerificationFailed => {
                 write!(
-                    f,
-                    "surface-code decoder arithmetic overflow"
+                    formatter,
+                    "candidate correction failed syndrome verification"
+                )
+            }
+
+            Self::Stabilizer(error) => {
+                write!(
+                    formatter,
+                    "stabilizer error: {error}"
                 )
             }
         }
     }
 }
 
-impl std::error::Error for SurfaceCodeDecoderError {}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl From<SurfaceCodeDecoderError>
-    for DecoderError
-{
-    fn from(
-        error: SurfaceCodeDecoderError,
-    ) -> Self {
-        error.into_decoder_error()
+    #[test]
+    fn default_configuration_is_valid() {
+        let config =
+            SurfaceDecoderConfig::default();
+
+        assert!(
+            config.validate().is_ok()
+        );
+
+        assert_eq!(
+            config.max_search_weight,
+            DEFAULT_MAX_SEARCH_WEIGHT
+        );
+
+        assert!(
+            config.verify_correction
+        );
+    }
+
+    #[test]
+    fn zero_search_weight_is_rejected() {
+        let config =
+            SurfaceDecoderConfig {
+                max_search_weight: 0,
+                verify_correction: true,
+            };
+
+        assert!(
+            matches!(
+                config.validate(),
+                Err(
+                    SurfaceCodeDecoderError::
+                        InvalidSearchWeight {
+                            weight: 0
+                        }
+                )
+            )
+        );
+    }
+
+    #[test]
+    fn decoder_identity_is_stable() {
+        assert_eq!(
+            SurfaceCodeDecoder::decoder_id(),
+            SURFACE_CODE_DECODER_ID
+        );
+
+        assert_eq!(
+            SurfaceCodeDecoder::decoder_name(),
+            SURFACE_CODE_DECODER_NAME
+        );
     }
 }
