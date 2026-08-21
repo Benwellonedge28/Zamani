@@ -1,177 +1,188 @@
 //! Zamani Quantum Error Correction — Sparse Representations.
 //!
-//! This module contains sparse data structures used by the QEC execution
-//! pipeline.
+//! This module owns sparse mathematical/data representations used throughout
+//! the QEC pipeline.
 //!
-//! # Responsibility
-//!
-//! ```text
-//!                 QEC LIMITS
-//!                     |
-//!                     v
-//!               SPARSE PREFLIGHT
-//!                     |
-//!          +----------+----------+
-//!          |          |          |
-//!          v          v          v
-//!    SparsePauli  SparseGraph  SparseSyndrome
-//!          |          |          |
-//!          v          v          v
-//! SparseStabilizerMatrix  SparseCorrection
-//! ```
-//!
-//! This module is deliberately NOT a parser.
-//!
-//! The previous implementation of this file parsed textual QEC documents.
-//! That responsibility does not belong in the sparse representation layer.
-//!
-//! # Design goals
-//!
-//! - deterministic ordering;
-//! - sparse storage;
-//! - checked arithmetic;
-//! - no unchecked indexing;
-//! - no implicit allocation bombs;
-//! - canonical `QecLimits` integration;
-//! - cheap structural validation;
-//! - explicit memory estimation;
-//! - duplicate suppression;
-//! - deterministic serialization primitives;
-//! - scalable support for large QEC workloads;
-//! - no decoder-specific policy;
-//! - no QPU access;
-//! - no network access;
-//! - no hidden global resource limits.
-//!
-//! # Representation model
-//!
-//! A sparse QEC workload is represented as:
+//! # Architectural contract
 //!
 //! ```text
-//! Pauli operator
-//!     |
-//!     +--> X support: {q1, q7, q100000}
-//!     |
-//!     +--> Z support: {q3, q7}
-//!
-//! Stabilizer matrix
-//!     |
-//!     +--> stabilizer 0 -> sparse Pauli
-//!     +--> stabilizer 1 -> sparse Pauli
-//!     +--> ...
-//!
-//! Graph
-//!     |
-//!     +--> node -> sparse neighbor set
-//!
-//! Syndrome
-//!     |
-//!     +--> round/stabilizer -> detection event
-//!
-//! Correction
-//!     |
-//!     +--> qubit -> Pauli operation
+//!                         QecLimits
+//!                            |
+//!                            v
+//!                    sparse preflight
+//!                            |
+//!          +-----------------+-----------------+
+//!          |                 |                 |
+//!          v                 v                 v
+//!      SparsePauli      SparseGraph      SparseSyndrome
+//!          |                 |                 |
+//!          v                 v                 v
+//! SparseStabilizerMatrix  SparseCorrection  event streams
+//!          |                 |                 |
+//!          +-----------------+-----------------+
+//!                            |
+//!                            v
+//!                    Decoder / QEC pipeline
 //! ```
 //!
-//! The representation is intentionally independent of a particular decoder.
-//! MWPM, Union-Find, streaming decoders, partitioned decoders and distributed
-//! decoders can consume these structures without requiring a dense expansion.
+//! # Responsibilities
 //!
-//! # Resource architecture
+//! This module owns:
 //!
-//! `QecLimits` is the declarative policy.
+//! - sparse Pauli representations;
+//! - sparse stabilizer matrices;
+//! - sparse graph representations;
+//! - sparse syndrome/event representations;
+//! - sparse correction representations;
+//! - deterministic iteration;
+//! - structural validation;
+//! - checked memory estimation;
+//! - canonical `QecLimits` preflight.
 //!
-//! ```text
-//! QecLimits
-//!     |
-//!     v
-//! preflight()
-//!     |
-//!     v
-//! sparse allocation
-//!     |
-//!     v
-//! ResourceManager
-//! ```
+//! This module does NOT own:
 //!
-//! This module therefore performs *preflight* but does not attempt to replace
-//! runtime accounting in `resources.rs`.
+//! - decoder algorithms;
+//! - decoder-specific limits;
+//! - QPU access;
+//! - networking;
+//! - runtime resource accounting;
+//! - allocation enforcement;
+//! - telemetry;
+//! - configuration policy;
+//! - parsing textual source documents.
+//!
+//! Runtime resource consumption belongs to `resources.rs`.
+//! Allocation reservation belongs to `memory.rs`.
+//! Declarative limits belong to `limits.rs`.
+//!
+//! # Integration contract
+//!
+//! `limits.rs`
+//!     -> canonical resource policy and `LimitKind`.
+//!
+//! `memory.rs`
+//!     -> actual memory reservation before large allocation.
+//!
+//! `resources.rs`
+//!     -> runtime accounting after allocation/use.
+//!
+//! `stabilizer.rs`
+//!     -> mathematical stabilizer operations.
+//!
+//! `syndrome.rs`
+//!     -> higher-level syndrome semantics.
+//!
+//! `decoding_graph.rs`
+//!     -> decoder-facing graph semantics.
+//!
+//! `decoder.rs`
+//!     -> consumes sparse correction/graph/syndrome representations.
+//!
+//! `mwpm.rs` / `union_find.rs`
+//!     -> consume sparse graph representations.
+//!
+//! `streaming.rs` / `partition.rs`
+//!     -> consume bounded sparse event representations.
+//!
+//! The sparse layer deliberately does not depend on any of those higher-level
+//! modules. This keeps the dependency direction acyclic and allows this file
+//! to be completed independently.
+//!
+//! # Determinism
+//!
+//! All public collections use ordered maps/sets. Iteration therefore has a
+//! stable order independent of hash randomization or insertion order.
+//!
+//! # Rust compatibility
+//!
+//! Target language/toolchain: Rust 1.97.1.
+//!
+//! The implementation uses stable standard-library APIs and does not require
+//! nightly features.
 
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::limits::{LimitError, LimitKind, QecLimits};
 
-// ============================================================================
-// Constants
-// ============================================================================
+/* ========================================================================== */
+/* Constants                                                                  */
+/* ========================================================================== */
 
-/// Number of bytes used by the sparse representation estimate for one
-/// qubit-index entry.
-///
-/// This is an intentionally conservative accounting estimate rather than a
-/// promise about the exact allocator representation.
+/// Conservative estimated bytes per sparse index/component.
 pub const ESTIMATED_INDEX_BYTES: u64 = 16;
 
-/// Number of bytes used by a sparse graph edge estimate.
+/// Conservative estimated bytes per sparse graph edge.
 pub const ESTIMATED_EDGE_BYTES: u64 = 24;
 
-/// Number of bytes used by a sparse syndrome event estimate.
-pub const ESTIMATED_SYNDROME_EVENT_BYTES: u64 = 24;
+/// Conservative estimated bytes per sparse syndrome event.
+pub const ESTIMATED_SYNDROME_EVENT_BYTES: u64 = 32;
 
-/// Number of bytes used by a sparse correction entry estimate.
+/// Conservative estimated bytes per sparse correction entry.
 pub const ESTIMATED_CORRECTION_BYTES: u64 = 24;
 
-// ============================================================================
-// Sparse errors
-// ============================================================================
+/// Conservative estimated bytes per sparse graph node.
+pub const ESTIMATED_GRAPH_NODE_BYTES: u64 = 32;
+
+/// Conservative estimated bytes per stabilizer row.
+pub const ESTIMATED_STABILIZER_ROW_BYTES: u64 = 32;
+
+/* ========================================================================== */
+/* Error type                                                                 */
+/* ========================================================================== */
 
 /// Errors produced by sparse QEC representations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SparseError {
-    /// A sparse representation was constructed with an invalid qubit count.
+    /// A representation cannot contain zero qubits.
     InvalidQubitCount {
         qubits: usize,
     },
 
-    /// A qubit index is outside the declared representation.
-    QubitOutOfRange {
-        qubit: usize,
-        num_qubits: usize,
+    /// A representation cannot contain zero nodes.
+    InvalidNodeCount {
+        nodes: usize,
+    },
+
+    /// An index is outside its declared domain.
+    IndexOutOfRange {
+        index: usize,
+        upper_bound: usize,
+        domain: &'static str,
     },
 
     /// Two representations have incompatible dimensions.
     DimensionMismatch {
         left: usize,
         right: usize,
+        domain: &'static str,
     },
 
-    /// A requested sparse structure exceeds the canonical QEC policy.
+    /// A resource limit was exceeded during preflight.
     ResourceLimitExceeded {
         resource: LimitKind,
         requested: u128,
         maximum: u128,
     },
 
-    /// A derived-size calculation overflowed.
+    /// A checked calculation overflowed.
     ArithmeticOverflow {
         resource: LimitKind,
     },
 
-    /// A graph node was already present.
-    DuplicateNode {
-        node: usize,
-    },
-
-    /// A graph edge was already present.
-    DuplicateEdge {
-        from: usize,
-        to: usize,
-    },
-
-    /// A sparse structure contains an invalid internal state.
+    /// An internal structural invariant is invalid.
     InvalidInvariant {
         message: &'static str,
+    },
+
+    /// An operation would introduce an invalid value.
+    InvalidValue {
+        message: &'static str,
+    },
+
+    /// An edge refers to itself when self-edges are prohibited.
+    SelfEdge {
+        node: usize,
     },
 }
 
@@ -182,22 +193,30 @@ impl fmt::Display for SparseError {
                 write!(f, "invalid sparse qubit count: {qubits}")
             }
 
-            Self::QubitOutOfRange {
-                qubit,
-                num_qubits,
+            Self::InvalidNodeCount { nodes } => {
+                write!(f, "invalid sparse node count: {nodes}")
+            }
+
+            Self::IndexOutOfRange {
+                index,
+                upper_bound,
+                domain,
             } => {
                 write!(
                     f,
-                    "qubit {qubit} is outside sparse representation \
-                     with {num_qubits} qubits"
+                    "{domain} index {index} is outside \
+                     valid range 0..{upper_bound}"
                 )
             }
 
-            Self::DimensionMismatch { left, right } => {
+            Self::DimensionMismatch {
+                left,
+                right,
+                domain,
+            } => {
                 write!(
                     f,
-                    "sparse representation dimension mismatch: \
-                     {left} != {right}"
+                    "{domain} dimension mismatch: {left} != {right}"
                 )
             }
 
@@ -220,19 +239,19 @@ impl fmt::Display for SparseError {
                 )
             }
 
-            Self::DuplicateNode { node } => {
-                write!(f, "duplicate sparse graph node: {node}")
-            }
-
-            Self::DuplicateEdge { from, to } => {
+            Self::InvalidInvariant { message } => {
                 write!(
                     f,
-                    "duplicate sparse graph edge: {from} -> {to}"
+                    "invalid sparse representation invariant: {message}"
                 )
             }
 
-            Self::InvalidInvariant { message } => {
-                write!(f, "invalid sparse representation invariant: {message}")
+            Self::InvalidValue { message } => {
+                write!(f, "invalid sparse value: {message}")
+            }
+
+            Self::SelfEdge { node } => {
+                write!(f, "self-edge is not permitted for node {node}")
             }
         }
     }
@@ -243,9 +262,9 @@ impl std::error::Error for SparseError {}
 /// Result type for sparse QEC operations.
 pub type SparseResult<T> = Result<T, SparseError>;
 
-// ============================================================================
-// Resource helpers
-// ============================================================================
+/* ========================================================================== */
+/* Checked arithmetic                                                         */
+/* ========================================================================== */
 
 fn checked_add(
     left: u64,
@@ -269,12 +288,11 @@ fn usize_to_u64(
     value: usize,
     resource: LimitKind,
 ) -> SparseResult<u64> {
-    u64::try_from(value).map_err(|_| {
-        SparseError::ArithmeticOverflow { resource }
-    })
+    u64::try_from(value)
+        .map_err(|_| SparseError::ArithmeticOverflow { resource })
 }
 
-fn limit_error(error: LimitError) -> SparseError {
+fn map_limit_error(error: LimitError) -> SparseError {
     match error {
         LimitError::Exceeded {
             resource,
@@ -298,38 +316,180 @@ fn limit_error(error: LimitError) -> SparseError {
             }
         }
 
-        LimitError::InconsistentLimits {
-            resource,
-            ..
-        } => SparseError::InvalidInvariant {
-            message: match resource {
-                LimitKind::QubitsPerPartition => {
-                    "inconsistent QEC partition limits"
-                }
-
-                _ => "inconsistent QEC limits",
-            },
-        },
+        LimitError::InconsistentLimits { .. }
+        | LimitError::UnsupportedSchema { .. } => {
+            SparseError::InvalidInvariant {
+                message: "invalid QEC limits supplied to sparse preflight",
+            }
+        }
     }
 }
 
-// ============================================================================
-// Sparse Pauli
-// ============================================================================
+/* ========================================================================== */
+/* Sparse resource estimate                                                   */
+/* ========================================================================== */
+
+/// Conservative preflight estimate for a sparse representation.
+///
+/// This is intentionally an estimate, not a replacement for runtime
+/// accounting in `resources.rs` or allocation reservation in `memory.rs`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SparseResourceEstimate {
+    /// Estimated bytes.
+    pub memory_bytes: u64,
+
+    /// Number of sparse entries.
+    pub entries: u64,
+
+    /// Number of graph nodes.
+    pub graph_nodes: u64,
+
+    /// Number of graph edges.
+    pub graph_edges: u64,
+
+    /// Number of syndrome events.
+    pub syndrome_events: u64,
+
+    /// Number of correction entries.
+    pub correction_entries: u64,
+
+    /// Number of stabilizer rows.
+    pub stabilizer_rows: u64,
+}
+
+impl SparseResourceEstimate {
+    /// Creates an empty estimate.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            memory_bytes: 0,
+            entries: 0,
+            graph_nodes: 0,
+            graph_edges: 0,
+            syndrome_events: 0,
+            correction_entries: 0,
+            stabilizer_rows: 0,
+        }
+    }
+
+    /// Adds another estimate using checked arithmetic.
+    pub fn checked_add(
+        &self,
+        other: &Self,
+    ) -> SparseResult<Self> {
+        Ok(Self {
+            memory_bytes: checked_add(
+                self.memory_bytes,
+                other.memory_bytes,
+                LimitKind::MemoryBytes,
+            )?,
+
+            entries: checked_add(
+                self.entries,
+                other.entries,
+                LimitKind::MemoryBytes,
+            )?,
+
+            graph_nodes: checked_add(
+                self.graph_nodes,
+                other.graph_nodes,
+                LimitKind::GraphNodes,
+            )?,
+
+            graph_edges: checked_add(
+                self.graph_edges,
+                other.graph_edges,
+                LimitKind::GraphEdges,
+            )?,
+
+            syndrome_events: checked_add(
+                self.syndrome_events,
+                other.syndrome_events,
+                LimitKind::SyndromeEvents,
+            )?,
+
+            correction_entries: checked_add(
+                self.correction_entries,
+                other.correction_entries,
+                LimitKind::MemoryBytes,
+            )?,
+
+            stabilizer_rows: checked_add(
+                self.stabilizer_rows,
+                other.stabilizer_rows,
+                LimitKind::Stabilizers,
+            )?,
+        })
+    }
+
+    /// Validates the estimate against canonical QEC policy.
+    pub fn validate_against(
+        &self,
+        limits: &QecLimits,
+    ) -> SparseResult<()> {
+        limits.validate().map_err(map_limit_error)?;
+
+        if self.memory_bytes > limits.max_memory_bytes {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::MemoryBytes,
+                requested: u128::from(self.memory_bytes),
+                maximum: u128::from(limits.max_memory_bytes),
+            });
+        }
+
+        if self.graph_nodes > limits.max_graph_nodes as u64 {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::GraphNodes,
+                requested: u128::from(self.graph_nodes),
+                maximum: u128::from(limits.max_graph_nodes as u64),
+            });
+        }
+
+        if self.graph_edges > limits.max_graph_edges as u64 {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::GraphEdges,
+                requested: u128::from(self.graph_edges),
+                maximum: u128::from(limits.max_graph_edges as u64),
+            });
+        }
+
+        if self.syndrome_events > limits.max_syndrome_events as u64 {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::SyndromeEvents,
+                requested: u128::from(self.syndrome_events),
+                maximum: u128::from(limits.max_syndrome_events as u64),
+            });
+        }
+
+        if self.stabilizer_rows > limits.max_stabilizers as u64 {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::Stabilizers,
+                requested: u128::from(self.stabilizer_rows),
+                maximum: u128::from(limits.max_stabilizers as u64),
+            });
+        }
+
+        Ok(())
+    }
+}
+
+/* ========================================================================== */
+/* Sparse Pauli                                                               */
+/* ========================================================================== */
 
 /// Sparse binary-symplectic Pauli representation.
 ///
-/// Instead of storing two dense `Vec<bool>` arrays, only the non-zero X and Z
-/// supports are stored.
+/// Only non-zero X and Z components are stored.
 ///
 /// ```text
 /// X support = {1, 4, 9000}
 /// Z support = {4, 7}
 /// ```
 ///
-/// Qubit 4 therefore represents `Y`, because both X and Z components are set.
+/// Qubit `4` therefore represents `Y`.
 ///
-/// Global phase is intentionally ignored, matching the stabilizer layer.
+/// Global phase is intentionally omitted because stabilizer/QEC correction
+/// logic generally works modulo global phase.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SparsePauli {
     num_qubits: usize,
@@ -338,7 +498,7 @@ pub struct SparsePauli {
 }
 
 impl SparsePauli {
-    /// Creates the identity operator on `num_qubits`.
+    /// Creates the identity on `num_qubits`.
     pub fn identity(num_qubits: usize) -> SparseResult<Self> {
         if num_qubits == 0 {
             return Err(SparseError::InvalidQubitCount {
@@ -353,7 +513,7 @@ impl SparsePauli {
         })
     }
 
-    /// Creates a sparse Pauli from explicit X and Z supports.
+    /// Creates a Pauli from explicit X/Z supports.
     pub fn from_supports<I, J>(
         num_qubits: usize,
         x_support: I,
@@ -376,19 +536,19 @@ impl SparsePauli {
         Ok(result)
     }
 
-    /// Returns the number of qubits represented.
+    /// Number of represented qubits.
     #[must_use]
     pub const fn num_qubits(&self) -> usize {
         self.num_qubits
     }
 
-    /// Returns the X support.
+    /// X support.
     #[must_use]
     pub fn x_support(&self) -> &BTreeSet<usize> {
         &self.x_support
     }
 
-    /// Returns the Z support.
+    /// Z support.
     #[must_use]
     pub fn z_support(&self) -> &BTreeSet<usize> {
         &self.z_support
@@ -418,25 +578,25 @@ impl SparsePauli {
         Ok(self.z_support.remove(&qubit))
     }
 
-    /// Returns whether an X component exists at `qubit`.
+    /// Returns whether an X component exists.
     #[must_use]
     pub fn has_x(&self, qubit: usize) -> bool {
         self.x_support.contains(&qubit)
     }
 
-    /// Returns whether a Z component exists at `qubit`.
+    /// Returns whether a Z component exists.
     #[must_use]
     pub fn has_z(&self, qubit: usize) -> bool {
         self.z_support.contains(&qubit)
     }
 
-    /// Returns whether the operator is identity.
+    /// Returns whether this is identity.
     #[must_use]
     pub fn is_identity(&self) -> bool {
         self.x_support.is_empty() && self.z_support.is_empty()
     }
 
-    /// Returns the number of qubits on which the Pauli is non-identity.
+    /// Returns Pauli weight.
     #[must_use]
     pub fn weight(&self) -> usize {
         self.x_support
@@ -444,28 +604,26 @@ impl SparsePauli {
             .count()
     }
 
-    /// Returns the number of stored binary components.
+    /// Returns number of stored X/Z components.
     #[must_use]
     pub fn support_size(&self) -> usize {
         self.x_support.len() + self.z_support.len()
     }
 
-    /// Returns the single-qubit Pauli encoded at `qubit`.
-    ///
-    /// The result uses:
+    /// Returns a single-qubit component.
     ///
     /// ```text
-    /// 00 = I
-    /// 10 = X
-    /// 11 = Y
-    /// 01 = Z
+    /// 0 = I
+    /// 1 = X
+    /// 2 = Y
+    /// 3 = Z
     /// ```
     #[must_use]
     pub fn component(&self, qubit: usize) -> u8 {
-        let x = self.x_support.contains(&qubit);
-        let z = self.z_support.contains(&qubit);
-
-        match (x, z) {
+        match (
+            self.x_support.contains(&qubit),
+            self.z_support.contains(&qubit),
+        ) {
             (false, false) => 0,
             (true, false) => 1,
             (true, true) => 2,
@@ -475,17 +633,13 @@ impl SparsePauli {
 
     /// Computes the binary symplectic product.
     ///
-    /// Returns `0` for commuting and `1` for anti-commuting operators.
+    /// `0` means commuting.
+    /// `1` means anti-commuting.
     pub fn symplectic_product(
         &self,
         other: &Self,
     ) -> SparseResult<u8> {
-        if self.num_qubits != other.num_qubits {
-            return Err(SparseError::DimensionMismatch {
-                left: self.num_qubits,
-                right: other.num_qubits,
-            });
-        }
+        self.ensure_same_dimension(other)?;
 
         let xz = self
             .x_support
@@ -508,19 +662,12 @@ impl SparsePauli {
         Ok(self.symplectic_product(other)? == 0)
     }
 
-    /// Multiplies this Pauli by another Pauli modulo global phase.
-    ///
-    /// Binary symplectic multiplication is XOR of X and Z supports.
+    /// Multiplies modulo global phase.
     pub fn multiply(
         &self,
         other: &Self,
     ) -> SparseResult<Self> {
-        if self.num_qubits != other.num_qubits {
-            return Err(SparseError::DimensionMismatch {
-                left: self.num_qubits,
-                right: other.num_qubits,
-            });
-        }
+        self.ensure_same_dimension(other)?;
 
         let x_support = self
             .x_support
@@ -541,12 +688,12 @@ impl SparsePauli {
         })
     }
 
-    /// Returns a deterministic iterator over non-identity qubits.
+    /// Deterministically iterates over all non-identity qubits.
     pub fn support(&self) -> impl Iterator<Item = usize> + '_ {
         self.x_support.union(&self.z_support).copied()
     }
 
-    /// Estimates memory required by this sparse representation.
+    /// Conservative memory estimate.
     pub fn estimated_memory_bytes(&self) -> SparseResult<u64> {
         let entries = usize_to_u64(
             self.support_size(),
@@ -560,11 +707,11 @@ impl SparsePauli {
         )
     }
 
-    /// Performs structural validation.
+    /// Validates all invariants.
     pub fn validate(&self) -> SparseResult<()> {
         if self.num_qubits == 0 {
             return Err(SparseError::InvalidQubitCount {
-                qubits: self.num_qubits,
+                qubits: 0,
             });
         }
 
@@ -591,153 +738,12 @@ impl SparsePauli {
         Ok(())
     }
 
-    fn validate_qubit(&self, qubit: usize) -> SparseResult<()> {
-        if qubit >= self.num_qubits {
-            return Err(SparseError::QubitOutOfRange {
-                qubit,
-                num_qubits: self.num_qubits,
-            });
-        }
-
-        Ok(())
-    }
-}
-
-// ============================================================================
-// Sparse stabilizer matrix
-// ============================================================================
-
-/// Sparse stabilizer-generator matrix.
-///
-/// Each row is represented by a `SparsePauli`.
-///
-/// No dense `n × m` matrix is materialized.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SparseStabilizerMatrix {
-    num_qubits: usize,
-    rows: Vec<SparsePauli>,
-}
-
-impl SparseStabilizerMatrix {
-    /// Creates an empty sparse stabilizer matrix.
-    pub fn new(
-        num_qubits: usize,
-        limits: &QecLimits,
-    ) -> SparseResult<Self> {
-        if num_qubits == 0 {
-            return Err(SparseError::InvalidQubitCount {
-                qubits: num_qubits,
-            });
-        }
-
-        limits.validate().map_err(limit_error)?;
-
-        if num_qubits > limits.max_qubits {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::Qubits,
-                requested: num_qubits as u128,
-                maximum: limits.max_qubits as u128,
-            });
-        }
-
-        Ok(Self {
-            num_qubits,
-            rows: Vec::new(),
-        })
-    }
-
-    /// Returns the represented qubit count.
-    #[must_use]
-    pub const fn num_qubits(&self) -> usize {
-        self.num_qubits
-    }
-
-    /// Returns the stabilizer-generator count.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.rows.len()
-    }
-
-    /// Returns whether there are no generators.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.rows.is_empty()
-    }
-
-    /// Returns all rows in deterministic order.
-    #[must_use]
-    pub fn rows(&self) -> &[SparsePauli] {
-        &self.rows
-    }
-
-    /// Appends one stabilizer generator.
-    pub fn push(
-        &mut self,
-        generator: SparsePauli,
+    /// Validates this Pauli against canonical QEC policy.
+    pub fn preflight(
+        &self,
         limits: &QecLimits,
     ) -> SparseResult<()> {
-        if generator.num_qubits() != self.num_qubits {
-            return Err(SparseError::DimensionMismatch {
-                left: self.num_qubits,
-                right: generator.num_qubits(),
-            });
-        }
-
-        if self.rows.len() >= limits.max_stabilizers {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::Stabilizers,
-                requested: (self.rows.len() as u128) + 1,
-                maximum: limits.max_stabilizers as u128,
-            });
-        }
-
-        if generator.weight() > limits.max_stabilizer_weight {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::StabilizerWeight,
-                requested: generator.weight() as u128,
-                maximum: limits.max_stabilizer_weight as u128,
-            });
-        }
-
-        generator.validate()?;
-
-        self.rows.push(generator);
-
-        Ok(())
-    }
-
-    /// Returns one generator by index without unchecked indexing.
-    pub fn get(&self, index: usize) -> Option<&SparsePauli> {
-        self.rows.get(index)
-    }
-
-    /// Computes the total sparse support size.
-    #[must_use]
-    pub fn total_support_size(&self) -> usize {
-        self.rows
-            .iter()
-            .map(SparsePauli::support_size)
-            .sum()
-    }
-
-    /// Estimates memory required by the matrix.
-    pub fn estimated_memory_bytes(&self) -> SparseResult<u64> {
-        let mut total = 0u64;
-
-        for row in &self.rows {
-            total = checked_add(
-                total,
-                row.estimated_memory_bytes()?,
-                LimitKind::MemoryBytes,
-            )?;
-        }
-
-        Ok(total)
-    }
-
-    /// Performs structural validation.
-    pub fn validate(&self, limits: &QecLimits) -> SparseResult<()> {
-        limits.validate().map_err(limit_error)?;
+        self.validate()?;
 
         if self.num_qubits > limits.max_qubits {
             return Err(SparseError::ResourceLimitExceeded {
@@ -747,194 +753,482 @@ impl SparseStabilizerMatrix {
             });
         }
 
-        if self.rows.len() > limits.max_stabilizers {
+        if self.weight() > limits.max_logical_operator_weight {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::LogicalOperatorWeight,
+                requested: self.weight() as u128,
+                maximum: limits.max_logical_operator_weight as u128,
+            });
+        }
+
+        self.estimated_memory_bytes()?;
+        Ok(())
+    }
+
+    fn validate_qubit(&self, qubit: usize) -> SparseResult<()> {
+        if qubit >= self.num_qubits {
+            return Err(SparseError::IndexOutOfRange {
+                index: qubit,
+                upper_bound: self.num_qubits,
+                domain: "qubit",
+            });
+        }
+
+        Ok(())
+    }
+
+    fn ensure_same_dimension(
+        &self,
+        other: &Self,
+    ) -> SparseResult<()> {
+        if self.num_qubits != other.num_qubits {
+            return Err(SparseError::DimensionMismatch {
+                left: self.num_qubits,
+                right: other.num_qubits,
+                domain: "Pauli",
+            });
+        }
+
+        Ok(())
+    }
+}
+
+/* ========================================================================== */
+/* Sparse stabilizer matrix                                                   */
+/* ========================================================================== */
+
+/// Sparse collection of stabilizer generators.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SparseStabilizerMatrix {
+    num_qubits: usize,
+    rows: BTreeMap<usize, SparsePauli>,
+}
+
+impl SparseStabilizerMatrix {
+    /// Creates an empty matrix.
+    pub fn new(num_qubits: usize) -> SparseResult<Self> {
+        if num_qubits == 0 {
+            return Err(SparseError::InvalidQubitCount {
+                qubits: num_qubits,
+            });
+        }
+
+        Ok(Self {
+            num_qubits,
+            rows: BTreeMap::new(),
+        })
+    }
+
+    /// Creates a matrix from rows.
+    pub fn from_rows<I>(
+        num_qubits: usize,
+        rows: I,
+    ) -> SparseResult<Self>
+    where
+        I: IntoIterator<Item = (usize, SparsePauli)>,
+    {
+        let mut matrix = Self::new(num_qubits)?;
+
+        for (row, pauli) in rows {
+            matrix.insert(row, pauli)?;
+        }
+
+        Ok(matrix)
+    }
+
+    /// Number of qubits.
+    #[must_use]
+    pub const fn num_qubits(&self) -> usize {
+        self.num_qubits
+    }
+
+    /// Number of stabilizer rows.
+    #[must_use]
+    pub fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+
+    /// Returns whether the matrix has no rows.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    /// Returns a row.
+    #[must_use]
+    pub fn get(&self, row: usize) -> Option<&SparsePauli> {
+        self.rows.get(&row)
+    }
+
+    /// Deterministically iterates over rows.
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = (&usize, &SparsePauli)> {
+        self.rows.iter()
+    }
+
+    /// Inserts or replaces a stabilizer row.
+    pub fn insert(
+        &mut self,
+        row: usize,
+        pauli: SparsePauli,
+    ) -> SparseResult<Option<SparsePauli>> {
+        if pauli.num_qubits() != self.num_qubits {
+            return Err(SparseError::DimensionMismatch {
+                left: pauli.num_qubits(),
+                right: self.num_qubits,
+                domain: "stabilizer matrix",
+            });
+        }
+
+        if row >= self.rows.len()
+            && row > self.rows.len().saturating_add(1_000_000)
+        {
+            return Err(SparseError::InvalidValue {
+                message: "stabilizer row index is unreasonably sparse",
+            });
+        }
+
+        pauli.validate()?;
+
+        Ok(self.rows.insert(row, pauli))
+    }
+
+    /// Removes a row.
+    pub fn remove(
+        &mut self,
+        row: usize,
+    ) -> Option<SparsePauli> {
+        self.rows.remove(&row)
+    }
+
+    /// Validates all rows.
+    pub fn validate(&self) -> SparseResult<()> {
+        if self.num_qubits == 0 {
+            return Err(SparseError::InvalidQubitCount {
+                qubits: 0,
+            });
+        }
+
+        for pauli in self.rows.values() {
+            if pauli.num_qubits() != self.num_qubits {
+                return Err(SparseError::DimensionMismatch {
+                    left: pauli.num_qubits(),
+                    right: self.num_qubits,
+                    domain: "stabilizer matrix",
+                });
+            }
+
+            pauli.validate()?;
+        }
+
+        Ok(())
+    }
+
+    /// Conservative memory estimate.
+    pub fn estimated_memory_bytes(&self) -> SparseResult<u64> {
+        let rows = usize_to_u64(
+            self.rows.len(),
+            LimitKind::Stabilizers,
+        )?;
+
+        let mut total = checked_mul(
+            rows,
+            ESTIMATED_STABILIZER_ROW_BYTES,
+            LimitKind::MemoryBytes,
+        )?;
+
+        for pauli in self.rows.values() {
+            total = checked_add(
+                total,
+                pauli.estimated_memory_bytes()?,
+                LimitKind::MemoryBytes,
+            )?;
+        }
+
+        Ok(total)
+    }
+
+    /// Canonical QEC preflight.
+    pub fn preflight(
+        &self,
+        limits: &QecLimits,
+    ) -> SparseResult<()> {
+        limits.validate().map_err(map_limit_error)?;
+        self.validate()?;
+
+        if self.num_qubits > limits.max_qubits {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::Qubits,
+                requested: self.num_qubits as u128,
+                maximum: limits.max_qubits as u128,
+            });
+        }
+
+        if self.row_count() > limits.max_stabilizers {
             return Err(SparseError::ResourceLimitExceeded {
                 resource: LimitKind::Stabilizers,
-                requested: self.rows.len() as u128,
+                requested: self.row_count() as u128,
                 maximum: limits.max_stabilizers as u128,
             });
         }
 
-        for row in &self.rows {
-            if row.weight() > limits.max_stabilizer_weight {
+        for pauli in self.rows.values() {
+            if pauli.weight() > limits.max_stabilizer_weight {
                 return Err(SparseError::ResourceLimitExceeded {
                     resource: LimitKind::StabilizerWeight,
-                    requested: row.weight() as u128,
+                    requested: pauli.weight() as u128,
                     maximum: limits.max_stabilizer_weight as u128,
                 });
             }
+        }
 
-            row.validate()?;
+        let memory = self.estimated_memory_bytes()?;
+
+        if memory > limits.max_memory_bytes {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::MemoryBytes,
+                requested: u128::from(memory),
+                maximum: u128::from(limits.max_memory_bytes),
+            });
         }
 
         Ok(())
     }
-
-    /// Returns the maximum generator weight.
-    #[must_use]
-    pub fn max_weight(&self) -> usize {
-        self.rows
-            .iter()
-            .map(SparsePauli::weight)
-            .max()
-            .unwrap_or(0)
-    }
 }
 
-// ============================================================================
-// Sparse adjacency
-// ============================================================================
+/* ========================================================================== */
+/* Sparse graph                                                               */
+/* ========================================================================== */
 
-/// Sparse deterministic adjacency structure.
+/// Sparse undirected graph.
 ///
-/// Each node owns an ordered `BTreeSet` of neighboring nodes.
+/// The graph stores each edge canonically as `(min(a,b), max(a,b))`.
+/// This prevents duplicate logical edges and guarantees deterministic
+/// serialization/iteration.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SparseAdjacency {
-    nodes: BTreeMap<usize, BTreeSet<usize>>,
+pub struct SparseGraph {
+    node_count: usize,
+    adjacency: BTreeMap<usize, BTreeSet<usize>>,
+    edge_count: usize,
 }
 
-impl SparseAdjacency {
-    /// Creates an empty adjacency structure.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            nodes: BTreeMap::new(),
-        }
-    }
-
-    /// Returns the number of nodes.
-    #[must_use]
-    pub fn node_count(&self) -> usize {
-        self.nodes.len()
-    }
-
-    /// Returns the number of directed adjacency entries.
-    #[must_use]
-    pub fn edge_count(&self) -> usize {
-        self.nodes
-            .values()
-            .map(BTreeSet::len)
-            .sum()
-    }
-
-    /// Inserts a node.
-    pub fn insert_node(
-        &mut self,
-        node: usize,
-        limits: &QecLimits,
-    ) -> SparseResult<bool> {
-        if self.nodes.contains_key(&node) {
-            return Err(SparseError::DuplicateNode { node });
-        }
-
-        if self.nodes.len() >= limits.max_graph_nodes {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::GraphNodes,
-                requested: (self.nodes.len() as u128) + 1,
-                maximum: limits.max_graph_nodes as u128,
+impl SparseGraph {
+    /// Creates an empty graph with `node_count` nodes.
+    pub fn new(node_count: usize) -> SparseResult<Self> {
+        if node_count == 0 {
+            return Err(SparseError::InvalidNodeCount {
+                nodes: node_count,
             });
         }
 
-        self.nodes.insert(node, BTreeSet::new());
-
-        Ok(true)
+        Ok(Self {
+            node_count,
+            adjacency: BTreeMap::new(),
+            edge_count: 0,
+        })
     }
 
-    /// Inserts a directed edge.
-    ///
-    /// Both endpoints must already exist.
-    pub fn insert_edge(
-        &mut self,
-        from: usize,
-        to: usize,
-        limits: &QecLimits,
-    ) -> SparseResult<bool> {
-        if !self.nodes.contains_key(&from) {
-            self.insert_node(from, limits)?;
-        }
-
-        if !self.nodes.contains_key(&to) {
-            self.insert_node(to, limits)?;
-        }
-
-        let exists = self
-            .nodes
-            .get(&from)
-            .map(|neighbors| neighbors.contains(&to))
-            .unwrap_or(false);
-
-        if exists {
-            return Err(SparseError::DuplicateEdge { from, to });
-        }
-
-        if self.edge_count() >= limits.max_graph_edges {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::GraphEdges,
-                requested: (self.edge_count() as u128) + 1,
-                maximum: limits.max_graph_edges as u128,
-            });
-        }
-
-        let neighbors = self
-            .nodes
-            .get_mut(&from)
-            .ok_or(SparseError::InvalidInvariant {
-                message: "graph node disappeared during insertion",
-            })?;
-
-        neighbors.insert(to);
-
-        Ok(true)
+    /// Number of nodes.
+    #[must_use]
+    pub const fn node_count(&self) -> usize {
+        self.node_count
     }
 
-    /// Inserts an undirected edge.
-    pub fn insert_undirected_edge(
-        &mut self,
-        left: usize,
-        right: usize,
-        limits: &QecLimits,
-    ) -> SparseResult<()> {
-        if left == right {
-            return Err(SparseError::InvalidInvariant {
-                message: "self-loop is not a valid QEC adjacency edge",
-            });
-        }
-
-        self.insert_edge(left, right, limits)?;
-        self.insert_edge(right, left, limits)?;
-
-        Ok(())
+    /// Number of undirected edges.
+    #[must_use]
+    pub const fn edge_count(&self) -> usize {
+        self.edge_count
     }
 
-    /// Returns neighbors in deterministic order.
+    /// Returns neighbors of a node.
     #[must_use]
     pub fn neighbors(
         &self,
         node: usize,
     ) -> Option<&BTreeSet<usize>> {
-        self.nodes.get(&node)
+        if node >= self.node_count {
+            return None;
+        }
+
+        self.adjacency.get(&node)
     }
 
-    /// Returns nodes in deterministic order.
-    pub fn nodes(&self) -> impl Iterator<Item = usize> + '_ {
-        self.nodes.keys().copied()
+    /// Returns whether an edge exists.
+    #[must_use]
+    pub fn contains_edge(
+        &self,
+        from: usize,
+        to: usize,
+    ) -> bool {
+        if from >= self.node_count || to >= self.node_count {
+            return false;
+        }
+
+        self.adjacency
+            .get(&from)
+            .map_or(false, |neighbors| neighbors.contains(&to))
     }
 
-    /// Estimates adjacency memory.
+    /// Adds an undirected edge.
+    ///
+    /// Adding an existing edge is idempotent and returns `false`.
+    pub fn add_edge(
+        &mut self,
+        from: usize,
+        to: usize,
+    ) -> SparseResult<bool> {
+        self.validate_node(from)?;
+        self.validate_node(to)?;
+
+        if from == to {
+            return Err(SparseError::SelfEdge { node: from });
+        }
+
+        if self.contains_edge(from, to) {
+            return Ok(false);
+        }
+
+        self.adjacency
+            .entry(from)
+            .or_default()
+            .insert(to);
+
+        self.adjacency
+            .entry(to)
+            .or_default()
+            .insert(from);
+
+        self.edge_count = self
+            .edge_count
+            .checked_add(1)
+            .ok_or(SparseError::ArithmeticOverflow {
+                resource: LimitKind::GraphEdges,
+            })?;
+
+        Ok(true)
+    }
+
+    /// Removes an undirected edge.
+    pub fn remove_edge(
+        &mut self,
+        from: usize,
+        to: usize,
+    ) -> SparseResult<bool> {
+        self.validate_node(from)?;
+        self.validate_node(to)?;
+
+        if !self.contains_edge(from, to) {
+            return Ok(false);
+        }
+
+        if let Some(neighbors) = self.adjacency.get_mut(&from) {
+            neighbors.remove(&to);
+            if neighbors.is_empty() {
+                self.adjacency.remove(&from);
+            }
+        }
+
+        if let Some(neighbors) = self.adjacency.get_mut(&to) {
+            neighbors.remove(&from);
+            if neighbors.is_empty() {
+                self.adjacency.remove(&to);
+            }
+        }
+
+        self.edge_count = self
+            .edge_count
+            .checked_sub(1)
+            .ok_or(SparseError::InvalidInvariant {
+                message: "graph edge count underflow",
+            })?;
+
+        Ok(true)
+    }
+
+    /// Deterministically iterates over graph edges.
+    pub fn edges(
+        &self,
+    ) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.adjacency.iter().flat_map(|(&from, neighbors)| {
+            neighbors
+                .iter()
+                .filter_map(move |&to| {
+                    if from < to {
+                        Some((from, to))
+                    } else {
+                        None
+                    }
+                })
+        })
+    }
+
+    /// Validates graph invariants.
+    pub fn validate(&self) -> SparseResult<()> {
+        if self.node_count == 0 {
+            return Err(SparseError::InvalidNodeCount {
+                nodes: 0,
+            });
+        }
+
+        let mut counted_edges = 0usize;
+
+        for (&node, neighbors) in &self.adjacency {
+            self.validate_node(node)?;
+
+            for &neighbor in neighbors {
+                self.validate_node(neighbor)?;
+
+                if node == neighbor {
+                    return Err(SparseError::SelfEdge { node });
+                }
+
+                if !self
+                    .adjacency
+                    .get(&neighbor)
+                    .map_or(false, |set| set.contains(&node))
+                {
+                    return Err(SparseError::InvalidInvariant {
+                        message: "graph adjacency is not symmetric",
+                    });
+                }
+
+                if node < neighbor {
+                    counted_edges = counted_edges
+                        .checked_add(1)
+                        .ok_or(
+                            SparseError::ArithmeticOverflow {
+                                resource: LimitKind::GraphEdges,
+                            },
+                        )?;
+                }
+            }
+        }
+
+        if counted_edges != self.edge_count {
+            return Err(SparseError::InvalidInvariant {
+                message: "stored graph edge count disagrees with adjacency",
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Conservative memory estimate.
     pub fn estimated_memory_bytes(&self) -> SparseResult<u64> {
         let nodes = usize_to_u64(
-            self.node_count(),
-            LimitKind::MemoryBytes,
+            self.adjacency.len(),
+            LimitKind::GraphNodes,
         )?;
 
         let edges = usize_to_u64(
-            self.edge_count(),
-            LimitKind::MemoryBytes,
+            self.edge_count,
+            LimitKind::GraphEdges,
         )?;
 
         let node_bytes = checked_mul(
             nodes,
-            ESTIMATED_INDEX_BYTES,
+            ESTIMATED_GRAPH_NODE_BYTES,
             LimitKind::MemoryBytes,
         )?;
 
@@ -951,431 +1245,252 @@ impl SparseAdjacency {
         )
     }
 
-    /// Validates the sparse adjacency structure against policy.
-    pub fn validate(
+    /// Canonical QEC preflight.
+    pub fn preflight(
         &self,
         limits: &QecLimits,
     ) -> SparseResult<()> {
-        limits.validate().map_err(limit_error)?;
+        limits.validate().map_err(map_limit_error)?;
+        self.validate()?;
 
-        if self.node_count() > limits.max_graph_nodes {
+        if self.node_count > limits.max_graph_nodes {
             return Err(SparseError::ResourceLimitExceeded {
                 resource: LimitKind::GraphNodes,
-                requested: self.node_count() as u128,
+                requested: self.node_count as u128,
                 maximum: limits.max_graph_nodes as u128,
             });
         }
 
-        if self.edge_count() > limits.max_graph_edges {
+        if self.edge_count > limits.max_graph_edges {
             return Err(SparseError::ResourceLimitExceeded {
                 resource: LimitKind::GraphEdges,
-                requested: self.edge_count() as u128,
+                requested: self.edge_count as u128,
                 maximum: limits.max_graph_edges as u128,
             });
         }
 
-        for (node, neighbors) in &self.nodes {
-            if neighbors.contains(node) {
-                return Err(SparseError::InvalidInvariant {
-                    message: "sparse graph contains a self-loop",
-                });
-            }
+        let memory = self.estimated_memory_bytes()?;
 
-            for neighbor in neighbors {
-                if !self.nodes.contains_key(neighbor) {
-                    return Err(SparseError::InvalidInvariant {
-                        message: "sparse graph contains dangling edge",
-                    });
-                }
-            }
+        if memory > limits.max_memory_bytes {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::MemoryBytes,
+                requested: u128::from(memory),
+                maximum: u128::from(limits.max_memory_bytes),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn validate_node(&self, node: usize) -> SparseResult<()> {
+        if node >= self.node_count {
+            return Err(SparseError::IndexOutOfRange {
+                index: node,
+                upper_bound: self.node_count,
+                domain: "graph node",
+            });
         }
 
         Ok(())
     }
 }
 
-impl Default for SparseAdjacency {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/* ========================================================================== */
+/* Sparse syndrome                                                            */
+/* ========================================================================== */
 
-// ============================================================================
-// Weighted sparse graph
-// ============================================================================
-
-/// Sparse weighted graph edge.
+/// A single sparse detection event.
+///
+/// `round` identifies the measurement round.
+/// `stabilizer` identifies the detector/stabilizer.
+/// `value` is the binary detection value.
+///
+/// Optional confidence and timestamp metadata are kept separate from the
+/// sparse identity so the representation remains usable by classical
+/// decoders without requiring a particular backend.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SparseWeightedEdge {
-    pub from: usize,
-    pub to: usize,
-    pub weight: f64,
-}
-
-impl SparseWeightedEdge {
-    /// Creates a validated sparse weighted edge.
-    pub fn new(
-        from: usize,
-        to: usize,
-        weight: f64,
-    ) -> SparseResult<Self> {
-        if from == to {
-            return Err(SparseError::InvalidInvariant {
-                message: "QEC sparse weighted graph cannot contain self-loops",
-            });
-        }
-
-        if !weight.is_finite() || weight < 0.0 {
-            return Err(SparseError::InvalidInvariant {
-                message: "QEC sparse edge weights must be finite and non-negative",
-            });
-        }
-
-        Ok(Self {
-            from,
-            to,
-            weight,
-        })
-    }
-}
-
-/// Sparse weighted graph.
-///
-/// This structure stores only edges that actually exist. It is intended for
-/// decoding graphs where the full dense adjacency matrix would be wasteful.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SparseGraph {
-    adjacency: SparseAdjacency,
-    edges: BTreeMap<(usize, usize), f64>,
-}
-
-impl SparseGraph {
-    /// Creates an empty sparse graph.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            adjacency: SparseAdjacency::new(),
-            edges: BTreeMap::new(),
-        }
-    }
-
-    /// Returns the number of graph nodes.
-    #[must_use]
-    pub fn node_count(&self) -> usize {
-        self.adjacency.node_count()
-    }
-
-    /// Returns the number of directed weighted edges.
-    #[must_use]
-    pub fn edge_count(&self) -> usize {
-        self.edges.len()
-    }
-
-    /// Inserts a graph node.
-    pub fn insert_node(
-        &mut self,
-        node: usize,
-        limits: &QecLimits,
-    ) -> SparseResult<()> {
-        self.adjacency.insert_node(node, limits)?;
-        Ok(())
-    }
-
-    /// Inserts a directed weighted edge.
-    pub fn insert_edge(
-        &mut self,
-        edge: SparseWeightedEdge,
-        limits: &QecLimits,
-    ) -> SparseResult<()> {
-        if self.edges.contains_key(&(edge.from, edge.to)) {
-            return Err(SparseError::DuplicateEdge {
-                from: edge.from,
-                to: edge.to,
-            });
-        }
-
-        self.adjacency
-            .insert_edge(edge.from, edge.to, limits)?;
-
-        self.edges.insert(
-            (edge.from, edge.to),
-            edge.weight,
-        );
-
-        Ok(())
-    }
-
-    /// Inserts an undirected weighted edge.
-    pub fn insert_undirected_edge(
-        &mut self,
-        from: usize,
-        to: usize,
-        weight: f64,
-        limits: &QecLimits,
-    ) -> SparseResult<()> {
-        let first = SparseWeightedEdge::new(
-            from,
-            to,
-            weight,
-        )?;
-
-        let second = SparseWeightedEdge::new(
-            to,
-            from,
-            weight,
-        )?;
-
-        self.insert_edge(first, limits)?;
-        self.insert_edge(second, limits)?;
-
-        Ok(())
-    }
-
-    /// Returns a deterministic edge iterator.
-    pub fn edges(
-        &self,
-    ) -> impl Iterator<Item = SparseWeightedEdge> + '_ {
-        self.edges.iter().map(|(&(from, to), &weight)| {
-            SparseWeightedEdge {
-                from,
-                to,
-                weight,
-            }
-        })
-    }
-
-    /// Returns the weight of a specific edge.
-    #[must_use]
-    pub fn weight(
-        &self,
-        from: usize,
-        to: usize,
-    ) -> Option<f64> {
-        self.edges.get(&(from, to)).copied()
-    }
-
-    /// Returns neighboring nodes.
-    #[must_use]
-    pub fn neighbors(
-        &self,
-        node: usize,
-    ) -> Option<&BTreeSet<usize>> {
-        self.adjacency.neighbors(node)
-    }
-
-    /// Validates the complete graph.
-    pub fn validate(
-        &self,
-        limits: &QecLimits,
-    ) -> SparseResult<()> {
-        self.adjacency.validate(limits)?;
-
-        if self.edge_count() > limits.max_graph_edges {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::GraphEdges,
-                requested: self.edge_count() as u128,
-                maximum: limits.max_graph_edges as u128,
-            });
-        }
-
-        for (&(from, to), weight) in &self.edges {
-            if from == to {
-                return Err(SparseError::InvalidInvariant {
-                    message: "sparse weighted graph contains a self-loop",
-                });
-            }
-
-            if !weight.is_finite() || *weight < 0.0 {
-                return Err(SparseError::InvalidInvariant {
-                    message: "sparse weighted graph contains invalid weight",
-                });
-            }
-
-            if self
-                .adjacency
-                .neighbors(from)
-                .map(|neighbors| neighbors.contains(&to))
-                != Some(true)
-            {
-                return Err(SparseError::InvalidInvariant {
-                    message: "weighted edge is missing from adjacency index",
-                });
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Estimates memory used by the sparse graph.
-    pub fn estimated_memory_bytes(&self) -> SparseResult<u64> {
-        self.adjacency.estimated_memory_bytes()
-    }
-}
-
-impl Default for SparseGraph {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// ============================================================================
-// Sparse syndrome
-// ============================================================================
-
-/// Sparse detection-event identifier.
-///
-/// A syndrome event is identified by measurement round and stabilizer ID.
-/// This avoids storing a dense `round × stabilizer` matrix.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SparseSyndromeKey {
-    pub round: u64,
-    pub stabilizer: u64,
-}
-
-/// Sparse syndrome event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SparseSyndromeEvent {
-    pub key: SparseSyndromeKey,
+    /// Measurement round.
+    pub round: usize,
+
+    /// Stabilizer/detector index.
+    pub stabilizer: usize,
+
+    /// Detection value.
     pub value: bool,
+
+    /// Optional confidence in the measurement.
+    pub confidence: Option<f64>,
+
+    /// Optional timestamp in nanoseconds.
+    pub timestamp_ns: Option<u64>,
 }
 
 impl SparseSyndromeEvent {
+    /// Creates a binary detection event.
     #[must_use]
     pub const fn new(
-        round: u64,
-        stabilizer: u64,
+        round: usize,
+        stabilizer: usize,
         value: bool,
     ) -> Self {
         Self {
-            key: SparseSyndromeKey {
-                round,
-                stabilizer,
-            },
+            round,
+            stabilizer,
             value,
+            confidence: None,
+            timestamp_ns: None,
         }
     }
-}
 
-/// Sparse syndrome representation.
-///
-/// Only non-trivial events are retained.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SparseSyndrome {
-    events: BTreeSet<SparseSyndromeKey>,
-    rounds: u64,
-}
-
-impl SparseSyndrome {
-    /// Creates an empty sparse syndrome.
-    pub fn new(
-        rounds: u64,
-        limits: &QecLimits,
+    /// Sets confidence.
+    pub fn with_confidence(
+        mut self,
+        confidence: f64,
     ) -> SparseResult<Self> {
-        if rounds == 0 {
-            return Err(SparseError::InvalidInvariant {
-                message: "syndrome must contain at least one round",
+        if !confidence.is_finite()
+            || !(0.0..=1.0).contains(&confidence)
+        {
+            return Err(SparseError::InvalidValue {
+                message: "confidence must be finite and in [0, 1]",
             });
         }
 
-        if rounds > limits.max_rounds as u64 {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::MeasurementRounds,
-                requested: rounds as u128,
-                maximum: limits.max_rounds as u128,
+        self.confidence = Some(confidence);
+        Ok(self)
+    }
+
+    /// Sets a timestamp.
+    #[must_use]
+    pub const fn with_timestamp(
+        mut self,
+        timestamp_ns: u64,
+    ) -> Self {
+        self.timestamp_ns = Some(timestamp_ns);
+        self
+    }
+}
+
+/// Sparse syndrome/event collection.
+///
+/// Events are indexed by `(round, stabilizer)` and therefore duplicate
+/// insertion replaces the existing event rather than silently producing two
+/// conflicting values.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SparseSyndrome {
+    max_rounds: usize,
+    max_stabilizers: usize,
+    events: BTreeMap<(usize, usize), SparseSyndromeEvent>,
+}
+
+impl SparseSyndrome {
+    /// Creates an empty syndrome representation.
+    pub fn new(
+        max_rounds: usize,
+        max_stabilizers: usize,
+    ) -> SparseResult<Self> {
+        if max_rounds == 0 {
+            return Err(SparseError::InvalidValue {
+                message: "syndrome must support at least one round",
+            });
+        }
+
+        if max_stabilizers == 0 {
+            return Err(SparseError::InvalidValue {
+                message: "syndrome must support at least one stabilizer",
             });
         }
 
         Ok(Self {
-            events: BTreeSet::new(),
-            rounds,
+            max_rounds,
+            max_stabilizers,
+            events: BTreeMap::new(),
         })
     }
 
-    /// Returns the number of rounds.
+    /// Maximum number of supported rounds.
     #[must_use]
-    pub const fn rounds(&self) -> u64 {
-        self.rounds
+    pub const fn max_rounds(&self) -> usize {
+        self.max_rounds
     }
 
-    /// Returns the number of detection events.
+    /// Maximum number of supported stabilizers.
+    #[must_use]
+    pub const fn max_stabilizers(&self) -> usize {
+        self.max_stabilizers
+    }
+
+    /// Number of stored events.
     #[must_use]
     pub fn event_count(&self) -> usize {
         self.events.len()
     }
 
-    /// Returns whether the syndrome is trivial.
-    #[must_use]
-    pub fn is_trivial(&self) -> bool {
-        self.events.is_empty()
-    }
-
-    /// Inserts a non-trivial event.
-    ///
-    /// Re-inserting the same event is idempotent.
+    /// Inserts/replaces an event.
     pub fn insert(
         &mut self,
         event: SparseSyndromeEvent,
-        limits: &QecLimits,
-    ) -> SparseResult<bool> {
-        if event.key.round >= self.rounds {
-            return Err(SparseError::InvalidInvariant {
-                message: "syndrome event round exceeds syndrome rounds",
-            });
-        }
+    ) -> SparseResult<Option<SparseSyndromeEvent>> {
+        self.validate_event(&event)?;
 
-        if !event.value {
-            return Ok(false);
-        }
-
-        if self.events.contains(&event.key) {
-            return Ok(false);
-        }
-
-        if self.events.len() >= limits.max_syndrome_events {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::SyndromeEvents,
-                requested: (self.events.len() as u128) + 1,
-                maximum: limits.max_syndrome_events as u128,
-            });
-        }
-
-        Ok(self.events.insert(event.key))
+        Ok(self
+            .events
+            .insert((event.round, event.stabilizer), event))
     }
 
-    /// Removes a detection event.
+    /// Removes an event.
     pub fn remove(
         &mut self,
-        key: SparseSyndromeKey,
-    ) -> bool {
-        self.events.remove(&key)
+        round: usize,
+        stabilizer: usize,
+    ) -> Option<SparseSyndromeEvent> {
+        self.events.remove(&(round, stabilizer))
     }
 
-    /// Checks whether an event exists.
+    /// Gets an event.
     #[must_use]
-    pub fn contains(
+    pub fn get(
         &self,
-        key: SparseSyndromeKey,
-    ) -> bool {
-        self.events.contains(&key)
+        round: usize,
+        stabilizer: usize,
+    ) -> Option<&SparseSyndromeEvent> {
+        self.events.get(&(round, stabilizer))
     }
 
-    /// Returns deterministic event iteration.
-    pub fn events(
+    /// Deterministically iterates over events.
+    pub fn iter(
         &self,
-    ) -> impl Iterator<Item = SparseSyndromeEvent> + '_ {
-        self.events.iter().copied().map(|key| {
-            SparseSyndromeEvent {
-                key,
-                value: true,
-            }
-        })
+    ) -> impl Iterator<Item = &SparseSyndromeEvent> {
+        self.events.values()
     }
 
-    /// Estimates memory required by the syndrome.
+    /// Returns only active detection events.
+    pub fn detection_events(
+        &self,
+    ) -> impl Iterator<Item = &SparseSyndromeEvent> {
+        self.events.values().filter(|event| event.value)
+    }
+
+    /// Validates all events.
+    pub fn validate(&self) -> SparseResult<()> {
+        if self.max_rounds == 0 || self.max_stabilizers == 0 {
+            return Err(SparseError::InvalidInvariant {
+                message: "syndrome dimensions must be non-zero",
+            });
+        }
+
+        for event in self.events.values() {
+            self.validate_event(event)?;
+        }
+
+        Ok(())
+    }
+
+    /// Conservative memory estimate.
     pub fn estimated_memory_bytes(&self) -> SparseResult<u64> {
         let count = usize_to_u64(
-            self.event_count(),
-            LimitKind::MemoryBytes,
+            self.events.len(),
+            LimitKind::SyndromeEvents,
         )?;
 
         checked_mul(
@@ -1385,26 +1500,13 @@ impl SparseSyndrome {
         )
     }
 
-    /// Validates the sparse syndrome against the canonical limits.
-    pub fn validate(
+    /// Canonical QEC preflight.
+    pub fn preflight(
         &self,
         limits: &QecLimits,
     ) -> SparseResult<()> {
-        limits.validate().map_err(limit_error)?;
-
-        if self.rounds == 0 {
-            return Err(SparseError::InvalidInvariant {
-                message: "syndrome has zero rounds",
-            });
-        }
-
-        if self.rounds > limits.max_rounds as u64 {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::MeasurementRounds,
-                requested: self.rounds as u128,
-                maximum: limits.max_rounds as u128,
-            });
-        }
+        limits.validate().map_err(map_limit_error)?;
+        self.validate()?;
 
         if self.event_count() > limits.max_syndrome_events {
             return Err(SparseError::ResourceLimitExceeded {
@@ -1414,10 +1516,61 @@ impl SparseSyndrome {
             });
         }
 
-        for event in &self.events {
-            if event.round >= self.rounds {
-                return Err(SparseError::InvalidInvariant {
-                    message: "syndrome contains an event outside its round range",
+        if self.max_rounds > limits.max_rounds {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::MeasurementRounds,
+                requested: self.max_rounds as u128,
+                maximum: limits.max_rounds as u128,
+            });
+        }
+
+        if self.max_stabilizers > limits.max_stabilizers {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::Stabilizers,
+                requested: self.max_stabilizers as u128,
+                maximum: limits.max_stabilizers as u128,
+            });
+        }
+
+        let memory = self.estimated_memory_bytes()?;
+
+        if memory > limits.max_memory_bytes {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::MemoryBytes,
+                requested: u128::from(memory),
+                maximum: u128::from(limits.max_memory_bytes),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn validate_event(
+        &self,
+        event: &SparseSyndromeEvent,
+    ) -> SparseResult<()> {
+        if event.round >= self.max_rounds {
+            return Err(SparseError::IndexOutOfRange {
+                index: event.round,
+                upper_bound: self.max_rounds,
+                domain: "syndrome round",
+            });
+        }
+
+        if event.stabilizer >= self.max_stabilizers {
+            return Err(SparseError::IndexOutOfRange {
+                index: event.stabilizer,
+                upper_bound: self.max_stabilizers,
+                domain: "syndrome stabilizer",
+            });
+        }
+
+        if let Some(confidence) = event.confidence {
+            if !confidence.is_finite()
+                || !(0.0..=1.0).contains(&confidence)
+            {
+                return Err(SparseError::InvalidValue {
+                    message: "syndrome confidence must be finite and in [0, 1]",
                 });
             }
         }
@@ -1426,174 +1579,222 @@ impl SparseSyndrome {
     }
 }
 
-// ============================================================================
-// Sparse correction
-// ============================================================================
+/* ========================================================================== */
+/* Sparse correction                                                          */
+/* ========================================================================== */
 
-/// Sparse correction operator.
+/// Sparse correction entry.
 ///
-/// Each entry stores the binary-symplectic X/Z components for one physical
-/// qubit. Identity entries are never stored.
+/// The operation uses the same compact encoding as `SparsePauli`:
+///
+/// ```text
+/// 0 = I
+/// 1 = X
+/// 2 = Y
+/// 3 = Z
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SparseCorrectionEntry {
+    /// Physical qubit.
+    pub qubit: usize,
+
+    /// Pauli operation.
+    pub operation: u8,
+}
+
+impl SparseCorrectionEntry {
+    /// Creates a correction entry.
+    pub fn new(
+        qubit: usize,
+        operation: u8,
+    ) -> SparseResult<Self> {
+        if operation > 3 {
+            return Err(SparseError::InvalidValue {
+                message: "correction operation must be 0, 1, 2, or 3",
+            });
+        }
+
+        Ok(Self { qubit, operation })
+    }
+
+    /// Returns whether the operation is identity.
+    #[must_use]
+    pub const fn is_identity(&self) -> bool {
+        self.operation == 0
+    }
+}
+
+/// Sparse correction map.
+///
+/// Identity corrections are not retained. This guarantees that the
+/// representation remains sparse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SparseCorrection {
     num_qubits: usize,
-    operators: BTreeMap<usize, u8>,
+    entries: BTreeMap<usize, u8>,
 }
 
 impl SparseCorrection {
     /// Creates an empty correction.
-    pub fn new(
-        num_qubits: usize,
-        limits: &QecLimits,
-    ) -> SparseResult<Self> {
+    pub fn new(num_qubits: usize) -> SparseResult<Self> {
         if num_qubits == 0 {
             return Err(SparseError::InvalidQubitCount {
                 qubits: num_qubits,
             });
         }
 
-        if num_qubits > limits.max_qubits {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::Qubits,
-                requested: num_qubits as u128,
-                maximum: limits.max_qubits as u128,
-            });
-        }
-
         Ok(Self {
             num_qubits,
-            operators: BTreeMap::new(),
+            entries: BTreeMap::new(),
         })
     }
 
-    /// Returns the number of represented qubits.
+    /// Number of represented qubits.
     #[must_use]
     pub const fn num_qubits(&self) -> usize {
         self.num_qubits
     }
 
-    /// Returns the number of non-identity corrections.
+    /// Number of non-identity correction entries.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.operators.len()
+        self.entries.len()
     }
 
-    /// Returns whether the correction is empty.
+    /// Returns whether there are no corrections.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.operators.is_empty()
+        self.entries.is_empty()
     }
 
-    /// Applies a binary-symplectic Pauli component.
+    /// Returns the operation at a qubit.
+    #[must_use]
+    pub fn get(&self, qubit: usize) -> Option<u8> {
+        self.entries.get(&qubit).copied()
+    }
+
+    /// Inserts a correction.
     ///
-    /// The value must be:
-    ///
-    /// ```text
-    /// 0 = I
-    /// 1 = X
-    /// 2 = Y
-    /// 3 = Z
-    /// ```
-    ///
-    /// Composition is performed modulo global phase.
-    pub fn apply(
+    /// Identity removes an existing correction.
+    pub fn insert(
+        &mut self,
+        entry: SparseCorrectionEntry,
+    ) -> SparseResult<Option<u8>> {
+        self.validate_qubit(entry.qubit)?;
+
+        if entry.operation > 3 {
+            return Err(SparseError::InvalidValue {
+                message: "correction operation must be in 0..=3",
+            });
+        }
+
+        if entry.is_identity() {
+            Ok(self.entries.remove(&entry.qubit))
+        } else {
+            Ok(self.entries.insert(
+                entry.qubit,
+                entry.operation,
+            ))
+        }
+    }
+
+    /// Removes a correction.
+    pub fn remove(
         &mut self,
         qubit: usize,
-        pauli: u8,
-        limits: &QecLimits,
+    ) -> SparseResult<Option<u8>> {
+        self.validate_qubit(qubit)?;
+        Ok(self.entries.remove(&qubit))
+    }
+
+    /// Deterministically iterates over corrections.
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = SparseCorrectionEntry> + '_ {
+        self.entries.iter().map(|(&qubit, &operation)| {
+            SparseCorrectionEntry { qubit, operation }
+        })
+    }
+
+    /// Composes another correction modulo global phase.
+    ///
+    /// Pauli composition is represented by XOR of the binary X/Z bits.
+    pub fn compose(
+        &mut self,
+        other: &Self,
     ) -> SparseResult<()> {
-        if qubit >= self.num_qubits {
-            return Err(SparseError::QubitOutOfRange {
-                qubit,
-                num_qubits: self.num_qubits,
+        if self.num_qubits != other.num_qubits {
+            return Err(SparseError::DimensionMismatch {
+                left: self.num_qubits,
+                right: other.num_qubits,
+                domain: "correction",
             });
         }
 
-        if pauli > 3 {
-            return Err(SparseError::InvalidInvariant {
-                message: "sparse correction Pauli component must be 0..=3",
-            });
-        }
+        for entry in other.iter() {
+            let current =
+                self.entries.get(&entry.qubit).copied().unwrap_or(0);
 
-        if pauli == 0 {
-            return Ok(());
-        }
+            let composed = compose_pauli_codes(
+                current,
+                entry.operation,
+            );
 
-        if !self.operators.contains_key(&qubit)
-            && self.operators.len() >= limits.max_qubits
-        {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::Qubits,
-                requested: (self.operators.len() as u128) + 1,
-                maximum: limits.max_qubits as u128,
-            });
-        }
-
-        let current = self
-            .operators
-            .get(&qubit)
-            .copied()
-            .unwrap_or(0);
-
-        let combined = pauli_multiply(current, pauli);
-
-        if combined == 0 {
-            self.operators.remove(&qubit);
-        } else {
-            self.operators.insert(qubit, combined);
+            if composed == 0 {
+                self.entries.remove(&entry.qubit);
+            } else {
+                self.entries.insert(
+                    entry.qubit,
+                    composed,
+                );
+            }
         }
 
         Ok(())
     }
 
-    /// Returns the stored Pauli component.
-    #[must_use]
-    pub fn get(&self, qubit: usize) -> u8 {
-        self.operators
-            .get(&qubit)
-            .copied()
-            .unwrap_or(0)
+    /// Validates invariants.
+    pub fn validate(&self) -> SparseResult<()> {
+        if self.num_qubits == 0 {
+            return Err(SparseError::InvalidQubitCount {
+                qubits: 0,
+            });
+        }
+
+        for (&qubit, &operation) in &self.entries {
+            self.validate_qubit(qubit)?;
+
+            if operation == 0 || operation > 3 {
+                return Err(SparseError::InvalidInvariant {
+                    message: "correction contains invalid operation code",
+                });
+            }
+        }
+
+        Ok(())
     }
 
-    /// Returns deterministic correction entries.
-    pub fn iter(
-        &self,
-    ) -> impl Iterator<Item = (usize, u8)> + '_ {
-        self.operators
-            .iter()
-            .map(|(&qubit, &pauli)| (qubit, pauli))
-    }
-
-    /// Returns whether this correction is the identity.
-    #[must_use]
-    pub fn is_identity(&self) -> bool {
-        self.operators.is_empty()
-    }
-
-    /// Estimates memory used by this correction.
+    /// Conservative memory estimate.
     pub fn estimated_memory_bytes(&self) -> SparseResult<u64> {
-        let count = usize_to_u64(
-            self.len(),
+        let entries = usize_to_u64(
+            self.entries.len(),
             LimitKind::MemoryBytes,
         )?;
 
         checked_mul(
-            count,
+            entries,
             ESTIMATED_CORRECTION_BYTES,
             LimitKind::MemoryBytes,
         )
     }
 
-    /// Validates the correction.
-    pub fn validate(
+    /// Canonical QEC preflight.
+    pub fn preflight(
         &self,
         limits: &QecLimits,
     ) -> SparseResult<()> {
-        if self.num_qubits == 0 {
-            return Err(SparseError::InvalidQubitCount {
-                qubits: self.num_qubits,
-            });
-        }
+        limits.validate().map_err(map_limit_error)?;
+        self.validate()?;
 
         if self.num_qubits > limits.max_qubits {
             return Err(SparseError::ResourceLimitExceeded {
@@ -1603,47 +1804,68 @@ impl SparseCorrection {
             });
         }
 
-        for (&qubit, &pauli) in &self.operators {
-            if qubit >= self.num_qubits {
-                return Err(SparseError::QubitOutOfRange {
-                    qubit,
-                    num_qubits: self.num_qubits,
-                });
-            }
+        if self.len() > limits.max_logical_operator_weight {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::LogicalOperatorWeight,
+                requested: self.len() as u128,
+                maximum: limits.max_logical_operator_weight as u128,
+            });
+        }
 
-            if pauli == 0 || pauli > 3 {
-                return Err(SparseError::InvalidInvariant {
-                    message: "sparse correction contains invalid Pauli",
-                });
-            }
+        let memory = self.estimated_memory_bytes()?;
+
+        if memory > limits.max_memory_bytes {
+            return Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::MemoryBytes,
+                requested: u128::from(memory),
+                maximum: u128::from(limits.max_memory_bytes),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn validate_qubit(
+        &self,
+        qubit: usize,
+    ) -> SparseResult<()> {
+        if qubit >= self.num_qubits {
+            return Err(SparseError::IndexOutOfRange {
+                index: qubit,
+                upper_bound: self.num_qubits,
+                domain: "correction qubit",
+            });
         }
 
         Ok(())
     }
 }
 
-// ============================================================================
-// Pauli composition
-// ============================================================================
+/* ========================================================================== */
+/* Pauli-code helpers                                                         */
+/* ========================================================================== */
 
-/// Multiplies binary-symplectic single-qubit Pauli values modulo global phase.
+/// Composes compact Pauli codes modulo global phase.
 ///
 /// ```text
-/// I = 0
-/// X = 1
-/// Y = 2
-/// Z = 3
+/// 0 = I
+/// 1 = X
+/// 2 = Y
+/// 3 = Z
 /// ```
 #[must_use]
-pub const fn pauli_multiply(left: u8, right: u8) -> u8 {
-    let x_left = (left == 1) || (left == 2);
-    let z_left = (left == 2) || (left == 3);
+pub const fn compose_pauli_codes(
+    left: u8,
+    right: u8,
+) -> u8 {
+    let left_x = (left == 1) || (left == 2);
+    let left_z = (left == 2) || (left == 3);
 
-    let x_right = (right == 1) || (right == 2);
-    let z_right = (right == 2) || (right == 3);
+    let right_x = (right == 1) || (right == 2);
+    let right_z = (right == 2) || (right == 3);
 
-    let x = x_left ^ x_right;
-    let z = z_left ^ z_right;
+    let x = left_x ^ right_x;
+    let z = left_z ^ right_z;
 
     match (x, z) {
         (false, false) => 0,
@@ -1653,634 +1875,384 @@ pub const fn pauli_multiply(left: u8, right: u8) -> u8 {
     }
 }
 
-// ============================================================================
-// Sparse resource estimate
-// ============================================================================
+/* ========================================================================== */
+/* Aggregate preflight                                                        */
+/* ========================================================================== */
 
-/// Aggregate estimate for a sparse QEC workload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SparseResourceEstimate {
-    /// Estimated memory in bytes.
-    pub memory_bytes: u64,
+/// Performs preflight for a collection of sparse representations.
+///
+/// This is useful to higher-level constructors that need to verify the
+/// combined resource footprint before allocation.
+///
+/// The function deliberately does not reserve memory. `memory.rs` owns that
+/// responsibility.
+pub fn preflight(
+    limits: &QecLimits,
+    pauli: Option<&SparsePauli>,
+    stabilizers: Option<&SparseStabilizerMatrix>,
+    graph: Option<&SparseGraph>,
+    syndrome: Option<&SparseSyndrome>,
+    correction: Option<&SparseCorrection>,
+) -> SparseResult<SparseResourceEstimate> {
+    limits.validate().map_err(map_limit_error)?;
 
-    /// Number of sparse Pauli support entries.
-    pub pauli_support_entries: u64,
+    let mut estimate = SparseResourceEstimate::new();
 
-    /// Number of stabilizer generators.
-    pub stabilizers: u64,
+    if let Some(value) = pauli {
+        value.preflight(limits)?;
 
-    /// Number of graph nodes.
-    pub graph_nodes: u64,
+        let memory = value.estimated_memory_bytes()?;
 
-    /// Number of graph edges.
-    pub graph_edges: u64,
+        estimate.memory_bytes = checked_add(
+            estimate.memory_bytes,
+            memory,
+            LimitKind::MemoryBytes,
+        )?;
 
-    /// Number of syndrome events.
-    pub syndrome_events: u64,
-
-    /// Number of correction entries.
-    pub correction_entries: u64,
-}
-
-impl SparseResourceEstimate {
-    /// Returns a zero estimate.
-    #[must_use]
-    pub const fn zero() -> Self {
-        Self {
-            memory_bytes: 0,
-            pauli_support_entries: 0,
-            stabilizers: 0,
-            graph_nodes: 0,
-            graph_edges: 0,
-            syndrome_events: 0,
-            correction_entries: 0,
-        }
-    }
-
-    /// Adds another estimate using checked arithmetic.
-    pub fn checked_add(
-        self,
-        other: Self,
-    ) -> SparseResult<Self> {
-        Ok(Self {
-            memory_bytes: checked_add(
-                self.memory_bytes,
-                other.memory_bytes,
+        estimate.entries = checked_add(
+            estimate.entries,
+            usize_to_u64(
+                value.support_size(),
                 LimitKind::MemoryBytes,
             )?,
+            LimitKind::MemoryBytes,
+        )?;
+    }
 
-            pauli_support_entries: checked_add(
-                self.pauli_support_entries,
-                other.pauli_support_entries,
-                LimitKind::StabilizerWeight,
-            )?,
+    if let Some(value) = stabilizers {
+        value.preflight(limits)?;
 
-            stabilizers: checked_add(
-                self.stabilizers,
-                other.stabilizers,
+        let memory = value.estimated_memory_bytes()?;
+
+        estimate.memory_bytes = checked_add(
+            estimate.memory_bytes,
+            memory,
+            LimitKind::MemoryBytes,
+        )?;
+
+        estimate.stabilizer_rows = checked_add(
+            estimate.stabilizer_rows,
+            usize_to_u64(
+                value.row_count(),
                 LimitKind::Stabilizers,
             )?,
+            LimitKind::Stabilizers,
+        )?;
+    }
 
-            graph_nodes: checked_add(
-                self.graph_nodes,
-                other.graph_nodes,
+    if let Some(value) = graph {
+        value.preflight(limits)?;
+
+        let memory = value.estimated_memory_bytes()?;
+
+        estimate.memory_bytes = checked_add(
+            estimate.memory_bytes,
+            memory,
+            LimitKind::MemoryBytes,
+        )?;
+
+        estimate.graph_nodes = checked_add(
+            estimate.graph_nodes,
+            usize_to_u64(
+                value.node_count(),
                 LimitKind::GraphNodes,
             )?,
+            LimitKind::GraphNodes,
+        )?;
 
-            graph_edges: checked_add(
-                self.graph_edges,
-                other.graph_edges,
+        estimate.graph_edges = checked_add(
+            estimate.graph_edges,
+            usize_to_u64(
+                value.edge_count(),
                 LimitKind::GraphEdges,
             )?,
+            LimitKind::GraphEdges,
+        )?;
+    }
 
-            syndrome_events: checked_add(
-                self.syndrome_events,
-                other.syndrome_events,
+    if let Some(value) = syndrome {
+        value.preflight(limits)?;
+
+        let memory = value.estimated_memory_bytes()?;
+
+        estimate.memory_bytes = checked_add(
+            estimate.memory_bytes,
+            memory,
+            LimitKind::MemoryBytes,
+        )?;
+
+        estimate.syndrome_events = checked_add(
+            estimate.syndrome_events,
+            usize_to_u64(
+                value.event_count(),
                 LimitKind::SyndromeEvents,
             )?,
+            LimitKind::SyndromeEvents,
+        )?;
+    }
 
-            correction_entries: checked_add(
-                self.correction_entries,
-                other.correction_entries,
-                LimitKind::Qubits,
+    if let Some(value) = correction {
+        value.preflight(limits)?;
+
+        let memory = value.estimated_memory_bytes()?;
+
+        estimate.memory_bytes = checked_add(
+            estimate.memory_bytes,
+            memory,
+            LimitKind::MemoryBytes,
+        )?;
+
+        estimate.correction_entries = checked_add(
+            estimate.correction_entries,
+            usize_to_u64(
+                value.len(),
+                LimitKind::MemoryBytes,
             )?,
-        })
-    }
-
-    /// Validates the memory estimate against the canonical policy.
-    pub fn validate(
-        &self,
-        limits: &QecLimits,
-    ) -> SparseResult<()> {
-        if self.memory_bytes > limits.max_memory_bytes {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::MemoryBytes,
-                requested: self.memory_bytes as u128,
-                maximum: limits.max_memory_bytes as u128,
-            });
-        }
-
-        if self.stabilizers > limits.max_stabilizers as u64 {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::Stabilizers,
-                requested: self.stabilizers as u128,
-                maximum: limits.max_stabilizers as u128,
-            });
-        }
-
-        if self.graph_nodes > limits.max_graph_nodes as u64 {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::GraphNodes,
-                requested: self.graph_nodes as u128,
-                maximum: limits.max_graph_nodes as u128,
-            });
-        }
-
-        if self.graph_edges > limits.max_graph_edges as u64 {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::GraphEdges,
-                requested: self.graph_edges as u128,
-                maximum: limits.max_graph_edges as u128,
-            });
-        }
-
-        if self.syndrome_events
-            > limits.max_syndrome_events as u64
-        {
-            return Err(SparseError::ResourceLimitExceeded {
-                resource: LimitKind::SyndromeEvents,
-                requested: self.syndrome_events as u128,
-                maximum: limits.max_syndrome_events as u128,
-            });
-        }
-
-        Ok(())
-    }
-}
-
-// ============================================================================
-// Sparse preflight
-// ============================================================================
-
-/// Performs a no-allocation preflight for a sparse QEC workload.
-///
-/// This function is intended to be called before constructing a large sparse
-/// object.
-///
-/// The function deliberately does not allocate.
-pub fn preflight_sparse_workload(
-    limits: &QecLimits,
-    num_qubits: usize,
-    stabilizers: usize,
-    graph_nodes: usize,
-    graph_edges: usize,
-    syndrome_events: usize,
-    correction_entries: usize,
-) -> SparseResult<SparseResourceEstimate> {
-    limits.validate().map_err(limit_error)?;
-
-    if num_qubits == 0 {
-        return Err(SparseError::InvalidQubitCount {
-            qubits: num_qubits,
-        });
-    }
-
-    if num_qubits > limits.max_qubits {
-        return Err(SparseError::ResourceLimitExceeded {
-            resource: LimitKind::Qubits,
-            requested: num_qubits as u128,
-            maximum: limits.max_qubits as u128,
-        });
-    }
-
-    if stabilizers > limits.max_stabilizers {
-        return Err(SparseError::ResourceLimitExceeded {
-            resource: LimitKind::Stabilizers,
-            requested: stabilizers as u128,
-            maximum: limits.max_stabilizers as u128,
-        });
-    }
-
-    if graph_nodes > limits.max_graph_nodes {
-        return Err(SparseError::ResourceLimitExceeded {
-            resource: LimitKind::GraphNodes,
-            requested: graph_nodes as u128,
-            maximum: limits.max_graph_nodes as u128,
-        });
-    }
-
-    if graph_edges > limits.max_graph_edges {
-        return Err(SparseError::ResourceLimitExceeded {
-            resource: LimitKind::GraphEdges,
-            requested: graph_edges as u128,
-            maximum: limits.max_graph_edges as u128,
-        });
-    }
-
-    if syndrome_events > limits.max_syndrome_events {
-        return Err(SparseError::ResourceLimitExceeded {
-            resource: LimitKind::SyndromeEvents,
-            requested: syndrome_events as u128,
-            maximum: limits.max_syndrome_events as u128,
-        });
-    }
-
-    if correction_entries > limits.max_qubits {
-        return Err(SparseError::ResourceLimitExceeded {
-            resource: LimitKind::Qubits,
-            requested: correction_entries as u128,
-            maximum: limits.max_qubits as u128,
-        });
-    }
-
-    let graph_node_count = usize_to_u64(
-        graph_nodes,
-        LimitKind::GraphNodes,
-    )?;
-
-    let graph_edge_count = usize_to_u64(
-        graph_edges,
-        LimitKind::GraphEdges,
-    )?;
-
-    let syndrome_count = usize_to_u64(
-        syndrome_events,
-        LimitKind::SyndromeEvents,
-    )?;
-
-    let correction_count = usize_to_u64(
-        correction_entries,
-        LimitKind::Qubits,
-    )?;
-
-    let stabilizer_count = usize_to_u64(
-        stabilizers,
-        LimitKind::Stabilizers,
-    )?;
-
-    let graph_memory = checked_add(
-        checked_mul(
-            graph_node_count,
-            ESTIMATED_INDEX_BYTES,
             LimitKind::MemoryBytes,
-        )?,
-        checked_mul(
-            graph_edge_count,
-            ESTIMATED_EDGE_BYTES,
-            LimitKind::MemoryBytes,
-        )?,
-        LimitKind::MemoryBytes,
-    )?;
+        )?;
+    }
 
-    let syndrome_memory = checked_mul(
-        syndrome_count,
-        ESTIMATED_SYNDROME_EVENT_BYTES,
-        LimitKind::MemoryBytes,
-    )?;
-
-    let correction_memory = checked_mul(
-        correction_count,
-        ESTIMATED_CORRECTION_BYTES,
-        LimitKind::MemoryBytes,
-    )?;
-
-    let stabilizer_memory = checked_mul(
-        stabilizer_count,
-        ESTIMATED_INDEX_BYTES,
-        LimitKind::MemoryBytes,
-    )?;
-
-    let memory_bytes = checked_add(
-        graph_memory,
-        syndrome_memory,
-        LimitKind::MemoryBytes,
-    )?;
-
-    let memory_bytes = checked_add(
-        memory_bytes,
-        correction_memory,
-        LimitKind::MemoryBytes,
-    )?;
-
-    let memory_bytes = checked_add(
-        memory_bytes,
-        stabilizer_memory,
-        LimitKind::MemoryBytes,
-    )?;
-
-    let estimate = SparseResourceEstimate {
-        memory_bytes,
-        pauli_support_entries: 0,
-        stabilizers: stabilizer_count,
-        graph_nodes: graph_node_count,
-        graph_edges: graph_edge_count,
-        syndrome_events: syndrome_count,
-        correction_entries: correction_count,
-    };
-
-    estimate.validate(limits)?;
+    estimate.validate_against(limits)?;
 
     Ok(estimate)
 }
 
-// ============================================================================
-// Tests
-// ============================================================================
+/* ========================================================================== */
+/* Tests                                                                      */
+/* ========================================================================== */
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn limits() -> QecLimits {
-        QecLimits::default()
+    #[test]
+    fn pauli_identity_is_sparse() {
+        let pauli = SparsePauli::identity(9).unwrap();
+
+        assert!(pauli.is_identity());
+        assert_eq!(pauli.weight(), 0);
+        assert_eq!(pauli.support_size(), 0);
     }
 
     #[test]
-    fn sparse_identity_is_empty() {
-        let identity = SparsePauli::identity(16)
-            .expect("valid sparse identity");
+    fn pauli_support_is_deterministic() {
+        let pauli = SparsePauli::from_supports(
+            16,
+            [7, 2, 12],
+            [12, 4],
+        )
+        .unwrap();
 
-        assert!(identity.is_identity());
-        assert_eq!(identity.weight(), 0);
-        assert_eq!(identity.support_size(), 0);
+        let support: Vec<_> = pauli.support().collect();
+
+        assert_eq!(support, vec![2, 4, 7, 12]);
     }
 
     #[test]
-    fn sparse_pauli_tracks_only_non_identity_support() {
-        let mut pauli =
-            SparsePauli::identity(100_000)
-                .expect("valid sparse Pauli");
+    fn pauli_y_is_encoded_by_x_and_z() {
+        let pauli =
+            SparsePauli::from_supports(4, [2], [2]).unwrap();
 
-        pauli.insert_x(2)
-            .expect("valid qubit");
-
-        pauli.insert_z(2)
-            .expect("valid qubit");
-
-        pauli.insert_x(99_999)
-            .expect("valid qubit");
-
-        assert_eq!(pauli.weight(), 2);
         assert_eq!(pauli.component(2), 2);
-        assert_eq!(pauli.component(99_999), 1);
-        assert_eq!(pauli.component(0), 0);
+        assert_eq!(pauli.weight(), 1);
     }
 
     #[test]
-    fn sparse_paulis_use_symplectic_intersections() {
-        let a = SparsePauli::from_supports(
-            8,
-            [1usize],
-            [2usize],
-        )
-        .expect("valid sparse Pauli");
+    fn pauli_symplectic_product_detects_anticommutation() {
+        let x =
+            SparsePauli::from_supports(2, [0], []).unwrap();
 
-        let b = SparsePauli::from_supports(
-            8,
-            [2usize],
-            [1usize],
-        )
-        .expect("valid sparse Pauli");
+        let z =
+            SparsePauli::from_supports(2, [], [0]).unwrap();
 
-        assert_eq!(
-            a.symplectic_product(&b)
-                .expect("matching dimensions"),
-            0
-        );
+        assert_eq!(x.symplectic_product(&z).unwrap(), 1);
+        assert!(!x.commutes_with(&z).unwrap());
     }
 
     #[test]
-    fn sparse_pauli_detects_anticommutation() {
-        let x = SparsePauli::from_supports(
-            8,
-            [2usize],
-            [],
-        )
-        .expect("valid sparse Pauli");
+    fn pauli_multiplication_is_xor_based() {
+        let x =
+            SparsePauli::from_supports(2, [0], []).unwrap();
 
-        let z = SparsePauli::from_supports(
-            8,
-            [],
-            [2usize],
-        )
-        .expect("valid sparse Pauli");
+        let z =
+            SparsePauli::from_supports(2, [], [0]).unwrap();
 
-        assert_eq!(
-            x.symplectic_product(&z)
-                .expect("matching dimensions"),
-            1
-        );
+        let y = x.multiply(&z).unwrap();
 
-        assert!(
-            !x.commutes_with(&z)
-                .expect("matching dimensions")
-        );
+        assert_eq!(y.component(0), 2);
     }
 
     #[test]
-    fn sparse_pauli_multiplication_is_xor_based() {
-        let x = SparsePauli::from_supports(
-            4,
-            [1usize],
-            [],
-        )
-        .expect("valid sparse Pauli");
-
-        let z = SparsePauli::from_supports(
-            4,
-            [],
-            [1usize],
-        )
-        .expect("valid sparse Pauli");
-
-        let y = x.multiply(&z)
-            .expect("matching dimensions");
-
-        assert_eq!(y.component(1), 2);
-    }
-
-    #[test]
-    fn sparse_stabilizer_matrix_enforces_weight_limit() {
+    fn stabilizer_matrix_is_dimension_safe() {
         let mut matrix =
-            SparseStabilizerMatrix::new(16, &limits())
-                .expect("valid matrix");
+            SparseStabilizerMatrix::new(5).unwrap();
 
-        let generator =
-            SparsePauli::from_supports(
-                16,
-                [0, 1, 2],
-                [3, 4],
-            )
-            .expect("valid generator");
+        let row =
+            SparsePauli::from_supports(5, [0], [1]).unwrap();
 
-        matrix
-            .push(generator, &limits())
-            .expect("generator should fit");
+        matrix.insert(0, row).unwrap();
 
-        assert_eq!(matrix.len(), 1);
-        assert_eq!(matrix.max_weight(), 5);
+        assert_eq!(matrix.row_count(), 1);
+        assert!(matrix.validate().is_ok());
     }
 
     #[test]
-    fn sparse_adjacency_is_deterministic() {
-        let mut graph = SparseAdjacency::new();
-        let policy = limits();
+    fn graph_is_symmetric() {
+        let mut graph = SparseGraph::new(4).unwrap();
 
-        graph
-            .insert_undirected_edge(4, 1, &policy)
-            .expect("edge");
+        assert!(graph.add_edge(0, 2).unwrap());
+        assert!(graph.contains_edge(0, 2));
+        assert!(graph.contains_edge(2, 0));
+        assert_eq!(graph.edge_count(), 1);
 
-        graph
-            .insert_undirected_edge(4, 2, &policy)
-            .expect("edge");
-
-        let nodes: Vec<_> = graph.nodes().collect();
-
-        assert_eq!(nodes, vec![1, 2, 4]);
-
-        let neighbors = graph
-            .neighbors(4)
-            .expect("node must exist");
-
-        let neighbors: Vec<_> =
-            neighbors.iter().copied().collect();
-
-        assert_eq!(neighbors, vec![1, 2]);
+        graph.validate().unwrap();
     }
 
     #[test]
-    fn sparse_graph_rejects_invalid_weight() {
-        assert!(
-            SparseWeightedEdge::new(1, 2, f64::NAN)
-                .is_err()
-        );
+    fn graph_duplicate_edges_are_idempotent() {
+        let mut graph = SparseGraph::new(4).unwrap();
 
-        assert!(
-            SparseWeightedEdge::new(1, 2, -1.0)
-                .is_err()
-        );
+        assert!(graph.add_edge(0, 1).unwrap());
+        assert!(!graph.add_edge(1, 0).unwrap());
+
+        assert_eq!(graph.edge_count(), 1);
     }
 
     #[test]
-    fn sparse_syndrome_stores_only_detection_events() {
-        let policy = limits();
-
-        let mut syndrome =
-            SparseSyndrome::new(10, &policy)
-                .expect("valid syndrome");
-
-        syndrome
-            .insert(
-                SparseSyndromeEvent::new(2, 7, true),
-                &policy,
-            )
-            .expect("event");
-
-        syndrome
-            .insert(
-                SparseSyndromeEvent::new(3, 8, true),
-                &policy,
-            )
-            .expect("event");
-
-        syndrome
-            .insert(
-                SparseSyndromeEvent::new(4, 9, false),
-                &policy,
-            )
-            .expect("trivial event");
-
-        assert_eq!(syndrome.event_count(), 2);
-        assert!(!syndrome.is_trivial());
-    }
-
-    #[test]
-    fn sparse_correction_composes_paulis() {
-        let policy = limits();
-
-        let mut correction =
-            SparseCorrection::new(32, &policy)
-                .expect("valid correction");
-
-        correction
-            .apply(7, 1, &policy)
-            .expect("X correction");
-
-        correction
-            .apply(7, 3, &policy)
-            .expect("Z correction");
-
-        assert_eq!(correction.get(7), 2);
-
-        correction
-            .apply(7, 2, &policy)
-            .expect("Y correction");
-
-        assert_eq!(correction.get(7), 0);
-        assert!(correction.is_identity());
-    }
-
-    #[test]
-    fn preflight_performs_no_sparse_allocation() {
-        let estimate =
-            preflight_sparse_workload(
-                &limits(),
-                1_000,
-                500,
-                2_000,
-                4_000,
-                5_000,
-                100,
-            )
-            .expect("workload should fit");
-
-        assert_eq!(estimate.stabilizers, 500);
-        assert_eq!(estimate.graph_nodes, 2_000);
-        assert_eq!(estimate.graph_edges, 4_000);
-        assert_eq!(estimate.syndrome_events, 5_000);
-        assert_eq!(estimate.correction_entries, 100);
-        assert!(estimate.memory_bytes > 0);
-    }
-
-    #[test]
-    fn preflight_rejects_excessive_graphs() {
-        let mut policy = limits();
-
-        policy.max_graph_nodes = 4;
-
-        let result =
-            preflight_sparse_workload(
-                &policy,
-                16,
-                1,
-                5,
-                1,
-                1,
-                1,
-            );
+    fn graph_self_edges_are_rejected() {
+        let mut graph = SparseGraph::new(4).unwrap();
 
         assert!(matches!(
-            result,
-            Err(
-                SparseError::ResourceLimitExceeded {
-                    resource: LimitKind::GraphNodes,
-                    ..
-                }
-            )
+            graph.add_edge(1, 1),
+            Err(SparseError::SelfEdge { node: 1 })
         ));
     }
 
     #[test]
-    fn out_of_range_qubits_never_panic() {
-        let mut pauli =
-            SparsePauli::identity(8)
-                .expect("valid Pauli");
+    fn syndrome_is_keyed_by_round_and_stabilizer() {
+        let mut syndrome =
+            SparseSyndrome::new(8, 16).unwrap();
 
-        assert!(
-            pauli.insert_x(8).is_err()
-        );
+        syndrome
+            .insert(SparseSyndromeEvent::new(2, 7, true))
+            .unwrap();
 
-        assert!(
-            pauli.insert_z(usize::MAX).is_err()
+        assert_eq!(
+            syndrome.get(2, 7).unwrap().value,
+            true
         );
+        assert_eq!(syndrome.event_count(), 1);
     }
 
     #[test]
-    fn sparse_structures_have_no_local_production_ceiling() {
-        // The implementation deliberately does not define arbitrary
-        // MAX_* resource ceilings. QecLimits is the canonical policy.
-        let policy = limits();
+    fn syndrome_duplicate_key_replaces_event() {
+        let mut syndrome =
+            SparseSyndrome::new(8, 16).unwrap();
 
-        let mut pauli =
-            SparsePauli::identity(
-                policy.max_qubits.min(1_000),
-            )
-            .expect("valid Pauli");
+        syndrome
+            .insert(SparseSyndromeEvent::new(2, 7, true))
+            .unwrap();
 
-        pauli
-            .insert_x(0)
-            .expect("valid qubit");
+        syndrome
+            .insert(SparseSyndromeEvent::new(2, 7, false))
+            .unwrap();
 
-        assert_eq!(pauli.weight(), 1);
+        assert_eq!(syndrome.event_count(), 1);
+        assert!(!syndrome.get(2, 7).unwrap().value);
+    }
+
+    #[test]
+    fn correction_identity_is_not_stored() {
+        let mut correction =
+            SparseCorrection::new(8).unwrap();
+
+        correction
+            .insert(SparseCorrectionEntry::new(3, 1).unwrap())
+            .unwrap();
+
+        assert_eq!(correction.len(), 1);
+
+        correction
+            .insert(SparseCorrectionEntry::new(3, 0).unwrap())
+            .unwrap();
+
+        assert_eq!(correction.len(), 0);
+    }
+
+    #[test]
+    fn correction_composition_is_deterministic() {
+        let mut left =
+            SparseCorrection::new(8).unwrap();
+
+        let mut right =
+            SparseCorrection::new(8).unwrap();
+
+        left.insert(
+            SparseCorrectionEntry::new(2, 1).unwrap(),
+        )
+        .unwrap();
+
+        right.insert(
+            SparseCorrectionEntry::new(2, 3).unwrap(),
+        )
+        .unwrap();
+
+        left.compose(&right).unwrap();
+
+        assert_eq!(left.get(2), Some(2));
+    }
+
+    #[test]
+    fn aggregate_preflight_accepts_valid_structures() {
+        let limits = QecLimits::new();
+
+        let pauli =
+            SparsePauli::from_supports(8, [1, 4], [4]).unwrap();
+
+        let mut graph = SparseGraph::new(8).unwrap();
+        graph.add_edge(0, 1).unwrap();
+        graph.add_edge(1, 2).unwrap();
+
+        let estimate = preflight(
+            &limits,
+            Some(&pauli),
+            None,
+            Some(&graph),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(estimate.memory_bytes > 0);
+        assert_eq!(estimate.graph_nodes, 8);
+        assert_eq!(estimate.graph_edges, 2);
+    }
+
+    #[test]
+    fn resource_limits_are_enforced() {
+        let mut limits = QecLimits::new();
+        limits.max_graph_nodes = 2;
+
+        let graph = SparseGraph::new(3).unwrap();
+
+        assert!(matches!(
+            graph.preflight(&limits),
+            Err(SparseError::ResourceLimitExceeded {
+                resource: LimitKind::GraphNodes,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn invalid_confidence_is_rejected() {
+        let event =
+            SparseSyndromeEvent::new(0, 0, true)
+                .with_confidence(2.0);
+
+        assert!(matches!(
+            event,
+            Err(SparseError::InvalidValue { .. })
+        ));
     }
 }
