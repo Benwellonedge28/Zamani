@@ -1,104 +1,176 @@
 //! Zamani Quantum Error-Correction Scheduler.
 //!
-//! Production scheduling and admission-control infrastructure for QEC.
+//! Production admission, lifecycle, deterministic ordering, cancellation,
+//! deadline, worker-lease, retry, and resource-reservation orchestration.
 //!
-//! Architectural contract:
+//! # Ownership
+//!
+//! This module owns:
+//!
+//! - job admission;
+//! - scheduler lifecycle state;
+//! - deterministic priority ordering;
+//! - bounded queueing;
+//! - worker registration;
+//! - worker leasing;
+//! - retry policy;
+//! - deadline enforcement;
+//! - cancellation propagation;
+//! - checkpoint lifecycle transitions;
+//! - scheduler-level resource reservation;
+//! - execution dispatch.
+//!
+//! This module does NOT own:
+//!
+//! - QEC mathematics;
+//! - decoder algorithms;
+//! - decoding graphs;
+//! - syndrome extraction;
+//! - surface-code topology;
+//! - QPU I/O;
+//! - distributed network transport;
+//! - checkpoint serialization;
+//! - cache implementation;
+//! - canonical resource policy;
+//! - capability authority;
+//! - runtime resource accounting.
+//!
+//! # Integration architecture
 //!
 //! ```text
-//!                       UNTRUSTED JOB
-//!                            │
-//!                            ▼
-//!                     Job Validation
-//!                            │
-//!                            ▼
-//!                  Capability Authorization
-//!                            │
-//!                            ▼
-//!                    QecLimits Preflight
-//!                            │
-//!                            ▼
-//!                   Resource Reservation
-//!                            │
-//!                            ▼
-//!                       Admission
-//!                            │
-//!                            ▼
-//!                    Deterministic Queue
-//!                            │
-//!                            ▼
+//!                    QecConfig / QecLimits
+//!                             │
+//!                             ▼
+//!                       configuration
+//!                             │
+//!                             ▼
+//!                         Scheduler
+//!                             │
+//!          ┌──────────────────┼──────────────────┐
+//!          │                  │                  │
+//!          ▼                  ▼                  ▼
+//!   capabilities.rs    resources.rs      cancellation.rs
+//!   authorization      accounting        cancellation
+//!          │                  │                  │
+//!          └──────────────────┼──────────────────┘
+//!                             ▼
+//!                         Admission
+//!                             │
+//!                             ▼
+//!                   Deterministic Queue
+//!                             │
+//!                             ▼
 //!                       Worker Lease
-//!                            │
-//!                            ▼
-//!                         Running
+//!                             │
+//!                             ▼
+//!                         Executor
 //!                       /    |     \
 //!                      /     |      \
-//!               checkpoint  cancel   failure
-//!                    │        │        │
-//!                    ▼        ▼        ▼
-//!                Paused   Cancelled  Retry/Failed
-//!                    │
-//!                    ▼
-//!                 Resuming
-//!                    │
-//!                    ▼
-//!                Running
-//!                    │
-//!                    ▼
-//!                 Completed
+//!                success   cancel   failure
+//!                   │        │        │
+//!                   ▼        ▼        ▼
+//!               Completed Cancelled Retry/Failed
 //! ```
 //!
-//! The scheduler does NOT implement QEC mathematics. Decoders, simulation,
-//! graph construction, syndrome extraction, QPU adapters, etc. remain owned
-//! by their respective modules.
+//! The scheduler is executor-agnostic. A decoder, simulator, streaming
+//! worker, partition worker, distributed coordinator, or QPU orchestration
+//! layer supplies a `JobExecutor`.
 //!
-//! The scheduler owns:
+//! # Resource ownership
 //!
-//! * validation;
-//! * admission control;
-//! * priority ordering;
-//! * bounded queueing;
-//! * resource reservation;
-//! * worker leases;
-//! * cancellation propagation;
-//! * deadlines;
-//! * checkpoint state transitions;
-//! * retry policy;
-//! * deterministic scheduling;
-//! * lifecycle state;
-//! * safe failure.
+//! `limits.rs` remains the single source of truth for declarative limits.
 //!
-//! Resource policy is intentionally delegated to `limits.rs` / `QecLimits`.
-//! Runtime accounting can be supplied through `ResourceAccounting`, allowing
-//! `resources.rs` to remain the runtime accounting authority without creating
-//! a second scheduler-specific resource policy.
+//! `resources.rs` remains the runtime accounting authority.
+//!
+//! `memory.rs` remains the memory allocation authority.
+//!
+//! This scheduler only maintains the reservation required to make admission
+//! atomic and deterministic. Production runtime accounting is connected by
+//! implementing `ResourceAccounting`.
+//!
+//! # Capability ownership
+//!
+//! `CapabilityRequirement` describes what a job needs.
+//!
+//! It does NOT grant authority.
+//!
+//! Actual authorization is supplied through `CapabilityAuthorizer`, whose
+//! implementation belongs to `capabilities.rs`.
+//!
+//! # Cancellation ownership
+//!
+//! Cancellation is delegated completely to `cancellation.rs`.
+//!
+//! The scheduler owns a `CancellationSource` per admitted job and passes only
+//! the corresponding `CancellationToken` to executors.
+//!
+//! # Rust compatibility
+//!
+//! Target: Rust 1.97.1.
+//!
+//! The implementation uses only stable standard-library APIs.
 
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BTreeMap, BinaryHeap};
 use std::fmt;
-use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering},
-    Arc, Mutex,
-};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use super::cancellation::{
+    CancellationReason,
+    CancellationSource,
+    CancellationToken,
+};
 use super::configuration::QecConfig;
-use super::errors::{QecError, QecResult, ResourceKind};
-use super::limits::{LimitKind, QecLimits};
+use super::errors::{
+    NumericalOperation,
+    QecError,
+    QecResult,
+    ResourceKind,
+};
+use super::limits::QecLimits;
 
-/* ========================================================================== */
-/* Identifiers                                                                */
-/* ========================================================================== */
+/// Canonical scheduler result type.
+///
+/// Scheduler errors are always represented by the QEC-wide `QecError`.
+pub type SchedulerResult<T> = QecResult<T>;
 
-/// Globally unique scheduler job identifier within one scheduler instance.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+/// Maximum retry count accepted by the scheduler.
+///
+/// This is an API-safety bound, not a QEC resource policy.
+pub const MAX_RETRY_COUNT: u32 = 1_000_000;
+
+/// Maximum queue depth accepted by one scheduler instance.
+///
+/// This is an admission-safety bound. Actual workload/resource ceilings
+/// remain controlled by `QecLimits`.
+pub const MAX_QUEUE_DEPTH: usize = 1_000_000;
+
+// ============================================================================
+// Identifiers
+// ============================================================================
+
+/// Scheduler-local job identifier.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub struct JobId(u64);
 
 impl JobId {
+    /// Creates an identifier from a raw value.
     #[must_use]
     pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
+    /// Returns the raw identifier.
     #[must_use]
     pub const fn get(self) -> u64 {
         self.0
@@ -106,66 +178,54 @@ impl JobId {
 }
 
 /// Scheduler worker identifier.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub struct WorkerId(u64);
 
 impl WorkerId {
+    /// Creates an identifier from a raw value.
     #[must_use]
     pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
+    /// Returns the raw identifier.
     #[must_use]
     pub const fn get(self) -> u64 {
         self.0
     }
 }
 
-/* ========================================================================== */
-/* Execution                                                                  */
-/* ========================================================================== */
+// ============================================================================
+// Scheduling primitives
+// ============================================================================
 
-/// Execution backend class.
-///
-/// This describes scheduling requirements. It does not perform backend I/O.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum ExecutionMode {
-    SingleThread,
-    MultiThread,
-    MultiProcess,
-    Distributed,
-    Accelerated,
-}
-
-impl ExecutionMode {
-    #[must_use]
-    pub const fn requires_parallelism(self) -> bool {
-        !matches!(self, Self::SingleThread)
-    }
-
-    #[must_use]
-    pub const fn requires_distributed_capability(self) -> bool {
-        matches!(self, Self::MultiProcess | Self::Distributed)
-    }
-
-    #[must_use]
-    pub const fn requires_accelerator(self) -> bool {
-        matches!(self, Self::Accelerated)
-    }
-}
-
-/// QEC workload class.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+/// QEC workload category.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum JobKind {
     LogicalOperation,
     Decode,
     Simulation,
     ThresholdBenchmark,
     Diagnostic,
+    Streaming,
+    Partition,
+    Distributed,
+    Qpu,
 }
 
 /// Scheduling priority.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+///
+/// Higher priority wins. Equal priorities are ordered by submission sequence.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Priority {
     Critical,
     High,
@@ -175,8 +235,9 @@ pub enum Priority {
 }
 
 impl Priority {
+    /// Returns the stable priority rank.
     #[must_use]
-    const fn rank(self) -> u8 {
+    pub const fn rank(self) -> u8 {
         match self {
             Self::Critical => 5,
             Self::High => 4,
@@ -187,105 +248,195 @@ impl Priority {
     }
 }
 
-/* ========================================================================== */
-/* Deadline                                                                   */
-/* ========================================================================== */
+/// Execution requirement.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ExecutionMode {
+    SingleThread,
+    MultiThread,
+    MultiProcess,
+    Distributed,
+    Accelerated,
+    Qpu,
+}
 
-/// Optional wall-clock deadline.
-#[derive(Clone, Copy, Debug)]
+impl ExecutionMode {
+    /// Whether the execution requires more than one classical worker.
+    #[must_use]
+    pub const fn requires_parallelism(self) -> bool {
+        matches!(
+            self,
+            Self::MultiThread
+                | Self::MultiProcess
+                | Self::Distributed
+                | Self::Accelerated
+        )
+    }
+
+    /// Whether distributed execution authority is required.
+    #[must_use]
+    pub const fn requires_distributed_capability(self) -> bool {
+        matches!(
+            self,
+            Self::MultiProcess | Self::Distributed
+        )
+    }
+
+    /// Whether accelerator authority is required.
+    #[must_use]
+    pub const fn requires_accelerator(self) -> bool {
+        matches!(self, Self::Accelerated)
+    }
+
+    /// Whether QPU authority is required.
+    #[must_use]
+    pub const fn requires_qpu(self) -> bool {
+        matches!(self, Self::Qpu)
+    }
+}
+
+// ============================================================================
+// Deadline
+// ============================================================================
+
+/// Optional absolute scheduler deadline.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Deadline(Option<Instant>);
 
 impl Deadline {
+    /// Creates a job without a deadline.
     #[must_use]
     pub const fn none() -> Self {
         Self(None)
     }
 
+    /// Creates a deadline relative to the current instant.
     #[must_use]
     pub fn after(duration: Duration) -> Self {
-        Self(Some(Instant::now() + duration))
+        Self(Instant::now().checked_add(duration))
     }
 
+    /// Returns whether the deadline has expired.
     #[must_use]
     pub fn expired(self) -> bool {
         self.0
-            .is_some_and(|deadline| Instant::now() >= deadline)
+            .map_or(false, |deadline| Instant::now() >= deadline)
     }
 
+    /// Returns remaining time.
     #[must_use]
     pub fn remaining(self) -> Option<Duration> {
+        self.0.map(|deadline| {
+            deadline.saturating_duration_since(Instant::now())
+        })
+    }
+
+    /// Returns the underlying absolute deadline.
+    #[must_use]
+    pub const fn instant(self) -> Option<Instant> {
         self.0
-            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 }
 
-/* ========================================================================== */
-/* Resource reservation                                                       */
-/* ========================================================================== */
+// ============================================================================
+// Resource contract
+// ============================================================================
 
-/// Resource reservation requested by a scheduled workload.
+/// Resource reservation requested by one job.
 ///
-/// These values are reservations, not global policies. The maximum allowed
-/// values always come from `QecLimits`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// These values are reservations, not another resource-policy system.
+/// Every request is validated against `QecLimits` before admission.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ResourceRequest {
+    /// Maximum memory reserved for this workload.
     pub memory_bytes: u64,
+
+    /// Number of classical workers reserved.
     pub parallel_workers: usize,
+
+    /// Decoder iteration reservation.
     pub decoder_iterations: usize,
+
+    /// Number of partitions reserved.
+    pub partitions: usize,
 }
 
 impl ResourceRequest {
+    /// Creates an empty resource request.
     #[must_use]
     pub const fn zero() -> Self {
         Self {
             memory_bytes: 0,
             parallel_workers: 0,
             decoder_iterations: 0,
+            partitions: 0,
         }
     }
 
-    pub fn validate_against(&self, limits: &QecLimits) -> SchedulerResult<()> {
+    /// Validates this request against the canonical QEC limits.
+    pub fn validate_against(
+        &self,
+        limits: &QecLimits,
+    ) -> SchedulerResult<()> {
         if self.memory_bytes > limits.max_memory_bytes {
-            return Err(SchedulerError::ResourceLimitExceeded {
-                resource: LimitKind::MemoryBytes,
-                requested: self.memory_bytes as u128,
-                maximum: limits.max_memory_bytes as u128,
-            });
+            return Err(resource_error(
+                ResourceKind::MemoryBytes,
+                self.memory_bytes as u128,
+                0,
+                limits.max_memory_bytes as u128,
+                "scheduler memory request exceeds QecLimits",
+            ));
         }
 
         if self.parallel_workers > limits.max_parallelism {
-            return Err(SchedulerError::ResourceLimitExceeded {
-                resource: LimitKind::Parallelism,
-                requested: self.parallel_workers as u128,
-                maximum: limits.max_parallelism as u128,
-            });
+            return Err(resource_error(
+                ResourceKind::Parallelism,
+                self.parallel_workers as u128,
+                0,
+                limits.max_parallelism as u128,
+                "scheduler worker request exceeds QecLimits",
+            ));
         }
 
-        if self.decoder_iterations > limits.max_decoder_iterations {
-            return Err(SchedulerError::ResourceLimitExceeded {
-                resource: LimitKind::DecoderIterations,
-                requested: self.decoder_iterations as u128,
-                maximum: limits.max_decoder_iterations as u128,
-            });
+        if self.decoder_iterations
+            > limits.max_decoder_iterations
+        {
+            return Err(resource_error(
+                ResourceKind::DecoderIterations,
+                self.decoder_iterations as u128,
+                0,
+                limits.max_decoder_iterations as u128,
+                "scheduler iteration reservation exceeds QecLimits",
+            ));
+        }
+
+        if self.partitions > limits.max_partitions {
+            return Err(resource_error(
+                ResourceKind::Partitions,
+                self.partitions as u128,
+                0,
+                limits.max_partitions as u128,
+                "scheduler partition reservation exceeds QecLimits",
+            ));
         }
 
         Ok(())
     }
 }
 
-/// Runtime resource reservation.
+/// Aggregate scheduler reservation.
 ///
-/// A scheduler never assumes that a resource is available merely because it
-/// fits inside the global policy. It must also fit inside currently available
-/// capacity.
+/// This is deliberately distinct from runtime consumption.
+///
+/// `resources.rs` remains authoritative for actual resource usage.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ResourceReservation {
+pub struct ReservationSnapshot {
     pub memory_bytes: u64,
     pub parallel_workers: usize,
     pub decoder_iterations: usize,
+    pub partitions: usize,
 }
 
-impl ResourceReservation {
+impl ReservationSnapshot {
     fn try_add(
         self,
         request: ResourceRequest,
@@ -294,177 +445,262 @@ impl ResourceReservation {
         let memory = self
             .memory_bytes
             .checked_add(request.memory_bytes)
-            .ok_or(SchedulerError::ArithmeticOverflow(
-                "scheduler memory reservation",
-            ))?;
+            .ok_or_else(|| {
+                numerical_error(
+                    "scheduler memory reservation overflow",
+                )
+            })?;
 
         let workers = self
             .parallel_workers
             .checked_add(request.parallel_workers)
-            .ok_or(SchedulerError::ArithmeticOverflow(
-                "scheduler worker reservation",
-            ))?;
+            .ok_or_else(|| {
+                numerical_error(
+                    "scheduler worker reservation overflow",
+                )
+            })?;
 
         let iterations = self
             .decoder_iterations
             .checked_add(request.decoder_iterations)
-            .ok_or(SchedulerError::ArithmeticOverflow(
-                "scheduler decoder-iteration reservation",
-            ))?;
+            .ok_or_else(|| {
+                numerical_error(
+                    "scheduler iteration reservation overflow",
+                )
+            })?;
+
+        let partitions = self
+            .partitions
+            .checked_add(request.partitions)
+            .ok_or_else(|| {
+                numerical_error(
+                    "scheduler partition reservation overflow",
+                )
+            })?;
 
         if memory > limits.max_memory_bytes {
-            return Err(SchedulerError::ResourceLimitExceeded {
-                resource: LimitKind::MemoryBytes,
-                requested: memory as u128,
-                maximum: limits.max_memory_bytes as u128,
-            });
+            return Err(resource_error(
+                ResourceKind::MemoryBytes,
+                memory as u128,
+                0,
+                limits.max_memory_bytes as u128,
+                "aggregate scheduler reservation exceeds memory limit",
+            ));
         }
 
         if workers > limits.max_parallelism {
-            return Err(SchedulerError::ResourceLimitExceeded {
-                resource: LimitKind::Parallelism,
-                requested: workers as u128,
-                maximum: limits.max_parallelism as u128,
-            });
+            return Err(resource_error(
+                ResourceKind::Parallelism,
+                workers as u128,
+                0,
+                limits.max_parallelism as u128,
+                "aggregate scheduler reservation exceeds parallelism limit",
+            ));
         }
 
         if iterations > limits.max_decoder_iterations {
-            return Err(SchedulerError::ResourceLimitExceeded {
-                resource: LimitKind::DecoderIterations,
-                requested: iterations as u128,
-                maximum: limits.max_decoder_iterations as u128,
-            });
+            return Err(resource_error(
+                ResourceKind::DecoderIterations,
+                iterations as u128,
+                0,
+                limits.max_decoder_iterations as u128,
+                "aggregate scheduler reservation exceeds decoder iteration limit",
+            ));
+        }
+
+        if partitions > limits.max_partitions {
+            return Err(resource_error(
+                ResourceKind::Partitions,
+                partitions as u128,
+                0,
+                limits.max_partitions as u128,
+                "aggregate scheduler reservation exceeds partition limit",
+            ));
         }
 
         Ok(Self {
             memory_bytes: memory,
             parallel_workers: workers,
             decoder_iterations: iterations,
+            partitions,
         })
     }
 
     fn subtract(self, request: ResourceRequest) -> Self {
         Self {
-            memory_bytes: self.memory_bytes.saturating_sub(request.memory_bytes),
+            memory_bytes: self
+                .memory_bytes
+                .saturating_sub(request.memory_bytes),
+
             parallel_workers: self
                 .parallel_workers
                 .saturating_sub(request.parallel_workers),
+
             decoder_iterations: self
                 .decoder_iterations
                 .saturating_sub(request.decoder_iterations),
+
+            partitions: self
+                .partitions
+                .saturating_sub(request.partitions),
         }
     }
 }
 
-/* ========================================================================== */
-/* Capability requirements                                                     */
-/* ========================================================================== */
-
-/// Scheduler-side capability requirements.
+/// Runtime-resource accounting adapter.
 ///
-/// Actual capability possession remains the responsibility of
-/// `capabilities.rs`.
+/// `resources.rs` should implement this contract rather than requiring the
+/// scheduler to know its internal accounting representation.
+///
+/// Implementations must make `reserve` atomic and must release exactly once.
+pub trait ResourceAccounting: Send + Sync {
+    /// Atomically reserves resources for an admitted job.
+    fn reserve(
+        &self,
+        job_id: JobId,
+        request: ResourceRequest,
+    ) -> SchedulerResult<()>;
+
+    /// Releases a previous reservation exactly once.
+    fn release(
+        &self,
+        job_id: JobId,
+        request: ResourceRequest,
+    ) -> SchedulerResult<()>;
+}
+
+/// No-op resource adapter for isolated tests.
+///
+/// Production execution should connect this to `resources.rs`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoopResourceAccounting;
+
+impl ResourceAccounting for NoopResourceAccounting {
+    fn reserve(
+        &self,
+        _job_id: JobId,
+        _request: ResourceRequest,
+    ) -> SchedulerResult<()> {
+        Ok(())
+    }
+
+    fn release(
+        &self,
+        _job_id: JobId,
+        _request: ResourceRequest,
+    ) -> SchedulerResult<()> {
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Capability contract
+// ============================================================================
+
+/// Capability requirements for a scheduled workload.
+///
+/// This structure describes requirements only. It does not grant authority.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CapabilityRequirement {
     pub decode: bool,
     pub simulate: bool,
     pub benchmark: bool,
-    pub inspect_topology: bool,
-    pub accelerator: bool,
     pub distributed_execution: bool,
+    pub accelerator: bool,
     pub streaming: bool,
     pub checkpoint: bool,
     pub deterministic: bool,
+    pub qpu_submit: bool,
+    pub qpu_read_results: bool,
 }
 
 impl CapabilityRequirement {
+    /// Creates an empty capability requirement.
     #[must_use]
     pub const fn none() -> Self {
         Self {
             decode: false,
             simulate: false,
             benchmark: false,
-            inspect_topology: false,
-            accelerator: false,
             distributed_execution: false,
+            accelerator: false,
             streaming: false,
             checkpoint: false,
             deterministic: false,
+            qpu_submit: false,
+            qpu_read_results: false,
         }
     }
 
+    /// Creates requirements implied by the workload.
     #[must_use]
-    pub const fn for_mode(mode: ExecutionMode) -> Self {
+    pub const fn for_job(
+        kind: JobKind,
+        mode: ExecutionMode,
+        deterministic: bool,
+        checkpointable: bool,
+    ) -> Self {
         Self {
-            decode: false,
-            simulate: false,
-            benchmark: false,
-            inspect_topology: false,
+            decode: matches!(
+                kind,
+                JobKind::Decode
+                    | JobKind::LogicalOperation
+                    | JobKind::Streaming
+                    | JobKind::Partition
+                    | JobKind::Distributed
+                    | JobKind::Qpu
+            ),
+
+            simulate: matches!(
+                kind,
+                JobKind::Simulation
+                    | JobKind::ThresholdBenchmark
+            ),
+
+            benchmark: matches!(
+                kind,
+                JobKind::ThresholdBenchmark
+            ),
+
+            distributed_execution:
+                mode.requires_distributed_capability(),
+
             accelerator: mode.requires_accelerator(),
-            distributed_execution: mode.requires_distributed_capability(),
-            streaming: false,
-            checkpoint: false,
-            deterministic: false,
+
+            streaming: matches!(
+                kind,
+                JobKind::Streaming
+            ),
+
+            checkpoint: checkpointable,
+
+            deterministic,
+
+            qpu_submit: mode.requires_qpu(),
+
+            qpu_read_results: mode.requires_qpu(),
         }
     }
 }
 
-/// Fail-closed capability authorizer.
+/// Capability authorization boundary.
 ///
-/// The scheduler intentionally does not know how capability grants are
-/// represented internally. `capabilities.rs` can provide the closure.
-pub type CapabilityAuthorizer =
-    Arc<dyn Fn(CapabilityRequirement) -> SchedulerResult<()> + Send + Sync>;
+/// `capabilities.rs` owns the actual authority implementation.
+pub type CapabilityAuthorizer = Arc<
+    dyn Fn(CapabilityRequirement) -> SchedulerResult<()>
+        + Send
+        + Sync,
+>;
 
 fn allow_all_capabilities() -> CapabilityAuthorizer {
     Arc::new(|_| Ok(()))
 }
 
-/* ========================================================================== */
-/* Cancellation                                                               */
-/* ========================================================================== */
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
-/// Scheduler cancellation token.
-///
-/// Expensive QEC components should bind their own cancellation implementation
-/// to this token when they execute through the scheduler.
-#[derive(Clone, Default)]
-pub struct CancellationToken {
-    cancelled: Arc<AtomicBool>,
-}
-
-impl CancellationToken {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn cancel(&self) {
-        self.cancelled.store(true, AtomicOrdering::Release);
-    }
-
-    #[must_use]
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(AtomicOrdering::Acquire)
-    }
-
-    pub fn check(&self) -> SchedulerResult<()> {
-        if self.is_cancelled() {
-            Err(SchedulerError::CancellationRequested)
-        } else {
-            Ok(())
-        }
-    }
-}
-
-/* ========================================================================== */
-/* Lifecycle                                                                  */
-/* ========================================================================== */
-
-/// Explicit scheduler lifecycle.
-///
-/// This is intentionally richer than a simple queued/running flag because
-/// checkpoint/resume and recovery are first-class QEC operations.
+/// Complete scheduler lifecycle.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum JobState {
     Created,
@@ -482,8 +718,9 @@ pub enum JobState {
 }
 
 impl JobState {
+    /// Returns whether the state is terminal.
     #[must_use]
-    pub const fn terminal(self) -> bool {
+    pub const fn is_terminal(self) -> bool {
         matches!(
             self,
             Self::Completed
@@ -495,9 +732,9 @@ impl JobState {
     }
 }
 
-/* ========================================================================== */
-/* Job specification                                                          */
-/* ========================================================================== */
+// ============================================================================
+// Job specification
+// ============================================================================
 
 /// Immutable scheduling request.
 #[derive(Clone, Debug)]
@@ -514,52 +751,86 @@ pub struct JobSpec {
 }
 
 impl JobSpec {
-    pub fn validate(&self, limits: &QecLimits) -> SchedulerResult<()> {
+    /// Validates the job specification before admission.
+    pub fn validate(
+        &self,
+        limits: &QecLimits,
+    ) -> SchedulerResult<()> {
         self.resources.validate_against(limits)?;
 
-        if self.max_retries > 1_000_000 {
-            return Err(SchedulerError::InvalidRequest(
-                "max_retries exceeds scheduler safety bound".into(),
-            ));
+        if self.max_retries > MAX_RETRY_COUNT {
+            return Err(QecError::InvalidInput {
+                message:
+                    "max_retries exceeds scheduler safety bound"
+                        .into(),
+            });
         }
 
-        if self.mode.requires_parallelism() && self.resources.parallel_workers == 0 {
-            return Err(SchedulerError::InvalidRequest(
-                "parallel execution requires at least one worker reservation".into(),
-            ));
-        }
-
-        if self.mode == ExecutionMode::SingleThread
-            && self.resources.parallel_workers > 1
+        if self.mode.requires_parallelism()
+            && self.resources.parallel_workers == 0
         {
-            return Err(SchedulerError::InvalidRequest(
-                "single-thread execution cannot reserve multiple workers".into(),
+            return Err(QecError::InvalidInput {
+                message:
+                    "parallel execution requires at least one worker reservation"
+                        .into(),
+            });
+        }
+
+        if matches!(
+            self.mode,
+            ExecutionMode::SingleThread
+        ) && self.resources.parallel_workers > 1
+        {
+            return Err(QecError::InvalidInput {
+                message:
+                    "single-thread execution cannot reserve multiple workers"
+                        .into(),
+            });
+        }
+
+        if self.checkpointable
+            && !self.capabilities.checkpoint
+        {
+            return Err(capability_error(
+                "checkpoint",
+                "checkpointable job",
             ));
         }
 
-        if self.checkpointable && !self.capabilities.checkpoint {
-            return Err(SchedulerError::CapabilityDenied(
-                "checkpoint capability required by checkpointable job".into(),
+        if self.deterministic
+            && !self.capabilities.deterministic
+        {
+            return Err(capability_error(
+                "deterministic_execution",
+                "deterministic job",
             ));
         }
 
-        if self.deterministic && !self.capabilities.deterministic {
-            return Err(SchedulerError::CapabilityDenied(
-                "deterministic-execution capability required".into(),
-            ));
-        }
-
-        if self.mode.requires_accelerator() && !self.capabilities.accelerator {
-            return Err(SchedulerError::CapabilityDenied(
-                "accelerator capability required".into(),
+        if self.mode.requires_accelerator()
+            && !self.capabilities.accelerator
+        {
+            return Err(capability_error(
+                "accelerator",
+                "accelerated job",
             ));
         }
 
         if self.mode.requires_distributed_capability()
             && !self.capabilities.distributed_execution
         {
-            return Err(SchedulerError::CapabilityDenied(
-                "distributed-execution capability required".into(),
+            return Err(capability_error(
+                "distributed_execution",
+                "distributed job",
+            ));
+        }
+
+        if self.mode.requires_qpu()
+            && (!self.capabilities.qpu_submit
+                || !self.capabilities.qpu_read_results)
+        {
+            return Err(capability_error(
+                "qpu_submit/qpu_read_results",
+                "QPU job",
             ));
         }
 
@@ -567,16 +838,21 @@ impl JobSpec {
     }
 }
 
-/* ========================================================================== */
-/* Executor                                                                   */
-/* ========================================================================== */
+// ============================================================================
+// Executor contract
+// ============================================================================
 
-/// Backend-independent executable workload.
-pub trait JobExecutor: Send + Sync + 'static {
-    fn execute(&self, context: ExecutionContext) -> SchedulerResult<JobOutput>;
+/// Opaque result produced by a scheduled executor.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct JobOutput {
+    /// Optional domain-specific serialized result.
+    pub payload: Vec<u8>,
+
+    /// Optional stable execution fingerprint.
+    pub fingerprint: Option<String>,
 }
 
-/// Context passed to a worker.
+/// Execution context passed to a worker.
 #[derive(Clone)]
 pub struct ExecutionContext {
     pub job_id: JobId,
@@ -590,1531 +866,1250 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
+    /// Checks cancellation and deadline before expensive work.
     pub fn check(&self) -> SchedulerResult<()> {
         self.cancellation.check()?;
 
         if self.deadline.expired() {
-            return Err(SchedulerError::DeadlineExceeded);
+            return Err(QecError::TimeLimitExceeded {
+                elapsed_nanos: 0,
+                limit_nanos: 0,
+                message:
+                    "scheduler job deadline expired"
+                        .into(),
+            });
         }
 
         Ok(())
     }
 }
 
-/// Generic scheduler output.
+/// Backend-independent executable workload.
 ///
-/// Domain-specific QEC results remain owned by the decoder/backend.
-#[derive(Clone, Debug, Default)]
-pub struct JobOutput {
-    pub success: bool,
-    pub logical_failure: bool,
-    pub correction_count: u64,
-    pub detection_event_count: u64,
-    pub decoder_iterations: u64,
+/// The scheduler does not interpret the executor's domain-specific result.
+pub trait JobExecutor: Send + Sync + 'static {
+    fn execute(
+        &self,
+        context: ExecutionContext,
+    ) -> SchedulerResult<JobOutput>;
 }
 
-/* ========================================================================== */
-/* Checkpointing                                                              */
-/* ========================================================================== */
+// ============================================================================
+// Queue
+// ============================================================================
 
-/// Checkpoint boundary requested by the scheduler.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CheckpointReason {
-    Explicit,
-    ResourcePressure,
-    Retry,
-    Pause,
-}
-
-/// Checkpoint callback.
-///
-/// The checkpoint implementation itself belongs to `checkpoint.rs`.
-pub type CheckpointHook =
-    Arc<dyn Fn(JobId, CheckpointReason) -> SchedulerResult<()> + Send + Sync>;
-
-fn noop_checkpoint() -> CheckpointHook {
-    Arc::new(|_, _| Ok(()))
-}
-
-/* ========================================================================== */
-/* Resource accounting integration                                            */
-/* ========================================================================== */
-
-/// Runtime resource-accounting integration point.
-///
-/// `resources.rs` remains the authoritative runtime accounting layer. The
-/// scheduler only requires this minimal contract, which prevents scheduler.rs
-/// from recreating the entire ResourceManager implementation.
-///
-/// A production adapter should reserve/release against `ResourceManager`.
-pub trait ResourceAccounting: Send + Sync {
-    fn reserve(
-        &self,
-        request: ResourceRequest,
-        limits: &QecLimits,
-    ) -> SchedulerResult<()>;
-
-    fn release(&self, request: ResourceRequest);
-
-    fn snapshot(&self) -> ResourceReservation;
-}
-
-/// Scheduler-local fallback accounting adapter.
-///
-/// This is useful for tests and for configurations where the caller has not
-/// supplied a ResourceManager adapter. It still enforces QecLimits and never
-/// permits aggregate overcommitment.
-#[derive(Default)]
-pub struct LocalResourceAccounting {
-    current: Mutex<ResourceReservation>,
-}
-
-impl ResourceAccounting for LocalResourceAccounting {
-    fn reserve(
-        &self,
-        request: ResourceRequest,
-        limits: &QecLimits,
-    ) -> SchedulerResult<()> {
-        let mut current = self.current.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "resource accounting mutex poisoned".into(),
-            )
-        })?;
-
-        let next = current.try_add(request, limits)?;
-        *current = next;
-        Ok(())
-    }
-
-    fn release(&self, request: ResourceRequest) {
-        if let Ok(mut current) = self.current.lock() {
-            *current = current.subtract(request);
-        }
-    }
-
-    fn snapshot(&self) -> ResourceReservation {
-        self.current
-            .lock()
-            .map(|value| *value)
-            .unwrap_or_default()
-    }
-}
-
-/* ========================================================================== */
-/* Queue                                                                      */
-/* ========================================================================== */
-
-struct QueueItem {
-    id: JobId,
-    spec: JobSpec,
-    executor: Arc<dyn JobExecutor>,
-    cancellation: CancellationToken,
-    state: Arc<Mutex<JobState>>,
+struct QueueEntry {
+    priority: Priority,
     sequence: u64,
-    attempt: u32,
+    job_id: JobId,
 }
 
-impl PartialEq for QueueItem {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for QueueItem {}
-
-impl Ord for QueueItem {
+impl Ord for QueueEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        let priority = self
-            .spec
-            .priority
+        self.priority
             .rank()
-            .cmp(&other.spec.priority.rank());
-
-        if priority != Ordering::Equal {
-            return priority;
-        }
-
-        let deadline = match (self.spec.deadline.0, other.spec.deadline.0) {
-            (Some(a), Some(b)) => b.cmp(&a),
-            (Some(_), None) => Ordering::Greater,
-            (None, Some(_)) => Ordering::Less,
-            (None, None) => Ordering::Equal,
-        };
-
-        if deadline != Ordering::Equal {
-            return deadline;
-        }
-
-        // Earlier admission wins.
-        other.sequence.cmp(&self.sequence)
+            .cmp(&other.priority.rank())
+            .then_with(|| other.sequence.cmp(&self.sequence))
+            .then_with(|| other.job_id.cmp(&self.job_id))
     }
 }
 
-impl PartialOrd for QueueItem {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+impl PartialOrd for QueueEntry {
+    fn partial_cmp(
+        &self,
+        other: &Self,
+    ) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-/* ========================================================================== */
-/* Job handle                                                                 */
-/* ========================================================================== */
-
-/// Handle retained by the caller.
-#[derive(Clone)]
-pub struct JobHandle {
-    id: JobId,
-    state: Arc<Mutex<JobState>>,
-    cancellation: CancellationToken,
-}
-
-impl JobHandle {
-    #[must_use]
-    pub const fn id(&self) -> JobId {
-        self.id
-    }
-
-    pub fn cancel(&self) {
-        self.cancellation.cancel();
-
-        if let Ok(mut state) = self.state.lock() {
-            if matches!(
-                *state,
-                JobState::Created
-                    | JobState::Validating
-                    | JobState::Admitted
-                    | JobState::Running
-                    | JobState::Checkpointing
-                    | JobState::Paused
-                    | JobState::Resuming
-            ) {
-                *state = JobState::Cancelled;
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn state(&self) -> JobState {
-        self.state
-            .lock()
-            .map(|state| *state)
-            .unwrap_or(JobState::Failed)
-    }
-
-    #[must_use]
-    pub fn cancellation(&self) -> CancellationToken {
-        self.cancellation.clone()
-    }
-}
-
-/* ========================================================================== */
-/* Scheduler metrics                                                          */
-/* ========================================================================== */
-
-/// Scheduler lifecycle counters.
-///
-/// These are deliberately lightweight. Full QEC decoder metrics belong to
-/// `metrics.rs`.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct SchedulerMetrics {
-    pub submitted: u64,
-    pub admitted: u64,
-    pub rejected: u64,
-    pub started: u64,
-    pub completed: u64,
-    pub failed: u64,
-    pub cancelled: u64,
-    pub timed_out: u64,
-    pub checkpointed: u64,
-    pub resumed: u64,
-    pub retries: u64,
-    pub resource_rejections: u64,
-}
-
-/* ========================================================================== */
-/* Errors                                                                     */
-/* ========================================================================== */
-
-/// Scheduler-specific error.
-///
-/// Public callers should normally use the `QecResult` conversion.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SchedulerError {
-    InvalidRequest(String),
-
-    InvalidConfiguration(String),
-
-    QueueFull,
-
-    SchedulerDisabled,
-
-    SchedulerShuttingDown,
-
-    ResourceLimitExceeded {
-        resource: LimitKind,
-        requested: u128,
-        maximum: u128,
-    },
-
-    CapabilityDenied(String),
-
-    WorkerUnavailable,
-
-    DeadlineExceeded,
-
-    CancellationRequested,
-
-    CheckpointRequired,
-
-    CheckpointFailed(String),
-
-    RetryLimitExceeded,
-
-    ExecutorFailed(String),
-
-    ArithmeticOverflow(&'static str),
-
-    InternalInvariantViolation(String),
-}
-
-impl fmt::Display for SchedulerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidRequest(message) => {
-                write!(f, "invalid scheduler request: {message}")
-            }
-
-            Self::InvalidConfiguration(message) => {
-                write!(f, "invalid scheduler configuration: {message}")
-            }
-
-            Self::QueueFull => write!(f, "scheduler queue is full"),
-
-            Self::SchedulerDisabled => write!(f, "scheduler is disabled"),
-
-            Self::SchedulerShuttingDown => {
-                write!(f, "scheduler is shutting down")
-            }
-
-            Self::ResourceLimitExceeded {
-                resource,
-                requested,
-                maximum,
-            } => write!(
-                f,
-                "{resource} limit exceeded: requested={requested}, maximum={maximum}"
-            ),
-
-            Self::CapabilityDenied(capability) => {
-                write!(f, "capability denied: {capability}")
-            }
-
-            Self::WorkerUnavailable => {
-                write!(f, "no compatible worker is available")
-            }
-
-            Self::DeadlineExceeded => write!(f, "job deadline exceeded"),
-
-            Self::CancellationRequested => {
-                write!(f, "job cancellation requested")
-            }
-
-            Self::CheckpointRequired => {
-                write!(f, "checkpoint is required before this transition")
-            }
-
-            Self::CheckpointFailed(message) => {
-                write!(f, "checkpoint failed: {message}")
-            }
-
-            Self::RetryLimitExceeded => {
-                write!(f, "job retry limit exceeded")
-            }
-
-            Self::ExecutorFailed(message) => {
-                write!(f, "job executor failed: {message}")
-            }
-
-            Self::ArithmeticOverflow(operation) => {
-                write!(f, "scheduler arithmetic overflow: {operation}")
-            }
-
-            Self::InternalInvariantViolation(message) => {
-                write!(f, "scheduler invariant violation: {message}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for SchedulerError {}
-
-/// Scheduler result type.
-pub type SchedulerResult<T> = Result<T, SchedulerError>;
-
-/// Convert scheduler errors to the canonical QEC public error boundary.
-impl From<SchedulerError> for QecError {
-    fn from(error: SchedulerError) -> Self {
-        match error {
-            SchedulerError::InvalidRequest(message) => {
-                QecError::InvalidInput { message }
-            }
-
-            SchedulerError::InvalidConfiguration(message) => {
-                QecError::UnsupportedConfiguration {
-                    feature: "scheduler".into(),
-                    message,
-                }
-            }
-
-            SchedulerError::QueueFull => QecError::ResourceLimitExceeded {
-                resource: ResourceKind::AllocationCount,
-                requested: 1,
-                current: 0,
-                limit: 0,
-                message: "scheduler queue is full".into(),
-            },
-
-            SchedulerError::SchedulerDisabled => {
-                QecError::UnsupportedConfiguration {
-                    feature: "scheduler".into(),
-                    message: "scheduler is disabled".into(),
-                }
-            }
-
-            SchedulerError::SchedulerShuttingDown => {
-                QecError::UnsupportedConfiguration {
-                    feature: "scheduler".into(),
-                    message: "scheduler is shutting down".into(),
-                }
-            }
-
-            SchedulerError::ResourceLimitExceeded {
-                resource,
-                requested,
-                maximum,
-            } => {
-                let mapped = match resource {
-                    LimitKind::MemoryBytes => ResourceKind::MemoryBytes,
-                    LimitKind::Parallelism => ResourceKind::Parallelism,
-                    LimitKind::DecoderIterations => {
-                        ResourceKind::DecoderIterations
-                    }
-                    LimitKind::QpuShots => ResourceKind::QpuShots,
-                    LimitKind::QpuCircuits => ResourceKind::QpuCircuits,
-                    LimitKind::Partitions => ResourceKind::Partitions,
-                    LimitKind::SyndromeEvents => {
-                        ResourceKind::SyndromeEvents
-                    }
-                    LimitKind::GraphNodes => ResourceKind::GraphNodes,
-                    LimitKind::GraphEdges => ResourceKind::GraphEdges,
-                    LimitKind::CodeDistance => ResourceKind::CodeDistance,
-                    LimitKind::Qubits => ResourceKind::Qubits,
-                    LimitKind::Stabilizers => ResourceKind::Stabilizers,
-                    LimitKind::MeasurementRounds => {
-                        ResourceKind::MeasurementRounds
-                    }
-                    LimitKind::CheckpointSizeBytes => {
-                        ResourceKind::CheckpointSize
-                    }
-                    LimitKind::StreamBufferEvents => {
-                        ResourceKind::StreamBuffer
-                    }
-                    _ => ResourceKind::Custom,
-                };
-
-                QecError::ResourceLimitExceeded {
-                    resource: mapped,
-                    requested,
-                    current: 0,
-                    limit: maximum,
-                    message: "scheduler resource admission rejected".into(),
-                }
-            }
-
-            SchedulerError::CapabilityDenied(message) => {
-                QecError::UnsupportedConfiguration {
-                    feature: "capability".into(),
-                    message,
-                }
-            }
-
-            SchedulerError::WorkerUnavailable => {
-                QecError::UnsupportedConfiguration {
-                    feature: "worker".into(),
-                    message: "no compatible worker is available".into(),
-                }
-            }
-
-            SchedulerError::DeadlineExceeded => {
-                QecError::TimeLimitExceeded {
-                    elapsed_nanos: 0,
-                    limit_nanos: 0,
-                    message: "scheduler deadline exceeded".into(),
-                }
-            }
-
-            SchedulerError::CancellationRequested => {
-                QecError::CancellationRequested {
-                    message: "scheduler cancellation requested".into(),
-                }
-            }
-
-            SchedulerError::CheckpointRequired => {
-                QecError::UnsupportedConfiguration {
-                    feature: "checkpoint".into(),
-                    message: "checkpoint required for lifecycle transition".into(),
-                }
-            }
-
-            SchedulerError::CheckpointFailed(message) => {
-                QecError::InternalInvariantViolation {
-                    invariant: "checkpoint".into(),
-                    message,
-                }
-            }
-
-            SchedulerError::RetryLimitExceeded => {
-                QecError::DecoderFailure {
-                    decoder: super::errors::DecoderKind::Custom,
-                    message: "scheduler retry limit exceeded".into(),
-                }
-            }
-
-            SchedulerError::ExecutorFailed(message) => {
-                QecError::DecoderFailure {
-                    decoder: super::errors::DecoderKind::Custom,
-                    message,
-                }
-            }
-
-            SchedulerError::ArithmeticOverflow(operation) => {
-                QecError::NumericalFailure {
-                    operation: super::errors::NumericalOperation::Custom,
-                    message: operation.into(),
-                }
-            }
-
-            SchedulerError::InternalInvariantViolation(message) => {
-                QecError::InternalInvariantViolation {
-                    invariant: "scheduler".into(),
-                    message,
-                }
-            }
-        }
-    }
-}
-
-/* ========================================================================== */
-/* Scheduler                                                                  */
-/* ========================================================================== */
-
-/// Production QEC scheduler.
-///
-/// The scheduler is intentionally synchronous at the orchestration boundary:
-/// callers submit jobs and explicitly drive worker execution through
-/// `run_next()` / `run_worker()`. This avoids pretending that merely having a
-/// scheduler object automatically provides distributed execution.
-///
-/// A higher-level runtime can place this scheduler behind an async/threaded
-/// worker pool without changing the admission or lifecycle semantics.
-pub struct QecScheduler {
-    limits: QecLimits,
-
-    max_queued_jobs: usize,
-    max_running_jobs: usize,
-
-    deterministic: bool,
-    enable_deadlines: bool,
-    enable_cancellation: bool,
-    enable_backpressure: bool,
-
-    queue: Mutex<BinaryHeap<QueueItem>>,
-    jobs: Mutex<HashMap<JobId, JobRecord>>,
-    workers: Mutex<HashMap<WorkerId, WorkerRecord>>,
-
-    next_job_id: AtomicU64,
-    next_sequence: AtomicU64,
-
-    running_jobs: AtomicU64,
-
-    shutting_down: AtomicBool,
-
-    accounting: Arc<dyn ResourceAccounting>,
-    authorize: CapabilityAuthorizer,
-    checkpoint: CheckpointHook,
-
-    metrics: Mutex<SchedulerMetrics>,
-}
+// ============================================================================
+// Internal job state
+// ============================================================================
 
 struct JobRecord {
     spec: JobSpec,
-    state: Arc<Mutex<JobState>>,
-    cancellation: CancellationToken,
+    executor: Arc<dyn JobExecutor>,
+    state: JobState,
+    cancellation: CancellationSource,
+    attempts: u32,
+    queue_sequence: u64,
+    output: Option<JobOutput>,
+    last_error: Option<QecError>,
+    worker: Option<WorkerId>,
     submitted_at: Instant,
-    attempt: u32,
+    started_at: Option<Instant>,
+    completed_at: Option<Instant>,
+    reservation_accounted: bool,
 }
 
-struct WorkerRecord {
-    mode: ExecutionMode,
-    busy: bool,
-    current_job: Option<JobId>,
+impl fmt::Debug for JobRecord {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        f.debug_struct("JobRecord")
+            .field("state", &self.state)
+            .field("attempts", &self.attempts)
+            .field("queue_sequence", &self.queue_sequence)
+            .field("output", &self.output)
+            .field("last_error", &self.last_error)
+            .field("worker", &self.worker)
+            .field("submitted_at", &self.submitted_at)
+            .field("started_at", &self.started_at)
+            .field("completed_at", &self.completed_at)
+            .finish()
+    }
 }
 
-impl QecScheduler {
-    /// Construct directly from canonical QEC limits.
-    pub fn new(limits: QecLimits) -> SchedulerResult<Self> {
-        Self::with_integrations(
-            limits,
-            1_024,
-            8,
-            Arc::new(LocalResourceAccounting::default()),
-            allow_all_capabilities(),
-            noop_checkpoint(),
-        )
+/// Immutable public job-status snapshot.
+#[derive(Clone, Debug)]
+pub struct JobStatus {
+    pub job_id: JobId,
+    pub state: JobState,
+    pub attempts: u32,
+    pub worker: Option<WorkerId>,
+    pub output: Option<JobOutput>,
+    pub last_error: Option<String>,
+    pub submitted_at: Instant,
+    pub started_at: Option<Instant>,
+    pub completed_at: Option<Instant>,
+}
+
+// ============================================================================
+// Scheduler internals
+// ============================================================================
+
+struct SchedulerInner {
+    limits: QecLimits,
+    queue: BinaryHeap<QueueEntry>,
+    jobs: BTreeMap<JobId, JobRecord>,
+    reservations: ReservationSnapshot,
+    next_job_id: u64,
+    next_sequence: u64,
+    workers: BTreeMap<WorkerId, bool>,
+}
+
+// ============================================================================
+// Scheduler
+// ============================================================================
+
+/// Production QEC scheduler.
+///
+/// Cloning a scheduler creates another handle to the same scheduler state.
+///
+/// Execution never occurs while the scheduler mutex is held. This is critical:
+/// an executor may call back into status/cancellation/integration APIs without
+/// deadlocking the scheduler.
+#[derive(Clone)]
+pub struct Scheduler {
+    inner: Arc<Mutex<SchedulerInner>>,
+    authorizer: CapabilityAuthorizer,
+    accounting: Arc<dyn ResourceAccounting>,
+}
+
+impl fmt::Debug for Scheduler {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        let inner =
+            self.inner.lock().unwrap_or_else(
+                |poisoned| poisoned.into_inner(),
+            );
+
+        f.debug_struct("Scheduler")
+            .field("limits", &inner.limits)
+            .field("queued_jobs", &inner.queue.len())
+            .field("jobs", &inner.jobs.len())
+            .field("reservations", &inner.reservations)
+            .field("workers", &inner.workers.len())
+            .finish()
     }
+}
 
-    /// Construct from the complete QEC configuration.
-    ///
-    /// This ensures scheduler policy starts from `QecConfig` instead of
-    /// inventing an independent configuration tree.
-    pub fn from_config(config: &QecConfig) -> SchedulerResult<Self> {
-        config
-            .validate()
-            .map_err(|error| SchedulerError::InvalidConfiguration(error.to_string()))?;
-
-        let scheduler = &config.scheduler;
-
-        Self::with_integrations(
-            config.limits,
-            scheduler.max_queued_jobs,
-            scheduler.max_running_jobs as usize,
-            Arc::new(LocalResourceAccounting::default()),
-            allow_all_capabilities(),
-            noop_checkpoint(),
-        )
-        .and_then(|mut scheduler_instance| {
-            scheduler_instance.enable_deadlines = scheduler.enable_deadlines;
-            scheduler_instance.enable_cancellation = scheduler.enable_cancellation;
-            scheduler_instance.enable_backpressure = scheduler.enable_backpressure;
-            scheduler_instance.deterministic =
-                config.determinism.enabled
-                || config.determinism.seed.is_some();
-
-            Ok(scheduler_instance)
-        })
-    }
-
-    /// Construct with explicit runtime integration points.
-    pub fn with_integrations(
+impl Scheduler {
+    /// Creates a scheduler from canonical QEC limits.
+    pub fn new(
         limits: QecLimits,
-        max_queued_jobs: usize,
-        max_running_jobs: usize,
-        accounting: Arc<dyn ResourceAccounting>,
-        authorize: CapabilityAuthorizer,
-        checkpoint: CheckpointHook,
     ) -> SchedulerResult<Self> {
         limits
             .validate()
-            .map_err(|error| SchedulerError::InvalidConfiguration(error.to_string()))?;
+            .map_err(|error| {
+                QecError::UnsupportedConfiguration {
+                    feature: "qec_limits".into(),
+                    message: error.to_string(),
+                }
+            })?;
 
-        if max_queued_jobs == 0 {
-            return Err(SchedulerError::InvalidConfiguration(
-                "max_queued_jobs must be greater than zero".into(),
-            ));
-        }
-
-        if max_running_jobs == 0 {
-            return Err(SchedulerError::InvalidConfiguration(
-                "max_running_jobs must be greater than zero".into(),
-            ));
-        }
-
-        if max_running_jobs > limits.max_parallelism {
-            return Err(SchedulerError::InvalidConfiguration(
-                "max_running_jobs exceeds QecLimits.max_parallelism".into(),
-            ));
-        }
-
-        Ok(Self {
+        Ok(Self::with_components(
             limits,
-
-            max_queued_jobs,
-            max_running_jobs,
-
-            deterministic: false,
-            enable_deadlines: true,
-            enable_cancellation: true,
-            enable_backpressure: true,
-
-            queue: Mutex::new(BinaryHeap::new()),
-            jobs: Mutex::new(HashMap::new()),
-            workers: Mutex::new(HashMap::new()),
-
-            next_job_id: AtomicU64::new(1),
-            next_sequence: AtomicU64::new(0),
-
-            running_jobs: AtomicU64::new(0),
-
-            shutting_down: AtomicBool::new(false),
-
-            accounting,
-            authorize,
-            checkpoint,
-
-            metrics: Mutex::new(SchedulerMetrics::default()),
-        })
+            allow_all_capabilities(),
+            Arc::new(NoopResourceAccounting),
+        ))
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Worker management                                                      */
-    /* ---------------------------------------------------------------------- */
+    /// Creates a scheduler from the canonical QEC configuration.
+    pub fn from_config(
+        config: &QecConfig,
+    ) -> SchedulerResult<Self> {
+        config
+            .validate()
+            .map_err(|error| {
+                QecError::UnsupportedConfiguration {
+                    feature:
+                        "qec_scheduler_configuration"
+                            .into(),
+                    message: error.to_string(),
+                }
+            })?;
 
-    /// Register a worker.
+        Self::new(config.limits)
+    }
+
+    /// Creates a scheduler with external capability and resource authorities.
+    ///
+    /// `limits` must already have passed `QecLimits::validate()`.
+    pub fn with_components(
+        limits: QecLimits,
+        authorizer: CapabilityAuthorizer,
+        accounting: Arc<dyn ResourceAccounting>,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(
+                SchedulerInner {
+                    limits,
+                    queue: BinaryHeap::new(),
+                    jobs: BTreeMap::new(),
+                    reservations:
+                        ReservationSnapshot::default(),
+                    next_job_id: 0,
+                    next_sequence: 0,
+                    workers: BTreeMap::new(),
+                },
+            )),
+            authorizer,
+            accounting,
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Worker management
+    // ------------------------------------------------------------------------
+
+    /// Registers an available worker.
+    ///
+    /// Registration is idempotent.
     pub fn register_worker(
         &self,
         worker_id: WorkerId,
-        mode: ExecutionMode,
     ) -> SchedulerResult<()> {
-        let mut workers = self.workers.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "worker registry mutex poisoned".into(),
-            )
-        })?;
-
-        if workers.contains_key(&worker_id) {
-            return Err(SchedulerError::InvalidRequest(
-                "worker ID is already registered".into(),
-            ));
-        }
-
-        workers.insert(
-            worker_id,
-            WorkerRecord {
-                mode,
-                busy: false,
-                current_job: None,
-            },
-        );
-
+        let mut inner = lock_inner(&self.inner)?;
+        inner.workers.insert(worker_id, true);
         Ok(())
     }
 
-    /// Remove a worker.
+    /// Removes a worker from future scheduling.
     ///
-    /// A busy worker cannot disappear silently. The current job is cancelled
-    /// and will be eligible for retry when submitted again by the runtime.
+    /// Existing work is not forcefully terminated.
     pub fn unregister_worker(
         &self,
         worker_id: WorkerId,
     ) -> SchedulerResult<()> {
-        let mut workers = self.workers.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "worker registry mutex poisoned".into(),
-            )
-        })?;
-
-        let worker = workers
-            .remove(&worker_id)
-            .ok_or(SchedulerError::WorkerUnavailable)?;
-
-        if let Some(job_id) = worker.current_job {
-            drop(workers);
-
-            if let Ok(jobs) = self.jobs.lock() {
-                if let Some(record) = jobs.get(&job_id) {
-                    record.cancellation.cancel();
-
-                    if let Ok(mut state) = record.state.lock() {
-                        *state = JobState::Failed;
-                    }
-                }
-            }
-        }
-
+        let mut inner = lock_inner(&self.inner)?;
+        inner.workers.remove(&worker_id);
         Ok(())
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Submission                                                              */
-    /* ---------------------------------------------------------------------- */
+    // ------------------------------------------------------------------------
+    // Admission
+    // ------------------------------------------------------------------------
 
-    /// Submit a workload.
+    /// Validates, authorizes, reserves, and queues a job.
     ///
-    /// Admission is atomic with resource reservation. A job is never placed
-    /// into the queue if its reservation cannot be established.
+    /// Admission is atomic from the scheduler's perspective:
+    ///
+    /// ```text
+    /// validate
+    ///     ↓
+    /// capability authorization
+    ///     ↓
+    /// deadline check
+    ///     ↓
+    /// aggregate reservation
+    ///     ↓
+    /// ResourceAccounting::reserve
+    ///     ↓
+    /// queue
+    /// ```
     pub fn submit(
         &self,
         spec: JobSpec,
         executor: Arc<dyn JobExecutor>,
-    ) -> QecResult<JobHandle> {
-        self.submit_internal(spec, executor)
-            .map_err(QecError::from)
-    }
+    ) -> SchedulerResult<JobId> {
+        let mut inner = lock_inner(&self.inner)?;
 
-    fn submit_internal(
-        &self,
-        spec: JobSpec,
-        executor: Arc<dyn JobExecutor>,
-    ) -> SchedulerResult<JobHandle> {
-        if self.shutting_down.load(AtomicOrdering::Acquire) {
-            return Err(SchedulerError::SchedulerShuttingDown);
-        }
-
-        if !self.enable_cancellation {
-            return Err(SchedulerError::InvalidConfiguration(
-                "production scheduling requires cancellation".into(),
+        if inner.queue.len() >= MAX_QUEUE_DEPTH {
+            return Err(resource_error(
+                ResourceKind::Operations,
+                (inner.queue.len() + 1) as u128,
+                inner.queue.len() as u128,
+                MAX_QUEUE_DEPTH as u128,
+                "scheduler queue depth exceeded",
             ));
         }
 
-        spec.validate(&self.limits)?;
+        spec.validate(&inner.limits)?;
 
-        if !self.enable_deadlines && spec.deadline.0.is_some() {
-            return Err(SchedulerError::InvalidRequest(
-                "deadlines are disabled by scheduler configuration".into(),
-            ));
-        }
+        (self.authorizer)(spec.capabilities)?;
 
-        if self
-            .running_jobs
-            .load(AtomicOrdering::Acquire)
-            >= self.max_running_jobs as u64
-            && !self.enable_backpressure
-        {
-            return Err(SchedulerError::ResourceLimitExceeded {
-                resource: LimitKind::Parallelism,
-                requested: self.max_running_jobs as u128 + 1,
-                maximum: self.max_running_jobs as u128,
+        if spec.deadline.expired() {
+            return Err(QecError::TimeLimitExceeded {
+                elapsed_nanos: 0,
+                limit_nanos: 0,
+                message:
+                    "job deadline already expired"
+                        .into(),
             });
         }
 
-        (self.authorize)(spec.capabilities)?;
+        let new_reservation =
+            inner
+                .reservations
+                .try_add(
+                    spec.resources,
+                    &inner.limits,
+                )?;
 
-        if spec.deadline.expired() {
-            return Err(SchedulerError::DeadlineExceeded);
+        let job_id =
+            JobId(inner.next_job_id);
+
+        inner.next_job_id =
+            inner
+                .next_job_id
+                .checked_add(1)
+                .ok_or_else(|| {
+                    numerical_error(
+                        "scheduler job identifier overflow",
+                    )
+                })?;
+
+        let sequence = inner.next_sequence;
+
+        inner.next_sequence =
+            inner
+                .next_sequence
+                .checked_add(1)
+                .ok_or_else(|| {
+                    numerical_error(
+                        "scheduler sequence overflow",
+                    )
+                })?;
+
+        /*
+         * External resource accounting occurs before the scheduler commits
+         * its own reservation.
+         */
+        self.accounting
+            .reserve(job_id, spec.resources)?;
+
+        let cancellation =
+            CancellationSource::new();
+
+        let job = JobRecord {
+            spec: spec.clone(),
+            executor,
+            state: JobState::Admitted,
+            cancellation,
+            attempts: 0,
+            queue_sequence: sequence,
+            output: None,
+            last_error: None,
+            worker: None,
+            submitted_at: Instant::now(),
+            started_at: None,
+            completed_at: None,
+            reservation_accounted: true,
+        };
+
+        inner.reservations = new_reservation;
+
+        inner.jobs.insert(job_id, job);
+
+        inner.queue.push(QueueEntry {
+            priority: spec.priority,
+            sequence,
+            job_id,
+        });
+
+        Ok(job_id)
+    }
+
+    // ------------------------------------------------------------------------
+    // Cancellation
+    // ------------------------------------------------------------------------
+
+    /// Cancels a job cooperatively.
+    pub fn cancel(
+        &self,
+        job_id: JobId,
+        reason: CancellationReason,
+    ) -> SchedulerResult<()> {
+        let mut inner = lock_inner(&self.inner)?;
+
+        let terminal = inner
+            .jobs
+            .get(&job_id)
+            .ok_or_else(|| unknown_job(job_id))?
+            .state
+            .is_terminal();
+
+        if terminal {
+            return Ok(());
         }
 
         {
-            let queue = self.queue.lock().map_err(|_| {
-                SchedulerError::InternalInvariantViolation(
-                    "scheduler queue mutex poisoned".into(),
-                )
-            })?;
+            let job = inner
+                .jobs
+                .get_mut(&job_id)
+                .ok_or_else(|| unknown_job(job_id))?;
 
-            if queue.len() >= self.max_queued_jobs {
-                return Err(SchedulerError::QueueFull);
+            job.cancellation
+                .cancel_with_reason(reason);
+
+            if matches!(
+                job.state,
+                JobState::Admitted
+                    | JobState::Validating
+                    | JobState::Paused
+                    | JobState::Resuming
+            ) {
+                job.state = JobState::Cancelled;
+                job.completed_at =
+                    Some(Instant::now());
             }
         }
 
-        // Reserve before insertion into the queue.
-        self.accounting
-            .reserve(spec.resources, &self.limits)?;
-
-        let id = JobId::new(
-            self.next_job_id
-                .fetch_add(1, AtomicOrdering::Relaxed),
-        );
-
-        let sequence = self
-            .next_sequence
-            .fetch_add(1, AtomicOrdering::Relaxed);
-
-        let cancellation = CancellationToken::new();
-
-        let state = Arc::new(Mutex::new(JobState::Created));
-
-        if let Ok(mut value) = state.lock() {
-            *value = JobState::Validating;
-        }
-
-        let record = JobRecord {
-            spec: spec.clone(),
-            state: state.clone(),
-            cancellation: cancellation.clone(),
-            submitted_at: Instant::now(),
-            attempt: 0,
-        };
-
-        {
-            let mut jobs = self.jobs.lock().map_err(|_| {
-                self.accounting.release(spec.resources);
-
-                SchedulerError::InternalInvariantViolation(
-                    "job registry mutex poisoned".into(),
-                )
-            })?;
-
-            jobs.insert(id, record);
-        }
-
-        {
-            let mut queue = self.queue.lock().map_err(|_| {
-                self.accounting.release(spec.resources);
-
-                SchedulerError::InternalInvariantViolation(
-                    "scheduler queue mutex poisoned".into(),
-                )
-            })?;
-
-            queue.push(QueueItem {
-                id,
-                spec,
-                executor,
-                cancellation,
-                state: state.clone(),
-                sequence,
-                attempt: 0,
+        let should_release = inner
+            .jobs
+            .get(&job_id)
+            .map_or(false, |job| {
+                job.state == JobState::Cancelled
+                    && job.reservation_accounted
             });
+
+        if should_release {
+            release_job_resources(
+                &self.accounting,
+                &mut inner,
+                job_id,
+            )?;
         }
 
-        if let Ok(mut value) = state.lock() {
-            *value = JobState::Admitted;
-        }
-
-        if let Ok(mut metrics) = self.metrics.lock() {
-            metrics.submitted = metrics.submitted.saturating_add(1);
-            metrics.admitted = metrics.admitted.saturating_add(1);
-        }
-
-        Ok(JobHandle {
-            id,
-            state,
-            cancellation: self
-                .jobs
-                .lock()
-                .ok()
-                .and_then(|jobs| jobs.get(&id).map(|job| job.cancellation.clone()))
-                .unwrap_or_default(),
-        })
+        Ok(())
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Queue execution                                                         */
-    /* ---------------------------------------------------------------------- */
+    /// Ordinary user-requested cancellation.
+    pub fn cancel_requested(
+        &self,
+        job_id: JobId,
+    ) -> SchedulerResult<()> {
+        self.cancel(
+            job_id,
+            CancellationReason::Requested,
+        )
+    }
 
-    /// Run the highest-priority compatible queued job.
+    // ------------------------------------------------------------------------
+    // Execution
+    // ------------------------------------------------------------------------
+
+    /// Runs the next eligible job on a registered worker.
+    ///
+    /// The executor runs completely outside the scheduler mutex.
     pub fn run_next(
         &self,
         worker_id: WorkerId,
-    ) -> QecResult<Option<JobOutput>> {
-        self.run_next_internal(worker_id)
-            .map_err(QecError::from)
-    }
+    ) -> SchedulerResult<Option<JobId>> {
+        let selected = {
+            let mut inner = lock_inner(&self.inner)?;
 
-    fn run_next_internal(
-        &self,
-        worker_id: WorkerId,
-    ) -> SchedulerResult<Option<JobOutput>> {
-        if self.shutting_down.load(AtomicOrdering::Acquire) {
-            return Err(SchedulerError::SchedulerShuttingDown);
-        }
-
-        let worker_mode = {
-            let workers = self.workers.lock().map_err(|_| {
-                SchedulerError::InternalInvariantViolation(
-                    "worker registry mutex poisoned".into(),
-                )
-            })?;
-
-            let worker = workers
+            if !inner
+                .workers
                 .get(&worker_id)
-                .ok_or(SchedulerError::WorkerUnavailable)?;
-
-            if worker.busy {
-                return Err(SchedulerError::WorkerUnavailable);
+                .copied()
+                .unwrap_or(false)
+            {
+                return Err(
+                    QecError::BackendFailure {
+                        backend:
+                            "scheduler".into(),
+                        message: format!(
+                            "worker {:?} is not registered",
+                            worker_id
+                        ),
+                    },
+                );
             }
 
-            worker.mode
-        };
+            let mut deferred =
+                Vec::new();
 
-        let item = self.take_next_compatible(worker_mode)?;
+            let selected_entry =
+                loop {
+                    let Some(entry) =
+                        inner.queue.pop()
+                    else {
+                        break None;
+                    };
 
-        let Some(item) = item else {
-            return Ok(None);
-        };
+                    let eligible =
+                        inner
+                            .jobs
+                            .get(&entry.job_id)
+                            .map_or(
+                                false,
+                                |job| {
+                                    matches!(
+                                        job.state,
+                                        JobState::Admitted
+                                            | JobState::Resuming
+                                    )
+                                },
+                            );
 
-        self.mark_worker_running(worker_id, item.id)?;
+                    if eligible {
+                        break Some(entry);
+                    }
 
-        self.transition(item.id, JobState::Running)?;
+                    deferred.push(entry);
+                };
 
-        self.running_jobs
-            .fetch_add(1, AtomicOrdering::AcqRel);
+            for entry in deferred {
+                inner.queue.push(entry);
+            }
 
-        if let Ok(mut metrics) = self.metrics.lock() {
-            metrics.started = metrics.started.saturating_add(1);
-        }
+            let Some(entry) = selected_entry
+            else {
+                return Ok(None);
+            };
 
-        let context = ExecutionContext {
-            job_id: item.id,
-            worker_id,
-            mode: item.spec.mode,
-            resources: item.spec.resources,
-            deadline: item.spec.deadline,
-            cancellation: item.cancellation.clone(),
-            deterministic: item.spec.deterministic || self.deterministic,
-            attempt: item.attempt,
-        };
+            /*
+             * Cancellation/deadline checks occur before taking a worker lease.
+             */
+            let pre_cancelled =
+                inner
+                    .jobs
+                    .get(&entry.job_id)
+                    .map_or(false, |job| {
+                        job.cancellation.is_cancelled()
+                    });
 
-        let result = if context.check().is_err() {
-            Err(SchedulerError::CancellationRequested)
-        } else {
-            item.executor.execute(context)
-        };
+            let pre_expired =
+                inner
+                    .jobs
+                    .get(&entry.job_id)
+                    .map_or(false, |job| {
+                        job.spec.deadline.expired()
+                    });
 
-        self.running_jobs
-            .fetch_sub(1, AtomicOrdering::AcqRel);
+            if pre_cancelled
+                || pre_expired
+            {
+                let state =
+                    if pre_expired {
+                        JobState::TimedOut
+                    } else {
+                        JobState::Cancelled
+                    };
 
-        self.mark_worker_idle(worker_id, item.id)?;
+                {
+                    let job = inner
+                        .jobs
+                        .get_mut(&entry.job_id)
+                        .ok_or_else(|| {
+                            unknown_job(entry.job_id)
+                        })?;
 
-        match result {
-            Ok(output) => {
-                self.accounting.release(item.spec.resources);
-
-                self.transition(item.id, JobState::Completed)?;
-
-                if let Ok(mut metrics) = self.metrics.lock() {
-                    metrics.completed = metrics.completed.saturating_add(1);
+                    job.state = state;
+                    job.completed_at =
+                        Some(Instant::now());
                 }
 
-                Ok(Some(output))
+                release_job_resources(
+                    &self.accounting,
+                    &mut inner,
+                    entry.job_id,
+                )?;
+
+                return Ok(Some(entry.job_id));
+            }
+
+            let (
+                executor,
+                context,
+            ) = {
+                let job = inner
+                    .jobs
+                    .get_mut(&entry.job_id)
+                    .ok_or_else(|| {
+                        unknown_job(entry.job_id)
+                    })?;
+
+                let attempt =
+                    job.attempts;
+
+                job.attempts =
+                    job.attempts
+                        .checked_add(1)
+                        .ok_or_else(|| {
+                            numerical_error(
+                                "scheduler attempt overflow",
+                            )
+                        })?;
+
+                job.state =
+                    JobState::Running;
+
+                job.worker =
+                    Some(worker_id);
+
+                if job.started_at.is_none()
+                {
+                    job.started_at =
+                        Some(Instant::now());
+                }
+
+                let context =
+                    ExecutionContext {
+                        job_id: entry.job_id,
+                        worker_id,
+                        mode: job.spec.mode,
+                        resources:
+                            job.spec.resources,
+                        deadline:
+                            job.spec.deadline,
+                        cancellation:
+                            job.cancellation
+                                .token(),
+                        deterministic:
+                            job.spec
+                                .deterministic,
+                        attempt,
+                    };
+
+                (
+                    Arc::clone(&job.executor),
+                    context,
+                )
+            };
+
+            inner
+                .workers
+                .insert(worker_id, false);
+
+            (
+                entry.job_id,
+                executor,
+                context,
+            )
+        };
+
+        let (
+            job_id,
+            executor,
+            context,
+        ) = selected;
+
+        /*
+         * The executor is completely outside the scheduler lock.
+         */
+        let execution_result =
+            context
+                .check()
+                .and_then(|_| {
+                    executor.execute(
+                        context.clone(),
+                    )
+                });
+
+        let mut inner =
+            lock_inner(&self.inner)?;
+
+        /*
+         * Worker becomes available again regardless of execution result.
+         */
+        inner
+            .workers
+            .insert(worker_id, true);
+
+        match execution_result {
+            Ok(output) => {
+                {
+                    let job = inner
+                        .jobs
+                        .get_mut(&job_id)
+                        .ok_or_else(|| {
+                            unknown_job(job_id)
+                        })?;
+
+                    job.output =
+                        Some(output);
+
+                    job.last_error =
+                        None;
+
+                    job.worker = None;
+
+                    job.state =
+                        JobState::Completed;
+
+                    job.completed_at =
+                        Some(Instant::now());
+                }
+
+                release_job_resources(
+                    &self.accounting,
+                    &mut inner,
+                    job_id,
+                )?;
             }
 
             Err(error) => {
-                self.handle_failure(item, error)?;
+                let (
+                    cancelled,
+                    timed_out,
+                    retry,
+                    priority,
+                ) = {
+                    let job = inner
+                        .jobs
+                        .get_mut(&job_id)
+                        .ok_or_else(|| {
+                            unknown_job(job_id)
+                        })?;
 
-                Ok(None)
-            }
-        }
-    }
+                    job.last_error =
+                        Some(error.clone());
 
-    fn take_next_compatible(
-        &self,
-        worker_mode: ExecutionMode,
-    ) -> SchedulerResult<Option<QueueItem>> {
-        let mut queue = self.queue.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "scheduler queue mutex poisoned".into(),
-            )
-        })?;
+                    job.worker = None;
 
-        let mut deferred = Vec::new();
-        let mut selected = None;
+                    let timed_out =
+                        matches!(
+                            error,
+                            QecError::TimeLimitExceeded {
+                                ..
+                            }
+                        );
 
-        while let Some(item) = queue.pop() {
-            if self.item_compatible_with_worker(&item, worker_mode) {
-                selected = Some(item);
-                break;
-            }
+                    let cancelled =
+                        matches!(
+                            error,
+                            QecError::CancellationRequested {
+                                ..
+                            }
+                        ) || job
+                            .cancellation
+                            .is_cancelled();
 
-            deferred.push(item);
-        }
+                    let retry =
+                        !cancelled
+                            && !timed_out
+                            && job.attempts
+                                <= job
+                                    .spec
+                                    .max_retries;
 
-        for item in deferred {
-            queue.push(item);
-        }
+                    (
+                        cancelled,
+                        timed_out,
+                        retry,
+                        job.spec.priority,
+                    )
+                };
 
-        Ok(selected)
-    }
+                if cancelled
+                    || timed_out
+                {
+                    {
+                        let job = inner
+                            .jobs
+                            .get_mut(&job_id)
+                            .ok_or_else(
+                                || {
+                                    unknown_job(
+                                        job_id,
+                                    )
+                                },
+                            )?;
 
-    fn item_compatible_with_worker(
-        &self,
-        item: &QueueItem,
-        worker_mode: ExecutionMode,
-    ) -> bool {
-        match item.spec.mode {
-            ExecutionMode::SingleThread => true,
+                        job.state =
+                            if timed_out {
+                                JobState::TimedOut
+                            } else {
+                                JobState::Cancelled
+                            };
 
-            ExecutionMode::MultiThread => matches!(
-                worker_mode,
-                ExecutionMode::MultiThread
-                    | ExecutionMode::MultiProcess
-                    | ExecutionMode::Distributed
-                    | ExecutionMode::Accelerated
-            ),
+                        job.completed_at =
+                            Some(Instant::now());
+                    }
 
-            ExecutionMode::MultiProcess => matches!(
-                worker_mode,
-                ExecutionMode::MultiProcess | ExecutionMode::Distributed
-            ),
+                    release_job_resources(
+                        &self.accounting,
+                        &mut inner,
+                        job_id,
+                    )?;
+                } else if retry {
+                    let sequence =
+                        inner
+                            .next_sequence
+                            .checked_add(1)
+                            .ok_or_else(
+                                || {
+                                    numerical_error(
+                                        "scheduler retry sequence overflow",
+                                    )
+                                },
+                            )?;
 
-            ExecutionMode::Distributed => {
-                matches!(worker_mode, ExecutionMode::Distributed)
-            }
+                    inner.next_sequence =
+                        sequence;
 
-            ExecutionMode::Accelerated => {
-                matches!(worker_mode, ExecutionMode::Accelerated)
-            }
-        }
-    }
+                    {
+                        let job = inner
+                            .jobs
+                            .get_mut(&job_id)
+                            .ok_or_else(
+                                || {
+                                    unknown_job(
+                                        job_id,
+                                    )
+                                },
+                            )?;
 
-    /* ---------------------------------------------------------------------- */
-    /* Failure / retry                                                         */
-    /* ---------------------------------------------------------------------- */
+                        job.state =
+                            JobState::Admitted;
 
-    fn handle_failure(
-        &self,
-        item: QueueItem,
-        error: SchedulerError,
-    ) -> SchedulerResult<()> {
-        self.accounting.release(item.spec.resources);
+                        job.queue_sequence =
+                            sequence;
+                    }
 
-        if matches!(
-            error,
-            SchedulerError::CancellationRequested
-                | SchedulerError::DeadlineExceeded
-        ) {
-            let state = if matches!(
-                error,
-                SchedulerError::DeadlineExceeded
-            ) {
-                JobState::TimedOut
-            } else {
-                JobState::Cancelled
-            };
-
-            self.transition(item.id, state)?;
-
-            if let Ok(mut metrics) = self.metrics.lock() {
-                if state == JobState::TimedOut {
-                    metrics.timed_out = metrics.timed_out.saturating_add(1);
+                    inner.queue.push(
+                        QueueEntry {
+                            priority,
+                            sequence,
+                            job_id,
+                        },
+                    );
                 } else {
-                    metrics.cancelled = metrics.cancelled.saturating_add(1);
+                    {
+                        let job = inner
+                            .jobs
+                            .get_mut(&job_id)
+                            .ok_or_else(
+                                || {
+                                    unknown_job(
+                                        job_id,
+                                    )
+                                },
+                            )?;
+
+                        job.state =
+                            JobState::Failed;
+
+                        job.completed_at =
+                            Some(Instant::now);
+                    }
+
+                    release_job_resources(
+                        &self.accounting,
+                        &mut inner,
+                        job_id,
+                    )?;
                 }
             }
-
-            return Ok(());
         }
 
-        if item.attempt < item.spec.max_retries {
-            let next_attempt = item.attempt.saturating_add(1);
-
-            if item.spec.checkpointable {
-                self.transition(item.id, JobState::Checkpointing)?;
-
-                (self.checkpoint)(
-                    item.id,
-                    CheckpointReason::Retry,
-                )
-                .map_err(|error| {
-                    SchedulerError::CheckpointFailed(error.to_string())
-                })?;
-
-                if let Ok(mut metrics) = self.metrics.lock() {
-                    metrics.checkpointed =
-                        metrics.checkpointed.saturating_add(1);
-                }
-
-                self.transition(item.id, JobState::Paused)?;
-                self.transition(item.id, JobState::Resuming)?;
-
-                if let Ok(mut metrics) = self.metrics.lock() {
-                    metrics.resumed = metrics.resumed.saturating_add(1);
-                }
-            }
-
-            let sequence = self
-                .next_sequence
-                .fetch_add(1, AtomicOrdering::Relaxed);
-
-            let cancellation = CancellationToken::new();
-
-            let state = {
-                let jobs = self.jobs.lock().map_err(|_| {
-                    SchedulerError::InternalInvariantViolation(
-                        "job registry mutex poisoned".into(),
-                    )
-                })?;
-
-                jobs.get(&item.id)
-                    .map(|record| record.state.clone())
-                    .ok_or_else(|| {
-                        SchedulerError::InternalInvariantViolation(
-                            "retry target job missing".into(),
-                        )
-                    })?
-            };
-
-            if let Ok(mut value) = state.lock() {
-                *value = JobState::Admitted;
-            }
-
-            self.accounting
-                .reserve(item.spec.resources, &self.limits)?;
-
-            {
-                let mut queue = self.queue.lock().map_err(|_| {
-                    self.accounting.release(item.spec.resources);
-
-                    SchedulerError::InternalInvariantViolation(
-                        "scheduler queue mutex poisoned".into(),
-                    )
-                })?;
-
-                queue.push(QueueItem {
-                    id: item.id,
-                    spec: item.spec.clone(),
-                    executor: item.executor,
-                    cancellation,
-                    state,
-                    sequence,
-                    attempt: next_attempt,
-                });
-            }
-
-            if let Ok(mut jobs) = self.jobs.lock() {
-                if let Some(record) = jobs.get_mut(&item.id) {
-                    record.attempt = next_attempt;
-                }
-            }
-
-            if let Ok(mut metrics) = self.metrics.lock() {
-                metrics.retries = metrics.retries.saturating_add(1);
-            }
-
-            return Ok(());
-        }
-
-        self.transition(item.id, JobState::Failed)?;
-
-        if let Ok(mut metrics) = self.metrics.lock() {
-            metrics.failed = metrics.failed.saturating_add(1);
-        }
-
-        let _ = error;
-
-        Ok(())
+        Ok(Some(job_id))
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Lifecycle                                                               */
-    /* ---------------------------------------------------------------------- */
+    // ------------------------------------------------------------------------
+    // Status
+    // ------------------------------------------------------------------------
 
-    fn transition(
+    /// Returns a stable public job-status snapshot.
+    pub fn status(
         &self,
         job_id: JobId,
-        next: JobState,
-    ) -> SchedulerResult<()> {
-        let jobs = self.jobs.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "job registry mutex poisoned".into(),
-            )
-        })?;
+    ) -> SchedulerResult<JobStatus> {
+        let inner = lock_inner(&self.inner)?;
 
-        let record = jobs
+        let job = inner
+            .jobs
             .get(&job_id)
-            .ok_or_else(|| {
-                SchedulerError::InternalInvariantViolation(
-                    "job not found during lifecycle transition".into(),
-                )
-            })?;
+            .ok_or_else(|| unknown_job(job_id))?;
 
-        let mut state = record.state.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "job state mutex poisoned".into(),
-            )
-        })?;
-
-        let current = *state;
-
-        if !Self::valid_transition(current, next) {
-            return Err(SchedulerError::InternalInvariantViolation(
-                format!(
-                    "invalid scheduler transition: {:?} -> {:?}",
-                    current, next
-                ),
-            ));
-        }
-
-        *state = next;
-
-        Ok(())
+        Ok(JobStatus {
+            job_id,
+            state: job.state,
+            attempts: job.attempts,
+            worker: job.worker,
+            output: job.output.clone(),
+            last_error: job
+                .last_error
+                .as_ref()
+                .map(ToString::to_string),
+            submitted_at: job.submitted_at,
+            started_at: job.started_at,
+            completed_at: job.completed_at,
+        })
     }
 
-    const fn valid_transition(
-        current: JobState,
-        next: JobState,
-    ) -> bool {
-        use JobState::*;
-
-        match (current, next) {
-            (Created, Validating) => true,
-
-            (Validating, Admitted) => true,
-            (Validating, Rejected) => true,
-            (Validating, Cancelled) => true,
-
-            (Admitted, Running) => true,
-            (Admitted, Cancelled) => true,
-
-            (Running, Completed) => true,
-            (Running, Failed) => true,
-            (Running, Cancelled) => true,
-            (Running, TimedOut) => true,
-            (Running, Checkpointing) => true,
-
-            (Checkpointing, Paused) => true,
-            (Checkpointing, Failed) => true,
-            (Checkpointing, Cancelled) => true,
-
-            (Paused, Resuming) => true,
-            (Paused, Cancelled) => true,
-
-            (Resuming, Running) => true,
-            (Resuming, Failed) => true,
-            (Resuming, Cancelled) => true,
-
-            _ if current.terminal() => false,
-
-            _ => false,
-        }
-    }
-
-    /* ---------------------------------------------------------------------- */
-    /* Cancellation                                                            */
-    /* ---------------------------------------------------------------------- */
-
-    pub fn cancel(&self, job_id: JobId) -> SchedulerResult<()> {
-        let jobs = self.jobs.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "job registry mutex poisoned".into(),
-            )
-        })?;
-
-        let record = jobs
-            .get(&job_id)
-            .ok_or_else(|| {
-                SchedulerError::InvalidRequest(
-                    "unknown scheduler job".into(),
-                )
-            })?;
-
-        record.cancellation.cancel();
-
-        let state = record.state.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "job state mutex poisoned".into(),
-            )
-        })?;
-
-        if state.terminal() {
-            return Ok(());
-        }
-
-        drop(state);
-
-        self.transition(job_id, JobState::Cancelled)?;
-
-        if let Ok(mut metrics) = self.metrics.lock() {
-            metrics.cancelled = metrics.cancelled.saturating_add(1);
-        }
-
-        Ok(())
-    }
-
-    /* ---------------------------------------------------------------------- */
-    /* Checkpoint                                                              */
-    /* ---------------------------------------------------------------------- */
-
-    pub fn checkpoint(
-        &self,
-        job_id: JobId,
-        reason: CheckpointReason,
-    ) -> SchedulerResult<()> {
-        let jobs = self.jobs.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "job registry mutex poisoned".into(),
-            )
-        })?;
-
-        let record = jobs
-            .get(&job_id)
-            .ok_or_else(|| {
-                SchedulerError::InvalidRequest(
-                    "unknown scheduler job".into(),
-                )
-            })?;
-
-        if !record.spec.checkpointable {
-            return Err(SchedulerError::CheckpointRequired);
-        }
-
-        drop(jobs);
-
-        self.transition(job_id, JobState::Checkpointing)?;
-
-        if let Err(error) = (self.checkpoint)(job_id, reason) {
-            let _ = self.transition(job_id, JobState::Failed);
-
-            return Err(SchedulerError::CheckpointFailed(
-                error.to_string(),
-            ));
-        }
-
-        if let Ok(mut metrics) = self.metrics.lock() {
-            metrics.checkpointed = metrics.checkpointed.saturating_add(1);
-        }
-
-        self.transition(job_id, JobState::Paused)
-    }
-
-    /// Resume a paused job.
+    /// Returns the cancellation token for an admitted job.
     ///
-    /// The actual work is requeued by the caller/runtime because the scheduler
-    /// deliberately does not manufacture an executor or checkpoint payload.
-    pub fn mark_resuming(
+    /// Executors should use this token rather than creating a second
+    /// cancellation mechanism.
+    pub fn cancellation_token(
+        &self,
+        job_id: JobId,
+    ) -> SchedulerResult<CancellationToken> {
+        let inner = lock_inner(&self.inner)?;
+
+        let job = inner
+            .jobs
+            .get(&job_id)
+            .ok_or_else(|| unknown_job(job_id))?;
+
+        Ok(job.cancellation.token())
+    }
+
+    // ------------------------------------------------------------------------
+    // Checkpoint lifecycle
+    // ------------------------------------------------------------------------
+
+    /// Marks a running job as checkpointing.
+    ///
+    /// Serialization remains owned by `checkpoint.rs`.
+    pub fn begin_checkpoint(
         &self,
         job_id: JobId,
     ) -> SchedulerResult<()> {
-        self.transition(job_id, JobState::Resuming)
-    }
+        let mut inner =
+            lock_inner(&self.inner)?;
 
-    /* ---------------------------------------------------------------------- */
-    /* Shutdown                                                               */
-    /* ---------------------------------------------------------------------- */
+        let job = inner
+            .jobs
+            .get_mut(&job_id)
+            .ok_or_else(|| unknown_job(job_id))?;
 
-    /// Prevent new submissions and cancel queued/running work.
-    pub fn shutdown(&self) -> SchedulerResult<()> {
-        self.shutting_down
-            .store(true, AtomicOrdering::Release);
-
-        let jobs = self.jobs.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "job registry mutex poisoned".into(),
-            )
-        })?;
-
-        for record in jobs.values() {
-            if let Ok(state) = record.state.lock() {
-                if !state.terminal() {
-                    record.cancellation.cancel();
-                }
-            }
+        if job.state != JobState::Running {
+            return Err(invalid_transition(
+                job.state,
+                JobState::Checkpointing,
+            ));
         }
+
+        if !job.spec.checkpointable {
+            return Err(capability_error(
+                "checkpoint",
+                "begin_checkpoint",
+            ));
+        }
+
+        job.state =
+            JobState::Checkpointing;
 
         Ok(())
     }
 
-    #[must_use]
-    pub fn is_shutting_down(&self) -> bool {
-        self.shutting_down.load(AtomicOrdering::Acquire)
+    /// Moves a successfully checkpointed job to paused state.
+    pub fn pause_after_checkpoint(
+        &self,
+        job_id: JobId,
+    ) -> SchedulerResult<()> {
+        let mut inner =
+            lock_inner(&self.inner)?;
+
+        let job = inner
+            .jobs
+            .get_mut(&job_id)
+            .ok_or_else(|| unknown_job(job_id))?;
+
+        if job.state
+            != JobState::Checkpointing
+        {
+            return Err(invalid_transition(
+                job.state,
+                JobState::Paused,
+            ));
+        }
+
+        job.state =
+            JobState::Paused;
+
+        job.worker = None;
+
+        Ok(())
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Inspection                                                              */
-    /* ---------------------------------------------------------------------- */
+    /// Requeues a paused job.
+    pub fn resume(
+        &self,
+        job_id: JobId,
+    ) -> SchedulerResult<()> {
+        let mut inner =
+            lock_inner(&self.inner)?;
 
+        let (
+            priority,
+            deadline_expired,
+        ) = {
+            let job = inner
+                .jobs
+                .get(&job_id)
+                .ok_or_else(|| unknown_job(job_id))?;
+
+            if job.state != JobState::Paused {
+                return Err(invalid_transition(
+                    job.state,
+                    JobState::Resuming,
+                ));
+            }
+
+            if job.cancellation.is_cancelled() {
+                return Err(
+                    QecError::CancellationRequested {
+                        message:
+                            "cannot resume a cancelled job"
+                                .into(),
+                    },
+                );
+            }
+
+            (
+                job.spec.priority,
+                job.spec.deadline.expired(),
+            )
+        };
+
+        if deadline_expired {
+            {
+                let job = inner
+                    .jobs
+                    .get_mut(&job_id)
+                    .ok_or_else(|| {
+                        unknown_job(job_id)
+                    })?;
+
+                job.state =
+                    JobState::TimedOut;
+
+                job.completed_at =
+                    Some(Instant::now());
+            }
+
+            release_job_resources(
+                &self.accounting,
+                &mut inner,
+                job_id,
+            )?;
+
+            return Ok(());
+        }
+
+        let sequence =
+            inner.next_sequence;
+
+        inner.next_sequence =
+            sequence
+                .checked_add(1)
+                .ok_or_else(|| {
+                    numerical_error(
+                        "scheduler resume sequence overflow",
+                    )
+                })?;
+
+        {
+            let job = inner
+                .jobs
+                .get_mut(&job_id)
+                .ok_or_else(|| unknown_job(job_id))?;
+
+            job.state =
+                JobState::Resuming;
+
+            job.queue_sequence =
+                sequence;
+        }
+
+        inner.queue.push(
+            QueueEntry {
+                priority,
+                sequence,
+                job_id,
+            },
+        );
+
+        Ok(())
+    }
+
+    // ------------------------------------------------------------------------
+    // Introspection
+    // ------------------------------------------------------------------------
+
+    /// Returns the scheduler's current aggregate reservation.
     #[must_use]
-    pub fn job_state(&self, job_id: JobId) -> Option<JobState> {
-        self.jobs
+    pub fn reservation_snapshot(
+        &self,
+    ) -> ReservationSnapshot {
+        self.inner
             .lock()
-            .ok()
-            .and_then(|jobs| jobs.get(&job_id).map(|job| {
-                job.state
-                    .lock()
-                    .map(|state| *state)
-                    .unwrap_or(JobState::Failed)
-            }))
+            .unwrap_or_else(
+                |poisoned| poisoned.into_inner(),
+            )
+            .reservations
     }
 
+    /// Returns the number of tracked jobs.
+    #[must_use]
+    pub fn job_count(&self) -> usize {
+        self.inner
+            .lock()
+            .unwrap_or_else(
+                |poisoned| poisoned.into_inner(),
+            )
+            .jobs
+            .len()
+    }
+
+    /// Returns the current queue depth.
     #[must_use]
     pub fn queue_depth(&self) -> usize {
-        self.queue
+        self.inner
             .lock()
-            .map(|queue| queue.len())
-            .unwrap_or(0)
-    }
-
-    #[must_use]
-    pub fn running_jobs(&self) -> usize {
-        self.running_jobs
-            .load(AtomicOrdering::Acquire)
-            .try_into()
-            .unwrap_or(usize::MAX)
-    }
-
-    #[must_use]
-    pub fn resource_snapshot(&self) -> ResourceReservation {
-        self.accounting.snapshot()
-    }
-
-    #[must_use]
-    pub fn metrics(&self) -> SchedulerMetrics {
-        self.metrics
-            .lock()
-            .map(|metrics| *metrics)
-            .unwrap_or_default()
-    }
-
-    #[must_use]
-    pub fn limits(&self) -> QecLimits {
-        self.limits
-    }
-
-    #[must_use]
-    pub fn max_queued_jobs(&self) -> usize {
-        self.max_queued_jobs
-    }
-
-    #[must_use]
-    pub fn max_running_jobs(&self) -> usize {
-        self.max_running_jobs
-    }
-
-    fn mark_worker_running(
-        &self,
-        worker_id: WorkerId,
-        job_id: JobId,
-    ) -> SchedulerResult<()> {
-        let mut workers = self.workers.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "worker registry mutex poisoned".into(),
+            .unwrap_or_else(
+                |poisoned| poisoned.into_inner(),
             )
-        })?;
-
-        let worker = workers
-            .get_mut(&worker_id)
-            .ok_or(SchedulerError::WorkerUnavailable)?;
-
-        if worker.busy {
-            return Err(SchedulerError::WorkerUnavailable);
-        }
-
-        worker.busy = true;
-        worker.current_job = Some(job_id);
-
-        Ok(())
-    }
-
-    fn mark_worker_idle(
-        &self,
-        worker_id: WorkerId,
-        job_id: JobId,
-    ) -> SchedulerResult<()> {
-        let mut workers = self.workers.lock().map_err(|_| {
-            SchedulerError::InternalInvariantViolation(
-                "worker registry mutex poisoned".into(),
-            )
-        })?;
-
-        let worker = workers
-            .get_mut(&worker_id)
-            .ok_or(SchedulerError::WorkerUnavailable)?;
-
-        if worker.current_job != Some(job_id) {
-            return Err(SchedulerError::InternalInvariantViolation(
-                "worker/job ownership mismatch".into(),
-            ));
-        }
-
-        worker.busy = false;
-        worker.current_job = None;
-
-        Ok(())
+            .queue
+            .len()
     }
 }
 
-/* ========================================================================== */
-/* Tests                                                                      */
-/* ========================================================================== */
+// ============================================================================
+// Helpers
+// ============================================================================
+
+fn lock_inner(
+    inner: &Arc<Mutex<SchedulerInner>>,
+) -> SchedulerResult<
+    std::sync::MutexGuard<'_, SchedulerInner>,
+> {
+    inner.lock().map_err(|_| {
+        QecError::InternalInvariantViolation {
+            invariant:
+                "scheduler mutex integrity".into(),
+            message:
+                "scheduler state mutex was poisoned"
+                    .into(),
+        }
+    })
+}
+
+fn release_job_resources(
+    accounting: &Arc<dyn ResourceAccounting>,
+    inner: &mut SchedulerInner,
+    job_id: JobId,
+) -> SchedulerResult<()> {
+    let request = {
+        let job = inner
+            .jobs
+            .get(&job_id)
+            .ok_or_else(|| unknown_job(job_id))?;
+
+        if !job.reservation_accounted {
+            return Ok(());
+        }
+
+        job.spec.resources
+    };
+
+    accounting.release(job_id, request)?;
+
+    inner.reservations =
+        inner.reservations.subtract(request);
+
+    if let Some(job) =
+        inner.jobs.get_mut(&job_id)
+    {
+        job.reservation_accounted = false;
+    }
+
+    Ok(())
+}
+
+fn unknown_job(job_id: JobId) -> QecError {
+    QecError::InvalidInput {
+        message: format!(
+            "unknown scheduler job id {}",
+            job_id.get()
+        ),
+    }
+}
+
+fn invalid_transition(
+    from: JobState,
+    to: JobState,
+) -> QecError {
+    QecError::InvalidInput {
+        message: format!(
+            "invalid scheduler state transition: {from:?} -> {to:?}"
+        ),
+    }
+}
+
+fn capability_error(
+    capability: &str,
+    operation: &str,
+) -> QecError {
+    QecError::CapabilityDenied {
+        capability: capability.into(),
+        operation: operation.into(),
+        message: format!(
+            "capability {capability} is required for {operation}"
+        ),
+    }
+}
+
+fn numerical_error(
+    message: &str,
+) -> QecError {
+    QecError::NumericalFailure {
+        operation:
+            NumericalOperation::Accumulation,
+        message: message.into(),
+    }
+}
+
+fn resource_error(
+    resource: ResourceKind,
+    requested: u128,
+    current: u128,
+    limit: u128,
+    message: &str,
+) -> QecError {
+    QecError::ResourceLimitExceeded {
+        resource,
+        requested,
+        current,
+        limit,
+        message: message.into(),
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -2130,8 +2125,9 @@ mod tests {
             context.check()?;
 
             Ok(JobOutput {
-                success: true,
-                ..Default::default()
+                payload: vec![1, 2, 3],
+                fingerprint:
+                    Some("successful-test".into()),
             })
         }
     }
@@ -2143,227 +2139,269 @@ mod tests {
             &self,
             _context: ExecutionContext,
         ) -> SchedulerResult<JobOutput> {
-            Err(SchedulerError::ExecutorFailed(
-                "intentional test failure".into(),
-            ))
+            Err(QecError::BackendFailure {
+                backend: "scheduler-test".into(),
+                message:
+                    "intentional test failure"
+                        .into(),
+            })
         }
     }
 
-    fn spec() -> JobSpec {
+    fn spec(
+        priority: Priority,
+    ) -> JobSpec {
         JobSpec {
             kind: JobKind::Decode,
-            priority: Priority::Normal,
+            priority,
             deadline: Deadline::none(),
             resources: ResourceRequest {
                 memory_bytes: 1024,
                 parallel_workers: 1,
-                decoder_iterations: 100,
+                decoder_iterations: 1,
+                partitions: 1,
             },
-            mode: ExecutionMode::SingleThread,
-            deterministic: true,
+            mode:
+                ExecutionMode::SingleThread,
+            deterministic: false,
             checkpointable: false,
-            capabilities: CapabilityRequirement {
-                decode: true,
-                deterministic: true,
-                ..CapabilityRequirement::none()
-            },
+            capabilities:
+                CapabilityRequirement {
+                    decode: true,
+                    ..CapabilityRequirement::none()
+                },
             max_retries: 0,
         }
     }
 
     #[test]
-    fn admission_reserves_resources() {
-        let scheduler = QecScheduler::new(QecLimits::default()).unwrap();
-
-        let handle = scheduler
-            .submit(spec(), Arc::new(SuccessfulExecutor))
-            .unwrap();
-
-        assert_eq!(handle.state(), JobState::Admitted);
-
-        let snapshot = scheduler.resource_snapshot();
-
-        assert_eq!(snapshot.memory_bytes, 1024);
-        assert_eq!(snapshot.parallel_workers, 1);
-    }
-
-    #[test]
-    fn successful_execution_releases_resources() {
-        let scheduler = QecScheduler::new(QecLimits::default()).unwrap();
+    fn higher_priority_runs_first() {
+        let scheduler =
+            Scheduler::new(
+                QecLimits::default(),
+            )
+            .expect("valid limits");
 
         scheduler
             .register_worker(
                 WorkerId::new(1),
-                ExecutionMode::SingleThread,
             )
-            .unwrap();
+            .expect("worker");
 
-        let handle = scheduler
-            .submit(spec(), Arc::new(SuccessfulExecutor))
-            .unwrap();
+        let low = scheduler
+            .submit(
+                spec(Priority::Low),
+                Arc::new(
+                    SuccessfulExecutor,
+                ),
+            )
+            .expect("low");
 
-        let output = scheduler
+        let high = scheduler
+            .submit(
+                spec(Priority::High),
+                Arc::new(
+                    SuccessfulExecutor,
+                ),
+            )
+            .expect("high");
+
+        let ran = scheduler
             .run_next(WorkerId::new(1))
-            .unwrap()
-            .unwrap();
+            .expect("run")
+            .expect("job");
 
-        assert!(output.success);
-        assert_eq!(handle.state(), JobState::Completed);
+        assert_eq!(ran, high);
 
-        let snapshot = scheduler.resource_snapshot();
-
-        assert_eq!(snapshot.memory_bytes, 0);
-        assert_eq!(snapshot.parallel_workers, 0);
+        assert_eq!(
+            scheduler
+                .status(low)
+                .expect("status")
+                .state,
+            JobState::Admitted
+        );
     }
 
     #[test]
-    fn cancellation_is_propagated() {
-        let scheduler = QecScheduler::new(QecLimits::default()).unwrap();
+    fn successful_execution_releases_reservation() {
+        let scheduler =
+            Scheduler::new(
+                QecLimits::default(),
+            )
+            .expect("valid limits");
 
         scheduler
             .register_worker(
                 WorkerId::new(1),
-                ExecutionMode::SingleThread,
             )
-            .unwrap();
+            .expect("worker");
 
-        let handle = scheduler
-            .submit(spec(), Arc::new(SuccessfulExecutor))
-            .unwrap();
-
-        handle.cancel();
-
-        assert_eq!(handle.state(), JobState::Cancelled);
-        assert!(handle.cancellation().is_cancelled());
-    }
-
-    #[test]
-    fn priority_is_deterministic() {
-        let scheduler = QecScheduler::new(QecLimits::default()).unwrap();
-
-        let mut low = spec();
-        low.priority = Priority::Low;
-
-        let mut critical = spec();
-        critical.priority = Priority::Critical;
-
-        scheduler
-            .submit(low, Arc::new(SuccessfulExecutor))
-            .unwrap();
-
-        scheduler
-            .submit(critical, Arc::new(SuccessfulExecutor))
-            .unwrap();
-
-        scheduler
-            .register_worker(
-                WorkerId::new(1),
-                ExecutionMode::SingleThread,
+        let id = scheduler
+            .submit(
+                spec(Priority::Normal),
+                Arc::new(
+                    SuccessfulExecutor,
+                ),
             )
-            .unwrap();
+            .expect("submit");
 
-        let _ = scheduler
-            .run_next(WorkerId::new(1))
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(scheduler.metrics().completed, 1);
-    }
-
-    #[test]
-    fn incompatible_worker_does_not_execute_job() {
-        let scheduler = QecScheduler::new(QecLimits::default()).unwrap();
-
-        let mut request = spec();
-        request.mode = ExecutionMode::Accelerated;
-        request.capabilities.accelerator = true;
-
-        scheduler
-            .submit(request, Arc::new(SuccessfulExecutor))
-            .unwrap();
-
-        scheduler
-            .register_worker(
-                WorkerId::new(1),
-                ExecutionMode::SingleThread,
-            )
-            .unwrap();
-
-        let result = scheduler
-            .run_next(WorkerId::new(1))
-            .unwrap();
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn failed_job_does_not_leak_reserved_resources() {
-        let scheduler = QecScheduler::new(QecLimits::default()).unwrap();
-
-        scheduler
-            .register_worker(
-                WorkerId::new(1),
-                ExecutionMode::SingleThread,
-            )
-            .unwrap();
-
-        let handle = scheduler
-            .submit(spec(), Arc::new(FailingExecutor))
-            .unwrap();
-
-        scheduler
-            .run_next(WorkerId::new(1))
-            .unwrap();
-
-        assert_eq!(handle.state(), JobState::Failed);
-
-        let snapshot = scheduler.resource_snapshot();
-
-        assert_eq!(snapshot.memory_bytes, 0);
-        assert_eq!(snapshot.parallel_workers, 0);
-    }
-
-    #[test]
-    fn queue_is_bounded() {
-        let limits = QecLimits::default();
-
-        let scheduler = QecScheduler::with_integrations(
-            limits,
-            1,
-            1,
-            Arc::new(LocalResourceAccounting::default()),
-            allow_all_capabilities(),
-            noop_checkpoint(),
-        )
-        .unwrap();
-
-        scheduler
-            .submit(spec(), Arc::new(SuccessfulExecutor))
-            .unwrap();
-
-        let second = scheduler.submit(
-            spec(),
-            Arc::new(SuccessfulExecutor),
+        assert_eq!(
+            scheduler
+                .reservation_snapshot()
+                .memory_bytes,
+            1024
         );
 
-        assert!(second.is_err());
+        scheduler
+            .run_next(WorkerId::new(1))
+            .expect("run");
+
+        assert_eq!(
+            scheduler.reservation_snapshot(),
+            ReservationSnapshot::default()
+        );
+
+        assert_eq!(
+            scheduler
+                .status(id)
+                .expect("status")
+                .state,
+            JobState::Completed
+        );
     }
 
     #[test]
-    fn limits_are_single_source_of_truth() {
-        let mut limits = QecLimits::default();
-        limits.max_memory_bytes = 1024;
+    fn failure_without_retry_is_terminal() {
+        let scheduler =
+            Scheduler::new(
+                QecLimits::default(),
+            )
+            .expect("valid limits");
 
-        let scheduler = QecScheduler::new(limits).unwrap();
+        scheduler
+            .register_worker(
+                WorkerId::new(1),
+            )
+            .expect("worker");
 
-        let mut request = spec();
-        request.resources.memory_bytes = 2048;
+        let id = scheduler
+            .submit(
+                spec(Priority::Normal),
+                Arc::new(
+                    FailingExecutor,
+                ),
+            )
+            .expect("submit");
 
-        let result = scheduler.submit(
-            request,
-            Arc::new(SuccessfulExecutor),
+        scheduler
+            .run_next(WorkerId::new(1))
+            .expect("run");
+
+        assert_eq!(
+            scheduler
+                .status(id)
+                .expect("status")
+                .state,
+            JobState::Failed
         );
 
-        assert!(result.is_err());
+        assert_eq!(
+            scheduler.reservation_snapshot(),
+            ReservationSnapshot::default()
+        );
+    }
+
+    #[test]
+    fn cancellation_is_cooperative() {
+        let scheduler =
+            Scheduler::new(
+                QecLimits::default(),
+            )
+            .expect("valid limits");
+
+        scheduler
+            .register_worker(
+                WorkerId::new(1),
+            )
+            .expect("worker");
+
+        let id = scheduler
+            .submit(
+                spec(Priority::Normal),
+                Arc::new(
+                    SuccessfulExecutor,
+                ),
+            )
+            .expect("submit");
+
+        scheduler
+            .cancel_requested(id)
+            .expect("cancel");
+
+        assert_eq!(
+            scheduler
+                .status(id)
+                .expect("status")
+                .state,
+            JobState::Cancelled
+        );
+
+        assert_eq!(
+            scheduler.reservation_snapshot(),
+            ReservationSnapshot::default()
+        );
+    }
+
+    #[test]
+    fn deterministic_fifo_for_equal_priority() {
+        let scheduler =
+            Scheduler::new(
+                QecLimits::default(),
+            )
+            .expect("valid limits");
+
+        scheduler
+            .register_worker(
+                WorkerId::new(1),
+            )
+            .expect("worker");
+
+        let first = scheduler
+            .submit(
+                spec(Priority::Normal),
+                Arc::new(
+                    SuccessfulExecutor,
+                ),
+            )
+            .expect("first");
+
+        let second = scheduler
+            .submit(
+                spec(Priority::Normal),
+                Arc::new(
+                    SuccessfulExecutor,
+                ),
+            )
+            .expect("second");
+
+        assert_eq!(
+            scheduler
+                .run_next(
+                    WorkerId::new(1)
+                )
+                .expect("run")
+                .expect("job"),
+            first
+        );
+
+        assert_eq!(
+            scheduler
+                .run_next(
+                    WorkerId::new(1)
+                )
+                .expect("run")
+                .expect("job"),
+            second
+        );
     }
 }
