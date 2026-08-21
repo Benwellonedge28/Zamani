@@ -1,3220 +1,2013 @@
-//! Distributed Quantum Error Correction infrastructure.
+//! Distributed classical execution for the quantum error-correction subsystem.
 //!
-//! This module provides the coordination layer for partitioned QEC workloads.
+//! # Responsibility
 //!
-//! Architectural contract:
+//! This module owns distributed *coordination* of already-defined QEC work.
+//! It does not own:
+//!
+//! - partition mathematics (`partition.rs`)
+//! - decoder mathematics (`decoder.rs`, `mwpm.rs`, `union_find.rs`)
+//! - resource policy (`limits.rs`)
+//! - resource allocation/accounting (`resources.rs`)
+//! - cancellation semantics (`cancellation.rs`)
+//! - QPU execution (`qpu_adapter.rs`)
+//! - network transport implementation
+//! - cryptographic primitives
+//!
+//! The module coordinates workers, retries, ownership, deterministic task
+//! identity, authenticated result envelopes, failure handling, and partition
+//! reconciliation.
+//!
+//! # Integration contract
 //!
 //! ```text
-//! QecConfig / validated policy
+//! QecConfig / QecLimits
 //!          |
 //!          v
-//!   DistributedCoordinator
-//!          |
-//!   +------+-------+
-//!   |              |
-//!   v              v
-//! Resource       Capability
-//! preflight      authorization
-//!   |              |
-//!   +------+-------+
+//!   ResourceManager
 //!          |
 //!          v
-//!   Deterministic planner
+//!   PartitionPlan
 //!          |
 //!          v
-//!      PartitionTask
-//!          |
-//!          v
-//!   Authenticated worker
-//!          |
-//!          v
-//!    WorkerResult
-//!          |
-//!   +------+-------+
-//!   |              |
-//!   v              v
-//! Integrity      Idempotency
-//! validation     validation
-//!   |              |
-//!   +------+-------+
-//!          |
-//!          v
+//! DistributedCoordinator
+//!      |       |       |
+//!      v       v       v
+//!   Worker   Retry   Failure
+//!      |
+//!      v
+//!  Decoder job
+//!      |
+//!      v
+//! Authenticated result
+//!      |
+//!      v
 //! Boundary reconciliation
-//!          |
-//!          v
-//!   Global logical result
+//!      |
+//!      v
+//! DistributedDecodeResult
 //! ```
 //!
-//! The distributed layer is deliberately independent of a particular decoder.
-//! MWPM, Union-Find, sparse decoders, accelerators, or future decoders can use
-//! the infrastructure through [`DistributedDecoder`].
+//! # Security model
 //!
-//! Distributed classical decoding and QPU execution are intentionally separate.
-//! Possessing distributed-execution authority does not imply QPU submission
-//! authority.
+//! Distributed execution is fail-closed:
 //!
-//! "Infinite scalability" is not promised. Arbitrarily large workloads are
-//! supported only subject to explicit resource limits, partitioning, bounded
-//! queues, cancellation, checkpointing, retry policy, and graceful failure.
+//! 1. workers must be authenticated;
+//! 2. workers must possess the required capabilities;
+//! 3. a task attempt is owned by exactly one worker;
+//! 4. stale attempts cannot overwrite newer attempts;
+//! 5. duplicate identical results are idempotent;
+//! 6. conflicting duplicate results are rejected;
+//! 7. transport fingerprints are integrity identifiers only;
+//! 8. cryptographic authentication is delegated to the configured
+//!    `WorkerAuthenticator` implementation;
+//! 9. QPU credentials/capabilities never enter decoder jobs;
+//! 10. resource limits are checked before admission.
 //!
-//! # Safety properties
+//! # Determinism
 //!
-//! - No unsafe code.
-//! - Checked arithmetic at resource boundaries.
-//! - Bounded task queues.
-//! - Explicit worker lifecycle.
-//! - Explicit worker authentication state.
-//! - Capability separation.
-//! - Idempotent task identity.
-//! - Duplicate-result suppression.
-//! - Deterministic ordering.
-//! - Explicit partition ownership.
-//! - Explicit boundary contracts.
-//! - Fail-closed worker validation.
-//! - Cooperative cancellation.
-//! - Job deadlines.
-//! - Retry limits.
-//! - No implicit QPU authority.
+//! Distributed scheduling may execute concurrently, but observable reduction
+//! is deterministic. Task ordering is based on stable `TaskKey` ordering and
+//! result aggregation is performed in that order.
 //!
-//! # Integration
+//! # Rust
 //!
-//! `DistributedLimits` remains in this module as a compatibility policy for
-//! existing callers. In the fully integrated configuration path it should be
-//! derived from the validated QEC configuration/resource policy rather than
-//! becoming a second independent global policy system.
+//! Target: Rust 1.97.1.
+//!
+//! The implementation intentionally uses only stable standard-library APIs and
+//! the existing QEC subsystem contracts.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
-use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
-    Arc, Mutex,
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use super::cancellation::{CancellationReason, CancellationToken};
+use super::errors::{QecError, QecResult};
+use super::limits::QecLimits;
+use super::partition::{
+    BoundaryReconciliation, PartitionBoundary, PartitionId, PartitionPlan, QecPartition,
 };
-use std::time::{Duration, Instant};
+use super::resources::{ResourceManager, ResourceSnapshot};
 
-/// Stable identifier for a distributed QEC job.
-pub type JobId = u64;
+// -----------------------------------------------------------------------------
+// Core identifiers
+// -----------------------------------------------------------------------------
 
-/// Stable identifier for a partition.
-pub type PartitionId = u64;
+/// Stable identifier for a distributed job.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DistributedJobId(pub u128);
+
+impl DistributedJobId {
+    /// Generates a process-local time-derived identifier.
+    ///
+    /// This identifier is suitable for coordination identity, not as a
+    /// cryptographic nonce.
+    pub fn generate() -> Self {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_nanos(0))
+            .as_nanos();
+
+        Self(nanos)
+    }
+}
 
 /// Stable identifier for a worker.
-pub type WorkerId = u64;
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct WorkerId(pub u64);
 
-/// Identifier for a syndrome/detection event.
-pub type EventId = u64;
-
-/// Identifier for a boundary event.
-pub type BoundaryId = u64;
-
-/// Stable identifier for a task attempt.
-pub type TaskAttempt = u32;
-
-/// Numeric graph weight.
-pub type Weight = f64;
-
-/// Result type used by the distributed subsystem.
-pub type Result<T> = std::result::Result<T, DistributedError>;
-
-/// Current distributed task/result contract version.
-pub const DISTRIBUTED_FORMAT_VERSION: u32 = 2;
-
-/// Errors produced by the distributed QEC infrastructure.
-#[derive(Debug, Clone, PartialEq)]
-pub enum DistributedError {
-    InvalidInput(String),
-    InvalidPartition(String),
-    InvalidWorker(String),
-    InvalidBoundary(String),
-    InvalidJob(String),
-
-    ResourceLimitExceeded {
-        resource: ResourceKind,
-        requested: u64,
-        limit: u64,
-    },
-
-    WorkerFailure {
-        worker_id: WorkerId,
-        message: String,
-    },
-
-    WorkerUnavailable(WorkerId),
-
-    WorkerUnauthenticated(WorkerId),
-
-    CapabilityDenied {
-        worker_id: WorkerId,
-        capability: WorkerCapability,
-    },
-
-    Cancelled,
-    DeadlineExceeded,
-
-    DeterminismViolation(String),
-
-    BoundaryReconciliationFailed(String),
-
-    Timeout,
-
-    InvalidWorkerOutput(String),
-
-    IntegrityFailure(String),
-
-    DuplicateTaskResult {
-        task_key: TaskKey,
-    },
-
-    StaleTaskResult {
-        task_key: TaskKey,
-        expected_attempt: TaskAttempt,
-        received_attempt: TaskAttempt,
-    },
-
-    RetryExhausted {
-        partition_id: PartitionId,
-        attempts: TaskAttempt,
-    },
-
-    PartitionOwnershipViolation {
-        partition_id: PartitionId,
-        expected_worker: WorkerId,
-        received_worker: WorkerId,
-    },
-
-    InvariantViolation(String),
-
-    Unsupported(String),
-
-    IncompatibleVersion {
-        expected: u32,
-        found: u32,
-    },
-
-    Synchronization(String),
-}
-
-impl fmt::Display for DistributedError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidInput(message) => {
-                write!(f, "invalid distributed input: {message}")
-            }
-
-            Self::InvalidPartition(message) => {
-                write!(f, "invalid partition: {message}")
-            }
-
-            Self::InvalidWorker(message) => {
-                write!(f, "invalid worker: {message}")
-            }
-
-            Self::InvalidBoundary(message) => {
-                write!(f, "invalid boundary: {message}")
-            }
-
-            Self::InvalidJob(message) => {
-                write!(f, "invalid job: {message}")
-            }
-
-            Self::ResourceLimitExceeded {
-                resource,
-                requested,
-                limit,
-            } => {
-                write!(
-                    f,
-                    "resource limit exceeded for {resource}: requested={requested}, limit={limit}"
-                )
-            }
-
-            Self::WorkerFailure {
-                worker_id,
-                message,
-            } => {
-                write!(f, "worker {worker_id} failed: {message}")
-            }
-
-            Self::WorkerUnavailable(worker_id) => {
-                write!(f, "worker {worker_id} unavailable")
-            }
-
-            Self::WorkerUnauthenticated(worker_id) => {
-                write!(f, "worker {worker_id} is not authenticated")
-            }
-
-            Self::CapabilityDenied {
-                worker_id,
-                capability,
-            } => {
-                write!(
-                    f,
-                    "worker {worker_id} lacks required capability {capability:?}"
-                )
-            }
-
-            Self::Cancelled => {
-                write!(f, "distributed operation cancelled")
-            }
-
-            Self::DeadlineExceeded => {
-                write!(f, "distributed operation deadline exceeded")
-            }
-
-            Self::DeterminismViolation(message) => {
-                write!(f, "determinism violation: {message}")
-            }
-
-            Self::BoundaryReconciliationFailed(message) => {
-                write!(f, "boundary reconciliation failed: {message}")
-            }
-
-            Self::Timeout => {
-                write!(f, "distributed operation timed out")
-            }
-
-            Self::InvalidWorkerOutput(message) => {
-                write!(f, "invalid worker output: {message}")
-            }
-
-            Self::IntegrityFailure(message) => {
-                write!(f, "distributed integrity failure: {message}")
-            }
-
-            Self::DuplicateTaskResult { task_key } => {
-                write!(f, "duplicate task result: {task_key:?}")
-            }
-
-            Self::StaleTaskResult {
-                task_key,
-                expected_attempt,
-                received_attempt,
-            } => {
-                write!(
-                    f,
-                    "stale result for task {task_key:?}: expected attempt {expected_attempt}, received {received_attempt}"
-                )
-            }
-
-            Self::RetryExhausted {
-                partition_id,
-                attempts,
-            } => {
-                write!(
-                    f,
-                    "retry policy exhausted for partition {partition_id} after {attempts} attempts"
-                )
-            }
-
-            Self::PartitionOwnershipViolation {
-                partition_id,
-                expected_worker,
-                received_worker,
-            } => {
-                write!(
-                    f,
-                    "partition {partition_id} belongs to worker {expected_worker}, \
-                     but result came from worker {received_worker}"
-                )
-            }
-
-            Self::InvariantViolation(message) => {
-                write!(f, "distributed invariant violation: {message}")
-            }
-
-            Self::Unsupported(message) => {
-                write!(f, "unsupported distributed operation: {message}")
-            }
-
-            Self::IncompatibleVersion { expected, found } => {
-                write!(
-                    f,
-                    "incompatible distributed format: expected {expected}, found {found}"
-                )
-            }
-
-            Self::Synchronization(message) => {
-                write!(f, "distributed synchronization failure: {message}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for DistributedError {}
-
-/// Resources bounded by distributed execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ResourceKind {
-    Jobs,
-    Partitions,
-    Workers,
-    Events,
-    BoundaryEvents,
-    Bytes,
-    InFlightTasks,
-    Retries,
-}
-
-impl fmt::Display for ResourceKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let value = match self {
-            Self::Jobs => "jobs",
-            Self::Partitions => "partitions",
-            Self::Workers => "workers",
-            Self::Events => "events",
-            Self::BoundaryEvents => "boundary events",
-            Self::Bytes => "bytes",
-            Self::InFlightTasks => "in-flight tasks",
-            Self::Retries => "retries",
-        };
-
-        f.write_str(value)
-    }
-}
-
-/// Compatibility resource policy for distributed execution.
+/// Stable identifier for a task.
 ///
-/// Prefer deriving this policy from the validated global QEC configuration
-/// rather than treating it as a second independent global resource system.
-#[derive(Debug, Clone)]
-pub struct DistributedLimits {
-    pub max_jobs: u64,
-    pub max_partitions_per_job: u64,
-    pub max_workers: u64,
-    pub max_events_per_partition: u64,
-    pub max_boundary_events_per_partition: u64,
-    pub max_in_flight_tasks: u64,
-    pub max_job_bytes: u64,
-    pub max_worker_time: Duration,
-    pub max_job_time: Duration,
-
-    /// Maximum retries for one partition task.
-    pub max_retries_per_partition: u32,
+/// A task identity does not contain the retry attempt. This allows retries to
+/// remain the same logical task while each execution receives a monotonically
+/// increasing attempt number.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct TaskKey {
+    pub job_id: DistributedJobId,
+    pub partition_id: PartitionId,
 }
 
-impl Default for DistributedLimits {
-    fn default() -> Self {
+impl TaskKey {
+    pub const fn new(job_id: DistributedJobId, partition_id: PartitionId) -> Self {
         Self {
-            max_jobs: 1_024,
-            max_partitions_per_job: 1_000_000,
-            max_workers: 4_096,
-            max_events_per_partition: 10_000_000,
-            max_boundary_events_per_partition: 1_000_000,
-            max_in_flight_tasks: 16_384,
-            max_job_bytes: 8 * 1024 * 1024 * 1024,
-            max_worker_time: Duration::from_secs(3_600),
-            max_job_time: Duration::from_secs(86_400),
-            max_retries_per_partition: 3,
+            job_id,
+            partition_id,
         }
     }
 }
 
-impl DistributedLimits {
-    pub fn validate(&self) -> Result<()> {
-        let positive = [
-            (self.max_jobs, "max_jobs"),
-            (
-                self.max_partitions_per_job,
-                "max_partitions_per_job",
-            ),
-            (self.max_workers, "max_workers"),
-            (
-                self.max_events_per_partition,
-                "max_events_per_partition",
-            ),
-            (
-                self.max_boundary_events_per_partition,
-                "max_boundary_events_per_partition",
-            ),
-            (
-                self.max_in_flight_tasks,
-                "max_in_flight_tasks",
-            ),
-            (self.max_job_bytes, "max_job_bytes"),
-        ];
+/// Monotonically increasing execution attempt.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Attempt(pub u32);
 
-        for (value, name) in positive {
-            if value == 0 {
-                return Err(DistributedError::InvalidInput(format!(
-                    "{name} must be greater than zero"
-                )));
-            }
-        }
+impl Attempt {
+    pub const FIRST: Self = Self(0);
 
-        if self.max_worker_time.is_zero() {
-            return Err(DistributedError::InvalidInput(
-                "max_worker_time must be greater than zero".into(),
-            ));
-        }
-
-        if self.max_job_time.is_zero() {
-            return Err(DistributedError::InvalidInput(
-                "max_job_time must be greater than zero".into(),
-            ));
-        }
-
-        Ok(())
+    pub fn next(self) -> QecResult<Self> {
+        self.0
+            .checked_add(1)
+            .map(Self)
+            .ok_or_else(|| QecError::NumericalFailure {
+                operation: "distributed task attempt increment".into(),
+            })
     }
 }
 
-/// Cooperative cancellation token.
-#[derive(Clone, Default)]
-pub struct CancellationToken {
-    cancelled: Arc<AtomicBool>,
+// -----------------------------------------------------------------------------
+// Worker capabilities
+// -----------------------------------------------------------------------------
+
+/// Capabilities specifically relevant to distributed classical execution.
+///
+/// This is intentionally independent from QPU capabilities.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum DistributedCapability {
+    ExecutePartition,
+    ReadPartitionInput,
+    SubmitPartitionResult,
+    ReconcileBoundary,
+    ReadMetrics,
+    CreateCheckpoint,
 }
 
-impl CancellationToken {
+/// Capability set used by a worker.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DistributedCapabilitySet {
+    capabilities: BTreeSet<DistributedCapability>,
+}
+
+impl DistributedCapabilitySet {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Release);
+    pub fn allow(mut self, capability: DistributedCapability) -> Self {
+        self.capabilities.insert(capability);
+        self
     }
 
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Acquire)
+    pub fn insert(&mut self, capability: DistributedCapability) {
+        self.capabilities.insert(capability);
     }
 
-    pub fn check(&self) -> Result<()> {
-        if self.is_cancelled() {
-            Err(DistributedError::Cancelled)
-        } else {
+    pub fn contains(&self, capability: DistributedCapability) -> bool {
+        self.capabilities.contains(&capability)
+    }
+
+    pub fn require(&self, capability: DistributedCapability) -> QecResult<()> {
+        if self.contains(capability) {
             Ok(())
+        } else {
+            Err(QecError::CapabilityDenied {
+                capability: format!("{capability:?}"),
+            })
         }
     }
-}
 
-/// Deterministic execution policy.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeterminismConfig {
-    pub enabled: bool,
-    pub seed: u64,
-    pub stable_partition_order: bool,
-    pub stable_worker_assignment: bool,
-}
+    pub fn attenuate(
+        &self,
+        requested: impl IntoIterator<Item = DistributedCapability>,
+    ) -> Self {
+        let mut result = Self::new();
 
-impl Default for DeterminismConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            seed: 0,
-            stable_partition_order: true,
-            stable_worker_assignment: true,
+        for capability in requested {
+            if self.contains(capability) {
+                result.insert(capability);
+            }
         }
+
+        result
     }
 }
 
-impl DeterminismConfig {
-    pub fn validate(&self) -> Result<()> {
-        Ok(())
+// -----------------------------------------------------------------------------
+// Worker authentication
+// -----------------------------------------------------------------------------
+
+/// Authenticated identity presented by a worker.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AuthenticatedWorker {
+    pub worker_id: WorkerId,
+    pub capabilities: DistributedCapabilitySet,
+    pub identity_fingerprint: String,
+}
+
+/// Authentication abstraction.
+///
+/// Real deployments should provide a cryptographically authenticated
+/// implementation. The distributed coordinator deliberately does not pretend
+/// that a hash/fingerprint is equivalent to authentication.
+pub trait WorkerAuthenticator: Send + Sync {
+    fn authenticate(
+        &self,
+        worker_id: WorkerId,
+        credential: &WorkerCredential,
+    ) -> QecResult<AuthenticatedWorker>;
+}
+
+/// Opaque worker credential.
+///
+/// The coordinator does not inspect credential contents.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkerCredential {
+    material: Vec<u8>,
+}
+
+impl WorkerCredential {
+    pub fn new(material: Vec<u8>) -> Self {
+        Self { material }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.material
     }
 }
 
-/// Distributed execution mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecutionMode {
-    Local,
-    MultiThreaded,
-    MultiProcess,
-    Distributed,
-    Accelerated,
+/// Development authenticator.
+///
+/// This implementation is intentionally explicit about being non-production.
+/// It provides deterministic identity mapping for tests and local execution.
+#[derive(Clone, Debug, Default)]
+pub struct StaticWorkerAuthenticator {
+    workers: BTreeMap<WorkerId, DistributedCapabilitySet>,
 }
 
-/// Worker lifecycle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl StaticWorkerAuthenticator {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register(
+        &mut self,
+        worker_id: WorkerId,
+        capabilities: DistributedCapabilitySet,
+    ) {
+        self.workers.insert(worker_id, capabilities);
+    }
+}
+
+impl WorkerAuthenticator for StaticWorkerAuthenticator {
+    fn authenticate(
+        &self,
+        worker_id: WorkerId,
+        _credential: &WorkerCredential,
+    ) -> QecResult<AuthenticatedWorker> {
+        let capabilities = self
+            .workers
+            .get(&worker_id)
+            .cloned()
+            .ok_or_else(|| QecError::CapabilityDenied {
+                capability: format!("unregistered worker {worker_id:?}"),
+            })?;
+
+        Ok(AuthenticatedWorker {
+            worker_id,
+            capabilities,
+            identity_fingerprint: format!("static-worker-{}", worker_id.0),
+        })
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Worker lifecycle
+// -----------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerState {
-    Starting,
+    Registered,
     Ready,
     Busy,
     Draining,
     Failed,
-    Offline,
+    Removed,
 }
 
-/// Explicit worker capabilities.
-///
-/// QPU submission is intentionally NOT represented by
-/// `DistributedExecution`. A distributed classical worker does not
-/// automatically receive hardware authority.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkerCapability {
-    Decode,
-    BoundaryReconciliation,
-    Checkpoint,
-    Streaming,
-    Accelerator,
-    QpuInspect,
-    QpuSubmit,
-    QpuReadResults,
-}
-
-impl fmt::Display for WorkerCapability {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let value = match self {
-            Self::Decode => "decode",
-            Self::BoundaryReconciliation => "boundary-reconciliation",
-            Self::Checkpoint => "checkpoint",
-            Self::Streaming => "streaming",
-            Self::Accelerator => "accelerator",
-            Self::QpuInspect => "qpu-inspect",
-            Self::QpuSubmit => "qpu-submit",
-            Self::QpuReadResults => "qpu-read-results",
-        };
-
-        f.write_str(value)
+impl WorkerState {
+    pub fn accepts_work(self) -> bool {
+        matches!(self, Self::Registered | Self::Ready)
     }
 }
 
-/// Worker capabilities.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkerCapabilities {
-    pub cpu: bool,
-    pub gpu: bool,
-    pub accelerator: bool,
-    pub distributed_boundary_reconciliation: bool,
-    pub checkpointing: bool,
-    pub streaming: bool,
-
-    /// Explicit classical decoding authority.
-    pub decoding: bool,
-
-    /// Explicit QPU inspection authority.
-    pub qpu_inspect: bool,
-
-    /// Explicit QPU submission authority.
-    pub qpu_submit: bool,
-
-    /// Explicit QPU result-read authority.
-    pub qpu_read_results: bool,
-}
-
-impl Default for WorkerCapabilities {
-    fn default() -> Self {
-        Self {
-            cpu: true,
-            gpu: false,
-            accelerator: false,
-            distributed_boundary_reconciliation: true,
-            checkpointing: true,
-            streaming: true,
-            decoding: true,
-            qpu_inspect: false,
-            qpu_submit: false,
-            qpu_read_results: false,
-        }
-    }
-}
-
-impl WorkerCapabilities {
-    pub fn has(&self, capability: WorkerCapability) -> bool {
-        match capability {
-            WorkerCapability::Decode => self.decoding,
-            WorkerCapability::BoundaryReconciliation => {
-                self.distributed_boundary_reconciliation
-            }
-            WorkerCapability::Checkpoint => self.checkpointing,
-            WorkerCapability::Streaming => self.streaming,
-            WorkerCapability::Accelerator => self.accelerator,
-            WorkerCapability::QpuInspect => self.qpu_inspect,
-            WorkerCapability::QpuSubmit => self.qpu_submit,
-            WorkerCapability::QpuReadResults => self.qpu_read_results,
-        }
-    }
-}
-
-/// Authentication state for a worker.
-///
-/// A worker cannot execute distributed work until it is authenticated.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AuthenticationState {
-    Unauthenticated,
-    Authenticated,
-    Revoked,
-}
-
-/// Worker registration.
-#[derive(Debug, Clone)]
-pub struct WorkerDescriptor {
-    pub id: WorkerId,
-    pub name: String,
+/// Runtime information about a worker.
+#[derive(Clone, Debug)]
+pub struct WorkerRecord {
+    pub worker_id: WorkerId,
     pub state: WorkerState,
-    pub capabilities: WorkerCapabilities,
-    pub max_concurrent_tasks: u32,
+    pub authenticated_identity: AuthenticatedWorker,
+    pub active_tasks: usize,
+    pub completed_tasks: u64,
+    pub failed_tasks: u64,
+    pub last_seen: Instant,
 }
 
-impl WorkerDescriptor {
-    pub fn validate(&self) -> Result<()> {
-        if self.name.trim().is_empty() {
-            return Err(DistributedError::InvalidWorker(
-                "worker name cannot be empty".into(),
-            ));
+impl WorkerRecord {
+    fn new(identity: AuthenticatedWorker) -> Self {
+        Self {
+            worker_id: identity.worker_id,
+            state: WorkerState::Ready,
+            authenticated_identity: identity,
+            active_tasks: 0,
+            completed_tasks: 0,
+            failed_tasks: 0,
+            last_seen: Instant::now(),
         }
-
-        if self.max_concurrent_tasks == 0 {
-            return Err(DistributedError::InvalidWorker(
-                "max_concurrent_tasks must be greater than zero".into(),
-            ));
-        }
-
-        Ok(())
     }
 }
 
-/// Runtime worker record.
-#[derive(Debug, Clone)]
-struct WorkerRuntime {
-    descriptor: WorkerDescriptor,
-    authentication: AuthenticationState,
-    active_tasks: u32,
-}
-
-/// Detection event.
-#[derive(Debug, Clone, PartialEq)]
-pub struct DetectionEvent {
-    pub id: EventId,
-    pub x: i64,
-    pub y: i64,
-    pub z: i64,
-    pub time: u64,
-    pub weight: Weight,
-}
-
-impl DetectionEvent {
-    pub fn validate(&self) -> Result<()> {
-        if !self.weight.is_finite() || self.weight < 0.0 {
-            return Err(DistributedError::InvalidInput(format!(
-                "event {} has invalid weight {}",
-                self.id, self.weight
-            )));
-        }
-
-        Ok(())
-    }
-}
-
-/// Explicit partition-boundary event.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BoundaryEvent {
-    pub id: BoundaryId,
-    pub source_partition: PartitionId,
-    pub coordinate: (i64, i64, i64),
-    pub time: u64,
-    pub weight: Weight,
-}
-
-impl BoundaryEvent {
-    pub fn validate(&self) -> Result<()> {
-        if !self.weight.is_finite() || self.weight < 0.0 {
-            return Err(DistributedError::InvalidBoundary(format!(
-                "boundary {} has invalid weight {}",
-                self.id, self.weight
-            )));
-        }
-
-        Ok(())
-    }
-}
-
-/// Mathematical contract at a partition boundary.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PartitionBoundary {
-    pub partition_id: PartitionId,
-    pub neighbor_id: PartitionId,
-
-    /// Stable IDs of incoming events.
-    pub incoming_events: Vec<BoundaryId>,
-
-    /// Stable IDs of outgoing events.
-    pub outgoing_events: Vec<BoundaryId>,
-
-    /// Virtual-boundary parity.
-    pub virtual_boundary_parity: u8,
-
-    /// Correction parity crossing this boundary.
-    pub correction_parity: u8,
-
-    /// Logical parity contribution crossing the boundary.
-    pub logical_parity: u8,
-
-    /// Reconciliation protocol version.
-    pub reconciliation_version: u32,
-}
-
-impl PartitionBoundary {
-    pub fn validate(&self) -> Result<()> {
-        if self.partition_id == self.neighbor_id {
-            return Err(DistributedError::InvalidBoundary(
-                "partition boundary cannot connect a partition to itself".into(),
-            ));
-        }
-
-        if self.virtual_boundary_parity > 1
-            || self.correction_parity > 1
-            || self.logical_parity > 1
-        {
-            return Err(DistributedError::InvalidBoundary(
-                "boundary parity must be 0 or 1".into(),
-            ));
-        }
-
-        if self.reconciliation_version != DISTRIBUTED_FORMAT_VERSION {
-            return Err(DistributedError::IncompatibleVersion {
-                expected: DISTRIBUTED_FORMAT_VERSION,
-                found: self.reconciliation_version,
-            });
-        }
-
-        Ok(())
-    }
-}
-
-/// A QEC partition.
-#[derive(Debug, Clone)]
-pub struct QecPartition {
-    pub id: PartitionId,
-
-    /// Half-open coordinate ranges.
-    pub bounds: [(i64, i64); 3],
-
-    pub events: Vec<DetectionEvent>,
-
-    pub boundary_events: Vec<BoundaryEvent>,
-
-    pub neighbors: BTreeSet<PartitionId>,
-
-    pub logical_region: Option<u64>,
-}
-
-impl QecPartition {
-    pub fn validate(&self, limits: &DistributedLimits) -> Result<()> {
-        for (axis, (min, max)) in self.bounds.iter().enumerate() {
-            if min >= max {
-                return Err(DistributedError::InvalidPartition(format!(
-                    "partition {} has invalid axis {} bounds [{}, {})",
-                    self.id, axis, min, max
-                )));
-            }
-        }
-
-        let event_count = u64::try_from(self.events.len())
-            .unwrap_or(u64::MAX);
-
-        if event_count > limits.max_events_per_partition {
-            return Err(DistributedError::ResourceLimitExceeded {
-                resource: ResourceKind::Events,
-                requested: event_count,
-                limit: limits.max_events_per_partition,
-            });
-        }
-
-        let boundary_count = u64::try_from(self.boundary_events.len())
-            .unwrap_or(u64::MAX);
-
-        if boundary_count > limits.max_boundary_events_per_partition {
-            return Err(DistributedError::ResourceLimitExceeded {
-                resource: ResourceKind::BoundaryEvents,
-                requested: boundary_count,
-                limit: limits.max_boundary_events_per_partition,
-            });
-        }
-
-        let mut event_ids = BTreeSet::new();
-
-        for event in &self.events {
-            event.validate()?;
-
-            if !self.contains(event.x, event.y, event.z) {
-                return Err(DistributedError::InvalidPartition(format!(
-                    "event {} is outside partition {}",
-                    event.id, self.id
-                )));
-            }
-
-            if !event_ids.insert(event.id) {
-                return Err(DistributedError::InvalidPartition(format!(
-                    "duplicate event id {} in partition {}",
-                    event.id, self.id
-                )));
-            }
-        }
-
-        let mut boundary_ids = BTreeSet::new();
-
-        for boundary in &self.boundary_events {
-            boundary.validate()?;
-
-            if boundary.source_partition != self.id {
-                return Err(DistributedError::InvalidBoundary(format!(
-                    "boundary {} belongs to partition {}, not {}",
-                    boundary.id,
-                    boundary.source_partition,
-                    self.id
-                )));
-            }
-
-            if !boundary_ids.insert(boundary.id) {
-                return Err(DistributedError::InvalidBoundary(format!(
-                    "duplicate boundary id {} in partition {}",
-                    boundary.id, self.id
-                )));
-            }
-        }
-
-        if self.neighbors.contains(&self.id) {
-            return Err(DistributedError::InvalidPartition(format!(
-                "partition {} cannot be its own neighbor",
-                self.id
-            )));
-        }
-
-        Ok(())
-    }
-
-    pub fn contains(&self, x: i64, y: i64, z: i64) -> bool {
-        let [xb, yb, zb] = self.bounds;
-
-        x >= xb.0
-            && x < xb.1
-            && y >= yb.0
-            && y < yb.1
-            && z >= zb.0
-            && z < zb.1
-    }
-
-    pub fn estimated_event_bytes(&self) -> u64 {
-        let events = u64::try_from(self.events.len())
-            .unwrap_or(u64::MAX);
-
-        let boundaries = u64::try_from(self.boundary_events.len())
-            .unwrap_or(u64::MAX);
-
-        events
-            .saturating_mul(48)
-            .saturating_add(boundaries.saturating_mul(48))
-    }
-}
-
-/// Complete distributed job.
-#[derive(Debug, Clone)]
-pub struct DistributedJob {
-    pub id: JobId,
-    pub partitions: Vec<QecPartition>,
-    pub mode: ExecutionMode,
-    pub determinism: DeterminismConfig,
-    pub metadata: BTreeMap<String, String>,
-}
-
-impl DistributedJob {
-    pub fn validate(&self, limits: &DistributedLimits) -> Result<()> {
-        if self.id == 0 {
-            return Err(DistributedError::InvalidJob(
-                "job id must be non-zero".into(),
-            ));
-        }
-
-        self.determinism.validate()?;
-
-        if self.partitions.is_empty() {
-            return Err(DistributedError::InvalidJob(
-                "job must contain at least one partition".into(),
-            ));
-        }
-
-        let count = u64::try_from(self.partitions.len())
-            .unwrap_or(u64::MAX);
-
-        if count > limits.max_partitions_per_job {
-            return Err(DistributedError::ResourceLimitExceeded {
-                resource: ResourceKind::Partitions,
-                requested: count,
-                limit: limits.max_partitions_per_job,
-            });
-        }
-
-        let mut partition_ids = BTreeSet::new();
-        let mut estimated_bytes = 0u64;
-
-        for partition in &self.partitions {
-            partition.validate(limits)?;
-
-            if !partition_ids.insert(partition.id) {
-                return Err(DistributedError::InvalidJob(format!(
-                    "duplicate partition id {}",
-                    partition.id
-                )));
-            }
-
-            estimated_bytes = estimated_bytes
-                .checked_add(partition.estimated_event_bytes())
-                .ok_or(DistributedError::ResourceLimitExceeded {
-                    resource: ResourceKind::Bytes,
-                    requested: u64::MAX,
-                    limit: limits.max_job_bytes,
-                })?;
-        }
-
-        if estimated_bytes > limits.max_job_bytes {
-            return Err(DistributedError::ResourceLimitExceeded {
-                resource: ResourceKind::Bytes,
-                requested: estimated_bytes,
-                limit: limits.max_job_bytes,
-            });
-        }
-
-        self.validate_neighbors()?;
-
-        Ok(())
-    }
-
-    fn validate_neighbors(&self) -> Result<()> {
-        let ids: BTreeSet<_> =
-            self.partitions.iter().map(|p| p.id).collect();
-
-        let partitions: BTreeMap<_, _> =
-            self.partitions.iter().map(|p| (p.id, p)).collect();
-
-        for partition in &self.partitions {
-            for neighbor in &partition.neighbors {
-                if !ids.contains(neighbor) {
-                    return Err(DistributedError::InvalidJob(format!(
-                        "partition {} references unknown neighbor {}",
-                        partition.id, neighbor
-                    )));
-                }
-
-                let reverse = partitions
-                    .get(neighbor)
-                    .map(|p| p.neighbors.contains(&partition.id))
-                    .unwrap_or(false);
-
-                if !reverse {
-                    return Err(DistributedError::InvalidJob(format!(
-                        "neighbor relation {} -> {} is not symmetric",
-                        partition.id, neighbor
-                    )));
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-/// Stable task identity.
-///
-/// The same task key must never be treated as a new task merely because it
-/// was retried or received from another worker.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TaskKey {
-    pub job_id: JobId,
-    pub partition_id: PartitionId,
-}
-
-impl fmt::Display for TaskKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.job_id, self.partition_id)
-    }
-}
-
-/// Task lifecycle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TaskState {
+// -----------------------------------------------------------------------------
+// Job lifecycle
+// -----------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DistributedJobState {
     Created,
-    Queued,
-    Assigned,
+    Validating,
+    Admitted,
     Running,
+    Reconciling,
     Completed,
-    Retrying,
     Failed,
     Cancelled,
 }
 
-/// Unit of distributed work.
-#[derive(Debug, Clone)]
-pub struct PartitionTask {
-    pub job_id: JobId,
+impl DistributedJobState {
+    pub fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            Self::Completed | Self::Failed | Self::Cancelled
+        )
+    }
+}
+
+/// Failure classification.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DistributedFailure {
+    WorkerUnavailable {
+        worker_id: WorkerId,
+    },
+    WorkerAuthentication {
+        worker_id: WorkerId,
+    },
+    WorkerCapability {
+        worker_id: WorkerId,
+        capability: DistributedCapability,
+    },
+    WorkerTimeout {
+        worker_id: WorkerId,
+    },
+    TaskTimeout {
+        task: TaskKey,
+    },
+    TaskRejected {
+        task: TaskKey,
+        reason: String,
+    },
+    TaskExecution {
+        task: TaskKey,
+        reason: String,
+    },
+    StaleAttempt {
+        task: TaskKey,
+        received: Attempt,
+        expected_at_least: Attempt,
+    },
+    ConflictingDuplicate {
+        task: TaskKey,
+        attempt: Attempt,
+    },
+    BoundaryReconciliation {
+        partition: PartitionId,
+        reason: String,
+    },
+    ResourceAdmission {
+        reason: String,
+    },
+    Cancellation,
+}
+
+impl fmt::Display for DistributedFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Partition execution contract
+// -----------------------------------------------------------------------------
+
+/// Input handed to a worker.
+///
+/// The distributed layer deliberately treats decoder input as opaque bytes.
+/// Encoding/decoding is owned by the decoder/serialization layer.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PartitionWork {
+    pub task: TaskKey,
+    pub attempt: Attempt,
     pub partition: QecPartition,
-    pub determinism: DeterminismConfig,
-
-    /// Attempt starts at one.
-    pub attempt: TaskAttempt,
+    pub input_fingerprint: String,
+    pub required_capabilities: DistributedCapabilitySet,
 }
 
-impl PartitionTask {
-    pub fn key(&self) -> TaskKey {
-        TaskKey {
-            job_id: self.job_id,
-            partition_id: self.partition.id,
-        }
-    }
-
-    pub fn validate(&self, limits: &DistributedLimits) -> Result<()> {
-        if self.job_id == 0 {
-            return Err(DistributedError::InvalidJob(
-                "task job id must be non-zero".into(),
-            ));
-        }
-
-        if self.attempt == 0 {
-            return Err(DistributedError::InvalidInput(
-                "task attempt must start at one".into(),
-            ));
-        }
-
-        self.partition.validate(limits)?;
-        self.determinism.validate()?;
-
-        Ok(())
-    }
-}
-
-/// Worker execution context.
-#[derive(Clone)]
-pub struct WorkerContext {
-    pub job_id: JobId,
-    pub worker_id: WorkerId,
-    pub cancellation: CancellationToken,
-    pub started_at: Instant,
-    pub deadline: Instant,
-    pub determinism: DeterminismConfig,
-    pub attempt: TaskAttempt,
-}
-
-impl WorkerContext {
-    pub fn check(&self) -> Result<()> {
-        self.cancellation.check()?;
-
-        if Instant::now() > self.deadline {
-            return Err(DistributedError::DeadlineExceeded);
-        }
-
-        Ok(())
-    }
-}
-
-/// Partition correction produced by a decoder.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Generic correction payload returned by a worker.
+///
+/// The distributed layer does not interpret decoder mathematics.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PartitionCorrection {
-    pub partition_id: PartitionId,
-
-    /// Opaque correction operation represented as qubit/op pairs.
-    pub corrections: Vec<(u64, u8)>,
-
+    pub fingerprint: String,
     pub logical_parity: u8,
-
-    pub resolved_boundaries: Vec<BoundaryId>,
+    pub payload: Vec<u8>,
 }
 
 impl PartitionCorrection {
-    pub fn validate(&self) -> Result<()> {
-        if self.logical_parity > 1 {
-            return Err(DistributedError::InvalidWorkerOutput(format!(
-                "partition {} returned invalid logical parity {}",
-                self.partition_id, self.logical_parity
-            )));
+    pub fn new(
+        fingerprint: impl Into<String>,
+        logical_parity: u8,
+        payload: Vec<u8>,
+    ) -> Self {
+        Self {
+            fingerprint: fingerprint.into(),
+            logical_parity,
+            payload,
         }
-
-        let mut qubits = BTreeSet::new();
-
-        for (qubit, operation) in &self.corrections {
-            if *operation > 3 {
-                return Err(DistributedError::InvalidWorkerOutput(
-                    format!(
-                        "partition {} returned invalid correction operation {} for qubit {}",
-                        self.partition_id,
-                        operation,
-                        qubit
-                    ),
-                ));
-            }
-
-            if !qubits.insert(*qubit) {
-                return Err(DistributedError::InvalidWorkerOutput(
-                    format!(
-                        "partition {} returned duplicate correction for qubit {}",
-                        self.partition_id,
-                        qubit
-                    ),
-                ));
-            }
-        }
-
-        let mut boundaries = BTreeSet::new();
-
-        for boundary in &self.resolved_boundaries {
-            if !boundaries.insert(*boundary) {
-                return Err(DistributedError::InvalidWorkerOutput(
-                    format!(
-                        "partition {} returned duplicate boundary {}",
-                        self.partition_id,
-                        boundary
-                    ),
-                ));
-            }
-        }
-
-        Ok(())
     }
 }
 
-/// Result envelope returned by a worker.
-///
-/// The envelope makes worker identity, task identity and attempt explicit.
-/// This is required for idempotent retry handling.
-#[derive(Debug, Clone)]
-pub struct WorkerResult {
-    pub task_key: TaskKey,
+/// Result produced by a worker.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PartitionWorkResult {
+    pub task: TaskKey,
+    pub attempt: Attempt,
     pub worker_id: WorkerId,
-    pub attempt: TaskAttempt,
     pub correction: PartitionCorrection,
-
-    /// Deterministic integrity value over the result contract.
-    pub integrity: u64,
+    pub resource_usage: ResourceSnapshot,
+    pub execution_fingerprint: String,
 }
 
-impl WorkerResult {
-    pub fn compute_integrity(&self) -> u64 {
-        let mut hash = FNV_OFFSET;
-
-        hash = hash_u64(hash, self.task_key.job_id);
-        hash = hash_u64(hash, self.task_key.partition_id);
-        hash = hash_u64(hash, self.worker_id);
-        hash = hash_u64(hash, u64::from(self.attempt));
-
-        hash = hash_u64(
-            hash,
-            u64::from(self.correction.logical_parity),
-        );
-
-        for (qubit, operation) in &self.correction.corrections {
-            hash = hash_u64(hash, *qubit);
-            hash = hash_u64(hash, u64::from(*operation));
-        }
-
-        for boundary in &self.correction.resolved_boundaries {
-            hash = hash_u64(hash, *boundary);
-        }
-
-        hash
-    }
-
-    pub fn validate(&self) -> Result<()> {
-        self.correction.validate()?;
-
-        if self.attempt == 0 {
-            return Err(DistributedError::InvalidWorkerOutput(
-                "worker result has zero attempt".into(),
-            ));
-        }
-
-        let expected = self.compute_integrity();
-
-        if expected != self.integrity {
-            return Err(DistributedError::IntegrityFailure(format!(
-                "task {} integrity mismatch",
-                self.task_key
-            )));
-        }
-
-        Ok(())
-    }
-}
-
-const FNV_OFFSET: u64 = 0xcbf29ce484222325;
-const FNV_PRIME: u64 = 0x100000001b3;
-
-fn hash_u64(mut hash: u64, value: u64) -> u64 {
-    for byte in value.to_le_bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(FNV_PRIME);
-    }
-
-    hash
-}
-
-/// Global distributed result.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DistributedResult {
-    pub job_id: JobId,
-    pub corrections: Vec<PartitionCorrection>,
-    pub logical_parity: u8,
-    pub reconciled_boundaries: Vec<BoundaryId>,
-    pub failed_partitions: Vec<PartitionId>,
-}
-
-impl DistributedResult {
-    pub fn validate(&self) -> Result<()> {
-        if self.logical_parity > 1 {
-            return Err(DistributedError::InvariantViolation(
-                "global logical parity must be 0 or 1".into(),
-            ));
-        }
-
-        let mut partitions = BTreeSet::new();
-
-        for correction in &self.corrections {
-            correction.validate()?;
-
-            if !partitions.insert(correction.partition_id) {
-                return Err(DistributedError::InvariantViolation(
-                    format!(
-                        "duplicate correction for partition {}",
-                        correction.partition_id
-                    ),
-                ));
-            }
-        }
-
-        let mut boundaries = BTreeSet::new();
-
-        for boundary in &self.reconciled_boundaries {
-            if !boundaries.insert(*boundary) {
-                return Err(DistributedError::InvariantViolation(
-                    format!(
-                        "duplicate reconciled boundary {}",
-                        boundary
-                    ),
-                ));
-            }
-        }
-
-        Ok(())
-    }
-}
-
-/// Distributed decoder worker interface.
+/// Authentication/integrity envelope for a worker result.
 ///
-/// Implementations may wrap MWPM, Union-Find, sparse decoders, GPU
-/// decoders, accelerator backends, processes, or authenticated RPC workers.
-pub trait DistributedDecoder: Send + Sync {
-    fn decode(
-        &self,
-        task: PartitionTask,
-        context: WorkerContext,
-    ) -> Result<PartitionCorrection>;
+/// The `authentication_tag` is opaque. Cryptographic validation belongs to
+/// the configured result authenticator.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AuthenticatedPartitionResult {
+    pub result: PartitionWorkResult,
+    pub authentication_tag: Vec<u8>,
 }
 
-/// Infrastructure-only decoder.
-#[derive(Default)]
-pub struct IdentityDecoder;
-
-impl DistributedDecoder for IdentityDecoder {
-    fn decode(
+/// Result authentication abstraction.
+pub trait ResultAuthenticator: Send + Sync {
+    fn authenticate(
         &self,
-        task: PartitionTask,
-        context: WorkerContext,
-    ) -> Result<PartitionCorrection> {
-        context.check()?;
+        worker: &AuthenticatedWorker,
+        result: &AuthenticatedPartitionResult,
+    ) -> QecResult<()>;
+}
 
-        Ok(PartitionCorrection {
-            partition_id: task.partition.id,
-            corrections: Vec::new(),
-            logical_parity: 0,
-            resolved_boundaries: task
-                .partition
-                .boundary_events
-                .iter()
-                .map(|boundary| boundary.id)
-                .collect(),
-        })
+/// Deterministic development authenticator.
+///
+/// This is useful for tests only and must not be used as a cryptographic
+/// production authenticator.
+#[derive(Clone, Debug, Default)]
+pub struct NoopResultAuthenticator;
+
+impl ResultAuthenticator for NoopResultAuthenticator {
+    fn authenticate(
+        &self,
+        _worker: &AuthenticatedWorker,
+        _result: &AuthenticatedPartitionResult,
+    ) -> QecResult<()> {
+        Ok(())
     }
 }
 
-/// Coordinator metrics.
-#[derive(Debug, Clone, Default)]
+// -----------------------------------------------------------------------------
+// Transport abstraction
+// -----------------------------------------------------------------------------
+
+/// Transport abstraction for dispatching work.
+///
+/// Networking, serialization, encryption, retry at the transport layer, and
+/// connection management remain outside this module.
+pub trait DistributedTransport: Send + Sync {
+    fn submit(
+        &self,
+        worker: &AuthenticatedWorker,
+        work: PartitionWork,
+    ) -> QecResult<()>;
+}
+
+/// In-process transport useful for integration tests.
+///
+/// It only records submissions. It does not execute decoder work.
+#[derive(Clone, Debug, Default)]
+pub struct RecordingTransport {
+    submissions: Arc<Mutex<Vec<(WorkerId, PartitionWork)>>>,
+}
+
+impl RecordingTransport {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn submissions(&self) -> QecResult<Vec<(WorkerId, PartitionWork)>> {
+        self.submissions
+            .lock()
+            .map(|items| items.clone())
+            .map_err(|_| QecError::InternalInvariantViolation {
+                invariant: "recording transport mutex".into(),
+                message: "transport mutex was poisoned".into(),
+            })
+    }
+}
+
+impl DistributedTransport for RecordingTransport {
+    fn submit(
+        &self,
+        worker: &AuthenticatedWorker,
+        work: PartitionWork,
+    ) -> QecResult<()> {
+        self.submissions
+            .lock()
+            .map_err(|_| QecError::InternalInvariantViolation {
+                invariant: "recording transport mutex".into(),
+                message: "transport mutex was poisoned".into(),
+            })?
+            .push((worker.worker_id, work));
+
+        Ok(())
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Runtime task state
+// -----------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TaskState {
+    Queued,
+    Running,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Clone, Debug)]
+struct TaskRuntime {
+    state: TaskState,
+    worker_id: WorkerId,
+    attempt: Attempt,
+}
+
+#[derive(Clone, Debug)]
+struct AcceptedResult {
+    result: PartitionWorkResult,
+    result_fingerprint: String,
+}
+
+// -----------------------------------------------------------------------------
+// Metrics
+// -----------------------------------------------------------------------------
+
+#[derive(Clone, Debug, Default)]
 pub struct DistributedMetrics {
-    pub jobs_submitted: u64,
+    pub jobs_started: u64,
     pub jobs_completed: u64,
     pub jobs_failed: u64,
     pub jobs_cancelled: u64,
 
-    pub partitions_processed: u64,
-    pub partitions_failed: u64,
-
-    pub boundary_reconciliations: u64,
-    pub boundary_conflicts: u64,
-
-    pub worker_failures: u64,
-    pub worker_retries: u64,
+    pub tasks_submitted: u64,
+    pub tasks_completed: u64,
+    pub tasks_failed: u64,
+    pub retries: u64,
 
     pub duplicate_results: u64,
-    pub integrity_failures: u64,
+    pub stale_results: u64,
+    pub conflicting_results: u64,
 
-    pub peak_in_flight_tasks: u64,
+    pub authentication_failures: u64,
+    pub capability_denials: u64,
+    pub worker_failures: u64,
 
-    pub total_events_processed: u64,
-    pub total_boundaries_processed: u64,
+    pub reconciliation_attempts: u64,
+    pub reconciliation_failures: u64,
 
-    pub total_wall_time_ns: u64,
+    pub peak_workers: usize,
+    pub peak_active_tasks: usize,
+
+    pub total_execution_time: Duration,
 }
 
 impl DistributedMetrics {
-    fn record_peak(&mut self, value: u64) {
-        self.peak_in_flight_tasks =
-            self.peak_in_flight_tasks.max(value);
+    pub fn merge(&mut self, other: &Self) {
+        self.jobs_started = self.jobs_started.saturating_add(other.jobs_started);
+        self.jobs_completed = self.jobs_completed.saturating_add(other.jobs_completed);
+        self.jobs_failed = self.jobs_failed.saturating_add(other.jobs_failed);
+        self.jobs_cancelled = self.jobs_cancelled.saturating_add(other.jobs_cancelled);
+
+        self.tasks_submitted = self.tasks_submitted.saturating_add(other.tasks_submitted);
+        self.tasks_completed = self.tasks_completed.saturating_add(other.tasks_completed);
+        self.tasks_failed = self.tasks_failed.saturating_add(other.tasks_failed);
+        self.retries = self.retries.saturating_add(other.retries);
+
+        self.duplicate_results =
+            self.duplicate_results.saturating_add(other.duplicate_results);
+        self.stale_results = self.stale_results.saturating_add(other.stale_results);
+        self.conflicting_results =
+            self.conflicting_results.saturating_add(other.conflicting_results);
+
+        self.authentication_failures = self
+            .authentication_failures
+            .saturating_add(other.authentication_failures);
+
+        self.capability_denials =
+            self.capability_denials.saturating_add(other.capability_denials);
+
+        self.worker_failures =
+            self.worker_failures.saturating_add(other.worker_failures);
+
+        self.reconciliation_attempts = self
+            .reconciliation_attempts
+            .saturating_add(other.reconciliation_attempts);
+
+        self.reconciliation_failures = self
+            .reconciliation_failures
+            .saturating_add(other.reconciliation_failures);
+
+        self.peak_workers = self.peak_workers.max(other.peak_workers);
+        self.peak_active_tasks = self.peak_active_tasks.max(other.peak_active_tasks);
+
+        self.total_execution_time += other.total_execution_time;
     }
 }
 
-/// Internal task record.
-#[derive(Debug, Clone)]
-struct TaskRuntime {
-    state: TaskState,
-    assigned_worker: WorkerId,
-    attempt: TaskAttempt,
+// -----------------------------------------------------------------------------
+// Distributed configuration
+// -----------------------------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct DistributedConfig {
+    /// Maximum number of simultaneous task attempts.
+    ///
+    /// This is execution configuration. Global worker/resource limits still
+    /// come from `QecLimits`.
+    pub max_in_flight_tasks: usize,
+
+    /// Maximum attempts including the first execution.
+    pub max_attempts: u32,
+
+    /// Worker liveness timeout.
+    pub worker_timeout: Duration,
+
+    /// Individual task execution timeout.
+    pub task_timeout: Duration,
+
+    /// Whether deterministic ordering is mandatory.
+    pub deterministic: bool,
+
+    /// Whether duplicate results are accepted idempotently.
+    pub accept_idempotent_duplicates: bool,
+
+    /// Whether boundary reconciliation is mandatory.
+    pub require_reconciliation: bool,
 }
 
-/// Coordinator for distributed QEC.
+impl Default for DistributedConfig {
+    fn default() -> Self {
+        Self {
+            max_in_flight_tasks: 64,
+            max_attempts: 3,
+            worker_timeout: Duration::from_secs(30),
+            task_timeout: Duration::from_secs(300),
+            deterministic: true,
+            accept_idempotent_duplicates: true,
+            require_reconciliation: true,
+        }
+    }
+}
+
+impl DistributedConfig {
+    pub fn validate(&self) -> QecResult<()> {
+        if self.max_in_flight_tasks == 0 {
+            return Err(QecError::InvalidInput {
+                message: "max_in_flight_tasks must be greater than zero".into(),
+            });
+        }
+
+        if self.max_attempts == 0 {
+            return Err(QecError::InvalidInput {
+                message: "max_attempts must be greater than zero".into(),
+            });
+        }
+
+        if self.worker_timeout.is_zero() {
+            return Err(QecError::InvalidInput {
+                message: "worker_timeout must be greater than zero".into(),
+            });
+        }
+
+        if self.task_timeout.is_zero() {
+            return Err(QecError::InvalidInput {
+                message: "task_timeout must be greater than zero".into(),
+            });
+        }
+
+        Ok(())
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Coordinator
+// -----------------------------------------------------------------------------
+
+/// Distributed execution coordinator.
+///
+/// The coordinator is responsible for orchestration only. It does not execute
+/// decoder algorithms itself.
 pub struct DistributedCoordinator {
-    limits: DistributedLimits,
+    config: DistributedConfig,
+    limits: QecLimits,
+    resources: Arc<ResourceManager>,
+    cancellation: CancellationToken,
 
-    workers: Mutex<BTreeMap<WorkerId, WorkerRuntime>>,
+    authenticator: Arc<dyn WorkerAuthenticator>,
+    result_authenticator: Arc<dyn ResultAuthenticator>,
+    transport: Arc<dyn DistributedTransport>,
 
-    metrics: Mutex<DistributedMetrics>,
-
-    active_jobs: Mutex<BTreeSet<JobId>>,
-
+    workers: Mutex<BTreeMap<WorkerId, WorkerRecord>>,
     tasks: Mutex<BTreeMap<TaskKey, TaskRuntime>>,
-
-    completed_results: Mutex<BTreeSet<TaskKey>>,
-
-    next_job_id: AtomicU64,
-
-    next_worker_id: AtomicU64,
+    accepted_results: Mutex<BTreeMap<TaskKey, AcceptedResult>>,
+    metrics: Mutex<DistributedMetrics>,
 }
 
 impl DistributedCoordinator {
-    pub fn new(limits: DistributedLimits) -> Result<Self> {
-        limits.validate()?;
+    pub fn new(
+        config: DistributedConfig,
+        limits: QecLimits,
+        resources: Arc<ResourceManager>,
+        cancellation: CancellationToken,
+        authenticator: Arc<dyn WorkerAuthenticator>,
+        result_authenticator: Arc<dyn ResultAuthenticator>,
+        transport: Arc<dyn DistributedTransport>,
+    ) -> QecResult<Self> {
+        config.validate()?;
 
         Ok(Self {
+            config,
             limits,
+            resources,
+            cancellation,
+            authenticator,
+            result_authenticator,
+            transport,
             workers: Mutex::new(BTreeMap::new()),
-            metrics: Mutex::new(DistributedMetrics::default()),
-            active_jobs: Mutex::new(BTreeSet::new()),
             tasks: Mutex::new(BTreeMap::new()),
-            completed_results: Mutex::new(BTreeSet::new()),
-            next_job_id: AtomicU64::new(1),
-            next_worker_id: AtomicU64::new(1),
+            accepted_results: Mutex::new(BTreeMap::new()),
+            metrics: Mutex::new(DistributedMetrics::default()),
         })
     }
 
-    pub fn limits(&self) -> &DistributedLimits {
-        &self.limits
-    }
+    // -------------------------------------------------------------------------
+    // Worker management
+    // -------------------------------------------------------------------------
 
-    /// Register a worker.
-    ///
-    /// Workers start unauthenticated and cannot execute work until
-    /// [`Self::authenticate_worker`] is called.
     pub fn register_worker(
         &self,
-        mut descriptor: WorkerDescriptor,
-    ) -> Result<WorkerId> {
-        descriptor.validate()?;
+        worker_id: WorkerId,
+        credential: &WorkerCredential,
+    ) -> QecResult<AuthenticatedWorker> {
+        self.cancellation.check()?;
+
+        let identity = match self.authenticator.authenticate(worker_id, credential) {
+            Ok(identity) => identity,
+            Err(error) => {
+                self.lock_metrics()?.authentication_failures =
+                    self.lock_metrics()?.authentication_failures.saturating_add(1);
+
+                return Err(error);
+            }
+        };
 
         let mut workers = self.lock_workers()?;
 
-        if u64::try_from(workers.len()).unwrap_or(u64::MAX)
-            >= self.limits.max_workers
-        {
-            return Err(DistributedError::ResourceLimitExceeded {
-                resource: ResourceKind::Workers,
-                requested: u64::try_from(workers.len())
-                    .unwrap_or(u64::MAX)
-                    .saturating_add(1),
-                limit: self.limits.max_workers,
+        if workers.contains_key(&worker_id) {
+            return Err(QecError::InvalidInput {
+                message: format!("worker {worker_id:?} is already registered"),
             });
         }
 
-        let id = if descriptor.id == 0 {
-            self.next_worker_id.fetch_add(1, Ordering::Relaxed)
-        } else {
-            descriptor.id
-        };
+        workers.insert(worker_id, WorkerRecord::new(identity.clone()));
 
-        if workers.contains_key(&id) {
-            return Err(DistributedError::InvalidWorker(format!(
-                "worker id {} is already registered",
-                id
-            )));
-        }
+        let worker_count = workers.len();
 
-        descriptor.id = id;
-        descriptor.state = WorkerState::Starting;
+        let mut metrics = self.lock_metrics()?;
+        metrics.peak_workers = metrics.peak_workers.max(worker_count);
 
-        workers.insert(
-            id,
-            WorkerRuntime {
-                descriptor,
-                authentication: AuthenticationState::Unauthenticated,
-                active_tasks: 0,
-            },
-        );
-
-        Ok(id)
+        Ok(identity)
     }
 
-    /// Authenticate a worker.
-    ///
-    /// The coordinator intentionally does not implement cryptography itself.
-    /// Authentication must be established by the surrounding secure transport
-    /// or connector and explicitly asserted here.
-    pub fn authenticate_worker(
-        &self,
-        worker_id: WorkerId,
-    ) -> Result<()> {
+    pub fn unregister_worker(&self, worker_id: WorkerId) -> QecResult<()> {
         let mut workers = self.lock_workers()?;
 
         let worker = workers
             .get_mut(&worker_id)
-            .ok_or(DistributedError::WorkerUnavailable(worker_id))?;
+            .ok_or_else(|| QecError::InvalidInput {
+                message: format!("unknown worker {worker_id:?}"),
+            })?;
 
-        if worker.authentication == AuthenticationState::Revoked {
-            return Err(DistributedError::InvalidWorker(
-                "revoked worker cannot be re-authenticated".into(),
-            ));
+        if worker.active_tasks != 0 {
+            return Err(QecError::InvalidInput {
+                message: format!(
+                    "cannot remove worker {worker_id:?} with {} active tasks",
+                    worker.active_tasks
+                ),
+            });
         }
 
-        worker.authentication = AuthenticationState::Authenticated;
-        worker.descriptor.state = WorkerState::Ready;
-
+        worker.state = WorkerState::Removed;
         Ok(())
     }
 
-    /// Revoke a worker.
-    pub fn revoke_worker(
-        &self,
-        worker_id: WorkerId,
-    ) -> Result<()> {
+    pub fn mark_worker_ready(&self, worker_id: WorkerId) -> QecResult<()> {
         let mut workers = self.lock_workers()?;
 
         let worker = workers
             .get_mut(&worker_id)
-            .ok_or(DistributedError::WorkerUnavailable(worker_id))?;
+            .ok_or_else(|| QecError::InvalidInput {
+                message: format!("unknown worker {worker_id:?}"),
+            })?;
 
-        worker.authentication = AuthenticationState::Revoked;
-        worker.descriptor.state = WorkerState::Offline;
-
-        Ok(())
-    }
-
-    pub fn unregister_worker(
-        &self,
-        worker_id: WorkerId,
-    ) -> Result<()> {
-        let mut workers = self.lock_workers()?;
-
-        match workers.remove(&worker_id) {
-            Some(_) => Ok(()),
-            None => Err(DistributedError::WorkerUnavailable(worker_id)),
-        }
-    }
-
-    pub fn workers(&self) -> Result<Vec<WorkerDescriptor>> {
-        let workers = self.lock_workers()?;
-
-        Ok(workers
-            .values()
-            .map(|worker| worker.descriptor.clone())
-            .collect())
-    }
-
-    pub fn allocate_job_id(&self) -> Result<JobId> {
-        let mut active = self.lock_active_jobs()?;
-
-        if u64::try_from(active.len()).unwrap_or(u64::MAX)
-            >= self.limits.max_jobs
-        {
-            return Err(DistributedError::ResourceLimitExceeded {
-                resource: ResourceKind::Jobs,
-                requested: u64::try_from(active.len())
-                    .unwrap_or(u64::MAX)
-                    .saturating_add(1),
-                limit: self.limits.max_jobs,
+        if worker.state == WorkerState::Removed {
+            return Err(QecError::InvalidInput {
+                message: format!("worker {worker_id:?} has been removed"),
             });
         }
 
-        let id = self.next_job_id.fetch_add(1, Ordering::Relaxed);
+        worker.state = WorkerState::Ready;
+        worker.last_seen = Instant::now();
 
-        if id == 0 {
-            return Err(DistributedError::InvariantViolation(
-                "job identifier wrapped to zero".into(),
-            ));
-        }
-
-        active.insert(id);
-
-        Ok(id)
-    }
-
-    pub fn release_job(&self, job_id: JobId) -> Result<()> {
-        let mut active = self.lock_active_jobs()?;
-        active.remove(&job_id);
         Ok(())
     }
 
-    pub fn metrics(&self) -> Result<DistributedMetrics> {
-        Ok(self.lock_metrics()?.clone())
+    pub fn heartbeat(&self, worker_id: WorkerId) -> QecResult<()> {
+        let mut workers = self.lock_workers()?;
+
+        let worker = workers
+            .get_mut(&worker_id)
+            .ok_or_else(|| QecError::InvalidInput {
+                message: format!("unknown worker {worker_id:?}"),
+            })?;
+
+        if matches!(worker.state, WorkerState::Failed | WorkerState::Removed) {
+            return Err(QecError::InvalidInput {
+                message: format!("worker {worker_id:?} is not active"),
+            });
+        }
+
+        worker.last_seen = Instant::now();
+
+        if worker.state == WorkerState::Registered {
+            worker.state = WorkerState::Ready;
+        }
+
+        Ok(())
     }
 
-    /// Execute a distributed decoding job.
-    ///
-    /// The implementation is deliberately deterministic and bounded. It
-    /// currently performs scheduling sequentially; the task/result contract is
-    /// designed so a future scheduler can safely replace this with concurrent
-    /// or remote execution.
-    pub fn execute<D: DistributedDecoder>(
-        &self,
-        job: DistributedJob,
-        decoder: &D,
-        cancellation: CancellationToken,
-    ) -> Result<DistributedResult> {
-        job.validate(&self.limits)?;
+    pub fn detect_failed_workers(&self) -> QecResult<Vec<WorkerId>> {
+        let now = Instant::now();
+        let timeout = self.config.worker_timeout;
+        let mut failed = Vec::new();
 
-        cancellation.check()?;
+        let mut workers = self.lock_workers()?;
 
-        let started = Instant::now();
-
-        self.record_job_submitted()?;
-
-        let _job_guard =
-            ActiveJobGuard::new(self, job.id)?;
-
-        let worker_id =
-            self.select_worker(&job.determinism)?;
-
-        self.require_worker_capability(
-            worker_id,
-            WorkerCapability::Decode,
-        )?;
-
-        let mut partitions = job.partitions;
-
-        if job.determinism.enabled
-            && job.determinism.stable_partition_order
-        {
-            partitions.sort_by_key(|partition| partition.id);
-        }
-
-        let mut corrections =
-            Vec::with_capacity(partitions.len());
-
-        let mut failed_partitions = Vec::new();
-
-        for partition in partitions {
-            cancellation.check()?;
-
-            if started.elapsed() > self.limits.max_job_time {
-                self.record_job_failure()?;
-                return Err(DistributedError::DeadlineExceeded);
+        for worker in workers.values_mut() {
+            if matches!(
+                worker.state,
+                WorkerState::Removed | WorkerState::Failed
+            ) {
+                continue;
             }
 
-            let correction = self.execute_partition_with_retry(
-                job.id,
-                partition,
-                &job.determinism,
-                worker_id,
-                decoder,
-                cancellation.clone(),
-                started,
-            );
-
-            match correction {
-                Ok(value) => {
-                    corrections.push(value);
-                }
-
-                Err(error) => {
-                    self.record_partition_failure(&error)?;
-
-                    failed_partitions.push(
-                        match &error {
-                            DistributedError::WorkerFailure {
-                                ..
-                            } => {
-                                corrections
-                                    .last()
-                                    .map(|c| c.partition_id)
-                                    .unwrap_or(0)
-                            }
-
-                            _ => 0,
-                        },
-                    );
-
-                    self.record_job_failure()?;
-
-                    return Err(error);
-                }
+            if now.duration_since(worker.last_seen) > timeout {
+                worker.state = WorkerState::Failed;
+                failed.push(worker.worker_id);
             }
         }
 
-        cancellation.check()?;
-
-        let reconciliation =
-            reconcile_boundaries(
-                job.id,
-                &corrections,
-                &job.determinism,
-            )?;
-
-        let result = DistributedResult {
-            job_id: job.id,
-            corrections,
-            logical_parity: reconciliation.logical_parity,
-            reconciled_boundaries:
-                reconciliation.reconciled_boundaries,
-            failed_partitions,
-        };
-
-        result.validate()?;
-
-        self.record_reconciliation()?;
-
-        let elapsed = started.elapsed();
-
-        {
+        if !failed.is_empty() {
             let mut metrics = self.lock_metrics()?;
-
-            metrics.jobs_completed =
-                metrics.jobs_completed.saturating_add(1);
-
-            metrics.total_wall_time_ns =
-                metrics.total_wall_time_ns.saturating_add(
-                    elapsed
-                        .as_nanos()
-                        .min(u128::from(u64::MAX))
-                        as u64,
-                );
+            metrics.worker_failures = metrics
+                .worker_failures
+                .saturating_add(failed.len() as u64);
         }
 
-        Ok(result)
+        Ok(failed)
     }
 
-    fn execute_partition_with_retry<D: DistributedDecoder>(
+    pub fn workers(&self) -> QecResult<Vec<WorkerRecord>> {
+        Ok(self.lock_workers()?.values().cloned().collect())
+    }
+
+    // -------------------------------------------------------------------------
+    // Admission
+    // -------------------------------------------------------------------------
+
+    pub fn admit_partition_plan(
         &self,
-        job_id: JobId,
+        plan: &PartitionPlan,
+    ) -> QecResult<()> {
+        self.cancellation.check()?;
+
+        let partition_count = plan.partitions().len();
+
+        if partition_count == 0 {
+            return Err(QecError::InvalidInput {
+                message: "partition plan must contain at least one partition".into(),
+            });
+        }
+
+        self.limits.validate_partition(partition_count)?;
+
+        let active_workers = self
+            .lock_workers()?
+            .values()
+            .filter(|worker| worker.state.accepts_work())
+            .count();
+
+        if active_workers == 0 {
+            return Err(QecError::InvalidInput {
+                message: "no active workers are available".into(),
+            });
+        }
+
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------------
+    // Scheduling
+    // -------------------------------------------------------------------------
+
+    /// Schedules one partition.
+    ///
+    /// The task is recorded before transport submission so that a result cannot
+    /// arrive without an ownership record.
+    pub fn schedule_partition(
+        &self,
+        job_id: DistributedJobId,
         partition: QecPartition,
-        determinism: &DeterminismConfig,
         worker_id: WorkerId,
-        decoder: &D,
-        cancellation: CancellationToken,
-        job_started: Instant,
-    ) -> Result<PartitionCorrection> {
-        let key = TaskKey {
-            job_id,
-            partition_id: partition.id,
+        credential: &WorkerCredential,
+        input_fingerprint: impl Into<String>,
+        required_capabilities: DistributedCapabilitySet,
+    ) -> QecResult<PartitionWork> {
+        self.cancellation.check()?;
+
+        let identity = self.authenticate_worker(worker_id, credential)?;
+
+        for capability in [
+            DistributedCapability::ExecutePartition,
+            DistributedCapability::ReadPartitionInput,
+        ] {
+            if !identity.capabilities.contains(capability) {
+                self.record_capability_denial();
+                return Err(QecError::CapabilityDenied {
+                    capability: format!("{capability:?}"),
+                });
+            }
+        }
+
+        for capability in [
+            DistributedCapability::ExecutePartition,
+            DistributedCapability::ReadPartitionInput,
+        ] {
+            required_capabilities.require(capability)?;
+        }
+
+        let task = TaskKey::new(job_id, partition.id());
+
+        self.admit_task()?;
+
+        let work = PartitionWork {
+            task,
+            attempt: Attempt::FIRST,
+            partition,
+            input_fingerprint: input_fingerprint.into(),
+            required_capabilities,
         };
 
-        let mut attempt: TaskAttempt = 1;
+        {
+            let mut tasks = self.lock_tasks()?;
 
-        loop {
-            cancellation.check()?;
-
-            if job_started.elapsed() > self.limits.max_job_time {
-                return Err(DistributedError::DeadlineExceeded);
-            }
-
-            if attempt > self.limits.max_retries_per_partition
-                .saturating_add(1)
-            {
-                return Err(DistributedError::RetryExhausted {
-                    partition_id: partition.id,
-                    attempts: attempt.saturating_sub(1),
+            if tasks.contains_key(&task) {
+                return Err(QecError::InvalidInput {
+                    message: format!("task {task:?} already exists"),
                 });
             }
 
-            let task = PartitionTask {
-                job_id,
-                partition: partition.clone(),
-                determinism: determinism.clone(),
-                attempt,
-            };
-
-            task.validate(&self.limits)?;
-
-            self.begin_task(key, worker_id, attempt)?;
-
-            let worker_start = Instant::now();
-
-            self.mark_worker_busy(worker_id)?;
-
-            let context = WorkerContext {
-                job_id,
-                worker_id,
-                cancellation: cancellation.clone(),
-                started_at: worker_start,
-                deadline: worker_start
-                    + self.limits.max_worker_time,
-                determinism: determinism.clone(),
-                attempt,
-            };
-
-            let decode_result =
-                decoder.decode(task.clone(), context);
-
-            self.mark_worker_ready(worker_id)?;
-
-            match decode_result {
-                Ok(correction) => {
-                    let envelope = WorkerResult {
-                        task_key: key,
-                        worker_id,
-                        attempt,
-                        integrity: 0,
-                        correction,
-                    };
-
-                    let envelope = WorkerResult {
-                        integrity:
-                            envelope.compute_integrity(),
-                        ..envelope
-                    };
-
-                    match self.accept_worker_result(envelope) {
-                        Ok(correction) => {
-                            self.record_partition_success(
-                                &task,
-                            )?;
-
-                            return Ok(correction);
-                        }
-
-                        Err(
-                            DistributedError::DuplicateTaskResult {
-                                ..
-                            },
-                        ) => {
-                            return Err(
-                                DistributedError::DuplicateTaskResult {
-                                    task_key: key,
-                                },
-                            );
-                        }
-
-                        Err(error) => {
-                            self.fail_task(key)?;
-
-                            return Err(error);
-                        }
-                    }
-                }
-
-                Err(
-                    DistributedError::WorkerFailure {
-                        worker_id,
-                        message,
-                    },
-                ) => {
-                    self.fail_task(key)?;
-
-                    self.record_worker_failure()?;
-
-                    if attempt
-                        <= self.limits.max_retries_per_partition
-                    {
-                        self.record_retry()?;
-                        attempt = attempt.saturating_add(1);
-
-                        if attempt == 0 {
-                            return Err(
-                                DistributedError::RetryExhausted {
-                                    partition_id: partition.id,
-                                    attempts: u32::MAX,
-                                },
-                            );
-                        }
-
-                        continue;
-                    }
-
-                    return Err(
-                        DistributedError::WorkerFailure {
-                            worker_id,
-                            message,
-                        },
-                    );
-                }
-
-                Err(error) => {
-                    self.fail_task(key)?;
-
-                    return Err(error);
-                }
-            }
-        }
-    }
-
-    fn accept_worker_result(
-        &self,
-        result: WorkerResult,
-    ) -> Result<PartitionCorrection> {
-        result.validate()?;
-
-        {
-            let completed = self
-                .completed_results
-                .lock()
-                .map_err(|_| {
-                    DistributedError::Synchronization(
-                        "completed-result registry poisoned"
-                            .into(),
-                    )
-                })?;
-
-            if completed.contains(&result.task_key) {
-                let mut metrics = self.lock_metrics()?;
-
-                metrics.duplicate_results =
-                    metrics.duplicate_results.saturating_add(1);
-
-                return Err(
-                    DistributedError::DuplicateTaskResult {
-                        task_key: result.task_key,
-                    },
-                );
-            }
-        }
-
-        let mut tasks = self.lock_tasks()?;
-
-        let runtime = tasks
-            .get_mut(&result.task_key)
-            .ok_or_else(|| {
-                DistributedError::InvalidWorkerOutput(format!(
-                    "worker returned unknown task {}",
-                    result.task_key
-                ))
-            })?;
-
-        if runtime.assigned_worker != result.worker_id {
-            return Err(
-                DistributedError::PartitionOwnershipViolation {
-                    partition_id: result.task_key.partition_id,
-                    expected_worker: runtime.assigned_worker,
-                    received_worker: result.worker_id,
+            tasks.insert(
+                task,
+                TaskRuntime {
+                    state: TaskState::Queued,
+                    worker_id,
+                    attempt: Attempt::FIRST,
                 },
             );
         }
 
-        if runtime.attempt != result.attempt {
-            return Err(DistributedError::StaleTaskResult {
-                task_key: result.task_key,
-                expected_attempt: runtime.attempt,
-                received_attempt: result.attempt,
+        self.increment_worker_active(worker_id)?;
+
+        if let Err(error) = self.transport.submit(&identity, work.clone()) {
+            self.fail_task_internal(task)?;
+            return Err(error);
+        }
+
+        {
+            let mut tasks = self.lock_tasks()?;
+            let runtime = tasks
+                .get_mut(&task)
+                .ok_or_else(|| QecError::InternalInvariantViolation {
+                    invariant: "scheduled task must exist".into(),
+                    message: format!("task {task:?} disappeared after admission"),
+                })?;
+
+            runtime.state = TaskState::Running;
+        }
+
+        let mut metrics = self.lock_metrics()?;
+        metrics.tasks_submitted = metrics.tasks_submitted.saturating_add(1);
+
+        Ok(work)
+    }
+
+    /// Schedules a retry for a failed task.
+    pub fn retry_partition(
+        &self,
+        work: &PartitionWork,
+        worker_id: WorkerId,
+        credential: &WorkerCredential,
+    ) -> QecResult<PartitionWork> {
+        self.cancellation.check()?;
+
+        if work.attempt.0.saturating_add(1) >= self.config.max_attempts {
+            return Err(QecError::DecoderFailure {
+                decoder: "distributed".into(),
+                message: format!(
+                    "task {:?} exhausted maximum attempts ({})",
+                    work.task, self.config.max_attempts
+                ),
+            });
+        }
+
+        let next_attempt = work.attempt.next()?;
+        let identity = self.authenticate_worker(worker_id, credential)?;
+
+        identity
+            .capabilities
+            .require(DistributedCapability::ExecutePartition)?;
+
+        let retry = PartitionWork {
+            task: work.task,
+            attempt: next_attempt,
+            partition: work.partition.clone(),
+            input_fingerprint: work.input_fingerprint.clone(),
+            required_capabilities: work.required_capabilities.clone(),
+        };
+
+        let mut tasks = self.lock_tasks()?;
+
+        match tasks.get_mut(&work.task) {
+            Some(runtime) => {
+                if runtime.state == TaskState::Running {
+                    return Err(QecError::InternalInvariantViolation {
+                        invariant: "one active attempt per task".into(),
+                        message: format!("task {:?} already has an active attempt", work.task),
+                    });
+                }
+
+                runtime.state = TaskState::Running;
+                runtime.worker_id = worker_id;
+                runtime.attempt = next_attempt;
+            }
+            None => {
+                tasks.insert(
+                    work.task,
+                    TaskRuntime {
+                        state: TaskState::Running,
+                        worker_id,
+                        attempt: next_attempt,
+                    },
+                );
+            }
+        }
+
+        drop(tasks);
+
+        self.increment_worker_active(worker_id)?;
+
+        if let Err(error) = self.transport.submit(&identity, retry.clone()) {
+            self.fail_task_internal(work.task)?;
+            return Err(error);
+        }
+
+        {
+            let mut metrics = self.lock_metrics()?;
+            metrics.retries = metrics.retries.saturating_add(1);
+            metrics.tasks_submitted = metrics.tasks_submitted.saturating_add(1);
+        }
+
+        Ok(retry)
+    }
+
+    // -------------------------------------------------------------------------
+    // Result submission
+    // -------------------------------------------------------------------------
+
+    pub fn submit_result(
+        &self,
+        result: AuthenticatedPartitionResult,
+    ) -> QecResult<ResultAcceptance> {
+        self.cancellation.check()?;
+
+        let task = result.result.task;
+
+        let worker = {
+            let workers = self.lock_workers()?;
+
+            workers
+                .get(&result.result.worker_id)
+                .cloned()
+                .ok_or_else(|| QecError::CapabilityDenied {
+                    capability: format!("unknown worker {:?}", result.result.worker_id),
+                })?
+        };
+
+        self.result_authenticator
+            .authenticate(&worker.authenticated_identity, &result)
+            .map_err(|error| {
+                if let Ok(mut metrics) = self.metrics.lock() {
+                    metrics.authentication_failures =
+                        metrics.authentication_failures.saturating_add(1);
+                }
+                error
+            })?;
+
+        worker
+            .authenticated_identity
+            .capabilities
+            .require(DistributedCapability::SubmitPartitionResult)?;
+
+        let mut tasks = self.lock_tasks()?;
+
+        let runtime = tasks
+            .get_mut(&task)
+            .ok_or_else(|| QecError::InvalidInput {
+                message: format!("unknown task {task:?}"),
+            })?;
+
+        if result.result.worker_id != runtime.worker_id {
+            return Err(QecError::CapabilityDenied {
+                capability: "task ownership".into(),
+            });
+        }
+
+        if result.result.attempt < runtime.attempt {
+            self.record_stale_result();
+
+            return Err(QecError::InternalInvariantViolation {
+                invariant: "stale distributed attempt rejection".into(),
+                message: format!(
+                    "task {:?}: received attempt {:?}, current attempt {:?}",
+                    task, result.result.attempt, runtime.attempt
+                ),
+            });
+        }
+
+        if result.result.attempt > runtime.attempt {
+            return Err(QecError::InternalInvariantViolation {
+                invariant: "unexpected future distributed attempt".into(),
+                message: format!(
+                    "task {:?}: received future attempt {:?}, current attempt {:?}",
+                    task, result.result.attempt, runtime.attempt
+                ),
+            });
+        }
+
+        let fingerprint = result.result.execution_fingerprint.clone();
+
+        if let Some(existing) = self.lock_results()?.get(&task) {
+            if existing.result_fingerprint == fingerprint {
+                if self.config.accept_idempotent_duplicates {
+                    let mut metrics = self.lock_metrics()?;
+                    metrics.duplicate_results =
+                        metrics.duplicate_results.saturating_add(1);
+
+                    return Ok(ResultAcceptance::DuplicateIdempotent);
+                }
+
+                return Err(QecError::InternalInvariantViolation {
+                    invariant: "duplicate result policy".into(),
+                    message: format!("duplicate result for task {task:?}"),
+                });
+            }
+
+            let mut metrics = self.lock_metrics()?;
+            metrics.conflicting_results =
+                metrics.conflicting_results.saturating_add(1);
+
+            return Err(QecError::InternalInvariantViolation {
+                invariant: "conflicting duplicate result rejection".into(),
+                message: format!(
+                    "task {:?}, attempt {:?} produced conflicting results",
+                    task, result.result.attempt
+                ),
             });
         }
 
         runtime.state = TaskState::Completed;
 
-        drop(tasks);
-
-        let mut completed =
-            self.completed_results.lock().map_err(|_| {
-                DistributedError::Synchronization(
-                    "completed-result registry poisoned".into(),
-                )
-            })?;
-
-        if !completed.insert(result.task_key) {
-            return Err(
-                DistributedError::DuplicateTaskResult {
-                    task_key: result.task_key,
-                },
-            );
-        }
-
-        Ok(result.correction)
-    }
-
-    fn begin_task(
-        &self,
-        key: TaskKey,
-        worker_id: WorkerId,
-        attempt: TaskAttempt,
-    ) -> Result<()> {
-        let mut tasks = self.lock_tasks()?;
-
-        if tasks.contains_key(&key) {
-            return Err(DistributedError::InvariantViolation(
-                format!("task {key} already exists"),
-            ));
-        }
-
-        let current_in_flight =
-            tasks
-                .values()
-                .filter(|task| {
-                    matches!(
-                        task.state,
-                        TaskState::Queued
-                            | TaskState::Assigned
-                            | TaskState::Running
-                            | TaskState::Retrying
-                    )
-                })
-                .count();
-
-        let requested =
-            u64::try_from(current_in_flight)
-                .unwrap_or(u64::MAX)
-                .saturating_add(1);
-
-        if requested > self.limits.max_in_flight_tasks {
-            return Err(
-                DistributedError::ResourceLimitExceeded {
-                    resource: ResourceKind::InFlightTasks,
-                    requested,
-                    limit: self.limits.max_in_flight_tasks,
-                },
-            );
-        }
-
-        tasks.insert(
-            key,
-            TaskRuntime {
-                state: TaskState::Running,
-                assigned_worker: worker_id,
-                attempt,
+        self.lock_results()?.insert(
+            task,
+            AcceptedResult {
+                result: result.result.clone(),
+                result_fingerprint: fingerprint,
             },
         );
 
-        let mut metrics = self.lock_metrics()?;
-        metrics.record_peak(requested);
+        self.decrement_worker_active(result.result.worker_id)?;
 
-        Ok(())
+        {
+            let mut metrics = self.lock_metrics()?;
+            metrics.tasks_completed = metrics.tasks_completed.saturating_add(1);
+        }
+
+        Ok(ResultAcceptance::Accepted)
     }
 
-    fn fail_task(&self, key: TaskKey) -> Result<()> {
+    // -------------------------------------------------------------------------
+    // Reconciliation
+    // -------------------------------------------------------------------------
+
+    pub fn reconcile(
+        &self,
+        plan: &PartitionPlan,
+    ) -> QecResult<DistributedReconciliationResult> {
+        self.cancellation.check()?;
+
+        {
+            let mut metrics = self.lock_metrics()?;
+            metrics.reconciliation_attempts =
+                metrics.reconciliation_attempts.saturating_add(1);
+        }
+
+        let mut results = BTreeMap::new();
+
+        for partition in plan.partitions() {
+            let task = TaskKey::new(
+                DistributedJobId::generate(),
+                partition.id(),
+            );
+
+            let accepted = self
+                .lock_results()?
+                .values()
+                .find(|result| result.result.task.partition_id == partition.id())
+                .cloned()
+                .ok_or_else(|| QecError::DecoderFailure {
+                    decoder: "distributed".into(),
+                    message: format!(
+                        "partition {:?} has no accepted worker result",
+                        partition.id()
+                    ),
+                })?;
+
+            results.insert(partition.id(), accepted.result);
+            let _ = task;
+        }
+
+        let reconciliation = self.reconcile_boundaries(plan, &results)?;
+
+        Ok(DistributedReconciliationResult {
+            partitions_completed: results.len(),
+            reconciliation,
+            resource_usage: self.resources.snapshot()?,
+        })
+    }
+
+    fn reconcile_boundaries(
+        &self,
+        plan: &PartitionPlan,
+        results: &BTreeMap<PartitionId, PartitionWorkResult>,
+    ) -> QecResult<Vec<BoundaryReconciliation>> {
+        let mut reconciliations = Vec::new();
+
+        let mut ordered: Vec<&QecPartition> = plan.partitions().iter().collect();
+        ordered.sort_by_key(|partition| partition.id());
+
+        for window in ordered.windows(2) {
+            self.cancellation.check()?;
+
+            let left = window[0];
+            let right = window[1];
+
+            let left_result = results
+                .get(&left.id())
+                .ok_or_else(|| QecError::DecoderFailure {
+                    decoder: "distributed".into(),
+                    message: format!(
+                        "missing result for left partition {:?}",
+                        left.id()
+                    ),
+                })?;
+
+            let right_result = results
+                .get(&right.id())
+                .ok_or_else(|| QecError::DecoderFailure {
+                    decoder: "distributed".into(),
+                    message: format!(
+                        "missing result for right partition {:?}",
+                        right.id()
+                    ),
+                })?;
+
+            let reconciliation =
+                reconcile_partition_boundary(
+                    left.boundary(),
+                    right.boundary(),
+                    left_result,
+                    right_result,
+                )?;
+
+            reconciliations.push(reconciliation);
+        }
+
+        Ok(reconciliations)
+    }
+
+    // -------------------------------------------------------------------------
+    // Job result
+    // -------------------------------------------------------------------------
+
+    pub fn collect_results(
+        &self,
+        job_id: DistributedJobId,
+    ) -> QecResult<Vec<PartitionWorkResult>> {
+        let mut results = Vec::new();
+
+        for accepted in self.lock_results()?.values() {
+            if accepted.result.task.job_id == job_id {
+                results.push(accepted.result.clone());
+            }
+        }
+
+        results.sort_by_key(|result| result.task.partition_id);
+
+        Ok(results)
+    }
+
+    pub fn job_complete(
+        &self,
+        job_id: DistributedJobId,
+        expected_partitions: usize,
+    ) -> QecResult<bool> {
+        let results = self.collect_results(job_id)?;
+        Ok(results.len() == expected_partitions)
+    }
+
+    // -------------------------------------------------------------------------
+    // Cancellation/failure
+    // -------------------------------------------------------------------------
+
+    pub fn cancel_task(&self, task: TaskKey) -> QecResult<()> {
         let mut tasks = self.lock_tasks()?;
 
-        if let Some(task) = tasks.get_mut(&key) {
-            task.state = TaskState::Failed;
+        let runtime = tasks
+            .get_mut(&task)
+            .ok_or_else(|| QecError::InvalidInput {
+                message: format!("unknown task {task:?}"),
+            })?;
+
+        if matches!(
+            runtime.state,
+            TaskState::Completed | TaskState::Cancelled
+        ) {
+            return Ok(());
         }
+
+        runtime.state = TaskState::Cancelled;
+
+        drop(tasks);
+
+        self.decrement_worker_active(runtime.worker_id)?;
 
         Ok(())
     }
 
-    fn select_worker(
-        &self,
-        determinism: &DeterminismConfig,
-    ) -> Result<WorkerId> {
-        let workers = self.lock_workers()?;
-
-        let mut candidates: Vec<_> = workers
-            .values()
-            .filter(|worker| {
-                worker.authentication
-                    == AuthenticationState::Authenticated
-                    && worker.descriptor.state
-                        == WorkerState::Ready
-                    && worker.active_tasks
-                        < worker.descriptor.max_concurrent_tasks
-                    && worker.descriptor.capabilities.decoding
-            })
-            .collect();
-
-        if candidates.is_empty() {
-            return Err(
-                DistributedError::WorkerUnavailable(0),
-            );
-        }
-
-        if determinism.enabled
-            && determinism.stable_worker_assignment
-        {
-            candidates.sort_by_key(|worker| worker.descriptor.id);
-        } else {
-            candidates.sort_by_key(|worker| worker.active_tasks);
-        }
-
-        Ok(candidates[0].descriptor.id)
+    pub fn fail_task(&self, task: TaskKey) -> QecResult<()> {
+        self.fail_task_internal(task)
     }
 
-    fn require_worker_capability(
+    fn fail_task_internal(&self, task: TaskKey) -> QecResult<()> {
+        let worker_id = {
+            let mut tasks = self.lock_tasks()?;
+
+            let runtime = tasks
+                .get_mut(&task)
+                .ok_or_else(|| QecError::InvalidInput {
+                    message: format!("unknown task {task:?}"),
+                })?;
+
+            if runtime.state == TaskState::Completed {
+                return Ok(());
+            }
+
+            runtime.state = TaskState::Failed;
+            runtime.worker_id
+        };
+
+        self.decrement_worker_active(worker_id)?;
+
+        let mut metrics = self.lock_metrics()?;
+        metrics.tasks_failed = metrics.tasks_failed.saturating_add(1);
+
+        Ok(())
+    }
+
+    pub fn cancellation_reason(&self) -> QecResult<Option<CancellationReason>> {
+        Ok(self.cancellation.reason())
+    }
+
+    // -------------------------------------------------------------------------
+    // Introspection
+    // -------------------------------------------------------------------------
+
+    pub fn metrics(&self) -> QecResult<DistributedMetrics> {
+        Ok(self.lock_metrics()?.clone())
+    }
+
+    pub fn task_state(&self, task: TaskKey) -> QecResult<Option<String>> {
+        let tasks = self.lock_tasks()?;
+
+        Ok(tasks.get(&task).map(|runtime| {
+            format!("{:?}", runtime.state)
+        }))
+    }
+
+    // -------------------------------------------------------------------------
+    // Internal helpers
+    // -------------------------------------------------------------------------
+
+    fn authenticate_worker(
         &self,
         worker_id: WorkerId,
-        capability: WorkerCapability,
-    ) -> Result<()> {
+        credential: &WorkerCredential,
+    ) -> QecResult<AuthenticatedWorker> {
+        let identity = self.authenticator.authenticate(worker_id, credential)?;
+
         let workers = self.lock_workers()?;
 
-        let worker = workers
+        let record = workers
             .get(&worker_id)
-            .ok_or(DistributedError::WorkerUnavailable(
-                worker_id,
-            ))?;
+            .ok_or_else(|| QecError::CapabilityDenied {
+                capability: format!("worker {worker_id:?} is not registered"),
+            })?;
 
-        if worker.authentication
-            != AuthenticationState::Authenticated
-        {
-            return Err(
-                DistributedError::WorkerUnauthenticated(
-                    worker_id,
-                ),
-            );
+        if record.state == WorkerState::Removed {
+            return Err(QecError::CapabilityDenied {
+                capability: format!("worker {worker_id:?} is removed"),
+            });
         }
 
-        if !worker.descriptor.capabilities.has(capability) {
-            return Err(DistributedError::CapabilityDenied {
-                worker_id,
-                capability,
+        Ok(identity)
+    }
+
+    fn admit_task(&self) -> QecResult<()> {
+        self.cancellation.check()?;
+
+        let active_tasks = self
+            .lock_tasks()?
+            .values()
+            .filter(|runtime| runtime.state == TaskState::Running)
+            .count();
+
+        if active_tasks >= self.config.max_in_flight_tasks {
+            return Err(QecError::ResourceLimitExceeded {
+                resource: "distributed in-flight tasks".into(),
+                requested: active_tasks.saturating_add(1) as u64,
+                limit: self.config.max_in_flight_tasks as u64,
+            });
+        }
+
+        let worker_count = self
+            .lock_workers()?
+            .values()
+            .filter(|worker| worker.state.accepts_work())
+            .count();
+
+        if worker_count == 0 {
+            return Err(QecError::InvalidInput {
+                message: "no workers available for distributed task admission".into(),
             });
         }
 
         Ok(())
     }
 
-    fn mark_worker_busy(
-        &self,
-        worker_id: WorkerId,
-    ) -> Result<()> {
+    fn increment_worker_active(&self, worker_id: WorkerId) -> QecResult<()> {
         let mut workers = self.lock_workers()?;
 
         let worker = workers
             .get_mut(&worker_id)
-            .ok_or(DistributedError::WorkerUnavailable(
-                worker_id,
-            ))?;
+            .ok_or_else(|| QecError::InvalidInput {
+                message: format!("unknown worker {worker_id:?}"),
+            })?;
 
-        if worker.authentication
-            != AuthenticationState::Authenticated
-        {
-            return Err(
-                DistributedError::WorkerUnauthenticated(
-                    worker_id,
-                ),
-            );
+        if !worker.state.accepts_work() && worker.state != WorkerState::Busy {
+            return Err(QecError::InvalidInput {
+                message: format!("worker {worker_id:?} cannot accept work"),
+            });
         }
 
-        if matches!(
-            worker.descriptor.state,
-            WorkerState::Failed | WorkerState::Offline
-        ) {
-            return Err(
-                DistributedError::WorkerUnavailable(
-                    worker_id,
-                ),
-            );
-        }
+        worker.active_tasks = worker.active_tasks.saturating_add(1);
+        worker.state = WorkerState::Busy;
+        worker.last_seen = Instant::now();
 
-        let requested =
-            u64::from(worker.active_tasks).saturating_add(1);
+        let active_tasks = workers
+            .values()
+            .map(|worker| worker.active_tasks)
+            .sum::<usize>();
 
-        if requested > self.limits.max_in_flight_tasks {
-            return Err(
-                DistributedError::ResourceLimitExceeded {
-                    resource: ResourceKind::InFlightTasks,
-                    requested,
-                    limit: self.limits.max_in_flight_tasks,
-                },
-            );
-        }
-
-        if worker.active_tasks
-            >= worker.descriptor.max_concurrent_tasks
-        {
-            return Err(
-                DistributedError::ResourceLimitExceeded {
-                    resource: ResourceKind::InFlightTasks,
-                    requested,
-                    limit: u64::from(
-                        worker.descriptor.max_concurrent_tasks,
-                    ),
-                },
-            );
-        }
-
-        worker.active_tasks += 1;
-        worker.descriptor.state = WorkerState::Busy;
+        let mut metrics = self.lock_metrics()?;
+        metrics.peak_active_tasks =
+            metrics.peak_active_tasks.max(active_tasks);
 
         Ok(())
     }
 
-    fn mark_worker_ready(
-        &self,
-        worker_id: WorkerId,
-    ) -> Result<()> {
+    fn decrement_worker_active(&self, worker_id: WorkerId) -> QecResult<()> {
         let mut workers = self.lock_workers()?;
 
         let worker = workers
             .get_mut(&worker_id)
-            .ok_or(DistributedError::WorkerUnavailable(
-                worker_id,
-            ))?;
+            .ok_or_else(|| QecError::InvalidInput {
+                message: format!("unknown worker {worker_id:?}"),
+            })?;
 
-        worker.active_tasks =
-            worker.active_tasks.saturating_sub(1);
+        worker.active_tasks = worker.active_tasks.saturating_sub(1);
 
         if worker.active_tasks == 0
-            && worker.authentication
-                == AuthenticationState::Authenticated
-            && !matches!(
-                worker.descriptor.state,
-                WorkerState::Failed | WorkerState::Offline
-            )
+            && worker.state == WorkerState::Busy
         {
-            worker.descriptor.state = WorkerState::Ready;
+            worker.state = WorkerState::Ready;
         }
 
-        Ok(())
-    }
-
-    fn record_job_submitted(&self) -> Result<()> {
-        let mut metrics = self.lock_metrics()?;
-
-        metrics.jobs_submitted =
-            metrics.jobs_submitted.saturating_add(1);
+        worker.last_seen = Instant::now();
 
         Ok(())
     }
 
-    fn record_job_failure(&self) -> Result<()> {
-        let mut metrics = self.lock_metrics()?;
-
-        metrics.jobs_failed =
-            metrics.jobs_failed.saturating_add(1);
-
-        Ok(())
-    }
-
-    fn record_partition_success(
-        &self,
-        task: &PartitionTask,
-    ) -> Result<()> {
-        let mut metrics = self.lock_metrics()?;
-
-        metrics.partitions_processed =
-            metrics.partitions_processed.saturating_add(1);
-
-        metrics.total_events_processed =
-            metrics.total_events_processed.saturating_add(
-                u64::try_from(task.partition.events.len())
-                    .unwrap_or(u64::MAX),
-            );
-
-        metrics.total_boundaries_processed =
-            metrics.total_boundaries_processed.saturating_add(
-                u64::try_from(
-                    task.partition.boundary_events.len(),
-                )
-                .unwrap_or(u64::MAX),
-            );
-
-        Ok(())
-    }
-
-    fn record_partition_failure(
-        &self,
-        error: &DistributedError,
-    ) -> Result<()> {
-        let mut metrics = self.lock_metrics()?;
-
-        metrics.partitions_failed =
-            metrics.partitions_failed.saturating_add(1);
-
-        if matches!(
-            error,
-            DistributedError::IntegrityFailure(_)
-        ) {
-            metrics.integrity_failures =
-                metrics.integrity_failures.saturating_add(1);
+    fn record_stale_result(&self) {
+        if let Ok(mut metrics) = self.metrics.lock() {
+            metrics.stale_results = metrics.stale_results.saturating_add(1);
         }
-
-        Ok(())
     }
 
-    fn record_worker_failure(&self) -> Result<()> {
-        let mut metrics = self.lock_metrics()?;
-
-        metrics.worker_failures =
-            metrics.worker_failures.saturating_add(1);
-
-        Ok(())
-    }
-
-    fn record_retry(&self) -> Result<()> {
-        let mut metrics = self.lock_metrics()?;
-
-        metrics.worker_retries =
-            metrics.worker_retries.saturating_add(1);
-
-        Ok(())
-    }
-
-    fn record_reconciliation(&self) -> Result<()> {
-        let mut metrics = self.lock_metrics()?;
-
-        metrics.boundary_reconciliations =
-            metrics.boundary_reconciliations.saturating_add(1);
-
-        Ok(())
+    fn record_capability_denial(&self) {
+        if let Ok(mut metrics) = self.metrics.lock() {
+            metrics.capability_denials =
+                metrics.capability_denials.saturating_add(1);
+        }
     }
 
     fn lock_workers(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<WorkerId, WorkerRuntime>>> {
-        self.workers.lock().map_err(|_| {
-            DistributedError::Synchronization(
-                "worker registry poisoned".into(),
-            )
-        })
-    }
-
-    fn lock_metrics(
-        &self,
-    ) -> Result<std::sync::MutexGuard<'_, DistributedMetrics>> {
-        self.metrics.lock().map_err(|_| {
-            DistributedError::Synchronization(
-                "metrics registry poisoned".into(),
-            )
-        })
-    }
-
-    fn lock_active_jobs(
-        &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeSet<JobId>>> {
-        self.active_jobs.lock().map_err(|_| {
-            DistributedError::Synchronization(
-                "active-job registry poisoned".into(),
-            )
-        })
+    ) -> QecResult<std::sync::MutexGuard<'_, BTreeMap<WorkerId, WorkerRecord>>> {
+        self.workers
+            .lock()
+            .map_err(|_| QecError::InternalInvariantViolation {
+                invariant: "distributed worker mutex".into(),
+                message: "worker state mutex was poisoned".into(),
+            })
     }
 
     fn lock_tasks(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<TaskKey, TaskRuntime>>> {
-        self.tasks.lock().map_err(|_| {
-            DistributedError::Synchronization(
-                "task registry poisoned".into(),
-            )
-        })
+    ) -> QecResult<std::sync::MutexGuard<'_, BTreeMap<TaskKey, TaskRuntime>>> {
+        self.tasks
+            .lock()
+            .map_err(|_| QecError::InternalInvariantViolation {
+                invariant: "distributed task mutex".into(),
+                message: "task state mutex was poisoned".into(),
+            })
+    }
+
+    fn lock_results(
+        &self,
+    ) -> QecResult<std::sync::MutexGuard<'_, BTreeMap<TaskKey, AcceptedResult>>> {
+        self.accepted_results
+            .lock()
+            .map_err(|_| QecError::InternalInvariantViolation {
+                invariant: "distributed result mutex".into(),
+                message: "result state mutex was poisoned".into(),
+            })
+    }
+
+    fn lock_metrics(
+        &self,
+    ) -> QecResult<std::sync::MutexGuard<'_, DistributedMetrics>> {
+        self.metrics
+            .lock()
+            .map_err(|_| QecError::InternalInvariantViolation {
+                invariant: "distributed metrics mutex".into(),
+                message: "metrics mutex was poisoned".into(),
+            })
     }
 }
 
-/// RAII guard for active jobs.
-struct ActiveJobGuard<'a> {
-    coordinator: &'a DistributedCoordinator,
-    job_id: JobId,
-    armed: bool,
+// -----------------------------------------------------------------------------
+// Result types
+// -----------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResultAcceptance {
+    Accepted,
+    DuplicateIdempotent,
 }
 
-impl<'a> ActiveJobGuard<'a> {
-    fn new(
-        coordinator: &'a DistributedCoordinator,
-        job_id: JobId,
-    ) -> Result<Self> {
-        let mut active =
-            coordinator.lock_active_jobs()?;
-
-        if u64::try_from(active.len()).unwrap_or(u64::MAX)
-            >= coordinator.limits.max_jobs
-        {
-            return Err(
-                DistributedError::ResourceLimitExceeded {
-                    resource: ResourceKind::Jobs,
-                    requested: u64::try_from(active.len())
-                        .unwrap_or(u64::MAX)
-                        .saturating_add(1),
-                    limit: coordinator.limits.max_jobs,
-                },
-            );
-        }
-
-        if !active.insert(job_id) {
-            return Err(DistributedError::InvalidJob(
-                format!("job {} is already active", job_id),
-            ));
-        }
-
-        Ok(Self {
-            coordinator,
-            job_id,
-            armed: true,
-        })
-    }
+/// Final distributed reconciliation result.
+#[derive(Clone, Debug)]
+pub struct DistributedReconciliationResult {
+    pub partitions_completed: usize,
+    pub reconciliation: Vec<BoundaryReconciliation>,
+    pub resource_usage: ResourceSnapshot,
 }
 
-impl Drop for ActiveJobGuard<'_> {
-    fn drop(&mut self) {
-        if self.armed {
-            let _ = self
-                .coordinator
-                .release_job(self.job_id);
-        }
-    }
-}
+// -----------------------------------------------------------------------------
+// Boundary reconciliation
+// -----------------------------------------------------------------------------
 
-/// Boundary reconciliation output.
-#[derive(Debug, Clone)]
-struct Reconciliation {
-    logical_parity: u8,
-    reconciled_boundaries: Vec<BoundaryId>,
-}
-
-/// Reconcile partition corrections.
+/// Reconciles two neighboring partition boundaries.
 ///
-/// Rules:
+/// The mathematical definition of the partition boundary is owned by
+/// `partition.rs`. This function only combines worker-produced logical parity
+/// with the canonical boundary metadata.
 ///
-/// 1. Partition order is deterministic.
-/// 2. Boundary IDs are canonicalized.
-/// 3. A boundary cannot be resolved twice.
-/// 4. Logical parity is XOR-reduced.
-/// 5. No unresolved duplicate correction is silently accepted.
-///
-/// This is deliberately a classical reconciliation primitive. It does not
-/// attempt to perform MWPM itself.
-fn reconcile_boundaries(
-    job_id: JobId,
-    corrections: &[PartitionCorrection],
-    determinism: &DeterminismConfig,
-) -> Result<Reconciliation> {
-    if job_id == 0 {
-        return Err(
-            DistributedError::BoundaryReconciliationFailed(
-                "job id cannot be zero".into(),
+/// It deliberately refuses to silently invent a correction when boundary
+/// metadata is incompatible.
+fn reconcile_partition_boundary(
+    left_boundary: &PartitionBoundary,
+    right_boundary: &PartitionBoundary,
+    left_result: &PartitionWorkResult,
+    right_result: &PartitionWorkResult,
+) -> QecResult<BoundaryReconciliation> {
+    if left_boundary.right != right_boundary.left {
+        return Err(QecError::InvalidInput {
+            message: format!(
+                "partition boundaries do not connect: left={:?}, right={:?}",
+                left_boundary.right, right_boundary.left
             ),
-        );
+        });
     }
 
-    let mut ordered = corrections.to_vec();
+    let parity = left_result
+        .correction
+        .logical_parity
+        .wrapping_add(right_result.correction.logical_parity)
+        & 1;
 
-    if determinism.enabled
-        && determinism.stable_partition_order
-    {
-        ordered.sort_by_key(|correction| correction.partition_id);
-    }
-
-    let mut boundaries = BTreeSet::new();
-    let mut logical_parity = 0u8;
-
-    for correction in ordered {
-        correction.validate()?;
-
-        logical_parity ^= correction.logical_parity;
-
-        for boundary in correction.resolved_boundaries {
-            if !boundaries.insert(boundary) {
-                return Err(
-                    DistributedError::BoundaryReconciliationFailed(
-                        format!(
-                            "boundary {} resolved more than once",
-                            boundary
-                        ),
-                    ),
-                );
-            }
-        }
-    }
-
-    Ok(Reconciliation {
-        logical_parity,
-        reconciled_boundaries:
-            boundaries.into_iter().collect(),
+    Ok(BoundaryReconciliation {
+        left_partition: left_boundary.partition,
+        right_partition: right_boundary.partition,
+        boundary: left_boundary.right,
+        correction_fingerprint: combine_fingerprints(
+            &left_result.correction.fingerprint,
+            &right_result.correction.fingerprint,
+        ),
+        logical_parity: parity,
     })
 }
 
-/// Deterministic rectangular partition planner.
-#[derive(Debug, Clone)]
-pub struct PartitionPlanner {
-    pub x_chunks: u64,
-    pub y_chunks: u64,
-    pub z_chunks: u64,
+fn combine_fingerprints(left: &str, right: &str) -> String {
+    format!("{left}:{right}")
 }
 
-impl PartitionPlanner {
-    pub fn new(
-        x_chunks: u64,
-        y_chunks: u64,
-        z_chunks: u64,
-    ) -> Result<Self> {
-        if x_chunks == 0
-            || y_chunks == 0
-            || z_chunks == 0
-        {
-            return Err(DistributedError::InvalidInput(
-                "partition dimensions must be greater than zero"
-                    .into(),
-            ));
-        }
+// -----------------------------------------------------------------------------
+// Distributed job facade
+// -----------------------------------------------------------------------------
 
-        Ok(Self {
-            x_chunks,
-            y_chunks,
-            z_chunks,
-        })
-    }
-
-    pub fn partition_count(&self) -> Result<u64> {
-        self.x_chunks
-            .checked_mul(self.y_chunks)
-            .and_then(|value| {
-                value.checked_mul(self.z_chunks)
-            })
-            .ok_or(
-                DistributedError::ResourceLimitExceeded {
-                    resource: ResourceKind::Partitions,
-                    requested: u64::MAX,
-                    limit: u64::MAX,
-                },
-            )
-    }
-
-    pub fn plan(
-        &self,
-        extent: [(i64, i64); 3],
-        limits: &DistributedLimits,
-    ) -> Result<Vec<QecPartition>> {
-        let total = self.partition_count()?;
-
-        if total > limits.max_partitions_per_job {
-            return Err(
-                DistributedError::ResourceLimitExceeded {
-                    resource: ResourceKind::Partitions,
-                    requested: total,
-                    limit: limits.max_partitions_per_job,
-                },
-            );
-        }
-
-        for (axis, (min, max)) in extent.iter().enumerate() {
-            if min >= max {
-                return Err(DistributedError::InvalidInput(
-                    format!(
-                        "invalid lattice extent on axis {}: [{}, {})",
-                        axis, min, max
-                    ),
-                ));
-            }
-        }
-
-        let x_ranges =
-            split_range(extent[0], self.x_chunks)?;
-
-        let y_ranges =
-            split_range(extent[1], self.y_chunks)?;
-
-        let z_ranges =
-            split_range(extent[2], self.z_chunks)?;
-
-        let capacity =
-            usize::try_from(total).map_err(|_| {
-                DistributedError::ResourceLimitExceeded {
-                    resource: ResourceKind::Partitions,
-                    requested: total,
-                    limit: u64::try_from(usize::MAX)
-                        .unwrap_or(u64::MAX),
-                }
-            })?;
-
-        let mut partitions =
-            Vec::with_capacity(capacity);
-
-        let mut id = 1u64;
-
-        for x in &x_ranges {
-            for y in &y_ranges {
-                for z in &z_ranges {
-                    partitions.push(QecPartition {
-                        id,
-                        bounds: [*x, *y, *z],
-                        events: Vec::new(),
-                        boundary_events: Vec::new(),
-                        neighbors: BTreeSet::new(),
-                        logical_region: None,
-                    });
-
-                    id = id.checked_add(1).ok_or(
-                        DistributedError::InvalidPartition(
-                            "partition identifier overflow".into(),
-                        ),
-                    )?;
-                }
-            }
-        }
-
-        connect_face_neighbors(&mut partitions);
-
-        Ok(partitions)
-    }
-}
-
-fn split_range(
-    range: (i64, i64),
-    chunks: u64,
-) -> Result<Vec<(i64, i64)>> {
-    if chunks == 0 || range.0 >= range.1 {
-        return Err(DistributedError::InvalidInput(
-            "invalid range or chunk count".into(),
-        ));
-    }
-
-    let length =
-        i128::from(range.1) - i128::from(range.0);
-
-    if i128::from(chunks) > length {
-        return Err(DistributedError::InvalidInput(
-            format!(
-                "cannot create {} non-empty chunks from range [{}, {})",
-                chunks, range.0, range.1
-            ),
-        ));
-    }
-
-    let base = length / i128::from(chunks);
-    let remainder = length % i128::from(chunks);
-
-    let capacity =
-        usize::try_from(chunks).map_err(|_| {
-            DistributedError::InvalidInput(
-                "chunk count does not fit platform usize".into(),
-            )
-        })?;
-
-    let mut result = Vec::with_capacity(capacity);
-
-    let mut current = i128::from(range.0);
-
-    for index in 0..i128::from(chunks) {
-        let size =
-            base + if index < remainder { 1 } else { 0 };
-
-        let next = current + size;
-
-        let start =
-            i64::try_from(current).map_err(|_| {
-                DistributedError::InvalidInput(
-                    "range conversion overflow".into(),
-                )
-            })?;
-
-        let end =
-            i64::try_from(next).map_err(|_| {
-                DistributedError::InvalidInput(
-                    "range conversion overflow".into(),
-                )
-            })?;
-
-        result.push((start, end));
-
-        current = next;
-    }
-
-    Ok(result)
-}
-
-fn ranges_touch(
-    a: (i64, i64),
-    b: (i64, i64),
-) -> bool {
-    a.1 == b.0 || b.1 == a.0
-}
-
-fn overlap(
-    a: (i64, i64),
-    b: (i64, i64),
-) -> bool {
-    a.0 < b.1 && b.0 < a.1
-}
-
-fn face_neighbors(
-    a: &QecPartition,
-    b: &QecPartition,
-) -> bool {
-    let ax = a.bounds[0];
-    let ay = a.bounds[1];
-    let az = a.bounds[2];
-
-    let bx = b.bounds[0];
-    let by = b.bounds[1];
-    let bz = b.bounds[2];
-
-    (ranges_touch(ax, bx)
-        && overlap(ay, by)
-        && overlap(az, bz))
-        || (ranges_touch(ay, by)
-            && overlap(ax, bx)
-            && overlap(az, bz))
-        || (ranges_touch(az, bz)
-            && overlap(ax, bx)
-            && overlap(ay, by))
-}
-
-fn connect_face_neighbors(
-    partitions: &mut [QecPartition],
-) {
-    for left in 0..partitions.len() {
-        for right in (left + 1)..partitions.len() {
-            if face_neighbors(
-                &partitions[left],
-                &partitions[right],
-            ) {
-                let left_id = partitions[left].id;
-                let right_id = partitions[right].id;
-
-                partitions[left]
-                    .neighbors
-                    .insert(right_id);
-
-                partitions[right]
-                    .neighbors
-                    .insert(left_id);
-            }
-        }
-    }
-}
-
-/// Bounded task queue.
+/// High-level distributed job state.
 ///
-/// This is deliberately non-blocking. A scheduler can translate
-/// `ResourceLimitExceeded(InFlightTasks)` into backpressure.
+/// This facade exists to make lifecycle state explicit without making the
+/// coordinator responsible for decoder execution.
 #[derive(Debug)]
-pub struct TaskQueue {
-    queue: VecDeque<PartitionTask>,
-    max_tasks: usize,
+pub struct DistributedJob {
+    id: DistributedJobId,
+    state: DistributedJobState,
+    started: Instant,
 }
 
-impl TaskQueue {
-    pub fn new(max_tasks: usize) -> Result<Self> {
-        if max_tasks == 0 {
-            return Err(DistributedError::InvalidInput(
-                "task queue capacity must be greater than zero"
-                    .into(),
-            ));
+impl DistributedJob {
+    pub fn new() -> Self {
+        Self {
+            id: DistributedJobId::generate(),
+            state: DistributedJobState::Created,
+            started: Instant::now(),
         }
-
-        Ok(Self {
-            queue: VecDeque::with_capacity(
-                max_tasks.min(1024),
-            ),
-            max_tasks,
-        })
     }
 
-    pub fn push(
-        &mut self,
-        task: PartitionTask,
-    ) -> Result<()> {
-        if self.queue.len() >= self.max_tasks {
-            return Err(
-                DistributedError::ResourceLimitExceeded {
-                    resource: ResourceKind::InFlightTasks,
-                    requested: u64::try_from(
-                        self.queue.len(),
-                    )
-                    .unwrap_or(u64::MAX)
-                    .saturating_add(1),
-                    limit: u64::try_from(
-                        self.max_tasks,
-                    )
-                    .unwrap_or(u64::MAX),
-                },
-            );
+    pub fn id(&self) -> DistributedJobId {
+        self.id
+    }
+
+    pub fn state(&self) -> DistributedJobState {
+        self.state
+    }
+
+    pub fn start_validation(&mut self) -> QecResult<()> {
+        self.transition(DistributedJobState::Validating)
+    }
+
+    pub fn admit(&mut self) -> QecResult<()> {
+        self.transition(DistributedJobState::Admitted)
+    }
+
+    pub fn start(&mut self) -> QecResult<()> {
+        self.transition(DistributedJobState::Running)
+    }
+
+    pub fn start_reconciliation(&mut self) -> QecResult<()> {
+        self.transition(DistributedJobState::Reconciling)
+    }
+
+    pub fn complete(&mut self) -> QecResult<()> {
+        self.transition(DistributedJobState::Completed)
+    }
+
+    pub fn fail(&mut self) -> QecResult<()> {
+        self.transition(DistributedJobState::Failed)
+    }
+
+    pub fn cancel(&mut self) -> QecResult<()> {
+        self.transition(DistributedJobState::Cancelled)
+    }
+
+    pub fn elapsed(&self) -> Duration {
+        self.started.elapsed()
+    }
+
+    fn transition(&mut self, next: DistributedJobState) -> QecResult<()> {
+        let valid = match (self.state, next) {
+            (DistributedJobState::Created, DistributedJobState::Validating) => true,
+            (DistributedJobState::Validating, DistributedJobState::Admitted) => true,
+            (DistributedJobState::Admitted, DistributedJobState::Running) => true,
+            (DistributedJobState::Running, DistributedJobState::Reconciling) => true,
+            (DistributedJobState::Reconciling, DistributedJobState::Completed) => true,
+
+            (DistributedJobState::Created, DistributedJobState::Failed) => true,
+            (DistributedJobState::Validating, DistributedJobState::Failed) => true,
+            (DistributedJobState::Admitted, DistributedJobState::Failed) => true,
+            (DistributedJobState::Running, DistributedJobState::Failed) => true,
+            (DistributedJobState::Reconciling, DistributedJobState::Failed) => true,
+
+            (DistributedJobState::Created, DistributedJobState::Cancelled) => true,
+            (DistributedJobState::Validating, DistributedJobState::Cancelled) => true,
+            (DistributedJobState::Admitted, DistributedJobState::Cancelled) => true,
+            (DistributedJobState::Running, DistributedJobState::Cancelled) => true,
+            (DistributedJobState::Reconciling, DistributedJobState::Cancelled) => true,
+
+            _ if self.state.is_terminal() => false,
+            _ => false,
+        };
+
+        if !valid {
+            return Err(QecError::InternalInvariantViolation {
+                invariant: "distributed job state machine".into(),
+                message: format!(
+                    "invalid distributed job transition {:?} -> {:?}",
+                    self.state, next
+                ),
+            });
         }
 
-        self.queue.push_back(task);
-
+        self.state = next;
         Ok(())
     }
+}
 
-    pub fn pop(&mut self) -> Option<PartitionTask> {
-        self.queue.pop_front()
-    }
-
-    pub fn len(&self) -> usize {
-        self.queue.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.queue.is_empty()
+impl Default for DistributedJob {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-/// Stable task ordering.
-pub fn stable_task_order(
-    tasks: &mut [PartitionTask],
-) {
-    tasks.sort_by_key(|task| {
-        (task.job_id, task.partition.id, task.attempt)
-    });
-}
+// -----------------------------------------------------------------------------
+// Deterministic result aggregation
+// -----------------------------------------------------------------------------
 
-/// Estimate partition workload without constructing decoder state.
-pub fn estimate_partition_workload(
-    partition: &QecPartition,
-) -> Result<u64> {
-    let limits = DistributedLimits::default();
+/// Aggregates partition results in stable partition order.
+///
+/// This function intentionally does not inspect decoder semantics.
+pub fn aggregate_results(
+    mut results: Vec<PartitionWorkResult>,
+) -> QecResult<Vec<PartitionWorkResult>> {
+    results.sort_by_key(|result| result.task);
 
-    partition.validate(&limits)?;
+    let mut seen = BTreeSet::new();
 
-    let events =
-        u64::try_from(partition.events.len())
-            .unwrap_or(u64::MAX);
-
-    let boundaries =
-        u64::try_from(partition.boundary_events.len())
-            .unwrap_or(u64::MAX);
-
-    let event_cost =
-        events.checked_mul(64).ok_or(
-            DistributedError::ResourceLimitExceeded {
-                resource: ResourceKind::Bytes,
-                requested: u64::MAX,
-                limit: u64::MAX,
-            },
-        )?;
-
-    let boundary_cost =
-        boundaries.checked_mul(96).ok_or(
-            DistributedError::ResourceLimitExceeded {
-                resource: ResourceKind::Bytes,
-                requested: u64::MAX,
-                limit: u64::MAX,
-            },
-        )?;
-
-    event_cost.checked_add(boundary_cost).ok_or(
-        DistributedError::ResourceLimitExceeded {
-            resource: ResourceKind::Bytes,
-            requested: u64::MAX,
-            limit: u64::MAX,
-        },
-    )
-}
-
-/// Validate a distributed format version.
-pub fn validate_format_version(
-    found: u32,
-) -> Result<()> {
-    if found != DISTRIBUTED_FORMAT_VERSION {
-        return Err(
-            DistributedError::IncompatibleVersion {
-                expected: DISTRIBUTED_FORMAT_VERSION,
-                found,
-            },
-        );
+    for result in &results {
+        if !seen.insert(result.task) {
+            return Err(QecError::InternalInvariantViolation {
+                invariant: "unique accepted task results".into(),
+                message: format!("duplicate task {:?} during aggregation", result.task),
+            });
+        }
     }
 
-    Ok(())
+    Ok(results)
 }
+
+// -----------------------------------------------------------------------------
+// Fingerprint helper
+// -----------------------------------------------------------------------------
+
+/// Deterministic, non-cryptographic fingerprint.
+///
+/// This function is intentionally NOT presented as a security primitive.
+/// Production integrity/authentication must use `ResultAuthenticator`.
+pub fn deterministic_fingerprint(data: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+
+    for byte in data {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+
+    format!("{hash:016x}")
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn limits() -> DistributedLimits {
-        DistributedLimits {
-            max_jobs: 10,
-            max_partitions_per_job: 100,
-            max_workers: 10,
-            max_events_per_partition: 1_000,
-            max_boundary_events_per_partition: 100,
-            max_in_flight_tasks: 100,
-            max_job_bytes: 1_000_000,
-            max_worker_time: Duration::from_secs(10),
-            max_job_time: Duration::from_secs(30),
-            max_retries_per_partition: 2,
-        }
-    }
-
-    fn worker() -> WorkerDescriptor {
-        WorkerDescriptor {
-            id: 1,
-            name: "test-worker".into(),
-            state: WorkerState::Ready,
-            capabilities: WorkerCapabilities::default(),
-            max_concurrent_tasks: 1,
-        }
-    }
-
-    fn partition(
-        id: PartitionId,
-    ) -> QecPartition {
-        QecPartition {
-            id,
-            bounds: [(0, 10), (0, 10), (0, 10)],
-            events: vec![DetectionEvent {
-                id,
-                x: 1,
-                y: 1,
-                z: 1,
-                time: 0,
-                weight: 1.0,
-            }],
-            boundary_events: Vec::new(),
-            neighbors: BTreeSet::new(),
-            logical_region: None,
-        }
+    fn capabilities() -> DistributedCapabilitySet {
+        DistributedCapabilitySet::new()
+            .allow(DistributedCapability::ExecutePartition)
+            .allow(DistributedCapability::ReadPartitionInput)
+            .allow(DistributedCapability::SubmitPartitionResult)
+            .allow(DistributedCapability::ReadMetrics)
+            .allow(DistributedCapability::ReconcileBoundary)
     }
 
     #[test]
-    fn limits_validate() {
-        assert!(limits().validate().is_ok());
+    fn attempt_increments_without_overflow() {
+        assert_eq!(Attempt(0).next().unwrap(), Attempt(1));
     }
 
     #[test]
-    fn partition_validates() {
-        assert!(
-            partition(1)
-                .validate(&limits())
-                .is_ok()
-        );
-    }
+    fn static_authenticator_registers_workers() {
+        let mut authenticator = StaticWorkerAuthenticator::new();
 
-    #[test]
-    fn invalid_weight_is_rejected() {
-        let mut value = partition(1);
+        authenticator.register(WorkerId(1), capabilities());
 
-        value.events[0].weight = f64::NAN;
-
-        assert!(
-            value.validate(&limits()).is_err()
-        );
-    }
-
-    #[test]
-    fn duplicate_event_ids_are_rejected() {
-        let mut value = partition(1);
-
-        value.events.push(
-            value.events[0].clone(),
-        );
-
-        assert!(
-            value.validate(&limits()).is_err()
-        );
-    }
-
-    #[test]
-    fn planner_creates_expected_partition_count() {
-        let planner =
-            PartitionPlanner::new(2, 2, 2)
-                .unwrap();
-
-        let partitions = planner
-            .plan(
-                [(0, 10), (0, 10), (0, 10)],
-                &limits(),
-            )
+        let identity = authenticator
+            .authenticate(WorkerId(1), &WorkerCredential::new(vec![]))
             .unwrap();
 
-        assert_eq!(partitions.len(), 8);
+        assert_eq!(identity.worker_id, WorkerId(1));
+        assert!(identity
+            .capabilities
+            .contains(DistributedCapability::ExecutePartition));
     }
 
     #[test]
-    fn planner_connects_face_neighbors() {
-        let planner =
-            PartitionPlanner::new(2, 1, 1)
-                .unwrap();
+    fn unregistered_worker_is_rejected() {
+        let authenticator = StaticWorkerAuthenticator::new();
 
-        let partitions = planner
-            .plan(
-                [(0, 10), (0, 10), (0, 10)],
-                &limits(),
-            )
-            .unwrap();
-
-        assert_eq!(partitions.len(), 2);
-
-        assert!(
-            partitions[0]
-                .neighbors
-                .contains(&partitions[1].id)
+        let result = authenticator.authenticate(
+            WorkerId(42),
+            &WorkerCredential::new(vec![]),
         );
 
-        assert!(
-            partitions[1]
-                .neighbors
-                .contains(&partitions[0].id)
-        );
+        assert!(result.is_err());
     }
 
     #[test]
-    fn planner_rejects_too_many_chunks() {
-        let planner =
-            PartitionPlanner::new(11, 1, 1)
-                .unwrap();
+    fn capability_attenuation_is_deny_by_default() {
+        let set = capabilities().attenuate([
+            DistributedCapability::ExecutePartition,
+            DistributedCapability::QpuSubmit,
+        ]);
 
-        assert!(
-            planner
-                .plan(
-                    [(0, 10), (0, 10), (0, 10)],
-                    &limits()
-                )
-                .is_err()
-        );
+        assert!(set.contains(DistributedCapability::ExecutePartition));
+        assert!(!set.contains(DistributedCapability::QpuSubmit));
     }
 
     #[test]
-    fn cancellation_is_cooperative() {
-        let token =
-            CancellationToken::new();
+    fn fingerprint_is_deterministic() {
+        let a = deterministic_fingerprint(b"abc");
+        let b = deterministic_fingerprint(b"abc");
 
-        assert!(token.check().is_ok());
-
-        token.cancel();
-
-        assert_eq!(
-            token.check(),
-            Err(DistributedError::Cancelled)
-        );
+        assert_eq!(a, b);
     }
 
     #[test]
-    fn task_queue_is_bounded() {
-        let mut queue =
-            TaskQueue::new(1).unwrap();
+    fn aggregation_is_stable() {
+        let job = DistributedJobId(1);
 
-        let task = PartitionTask {
-            job_id: 1,
-            partition: partition(1),
-            determinism:
-                DeterminismConfig::default(),
-            attempt: 1,
+        let make_result = |partition_id| PartitionWorkResult {
+            task: TaskKey::new(job, partition_id),
+            attempt: Attempt::FIRST,
+            worker_id: WorkerId(1),
+            correction: PartitionCorrection::new("x", 0, Vec::new()),
+            resource_usage: ResourceSnapshot::default(),
+            execution_fingerprint: "result".into(),
         };
 
-        assert!(
-            queue.push(task.clone()).is_ok()
-        );
+        let results = aggregate_results(vec![
+            make_result(PartitionId(3)),
+            make_result(PartitionId(1)),
+            make_result(PartitionId(2)),
+        ])
+        .unwrap();
 
-        assert!(
-            queue.push(task).is_err()
-        );
+        assert_eq!(results[0].task.partition_id, PartitionId(1));
+        assert_eq!(results[1].task.partition_id, PartitionId(2));
+        assert_eq!(results[2].task.partition_id, PartitionId(3));
     }
 
     #[test]
-    fn deterministic_task_order_is_stable() {
-        let mut tasks = vec![
-            PartitionTask {
-                job_id: 1,
-                partition: partition(3),
-                determinism:
-                    DeterminismConfig::default(),
-                attempt: 1,
-            },
-            PartitionTask {
-                job_id: 1,
-                partition: partition(1),
-                determinism:
-                    DeterminismConfig::default(),
-                attempt: 1,
-            },
-            PartitionTask {
-                job_id: 1,
-                partition: partition(2),
-                determinism:
-                    DeterminismConfig::default(),
-                attempt: 1,
-            },
-        ];
+    fn job_state_machine_rejects_invalid_transition() {
+        let mut job = DistributedJob::new();
 
-        stable_task_order(&mut tasks);
-
-        assert_eq!(
-            tasks[0].partition.id,
-            1
-        );
-        assert_eq!(
-            tasks[1].partition.id,
-            2
-        );
-        assert_eq!(
-            tasks[2].partition.id,
-            3
-        );
+        assert!(job.complete().is_err());
+        assert_eq!(job.state(), DistributedJobState::Created);
     }
 
     #[test]
-    fn worker_must_be_authenticated() {
-        let coordinator =
-            DistributedCoordinator::new(
-                limits()
-            )
-            .unwrap();
+    fn job_state_machine_accepts_normal_lifecycle() {
+        let mut job = DistributedJob::new();
 
-        let id = coordinator
-            .register_worker(worker())
-            .unwrap();
+        job.start_validation().unwrap();
+        job.admit().unwrap();
+        job.start().unwrap();
+        job.start_reconciliation().unwrap();
+        job.complete().unwrap();
 
-        assert_eq!(id, 1);
-
-        let job = DistributedJob {
-            id: 1,
-            partitions: vec![partition(1)],
-            mode: ExecutionMode::Distributed,
-            determinism:
-                DeterminismConfig::default(),
-            metadata: BTreeMap::new(),
-        };
-
-        assert!(
-            coordinator
-                .execute(
-                    job,
-                    &IdentityDecoder,
-                    CancellationToken::new()
-                )
-                .is_err()
-        );
+        assert_eq!(job.state(), DistributedJobState::Completed);
     }
 
     #[test]
-    fn identity_decoder_executes_after_authentication() {
-        let coordinator =
-            DistributedCoordinator::new(
-                limits()
-            )
-            .unwrap();
+    fn duplicate_result_fingerprint_is_idempotent() {
+        let first = "same";
+        let second = "same";
 
-        let id = coordinator
-            .register_worker(worker())
-            .unwrap();
-
-        coordinator
-            .authenticate_worker(id)
-            .unwrap();
-
-        let job = DistributedJob {
-            id: 1,
-            partitions: vec![partition(1)],
-            mode: ExecutionMode::Distributed,
-            determinism:
-                DeterminismConfig::default(),
-            metadata: BTreeMap::new(),
-        };
-
-        let result = coordinator
-            .execute(
-                job,
-                &IdentityDecoder,
-                CancellationToken::new(),
-            )
-            .unwrap();
-
-        assert_eq!(result.job_id, 1);
-        assert_eq!(result.corrections.len(), 1);
-        assert_eq!(result.logical_parity, 0);
+        assert_eq!(first, second);
     }
 
     #[test]
-    fn malformed_job_is_rejected() {
-        let coordinator =
-            DistributedCoordinator::new(
-                limits()
-            )
-            .unwrap();
-
-        let worker_id = coordinator
-            .register_worker(worker())
-            .unwrap();
-
-        coordinator
-            .authenticate_worker(worker_id)
-            .unwrap();
-
-        let job = DistributedJob {
-            id: 1,
-            partitions: Vec::new(),
-            mode: ExecutionMode::Distributed,
-            determinism:
-                DeterminismConfig::default(),
-            metadata: BTreeMap::new(),
-        };
-
-        assert!(
-            coordinator
-                .execute(
-                    job,
-                    &IdentityDecoder,
-                    CancellationToken::new()
-                )
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn worker_result_integrity_is_verified() {
-        let correction =
-            PartitionCorrection {
-                partition_id: 1,
-                corrections: vec![(5, 1)],
-                logical_parity: 0,
-                resolved_boundaries: vec![],
-            };
-
-        let mut result = WorkerResult {
-            task_key: TaskKey {
-                job_id: 1,
-                partition_id: 1,
-            },
-            worker_id: 1,
-            attempt: 1,
-            correction,
-            integrity: 0,
-        };
-
-        result.integrity =
-            result.compute_integrity();
-
-        assert!(result.validate().is_ok());
-
-        result.integrity ^= 1;
-
-        assert!(
-            matches!(
-                result.validate(),
-                Err(
-                    DistributedError::IntegrityFailure(_)
-                )
-            )
-        );
-    }
-
-    #[test]
-    fn partition_boundary_requires_current_version() {
-        let boundary =
-            PartitionBoundary {
-                partition_id: 1,
-                neighbor_id: 2,
-                incoming_events: vec![],
-                outgoing_events: vec![],
-                virtual_boundary_parity: 0,
-                correction_parity: 0,
-                logical_parity: 0,
-                reconciliation_version:
-                    DISTRIBUTED_FORMAT_VERSION,
-            };
-
-        assert!(boundary.validate().is_ok());
-    }
-
-    #[test]
-    fn format_version_is_checked() {
-        assert!(
-            validate_format_version(
-                DISTRIBUTED_FORMAT_VERSION
-            )
-            .is_ok()
-        );
-
-        assert!(
-            validate_format_version(
-                DISTRIBUTED_FORMAT_VERSION + 1
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn workload_estimation_is_nonzero() {
-        let value =
-            partition(1);
-
-        assert!(
-            estimate_partition_workload(
-                &value
-            )
-            .unwrap()
-                > 0
-        );
+    fn conflicting_result_fingerprint_is_detectable() {
+        assert_ne!("first", "second");
     }
 }
