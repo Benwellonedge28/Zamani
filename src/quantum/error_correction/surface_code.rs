@@ -3,6 +3,36 @@
 //! Production-grade mathematical/topological model of the canonical rotated
 //! planar surface code.
 //!
+//! # Ownership
+//!
+//! This module owns:
+//!
+//! - rotated planar surface-code topology;
+//! - physical data-qubit coordinates;
+//! - deterministic qubit indexing;
+//! - stabilizer topology;
+//! - logical X/Z topology;
+//! - topology-to-stabilizer algebra conversion;
+//! - topology validation;
+//! - resource preflight;
+//! - exact-distance verification delegation.
+//!
+//! This module does NOT own:
+//!
+//! - generic Pauli algebra;
+//! - generic stabilizer algebra;
+//! - decoder algorithms;
+//! - MWPM;
+//! - Union-Find;
+//! - QPU execution;
+//! - streaming;
+//! - distributed execution;
+//! - checkpoint persistence;
+//! - telemetry transport;
+//! - capability authorization.
+//!
+//! Those responsibilities belong to their respective modules.
+//!
 //! # Code family
 //!
 //! For odd distance `d >= 3`:
@@ -20,82 +50,84 @@
 //! q(r,c) = r*d + c
 //! ```
 //!
-//! Bulk stabilizers occupy the `(d-1) × (d-1)` plaquettes in a checkerboard
-//! pattern. Bulk stabilizers have weight four.
+//! # Construction contract
 //!
-//! Boundary stabilizers have weight two and are placed on alternating
-//! boundary edges. Their placement is derived from the topology rather than
-//! guessed from qubit counts.
-//!
-//! # Mathematical invariants
-//!
-//! The implementation validates:
-//!
-//! - distance validity;
-//! - checked `d²` arithmetic;
-//! - global `QecLimits` before allocation;
-//! - estimated memory requirements before allocation;
-//! - exact data-qubit topology;
-//! - unique qubit coordinates;
-//! - unique stabilizer identifiers;
-//! - unique stabilizer supports;
-//! - valid qubit references;
-//! - correct bulk/boundary weights;
-//! - correct boundary orientation;
-//! - X/Z checkerboard structure;
-//! - X/Z stabilizer commutation;
-//! - logical X/Z non-identity;
-//! - logical X/Z weight;
-//! - logical X/Z commutation with all stabilizers;
-//! - logical X/Z anticommutation;
-//! - syndrome extraction;
-//! - exact distance verification through `distance.rs`.
-//!
-//! # Resource model
-//!
-//! Construction is explicitly:
+//! Construction is always:
 //!
 //! ```text
 //! untrusted distance
 //!        ↓
-//! QecLimits validation
+//! policy validation
 //!        ↓
-//! checked d²
+//! checked resource calculation
 //!        ↓
-//! checked stabilizer count
+//! memory preflight
 //!        ↓
-//! conservative memory preflight
+//! stabilizer/logical-weight preflight
 //!        ↓
 //! allocation
 //!        ↓
-//! topology construction
+//! deterministic topology construction
 //!        ↓
 //! mathematical validation
 //! ```
 //!
-//! No large topology allocation is performed before the global QEC policy
-//! has approved the requested workload.
+//! No topology allocation is performed before the requested workload has
+//! passed the configured QEC policy.
 //!
-//! The memory calculation is intentionally conservative. It is a preflight
-//! safety estimate, not an allocator accounting snapshot.
+//! # Integration
 //!
-//! # Representation boundary
+//! ```text
+//! arithmetic.rs
+//!      │
+//!      ▼
+//! surface_code.rs
+//!      │
+//!      ├──────────────► stabilizer.rs
+//!      │
+//!      ├──────────────► distance.rs
+//!      │
+//!      ├──────────────► decoding_graph.rs
+//!      │
+//!      ├──────────────► surface_coder.rs
+//!      │
+//!      └──────────────► decoder.rs
+//! ```
 //!
-//! `surface_code.rs` owns the mathematical/topological representation.
+//! `limits.rs` remains the single source of declarative resource policy.
 //!
-//! Generic Pauli algebra and stabilizer linear algebra remain in
-//! `stabilizer.rs`.
+//! `errors.rs` remains the canonical QEC error boundary.
 //!
-//! Exact code-distance verification remains in `distance.rs`.
+//! `stabilizer.rs` owns generic binary-symplectic algebra.
 //!
-//! Decoder-specific behavior belongs in `surface_coder.rs`, `mwpm.rs`,
-//! `union_find.rs`, and the standardized decoder layer.
+//! `distance.rs` owns exact distance verification.
+//!
+//! `surface_coder.rs` owns circuit/encoding/decoding integration.
+//!
+//! # Rust compatibility
+//!
+//! This implementation targets Rust 1.97.1 and uses stable standard-library
+//! facilities only.
 
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::arithmetic::{
+    checked_add_usize,
+    checked_mul_add_usize,
+    checked_mul_usize,
+    checked_sub_usize,
+};
 use super::distance;
-use super::limits::{LimitError, QecLimits};
+use super::errors::{
+    QecError,
+    ResourceKind,
+};
+use super::limits::{
+    LimitError,
+    LimitKind,
+    QecLimits,
+};
 use super::stabilizer::{
     Pauli,
     PauliString,
@@ -132,7 +164,10 @@ impl Coordinate {
         row: usize,
         column: usize,
     ) -> Self {
-        Self { row, column }
+        Self {
+            row,
+            column,
+        }
     }
 
     #[must_use]
@@ -256,7 +291,7 @@ impl fmt::Display for StabilizerKind {
 // Boundary
 // ============================================================================
 
-/// Physical boundary on which a weight-2 stabilizer may reside.
+/// Physical boundary on which a weight-2 stabilizer resides.
 #[derive(
     Debug,
     Clone,
@@ -285,6 +320,50 @@ impl fmt::Display for Boundary {
             Self::Left => write!(f, "left"),
             Self::Right => write!(f, "right"),
         }
+    }
+}
+
+// ============================================================================
+// Resource estimate
+// ============================================================================
+
+/// Deterministic resource estimate for a surface-code topology.
+///
+/// This is a preflight estimate. Runtime consumption belongs to
+/// `resources.rs`.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+)]
+pub struct SurfaceCodeResourceEstimate {
+    num_qubits: usize,
+    num_stabilizers: usize,
+    estimated_memory_bytes: u64,
+}
+
+impl SurfaceCodeResourceEstimate {
+    #[must_use]
+    pub const fn num_qubits(
+        self,
+    ) -> usize {
+        self.num_qubits
+    }
+
+    #[must_use]
+    pub const fn num_stabilizers(
+        self,
+    ) -> usize {
+        self.num_stabilizers
+    }
+
+    #[must_use]
+    pub const fn estimated_memory_bytes(
+        self,
+    ) -> u64 {
+        self.estimated_memory_bytes
     }
 }
 
@@ -425,6 +504,84 @@ impl From<StabilizerError> for SurfaceCodeError {
     }
 }
 
+impl From<SurfaceCodeError> for QecError {
+    fn from(
+        error: SurfaceCodeError,
+    ) -> Self {
+        match error {
+            SurfaceCodeError::InvalidDistance { distance } => {
+                QecError::invalid_topology(
+                    format!(
+                        "invalid surface-code distance {distance}; \
+                         distance must be odd and >= 3"
+                    ),
+                )
+            }
+
+            SurfaceCodeError::Limit(error) => {
+                limit_error_to_qec_error(error)
+            }
+
+            SurfaceCodeError::ArithmeticOverflow {
+                resource,
+            } => {
+                QecError::NumericalFailure {
+                    operation:
+                        super::errors::NumericalOperation::IndexCalculation,
+                    message:
+                        format!(
+                            "surface-code arithmetic overflow while \
+                             calculating {resource}"
+                        ),
+                }
+            }
+
+            SurfaceCodeError::MemoryPreflightExceeded {
+                estimated,
+                maximum,
+            } => {
+                QecError::MemoryLimitExceeded {
+                    requested_bytes: estimated,
+                    current_bytes: 0,
+                    limit_bytes: maximum,
+                    message:
+                        "surface-code construction memory preflight \
+                         exceeded the configured memory limit"
+                            .to_string(),
+                }
+            }
+
+            SurfaceCodeError::Stabilizer(error) => {
+                QecError::invalid_stabilizer(
+                    error.to_string(),
+                )
+            }
+
+            SurfaceCodeError::DistanceVerification(error) => {
+                QecError::invalid_topology(error)
+            }
+
+            SurfaceCodeError::DimensionMismatch {
+                expected,
+                actual,
+            } => {
+                QecError::invalid_input(
+                    format!(
+                        "surface-code Pauli dimension mismatch: \
+                         expected {expected}, actual {actual}"
+                    ),
+                )
+            }
+
+            other => {
+                QecError::invalid_topology(
+                    other.to_string(),
+                )
+            }
+        }
+    }
+}
+
 impl fmt::Display for SurfaceCodeError {
     fn fmt(
         &self,
@@ -434,19 +591,24 @@ impl fmt::Display for SurfaceCodeError {
             Self::InvalidDistance { distance } => {
                 write!(
                     f,
-                    "invalid surface-code distance {}; distance must be odd and >= 3",
+                    "invalid surface-code distance {}; \
+                     distance must be odd and >= 3",
                     distance
                 )
             }
 
             Self::Limit(error) => {
-                write!(f, "QEC resource limit exceeded: {error}")
+                write!(
+                    f,
+                    "QEC resource limit exceeded: {error}"
+                )
             }
 
             Self::ArithmeticOverflow { resource } => {
                 write!(
                     f,
-                    "surface-code resource calculation overflowed for {resource}"
+                    "surface-code resource calculation \
+                     overflowed for {resource}"
                 )
             }
 
@@ -456,7 +618,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "surface-code memory preflight {} bytes exceeds configured maximum {} bytes",
+                    "surface-code memory preflight {} bytes \
+                     exceeds configured maximum {} bytes",
                     estimated,
                     maximum
                 )
@@ -486,7 +649,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "stabilizer {id} has weight {actual}; expected {expected}"
+                    "stabilizer {id} has weight {actual}; \
+                     expected {expected}"
                 )
             }
 
@@ -496,7 +660,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "stabilizer {stabilizer} references nonexistent qubit {qubit}"
+                    "stabilizer {stabilizer} references \
+                     nonexistent qubit {qubit}"
                 )
             }
 
@@ -506,7 +671,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "stabilizers {first} and {second} have identical support"
+                    "stabilizers {first} and {second} \
+                     have identical support"
                 )
             }
 
@@ -523,7 +689,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "invalid stabilizer count {actual}; expected {expected}"
+                    "invalid stabilizer count {actual}; \
+                     expected {expected}"
                 )
             }
 
@@ -533,7 +700,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "invalid data-qubit count {actual}; expected {expected}"
+                    "invalid data-qubit count {actual}; \
+                     expected {expected}"
                 )
             }
 
@@ -543,7 +711,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "coordinate {coordinate} is outside distance-{distance} lattice"
+                    "coordinate {coordinate} is outside \
+                     distance-{distance} lattice"
                 )
             }
 
@@ -564,7 +733,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "face ({row}, {column}) is outside distance-{distance} lattice"
+                    "face ({row}, {column}) is outside \
+                     distance-{distance} lattice"
                 )
             }
 
@@ -575,7 +745,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "stabilizer {id} has invalid {boundary} boundary type {kind}"
+                    "stabilizer {id} has invalid \
+                     {boundary} boundary type {kind}"
                 )
             }
 
@@ -585,14 +756,16 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "stabilizer {id} has invalid alternating placement on {boundary} boundary"
+                    "stabilizer {id} has invalid alternating \
+                     placement on {boundary} boundary"
                 )
             }
 
             Self::InvalidBulkTopology { id } => {
                 write!(
                     f,
-                    "bulk stabilizer {id} has invalid checkerboard topology"
+                    "bulk stabilizer {id} has invalid \
+                     checkerboard topology"
                 )
             }
 
@@ -620,7 +793,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "logical operator {name} has weight {actual}; expected {expected}"
+                    "logical operator {name} has weight {actual}; \
+                     expected {expected}"
                 )
             }
 
@@ -630,7 +804,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "logical operator {logical} does not commute with stabilizer {stabilizer}"
+                    "logical operator {logical} does not commute \
+                     with stabilizer {stabilizer}"
                 )
             }
 
@@ -647,7 +822,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "encoded logical-qubit count {actual}; expected {expected}"
+                    "encoded logical-qubit count {actual}; \
+                     expected {expected}"
                 )
             }
 
@@ -671,7 +847,8 @@ impl fmt::Display for SurfaceCodeError {
             } => {
                 write!(
                     f,
-                    "Pauli operator has {actual} qubits; expected {expected}"
+                    "Pauli operator has {actual} qubits; \
+                     expected {expected}"
                 )
             }
         }
@@ -684,12 +861,12 @@ impl std::error::Error for SurfaceCodeError {}
 // Surface stabilizer
 // ============================================================================
 
-/// Explicit stabilizer topology.
+/// Explicit surface-code stabilizer topology.
 ///
-/// The support is always deterministic and contains either:
+/// The support contains exactly:
 ///
-/// * four qubits for a bulk stabilizer;
-/// * two qubits for a boundary stabilizer.
+/// - four qubits for a bulk stabilizer;
+/// - two qubits for a boundary stabilizer.
 #[derive(
     Debug,
     Clone,
@@ -712,7 +889,9 @@ impl SurfaceStabilizer {
     ) -> Result<Self, SurfaceCodeError> {
         if support.is_empty() {
             return Err(
-                SurfaceCodeError::EmptyStabilizer { id }
+                SurfaceCodeError::EmptyStabilizer {
+                    id,
+                },
             );
         }
 
@@ -796,7 +975,7 @@ impl SurfaceStabilizer {
         self.boundary.is_some()
     }
 
-    /// Converts the explicit topology into the generic Pauli representation.
+    /// Converts this topology into a generic Pauli representation.
     pub fn pauli_string(
         &self,
         num_qubits: usize,
@@ -822,12 +1001,12 @@ impl SurfaceStabilizer {
 
         Ok(
             PauliString::from_paulis(
-                &paulis
+                &paulis,
             )
         )
     }
 
-    /// Converts the stabilizer into the generic stabilizer-generator IR.
+    /// Converts the topology into the generic stabilizer IR.
     pub fn generator(
         &self,
         num_qubits: usize,
@@ -868,7 +1047,7 @@ impl LogicalOperator {
             return Err(
                 SurfaceCodeError::IdentityLogicalOperator {
                     name,
-                }
+                },
             );
         }
 
@@ -926,7 +1105,7 @@ pub struct SurfaceCode {
 }
 
 impl SurfaceCode {
-    /// Constructs a surface code using the canonical global QEC limits.
+    /// Constructs a surface code using the canonical QEC limits.
     pub fn new(
         distance: usize,
     ) -> Result<Self, SurfaceCodeError> {
@@ -939,31 +1118,43 @@ impl SurfaceCode {
         )
     }
 
-    /// Constructs a surface code under an explicit resource policy.
+    /// Constructs a surface code under explicit QEC resource policy.
     ///
-    /// This is the preferred production entry point when the caller already
-    /// owns a `QecConfig`/`QecLimits` policy.
+    /// This is the preferred production entry point when a validated
+    /// `QecConfig` owns the policy.
     pub fn new_with_limits(
         distance: usize,
         limits: &QecLimits,
     ) -> Result<Self, SurfaceCodeError> {
-        let counts =
-            preflight(distance, limits)?;
+        let estimate =
+            preflight(
+                distance,
+                limits,
+            )?;
 
         let data_qubits =
             build_data_qubits(
                 distance,
-                counts.num_qubits,
+                estimate.num_qubits,
             )?;
 
         let stabilizers =
-            build_stabilizers(distance)?;
+            build_stabilizers(
+                distance,
+                limits,
+            )?;
 
         let logical_x =
-            build_logical_x(distance)?;
+            build_logical_x(
+                distance,
+                limits,
+            )?;
 
         let logical_z =
-            build_logical_z(distance)?;
+            build_logical_z(
+                distance,
+                limits,
+            )?;
 
         let code = Self {
             distance,
@@ -974,14 +1165,13 @@ impl SurfaceCode {
         };
 
         code.validate_with_limits(
-            limits
+            limits,
         )?;
 
         Ok(code)
     }
 
-    /// Compatibility constructor used by callers that refer to a code
-    /// explicitly by its distance.
+    /// Compatibility constructor for explicit distance construction.
     pub fn from_distance(
         distance: usize,
     ) -> Result<Self, SurfaceCodeError> {
@@ -1049,22 +1239,72 @@ impl SurfaceCode {
         &self.logical_z
     }
 
-    /// Returns the conservative memory estimate used by construction.
+    /// Returns the conservative construction-memory estimate.
     #[must_use]
     pub fn estimated_memory_bytes(
         &self,
     ) -> u64 {
         estimate_memory_bytes(
-            self.distance
+            self.distance,
         )
         .unwrap_or(u64::MAX)
+    }
+
+    /// Returns the complete deterministic preflight estimate.
+    pub fn resource_estimate(
+        distance: usize,
+    ) -> Result<
+        SurfaceCodeResourceEstimate,
+        SurfaceCodeError,
+    > {
+        let limits =
+            QecLimits::default();
+
+        preflight(
+            distance,
+            &limits,
+        )
+        .map(|estimate| {
+            SurfaceCodeResourceEstimate {
+                num_qubits:
+                    estimate.num_qubits,
+                num_stabilizers:
+                    estimate.num_stabilizers,
+                estimated_memory_bytes:
+                    estimate.estimated_memory_bytes,
+            }
+        })
+    }
+
+    /// Returns a resource estimate under explicit limits.
+    pub fn resource_estimate_with_limits(
+        distance: usize,
+        limits: &QecLimits,
+    ) -> Result<
+        SurfaceCodeResourceEstimate,
+        SurfaceCodeError,
+    > {
+        preflight(
+            distance,
+            limits,
+        )
+        .map(|estimate| {
+            SurfaceCodeResourceEstimate {
+                num_qubits:
+                    estimate.num_qubits,
+                num_stabilizers:
+                    estimate.num_stabilizers,
+                estimated_memory_bytes:
+                    estimate.estimated_memory_bytes,
+            }
+        })
     }
 
     // ------------------------------------------------------------------------
     // Coordinate topology
     // ------------------------------------------------------------------------
 
-    /// Converts a lattice coordinate to its physical qubit.
+    /// Converts a lattice coordinate into a physical data qubit.
     pub fn qubit_at(
         &self,
         coordinate: Coordinate,
@@ -1089,16 +1329,19 @@ impl SurfaceCode {
             )?;
 
         Ok(
-            self.data_qubits[index.index()]
+            self.data_qubits[
+                index.index()
+            ],
         )
     }
 
-    /// Returns the lattice coordinate for a physical qubit.
+    /// Returns the lattice coordinate of a physical qubit.
     pub fn coordinate_of(
         &self,
         qubit: QubitIndex,
     ) -> Result<Coordinate, SurfaceCodeError> {
-        let index = qubit.index();
+        let index =
+            qubit.index();
 
         if index >= self.data_qubits.len() {
             return Err(
@@ -1111,7 +1354,7 @@ impl SurfaceCode {
 
         Ok(
             self.data_qubits[index]
-                .coordinate()
+                .coordinate(),
         )
     }
 
@@ -1120,10 +1363,22 @@ impl SurfaceCode {
         &self,
         row: usize,
         column: usize,
-    ) -> Result<[QubitIndex; 4], SurfaceCodeError> {
-        if row >= self.distance.saturating_sub(1)
-            || column
-                >= self.distance.saturating_sub(1)
+    ) -> Result<
+        [QubitIndex; 4],
+        SurfaceCodeError,
+    > {
+        let max_face =
+            self.distance
+                .checked_sub(1)
+                .ok_or(
+                    SurfaceCodeError::ArithmeticOverflow {
+                        resource:
+                            "surface-code face dimension",
+                    },
+                )?;
+
+        if row >= max_face
+            || column >= max_face
         {
             return Err(
                 SurfaceCodeError::FaceOutOfRange {
@@ -1146,17 +1401,29 @@ impl SurfaceCode {
             checked_qubit_index(
                 d,
                 row,
-                column + 1,
+                checked_add_usize(
+                    column,
+                    1,
+                )?,
             )?,
             checked_qubit_index(
                 d,
-                row + 1,
+                checked_add_usize(
+                    row,
+                    1,
+                )?,
                 column,
             )?,
             checked_qubit_index(
                 d,
-                row + 1,
-                column + 1,
+                checked_add_usize(
+                    row,
+                    1,
+                )?,
+                checked_add_usize(
+                    column,
+                    1,
+                )?,
             )?,
         ])
     }
@@ -1165,16 +1432,19 @@ impl SurfaceCode {
     // Stabilizer representation
     // ------------------------------------------------------------------------
 
-    /// Builds the generic stabilizer group.
+    /// Converts the topology into the generic stabilizer group.
     ///
-    /// `stabilizer.rs` remains the owner of the generic algebraic
-    /// representation; this method only performs the topology-to-IR bridge.
+    /// `stabilizer.rs` owns the generic algebra. This method only performs
+    /// the topology-to-algebra representation bridge.
     pub fn stabilizer_group(
         &self,
-    ) -> Result<StabilizerGroup, SurfaceCodeError> {
+    ) -> Result<
+        StabilizerGroup,
+        SurfaceCodeError,
+    > {
         let mut group =
             StabilizerGroup::new(
-                self.num_data_qubits()
+                self.num_data_qubits(),
             )?;
 
         for stabilizer
@@ -1182,8 +1452,8 @@ impl SurfaceCode {
         {
             group.add_generator(
                 stabilizer.generator(
-                    self.num_data_qubits()
-                )?
+                    self.num_data_qubits(),
+                )?,
             )?;
         }
 
@@ -1194,14 +1464,19 @@ impl SurfaceCode {
     pub fn syndrome(
         &self,
         error: &PauliString,
-    ) -> Result<Syndrome, SurfaceCodeError> {
+    ) -> Result<
+        Syndrome,
+        SurfaceCodeError,
+    > {
         if error.num_qubits()
             != self.num_data_qubits()
         {
             return Err(
                 SurfaceCodeError::DimensionMismatch {
-                    expected: self.num_data_qubits(),
-                    actual: error.num_qubits(),
+                    expected:
+                        self.num_data_qubits(),
+                    actual:
+                        error.num_qubits(),
                 },
             );
         }
@@ -1210,7 +1485,7 @@ impl SurfaceCode {
             self.stabilizer_group()?;
 
         Ok(
-            group.syndrome(error)?
+            group.syndrome(error)?,
         )
     }
 
@@ -1218,7 +1493,7 @@ impl SurfaceCode {
     // Mathematical validation
     // ------------------------------------------------------------------------
 
-    /// Performs the canonical surface-code validation.
+    /// Performs canonical surface-code validation.
     pub fn validate(
         &self,
     ) -> Result<(), SurfaceCodeError> {
@@ -1226,12 +1501,11 @@ impl SurfaceCode {
             QecLimits::default();
 
         self.validate_with_limits(
-            &limits
+            &limits,
         )
     }
 
-    /// Performs structural and mathematical validation under an explicit
-    /// resource policy.
+    /// Performs structural and mathematical validation under explicit policy.
     pub fn validate_with_limits(
         &self,
         limits: &QecLimits,
@@ -1243,22 +1517,20 @@ impl SurfaceCode {
             )?;
 
         let expected_stabilizers =
-            expected_qubits
-                .checked_sub(1)
-                .ok_or(
-                    SurfaceCodeError::ArithmeticOverflow {
-                        resource:
-                            "surface-code stabilizer count",
-                    }
-                )?;
+            checked_sub_usize(
+                expected_qubits,
+                1,
+            )?;
 
         if self.num_data_qubits()
             != expected_qubits
         {
             return Err(
                 SurfaceCodeError::InvalidDataQubitCount {
-                    expected: expected_qubits,
-                    actual: self.num_data_qubits(),
+                    expected:
+                        expected_qubits,
+                    actual:
+                        self.num_data_qubits(),
                 },
             );
         }
@@ -1268,8 +1540,10 @@ impl SurfaceCode {
         {
             return Err(
                 SurfaceCodeError::InvalidStabilizerCount {
-                    expected: expected_stabilizers,
-                    actual: self.num_stabilizers(),
+                    expected:
+                        expected_stabilizers,
+                    actual:
+                        self.num_stabilizers(),
                 },
             );
         }
@@ -1295,12 +1569,14 @@ impl SurfaceCode {
         let mut coordinates =
             BTreeSet::new();
 
-        for (expected_index, qubit)
-            in self.data_qubits.iter().enumerate()
+        for (
+            expected_index,
+            qubit,
+        ) in self.data_qubits.iter().enumerate()
         {
             let expected =
                 QubitIndex::new(
-                    expected_index
+                    expected_index,
                 );
 
             if qubit.index()
@@ -1308,7 +1584,8 @@ impl SurfaceCode {
             {
                 return Err(
                     SurfaceCodeError::CoordinateIndexMismatch {
-                        qubit: qubit.index(),
+                        qubit:
+                            qubit.index(),
                         expected,
                     },
                 );
@@ -1325,17 +1602,19 @@ impl SurfaceCode {
                 return Err(
                     SurfaceCodeError::CoordinateOutOfRange {
                         coordinate,
-                        distance: self.distance,
+                        distance:
+                            self.distance,
                     },
                 );
             }
 
             if !coordinates.insert(
-                coordinate
+                coordinate,
             ) {
                 return Err(
                     SurfaceCodeError::CoordinateIndexMismatch {
-                        qubit: qubit.index(),
+                        qubit:
+                            qubit.index(),
                         expected,
                     },
                 );
@@ -1353,8 +1632,10 @@ impl SurfaceCode {
             {
                 return Err(
                     SurfaceCodeError::CoordinateIndexMismatch {
-                        qubit: qubit.index(),
-                        expected: expected_index,
+                        qubit:
+                            qubit.index(),
+                        expected:
+                            expected_index,
                     },
                 );
             }
@@ -1379,11 +1660,12 @@ impl SurfaceCode {
             in &self.stabilizers
         {
             if !ids.insert(
-                stabilizer.id()
+                stabilizer.id(),
             ) {
                 return Err(
                     SurfaceCodeError::DuplicateStabilizerId {
-                        id: stabilizer.id(),
+                        id:
+                            stabilizer.id(),
                     },
                 );
             }
@@ -1398,8 +1680,10 @@ impl SurfaceCode {
             {
                 return Err(
                     SurfaceCodeError::DuplicateStabilizerSupport {
-                        first: previous,
-                        second: stabilizer.id(),
+                        first:
+                            previous,
+                        second:
+                            stabilizer.id(),
                     },
                 );
             }
@@ -1426,15 +1710,17 @@ impl SurfaceCode {
                 {
                     return Err(
                         SurfaceCodeError::InvalidStabilizerWeight {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             expected: 2,
-                            actual: stabilizer.weight(),
+                            actual:
+                                stabilizer.weight(),
                         },
                     );
                 }
 
                 self.validate_boundary_stabilizer(
-                    stabilizer
+                    stabilizer,
                 )?;
             } else {
                 if stabilizer.weight()
@@ -1442,15 +1728,17 @@ impl SurfaceCode {
                 {
                     return Err(
                         SurfaceCodeError::InvalidStabilizerWeight {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             expected: 4,
-                            actual: stabilizer.weight(),
+                            actual:
+                                stabilizer.weight(),
                         },
                     );
                 }
 
                 self.validate_bulk_stabilizer(
-                    stabilizer
+                    stabilizer,
                 )?;
             }
         }
@@ -1462,38 +1750,56 @@ impl SurfaceCode {
         &self,
         stabilizer: &SurfaceStabilizer,
     ) -> Result<(), SurfaceCodeError> {
-        let support =
-            stabilizer.support();
-
-        if support.len() != 4 {
+        if stabilizer.support().len()
+            != 4
+        {
             return Err(
                 SurfaceCodeError::InvalidBulkTopology {
-                    id: stabilizer.id(),
+                    id:
+                        stabilizer.id(),
                 },
             );
         }
 
-        let coordinates: Vec<Coordinate> =
-            support
+        let coordinates:
+            Vec<Coordinate> =
+            stabilizer
+                .support()
                 .iter()
                 .map(|qubit| {
-                    self.coordinate_of(*qubit)
+                    self.coordinate_of(
+                        *qubit,
+                    )
                 })
                 .collect::<Result<_, _>>()?;
 
         let min_row =
             coordinates
                 .iter()
-                .map(|c| c.row())
+                .map(|coordinate|
+                    coordinate.row()
+                )
                 .min()
-                .unwrap_or(usize::MAX);
+                .ok_or(
+                    SurfaceCodeError::InvalidBulkTopology {
+                        id:
+                            stabilizer.id(),
+                    },
+                )?;
 
         let min_column =
             coordinates
                 .iter()
-                .map(|c| c.column())
+                .map(|coordinate|
+                    coordinate.column()
+                )
                 .min()
-                .unwrap_or(usize::MAX);
+                .ok_or(
+                    SurfaceCodeError::InvalidBulkTopology {
+                        id:
+                            stabilizer.id(),
+                    },
+                )?;
 
         let expected =
             self.face_qubits(
@@ -1509,7 +1815,8 @@ impl SurfaceCode {
 
         let actual_set:
             BTreeSet<QubitIndex> =
-            support
+            stabilizer
+                .support()
                 .iter()
                 .copied()
                 .collect();
@@ -1519,15 +1826,17 @@ impl SurfaceCode {
         {
             return Err(
                 SurfaceCodeError::InvalidBulkTopology {
-                    id: stabilizer.id(),
+                    id:
+                        stabilizer.id(),
                 },
             );
         }
 
         let expected_kind =
-            if (min_row
-                + min_column)
-                % 2
+            if checked_add_usize(
+                min_row,
+                min_column,
+            )? % 2
                 == 1
             {
                 StabilizerKind::X
@@ -1540,7 +1849,8 @@ impl SurfaceCode {
         {
             return Err(
                 SurfaceCodeError::InvalidBulkTopology {
-                    id: stabilizer.id(),
+                    id:
+                        stabilizer.id(),
                 },
             );
         }
@@ -1557,11 +1867,33 @@ impl SurfaceCode {
                 .boundary()
                 .ok_or(
                     SurfaceCodeError::InvalidBoundaryTopology {
-                        id: stabilizer.id(),
-                        boundary: Boundary::Top,
-                        kind: stabilizer.kind(),
-                    }
+                        id:
+                            stabilizer.id(),
+                        boundary:
+                            Boundary::Top,
+                        kind:
+                            stabilizer.kind(),
+                    },
                 )?;
+
+        let coordinates =
+            self.support_coordinates(
+                stabilizer,
+            )?;
+
+        if coordinates.len()
+            != 2
+        {
+            return Err(
+                SurfaceCodeError::InvalidStabilizerWeight {
+                    id:
+                        stabilizer.id(),
+                    expected: 2,
+                    actual:
+                        coordinates.len(),
+                },
+            );
+        }
 
         match boundary {
             Boundary::Left
@@ -1571,28 +1903,27 @@ impl SurfaceCode {
                 {
                     return Err(
                         SurfaceCodeError::InvalidBoundaryTopology {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             boundary,
-                            kind: stabilizer.kind(),
+                            kind:
+                                stabilizer.kind(),
                         },
                     );
                 }
 
-                let coordinates =
-                    self.support_coordinates(
-                        stabilizer
-                    )?;
-
                 let same_column =
-                    coordinates[0].column()
-                        == coordinates[1].column();
+                    coordinates[0]
+                        .column()
+                        == coordinates[1]
+                            .column();
 
                 let adjacent_rows =
                     coordinates[0]
                         .row()
                         .abs_diff(
                             coordinates[1]
-                                .row()
+                                .row(),
                         )
                         == 1;
 
@@ -1601,9 +1932,11 @@ impl SurfaceCode {
                 {
                     return Err(
                         SurfaceCodeError::InvalidBoundaryTopology {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             boundary,
-                            kind: stabilizer.kind(),
+                            kind:
+                                stabilizer.kind(),
                         },
                     );
                 }
@@ -1611,9 +1944,19 @@ impl SurfaceCode {
                 let row =
                     coordinates
                         .iter()
-                        .map(|c| c.row())
+                        .map(|coordinate|
+                            coordinate.row()
+                        )
                         .min()
-                        .unwrap_or(usize::MAX);
+                        .ok_or(
+                            SurfaceCodeError::InvalidBoundaryTopology {
+                                id:
+                                    stabilizer.id(),
+                                boundary,
+                                kind:
+                                    stabilizer.kind(),
+                            },
+                        )?;
 
                 let expected_boundary =
                     if row % 2 == 0 {
@@ -1627,7 +1970,8 @@ impl SurfaceCode {
                 {
                     return Err(
                         SurfaceCodeError::InvalidBoundaryParity {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             boundary,
                         },
                     );
@@ -1636,30 +1980,38 @@ impl SurfaceCode {
                 let expected_column =
                     match boundary {
                         Boundary::Left => 0,
-                        Boundary::Right =>
-                            self.distance
-                                .checked_sub(1)
-                                .ok_or(
-                                    SurfaceCodeError::ArithmeticOverflow {
-                                        resource:
-                                            "right boundary column",
-                                    }
-                                )?,
-                        _ => unreachable!(),
+                        Boundary::Right => {
+                            checked_sub_usize(
+                                self.distance,
+                                1,
+                            )?
+                        }
+                        Boundary::Top
+                        | Boundary::Bottom => {
+                            return Err(
+                                SurfaceCodeError::InvalidBoundaryTopology {
+                                    id:
+                                        stabilizer.id(),
+                                    boundary,
+                                    kind:
+                                        stabilizer.kind(),
+                                },
+                            );
+                        }
                     };
 
-                if coordinates
-                    .iter()
-                    .any(
-                        |c| c.column()
-                            != expected_column
-                    )
-                {
+                if coordinates.iter().any(
+                    |coordinate|
+                        coordinate.column()
+                            != expected_column,
+                ) {
                     return Err(
                         SurfaceCodeError::InvalidBoundaryTopology {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             boundary,
-                            kind: stabilizer.kind(),
+                            kind:
+                                stabilizer.kind(),
                         },
                     );
                 }
@@ -1672,28 +2024,27 @@ impl SurfaceCode {
                 {
                     return Err(
                         SurfaceCodeError::InvalidBoundaryTopology {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             boundary,
-                            kind: stabilizer.kind(),
+                            kind:
+                                stabilizer.kind(),
                         },
                     );
                 }
 
-                let coordinates =
-                    self.support_coordinates(
-                        stabilizer
-                    )?;
-
                 let same_row =
-                    coordinates[0].row()
-                        == coordinates[1].row();
+                    coordinates[0]
+                        .row()
+                        == coordinates[1]
+                            .row();
 
                 let adjacent_columns =
                     coordinates[0]
                         .column()
                         .abs_diff(
                             coordinates[1]
-                                .column()
+                                .column(),
                         )
                         == 1;
 
@@ -1702,9 +2053,11 @@ impl SurfaceCode {
                 {
                     return Err(
                         SurfaceCodeError::InvalidBoundaryTopology {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             boundary,
-                            kind: stabilizer.kind(),
+                            kind:
+                                stabilizer.kind(),
                         },
                     );
                 }
@@ -1712,9 +2065,19 @@ impl SurfaceCode {
                 let column =
                     coordinates
                         .iter()
-                        .map(|c| c.column())
+                        .map(|coordinate|
+                            coordinate.column()
+                        )
                         .min()
-                        .unwrap_or(usize::MAX);
+                        .ok_or(
+                            SurfaceCodeError::InvalidBoundaryTopology {
+                                id:
+                                    stabilizer.id(),
+                                boundary,
+                                kind:
+                                    stabilizer.kind(),
+                            },
+                        )?;
 
                 let expected_boundary =
                     if column % 2 == 1 {
@@ -1728,7 +2091,8 @@ impl SurfaceCode {
                 {
                     return Err(
                         SurfaceCodeError::InvalidBoundaryParity {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             boundary,
                         },
                     );
@@ -1737,30 +2101,38 @@ impl SurfaceCode {
                 let expected_row =
                     match boundary {
                         Boundary::Top => 0,
-                        Boundary::Bottom =>
-                            self.distance
-                                .checked_sub(1)
-                                .ok_or(
-                                    SurfaceCodeError::ArithmeticOverflow {
-                                        resource:
-                                            "bottom boundary row",
-                                    }
-                                )?,
-                        _ => unreachable!(),
+                        Boundary::Bottom => {
+                            checked_sub_usize(
+                                self.distance,
+                                1,
+                            )?
+                        }
+                        Boundary::Left
+                        | Boundary::Right => {
+                            return Err(
+                                SurfaceCodeError::InvalidBoundaryTopology {
+                                    id:
+                                        stabilizer.id(),
+                                    boundary,
+                                    kind:
+                                        stabilizer.kind(),
+                                },
+                            );
+                        }
                     };
 
-                if coordinates
-                    .iter()
-                    .any(
-                        |c| c.row()
-                            != expected_row
-                    )
-                {
+                if coordinates.iter().any(
+                    |coordinate|
+                        coordinate.row()
+                            != expected_row,
+                ) {
                     return Err(
                         SurfaceCodeError::InvalidBoundaryTopology {
-                            id: stabilizer.id(),
+                            id:
+                                stabilizer.id(),
                             boundary,
-                            kind: stabilizer.kind(),
+                            kind:
+                                stabilizer.kind(),
                         },
                     );
                 }
@@ -1773,22 +2145,23 @@ impl SurfaceCode {
     fn support_coordinates(
         &self,
         stabilizer: &SurfaceStabilizer,
-    ) -> Result<Vec<Coordinate>, SurfaceCodeError> {
+    ) -> Result<
+        Vec<Coordinate>,
+        SurfaceCodeError,
+    > {
         stabilizer
             .support()
             .iter()
-            .map(|qubit| {
+            .map(|qubit|
                 self.coordinate_of(*qubit)
-            })
+            )
             .collect()
     }
 
     /// Validates all X/Z stabilizer commutation relationships.
     ///
-    /// This is deliberately implemented using sparse incidence maps rather
-    /// than an O(s²) all-pairs comparison. Each data qubit participates in a
-    /// bounded number of local checks, so the generated topology is validated
-    /// in approximately linear time in the number of physical qubits.
+    /// The implementation uses sparse incidence maps rather than an
+    /// O(s²) all-pairs scan.
     fn validate_commutation(
         &self,
     ) -> Result<(), SurfaceCodeError> {
@@ -1809,10 +2182,12 @@ impl SurfaceCode {
         {
             let target =
                 match stabilizer.kind() {
-                    StabilizerKind::X =>
-                        &mut x_by_qubit,
-                    StabilizerKind::Z =>
-                        &mut z_by_qubit,
+                    StabilizerKind::X => {
+                        &mut x_by_qubit
+                    }
+                    StabilizerKind::Z => {
+                        &mut z_by_qubit
+                    }
                 };
 
             for &qubit
@@ -1822,15 +2197,11 @@ impl SurfaceCode {
                     .entry(qubit)
                     .or_default()
                     .push(
-                        stabilizer.id()
+                        stabilizer.id(),
                     );
             }
         }
 
-        // For CSS stabilizers, two operators anticommute exactly when their
-        // support intersection has odd cardinality.
-        //
-        // Toggle parity for each X/Z pair at every shared data qubit.
         let mut parity =
             BTreeMap::<
                 (usize, usize),
@@ -1848,12 +2219,16 @@ impl SurfaceCode {
                 continue;
             };
 
-            for &x_id in x_ids {
-                for &z_id in z_ids {
+            for &x_id
+                in x_ids
+            {
+                for &z_id
+                    in z_ids
+                {
                     let entry =
                         parity
                             .entry(
-                                (x_id, z_id)
+                                (x_id, z_id),
                             )
                             .or_insert(false);
 
@@ -1870,8 +2245,10 @@ impl SurfaceCode {
             if anticommutes {
                 return Err(
                     SurfaceCodeError::NonCommutingStabilizers {
-                        first: x_id,
-                        second: z_id,
+                        first:
+                            x_id,
+                        second:
+                            z_id,
                     },
                 );
             }
@@ -1890,7 +2267,8 @@ impl SurfaceCode {
             return Err(
                 SurfaceCodeError::InvalidLogicalQubitCount {
                     expected: 1,
-                    actual: self.num_logical_qubits(),
+                    actual:
+                        self.num_logical_qubits(),
                 },
             );
         }
@@ -1921,8 +2299,10 @@ impl SurfaceCode {
             return Err(
                 SurfaceCodeError::InvalidLogicalWeight {
                     name: "X_L",
-                    expected: self.distance,
-                    actual: self.logical_x.weight(),
+                    expected:
+                        self.distance,
+                    actual:
+                        self.logical_x.weight(),
                 },
             );
         }
@@ -1933,8 +2313,10 @@ impl SurfaceCode {
             return Err(
                 SurfaceCodeError::InvalidLogicalWeight {
                     name: "Z_L",
-                    expected: self.distance,
-                    actual: self.logical_z.weight(),
+                    expected:
+                        self.distance,
+                    actual:
+                        self.logical_z.weight(),
                 },
             );
         }
@@ -1944,18 +2326,19 @@ impl SurfaceCode {
         {
             let operator =
                 stabilizer.pauli_string(
-                    self.num_data_qubits()
+                    self.num_data_qubits(),
                 )?;
 
             if self.logical_x
                 .operator()
                 .anticommutes_with(
-                    &operator
+                    &operator,
                 )?
             {
                 return Err(
                     SurfaceCodeError::LogicalOperatorDoesNotCommute {
-                        logical: "X_L",
+                        logical:
+                            "X_L",
                         stabilizer:
                             stabilizer.id(),
                     },
@@ -1965,12 +2348,13 @@ impl SurfaceCode {
             if self.logical_z
                 .operator()
                 .anticommutes_with(
-                    &operator
+                    &operator,
                 )?
             {
                 return Err(
                     SurfaceCodeError::LogicalOperatorDoesNotCommute {
-                        logical: "Z_L",
+                        logical:
+                            "Z_L",
                         stabilizer:
                             stabilizer.id(),
                     },
@@ -1978,17 +2362,15 @@ impl SurfaceCode {
             }
         }
 
-        let anticommutes =
-            self.logical_x
-                .operator()
-                .anticommutes_with(
-                    self.logical_z
-                        .operator()
-                )?;
-
-        if !anticommutes {
+        if !self.logical_x
+            .operator()
+            .anticommutes_with(
+                self.logical_z
+                    .operator(),
+            )?
+        {
             return Err(
-                SurfaceCodeError::LogicalOperatorsDoNotAnticommute
+                SurfaceCodeError::LogicalOperatorsDoNotAnticommute,
             );
         }
 
@@ -1999,10 +2381,7 @@ impl SurfaceCode {
     // Exact distance
     // ------------------------------------------------------------------------
 
-    /// Verifies the exact code distance using the canonical QEC limits.
-    ///
-    /// The topology's declared distance is not trusted. `distance.rs` performs
-    /// the actual normalizer-minus-stabilizer search.
+    /// Verifies the exact code distance using canonical QEC limits.
     pub fn verify_distance(
         &self,
     ) -> Result<usize, SurfaceCodeError> {
@@ -2010,7 +2389,7 @@ impl SurfaceCode {
             QecLimits::default();
 
         self.verify_distance_with_limits(
-            &limits
+            &limits,
         )
     }
 
@@ -2020,7 +2399,7 @@ impl SurfaceCode {
         limits: &QecLimits,
     ) -> Result<usize, SurfaceCodeError> {
         self.validate_with_limits(
-            limits
+            limits,
         )?;
 
         let group =
@@ -2034,9 +2413,9 @@ impl SurfaceCode {
             .map_err(
                 |error| {
                     SurfaceCodeError::DistanceVerification(
-                        error.to_string()
+                        error.to_string(),
                     )
-                }
+                },
             )?;
 
         if result.distance()
@@ -2045,24 +2424,25 @@ impl SurfaceCode {
             return Err(
                 SurfaceCodeError::DistanceVerification(
                     format!(
-                        "topological distance {} disagrees with exact verified distance {}",
+                        "topological distance {} disagrees \
+                         with exact verified distance {}",
                         self.distance,
-                        result.distance()
-                    )
-                )
+                        result.distance(),
+                    ),
+                ),
             );
         }
 
         Ok(
-            result.distance()
+            result.distance(),
         )
     }
 
     // ------------------------------------------------------------------------
-    // Resource information
+    // Static resource helpers
     // ------------------------------------------------------------------------
 
-    /// Returns the number of data qubits required by a distance.
+    /// Returns the number of physical data qubits required by a distance.
     pub fn required_qubits(
         distance: usize,
     ) -> Result<usize, SurfaceCodeError> {
@@ -2078,17 +2458,13 @@ impl SurfaceCode {
     ) -> Result<usize, SurfaceCodeError> {
         let qubits =
             Self::required_qubits(
-                distance
+                distance,
             )?;
 
-        qubits
-            .checked_sub(1)
-            .ok_or(
-                SurfaceCodeError::ArithmeticOverflow {
-                    resource:
-                        "surface-code stabilizer count",
-                }
-            )
+        checked_sub_usize(
+            qubits,
+            1,
+        )
     }
 }
 
@@ -2110,11 +2486,14 @@ struct ResourceCounts {
 fn preflight(
     distance: usize,
     limits: &QecLimits,
-) -> Result<ResourceCounts, SurfaceCodeError> {
+) -> Result<
+    ResourceCounts,
+    SurfaceCodeError,
+> {
     limits
         .validate()
         .map_err(
-            SurfaceCodeError::Limit
+            SurfaceCodeError::Limit,
         )?;
 
     if distance < 3
@@ -2123,7 +2502,7 @@ fn preflight(
         return Err(
             SurfaceCodeError::InvalidDistance {
                 distance,
-            }
+            },
         );
     }
 
@@ -2132,12 +2511,16 @@ fn preflight(
     {
         return Err(
             SurfaceCodeError::Limit(
-                LimitError::CodeDistance {
-                    requested: distance,
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::CodeDistance,
+                    requested:
+                        distance as u128,
                     maximum:
-                        limits.max_code_distance,
-                }
-            )
+                        limits.max_code_distance
+                            as u128,
+                },
+            ),
         );
     }
 
@@ -2148,27 +2531,26 @@ fn preflight(
         )?;
 
     let num_stabilizers =
-        num_qubits
-            .checked_sub(1)
-            .ok_or(
-                SurfaceCodeError::ArithmeticOverflow {
-                    resource:
-                        "surface-code stabilizer count",
-                }
-            )?;
+        checked_sub_usize(
+            num_qubits,
+            1,
+        )?;
 
     if num_qubits
         > limits.max_qubits
     {
         return Err(
             SurfaceCodeError::Limit(
-                LimitError::Qubits {
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::Qubits,
                     requested:
-                        num_qubits,
+                        num_qubits as u128,
                     maximum:
-                        limits.max_qubits,
-                }
-            )
+                        limits.max_qubits
+                            as u128,
+                },
+            ),
         );
     }
 
@@ -2177,19 +2559,57 @@ fn preflight(
     {
         return Err(
             SurfaceCodeError::Limit(
-                LimitError::Stabilizers {
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::Stabilizers,
                     requested:
-                        num_stabilizers,
+                        num_stabilizers as u128,
                     maximum:
-                        limits.max_stabilizers,
-                }
-            )
+                        limits.max_stabilizers
+                            as u128,
+                },
+            ),
+        );
+    }
+
+    if limits.max_stabilizer_weight
+        < 4
+    {
+        return Err(
+            SurfaceCodeError::Limit(
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::StabilizerWeight,
+                    requested: 4,
+                    maximum:
+                        limits.max_stabilizer_weight
+                            as u128,
+                },
+            ),
+        );
+    }
+
+    if distance
+        > limits.max_logical_operator_weight
+    {
+        return Err(
+            SurfaceCodeError::Limit(
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::LogicalOperatorWeight,
+                    requested:
+                        distance as u128,
+                    maximum:
+                        limits.max_logical_operator_weight
+                            as u128,
+                },
+            ),
         );
     }
 
     let estimated_memory =
         estimate_memory_bytes(
-            distance
+            distance,
         )?;
 
     if estimated_memory
@@ -2201,7 +2621,7 @@ fn preflight(
                     estimated_memory,
                 maximum:
                     limits.max_memory_bytes,
-            }
+            },
         );
     }
 
@@ -2211,7 +2631,7 @@ fn preflight(
             num_stabilizers,
             estimated_memory_bytes:
                 estimated_memory,
-        }
+        },
     )
 }
 
@@ -2224,7 +2644,7 @@ fn validate_policy(
     limits
         .validate()
         .map_err(
-            SurfaceCodeError::Limit
+            SurfaceCodeError::Limit,
         )?;
 
     if distance
@@ -2232,12 +2652,16 @@ fn validate_policy(
     {
         return Err(
             SurfaceCodeError::Limit(
-                LimitError::CodeDistance {
-                    requested: distance,
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::CodeDistance,
+                    requested:
+                        distance as u128,
                     maximum:
-                        limits.max_code_distance,
-                }
-            )
+                        limits.max_code_distance
+                            as u128,
+                },
+            ),
         );
     }
 
@@ -2246,13 +2670,16 @@ fn validate_policy(
     {
         return Err(
             SurfaceCodeError::Limit(
-                LimitError::Qubits {
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::Qubits,
                     requested:
-                        num_qubits,
+                        num_qubits as u128,
                     maximum:
-                        limits.max_qubits,
-                }
-            )
+                        limits.max_qubits
+                            as u128,
+                },
+            ),
         );
     }
 
@@ -2261,13 +2688,16 @@ fn validate_policy(
     {
         return Err(
             SurfaceCodeError::Limit(
-                LimitError::Stabilizers {
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::Stabilizers,
                     requested:
-                        num_stabilizers,
+                        num_stabilizers as u128,
                     maximum:
-                        limits.max_stabilizers,
-                }
-            )
+                        limits.max_stabilizers
+                            as u128,
+                },
+            ),
         );
     }
 
@@ -2276,12 +2706,15 @@ fn validate_policy(
     {
         return Err(
             SurfaceCodeError::Limit(
-                LimitError::StabilizerWeight {
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::StabilizerWeight,
                     requested: 4,
                     maximum:
-                        limits.max_stabilizer_weight,
-                }
-            )
+                        limits.max_stabilizer_weight
+                            as u128,
+                },
+            ),
         );
     }
 
@@ -2290,30 +2723,31 @@ fn validate_policy(
     {
         return Err(
             SurfaceCodeError::Limit(
-                LimitError::LogicalOperatorWeight {
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::LogicalOperatorWeight,
                     requested:
-                        distance,
+                        distance as u128,
                     maximum:
-                        limits.max_logical_operator_weight,
-                }
-            )
+                        limits.max_logical_operator_weight
+                            as u128,
+                },
+            ),
         );
     }
 
     Ok(())
 }
 
+// ============================================================================
+// Memory preflight
+// ============================================================================
+
 /// Conservative construction-memory estimate.
 ///
-/// The estimate intentionally over-approximates the main owned structures:
-///
-/// * data-qubit storage;
-/// * stabilizer objects;
-/// * support allocations;
-/// * logical Pauli storage;
-/// * topology bookkeeping.
-///
-/// This is a policy preflight, not a replacement for `ResourceManager`.
+/// This is deliberately a policy estimate rather than runtime accounting.
+/// Exact runtime allocation tracking remains the responsibility of
+/// `memory.rs` and `resources.rs`.
 fn estimate_memory_bytes(
     distance: usize,
 ) -> Result<u64, SurfaceCodeError> {
@@ -2324,17 +2758,11 @@ fn estimate_memory_bytes(
         )?;
 
     let stabilizers =
-        qubits
-            .checked_sub(1)
-            .ok_or(
-                SurfaceCodeError::ArithmeticOverflow {
-                    resource:
-                        "surface-code memory stabilizer count",
-                }
-            )?;
+        checked_sub_usize(
+            qubits,
+            1,
+        )?;
 
-    // Deliberately conservative constants. The actual allocator/accounting
-    // layer can provide exact runtime measurements later.
     const BYTES_PER_DATA_QUBIT: u64 = 64;
     const BYTES_PER_STABILIZER: u64 = 512;
     const BYTES_PER_LOGICAL_OPERATOR: u64 = 1024;
@@ -2346,7 +2774,7 @@ fn estimate_memory_bytes(
                 |_| SurfaceCodeError::ArithmeticOverflow {
                     resource:
                         "surface-code memory qubit conversion",
-                }
+                },
             )?;
 
     let s =
@@ -2355,46 +2783,53 @@ fn estimate_memory_bytes(
                 |_| SurfaceCodeError::ArithmeticOverflow {
                     resource:
                         "surface-code memory stabilizer conversion",
-                }
+                },
             )?;
 
-    q.checked_mul(
-        BYTES_PER_DATA_QUBIT
-    )
-    .and_then(
-        |value| {
-            s.checked_mul(
-                BYTES_PER_STABILIZER
-            )
-            .and_then(
-                |stabilizer_bytes| {
-                    value.checked_add(
-                        stabilizer_bytes
-                    )
-                }
-            )
-        }
-    )
-    .and_then(
-        |value| {
-            value.checked_add(
-                BYTES_PER_LOGICAL_OPERATOR
-            )
-        }
-    )
-    .and_then(
-        |value| {
-            value.checked_add(
-                FIXED_OVERHEAD
-            )
-        }
-    )
-    .ok_or(
-        SurfaceCodeError::ArithmeticOverflow {
-            resource:
-                "surface-code memory estimate",
-        }
-    )
+    let data_bytes =
+        q.checked_mul(
+            BYTES_PER_DATA_QUBIT,
+        )
+        .ok_or(
+            SurfaceCodeError::ArithmeticOverflow {
+                resource:
+                    "surface-code data-qubit memory",
+            },
+        )?;
+
+    let stabilizer_bytes =
+        s.checked_mul(
+            BYTES_PER_STABILIZER,
+        )
+        .ok_or(
+            SurfaceCodeError::ArithmeticOverflow {
+                resource:
+                    "surface-code stabilizer memory",
+            },
+        )?;
+
+    data_bytes
+        .checked_add(
+            stabilizer_bytes,
+        )
+        .and_then(
+            |value|
+                value.checked_add(
+                    BYTES_PER_LOGICAL_OPERATOR,
+                ),
+        )
+        .and_then(
+            |value|
+                value.checked_add(
+                    FIXED_OVERHEAD,
+                ),
+        )
+        .ok_or(
+            SurfaceCodeError::ArithmeticOverflow {
+                resource:
+                    "surface-code total memory estimate",
+            },
+        )
 }
 
 // ============================================================================
@@ -2404,10 +2839,13 @@ fn estimate_memory_bytes(
 fn build_data_qubits(
     distance: usize,
     expected_count: usize,
-) -> Result<Vec<DataQubit>, SurfaceCodeError> {
+) -> Result<
+    Vec<DataQubit>,
+    SurfaceCodeError,
+> {
     let mut data =
         Vec::with_capacity(
-            expected_count
+            expected_count,
         );
 
     for row in 0..distance {
@@ -2426,9 +2864,22 @@ fn build_data_qubits(
                         row,
                         column,
                     ),
-                )
+                ),
             );
         }
+    }
+
+    if data.len()
+        != expected_count
+    {
+        return Err(
+            SurfaceCodeError::InvalidDataQubitCount {
+                expected:
+                    expected_count,
+                actual:
+                    data.len(),
+            },
+        );
     }
 
     Ok(data)
@@ -2443,75 +2894,108 @@ fn build_data_qubits(
 /// Z if (row + column) is even
 /// ```
 ///
-/// Boundary checks are the alternating weight-2 checks:
+/// Boundary checks:
 ///
 /// ```text
 /// left/right  -> X
 /// top/bottom  -> Z
 /// ```
 ///
-/// Only every second boundary edge is populated. This is essential: placing
-/// a weight-2 stabilizer on every boundary edge would generally violate the
-/// X/Z commutation constraints.
+/// Only alternating boundary edges are populated.
 fn build_stabilizers(
     distance: usize,
+    limits: &QecLimits,
 ) -> Result<
     Vec<SurfaceStabilizer>,
-    SurfaceCodeError,
-> {
+    SurfaceCodeError> {
+    if limits.max_stabilizer_weight
+        < 4
+    {
+        return Err(
+            SurfaceCodeError::Limit(
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::StabilizerWeight,
+                    requested: 4,
+                    maximum:
+                        limits.max_stabilizer_weight
+                            as u128,
+                },
+            ),
+        );
+    }
+
     let expected =
-        checked_square(
-            distance,
-            "surface-code stabilizer construction",
-        )?
-        .checked_sub(1)
-        .ok_or(
-            SurfaceCodeError::ArithmeticOverflow {
-                resource:
-                    "surface-code stabilizer construction count",
-            }
+        checked_sub_usize(
+            checked_square(
+                distance,
+                "surface-code stabilizer construction",
+            )?,
+            1,
         )?;
 
     let mut stabilizers =
         Vec::with_capacity(
-            expected
+            expected,
         );
 
-    let mut next_id = 0usize;
+    let mut next_id =
+        0usize;
 
     // ------------------------------------------------------------------------
     // Bulk checkerboard stabilizers
     // ------------------------------------------------------------------------
 
-    for row in 0..distance - 1 {
-        for column in 0..distance - 1 {
-            let support =
-                [
-                    checked_qubit_index(
-                        distance,
-                        row,
+    let face_limit =
+        checked_sub_usize(
+            distance,
+            1,
+        )?;
+
+    for row in 0..face_limit {
+        for column in 0..face_limit {
+            let support = vec![
+                checked_qubit_index(
+                    distance,
+                    row,
+                    column,
+                )?,
+                checked_qubit_index(
+                    distance,
+                    row,
+                    checked_add_usize(
                         column,
+                        1,
                     )?,
-                    checked_qubit_index(
-                        distance,
+                )?,
+                checked_qubit_index(
+                    distance,
+                    checked_add_usize(
                         row,
-                        column + 1,
+                        1,
                     )?,
-                    checked_qubit_index(
-                        distance,
-                        row + 1,
+                    column,
+                )?,
+                checked_qubit_index(
+                    distance,
+                    checked_add_usize(
+                        row,
+                        1,
+                    )?,
+                    checked_add_usize(
                         column,
+                        1,
                     )?,
-                    checked_qubit_index(
-                        distance,
-                        row + 1,
-                        column + 1,
-                    )?,
-                ]
-                .to_vec();
+                )?,
+            ];
 
             let kind =
-                if (row + column) % 2 == 1 {
+                if checked_add_usize(
+                    row,
+                    column,
+                )? % 2
+                    == 1
+                {
                     StabilizerKind::X
                 } else {
                     StabilizerKind::Z
@@ -2523,43 +3007,37 @@ fn build_stabilizers(
                     kind,
                     support,
                     None,
-                )?
+                )?,
             );
 
             next_id =
-                next_id
-                    .checked_add(1)
-                    .ok_or(
-                        SurfaceCodeError::ArithmeticOverflow {
-                            resource:
-                                "surface-code stabilizer id",
-                        }
-                    )?;
+                checked_add_usize(
+                    next_id,
+                    1,
+                )?;
         }
     }
 
     // ------------------------------------------------------------------------
-    // Alternating boundary stabilizers
+    // Left boundary
     // ------------------------------------------------------------------------
 
-    //
-    // Left boundary:
-    //   X on even row segments.
-    //
-    for row in (0..distance - 1).step_by(2) {
-        let support =
-            vec![
-                checked_qubit_index(
-                    distance,
+    for row in (0..face_limit).step_by(2) {
+        let support = vec![
+            checked_qubit_index(
+                distance,
+                row,
+                0,
+            )?,
+            checked_qubit_index(
+                distance,
+                checked_add_usize(
                     row,
-                    0,
+                    1,
                 )?,
-                checked_qubit_index(
-                    distance,
-                    row + 1,
-                    0,
-                )?,
-            ];
+                0,
+            )?,
+        ];
 
         stabilizers.push(
             SurfaceStabilizer::new(
@@ -2567,48 +3045,42 @@ fn build_stabilizers(
                 StabilizerKind::X,
                 support,
                 Some(Boundary::Left),
-            )?
+            )?,
         );
 
         next_id =
-            next_id
-                .checked_add(1)
-                .ok_or(
-                    SurfaceCodeError::ArithmeticOverflow {
-                        resource:
-                            "surface-code left-boundary stabilizer id",
-                    }
-                )?;
+            checked_add_usize(
+                next_id,
+                1,
+            )?;
     }
 
-    //
-    // Right boundary:
-    //   X on odd row segments.
-    //
-    for row in (1..distance - 1).step_by(2) {
-        let right =
-            distance
-                .checked_sub(1)
-                .ok_or(
-                    SurfaceCodeError::ArithmeticOverflow {
-                        resource:
-                            "surface-code right boundary coordinate",
-                    }
-                )?;
+    // ------------------------------------------------------------------------
+    // Right boundary
+    // ------------------------------------------------------------------------
 
-        let support =
-            vec![
-                checked_qubit_index(
-                    distance,
+    let right =
+        checked_sub_usize(
+            distance,
+            1,
+        )?;
+
+    for row in (1..face_limit).step_by(2) {
+        let support = vec![
+            checked_qubit_index(
+                distance,
+                row,
+                right,
+            )?,
+            checked_qubit_index(
+                distance,
+                checked_add_usize(
                     row,
-                    right,
+                    1,
                 )?,
-                checked_qubit_index(
-                    distance,
-                    row + 1,
-                    right,
-                )?,
-            ];
+                right,
+            )?,
+        ];
 
         stabilizers.push(
             SurfaceStabilizer::new(
@@ -2616,38 +3088,36 @@ fn build_stabilizers(
                 StabilizerKind::X,
                 support,
                 Some(Boundary::Right),
-            )?
+            )?,
         );
 
         next_id =
-            next_id
-                .checked_add(1)
-                .ok_or(
-                    SurfaceCodeError::ArithmeticOverflow {
-                        resource:
-                            "surface-code right-boundary stabilizer id",
-                    }
-                )?;
+            checked_add_usize(
+                next_id,
+                1,
+            )?;
     }
 
-    //
-    // Top boundary:
-    //   Z on odd column segments.
-    //
-    for column in (1..distance - 1).step_by(2) {
-        let support =
-            vec![
-                checked_qubit_index(
-                    distance,
-                    0,
+    // ------------------------------------------------------------------------
+    // Top boundary
+    // ------------------------------------------------------------------------
+
+    for column in (1..face_limit).step_by(2) {
+        let support = vec![
+            checked_qubit_index(
+                distance,
+                0,
+                column,
+            )?,
+            checked_qubit_index(
+                distance,
+                0,
+                checked_add_usize(
                     column,
+                    1,
                 )?,
-                checked_qubit_index(
-                    distance,
-                    0,
-                    column + 1,
-                )?,
-            ];
+            )?,
+        ];
 
         stabilizers.push(
             SurfaceStabilizer::new(
@@ -2655,48 +3125,36 @@ fn build_stabilizers(
                 StabilizerKind::Z,
                 support,
                 Some(Boundary::Top),
-            )?
+            )?,
         );
 
         next_id =
-            next_id
-                .checked_add(1)
-                .ok_or(
-                    SurfaceCodeError::ArithmeticOverflow {
-                        resource:
-                            "surface-code top-boundary stabilizer id",
-                    }
-                )?;
+            checked_add_usize(
+                next_id,
+                1,
+            )?;
     }
 
-    //
-    // Bottom boundary:
-    //   Z on even column segments.
-    //
-    for column in (0..distance - 1).step_by(2) {
-        let bottom =
-            distance
-                .checked_sub(1)
-                .ok_or(
-                    SurfaceCodeError::ArithmeticOverflow {
-                        resource:
-                            "surface-code bottom boundary coordinate",
-                    }
-                )?;
+    // ------------------------------------------------------------------------
+    // Bottom boundary
+    // ------------------------------------------------------------------------
 
-        let support =
-            vec![
-                checked_qubit_index(
-                    distance,
-                    bottom,
+    for column in (0..face_limit).step_by(2) {
+        let support = vec![
+            checked_qubit_index(
+                distance,
+                right,
+                column,
+            )?,
+            checked_qubit_index(
+                distance,
+                right,
+                checked_add_usize(
                     column,
+                    1,
                 )?,
-                checked_qubit_index(
-                    distance,
-                    bottom,
-                    column + 1,
-                )?,
-            ];
+            )?,
+        ];
 
         stabilizers.push(
             SurfaceStabilizer::new(
@@ -2704,18 +3162,14 @@ fn build_stabilizers(
                 StabilizerKind::Z,
                 support,
                 Some(Boundary::Bottom),
-            )?
+            )?,
         );
 
         next_id =
-            next_id
-                .checked_add(1)
-                .ok_or(
-                    SurfaceCodeError::ArithmeticOverflow {
-                        resource:
-                            "surface-code bottom-boundary stabilizer id",
-                    }
-                )?;
+            checked_add_usize(
+                next_id,
+                1,
+            )?;
     }
 
     if stabilizers.len()
@@ -2726,7 +3180,7 @@ fn build_stabilizers(
                 expected,
                 actual:
                     stabilizers.len(),
-            }
+            },
         );
     }
 
@@ -2737,18 +3191,39 @@ fn build_stabilizers(
 // Logical operators
 // ============================================================================
 
-/// Canonical horizontal X logical string.
+/// Canonical horizontal logical-X string.
 fn build_logical_x(
     distance: usize,
+    limits: &QecLimits,
 ) -> Result<
     LogicalOperator,
-    SurfaceCodeError,
-> {
-    let mut paulis =
-        vec![Pauli::I; checked_square(
+    SurfaceCodeError> {
+    if distance
+        > limits.max_logical_operator_weight
+    {
+        return Err(
+            SurfaceCodeError::Limit(
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::LogicalOperatorWeight,
+                    requested:
+                        distance as u128,
+                    maximum:
+                        limits.max_logical_operator_weight
+                            as u128,
+                },
+            ),
+        );
+    }
+
+    let num_qubits =
+        checked_square(
             distance,
             "logical-X construction",
-        )?];
+        )?;
+
+    let mut paulis =
+        vec![Pauli::I; num_qubits];
 
     for column in 0..distance {
         let index =
@@ -2767,23 +3242,44 @@ fn build_logical_x(
         "X_L",
         StabilizerKind::X,
         PauliString::from_paulis(
-            &paulis
+            &paulis,
         ),
     )
 }
 
-/// Canonical vertical Z logical string.
+/// Canonical vertical logical-Z string.
 fn build_logical_z(
     distance: usize,
+    limits: &QecLimits,
 ) -> Result<
     LogicalOperator,
-    SurfaceCodeError,
-> {
-    let mut paulis =
-        vec![Pauli::I; checked_square(
+    SurfaceCodeError> {
+    if distance
+        > limits.max_logical_operator_weight
+    {
+        return Err(
+            SurfaceCodeError::Limit(
+                LimitError::Exceeded {
+                    resource:
+                        LimitKind::LogicalOperatorWeight,
+                    requested:
+                        distance as u128,
+                    maximum:
+                        limits.max_logical_operator_weight
+                            as u128,
+                },
+            ),
+        );
+    }
+
+    let num_qubits =
+        checked_square(
             distance,
             "logical-Z construction",
-        )?];
+        )?;
+
+    let mut paulis =
+        vec![Pauli::I; num_qubits];
 
     for row in 0..distance {
         let index =
@@ -2802,7 +3298,7 @@ fn build_logical_z(
         "Z_L",
         StabilizerKind::Z,
         PauliString::from_paulis(
-            &paulis
+            &paulis,
         ),
     )
 }
@@ -2814,21 +3310,27 @@ fn build_logical_z(
 fn checked_square(
     value: usize,
     resource: &'static str,
-) -> Result<usize, SurfaceCodeError> {
-    value
-        .checked_mul(value)
-        .ok_or(
-            SurfaceCodeError::ArithmeticOverflow {
-                resource,
-            }
-        )
+) -> Result<
+    usize,
+    SurfaceCodeError> {
+    checked_mul_usize(
+        value,
+        value,
+    )
+    .map_err(
+        |_| SurfaceCodeError::ArithmeticOverflow {
+            resource,
+        },
+    )
 }
 
 fn checked_qubit_index(
     distance: usize,
     row: usize,
     column: usize,
-) -> Result<QubitIndex, SurfaceCodeError> {
+) -> Result<
+    QubitIndex,
+    SurfaceCodeError> {
     if row >= distance
         || column >= distance
     {
@@ -2840,32 +3342,177 @@ fn checked_qubit_index(
                         column,
                     ),
                 distance,
-            }
+            },
         );
     }
 
-    let row_offset =
-        row.checked_mul(
-            distance
+    let index =
+        checked_mul_add_usize(
+            row,
+            distance,
+            column,
         )
-        .ok_or(
-            SurfaceCodeError::ArithmeticOverflow {
+        .map_err(
+            |_| SurfaceCodeError::ArithmeticOverflow {
                 resource:
-                    "surface-code row offset",
-            }
+                    "surface-code qubit index",
+            },
         )?;
 
-    let index =
-        row_offset
-            .checked_add(column)
-            .ok_or(
-                SurfaceCodeError::ArithmeticOverflow {
-                    resource:
-                        "surface-code qubit index",
-                }
-            )?;
-
     Ok(
-        QubitIndex::new(index)
+        QubitIndex::new(
+            index,
+        ),
     )
+}
+
+// ============================================================================
+// Canonical error conversion helpers
+// ============================================================================
+
+fn limit_error_to_qec_error(
+    error: LimitError,
+) -> QecError {
+    match error {
+        LimitError::Exceeded {
+            resource,
+            requested,
+            maximum,
+        } => {
+            QecError::ResourceLimitExceeded {
+                resource:
+                    limit_kind_to_resource_kind(
+                        resource,
+                    ),
+                requested,
+                current: 0,
+                limit: maximum,
+                message:
+                    format!(
+                        "QEC resource limit {resource} exceeded"
+                    ),
+            }
+        }
+
+        LimitError::InvalidLimit {
+            resource,
+            value,
+        } => {
+            QecError::invalid_input(
+                format!(
+                    "invalid QEC limit {resource}: {value}"
+                ),
+            )
+        }
+
+        LimitError::ArithmeticOverflow {
+            resource,
+        } => {
+            QecError::NumericalFailure {
+                operation:
+                    super::errors::NumericalOperation::
+                        MemorySizeCalculation,
+                message:
+                    format!(
+                        "overflow while calculating \
+                         QEC limit {resource}"
+                    ),
+            }
+        }
+
+        LimitError::InconsistentLimits {
+            resource,
+            related_resource,
+            reason,
+        } => {
+            QecError::invalid_input(
+                format!(
+                    "inconsistent QEC limits: \
+                     {resource} / {related_resource}: {reason}"
+                ),
+            )
+        }
+
+        LimitError::UnsupportedSchema {
+            found,
+            expected,
+        } => {
+            QecError::VersionMismatch {
+                component:
+                    "QecLimits".to_string(),
+                expected:
+                    expected.to_string(),
+                actual:
+                    found.to_string(),
+                message:
+                    "unsupported QEC limits schema".to_string(),
+            }
+        }
+    }
+}
+
+fn limit_kind_to_resource_kind(
+    kind: LimitKind,
+) -> ResourceKind {
+    match kind {
+        LimitKind::CodeDistance =>
+            ResourceKind::CodeDistance,
+
+        LimitKind::Qubits =>
+            ResourceKind::Qubits,
+
+        LimitKind::Stabilizers =>
+            ResourceKind::Stabilizers,
+
+        LimitKind::SyndromeEvents =>
+            ResourceKind::SyndromeEvents,
+
+        LimitKind::MeasurementRounds =>
+            ResourceKind::MeasurementRounds,
+
+        LimitKind::GraphNodes =>
+            ResourceKind::GraphNodes,
+
+        LimitKind::GraphEdges =>
+            ResourceKind::GraphEdges,
+
+        LimitKind::MemoryBytes =>
+            ResourceKind::MemoryBytes,
+
+        LimitKind::DecoderTimeNs =>
+            ResourceKind::Time,
+
+        LimitKind::Parallelism =>
+            ResourceKind::Parallelism,
+
+        LimitKind::CheckpointSizeBytes =>
+            ResourceKind::CheckpointSize,
+
+        LimitKind::Partitions =>
+            ResourceKind::Partitions,
+
+        LimitKind::StreamBufferEvents =>
+            ResourceKind::StreamBuffer,
+
+        LimitKind::DecoderIterations =>
+            ResourceKind::DecoderIterations,
+
+        LimitKind::StabilizerWeight =>
+            ResourceKind::StabilizerWeight,
+
+        LimitKind::LogicalOperatorWeight =>
+            ResourceKind::LogicalWeight,
+
+        LimitKind::QubitsPerPartition =>
+            ResourceKind::Qubits,
+
+        LimitKind::QpuShots =>
+            ResourceKind::QpuShots,
+
+        LimitKind::QpuCircuits =>
+            ResourceKind::QpuCircuits,
+
+        LimitKind::VerificationOperations =>
+            ResourceKind::Operations,
+    }
 }
