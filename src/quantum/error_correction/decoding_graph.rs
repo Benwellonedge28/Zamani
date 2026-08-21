@@ -1,69 +1,133 @@
 //! Zamani Quantum Error Correction — Deterministic Space-Time Decoding Graph.
 //!
-//! This module is the intermediate representation between syndrome processing
-//! and a decoder such as MWPM or Union-Find.
+//! This module is the canonical intermediate representation between syndrome
+//! processing and QEC decoders such as MWPM and Union-Find.
 //!
-//! Design:
+//! # Architectural contract
 //!
 //! ```text
-//! DetectionEvent
-//!      │
-//!      ▼
-//! DecodingGraph
-//!      │
-//!      ├── DetectionNode
-//!      ├── BoundaryNode
-//!      └── GraphEdge
-//!             │
-//!             ▼
-//!       MWPM / Union-Find
+//! Syndrome / QPU / Replay
+//!          |
+//!          v
+//!   DetectionEvent
+//!          |
+//!          v
+//!   DecodingGraph
+//!      |       |
+//!      |       +--> Boundaries
+//!      |
+//!      +--> Detection Nodes
+//!      |
+//!      +--> Weighted Edges
+//!          |
+//!          v
+//!     MWPM / Union-Find
 //! ```
 //!
-//! The graph is deliberately not a decoder.
+//! ## This module owns
 //!
-//! Responsibilities:
-//! - represent space-time detection events;
-//! - represent physical/logical boundaries;
-//! - represent weighted candidate error paths;
-//! - enforce QecLimits before allocation;
-//! - perform memory preflight;
-//! - validate graph invariants;
-//! - reject duplicate nodes and edges;
-//! - provide deterministic iteration;
-//! - provide checked coordinate arithmetic;
-//! - provide bounded probability-to-weight conversion;
-//! - expose a stable API to decoder implementations.
+//! - validated spatial coordinates;
+//! - validated space-time coordinates;
+//! - stable detection-node identifiers;
+//! - stable boundary identifiers;
+//! - detection nodes;
+//! - boundary nodes;
+//! - graph endpoints;
+//! - graph edges;
+//! - bounded deterministic edge weights;
+//! - graph construction;
+//! - graph indexing;
+//! - duplicate detection;
+//! - deterministic iteration;
+//! - graph validation;
+//! - allocation-free resource preflight;
+//! - graph memory estimation;
+//! - checked arithmetic required by graph construction.
 //!
-//! Non-responsibilities:
+//! ## This module does NOT own
+//!
 //! - syndrome extraction;
 //! - stabilizer algebra;
-//! - noise generation;
+//! - surface-code topology;
+//! - physical noise generation;
+//! - decoder algorithms;
 //! - matching;
 //! - correction application;
-//! - logical-error classification;
-//! - QPU execution.
+//! - logical-equivalence classification;
+//! - QPU access;
+//! - scheduling;
+//! - distributed execution.
 //!
-//! Resource policy:
+//! ## Integration contract
+//!
+//! `limits.rs`
+//!     Canonical declarative resource policy.
+//!
+//! `syndrome.rs`
+//!     Supplies validated `DetectionEvent` values.
+//!
+//! `surface_code.rs`
+//!     Supplies physical coordinates for detection events and boundaries.
+//!
+//! `memory.rs`
+//!     Owns actual memory reservation/enforcement. This module performs
+//!     allocation-free graph preflight before graph mutation.
+//!
+//! `resources.rs`
+//!     Owns runtime accounting. This module does not create a second runtime
+//!     accounting system.
+//!
+//! `mwpm.rs`
+//! `union_find.rs`
+//!     Consume this graph through its stable public API.
+//!
+//! `distance.rs`
+//!     May use graph resource estimation and validation but must not make the
+//!     graph responsible for distance verification.
+//!
+//! `streaming.rs` / `partition.rs`
+//!     May construct bounded graph fragments using the same limits contract.
+//!
+//! # Resource ordering
+//!
+//! Every graph mutation follows:
 //!
 //! ```text
-//! QecLimits
-//!     │
-//!     ▼
-//! DecodingGraph preflight
-//!     │
-//!     ▼
-//! graph allocation
+//! input validation
+//!       |
+//!       v
+//! duplicate / endpoint validation
+//!       |
+//!       v
+//! checked capacity calculation
+//!       |
+//!       v
+//! QecLimits validation
+//!       |
+//!       v
+//! memory preflight
+//!       |
+//!       v
+//! graph mutation
 //! ```
 //!
-//! No production graph-size ceiling is defined locally. Representation
-//! invariants such as coordinate dimensionality and maximum encoded weight
-//! remain local because they describe the graph representation itself rather
-//! than execution policy.
+//! The graph never silently wraps arithmetic.
+//!
+//! # Determinism
+//!
+//! - `BTreeMap` and `BTreeSet` provide canonical ordering.
+//! - Endpoint pairs are canonicalized before storage.
+//! - Node identifiers are monotonic and checked.
+//! - Edge weights are integer-valued.
+//! - Probability conversion uses deterministic fixed-point arithmetic.
+//! - No floating-point value participates in graph identity or ordering.
+//!
+//! Rust compatibility target: Rust 1.97.1.
 
+use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt;
 
-use super::limits::{LimitError, QecLimits};
+use super::limits::{LimitError, LimitKind, QecLimits};
 use super::syndrome::{
     DetectionEvent,
     MeasurementConfidence,
@@ -77,51 +141,46 @@ use super::syndrome::{
 
 /// Maximum number of spatial dimensions represented by one coordinate.
 ///
-/// This is a representation invariant, not an execution resource policy.
+/// This is a representation invariant, not an execution-resource policy.
 pub const MAX_SPATIAL_DIMENSIONS: usize = 8;
 
-/// Maximum absolute coordinate component representable by the graph.
+/// Maximum absolute coordinate component accepted by the graph.
 ///
-/// This prevents malformed external coordinates from creating pathological
-/// arithmetic while leaving workload sizing to `QecLimits`.
+/// This prevents malformed external input from producing pathological
+/// coordinate arithmetic while leaving workload sizing to `QecLimits`.
 pub const MAX_COORDINATE_ABS: i64 = 1_000_000_000;
 
 /// Maximum valid graph round.
 ///
-/// `MeasurementRound` already validates its own range. This constant exists
-/// as a graph-level invariant for defensive validation.
+/// `MeasurementRound` already enforces the same invariant.
 pub const MAX_GRAPH_ROUND: u64 = u64::MAX - 1;
-
-/// Maximum valid graph timestamp.
-///
-/// `MeasurementTimestamp` already validates its own range.
-pub const MAX_GRAPH_TIMESTAMP: u64 = u64::MAX - 1;
 
 /// Fixed-point probability scale.
 ///
-/// ```text
-/// 0                   = 0
-/// 1_000_000_000_000   = 1.0
-/// ```
+/// `1_000_000_000_000` represents probability `1.0`.
 pub const PROBABILITY_SCALE: u64 = 1_000_000_000_000;
 
+/// Fixed-point logarithm scale used for edge weights.
+pub const LOG_WEIGHT_SCALE: i128 = 1_000_000;
+
 /// Maximum finite encoded edge weight.
-///
-/// This prevents pathological values from reaching decoders.
 pub const MAX_WEIGHT: u64 = 1_000_000_000_000_000;
 
-/// Conservative per-node memory estimate used by preflight.
+/// Fixed-point approximation of `ln(2) * LOG_WEIGHT_SCALE`.
 ///
-/// This is deliberately an estimate, not an allocator measurement.
+/// 0.693147 * 1_000_000 = 693147.
+const LN_2_SCALED: i128 = 693_147;
+
+/// Conservative per-detection-node memory estimate.
 const ESTIMATED_NODE_BYTES: u64 = 128;
 
-/// Conservative per-boundary memory estimate used by preflight.
+/// Conservative per-boundary-node memory estimate.
 const ESTIMATED_BOUNDARY_BYTES: u64 = 96;
 
-/// Conservative per-edge memory estimate used by preflight.
+/// Conservative per-edge memory estimate.
 const ESTIMATED_EDGE_BYTES: u64 = 96;
 
-/// Conservative graph base memory estimate.
+/// Conservative graph bookkeeping overhead.
 const ESTIMATED_GRAPH_BASE_BYTES: u64 = 1024;
 
 // ============================================================================
@@ -200,12 +259,14 @@ impl SpatialCoordinate {
         Self::new(vec![x, y, z])
     }
 
-    /// Returns the coordinate dimensionality.
+    /// Returns the dimensionality.
+    #[must_use]
     pub fn dimensions(&self) -> usize {
         self.values.len()
     }
 
     /// Returns one coordinate component.
+    #[must_use]
     pub fn get(
         &self,
         dimension: usize,
@@ -214,11 +275,12 @@ impl SpatialCoordinate {
     }
 
     /// Returns all coordinate components.
+    #[must_use]
     pub fn values(&self) -> &[i64] {
         &self.values
     }
 
-    /// Computes Manhattan distance using checked arithmetic.
+    /// Computes Manhattan distance with checked arithmetic.
     pub fn manhattan_distance(
         &self,
         other: &Self,
@@ -229,7 +291,7 @@ impl SpatialCoordinate {
             );
         }
 
-        let mut distance = 0u64;
+        let mut distance = 0_u64;
 
         for (&left, &right) in
             self.values.iter().zip(other.values.iter())
@@ -246,8 +308,13 @@ impl SpatialCoordinate {
                     DecodingGraphError::ArithmeticOverflow,
                 )?;
 
+            let magnitude =
+                u64::try_from(absolute).map_err(|_| {
+                    DecodingGraphError::ArithmeticOverflow
+                })?;
+
             distance = distance
-                .checked_add(absolute as u64)
+                .checked_add(magnitude)
                 .ok_or(
                     DecodingGraphError::ArithmeticOverflow,
                 )?;
@@ -260,21 +327,21 @@ impl SpatialCoordinate {
 impl fmt::Display for SpatialCoordinate {
     fn fmt(
         &self,
-        f: &mut fmt::Formatter<'_>,
+        formatter: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        write!(f, "(")?;
+        formatter.write_str("(")?;
 
         for (index, value) in
             self.values.iter().enumerate()
         {
             if index != 0 {
-                write!(f, ",")?;
+                formatter.write_str(",")?;
             }
 
-            write!(f, "{value}")?;
+            write!(formatter, "{value}")?;
         }
 
-        write!(f, ")")
+        formatter.write_str(")")
     }
 }
 
@@ -282,7 +349,7 @@ impl fmt::Display for SpatialCoordinate {
 // Space-time coordinate
 // ============================================================================
 
-/// A position in the decoding space-time lattice.
+/// Position in the decoding space-time lattice.
 #[derive(
     Debug,
     Clone,
@@ -318,16 +385,14 @@ impl SpaceTimeCoordinate {
     }
 
     /// Returns the spatial coordinate.
-    pub fn spatial(
-        &self,
-    ) -> &SpatialCoordinate {
+    #[must_use]
+    pub fn spatial(&self) -> &SpatialCoordinate {
         &self.spatial
     }
 
     /// Returns the measurement round.
-    pub const fn round(
-        &self,
-    ) -> MeasurementRound {
+    #[must_use]
+    pub const fn round(&self) -> MeasurementRound {
         self.round
     }
 }
@@ -351,11 +416,13 @@ pub struct NodeId(usize);
 
 impl NodeId {
     /// Creates an identifier.
+    #[must_use]
     pub const fn new(id: usize) -> Self {
         Self(id)
     }
 
     /// Returns the numeric identifier.
+    #[must_use]
     pub const fn index(self) -> usize {
         self.0
     }
@@ -364,9 +431,9 @@ impl NodeId {
 impl fmt::Display for NodeId {
     fn fmt(
         &self,
-        f: &mut fmt::Formatter<'_>,
+        formatter: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        write!(f, "n{}", self.0)
+        write!(formatter, "n{}", self.0)
     }
 }
 
@@ -385,11 +452,13 @@ pub struct BoundaryId(usize);
 
 impl BoundaryId {
     /// Creates an identifier.
+    #[must_use]
     pub const fn new(id: usize) -> Self {
         Self(id)
     }
 
     /// Returns the numeric identifier.
+    #[must_use]
     pub const fn index(self) -> usize {
         self.0
     }
@@ -398,9 +467,9 @@ impl BoundaryId {
 impl fmt::Display for BoundaryId {
     fn fmt(
         &self,
-        f: &mut fmt::Formatter<'_>,
+        formatter: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        write!(f, "b{}", self.0)
+        write!(formatter, "b{}", self.0)
     }
 }
 
@@ -424,7 +493,8 @@ pub struct DetectionNode {
 
 impl DetectionNode {
     /// Creates a detection node.
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         id: NodeId,
         coordinate: SpaceTimeCoordinate,
         stabilizer: StabilizerId,
@@ -438,24 +508,30 @@ impl DetectionNode {
         }
     }
 
-    pub const fn id(
-        &self,
-    ) -> NodeId {
+    /// Returns the node identifier.
+    #[must_use]
+    pub const fn id(&self) -> NodeId {
         self.id
     }
 
+    /// Returns the node coordinate.
+    #[must_use]
     pub fn coordinate(
         &self,
     ) -> &SpaceTimeCoordinate {
         &self.coordinate
     }
 
+    /// Returns the stabilizer identifier.
+    #[must_use]
     pub const fn stabilizer(
         &self,
     ) -> StabilizerId {
         self.stabilizer
     }
 
+    /// Returns measurement confidence.
+    #[must_use]
     pub const fn confidence(
         &self,
     ) -> MeasurementConfidence {
@@ -467,7 +543,7 @@ impl DetectionNode {
 // Boundary node
 // ============================================================================
 
-/// A physical or logical decoding boundary.
+/// Physical or logical decoding boundary.
 #[derive(
     Debug,
     Clone,
@@ -480,7 +556,9 @@ pub struct BoundaryNode {
 }
 
 impl BoundaryNode {
-    pub fn new(
+    /// Creates a boundary node.
+    #[must_use]
+    pub const fn new(
         id: BoundaryId,
         coordinate: SpaceTimeCoordinate,
     ) -> Self {
@@ -490,12 +568,14 @@ impl BoundaryNode {
         }
     }
 
-    pub const fn id(
-        &self,
-    ) -> BoundaryId {
+    /// Returns the boundary identifier.
+    #[must_use]
+    pub const fn id(&self) -> BoundaryId {
         self.id
     }
 
+    /// Returns the boundary coordinate.
+    #[must_use]
     pub fn coordinate(
         &self,
     ) -> &SpaceTimeCoordinate {
@@ -507,7 +587,7 @@ impl BoundaryNode {
 // Graph endpoint
 // ============================================================================
 
-/// Endpoint of a decoding graph edge.
+/// Endpoint of a decoding-graph edge.
 #[derive(
     Debug,
     Clone,
@@ -519,26 +599,26 @@ impl BoundaryNode {
     Hash,
 )]
 pub enum GraphEndpoint {
-    /// Detection event.
+    /// Detection event endpoint.
     Detection(NodeId),
 
-    /// Physical or logical boundary.
+    /// Boundary endpoint.
     Boundary(BoundaryId),
 }
 
 impl GraphEndpoint {
-    pub const fn is_detection(
-        self,
-    ) -> bool {
+    /// Returns whether this is a detection endpoint.
+    #[must_use]
+    pub const fn is_detection(self) -> bool {
         matches!(
             self,
             Self::Detection(_)
         )
     }
 
-    pub const fn is_boundary(
-        self,
-    ) -> bool {
+    /// Returns whether this is a boundary endpoint.
+    #[must_use]
+    pub const fn is_boundary(self) -> bool {
         matches!(
             self,
             Self::Boundary(_)
@@ -568,13 +648,13 @@ pub enum EdgeKind {
     /// Temporal propagation.
     Temporal,
 
-    /// Combined spatial/temporal propagation.
+    /// Combined space-time propagation.
     SpaceTime,
 
-    /// Connection to a boundary.
+    /// Connection to a physical/logical boundary.
     Boundary,
 
-    /// Backend-specific edge.
+    /// Backend-specific path semantics.
     Custom,
 }
 
@@ -582,7 +662,10 @@ pub enum EdgeKind {
 // Edge weight
 // ============================================================================
 
-/// Bounded deterministic edge weight.
+/// Bounded integer edge weight.
+///
+/// Decoder algorithms must use this integer representation rather than
+/// floating-point values.
 #[derive(
     Debug,
     Clone,
@@ -596,10 +679,10 @@ pub enum EdgeKind {
 pub struct EdgeWeight(u64);
 
 impl EdgeWeight {
-    /// Zero weight.
+    /// Zero-cost edge.
     pub const ZERO: Self = Self(0);
 
-    /// Creates a validated weight.
+    /// Creates a validated edge weight.
     pub const fn new(
         value: u64,
     ) -> Result<Self, DecodingGraphError> {
@@ -615,18 +698,21 @@ impl EdgeWeight {
     }
 
     /// Returns the numeric weight.
+    #[must_use]
     pub const fn value(self) -> u64 {
         self.0
     }
 
-    /// Creates a bounded weight from a probability.
+    /// Converts fixed-point probability to deterministic fixed-point
+    /// negative log-likelihood weight.
     ///
-    /// The probability is supplied as fixed-point:
+    /// The conversion is deliberately integer-only.
     ///
-    /// `1_000_000_000_000 == 1.0`
+    /// `probability == PROBABILITY_SCALE` represents probability `1.0`.
     ///
-    /// The conversion uses `-ln(p)` and stores a fixed integer scale.
-    /// Decoder decisions themselves remain integer-only.
+    /// The result is approximately:
+    ///
+    /// `-ln(p) * LOG_WEIGHT_SCALE`
     pub fn from_probability(
         probability: u64,
     ) -> Result<Self, DecodingGraphError> {
@@ -638,24 +724,159 @@ impl EdgeWeight {
             );
         }
 
-        let p =
-            probability as f64
-                / PROBABILITY_SCALE as f64;
+        let scaled_probability =
+            probability as i128;
 
-        let raw = -p.ln() * 1_000_000.0;
+        let mut normalized =
+            scaled_probability;
 
-        if !raw.is_finite()
-            || raw < 0.0
-            || raw > MAX_WEIGHT as f64
-        {
-            return Err(
-                DecodingGraphError::WeightOutOfRange {
-                    value: MAX_WEIGHT,
-                },
-            );
+        let mut exponent: i32 = 0;
+
+        /*
+         * Normalize p into approximately [0.5, 1].
+         *
+         * This keeps the atanh-series convergence fast and deterministic.
+         */
+        while normalized < PROBABILITY_SCALE as i128 / 2 {
+            normalized = normalized
+                .checked_mul(2)
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+            exponent = exponent
+                .checked_add(1)
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
         }
 
-        Self::new(raw.round() as u64)
+        while normalized
+            > PROBABILITY_SCALE as i128
+        {
+            normalized /= 2;
+
+            exponent = exponent
+                .checked_sub(1)
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+        }
+
+        /*
+         * ln(x) =
+         *
+         *     2 * (z + z^3/3 + z^5/5 + ...)
+         *
+         * where
+         *
+         *     z = (x - 1) / (x + 1).
+         *
+         * All values are represented at LOG_WEIGHT_SCALE precision.
+         */
+        let scale =
+            LOG_WEIGHT_SCALE;
+
+        let numerator =
+            normalized
+                .checked_sub(
+                    PROBABILITY_SCALE as i128,
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        let denominator =
+            normalized
+                .checked_add(
+                    PROBABILITY_SCALE as i128,
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        let mut z = numerator
+            .checked_mul(scale)
+            .ok_or(
+                DecodingGraphError::ArithmeticOverflow,
+            )?
+            / denominator;
+
+        let mut z_power = z;
+        let mut series = z;
+
+        /*
+         * With normalization to [0.5, 1], |z| <= 1/3.
+         * Thirty-one terms provide ample deterministic precision for graph
+         * ordering while keeping the calculation bounded.
+         */
+        for denominator_term in
+            (3_i128..=31_i128).step_by(2)
+        {
+            z_power = z_power
+                .checked_mul(z)
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?
+                / scale;
+
+            let term = z_power
+                / denominator_term;
+
+            series = series
+                .checked_add(term)
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+        }
+
+        let normalized_ln = series
+            .checked_mul(2)
+            .ok_or(
+                DecodingGraphError::ArithmeticOverflow,
+            )?;
+
+        /*
+         * ln(p) = ln(normalized) - exponent * ln(2)
+         */
+        let exponent_component =
+            (exponent as i128)
+                .checked_mul(LN_2_SCALED)
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        let ln_probability =
+            normalized_ln
+                .checked_sub(
+                    exponent_component,
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        let negative_log =
+            ln_probability
+                .checked_neg()
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
+
+        let bounded =
+            if negative_log < 0 {
+                0
+            } else {
+                u64::try_from(
+                    negative_log,
+                )
+                .map_err(|_| {
+                    DecodingGraphError::WeightOutOfRange {
+                        value: u64::MAX,
+                    }
+                })?
+            };
+
+        Self::new(bounded)
     }
 }
 
@@ -678,10 +899,7 @@ pub struct GraphEdge {
 }
 
 impl GraphEdge {
-    /// Creates an edge.
-    ///
-    /// Endpoints are canonicalized so deterministic equality and ordering are
-    /// preserved regardless of insertion direction.
+    /// Creates an edge and canonicalizes its endpoints.
     pub fn new(
         first: GraphEndpoint,
         second: GraphEndpoint,
@@ -694,9 +912,6 @@ impl GraphEdge {
             );
         }
 
-        let (first, second) =
-            canonical_endpoints(first, second);
-
         if kind == EdgeKind::Boundary
             && !(
                 first.is_boundary()
@@ -708,6 +923,12 @@ impl GraphEdge {
             );
         }
 
+        let (first, second) =
+            canonical_endpoints(
+                first,
+                second,
+            );
+
         Ok(Self {
             first,
             second,
@@ -716,35 +937,40 @@ impl GraphEdge {
         })
     }
 
-    /// First canonical endpoint.
+    /// Returns first canonical endpoint.
+    #[must_use]
     pub const fn first(
         &self,
     ) -> GraphEndpoint {
         self.first
     }
 
-    /// Second canonical endpoint.
+    /// Returns second canonical endpoint.
+    #[must_use]
     pub const fn second(
         &self,
     ) -> GraphEndpoint {
         self.second
     }
 
-    /// Edge weight.
+    /// Returns edge weight.
+    #[must_use]
     pub const fn weight(
         &self,
     ) -> EdgeWeight {
         self.weight
     }
 
-    /// Edge semantic kind.
+    /// Returns semantic edge kind.
+    #[must_use]
     pub const fn kind(
         &self,
     ) -> EdgeKind {
         self.kind
     }
 
-    /// Returns true if this edge touches a boundary.
+    /// Returns whether the edge touches a boundary.
+    #[must_use]
     pub const fn touches_boundary(
         &self,
     ) -> bool {
@@ -752,7 +978,8 @@ impl GraphEdge {
             || self.second.is_boundary()
     }
 
-    /// Returns the opposite endpoint.
+    /// Returns the endpoint opposite `endpoint`.
+    #[must_use]
     pub fn other(
         &self,
         endpoint: GraphEndpoint,
@@ -771,9 +998,9 @@ impl GraphEdge {
 // Graph configuration
 // ============================================================================
 
-/// Graph construction policy.
+/// Decoding-graph construction configuration.
 ///
-/// `QecLimits` is the authoritative execution/resource policy.
+/// `QecLimits` remains the only production resource-policy source.
 #[derive(
     Debug,
     Clone,
@@ -786,18 +1013,21 @@ pub struct DecodingGraphConfig {
 }
 
 impl DecodingGraphConfig {
-    /// Creates a graph configuration from central QEC limits.
+    /// Creates a graph configuration.
     pub fn new(
         limits: QecLimits,
     ) -> Result<Self, DecodingGraphError> {
         limits
             .validate()
-            .map_err(DecodingGraphError::Limit)?;
+            .map_err(
+                DecodingGraphError::Limit,
+            )?;
 
         Ok(Self { limits })
     }
 
-    /// Returns the resource policy.
+    /// Returns the authoritative resource policy.
+    #[must_use]
     pub const fn limits(
         &self,
     ) -> QecLimits {
@@ -817,7 +1047,7 @@ impl Default for DecodingGraphConfig {
 // Graph resource estimate
 // ============================================================================
 
-/// Resource estimate generated before graph allocation.
+/// Allocation-free graph resource estimate.
 #[derive(
     Debug,
     Clone,
@@ -833,14 +1063,36 @@ pub struct GraphResourceEstimate {
 }
 
 impl GraphResourceEstimate {
-    /// Calculates an estimate without allocating graph storage.
+    /// Calculates a graph resource estimate without allocating graph storage.
     pub fn calculate(
         detection_nodes: usize,
         boundary_nodes: usize,
         edges: usize,
     ) -> Result<Self, DecodingGraphError> {
+        let detection_nodes_u64 =
+            u64::try_from(
+                detection_nodes,
+            )
+            .map_err(|_| {
+                DecodingGraphError::ArithmeticOverflow
+            })?;
+
+        let boundary_nodes_u64 =
+            u64::try_from(
+                boundary_nodes,
+            )
+            .map_err(|_| {
+                DecodingGraphError::ArithmeticOverflow
+            })?;
+
+        let edges_u64 =
+            u64::try_from(edges)
+                .map_err(|_| {
+                    DecodingGraphError::ArithmeticOverflow
+                })?;
+
         let detection_bytes =
-            (detection_nodes as u64)
+            detection_nodes_u64
                 .checked_mul(
                     ESTIMATED_NODE_BYTES,
                 )
@@ -849,7 +1101,7 @@ impl GraphResourceEstimate {
                 )?;
 
         let boundary_bytes =
-            (boundary_nodes as u64)
+            boundary_nodes_u64
                 .checked_mul(
                     ESTIMATED_BOUNDARY_BYTES,
                 )
@@ -858,7 +1110,7 @@ impl GraphResourceEstimate {
                 )?;
 
         let edge_bytes =
-            (edges as u64)
+            edges_u64
                 .checked_mul(
                     ESTIMATED_EDGE_BYTES,
                 )
@@ -871,13 +1123,15 @@ impl GraphResourceEstimate {
                 .checked_add(
                     detection_bytes,
                 )
-                .and_then(|v| {
-                    v.checked_add(
+                .and_then(|value| {
+                    value.checked_add(
                         boundary_bytes,
                     )
                 })
-                .and_then(|v| {
-                    v.checked_add(edge_bytes)
+                .and_then(|value| {
+                    value.checked_add(
+                        edge_bytes,
+                    )
                 })
                 .ok_or(
                     DecodingGraphError::ArithmeticOverflow,
@@ -891,86 +1145,74 @@ impl GraphResourceEstimate {
         })
     }
 
+    /// Number of detection nodes.
+    #[must_use]
     pub const fn detection_nodes(
         self,
     ) -> usize {
         self.detection_nodes
     }
 
+    /// Number of boundary nodes.
+    #[must_use]
     pub const fn boundary_nodes(
         self,
     ) -> usize {
         self.boundary_nodes
     }
 
+    /// Number of edges.
+    #[must_use]
     pub const fn edges(
         self,
     ) -> usize {
         self.edges
     }
 
+    /// Estimated memory consumption.
+    #[must_use]
     pub const fn estimated_memory_bytes(
         self,
     ) -> u64 {
         self.estimated_memory_bytes
     }
 
-    /// Validates the estimate against central QEC limits.
+    /// Validates the estimate against canonical QEC limits.
     pub fn validate_against(
         &self,
         limits: &QecLimits,
     ) -> Result<(), DecodingGraphError> {
         limits
             .validate()
-            .map_err(DecodingGraphError::Limit)?;
-
-        let nodes = self
-            .detection_nodes
-            .checked_add(
-                self.boundary_nodes,
-            )
-            .ok_or(
-                DecodingGraphError::ArithmeticOverflow,
+            .map_err(
+                DecodingGraphError::Limit,
             )?;
 
-        if nodes > limits.max_graph_nodes {
-            return Err(
-                DecodingGraphError::Limit(
-                    LimitError::GraphNodes {
-                        requested: nodes,
-                        maximum:
-                            limits.max_graph_nodes,
-                    },
-                ),
-            );
-        }
+        let total_nodes =
+            self.detection_nodes
+                .checked_add(
+                    self.boundary_nodes,
+                )
+                .ok_or(
+                    DecodingGraphError::ArithmeticOverflow,
+                )?;
 
-        if self.edges > limits.max_graph_edges {
-            return Err(
-                DecodingGraphError::Limit(
-                    LimitError::GraphEdges {
-                        requested: self.edges,
-                        maximum:
-                            limits.max_graph_edges,
-                    },
-                ),
-            );
-        }
+        limits
+            .validate_graph(
+                total_nodes,
+                self.edges,
+            )
+            .map_err(
+                DecodingGraphError::Limit,
+            )?;
 
-        if self.estimated_memory_bytes
-            > limits.max_memory_bytes
-        {
-            return Err(
-                DecodingGraphError::Limit(
-                    LimitError::MemoryBytes {
-                        requested:
-                            self.estimated_memory_bytes,
-                        maximum:
-                            limits.max_memory_bytes,
-                    },
-                ),
-            );
-        }
+        limits
+            .validate_memory(
+                self.estimated_memory_bytes,
+            )
+            .map_err(
+                DecodingGraphError::Limit,
+            )?;
 
         Ok(())
     }
@@ -980,7 +1222,7 @@ impl GraphResourceEstimate {
 // Decoding graph
 // ============================================================================
 
-/// Deterministic bounded decoding graph.
+/// Deterministic resource-bounded decoding graph.
 #[derive(
     Debug,
     Clone,
@@ -990,52 +1232,50 @@ impl GraphResourceEstimate {
 pub struct DecodingGraph {
     config: DecodingGraphConfig,
 
-    nodes:
-        BTreeMap<
-            NodeId,
-            DetectionNode,
-        >,
+    nodes: BTreeMap<
+        NodeId,
+        DetectionNode,
+    >,
 
-    boundaries:
-        BTreeMap<
-            BoundaryId,
-            BoundaryNode,
-        >,
+    boundaries: BTreeMap<
+        BoundaryId,
+        BoundaryNode,
+    >,
 
-    edges:
-        BTreeMap<
-            (GraphEndpoint, GraphEndpoint),
-            GraphEdge,
-        >,
+    edges: BTreeMap<
+        (GraphEndpoint, GraphEndpoint),
+        GraphEdge,
+    >,
 
-    detection_index:
-        BTreeMap<
-            DetectionKey,
-            NodeId,
-        >,
+    detection_index: BTreeMap<
+        DetectionKey,
+        NodeId,
+    >,
 
-    boundary_index:
-        BTreeMap<
-            SpaceTimeCoordinate,
-            BoundaryId,
-        >,
+    boundary_index: BTreeMap<
+        SpaceTimeCoordinate,
+        BoundaryId,
+    >,
 
     next_node_id: usize,
     next_boundary_id: usize,
 }
 
 impl DecodingGraph {
-    /// Creates an empty graph using the default QEC resource policy.
+    /// Creates an empty graph with canonical default limits.
+    ///
+    /// The default policy is a repository invariant and therefore this
+    /// constructor cannot fail under normal operation.
     pub fn new() -> Self {
         Self::with_config(
             DecodingGraphConfig::default(),
         )
         .expect(
-            "default QEC limits must be valid",
+            "canonical default QEC limits must be valid",
         )
     }
 
-    /// Creates an empty graph using explicit QEC limits.
+    /// Creates an empty graph with explicit limits.
     pub fn new_with_limits(
         limits: &QecLimits,
     ) -> Result<Self, DecodingGraphError> {
@@ -1047,50 +1287,43 @@ impl DecodingGraph {
         Self::with_config(config)
     }
 
-    /// Creates an empty graph from an explicit configuration.
+    /// Creates an empty graph from explicit configuration.
     pub fn with_config(
         config: DecodingGraphConfig,
     ) -> Result<Self, DecodingGraphError> {
         config
-            .limits
+            .limits()
             .validate()
-            .map_err(DecodingGraphError::Limit)?;
+            .map_err(
+                DecodingGraphError::Limit,
+            )?;
 
         Ok(Self {
             config,
-
-            nodes:
-                BTreeMap::new(),
-
-            boundaries:
-                BTreeMap::new(),
-
-            edges:
-                BTreeMap::new(),
-
-            detection_index:
-                BTreeMap::new(),
-
-            boundary_index:
-                BTreeMap::new(),
-
+            nodes: BTreeMap::new(),
+            boundaries: BTreeMap::new(),
+            edges: BTreeMap::new(),
+            detection_index: BTreeMap::new(),
+            boundary_index: BTreeMap::new(),
             next_node_id: 0,
             next_boundary_id: 0,
         })
     }
 
-    /// Returns the graph resource policy.
-    pub const fn limits(
-        &self,
-    ) -> QecLimits {
-        self.config.limits()
-    }
-
-    /// Returns the graph configuration.
+    /// Returns graph configuration.
+    #[must_use]
     pub const fn config(
         &self,
     ) -> DecodingGraphConfig {
         self.config
+    }
+
+    /// Returns the authoritative QEC limits.
+    #[must_use]
+    pub const fn limits(
+        &self,
+    ) -> QecLimits {
+        self.config.limits()
     }
 
     /// Performs allocation-free resource preflight.
@@ -1110,27 +1343,31 @@ impl DecodingGraph {
                 edges,
             )?;
 
-        estimate
-            .validate_against(limits)?;
+        estimate.validate_against(
+            limits,
+        )?;
 
         Ok(estimate)
     }
 
     /// Returns the number of detection nodes.
+    #[must_use]
     pub fn node_count(
         &self,
     ) -> usize {
         self.nodes.len()
     }
 
-    /// Returns the number of boundary nodes.
+    /// Returns the number of boundaries.
+    #[must_use]
     pub fn boundary_count(
         &self,
     ) -> usize {
         self.boundaries.len()
     }
 
-    /// Returns the total graph-node count.
+    /// Returns total graph-node count, including boundaries.
+    #[must_use]
     pub fn total_node_count(
         &self,
     ) -> usize {
@@ -1140,21 +1377,23 @@ impl DecodingGraph {
             )
     }
 
-    /// Returns the edge count.
+    /// Returns the number of graph edges.
+    #[must_use]
     pub fn edge_count(
         &self,
     ) -> usize {
         self.edges.len()
     }
 
-    /// Returns true when no detection nodes exist.
+    /// Returns whether there are no detection nodes.
+    #[must_use]
     pub fn is_empty(
         &self,
     ) -> bool {
         self.nodes.is_empty()
     }
 
-    /// Returns detection nodes in deterministic ID order.
+    /// Iterates over detection nodes in deterministic ID order.
     pub fn nodes(
         &self,
     ) -> impl Iterator<
@@ -1163,7 +1402,7 @@ impl DecodingGraph {
         self.nodes.values()
     }
 
-    /// Returns detection nodes.
+    /// Alias for `nodes()`.
     pub fn detection_nodes(
         &self,
     ) -> impl Iterator<
@@ -1172,7 +1411,7 @@ impl DecodingGraph {
         self.nodes.values()
     }
 
-    /// Returns boundaries in deterministic ID order.
+    /// Iterates over boundaries in deterministic ID order.
     pub fn boundaries(
         &self,
     ) -> impl Iterator<
@@ -1181,7 +1420,7 @@ impl DecodingGraph {
         self.boundaries.values()
     }
 
-    /// Returns all edges in deterministic endpoint order.
+    /// Iterates over edges in canonical endpoint order.
     pub fn edges(
         &self,
     ) -> impl Iterator<
@@ -1191,6 +1430,7 @@ impl DecodingGraph {
     }
 
     /// Gets a detection node.
+    #[must_use]
     pub fn node(
         &self,
         id: NodeId,
@@ -1199,6 +1439,7 @@ impl DecodingGraph {
     }
 
     /// Gets a boundary node.
+    #[must_use]
     pub fn boundary(
         &self,
         id: BoundaryId,
@@ -1206,10 +1447,8 @@ impl DecodingGraph {
         self.boundaries.get(&id)
     }
 
-    /// Adds a detection event using an explicit spatial coordinate.
-    ///
-    /// The graph owns the space-time coordinate; the syndrome layer owns the
-    /// event semantics.
+    /// Adds a validated active detection event with a supplied spatial
+    /// coordinate.
     pub fn add_detection_event(
         &mut self,
         event: DetectionEvent,
@@ -1234,21 +1473,17 @@ impl DecodingGraph {
         )
     }
 
-    /// Adds a detection node.
+    /// Adds a detection node after complete preflight.
     pub fn add_detection_node(
         &mut self,
         coordinate: SpaceTimeCoordinate,
         stabilizer: StabilizerId,
         confidence: MeasurementConfidence,
     ) -> Result<NodeId, DecodingGraphError> {
-        self.check_node_capacity(1)?;
-
-        let key =
-            DetectionKey {
-                coordinate:
-                    coordinate.clone(),
-                stabilizer,
-            };
+        let key = DetectionKey {
+            coordinate: coordinate.clone(),
+            stabilizer,
+        };
 
         if self
             .detection_index
@@ -1259,12 +1494,17 @@ impl DecodingGraph {
             );
         }
 
+        /*
+         * Capacity and memory checks happen before any mutation.
+         */
+        self.check_node_capacity(1)?;
+
         let id =
             NodeId::new(
                 self.next_node_id,
             );
 
-        self.next_node_id =
+        let next_id =
             self.next_node_id
                 .checked_add(1)
                 .ok_or(
@@ -1285,12 +1525,17 @@ impl DecodingGraph {
         );
 
         self.detection_index
-            .insert(key, id);
+            .insert(
+                key,
+                id,
+            );
+
+        self.next_node_id = next_id;
 
         Ok(id)
     }
 
-    /// Adds a physical/logical boundary.
+    /// Adds a physical or logical boundary.
     pub fn add_boundary(
         &mut self,
         coordinate: SpaceTimeCoordinate,
@@ -1298,8 +1543,6 @@ impl DecodingGraph {
         BoundaryId,
         DecodingGraphError,
     > {
-        self.check_node_capacity(1)?;
-
         if self
             .boundary_index
             .contains_key(&coordinate)
@@ -1309,12 +1552,14 @@ impl DecodingGraph {
             );
         }
 
+        self.check_node_capacity(1)?;
+
         let id =
             BoundaryId::new(
                 self.next_boundary_id,
             );
 
-        self.next_boundary_id =
+        let next_id =
             self.next_boundary_id
                 .checked_add(1)
                 .ok_or(
@@ -1333,12 +1578,20 @@ impl DecodingGraph {
         );
 
         self.boundary_index
-            .insert(coordinate, id);
+            .insert(
+                coordinate,
+                id,
+            );
+
+        self.next_boundary_id =
+            next_id;
 
         Ok(id)
     }
 
-    /// Adds a weighted graph edge.
+    /// Adds a graph edge.
+    ///
+    /// Endpoint existence is checked before graph mutation.
     pub fn add_edge(
         &mut self,
         first: GraphEndpoint,
@@ -1346,8 +1599,13 @@ impl DecodingGraph {
         weight: EdgeWeight,
         kind: EdgeKind,
     ) -> Result<(), DecodingGraphError> {
-        self.ensure_endpoint_exists(first)?;
-        self.ensure_endpoint_exists(second)?;
+        self.ensure_endpoint_exists(
+            first,
+        )?;
+
+        self.ensure_endpoint_exists(
+            second,
+        )?;
 
         let edge =
             GraphEdge::new(
@@ -1380,6 +1638,7 @@ impl DecodingGraph {
     }
 
     /// Returns an edge between two endpoints.
+    #[must_use]
     pub fn edge(
         &self,
         first: GraphEndpoint,
@@ -1394,9 +1653,10 @@ impl DecodingGraph {
         self.edges.get(&key)
     }
 
-    /// Returns edges incident to an endpoint.
+    /// Returns all edges incident to an endpoint.
     ///
-    /// Results are deterministic.
+    /// The returned vector is deterministic.
+    #[must_use]
     pub fn incident_edges(
         &self,
         endpoint: GraphEndpoint,
@@ -1405,7 +1665,8 @@ impl DecodingGraph {
             .values()
             .filter(
                 |edge| {
-                    edge.first() == endpoint
+                    edge.first()
+                        == endpoint
                         || edge.second()
                             == endpoint
                 },
@@ -1413,9 +1674,8 @@ impl DecodingGraph {
             .collect()
     }
 
-    /// Returns graph neighbours for an endpoint.
-    ///
-    /// The result is deterministic and contains no duplicates.
+    /// Returns neighbouring endpoints in deterministic order.
+    #[must_use]
     pub fn neighbours(
         &self,
         endpoint: GraphEndpoint,
@@ -1441,6 +1701,7 @@ impl DecodingGraph {
     }
 
     /// US spelling compatibility alias.
+    #[must_use]
     pub fn neighbors(
         &self,
         endpoint: GraphEndpoint,
@@ -1448,7 +1709,7 @@ impl DecodingGraph {
         self.neighbours(endpoint)
     }
 
-    /// Validates the complete graph.
+    /// Validates the entire graph.
     pub fn validate(
         &self,
     ) -> Result<(), DecodingGraphError> {
@@ -1481,14 +1742,17 @@ impl DecodingGraph {
             );
         }
 
-        for (id, node) in &self.nodes {
+        for (id, node) in
+            &self.nodes
+        {
             if *id != node.id() {
                 return Err(
                     DecodingGraphError::NodeIdMismatch,
                 );
             }
 
-            if node.coordinate()
+            if node
+                .coordinate()
                 .round()
                 .value()
                 > MAX_GRAPH_ROUND
@@ -1502,14 +1766,45 @@ impl DecodingGraph {
                     },
                 );
             }
+
+            let key =
+                DetectionKey {
+                    coordinate:
+                        node.coordinate()
+                            .clone(),
+                    stabilizer:
+                        node.stabilizer(),
+                };
+
+            if self
+                .detection_index
+                .get(&key)
+                != Some(id)
+            {
+                return Err(
+                    DecodingGraphError::IndexMismatch,
+                );
+            }
         }
 
-        for (id, boundary)
-            in &self.boundaries
+        for (id, boundary) in
+            &self.boundaries
         {
             if *id != boundary.id() {
                 return Err(
                     DecodingGraphError::BoundaryIdMismatch,
+                );
+            }
+
+            if self
+                .boundary_index
+                .get(
+                    boundary.coordinate(),
+                )
+                != Some(id)
+            {
+                return Err(
+                    DecodingGraphError::IndexMismatch,
                 );
             }
         }
@@ -1517,9 +1812,12 @@ impl DecodingGraph {
         let mut seen_edges =
             BTreeSet::new();
 
-        for edge in self.edges.values() {
+        for edge in
+            self.edges.values()
+        {
             let first =
                 edge.first();
+
             let second =
                 edge.second();
 
@@ -1543,7 +1841,9 @@ impl DecodingGraph {
                     second,
                 );
 
-            if !seen_edges.insert(key) {
+            if !seen_edges.insert(
+                key,
+            ) {
                 return Err(
                     DecodingGraphError::DuplicateEdge,
                 );
@@ -1560,12 +1860,22 @@ impl DecodingGraph {
                     },
                 );
             }
+
+            if edge.kind()
+                == EdgeKind::Boundary
+                && !edge
+                    .touches_boundary()
+            {
+                return Err(
+                    DecodingGraphError::BoundaryEdgeRequiresBoundary,
+                );
+            }
         }
 
         Ok(())
     }
 
-    /// Returns a deterministic graph resource estimate.
+    /// Returns the current graph resource estimate.
     pub fn resource_estimate(
         &self,
     ) -> Result<
@@ -1580,7 +1890,7 @@ impl DecodingGraph {
     }
 
     // ------------------------------------------------------------------------
-    // Internal capacity checks
+    // Capacity checks
     // ------------------------------------------------------------------------
 
     fn check_node_capacity(
@@ -1596,7 +1906,7 @@ impl DecodingGraph {
                     DecodingGraphError::ArithmeticOverflow,
                 )?;
 
-        let total =
+        let total_nodes =
             requested_detection
                 .checked_add(
                     self.boundary_count(),
@@ -1605,22 +1915,14 @@ impl DecodingGraph {
                     DecodingGraphError::ArithmeticOverflow,
                 )?;
 
-        if total
-            > self
-                .limits()
-                .max_graph_nodes
-        {
-            return Err(
-                DecodingGraphError::Limit(
-                    LimitError::GraphNodes {
-                        requested: total,
-                        maximum:
-                            self.limits()
-                                .max_graph_nodes,
-                    },
-                ),
-            );
-        }
+        self.limits()
+            .validate_graph(
+                total_nodes,
+                self.edge_count(),
+            )
+            .map_err(
+                DecodingGraphError::Limit,
+            )?;
 
         let estimate =
             GraphResourceEstimate::calculate(
@@ -1629,25 +1931,14 @@ impl DecodingGraph {
                 self.edge_count(),
             )?;
 
-        if estimate
-            .estimated_memory_bytes()
-            > self
-                .limits()
-                .max_memory_bytes
-        {
-            return Err(
-                DecodingGraphError::Limit(
-                    LimitError::MemoryBytes {
-                        requested:
-                            estimate
-                                .estimated_memory_bytes(),
-                        maximum:
-                            self.limits()
-                                .max_memory_bytes,
-                    },
-                ),
-            );
-        }
+        self.limits()
+            .validate_memory(
+                estimate
+                    .estimated_memory_bytes(),
+            )
+            .map_err(
+                DecodingGraphError::Limit,
+            )?;
 
         Ok(())
     }
@@ -1656,7 +1947,7 @@ impl DecodingGraph {
         &self,
         additional: usize,
     ) -> Result<(), DecodingGraphError> {
-        let requested =
+        let requested_edges =
             self.edge_count()
                 .checked_add(
                     additional,
@@ -1665,49 +1956,33 @@ impl DecodingGraph {
                     DecodingGraphError::ArithmeticOverflow,
                 )?;
 
-        if requested
-            > self
-                .limits()
-                .max_graph_edges
-        {
-            return Err(
-                DecodingGraphError::Limit(
-                    LimitError::GraphEdges {
-                        requested,
-                        maximum:
-                            self.limits()
-                                .max_graph_edges,
-                    },
-                ),
-            );
-        }
+        let total_nodes =
+            self.total_node_count();
+
+        self.limits()
+            .validate_graph(
+                total_nodes,
+                requested_edges,
+            )
+            .map_err(
+                DecodingGraphError::Limit,
+            )?;
 
         let estimate =
             GraphResourceEstimate::calculate(
                 self.node_count(),
                 self.boundary_count(),
-                requested,
+                requested_edges,
             )?;
 
-        if estimate
-            .estimated_memory_bytes()
-            > self
-                .limits()
-                .max_memory_bytes
-        {
-            return Err(
-                DecodingGraphError::Limit(
-                    LimitError::MemoryBytes {
-                        requested:
-                            estimate
-                                .estimated_memory_bytes(),
-                        maximum:
-                            self.limits()
-                                .max_memory_bytes,
-                    },
-                ),
-            );
-        }
+        self.limits()
+            .validate_memory(
+                estimate
+                    .estimated_memory_bytes(),
+            )
+            .map_err(
+                DecodingGraphError::Limit,
+            )?;
 
         Ok(())
     }
@@ -1718,7 +1993,9 @@ impl DecodingGraph {
     ) -> Result<(), DecodingGraphError> {
         match endpoint {
             GraphEndpoint::Detection(id) => {
-                if !self.nodes.contains_key(&id) {
+                if !self.nodes.contains_key(
+                    &id,
+                ) {
                     return Err(
                         DecodingGraphError::UnknownNode {
                             id,
@@ -1769,7 +2046,7 @@ struct DetectionKey {
 }
 
 // ============================================================================
-// Canonical ordering
+// Canonical endpoint ordering
 // ============================================================================
 
 fn canonical_endpoints(
@@ -1790,7 +2067,7 @@ fn canonical_endpoints(
 // Errors
 // ============================================================================
 
-/// Errors produced by decoding graph construction and validation.
+/// Errors produced by graph construction and validation.
 #[derive(
     Debug,
     Clone,
@@ -1815,10 +2092,6 @@ pub enum DecodingGraphError {
 
     InvalidRound {
         round: u64,
-    },
-
-    InvalidTimestamp {
-        timestamp: u64,
     },
 
     InvalidProbability,
@@ -1861,13 +2134,12 @@ pub enum DecodingGraphError {
 impl fmt::Display for DecodingGraphError {
     fn fmt(
         &self,
-        f: &mut fmt::Formatter<'_>,
+        formatter: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
             Self::EmptyCoordinate => {
-                write!(
-                    f,
-                    "spatial coordinate cannot be empty"
+                formatter.write_str(
+                    "spatial coordinate cannot be empty",
                 )
             }
 
@@ -1876,7 +2148,7 @@ impl fmt::Display for DecodingGraphError {
                 limit,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "coordinate has {dimensions} dimensions; maximum is {limit}"
                 )
             }
@@ -1885,22 +2157,20 @@ impl fmt::Display for DecodingGraphError {
                 value,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "coordinate component {value} is outside the supported range"
                 )
             }
 
             Self::DimensionMismatch => {
-                write!(
-                    f,
-                    "coordinate dimensions do not match"
+                formatter.write_str(
+                    "coordinate dimensions do not match",
                 )
             }
 
             Self::ArithmeticOverflow => {
-                write!(
-                    f,
-                    "arithmetic overflow in decoding graph"
+                formatter.write_str(
+                    "arithmetic overflow in decoding graph",
                 )
             }
 
@@ -1908,24 +2178,14 @@ impl fmt::Display for DecodingGraphError {
                 round,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "invalid graph measurement round: {round}"
                 )
             }
 
-            Self::InvalidTimestamp {
-                timestamp,
-            } => {
-                write!(
-                    f,
-                    "invalid graph timestamp: {timestamp}"
-                )
-            }
-
             Self::InvalidProbability => {
-                write!(
-                    f,
-                    "probability must be in the range (0, 1]"
+                formatter.write_str(
+                    "probability must be in the range (0, 1]",
                 )
             }
 
@@ -1933,57 +2193,50 @@ impl fmt::Display for DecodingGraphError {
                 value,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "edge weight {value} exceeds the supported maximum"
                 )
             }
 
             Self::SelfLoop => {
-                write!(
-                    f,
-                    "self-loop edges are not permitted"
+                formatter.write_str(
+                    "self-loop edges are not permitted",
                 )
             }
 
             Self::BoundaryEdgeRequiresBoundary => {
-                write!(
-                    f,
-                    "a Boundary edge must touch a boundary endpoint"
+                formatter.write_str(
+                    "a Boundary edge must touch a boundary endpoint",
                 )
             }
 
             Self::DuplicateDetectionNode => {
-                write!(
-                    f,
-                    "duplicate detection node"
+                formatter.write_str(
+                    "duplicate detection node",
                 )
             }
 
             Self::DuplicateBoundary => {
-                write!(
-                    f,
-                    "duplicate boundary"
+                formatter.write_str(
+                    "duplicate boundary",
                 )
             }
 
             Self::DuplicateEdge => {
-                write!(
-                    f,
-                    "duplicate graph edge"
+                formatter.write_str(
+                    "duplicate graph edge",
                 )
             }
 
             Self::InactiveDetectionEvent => {
-                write!(
-                    f,
-                    "inactive detection event cannot become a graph node"
+                formatter.write_str(
+                    "inactive detection event cannot become a graph node",
                 )
             }
 
             Self::IdentifierOverflow => {
-                write!(
-                    f,
-                    "graph identifier overflow"
+                formatter.write_str(
+                    "graph identifier overflow",
                 )
             }
 
@@ -1991,7 +2244,7 @@ impl fmt::Display for DecodingGraphError {
                 id,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "unknown graph node {id}"
                 )
             }
@@ -2000,35 +2253,32 @@ impl fmt::Display for DecodingGraphError {
                 id,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "unknown graph boundary {id}"
                 )
             }
 
             Self::IndexMismatch => {
-                write!(
-                    f,
-                    "graph index does not match graph storage"
+                formatter.write_str(
+                    "graph index does not match graph storage",
                 )
             }
 
             Self::NodeIdMismatch => {
-                write!(
-                    f,
-                    "graph node identifier mismatch"
+                formatter.write_str(
+                    "graph node identifier mismatch",
                 )
             }
 
             Self::BoundaryIdMismatch => {
-                write!(
-                    f,
-                    "graph boundary identifier mismatch"
+                formatter.write_str(
+                    "graph boundary identifier mismatch",
                 )
             }
 
             Self::Limit(error) => {
                 write!(
-                    f,
+                    formatter,
                     "{error}"
                 )
             }
@@ -2054,7 +2304,8 @@ mod tests {
 
         limits.max_graph_nodes = 32;
         limits.max_graph_edges = 64;
-        limits.max_memory_bytes = 64 * 1024;
+        limits.max_memory_bytes =
+            64 * 1024;
 
         limits
     }
@@ -2072,10 +2323,13 @@ mod tests {
         x: i64,
         y: i64,
     ) -> SpatialCoordinate {
-        SpatialCoordinate::xy(x, y)
-            .expect(
-                "test coordinate must be valid",
-            )
+        SpatialCoordinate::xy(
+            x,
+            y,
+        )
+        .expect(
+            "test coordinate must be valid",
+        )
     }
 
     #[test]
@@ -2111,18 +2365,46 @@ mod tests {
     #[test]
     fn coordinate_distance_is_checked() {
         let a =
-            coordinate(0, 0);
+            coordinate(
+                0,
+                0,
+            );
 
         let b =
-            coordinate(3, 4);
+            coordinate(
+                3,
+                4,
+            );
 
         assert_eq!(
-            a.manhattan_distance(&b)
-                .expect(
-                    "distance should succeed",
-                ),
+            a.manhattan_distance(
+                &b,
+            )
+            .expect(
+                "distance should succeed",
+            ),
             7
         );
+    }
+
+    #[test]
+    fn coordinate_overflow_is_rejected() {
+        let result =
+            SpatialCoordinate::new(
+                vec![
+                    i64::MIN,
+                ],
+            );
+
+        assert!(matches!(
+            result,
+            Err(
+                DecodingGraphError::
+                    CoordinateOutOfRange {
+                        ..
+                    }
+            )
+        ));
     }
 
     #[test]
@@ -2135,7 +2417,10 @@ mod tests {
 
         let coordinate =
             SpaceTimeCoordinate::new(
-                coordinate(1, 2),
+                coordinate(
+                    1,
+                    2,
+                ),
                 round(0),
             )
             .unwrap();
@@ -2143,7 +2428,9 @@ mod tests {
         graph
             .add_detection_node(
                 coordinate.clone(),
-                StabilizerId::new(0),
+                StabilizerId::new(
+                    0,
+                ),
                 MeasurementConfidence::FULL,
             )
             .unwrap();
@@ -2151,7 +2438,9 @@ mod tests {
         let result =
             graph.add_detection_node(
                 coordinate,
-                StabilizerId::new(0),
+                StabilizerId::new(
+                    0,
+                ),
                 MeasurementConfidence::FULL,
             );
 
@@ -2176,11 +2465,16 @@ mod tests {
             graph
                 .add_detection_node(
                     SpaceTimeCoordinate::new(
-                        coordinate(0, 0),
+                        coordinate(
+                            0,
+                            0,
+                        ),
                         round(0),
                     )
                     .unwrap(),
-                    StabilizerId::new(0),
+                    StabilizerId::new(
+                        0,
+                    ),
                     MeasurementConfidence::FULL,
                 )
                 .unwrap();
@@ -2189,26 +2483,38 @@ mod tests {
             graph
                 .add_detection_node(
                     SpaceTimeCoordinate::new(
-                        coordinate(1, 0),
+                        coordinate(
+                            1,
+                            0,
+                        ),
                         round(0),
                     )
                     .unwrap(),
-                    StabilizerId::new(1),
+                    StabilizerId::new(
+                        1,
+                    ),
                     MeasurementConfidence::FULL,
                 )
                 .unwrap();
 
         let first =
-            GraphEndpoint::Detection(a);
+            GraphEndpoint::Detection(
+                a,
+            );
 
         let second =
-            GraphEndpoint::Detection(b);
+            GraphEndpoint::Detection(
+                b,
+            );
 
         graph
             .add_edge(
                 first,
                 second,
-                EdgeWeight::new(1).unwrap(),
+                EdgeWeight::new(
+                    1,
+                )
+                .unwrap(),
                 EdgeKind::Spatial,
             )
             .unwrap();
@@ -2217,7 +2523,10 @@ mod tests {
             graph.add_edge(
                 second,
                 first,
-                EdgeWeight::new(1).unwrap(),
+                EdgeWeight::new(
+                    1,
+                )
+                .unwrap(),
                 EdgeKind::Spatial,
             );
 
@@ -2242,11 +2551,16 @@ mod tests {
             graph
                 .add_detection_node(
                     SpaceTimeCoordinate::new(
-                        coordinate(0, 0),
+                        coordinate(
+                            0,
+                            0,
+                        ),
                         round(0),
                     )
                     .unwrap(),
-                    StabilizerId::new(0),
+                    StabilizerId::new(
+                        0,
+                    ),
                     MeasurementConfidence::FULL,
                 )
                 .unwrap();
@@ -2255,7 +2569,10 @@ mod tests {
             graph
                 .add_boundary(
                     SpaceTimeCoordinate::new(
-                        coordinate(0, -1),
+                        coordinate(
+                            0,
+                            -1,
+                        ),
                         round(0),
                     )
                     .unwrap(),
@@ -2264,11 +2581,16 @@ mod tests {
 
         graph
             .add_edge(
-                GraphEndpoint::Detection(node),
+                GraphEndpoint::Detection(
+                    node,
+                ),
                 GraphEndpoint::Boundary(
                     boundary,
                 ),
-                EdgeWeight::new(5).unwrap(),
+                EdgeWeight::new(
+                    5,
+                )
+                .unwrap(),
                 EdgeKind::Boundary,
             )
             .unwrap();
@@ -2289,7 +2611,75 @@ mod tests {
     }
 
     #[test]
-    fn resource_preflight_happens_before_graph_allocation() {
+    fn invalid_boundary_edge_is_rejected() {
+        let mut graph =
+            DecodingGraph::new_with_limits(
+                &limits(),
+            )
+            .unwrap();
+
+        let a =
+            graph
+                .add_detection_node(
+                    SpaceTimeCoordinate::new(
+                        coordinate(
+                            0,
+                            0,
+                        ),
+                        round(0),
+                    )
+                    .unwrap(),
+                    StabilizerId::new(
+                        0,
+                    ),
+                    MeasurementConfidence::FULL,
+                )
+                .unwrap();
+
+        let b =
+            graph
+                .add_detection_node(
+                    SpaceTimeCoordinate::new(
+                        coordinate(
+                            1,
+                            0,
+                        ),
+                        round(0),
+                    )
+                    .unwrap(),
+                    StabilizerId::new(
+                        1,
+                    ),
+                    MeasurementConfidence::FULL,
+                )
+                .unwrap();
+
+        let result =
+            graph.add_edge(
+                GraphEndpoint::Detection(
+                    a,
+                ),
+                GraphEndpoint::Detection(
+                    b,
+                ),
+                EdgeWeight::new(
+                    1,
+                )
+                .unwrap(),
+                EdgeKind::Boundary,
+            );
+
+        assert_eq!(
+            result,
+            Err(
+                DecodingGraphError::
+                    BoundaryEdgeRequiresBoundary
+            )
+        );
+    }
+
+    #[test]
+    fn resource_preflight_happens_before_allocation() {
         let mut limits =
             limits();
 
@@ -2308,7 +2698,9 @@ mod tests {
             result,
             Err(
                 DecodingGraphError::Limit(
-                    LimitError::GraphNodes {
+                    LimitError::Exceeded {
+                        resource:
+                            LimitKind::GraphNodes,
                         ..
                     }
                 )
@@ -2328,11 +2720,16 @@ mod tests {
             graph
                 .add_detection_node(
                     SpaceTimeCoordinate::new(
-                        coordinate(5, 5),
+                        coordinate(
+                            5,
+                            5,
+                        ),
                         round(1),
                     )
                     .unwrap(),
-                    StabilizerId::new(5),
+                    StabilizerId::new(
+                        5,
+                    ),
                     MeasurementConfidence::FULL,
                 )
                 .unwrap();
@@ -2341,11 +2738,16 @@ mod tests {
             graph
                 .add_detection_node(
                     SpaceTimeCoordinate::new(
-                        coordinate(1, 1),
+                        coordinate(
+                            1,
+                            1,
+                        ),
                         round(0),
                     )
                     .unwrap(),
-                    StabilizerId::new(1),
+                    StabilizerId::new(
+                        1,
+                    ),
                     MeasurementConfidence::FULL,
                 )
                 .unwrap();
@@ -2353,12 +2755,110 @@ mod tests {
         let ids: Vec<NodeId> =
             graph
                 .nodes()
-                .map(DetectionNode::id)
+                .map(
+                    DetectionNode::id,
+                )
                 .collect();
 
         assert_eq!(
             ids,
-            vec![first, second]
+            vec![
+                first,
+                second
+            ]
+        );
+    }
+
+    #[test]
+    fn probability_weight_is_deterministic() {
+        let weight =
+            EdgeWeight::from_probability(
+                PROBABILITY_SCALE,
+            )
+            .expect(
+                "probability 1.0 must be valid",
+            );
+
+        assert_eq!(
+            weight,
+            EdgeWeight::ZERO
+        );
+    }
+
+    #[test]
+    fn invalid_probability_is_rejected() {
+        assert!(matches!(
+            EdgeWeight::from_probability(
+                0
+            ),
+            Err(
+                DecodingGraphError::
+                    InvalidProbability
+            )
+        ));
+
+        assert!(matches!(
+            EdgeWeight::from_probability(
+                PROBABILITY_SCALE
+                    .saturating_add(
+                        1,
+                    )
+            ),
+            Err(
+                DecodingGraphError::
+                    InvalidProbability
+            )
+        ));
+    }
+
+    #[test]
+    fn graph_rejects_unknown_endpoints() {
+        let mut graph =
+            DecodingGraph::new_with_limits(
+                &limits(),
+            )
+            .unwrap();
+
+        let result =
+            graph.add_edge(
+                GraphEndpoint::Detection(
+                    NodeId::new(
+                        999,
+                    ),
+                ),
+                GraphEndpoint::Detection(
+                    NodeId::new(
+                        1000,
+                    ),
+                ),
+                EdgeWeight::new(
+                    1,
+                )
+                .unwrap(),
+                EdgeKind::Spatial,
+            );
+
+        assert!(matches!(
+            result,
+            Err(
+                DecodingGraphError::
+                    UnknownNode {
+                        ..
+                    }
+            )
+        ));
+    }
+
+    #[test]
+    fn graph_validation_checks_indices() {
+        let graph =
+            DecodingGraph::new_with_limits(
+                &limits(),
+            )
+            .unwrap();
+
+        assert!(
+            graph.validate().is_ok()
         );
     }
 }
