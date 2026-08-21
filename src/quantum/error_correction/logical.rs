@@ -1,64 +1,123 @@
 //! Zamani Quantum Error Correction — Logical Operators.
 //!
-//! Production-grade logical-equivalence and logical-outcome analysis for
-//! stabilizer quantum error-correction codes.
+//! Production-grade logical-operator, logical-equivalence, and
+//! logical-outcome analysis for stabilizer quantum error-correction codes.
 //!
-//! Architectural role:
+//! # Ownership
+//!
+//! This module owns:
+//!
+//! - logical Pauli classification;
+//! - logical operator validation;
+//! - logical X/Y/Z basis validation;
+//! - stabilizer equivalence;
+//! - logical equivalence;
+//! - residual-error analysis;
+//! - logical outcome classification;
+//! - logical-code metadata;
+//! - explicit logical-basis validation;
+//! - logical-weight helpers;
+//! - conversion of local errors into the canonical `QecError` boundary.
+//!
+//! This module does NOT own:
+//!
+//! - surface-code topology;
+//! - stabilizer algebra;
+//! - syndrome storage;
+//! - decoder algorithms;
+//! - MWPM;
+//! - Union-Find;
+//! - Pauli-frame mutation;
+//! - QPU execution;
+//! - streaming;
+//! - distributed execution;
+//! - checkpoint persistence;
+//! - telemetry transport;
+//! - capability authorization.
+//!
+//! Those responsibilities belong to their respective QEC modules.
+//!
+//! # Mathematical model
+//!
+//! Let `S` be the stabilizer group.
+//!
+//! For a physical Pauli `P`:
 //!
 //! ```text
-//! physical Pauli / decoder correction
-//!             |
-//!             v
-//!     stabilizer equivalence
-//!             |
-//!             v
-//!       normalizer test
-//!             |
-//!             v
-//!     logical equivalence
-//!             |
-//!             v
-//!      logical outcome
+//! P ∈ S                  => stabilizer-equivalent to identity
+//! P ∈ N(S) \ S          => non-trivial logical operator
+//! P ∉ N(S)              => detectable physical error
 //! ```
 //!
-//! This module:
+//! where `N(S)` is the stabilizer normalizer/centralizer.
 //!
-//! - never modifies a quantum state;
-//! - never applies a correction;
-//! - never performs QPU I/O;
-//! - uses the checked Pauli/stabilizer APIs;
-//! - distinguishes physical errors from logical operators;
-//! - distinguishes stabilizer-equivalent identity from logical failure;
-//! - supports explicit single-logical-qubit X/Y/Z classification;
-//! - supports residual-error analysis (`physical_error * correction`);
-//! - provides logical equivalence testing;
-//! - exposes logical-qubit count;
-//! - supports explicit `QecLimits` validation;
-//! - avoids unchecked indexing and panic-based validation;
-//! - preserves deterministic behavior.
+//! For a physical error `E` and decoder correction `C`, the residual error is:
 //!
-//! Global Pauli phase is ignored because `stabilizer.rs` represents Pauli
-//! operators modulo global phase.
+//! ```text
+//! R = E * C
+//! ```
 //!
-//! Important mathematical distinction:
+//! Successful error correction requires:
+//!
+//! ```text
+//! R ∈ S
+//! ```
+//!
+//! A residual in `N(S) \ S` represents a logical error.
+//!
+//! # Important distinction
 //!
 //! A decoder correction by itself is NOT necessarily a logical operator.
-//! For a physical error E and decoder correction C, the physically relevant
-//! residual is:
+//! Callers evaluating decoder correctness should prefer:
 //!
-//!     R = E * C
+//! ```text
+//! LogicalCode::analyze_residual(error, correction, basis)
+//! ```
 //!
-//! A successful correction has R stabilizer-equivalent to identity.
+//! rather than classifying the correction alone.
 //!
-//! Therefore callers performing decoder-failure analysis should prefer:
+//! # Multi-logical-qubit safety
 //!
-//!     LogicalCode::analyze_residual(error, correction, basis)
+//! A single `LogicalBasis` represents exactly one encoded logical qubit.
 //!
-//! over classifying the correction alone.
+//! Multi-logical-qubit codes must use `LogicalBasisSet`. This prevents a
+//! logical operator acting on another encoded qubit from being incorrectly
+//! classified using an unrelated X/Z pair.
+//!
+//! # Phase convention
+//!
+//! `stabilizer.rs` intentionally represents Pauli operators modulo global
+//! phase. This module therefore also ignores global Pauli phase.
+//!
+//! # Integration
+//!
+//! ```text
+//! errors.rs
+//!     ▲
+//!     │
+//! logical.rs
+//!     ▲
+//!     │
+//! stabilizer.rs
+//!     │
+//!     ├── surface_code.rs
+//!     ├── distance.rs
+//!     ├── decoder.rs
+//!     ├── pauli_frame.rs
+//!     └── decoding_graph.rs
+//! ```
+//!
+//! `logical.rs` consumes the checked algebra exposed by `stabilizer.rs`.
+//! It does not duplicate stabilizer mathematics.
+//!
+//! # Rust compatibility
+//!
+//! Targets Rust 1.97.1 using stable standard-library facilities.
 
 use core::fmt;
 use std::collections::BTreeSet;
 
+use super::errors::QecError;
 use super::limits::QecLimits;
 use super::stabilizer::{
     Pauli,
@@ -74,8 +133,7 @@ use super::stabilizer::{
 
 /// Logical Pauli class.
 ///
-/// `Identity` is included because logical-outcome analysis must explicitly
-/// represent successful/no-logical-error execution.
+/// Global phase is ignored.
 #[derive(
     Debug,
     Clone,
@@ -87,18 +145,27 @@ use super::stabilizer::{
     Hash,
 )]
 pub enum LogicalPauli {
+    /// Logical identity.
     Identity,
+
+    /// Logical X.
     X,
+
+    /// Logical Y.
     Y,
+
+    /// Logical Z.
     Z,
 }
 
 impl LogicalPauli {
+    /// Returns true for identity.
     #[must_use]
     pub const fn is_identity(self) -> bool {
         matches!(self, Self::Identity)
     }
 
+    /// Returns true for X, Y, or Z.
     #[must_use]
     pub const fn is_non_identity(self) -> bool {
         !self.is_identity()
@@ -113,19 +180,25 @@ impl LogicalPauli {
         use LogicalPauli::*;
 
         match (self, other) {
-            (Identity, p) | (p, Identity) => p,
+            (Identity, value)
+            | (value, Identity) => value,
 
-            (X, X) | (Y, Y) | (Z, Z) => Identity,
+            (X, X)
+            | (Y, Y)
+            | (Z, Z) => Identity,
 
-            (X, Y) | (Y, X) => Z,
+            (X, Y)
+            | (Y, X) => Z,
 
-            (X, Z) | (Z, X) => Y,
+            (X, Z)
+            | (Z, X) => Y,
 
-            (Y, Z) | (Z, Y) => X,
+            (Y, Z)
+            | (Z, Y) => X,
         }
     }
 
-    /// Returns whether two logical Pauli classes commute.
+    /// Returns whether two logical Paulis commute.
     #[must_use]
     pub const fn commutes_with(
         self,
@@ -163,17 +236,11 @@ impl fmt::Display for LogicalPauli {
 // Logical outcome
 // ============================================================================
 
-/// High-level logical execution outcome.
+/// Logical execution outcome.
 ///
-/// This is intentionally separate from `LogicalClassification`.
-///
-/// `LogicalClassification` answers:
-///
-/// > "What is this physical Pauli with respect to the stabilizer group?"
-///
-/// `LogicalOutcome` answers:
-///
-/// > "What logical result did the QEC operation produce?"
+/// `Identity` and stabilizer-equivalent residuals are successful logical
+/// outcomes. `Unknown` means that the available information was insufficient
+/// to make a safe logical classification.
 #[derive(
     Debug,
     Clone,
@@ -185,29 +252,30 @@ impl fmt::Display for LogicalPauli {
     Hash,
 )]
 pub enum LogicalOutcome {
-    /// No logical error occurred.
+    /// No logical error.
     Identity,
 
-    /// A logical X error occurred.
+    /// Logical X error.
     LogicalX,
 
-    /// A logical Y error occurred.
+    /// Logical Y error.
     LogicalY,
 
-    /// A logical Z error occurred.
+    /// Logical Z error.
     LogicalZ,
 
-    /// The supplied information was insufficient to determine the logical
-    /// outcome safely.
+    /// Safe classification was impossible.
     Unknown,
 }
 
 impl LogicalOutcome {
+    /// Returns true when decoding produced no logical error.
     #[must_use]
     pub const fn is_success(self) -> bool {
         matches!(self, Self::Identity)
     }
 
+    /// Returns true when a logical X/Y/Z error occurred.
     #[must_use]
     pub const fn is_logical_failure(self) -> bool {
         matches!(
@@ -218,11 +286,17 @@ impl LogicalOutcome {
         )
     }
 
+    /// Returns true when classification is unknown.
     #[must_use]
     pub const fn is_unknown(self) -> bool {
         matches!(self, Self::Unknown)
     }
 
+    /// Converts the outcome into a logical Pauli.
+    ///
+    /// `Unknown` deliberately maps to identity only as a representation
+    /// fallback. Callers must check `is_unknown()` before using this value
+    /// semantically.
     #[must_use]
     pub const fn logical_pauli(self) -> LogicalPauli {
         match self {
@@ -241,11 +315,11 @@ impl fmt::Display for LogicalOutcome {
         formatter: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
-            Self::Identity => write!(formatter, "identity"),
-            Self::LogicalX => write!(formatter, "logical-X"),
-            Self::LogicalY => write!(formatter, "logical-Y"),
-            Self::LogicalZ => write!(formatter, "logical-Z"),
-            Self::Unknown => write!(formatter, "unknown"),
+            Self::Identity => formatter.write_str("identity"),
+            Self::LogicalX => formatter.write_str("logical-X"),
+            Self::LogicalY => formatter.write_str("logical-Y"),
+            Self::LogicalZ => formatter.write_str("logical-Z"),
+            Self::Unknown => formatter.write_str("unknown"),
         }
     }
 }
@@ -256,9 +330,8 @@ impl fmt::Display for LogicalOutcome {
 
 /// A candidate logical Pauli operator.
 ///
-/// Construction does not imply mathematical validity. The operator must be
-/// validated against a `LogicalCode` before being treated as a logical
-/// operator.
+/// Construction alone does not prove that the operator is a valid logical
+/// operator. It must be validated against a `LogicalCode`.
 #[derive(
     Debug,
     Clone,
@@ -271,6 +344,7 @@ pub struct LogicalOperator {
 }
 
 impl LogicalOperator {
+    /// Creates a candidate logical operator.
     #[must_use]
     pub fn new(
         logical_pauli: LogicalPauli,
@@ -282,6 +356,7 @@ impl LogicalOperator {
         }
     }
 
+    /// Returns the declared logical type.
     #[must_use]
     pub const fn logical_pauli(
         &self,
@@ -289,6 +364,7 @@ impl LogicalOperator {
         self.logical_pauli
     }
 
+    /// Returns the underlying physical Pauli string.
     #[must_use]
     pub fn operator(
         &self,
@@ -296,6 +372,7 @@ impl LogicalOperator {
         &self.operator
     }
 
+    /// Returns the number of physical qubits.
     #[must_use]
     pub const fn num_qubits(
         &self,
@@ -303,6 +380,7 @@ impl LogicalOperator {
         self.operator.num_qubits()
     }
 
+    /// Returns the physical Pauli weight.
     #[must_use]
     pub fn weight(
         &self,
@@ -310,6 +388,7 @@ impl LogicalOperator {
         self.operator.weight()
     }
 
+    /// Returns whether the underlying operator is identity.
     #[must_use]
     pub fn is_identity(
         &self,
@@ -317,6 +396,7 @@ impl LogicalOperator {
         self.operator.is_identity()
     }
 
+    /// Returns the physical support.
     #[must_use]
     pub fn support(
         &self,
@@ -345,9 +425,6 @@ pub enum LogicalClassification {
     Stabilizer,
 
     /// Non-trivial element of the stabilizer normalizer.
-    ///
-    /// This is a logical operator, but its X/Y/Z class requires a logical
-    /// basis or equivalent logical information.
     Logical,
 
     /// Does not commute with the stabilizer group.
@@ -355,6 +432,7 @@ pub enum LogicalClassification {
 }
 
 impl LogicalClassification {
+    /// Returns true when the operator is a non-trivial logical operator.
     #[must_use]
     pub const fn is_logical(
         self,
@@ -362,6 +440,7 @@ impl LogicalClassification {
         matches!(self, Self::Logical)
     }
 
+    /// Returns true for identity or stabilizer-equivalent identity.
     #[must_use]
     pub const fn is_trivial(
         self,
@@ -372,6 +451,7 @@ impl LogicalClassification {
         )
     }
 
+    /// Returns true when the operator belongs to the normalizer.
     #[must_use]
     pub const fn is_valid_normalizer_element(
         self,
@@ -389,7 +469,7 @@ impl LogicalClassification {
 // Logical effect
 // ============================================================================
 
-/// Detailed logical effect for a single encoded logical qubit.
+/// Detailed logical effect.
 #[derive(
     Debug,
     Clone,
@@ -398,16 +478,30 @@ impl LogicalClassification {
     Eq,
 )]
 pub enum LogicalEffect {
+    /// Exact identity.
     Identity,
+
+    /// Non-identity stabilizer.
     Stabilizer,
+
+    /// Logical X.
     LogicalX,
+
+    /// Logical Y.
     LogicalY,
+
+    /// Logical Z.
     LogicalZ,
+
+    /// Physical error outside the stabilizer normalizer.
     UncorrectablePhysicalError,
+
+    /// Safe classification was unavailable.
     Unknown,
 }
 
 impl LogicalEffect {
+    /// Returns true for logical X/Y/Z.
     #[must_use]
     pub const fn is_logical_error(
         self,
@@ -420,38 +514,493 @@ impl LogicalEffect {
         )
     }
 
+    /// Returns the corresponding logical Pauli.
     #[must_use]
     pub const fn logical_pauli(
         self,
     ) -> LogicalPauli {
         match self {
             Self::Identity
-            | Self::Stabilizer => LogicalPauli::Identity,
+            | Self::Stabilizer => {
+                LogicalPauli::Identity
+            }
 
             Self::LogicalX => LogicalPauli::X,
             Self::LogicalY => LogicalPauli::Y,
             Self::LogicalZ => LogicalPauli::Z,
 
             Self::UncorrectablePhysicalError
-            | Self::Unknown => LogicalPauli::Identity,
+            | Self::Unknown => {
+                LogicalPauli::Identity
+            }
         }
     }
 
+    /// Converts the effect to a logical outcome.
     #[must_use]
     pub const fn outcome(
         self,
     ) -> LogicalOutcome {
         match self {
             Self::Identity
-            | Self::Stabilizer => LogicalOutcome::Identity,
+            | Self::Stabilizer => {
+                LogicalOutcome::Identity
+            }
 
             Self::LogicalX => LogicalOutcome::LogicalX,
             Self::LogicalY => LogicalOutcome::LogicalY,
             Self::LogicalZ => LogicalOutcome::LogicalZ,
 
             Self::UncorrectablePhysicalError
-            | Self::Unknown => LogicalOutcome::Unknown,
+            | Self::Unknown => {
+                LogicalOutcome::Unknown
+            }
         }
+    }
+}
+
+// ============================================================================
+// Logical basis
+// ============================================================================
+
+/// A complete X/Z/Y basis for exactly one encoded logical qubit.
+///
+/// The logical Y operator is derived from X * Z modulo global phase.
+///
+/// This type deliberately rejects codes encoding anything other than exactly
+/// one logical qubit. Multi-logical-qubit codes must use `LogicalBasisSet`.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+)]
+pub struct LogicalBasis {
+    x: LogicalOperator,
+    y: LogicalOperator,
+    z: LogicalOperator,
+}
+
+impl LogicalBasis {
+    /// Creates and validates a single-logical-qubit basis.
+    pub fn new(
+        code: &LogicalCode,
+        x: LogicalOperator,
+        z: LogicalOperator,
+    ) -> Result<Self, LogicalError> {
+        let logical_qubits =
+            code.logical_qubit_count()?;
+
+        if logical_qubits != 1 {
+            return Err(
+                LogicalError::MultiLogicalQubitBasisRequired {
+                    logical_qubits,
+                },
+            );
+        }
+
+        if x.logical_pauli()
+            != LogicalPauli::X
+        {
+            return Err(
+                LogicalError::WrongLogicalType {
+                    expected: LogicalPauli::X,
+                    actual: x.logical_pauli(),
+                },
+            );
+        }
+
+        if z.logical_pauli()
+            != LogicalPauli::Z
+        {
+            return Err(
+                LogicalError::WrongLogicalType {
+                    expected: LogicalPauli::Z,
+                    actual: z.logical_pauli(),
+                },
+            );
+        }
+
+        code.validate_operator(&x)?;
+        code.validate_operator(&z)?;
+
+        let anticommutes =
+            x.operator()
+                .anticommutes_with(
+                    z.operator(),
+                )
+                .map_err(
+                    LogicalError::Stabilizer,
+                )?;
+
+        if !anticommutes {
+            return Err(
+                LogicalError::LogicalXZHermitianMismatch,
+            );
+        }
+
+        let y_operator =
+            x.operator()
+                .multiply(z.operator())
+                .map_err(
+                    LogicalError::Stabilizer,
+                )?;
+
+        let y = LogicalOperator::new(
+            LogicalPauli::Y,
+            y_operator,
+        );
+
+        code.validate_operator(&y)?;
+
+        Ok(Self {
+            x,
+            y,
+            z,
+        })
+    }
+
+    /// Returns logical X.
+    #[must_use]
+    pub fn x(
+        &self,
+    ) -> &LogicalOperator {
+        &self.x
+    }
+
+    /// Returns logical Y.
+    #[must_use]
+    pub fn y(
+        &self,
+    ) -> &LogicalOperator {
+        &self.y
+    }
+
+    /// Returns logical Z.
+    #[must_use]
+    pub fn z(
+        &self,
+    ) -> &LogicalOperator {
+        &self.z
+    }
+}
+
+// ============================================================================
+// Multi-logical-qubit basis
+// ============================================================================
+
+/// Logical X/Z basis pair for one encoded logical qubit.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+)]
+pub struct LogicalBasisPair {
+    index: usize,
+    x: LogicalOperator,
+    z: LogicalOperator,
+}
+
+impl LogicalBasisPair {
+    /// Creates a logical basis pair.
+    pub fn new(
+        index: usize,
+        x: LogicalOperator,
+        z: LogicalOperator,
+    ) -> Result<Self, LogicalError> {
+        if x.logical_pauli()
+            != LogicalPauli::X
+        {
+            return Err(
+                LogicalError::WrongLogicalType {
+                    expected: LogicalPauli::X,
+                    actual: x.logical_pauli(),
+                },
+            );
+        }
+
+        if z.logical_pauli()
+            != LogicalPauli::Z
+        {
+            return Err(
+                LogicalError::WrongLogicalType {
+                    expected: LogicalPauli::Z,
+                    actual: z.logical_pauli(),
+                },
+            );
+        }
+
+        Ok(Self {
+            index,
+            x,
+            z,
+        })
+    }
+
+    /// Returns the encoded logical-qubit index.
+    #[must_use]
+    pub const fn index(
+        &self,
+    ) -> usize {
+        self.index
+    }
+
+    /// Returns logical X.
+    #[must_use]
+    pub fn x(
+        &self,
+    ) -> &LogicalOperator {
+        &self.x
+    }
+
+    /// Returns logical Z.
+    #[must_use]
+    pub fn z(
+        &self,
+    ) -> &LogicalOperator {
+        &self.z
+    }
+}
+
+/// Complete logical basis for a stabilizer code.
+///
+/// Every encoded logical qubit must have one X/Z pair.
+///
+/// The pairs are stored in deterministic ascending logical-qubit order.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+)]
+pub struct LogicalBasisSet {
+    pairs: Vec<LogicalBasisPair>,
+}
+
+impl LogicalBasisSet {
+    /// Creates an empty basis set.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            pairs: Vec::new(),
+        }
+    }
+
+    /// Creates a basis set from all logical X/Z pairs.
+    pub fn from_pairs(
+        code: &LogicalCode,
+        mut pairs: Vec<LogicalBasisPair>,
+    ) -> Result<Self, LogicalError> {
+        let expected =
+            code.logical_qubit_count()?;
+
+        if expected == 0 {
+            return Err(
+                LogicalError::NoEncodedLogicalQubits,
+            );
+        }
+
+        pairs.sort_by_key(
+            LogicalBasisPair::index,
+        );
+
+        let mut seen =
+            BTreeSet::new();
+
+        for pair in &pairs {
+            if !seen.insert(pair.index()) {
+                return Err(
+                    LogicalError::DuplicateLogicalQubit {
+                        index: pair.index(),
+                    },
+                );
+            }
+
+            if pair.x().num_qubits()
+                != code.num_qubits()
+            {
+                return Err(
+                    LogicalError::QubitCountMismatch {
+                        expected: code.num_qubits(),
+                        actual: pair.x().num_qubits(),
+                    },
+                );
+            }
+
+            if pair.z().num_qubits()
+                != code.num_qubits()
+            {
+                return Err(
+                    LogicalError::QubitCountMismatch {
+                        expected: code.num_qubits(),
+                        actual: pair.z().num_qubits(),
+                    },
+                );
+            }
+
+            code.validate_operator(
+                pair.x(),
+            )?;
+
+            code.validate_operator(
+                pair.z(),
+            )?;
+
+            let anticommutes =
+                pair.x()
+                    .operator()
+                    .anticommutes_with(
+                        pair.z().operator(),
+                    )
+                    .map_err(
+                        LogicalError::Stabilizer,
+                    )?;
+
+            if !anticommutes {
+                return Err(
+                    LogicalError::LogicalXZHermitianMismatch,
+                );
+            }
+        }
+
+        if pairs.len() != expected {
+            return Err(
+                LogicalError::IncompleteLogicalBasis {
+                    expected,
+                    actual: pairs.len(),
+                },
+            );
+        }
+
+        for index in 0..expected {
+            if pairs[index].index()
+                != index
+            {
+                return Err(
+                    LogicalError::IncompleteLogicalBasis {
+                        expected,
+                        actual: pairs.len(),
+                    },
+                );
+            }
+        }
+
+        // Logical operators belonging to different encoded qubits must
+        // commute. This validates the supplied logical coordinate system.
+        for first in 0..pairs.len() {
+            for second in
+                (first + 1)..pairs.len()
+            {
+                let first_pair =
+                    &pairs[first];
+
+                let second_pair =
+                    &pairs[second];
+
+                let xx =
+                    first_pair
+                        .x()
+                        .operator()
+                        .anticommutes_with(
+                            second_pair
+                                .x()
+                                .operator(),
+                        )
+                        .map_err(
+                            LogicalError::Stabilizer,
+                        )?;
+
+                let xz =
+                    first_pair
+                        .x()
+                        .operator()
+                        .anticommutes_with(
+                            second_pair
+                                .z()
+                                .operator(),
+                        )
+                        .map_err(
+                            LogicalError::Stabilizer,
+                        )?;
+
+                let zx =
+                    first_pair
+                        .z()
+                        .operator()
+                        .anticommutes_with(
+                            second_pair
+                                .x()
+                                .operator(),
+                        )
+                        .map_err(
+                            LogicalError::Stabilizer,
+                        )?;
+
+                let zz =
+                    first_pair
+                        .z()
+                        .operator()
+                        .anticommutes_with(
+                            second_pair
+                                .z()
+                                .operator(),
+                        )
+                        .map_err(
+                            LogicalError::Stabilizer,
+                        )?;
+
+                if xx || xz || zx || zz {
+                    return Err(
+                        LogicalError::CrossLogicalAnticommutation {
+                            first: first_pair.index(),
+                            second: second_pair.index(),
+                        },
+                    );
+                }
+            }
+        }
+
+        Ok(Self { pairs })
+    }
+
+    /// Returns the number of encoded logical qubits represented.
+    #[must_use]
+    pub fn len(
+        &self,
+    ) -> usize {
+        self.pairs.len()
+    }
+
+    /// Returns true when no logical basis exists.
+    #[must_use]
+    pub fn is_empty(
+        &self,
+    ) -> bool {
+        self.pairs.is_empty()
+    }
+
+    /// Returns all basis pairs in deterministic order.
+    #[must_use]
+    pub fn pairs(
+        &self,
+    ) -> &[LogicalBasisPair] {
+        &self.pairs
+    }
+
+    /// Returns a basis pair by logical-qubit index.
+    #[must_use]
+    pub fn get(
+        &self,
+        index: usize,
+    ) -> Option<&LogicalBasisPair> {
+        self.pairs.get(index)
+    }
+}
+
+impl Default for LogicalBasisSet {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -461,8 +1010,7 @@ impl LogicalEffect {
 
 /// Validated logical-code context.
 ///
-/// This object is deliberately lightweight: the stabilizer group remains the
-/// owner of stabilizer algebra while this module owns logical semantics.
+/// Stabilizer algebra remains owned by `StabilizerGroup`.
 #[derive(
     Debug,
     Clone,
@@ -472,7 +1020,7 @@ pub struct LogicalCode {
 }
 
 impl LogicalCode {
-    /// Creates a logical-code context after validating the stabilizer group.
+    /// Creates a logical-code context.
     pub fn new(
         stabilizers: StabilizerGroup,
     ) -> Result<Self, LogicalError> {
@@ -485,7 +1033,7 @@ impl LogicalCode {
         })
     }
 
-    /// Creates a logical-code context under an explicit QEC resource policy.
+    /// Creates a logical-code context under explicit QEC limits.
     pub fn new_with_limits(
         stabilizers: StabilizerGroup,
         limits: &QecLimits,
@@ -499,6 +1047,7 @@ impl LogicalCode {
         })
     }
 
+    /// Returns the underlying stabilizer group.
     #[must_use]
     pub fn stabilizers(
         &self,
@@ -506,6 +1055,7 @@ impl LogicalCode {
         &self.stabilizers
     }
 
+    /// Returns the physical-qubit count.
     #[must_use]
     pub const fn num_qubits(
         &self,
@@ -513,6 +1063,7 @@ impl LogicalCode {
         self.stabilizers.num_qubits()
     }
 
+    /// Returns the number of stabilizer generators.
     #[must_use]
     pub fn generator_count(
         &self,
@@ -529,9 +1080,11 @@ impl LogicalCode {
             .map_err(LogicalError::Stabilizer)
     }
 
-    /// Returns the number of encoded logical qubits:
+    /// Returns the number of encoded logical qubits.
     ///
-    ///     k = n - rank(S)
+    /// ```text
+    /// k = n - rank(S)
+    /// ```
     pub fn logical_qubit_count(
         &self,
     ) -> Result<usize, LogicalError> {
@@ -540,31 +1093,43 @@ impl LogicalCode {
             .map_err(LogicalError::Stabilizer)
     }
 
-    /// Returns whether an operator commutes with every stabilizer.
+    /// Validates an operator's physical-qubit dimension.
+    pub fn validate_dimensions(
+        &self,
+        operator: &PauliString,
+    ) -> Result<(), LogicalError> {
+        if operator.num_qubits()
+            != self.num_qubits()
+        {
+            return Err(
+                LogicalError::QubitCountMismatch {
+                    expected: self.num_qubits(),
+                    actual: operator.num_qubits(),
+                },
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Returns whether an operator commutes with all stabilizers.
     pub fn commutes_with_stabilizers(
         &self,
         operator: &PauliString,
     ) -> Result<bool, LogicalError> {
-        self.check_qubit_count(operator)?;
+        self.validate_dimensions(operator)?;
 
-        for generator in self.stabilizers.generators() {
-            if !operator
-                .commutes_with(generator.operator())
-                .map_err(LogicalError::Stabilizer)?
-            {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
+        self.stabilizers
+            .is_in_normalizer(operator)
+            .map_err(LogicalError::Stabilizer)
     }
 
-    /// Returns whether an operator is generated by the stabilizer group.
+    /// Returns whether an operator belongs to the stabilizer group.
     pub fn is_stabilizer(
         &self,
         operator: &PauliString,
     ) -> Result<bool, LogicalError> {
-        self.check_qubit_count(operator)?;
+        self.validate_dimensions(operator)?;
 
         self.stabilizers
             .contains(operator)
@@ -577,7 +1142,7 @@ impl LogicalCode {
         operator: &PauliString,
         limits: &QecLimits,
     ) -> Result<bool, LogicalError> {
-        self.check_qubit_count(operator)?;
+        self.validate_dimensions(operator)?;
 
         self.stabilizers
             .contains_with_limits(
@@ -587,12 +1152,12 @@ impl LogicalCode {
             .map_err(LogicalError::Stabilizer)
     }
 
-    /// Classifies an arbitrary physical Pauli.
+    /// Classifies a physical Pauli relative to the code.
     pub fn classify(
         &self,
         operator: &PauliString,
     ) -> Result<LogicalClassification, LogicalError> {
-        self.check_qubit_count(operator)?;
+        self.validate_dimensions(operator)?;
 
         if operator.is_identity() {
             return Ok(
@@ -606,7 +1171,9 @@ impl LogicalCode {
             );
         }
 
-        if self.commutes_with_stabilizers(operator)? {
+        if self
+            .commutes_with_stabilizers(operator)?
+        {
             return Ok(
                 LogicalClassification::Logical,
             );
@@ -623,7 +1190,7 @@ impl LogicalCode {
         operator: &PauliString,
         limits: &QecLimits,
     ) -> Result<LogicalClassification, LogicalError> {
-        self.check_qubit_count(operator)?;
+        self.validate_dimensions(operator)?;
 
         self.stabilizers
             .validate_with_limits(limits)
@@ -648,19 +1215,18 @@ impl LogicalCode {
             );
         }
 
-        for generator in self.stabilizers.generators() {
-            if !operator
-                .commutes_with(generator.operator())
-                .map_err(LogicalError::Stabilizer)?
-            {
-                return Ok(
-                    LogicalClassification::PhysicalError,
-                );
-            }
+        if self
+            .stabilizers
+            .is_in_normalizer(operator)
+            .map_err(LogicalError::Stabilizer)?
+        {
+            return Ok(
+                LogicalClassification::Logical,
+            );
         }
 
         Ok(
-            LogicalClassification::Logical,
+            LogicalClassification::PhysicalError,
         )
     }
 
@@ -669,9 +1235,20 @@ impl LogicalCode {
         &self,
         logical: &LogicalOperator,
     ) -> Result<(), LogicalError> {
-        self.check_qubit_count(
+        self.validate_dimensions(
             logical.operator(),
         )?;
+
+        if logical.logical_pauli()
+            == LogicalPauli::Identity
+        {
+            return Err(
+                LogicalError::WrongLogicalType {
+                    expected: LogicalPauli::X,
+                    actual: LogicalPauli::Identity,
+                },
+            );
+        }
 
         match self.classify(
             logical.operator(),
@@ -701,163 +1278,36 @@ impl LogicalCode {
         logical_pauli: LogicalPauli,
         operator: PauliString,
     ) -> Result<LogicalOperator, LogicalError> {
-        let logical = LogicalOperator::new(
-            logical_pauli,
-            operator,
-        );
+        let logical =
+            LogicalOperator::new(
+                logical_pauli,
+                operator,
+            );
 
         self.validate_operator(&logical)?;
 
         Ok(logical)
     }
 
-    fn check_qubit_count(
-        &self,
-        operator: &PauliString,
-    ) -> Result<(), LogicalError> {
-        if operator.num_qubits()
-            != self.num_qubits()
-        {
-            return Err(
-                LogicalError::QubitCountMismatch {
-                    expected: self.num_qubits(),
-                    actual: operator.num_qubits(),
-                },
-            );
-        }
-
-        Ok(())
-    }
-}
-
-// ============================================================================
-// Logical basis
-// ============================================================================
-
-/// A complete X/Y/Z basis for one encoded logical qubit.
-///
-/// X and Z must anticommute. Y is derived as X * Z modulo global phase.
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-)]
-pub struct LogicalBasis {
-    x: LogicalOperator,
-    y: LogicalOperator,
-    z: LogicalOperator,
-}
-
-impl LogicalBasis {
-    pub fn new(
-        code: &LogicalCode,
-        x: LogicalOperator,
-        z: LogicalOperator,
-    ) -> Result<Self, LogicalError> {
-        if x.logical_pauli()
-            != LogicalPauli::X
-        {
-            return Err(
-                LogicalError::WrongLogicalType {
-                    expected: LogicalPauli::X,
-                    actual: x.logical_pauli(),
-                },
-            );
-        }
-
-        if z.logical_pauli()
-            != LogicalPauli::Z
-        {
-            return Err(
-                LogicalError::WrongLogicalType {
-                    expected: LogicalPauli::Z,
-                    actual: z.logical_pauli(),
-                },
-            );
-        }
-
-        code.validate_operator(&x)?;
-        code.validate_operator(&z)?;
-
-        let anticommutes = x
-            .operator()
-            .anticommutes_with(
-                z.operator(),
-            )
-            .map_err(LogicalError::Stabilizer)?;
-
-        if !anticommutes {
-            return Err(
-                LogicalError::LogicalXZHermitianMismatch,
-            );
-        }
-
-        let y_operator = x
-            .operator()
-            .multiply(z.operator())
-            .map_err(LogicalError::Stabilizer)?;
-
-        let y = LogicalOperator::new(
-            LogicalPauli::Y,
-            y_operator,
-        );
-
-        code.validate_operator(&y)?;
-
-        Ok(Self {
-            x,
-            y,
-            z,
-        })
-    }
-
-    #[must_use]
-    pub fn x(
-        &self,
-    ) -> &LogicalOperator {
-        &self.x
-    }
-
-    #[must_use]
-    pub fn y(
-        &self,
-    ) -> &LogicalOperator {
-        &self.y
-    }
-
-    #[must_use]
-    pub fn z(
-        &self,
-    ) -> &LogicalOperator {
-        &self.z
-    }
-}
-
-// ============================================================================
-// Logical analysis
-// ============================================================================
-
-impl LogicalCode {
-    /// Classifies a normalizer element against a single logical-qubit basis.
-    ///
-    /// The supplied basis must describe one encoded logical qubit. For
-    /// multi-logical-qubit codes, callers should use a complete logical basis
-    /// per encoded qubit rather than assuming one X/Z pair is sufficient.
+    /// Classifies a logical operator against a validated single-qubit basis.
     pub fn logical_effect(
         &self,
         operator: &PauliString,
         basis: &LogicalBasis,
     ) -> Result<LogicalEffect, LogicalError> {
-        self.check_qubit_count(operator)?;
+        self.validate_dimensions(operator)?;
 
         match self.classify(operator)? {
             LogicalClassification::Identity => {
-                return Ok(LogicalEffect::Identity);
+                return Ok(
+                    LogicalEffect::Identity,
+                );
             }
 
             LogicalClassification::Stabilizer => {
-                return Ok(LogicalEffect::Stabilizer);
+                return Ok(
+                    LogicalEffect::Stabilizer,
+                );
             }
 
             LogicalClassification::PhysicalError => {
@@ -869,25 +1319,25 @@ impl LogicalCode {
             LogicalClassification::Logical => {}
         }
 
-        let anti_x = operator
-            .anticommutes_with(
-                basis.x().operator(),
-            )
-            .map_err(LogicalError::Stabilizer)?;
+        let anti_x =
+            operator
+                .anticommutes_with(
+                    basis.x().operator(),
+                )
+                .map_err(
+                    LogicalError::Stabilizer,
+                )?;
 
-        let anti_z = operator
-            .anticommutes_with(
-                basis.z().operator(),
-            )
-            .map_err(LogicalError::Stabilizer)?;
+        let anti_z =
+            operator
+                .anticommutes_with(
+                    basis.z().operator(),
+                )
+                .map_err(
+                    LogicalError::Stabilizer,
+                )?;
 
         match (anti_x, anti_z) {
-            (false, false) => {
-                Err(
-                    LogicalError::IncompleteLogicalBasis,
-                )
-            }
-
             (false, true) => {
                 Ok(LogicalEffect::LogicalX)
             }
@@ -899,10 +1349,17 @@ impl LogicalCode {
             (true, true) => {
                 Ok(LogicalEffect::LogicalY)
             }
+
+            (false, false) => Err(
+                LogicalError::IncompleteLogicalBasis {
+                    expected: 1,
+                    actual: 0,
+                },
+            ),
         }
     }
 
-    /// Converts a logical effect into the standardized logical outcome.
+    /// Converts a single-qubit logical effect to a logical outcome.
     pub fn logical_outcome(
         &self,
         operator: &PauliString,
@@ -917,32 +1374,31 @@ impl LogicalCode {
         )
     }
 
-    /// Analyzes a decoder correction against the actual physical error.
+    /// Analyzes the residual left by a decoder.
     ///
-    /// The residual is:
-    ///
-    ///     R = E * C
-    ///
-    /// where E is the physical error and C is the decoder correction.
-    ///
-    /// This is the preferred API for determining whether decoding succeeded.
+    /// ```text
+    /// residual = physical_error * correction
+    /// ```
     pub fn analyze_residual(
         &self,
         physical_error: &PauliString,
         correction: &PauliString,
         basis: &LogicalBasis,
     ) -> Result<LogicalEffect, LogicalError> {
-        self.check_qubit_count(
+        self.validate_dimensions(
             physical_error,
         )?;
 
-        self.check_qubit_count(
+        self.validate_dimensions(
             correction,
         )?;
 
-        let residual = physical_error
-            .multiply(correction)
-            .map_err(LogicalError::Stabilizer)?;
+        let residual =
+            physical_error
+                .multiply(correction)
+                .map_err(
+                    LogicalError::Stabilizer,
+                )?;
 
         self.logical_effect(
             &residual,
@@ -950,7 +1406,7 @@ impl LogicalCode {
         )
     }
 
-    /// Returns the logical outcome of physical error + decoder correction.
+    /// Returns the residual logical outcome.
     pub fn residual_outcome(
         &self,
         physical_error: &PauliString,
@@ -966,24 +1422,175 @@ impl LogicalCode {
             .outcome(),
         )
     }
+
+    /// Classifies a residual using a complete multi-logical-qubit basis.
+    ///
+    /// This method verifies that every encoded logical qubit is accounted for.
+    ///
+    /// The returned vector contains one logical Pauli per encoded logical
+    /// qubit, in ascending logical-qubit order.
+    pub fn logical_pauli_vector(
+        &self,
+        operator: &PauliString,
+        basis: &LogicalBasisSet,
+    ) -> Result<Vec<LogicalPauli>, LogicalError> {
+        self.validate_dimensions(operator)?;
+
+        let expected =
+            self.logical_qubit_count()?;
+
+        if basis.len() != expected {
+            return Err(
+                LogicalError::IncompleteLogicalBasis {
+                    expected,
+                    actual: basis.len(),
+                },
+            );
+        }
+
+        match self.classify(operator)? {
+            LogicalClassification::Identity => {
+                return Ok(vec![
+                    LogicalPauli::Identity;
+                    expected
+                ]);
+            }
+
+            LogicalClassification::Stabilizer => {
+                return Ok(vec![
+                    LogicalPauli::Identity;
+                    expected
+                ]);
+            }
+
+            LogicalClassification::PhysicalError => {
+                return Err(
+                    LogicalError::UncorrectablePhysicalError,
+                );
+            }
+
+            LogicalClassification::Logical => {}
+        }
+
+        let mut result =
+            Vec::new();
+
+        result
+            .try_reserve(expected)
+            .map_err(|_| {
+                LogicalError::AllocationFailure
+            })?;
+
+        for pair in basis.pairs() {
+            let anti_x =
+                operator
+                    .anticommutes_with(
+                        pair.x().operator(),
+                    )
+                    .map_err(
+                        LogicalError::Stabilizer,
+                    )?;
+
+            let anti_z =
+                operator
+                    .anticommutes_with(
+                        pair.z().operator(),
+                    )
+                    .map_err(
+                        LogicalError::Stabilizer,
+                    )?;
+
+            let logical = match (
+                anti_x,
+                anti_z,
+            ) {
+                (false, false) => {
+                    LogicalPauli::Identity
+                }
+
+                (false, true) => {
+                    LogicalPauli::X
+                }
+
+                (true, false) => {
+                    LogicalPauli::Z
+                }
+
+                (true, true) => {
+                    LogicalPauli::Y
+                }
+            };
+
+            result.push(logical);
+        }
+
+        Ok(result)
+    }
+
+    /// Determines whether two physical Paulis are logically equivalent.
+    ///
+    /// ```text
+    /// P ~ Q  iff  P * Q ∈ S
+    /// ```
+    pub fn logically_equivalent(
+        &self,
+        first: &PauliString,
+        second: &PauliString,
+    ) -> Result<bool, LogicalError> {
+        self.validate_dimensions(first)?;
+        self.validate_dimensions(second)?;
+
+        let product =
+            first
+                .multiply(second)
+                .map_err(
+                    LogicalError::Stabilizer,
+                )?;
+
+        self.is_stabilizer(&product)
+    }
+
+    /// Resource-aware logical equivalence.
+    pub fn logically_equivalent_with_limits(
+        &self,
+        first: &PauliString,
+        second: &PauliString,
+        limits: &QecLimits,
+    ) -> Result<bool, LogicalError> {
+        self.validate_dimensions(first)?;
+        self.validate_dimensions(second)?;
+
+        let product =
+            first
+                .multiply(second)
+                .map_err(
+                    LogicalError::Stabilizer,
+                )?;
+
+        self.is_stabilizer_with_limits(
+            &product,
+            limits,
+        )
+    }
 }
 
 // ============================================================================
-// Logical distance helpers
+// Logical-weight helpers
 // ============================================================================
 
-/// Returns the minimum weight among explicitly supplied non-trivial logical
+/// Returns the minimum physical weight among supplied non-trivial logical
 /// candidates.
 ///
-/// This does not perform exponential Pauli-group enumeration.
+/// This function does NOT enumerate the full Pauli group.
 pub fn minimum_logical_weight(
     code: &LogicalCode,
     candidates: &[PauliString],
 ) -> Result<Option<usize>, LogicalError> {
-    let mut minimum = None;
+    let mut minimum =
+        None;
 
     for candidate in candidates {
-        code.check_candidate_dimensions(
+        code.validate_dimensions(
             candidate,
         )?;
 
@@ -993,7 +1600,8 @@ pub fn minimum_logical_weight(
             continue;
         }
 
-        let weight = candidate.weight();
+        let weight =
+            candidate.weight();
 
         minimum = Some(
             minimum.map_or(
@@ -1008,40 +1616,21 @@ pub fn minimum_logical_weight(
     Ok(minimum)
 }
 
-impl LogicalCode {
-    fn check_candidate_dimensions(
-        &self,
-        candidate: &PauliString,
-    ) -> Result<(), LogicalError> {
-        self.check_qubit_count(candidate)
-    }
-}
-
 // ============================================================================
-// Logical equivalence
+// Free-function compatibility API
 // ============================================================================
 
 /// Returns whether two physical Pauli operators implement the same logical
 /// operation.
-///
-/// For Pauli operators modulo phase:
-///
-///     P ~ Q  iff  P * Q ∈ S
-///
-/// where S is the stabilizer group.
 pub fn logically_equivalent(
     code: &LogicalCode,
     first: &PauliString,
     second: &PauliString,
 ) -> Result<bool, LogicalError> {
-    code.check_candidate_dimensions(first)?;
-    code.check_candidate_dimensions(second)?;
-
-    let product = first
-        .multiply(second)
-        .map_err(LogicalError::Stabilizer)?;
-
-    code.is_stabilizer(&product)
+    code.logically_equivalent(
+        first,
+        second,
+    )
 }
 
 /// Resource-aware logical equivalence.
@@ -1051,29 +1640,17 @@ pub fn logically_equivalent_with_limits(
     second: &PauliString,
     limits: &QecLimits,
 ) -> Result<bool, LogicalError> {
-    code.check_candidate_dimensions(first)?;
-    code.check_candidate_dimensions(second)?;
-
-    let product = first
-        .multiply(second)
-        .map_err(LogicalError::Stabilizer)?;
-
-    code.is_stabilizer_with_limits(
-        &product,
+    code.logically_equivalent_with_limits(
+        first,
+        second,
         limits,
     )
 }
 
-// ============================================================================
-// Logical correction analysis
-// ============================================================================
-
 /// Analyzes a decoder correction.
 ///
-/// Important:
-///
-/// A correction alone is not necessarily a logical operator. If the caller
-/// has the original physical error, use `LogicalCode::analyze_residual`.
+/// For decoder correctness, prefer `analyze_decoder_result` when the original
+/// physical error is available.
 pub fn analyze_correction(
     code: &LogicalCode,
     correction: &PauliString,
@@ -1085,7 +1662,7 @@ pub fn analyze_correction(
     )
 }
 
-/// Analyzes the residual left after decoder correction.
+/// Analyzes the residual produced by a decoder.
 pub fn analyze_decoder_result(
     code: &LogicalCode,
     physical_error: &PauliString,
@@ -1100,9 +1677,215 @@ pub fn analyze_decoder_result(
 }
 
 // ============================================================================
+// Constructors
+// ============================================================================
+
+/// Constructs an n-qubit identity operator.
+#[must_use]
+pub fn identity_operator(
+    num_qubits: usize,
+) -> PauliString {
+    PauliString::identity(
+        num_qubits,
+    )
+}
+
+/// Constructs a Pauli string from `(qubit, Pauli)` assignments.
+///
+/// Duplicate assignments are rejected rather than silently overwriting an
+/// earlier assignment.
+pub fn pauli_operator(
+    num_qubits: usize,
+    assignments: &[(usize, Pauli)],
+) -> Result<PauliString, LogicalError> {
+    let mut operator =
+        PauliString::identity(
+            num_qubits,
+        );
+
+    let mut seen =
+        BTreeSet::new();
+
+    for &(qubit, pauli) in assignments {
+        if qubit >= num_qubits {
+            return Err(
+                LogicalError::QubitIndexOutOfRange {
+                    qubit,
+                    num_qubits,
+                },
+            );
+        }
+
+        if !seen.insert(qubit) {
+            return Err(
+                LogicalError::DuplicateQubitAssignment {
+                    qubit,
+                },
+            );
+        }
+
+        operator
+            .set_pauli(
+                QubitIndex::new(qubit),
+                pauli,
+            )
+            .map_err(
+                LogicalError::Stabilizer,
+            )?;
+    }
+
+    Ok(operator)
+}
+
+// ============================================================================
+// Canonical QecError integration
+// ============================================================================
+
+impl LogicalError {
+    /// Converts this local error into the canonical QEC error boundary.
+    ///
+    /// This preserves the architectural rule that `logical.rs` owns detailed
+    /// diagnostics while `errors.rs` owns the public subsystem error model.
+    #[must_use]
+    pub fn into_qec_error(
+        self,
+    ) -> QecError {
+        match self {
+            Self::Stabilizer(error) => {
+                QecError::invalid_stabilizer(
+                    error.to_string(),
+                )
+            }
+
+            Self::QubitCountMismatch {
+                expected,
+                actual,
+            } => QecError::invalid_input(
+                format!(
+                    "logical operator acts on {actual} qubits; expected {expected}"
+                ),
+            ),
+
+            Self::DoesNotCommuteWithStabilizers => {
+                QecError::invalid_stabilizer(
+                    "operator does not commute with the stabilizer group",
+                )
+            }
+
+            Self::TrivialLogicalOperator {
+                kind,
+            } => QecError::invalid_stabilizer(
+                format!(
+                    "logical {kind} operator is stabilizer-equivalent to identity"
+                ),
+            ),
+
+            Self::WrongLogicalType {
+                expected,
+                actual,
+            } => QecError::invalid_input(
+                format!(
+                    "wrong logical operator type: expected {expected}, got {actual}"
+                ),
+            ),
+
+            Self::LogicalXZHermitianMismatch => {
+                QecError::invalid_stabilizer(
+                    "logical X and logical Z must anticommute",
+                )
+            }
+
+            Self::IncompleteLogicalBasis {
+                expected,
+                actual,
+            } => QecError::invalid_input(
+                format!(
+                    "incomplete logical basis: expected {expected} pairs, got {actual}"
+                ),
+            ),
+
+            Self::MultiLogicalQubitBasisRequired {
+                logical_qubits,
+            } => QecError::unsupported(
+                "single-logical-qubit basis",
+                format!(
+                    "the code contains {logical_qubits} encoded logical qubits; use LogicalBasisSet"
+                ),
+            ),
+
+            Self::InvalidLogicalBasis => {
+                QecError::invalid_input(
+                    "invalid logical operator basis",
+                )
+            }
+
+            Self::NoEncodedLogicalQubits => {
+                QecError::invalid_stabilizer(
+                    "stabilizer code contains no encoded logical qubits",
+                )
+            }
+
+            Self::DuplicateLogicalQubit {
+                index,
+            } => QecError::invalid_input(
+                format!(
+                    "duplicate logical-qubit basis index {index}"
+                ),
+            ),
+
+            Self::CrossLogicalAnticommutation {
+                first,
+                second,
+            } => QecError::invalid_stabilizer(
+                format!(
+                    "logical basis pairs {first} and {second} must commute across encoded qubits"
+                ),
+            ),
+
+            Self::AllocationFailure => {
+                QecError::resource_limit(
+                    super::errors::ResourceKind::Allocations,
+                    1,
+                    0,
+                    0,
+                    "logical basis allocation failed",
+                )
+            }
+
+            Self::QubitIndexOutOfRange {
+                qubit,
+                num_qubits,
+            } => QecError::invalid_input(
+                format!(
+                    "qubit index {qubit} is outside {num_qubits} physical qubits"
+                ),
+            ),
+
+            Self::DuplicateQubitAssignment {
+                qubit,
+            } => QecError::invalid_input(
+                format!(
+                    "qubit {qubit} was assigned more than once"
+                ),
+            },
+
+            Self::LogicalBasisNotAssociatedWithCode => {
+                QecError::invalid_stabilizer(
+                    "logical basis is not associated with the supplied code",
+                )
+            }
+        }
+    }
+}
+
+// ============================================================================
 // Errors
 // ============================================================================
 
+/// Detailed logical-module error.
+///
+/// Higher-level APIs can convert this to `QecError` using
+/// `LogicalError::into_qec_error()`.
 #[derive(
     Debug,
     Clone,
@@ -1110,16 +1893,16 @@ pub fn analyze_decoder_result(
     Eq,
 )]
 pub enum LogicalError {
-    /// Underlying stabilizer algebra failure.
+    /// Underlying stabilizer algebra error.
     Stabilizer(StabilizerError),
 
-    /// Operator/code dimensional mismatch.
+    /// Physical-qubit dimension mismatch.
     QubitCountMismatch {
         expected: usize,
         actual: usize,
     },
 
-    /// Candidate is not in the stabilizer normalizer.
+    /// Operator does not commute with the stabilizer group.
     DoesNotCommuteWithStabilizers,
 
     /// Candidate is stabilizer-equivalent to identity.
@@ -1127,28 +1910,59 @@ pub enum LogicalError {
         kind: LogicalPauli,
     },
 
-    /// Logical operator was labelled incorrectly.
+    /// Logical operator was declared with the wrong type.
     WrongLogicalType {
         expected: LogicalPauli,
         actual: LogicalPauli,
     },
 
-    /// Logical X and Z failed the required anti-commutation relation.
+    /// Logical X and Z do not anticommute.
     LogicalXZHermitianMismatch,
 
-    /// The supplied basis cannot classify the operator.
-    IncompleteLogicalBasis,
+    /// Logical basis is incomplete.
+    IncompleteLogicalBasis {
+        expected: usize,
+        actual: usize,
+    },
+
+    /// A single-logical-qubit basis was requested for a multi-logical code.
+    MultiLogicalQubitBasisRequired {
+        logical_qubits: usize,
+    },
 
     /// Invalid logical basis.
     InvalidLogicalBasis,
 
-    /// Empty logical basis.
-    EmptyLogicalBasis,
+    /// Code contains no encoded logical qubits.
+    NoEncodedLogicalQubits,
 
-    /// The operation requires a complete multi-logical-qubit basis.
-    MultiLogicalQubitBasisRequired {
-        logical_qubits: usize,
+    /// Duplicate logical-qubit basis index.
+    DuplicateLogicalQubit {
+        index: usize,
     },
+
+    /// Distinct logical-qubit basis pairs anticommute.
+    CrossLogicalAnticommutation {
+        first: usize,
+        second: usize,
+    },
+
+    /// A bounded allocation failed.
+    AllocationFailure,
+
+    /// Pauli assignment references an invalid qubit.
+    QubitIndexOutOfRange {
+        qubit: usize,
+        num_qubits: usize,
+    },
+
+    /// A physical qubit was assigned more than once.
+    DuplicateQubitAssignment {
+        qubit: usize,
+    },
+
+    /// Reserved for future basis/code association checks.
+    LogicalBasisNotAssociatedWithCode,
 }
 
 impl fmt::Display for LogicalError {
@@ -1175,9 +1989,8 @@ impl fmt::Display for LogicalError {
             }
 
             Self::DoesNotCommuteWithStabilizers => {
-                write!(
-                    formatter,
-                    "operator does not commute with the stabilizer group"
+                formatter.write_str(
+                    "operator does not commute with the stabilizer group",
                 )
             }
 
@@ -1201,30 +2014,18 @@ impl fmt::Display for LogicalError {
             }
 
             Self::LogicalXZHermitianMismatch => {
-                write!(
-                    formatter,
-                    "logical X and logical Z must anticommute"
+                formatter.write_str(
+                    "logical X and logical Z must anticommute",
                 )
             }
 
-            Self::IncompleteLogicalBasis => {
+            Self::IncompleteLogicalBasis {
+                expected,
+                actual,
+            } => {
                 write!(
                     formatter,
-                    "the supplied logical basis cannot classify this logical operator"
-                )
-            }
-
-            Self::InvalidLogicalBasis => {
-                write!(
-                    formatter,
-                    "invalid logical operator basis"
-                )
-            }
-
-            Self::EmptyLogicalBasis => {
-                write!(
-                    formatter,
-                    "logical operator basis is empty"
+                    "incomplete logical basis: expected {expected} pairs, got {actual}"
                 )
             }
 
@@ -1233,7 +2034,69 @@ impl fmt::Display for LogicalError {
             } => {
                 write!(
                     formatter,
-                    "a complete logical basis is required for {logical_qubits} encoded logical qubits"
+                    "a single-logical-qubit basis is invalid for a code with {logical_qubits} encoded logical qubits"
+                )
+            }
+
+            Self::InvalidLogicalBasis => {
+                formatter.write_str(
+                    "invalid logical operator basis",
+                )
+            }
+
+            Self::NoEncodedLogicalQubits => {
+                formatter.write_str(
+                    "the stabilizer code contains no encoded logical qubits",
+                )
+            }
+
+            Self::DuplicateLogicalQubit {
+                index,
+            } => {
+                write!(
+                    formatter,
+                    "duplicate logical-qubit basis index {index}"
+                )
+            }
+
+            Self::CrossLogicalAnticommutation {
+                first,
+                second,
+            } => {
+                write!(
+                    formatter,
+                    "logical basis pairs {first} and {second} must commute across encoded logical qubits"
+                )
+            }
+
+            Self::AllocationFailure => {
+                formatter.write_str(
+                    "logical basis allocation failed",
+                )
+            }
+
+            Self::QubitIndexOutOfRange {
+                qubit,
+                num_qubits,
+            } => {
+                write!(
+                    formatter,
+                    "qubit index {qubit} is outside {num_qubits} physical qubits"
+                )
+            }
+
+            Self::DuplicateQubitAssignment {
+                qubit,
+            } => {
+                write!(
+                    formatter,
+                    "qubit {qubit} was assigned more than once"
+                )
+            }
+
+            Self::LogicalBasisNotAssociatedWithCode => {
+                formatter.write_str(
+                    "logical basis is not associated with the supplied code",
                 )
             }
         }
@@ -1242,61 +2105,12 @@ impl fmt::Display for LogicalError {
 
 impl std::error::Error for LogicalError {}
 
-// ============================================================================
-// Constructors
-// ============================================================================
-
-/// Constructs an n-qubit identity operator.
-#[must_use]
-pub fn identity_operator(
-    num_qubits: usize,
-) -> PauliString {
-    PauliString::identity(
-        num_qubits,
-    )
-}
-
-/// Constructs a Pauli string from `(qubit, Pauli)` assignments.
-///
-/// Duplicate assignments are rejected so malformed external input cannot
-/// silently overwrite an earlier operation.
-pub fn pauli_operator(
-    num_qubits: usize,
-    assignments: &[(usize, Pauli)],
-) -> Result<PauliString, LogicalError> {
-    let mut operator =
-        PauliString::identity(num_qubits);
-
-    let mut seen =
-        BTreeSet::new();
-
-    for &(qubit, pauli) in assignments {
-        if qubit >= num_qubits {
-            return Err(
-                LogicalError::QubitCountMismatch {
-                    expected: num_qubits,
-                    actual: qubit.saturating_add(1),
-                },
-            );
-        }
-
-        if !seen.insert(qubit) {
-            return Err(
-                LogicalError::InvalidLogicalBasis,
-            );
-        }
-
-        operator
-            .set_pauli(
-                QubitIndex::new(qubit),
-                pauli,
-            )
-            .map_err(
-                LogicalError::Stabilizer,
-            )?;
+impl From<StabilizerError> for LogicalError {
+    fn from(
+        error: StabilizerError,
+    ) -> Self {
+        Self::Stabilizer(error)
     }
-
-    Ok(operator)
 }
 
 // ============================================================================
@@ -1307,42 +2121,75 @@ pub fn pauli_operator(
 mod tests {
     use super::*;
 
+    use super::super::stabilizer::{
+        StabilizerGenerator,
+    };
+
     fn simple_code() -> LogicalCode {
         let mut group =
             StabilizerGroup::new(2)
-                .expect("valid stabilizer group");
+                .expect(
+                    "valid stabilizer group",
+                );
+
+        let generator =
+            StabilizerGenerator::new(
+                0,
+                PauliString::from_paulis(
+                    &[
+                        Pauli::Z,
+                        Pauli::Z,
+                    ],
+                ),
+            )
+            .expect(
+                "valid stabilizer generator",
+            );
 
         group
-            .add_generator(
-                super::super::stabilizer::StabilizerGenerator::new(
-                    0,
-                    PauliString::from_paulis(&[
-                        Pauli::Z,
-                        Pauli::Z,
-                    ]),
-                )
-                .expect("valid generator"),
-            )
-            .expect("generator accepted");
+            .add_generator(generator)
+            .expect(
+                "generator accepted",
+            );
 
         LogicalCode::new(group)
-            .expect("valid logical code")
+            .expect(
+                "valid logical code",
+            )
+    }
+
+    fn logical_x() -> PauliString {
+        PauliString::from_paulis(
+            &[
+                Pauli::X,
+                Pauli::I,
+            ],
+        )
+    }
+
+    fn logical_z() -> PauliString {
+        PauliString::from_paulis(
+            &[
+                Pauli::Z,
+                Pauli::I,
+            ],
+        )
     }
 
     #[test]
     fn logical_pauli_multiplication_is_closed() {
         assert_eq!(
             LogicalPauli::X.multiply(
-                LogicalPauli::Z
+                LogicalPauli::Z,
             ),
-            LogicalPauli::Y
+            LogicalPauli::Y,
         );
 
         assert_eq!(
             LogicalPauli::Y.multiply(
-                LogicalPauli::Y
+                LogicalPauli::Y,
             ),
-            LogicalPauli::Identity
+            LogicalPauli::Identity,
         );
     }
 
@@ -1351,125 +2198,280 @@ mod tests {
         assert!(
             LogicalPauli::X
                 .commutes_with(
-                    LogicalPauli::X
+                    LogicalPauli::X,
                 )
         );
 
         assert!(
             !LogicalPauli::X
                 .commutes_with(
-                    LogicalPauli::Z
-                )
-        );
-
-        assert!(
-            !LogicalPauli::Y
-                .commutes_with(
-                    LogicalPauli::Z
+                    LogicalPauli::Z,
                 )
         );
     }
 
     #[test]
     fn identity_is_trivial() {
-        let code = simple_code();
+        let code =
+            simple_code();
 
         let identity =
             identity_operator(2);
 
         assert_eq!(
             code.classify(&identity)
-                .expect("classification"),
-            LogicalClassification::Identity
+                .expect(
+                    "classification",
+                ),
+            LogicalClassification::Identity,
         );
     }
 
     #[test]
     fn stabilizer_is_trivial_logically() {
-        let code = simple_code();
+        let code =
+            simple_code();
 
         let stabilizer =
-            PauliString::from_paulis(&[
-                Pauli::Z,
-                Pauli::Z,
-            ]);
+            PauliString::from_paulis(
+                &[
+                    Pauli::Z,
+                    Pauli::Z,
+                ],
+            );
 
         assert_eq!(
             code.classify(&stabilizer)
-                .expect("classification"),
-            LogicalClassification::Stabilizer
+                .expect(
+                    "classification",
+                ),
+            LogicalClassification::Stabilizer,
         );
     }
 
     #[test]
-    fn logical_equivalence_is_stabilizer_based() {
-        let code = simple_code();
+    fn_non_stabilizer_normalizer_is_logical() {
+        let code =
+            simple_code();
 
-        let first =
-            PauliString::from_paulis(&[
-                Pauli::X,
-                Pauli::I,
-            ]);
+        assert_eq!(
+            code.classify(
+                &logical_x(),
+            )
+            .expect(
+                "classification",
+            ),
+            LogicalClassification::Logical,
+        );
+    }
 
-        let second =
-            PauliString::from_paulis(&[
-                Pauli::I,
-                Pauli::X,
-            ]);
+    #[test]
+    fn logical_basis_validates() {
+        let code =
+            simple_code();
+
+        let x =
+            code.logical_operator(
+                LogicalPauli::X,
+                logical_x(),
+            )
+            .expect(
+                "logical X",
+            );
+
+        let z =
+            code.logical_operator(
+                LogicalPauli::Z,
+                logical_z(),
+            )
+            .expect(
+                "logical Z",
+            );
+
+        let basis =
+            LogicalBasis::new(
+                &code,
+                x,
+                z,
+            )
+            .expect(
+                "valid logical basis",
+            );
+
+        assert_eq!(
+            basis.y()
+                .logical_pauli(),
+            LogicalPauli::Y,
+        );
+    }
+
+    #[test]
+    fn logical_x_is_classified_correctly() {
+        let code =
+            simple_code();
+
+        let x =
+            code.logical_operator(
+                LogicalPauli::X,
+                logical_x(),
+            )
+            .expect(
+                "logical X",
+            );
+
+        let z =
+            code.logical_operator(
+                LogicalPauli::Z,
+                logical_z(),
+            )
+            .expect(
+                "logical Z",
+            );
+
+        let basis =
+            LogicalBasis::new(
+                &code,
+                x,
+                z,
+            )
+            .expect(
+                "basis",
+            );
+
+        assert_eq!(
+            code.logical_effect(
+                &logical_x(),
+                &basis,
+            )
+            .expect(
+                "logical effect",
+            ),
+            LogicalEffect::LogicalX,
+        );
+    }
+
+    #[test]
+    fn residual_identity_is_success() {
+        let code =
+            simple_code();
+
+        let x =
+            logical_x();
+
+        let correction =
+            logical_x();
+
+        let logical_x_operator =
+            code.logical_operator(
+                LogicalPauli::X,
+                logical_x(),
+            )
+            .expect(
+                "logical X",
+            );
+
+        let logical_z_operator =
+            code.logical_operator(
+                LogicalPauli::Z,
+                logical_z(),
+            )
+            .expect(
+                "logical Z",
+            );
+
+        let basis =
+            LogicalBasis::new(
+                &code,
+                logical_x_operator,
+                logical_z_operator,
+            )
+            .expect(
+                "basis",
+            );
+
+        assert_eq!(
+            code.residual_outcome(
+                &x,
+                &correction,
+                &basis,
+            )
+            .expect(
+                "residual outcome",
+            ),
+            LogicalOutcome::Identity,
+        );
+    }
+
+    #[test]
+    fn logical_equivalence_uses_stabilizer_cosets() {
+        let code =
+            simple_code();
+
+        let identity =
+            identity_operator(2);
+
+        let stabilizer =
+            PauliString::from_paulis(
+                &[
+                    Pauli::Z,
+                    Pauli::Z,
+                ],
+            );
 
         assert!(
-            logically_equivalent(
-                &code,
-                &first,
-                &second,
+            code.logically_equivalent(
+                &identity,
+                &stabilizer,
             )
-            .expect("equivalence")
+            .expect(
+                "logical equivalence",
+            )
         );
     }
 
     #[test]
-    fn pauli_constructor_rejects_duplicate_assignments() {
+    fn malformed_pauli_assignment_is_rejected() {
         let result =
             pauli_operator(
-                3,
+                2,
                 &[
                     (0, Pauli::X),
                     (0, Pauli::Z),
                 ],
             );
 
-        assert!(result.is_err());
+        assert!(
+            matches!(
+                result,
+                Err(
+                    LogicalError::DuplicateQubitAssignment {
+                        qubit: 0,
+                    },
+                )
+            )
+        );
     }
 
     #[test]
-    fn pauli_constructor_rejects_out_of_range_qubits() {
+    fn out_of_range_assignment_is_rejected() {
         let result =
             pauli_operator(
-                3,
-                &[(3, Pauli::X)],
+                2,
+                &[
+                    (2, Pauli::X),
+                ],
             );
 
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn dimension_mismatch_is_structured() {
-        let code = simple_code();
-
-        let operator =
-            PauliString::identity(3);
-
-        let result =
-            code.classify(&operator);
-
-        assert!(matches!(
-            result,
-            Err(
-                LogicalError::QubitCountMismatch {
-                    expected: 2,
-                    actual: 3
-                }
+        assert!(
+            matches!(
+                result,
+                Err(
+                    LogicalError::QubitIndexOutOfRange {
+                        qubit: 2,
+                        num_qubits: 2,
+                    },
+                )
             )
-        ));
+        );
     }
 }
