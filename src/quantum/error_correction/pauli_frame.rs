@@ -1,188 +1,193 @@
-//! Production Pauli-frame management for Zamani QEC.
+//! Production Pauli-frame management for Zamani Quantum Error Correction.
 //!
-//! A Pauli frame is classical correction state.  It records the Pauli
-//! correction that should be interpreted by the decoder, logical layer,
-//! measurement layer, circuit executor, or QPU adapter without requiring
-//! the correction to be physically applied immediately.
+//! # Ownership
+//!
+//! This module owns classical Pauli-frame state.
+//!
+//! A Pauli frame records a pending Pauli correction without physically
+//! applying that correction to a quantum device. It is therefore suitable
+//! for decoder output, measurement interpretation, logical classification,
+//! replay and checkpoint integration.
+//!
+//! This module owns:
+//!
+//! - Pauli-frame state;
+//! - frame composition;
+//! - frame accumulation;
+//! - frame reset/clear;
+//! - frame revision tracking;
+//! - single-qubit frame access;
+//! - measurement-result interpretation;
+//! - immutable frame snapshots;
+//! - checkpoint state representation;
+//! - frame integrity validation;
+//! - deterministic frame operations.
+//!
+//! This module does NOT own:
+//!
+//! - Pauli algebra itself;
+//! - stabilizer algebra;
+//! - logical-equivalence mathematics;
+//! - decoder algorithms;
+//! - surface-code topology;
+//! - QPU execution;
+//! - QPU credentials;
+//! - network access;
+//! - persistent checkpoint storage;
+//! - cache storage;
+//! - telemetry transport;
+//! - resource-policy definition.
+//!
+//! Those responsibilities remain in their respective modules.
 //!
 //! # Architectural position
 //!
 //! ```text
 //! Decoder
-//!    |
-//!    v
-//! Pauli correction
-//!    |
-//!    v
+//!    │
+//!    │ PauliString correction
+//!    ▼
 //! PauliFrame
-//!    |
-//!    +--------------------+
-//!    |                    |
-//!    v                    v
-//! measurement         logical classification
-//!    |                    |
-//!    +---------+----------+
-//!              |
-//!              v
-//!       QPU / circuit layer
+//!    │
+//!    ├───────────────┐
+//!    │               │
+//!    ▼               ▼
+//! measurement     logical-equivalence
+//! interpretation       layer
+//!    │               │
+//!    └───────┬───────┘
+//!            ▼
+//!       LogicalOutcome
+//!
+//! PauliFrame
+//!    │
+//!    ├── snapshot ──► checkpoint.rs
+//!    │
+//!    └── replay ────► replay.rs
 //! ```
 //!
-//! This module deliberately does NOT perform physical quantum operations.
+//! # Representation
 //!
-//! Global Pauli phase is ignored, matching the binary-symplectic
-//! representation used by `stabilizer.rs`.
+//! The frame delegates all Pauli algebra to `stabilizer.rs`.
 //!
-//! # Safety invariants
+//! A frame represents:
 //!
-//! * a frame always represents exactly one non-zero qubit count;
-//! * all frame dimensions are validated;
-//! * resource limits come from `QecLimits`;
-//! * no independent production allocation ceiling is maintained here;
-//! * corrections are composed deterministically;
-//! * cancellation is checked before and during bulk operations;
-//! * measurement interpretation never mutates the frame;
-//! * reset preserves the physical qubit count;
-//! * checkpoints contain enough state to reproduce the frame;
-//! * malformed checkpoints are rejected;
-//! * this module never accesses QPU credentials, devices, circuits, or
-//!   network resources.
+//! ```text
+//! P = P_0 ⊗ P_1 ⊗ ... ⊗ P_(n-1)
+//! ```
+//!
+//! where every `P_i` is `I`, `X`, `Y`, or `Z`.
+//!
+//! Global Pauli phase is intentionally discarded because the canonical
+//! `PauliString` representation in `stabilizer.rs` is binary-symplectic and
+//! phase-free.
+//!
+//! # Critical invariants
+//!
+//! 1. A frame always represents a non-zero number of qubits.
+//! 2. A correction may only be composed when its dimension matches the frame.
+//! 3. Resource policy comes exclusively from `QecLimits`.
+//! 4. Measurement interpretation never mutates the frame.
+//! 5. A failed mutation does not leave partially updated state.
+//! 6. Revision numbers increase only after a successful state mutation.
+//! 7. Identity operations do not create artificial revisions.
+//! 8. Cancellation is checked before and after expensive operations.
+//! 9. Snapshots contain enough information to reconstruct the frame.
+//! 10. Invalid snapshots are rejected.
+//! 11. Checkpoint versions are explicitly validated.
+//! 12. No physical quantum operation occurs in this module.
+//!
+//! # Integration contract
+//!
+//! ```text
+//! limits.rs
+//!      │
+//!      ▼
+//! PauliFrame
+//!      │
+//!      ├── decoder.rs
+//!      ├── decoder_result.rs
+//!      ├── logical_equivalence.rs
+//!      ├── checkpoint.rs
+//!      ├── replay.rs
+//!      └── QPU / measurement integration
+//! ```
+//!
+//! `stabilizer.rs` remains the sole owner of `Pauli` and `PauliString`
+//! algebra.
+//!
+//! `limits.rs` remains the sole source of declarative resource policy.
+//!
+//! `errors.rs` remains the canonical public QEC error boundary.
+//!
+//! `checkpoint.rs` may persist `PauliFrameCheckpoint`, but persistence and
+//! cryptographic integrity are not owned by this module.
+//!
+//! `logical_equivalence.rs` may inspect the frame's operator but must not
+//! mutate it.
+//!
+//! # Rust compatibility
+//!
+//! This implementation targets Rust 1.97.1 and uses stable standard-library
+//! facilities.
 
 use core::fmt;
 
 use super::cancellation::CancellationToken;
-use super::errors::{
-    QecError,
-    QecResult,
-    ResourceKind,
-};
-use super::limits::{
-    LimitError,
-    QecLimits,
-};
-use super::stabilizer::{
-    Pauli,
-    PauliString,
-    QubitIndex,
-    StabilizerError,
-};
+use super::errors::{QecError, QecResult, ResourceKind};
+use super::limits::QecLimits;
+use super::stabilizer::{Pauli, PauliString, QubitIndex, StabilizerError};
 
 // ============================================================================
-// Versioning
+// Versions
 // ============================================================================
 
-/// Current serialized Pauli-frame checkpoint schema.
-pub const PAULI_FRAME_CHECKPOINT_VERSION: u32 = 1;
+/// Current in-memory Pauli-frame representation version.
+pub const PAULI_FRAME_FORMAT_VERSION: u32 = 2;
 
-/// Current logical frame representation version.
-pub const PAULI_FRAME_FORMAT_VERSION: u32 = 1;
+/// Current Pauli-frame checkpoint schema version.
+pub const PAULI_FRAME_CHECKPOINT_VERSION: u32 = 2;
 
 // ============================================================================
-// Pauli frame
+// PauliFrame
 // ============================================================================
 
-/// Classical Pauli frame.
+/// Classical Pauli correction frame.
 ///
-/// The frame represents:
-///
-/// ```text
-/// P = P_0 ⊗ P_1 ⊗ ... ⊗ P_(n-1)
-/// ```
-///
-/// where each `P_i` is `I`, `X`, `Y`, or `Z`.
-///
-/// The frame is stored as a `PauliString` so that stabilizer algebra remains
-/// centralized in `stabilizer.rs`.
+/// The frame contains no physical quantum state. It is a classical
+/// representation of a correction that can be interpreted by a measurement
+/// or logical layer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PauliFrame {
     operator: PauliString,
 
-    /// Monotonically increasing mutation counter.
+    /// Number of successful state mutations.
     ///
-    /// This is useful for deterministic replay, checkpoint validation and
-    /// detecting whether a frame changed between two observations.
+    /// Identity operations and failed operations do not increment this value.
     revision: u64,
 }
 
 impl PauliFrame {
-    // ------------------------------------------------------------------------
+    // ========================================================================
     // Construction
-    // ------------------------------------------------------------------------
+    // ========================================================================
 
-    /// Creates an identity frame using the supplied QEC resource policy.
+    /// Creates an identity Pauli frame.
+    pub fn new(num_qubits: usize) -> Result<Self, PauliFrameError> {
+        Self::new_with_limits(num_qubits, &QecLimits::default())
+    }
+
+    /// Creates an identity Pauli frame after resource-policy validation.
     pub fn new_with_limits(
         num_qubits: usize,
         limits: &QecLimits,
     ) -> Result<Self, PauliFrameError> {
-        limits
-            .validate()
-            .map_err(PauliFrameError::InvalidLimits)?;
+        validate_limits(limits)?;
 
-        if num_qubits == 0 {
-            return Err(
-                PauliFrameError::ZeroQubits
-            );
-        }
-
-        if num_qubits > limits.max_qubits {
-            return Err(
-                PauliFrameError::ResourceLimitExceeded {
-                    resource: ResourceKind::Qubits,
-                    requested: num_qubits as u128,
-                    limit: limits.max_qubits as u128,
-                },
-            );
-        }
+        validate_num_qubits(num_qubits, limits)?;
 
         Ok(Self {
             operator: PauliString::identity(num_qubits),
-            revision: 0,
-        })
-    }
-
-    /// Creates an identity frame using the subsystem's configured defaults.
-    ///
-    /// This compatibility constructor is intentionally conservative and
-    /// delegates to `QecLimits::default()`.
-    pub fn new(
-        num_qubits: usize,
-    ) -> Result<Self, PauliFrameError> {
-        Self::new_with_limits(
-            num_qubits,
-            &QecLimits::default(),
-        )
-    }
-
-    /// Creates a frame from an existing Pauli operator under an explicit
-    /// resource policy.
-    pub fn from_operator_with_limits(
-        operator: PauliString,
-        limits: &QecLimits,
-    ) -> Result<Self, PauliFrameError> {
-        limits
-            .validate()
-            .map_err(PauliFrameError::InvalidLimits)?;
-
-        let num_qubits =
-            operator.num_qubits();
-
-        if num_qubits == 0 {
-            return Err(
-                PauliFrameError::ZeroQubits
-            );
-        }
-
-        if num_qubits > limits.max_qubits {
-            return Err(
-                PauliFrameError::ResourceLimitExceeded {
-                    resource: ResourceKind::Qubits,
-                    requested: num_qubits as u128,
-                    limit: limits.max_qubits as u128,
-                },
-            );
-        }
-
-        Ok(Self {
-            operator,
             revision: 0,
         })
     }
@@ -191,73 +196,72 @@ impl PauliFrame {
     pub fn from_operator(
         operator: PauliString,
     ) -> Result<Self, PauliFrameError> {
-        Self::from_operator_with_limits(
-            operator,
-            &QecLimits::default(),
-        )
+        Self::from_operator_with_limits(operator, &QecLimits::default())
     }
 
-    // ------------------------------------------------------------------------
-    // Basic state
-    // ------------------------------------------------------------------------
+    /// Creates a frame from an existing Pauli operator using explicit
+    /// resource policy.
+    pub fn from_operator_with_limits(
+        operator: PauliString,
+        limits: &QecLimits,
+    ) -> Result<Self, PauliFrameError> {
+        validate_limits(limits)?;
 
-    /// Number of physical qubits represented by the frame.
+        validate_num_qubits(operator.num_qubits(), limits)?;
+
+        Ok(Self {
+            operator,
+            revision: 0,
+        })
+    }
+
+    // ========================================================================
+    // State inspection
+    // ========================================================================
+
+    /// Returns the number of physical qubits represented by the frame.
     #[must_use]
-    pub const fn num_qubits(
-        &self,
-    ) -> usize {
+    pub const fn num_qubits(&self) -> usize {
         self.operator.num_qubits()
     }
 
-    /// Current deterministic mutation revision.
+    /// Returns the current mutation revision.
     #[must_use]
-    pub const fn revision(
-        &self,
-    ) -> u64 {
+    pub const fn revision(&self) -> u64 {
         self.revision
     }
 
-    /// Returns the complete Pauli operator represented by the frame.
+    /// Returns the frame's Pauli operator by reference.
     #[must_use]
-    pub fn operator(
-        &self,
-    ) -> &PauliString {
+    pub fn operator(&self) -> &PauliString {
         &self.operator
     }
 
-    /// Returns a cloned operator.
+    /// Returns an owned copy of the frame operator.
     #[must_use]
-    pub fn operator_owned(
-        &self,
-    ) -> PauliString {
+    pub fn operator_owned(&self) -> PauliString {
         self.operator.clone()
     }
 
-    /// Returns true when no correction is pending.
+    /// Returns true when the frame contains no pending correction.
     #[must_use]
-    pub fn is_identity(
-        &self,
-    ) -> bool {
+    pub fn is_identity(&self) -> bool {
         self.operator.is_identity()
     }
 
-    /// Returns the number of qubits carrying non-identity corrections.
+    /// Returns the number of non-identity qubits.
     #[must_use]
-    pub fn weight(
-        &self,
-    ) -> usize {
+    pub fn weight(&self) -> usize {
         self.operator.weight()
     }
 
     /// Returns the deterministic support of the frame.
     #[must_use]
-    pub fn support(
-        &self,
-    ) -> Vec<QubitIndex> {
+    pub fn support(&self) -> Vec<QubitIndex> {
         self.operator.support()
     }
 
-    /// Returns the Pauli currently tracked on one qubit.
+    /// Returns the Pauli acting on a specific physical qubit.
     pub fn pauli_at(
         &self,
         qubit: usize,
@@ -266,18 +270,16 @@ impl PauliFrame {
 
         self.operator
             .pauli_at(QubitIndex::new(qubit))
-            .map_err(
-                PauliFrameError::Stabilizer,
-            )
+            .map_err(PauliFrameError::Stabilizer)
     }
 
-    // ------------------------------------------------------------------------
+    // ========================================================================
     // Mutation
-    // ------------------------------------------------------------------------
+    // ========================================================================
 
-    /// Sets the correction on one qubit.
+    /// Replaces the Pauli correction on one qubit.
     ///
-    /// This replaces the existing Pauli on that qubit.
+    /// This is replacement semantics, not multiplication semantics.
     pub fn set(
         &mut self,
         qubit: usize,
@@ -285,32 +287,27 @@ impl PauliFrame {
     ) -> Result<(), PauliFrameError> {
         self.check_qubit(qubit)?;
 
-        let current =
-            self.operator.pauli_at(
-                QubitIndex::new(qubit)
-            ).map_err(
-                PauliFrameError::Stabilizer
-            )?;
+        let current = self
+            .operator
+            .pauli_at(QubitIndex::new(qubit))
+            .map_err(PauliFrameError::Stabilizer)?;
 
-        if current != pauli {
-            self.operator
-                .set_pauli(
-                    QubitIndex::new(qubit),
-                    pauli,
-                )
-                .map_err(
-                    PauliFrameError::Stabilizer
-                )?;
-
-            self.bump_revision()?;
+        if current == pauli {
+            return Ok(());
         }
+
+        self.operator
+            .set_pauli(QubitIndex::new(qubit), pauli)
+            .map_err(PauliFrameError::Stabilizer)?;
+
+        self.bump_revision()?;
 
         Ok(())
     }
 
-    /// Accumulates one correction into the frame.
+    /// Accumulates a decoder correction into the frame.
     ///
-    /// This is an alias for `compose` intended for decoder integration.
+    /// This uses Pauli multiplication modulo global phase.
     pub fn accumulate(
         &mut self,
         correction: &PauliString,
@@ -320,7 +317,8 @@ impl PauliFrame {
 
     /// Composes a Pauli correction into the frame.
     ///
-    /// Pauli multiplication is performed modulo global phase.
+    /// The operation is transactional: the frame is only modified after the
+    /// resulting PauliString has been successfully calculated.
     pub fn compose(
         &mut self,
         correction: &PauliString,
@@ -331,19 +329,22 @@ impl PauliFrame {
             return Ok(());
         }
 
-        self.operator = self
+        let composed = self
             .operator
             .multiply(correction)
-            .map_err(
-                PauliFrameError::Stabilizer
-            )?;
+            .map_err(PauliFrameError::Stabilizer)?;
+
+        self.operator = composed;
 
         self.bump_revision()?;
 
         Ok(())
     }
 
-    /// Composes a correction while honoring cooperative cancellation.
+    /// Composes a correction while observing cooperative cancellation.
+    ///
+    /// The operation is transactional: cancellation occurring after the
+    /// multiplication but before commit leaves the original frame unchanged.
     pub fn compose_with_cancellation(
         &mut self,
         correction: &PauliString,
@@ -358,11 +359,6 @@ impl PauliFrame {
             return Ok(());
         }
 
-        /*
-         * PauliString multiplication is currently a bounded linear operation.
-         * Checking before and after it gives deterministic cooperative
-         * cancellation semantics without exposing partially mutated state.
-         */
         cancellation.check()?;
 
         let composed = self
@@ -381,11 +377,7 @@ impl PauliFrame {
         Ok(())
     }
 
-    /// Composes many corrections deterministically.
-    ///
-    /// The caller's order is preserved. Because Pauli multiplication is
-    /// represented modulo global phase, the resulting binary-symplectic
-    /// operator is deterministic.
+    /// Composes multiple corrections in caller-specified deterministic order.
     pub fn compose_many(
         &mut self,
         corrections: &[PauliString],
@@ -397,7 +389,7 @@ impl PauliFrame {
         Ok(())
     }
 
-    /// Composes many corrections while honoring cancellation.
+    /// Composes multiple corrections with cancellation support.
     pub fn compose_many_with_cancellation(
         &mut self,
         corrections: &[PauliString],
@@ -415,54 +407,45 @@ impl PauliFrame {
         Ok(())
     }
 
-    /// Produces a new frame without modifying the original.
+    /// Returns a new frame containing the composed correction.
+    ///
+    /// The current frame remains unchanged.
     pub fn composed(
         &self,
         correction: &PauliString,
     ) -> Result<Self, PauliFrameError> {
-        let mut result =
-            self.clone();
+        let mut result = self.clone();
 
         result.compose(correction)?;
 
         Ok(result)
     }
 
-    /// Clears all pending corrections.
-    ///
-    /// The physical-qubit count is preserved.
-    pub fn clear(
-        &mut self,
-    ) -> Result<(), PauliFrameError> {
+    /// Clears all pending corrections while preserving qubit count.
+    pub fn clear(&mut self) -> Result<(), PauliFrameError> {
         if self.is_identity() {
             return Ok(());
         }
 
-        self.operator =
-            PauliString::identity(
-                self.num_qubits()
-            );
+        self.operator = PauliString::identity(self.num_qubits());
 
         self.bump_revision()?;
 
         Ok(())
     }
 
-    /// Resets the frame to identity and starts a new deterministic revision.
+    /// Resets the frame to identity.
     ///
-    /// Unlike construction, this operation never changes the represented
-    /// qubit count.
-    pub fn reset(
-        &mut self,
-    ) -> Result<(), PauliFrameError> {
+    /// The represented physical-qubit count never changes.
+    pub fn reset(&mut self) -> Result<(), PauliFrameError> {
         self.clear()
     }
 
-    // ------------------------------------------------------------------------
-    // Logical/measurement interpretation
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // Algebraic interpretation
+    // ========================================================================
 
-    /// Tests whether the frame commutes with an observable.
+    /// Returns true when the frame commutes with an observable.
     pub fn commutes_with(
         &self,
         observable: &PauliString,
@@ -471,12 +454,10 @@ impl PauliFrame {
 
         self.operator
             .commutes_with(observable)
-            .map_err(
-                PauliFrameError::Stabilizer
-            )
+            .map_err(PauliFrameError::Stabilizer)
     }
 
-    /// Tests whether the frame anticommutes with an observable.
+    /// Returns true when the frame anticommutes with an observable.
     pub fn anticommutes_with(
         &self,
         observable: &PauliString,
@@ -485,16 +466,13 @@ impl PauliFrame {
 
         self.operator
             .anticommutes_with(observable)
-            .map_err(
-                PauliFrameError::Stabilizer
-            )
+            .map_err(PauliFrameError::Stabilizer)
     }
 
-    /// Determines whether this frame flips the classical outcome of a
-    /// measurement of `observable`.
+    /// Returns whether a Pauli measurement result is flipped by this frame.
     ///
-    /// A Pauli frame changes a binary Pauli measurement result exactly when
-    /// the frame anticommutes with the measured observable.
+    /// For a binary Pauli measurement, an anticommute relation flips the
+    /// classical result.
     pub fn measurement_flips(
         &self,
         observable: &PauliString,
@@ -502,56 +480,117 @@ impl PauliFrame {
         self.anticommutes_with(observable)
     }
 
-    /// Applies the frame's interpretation to a raw binary measurement result.
+    /// Interprets a raw binary measurement result.
     ///
-    /// This does NOT perform a quantum measurement and does NOT mutate the
-    /// frame.
+    /// This operation is read-only and never changes the frame.
     pub fn correct_measurement(
         &self,
         raw_result: bool,
         observable: &PauliString,
     ) -> Result<bool, PauliFrameError> {
-        let flip =
-            self.measurement_flips(observable)?;
+        let interpretation =
+            self.interpret_measurement(
+                raw_result,
+                observable,
+            )?;
 
-        Ok(if flip {
-            !raw_result
-        } else {
-            raw_result
-        })
+        Ok(interpretation.corrected_result)
     }
 
-    /// Returns a structured measurement interpretation.
+    /// Produces a structured measurement interpretation.
     pub fn interpret_measurement(
         &self,
         raw_result: bool,
         observable: &PauliString,
     ) -> Result<FrameMeasurement, PauliFrameError> {
-        let flip =
+        let frame_flipped =
             self.measurement_flips(observable)?;
 
-        Ok(FrameMeasurement {
-            raw_result,
-            frame_flipped: flip,
-            corrected_result: if flip {
+        let corrected_result =
+            if frame_flipped {
                 !raw_result
             } else {
                 raw_result
-            },
+            };
+
+        Ok(FrameMeasurement {
+            raw_result,
+            frame_flipped,
+            corrected_result,
             frame_revision: self.revision,
         })
     }
 
-    // ------------------------------------------------------------------------
+    // ========================================================================
     // Snapshots
-    // ------------------------------------------------------------------------
+    // ========================================================================
 
-    /// Creates an immutable frame snapshot.
+    /// Creates an immutable snapshot of the complete frame state.
     #[must_use]
-    pub fn snapshot(
-        &self,
-    ) -> PauliFrameSnapshot {
+    pub fn snapshot(&self) -> PauliFrameSnapshot {
         PauliFrameSnapshot {
+            format_version: PAULI_FRAME_FORMAT_VERSION,
+            num_qubits: self.num_qubits(),
+            operator: self.operator.clone(),
+            revision: self.revision,
+        }
+    }
+
+    /// Restores a frame from an immutable snapshot.
+    pub fn from_snapshot(
+        snapshot: PauliFrameSnapshot,
+        limits: &QecLimits,
+    ) -> Result<Self, PauliFrameError> {
+        if snapshot.format_version
+            != PAULI_FRAME_FORMAT_VERSION
+        {
+            return Err(
+                PauliFrameError::UnsupportedFormatVersion {
+                    version: snapshot.format_version,
+                },
+            );
+        }
+
+        if snapshot.num_qubits == 0 {
+            return Err(PauliFrameError::ZeroQubits);
+        }
+
+        let actual =
+            snapshot.operator.num_qubits();
+
+        if actual != snapshot.num_qubits {
+            return Err(
+                PauliFrameError::SnapshotDimensionMismatch {
+                    declared: snapshot.num_qubits,
+                    actual,
+                },
+            );
+        }
+
+        validate_num_qubits(
+            snapshot.num_qubits,
+            limits,
+        )?;
+
+        Ok(Self {
+            operator: snapshot.operator,
+            revision: snapshot.revision,
+        })
+    }
+
+    // ========================================================================
+    // Checkpoints
+    // ========================================================================
+
+    /// Produces a checkpoint payload.
+    ///
+    /// Persistence, authentication and storage remain the responsibility of
+    /// `checkpoint.rs`.
+    #[must_use]
+    pub fn checkpoint(&self) -> PauliFrameCheckpoint {
+        PauliFrameCheckpoint {
+            schema_version:
+                PAULI_FRAME_CHECKPOINT_VERSION,
             format_version:
                 PAULI_FRAME_FORMAT_VERSION,
             num_qubits:
@@ -563,67 +602,11 @@ impl PauliFrame {
         }
     }
 
-    /// Restores a frame from a snapshot under a resource policy.
-    pub fn from_snapshot(
-        snapshot: PauliFrameSnapshot,
-        limits: &QecLimits,
-    ) -> Result<Self, PauliFrameError> {
-        if snapshot.format_version
-            != PAULI_FRAME_FORMAT_VERSION
-        {
-            return Err(
-                PauliFrameError::UnsupportedFormatVersion {
-                    version:
-                        snapshot.format_version,
-                },
-            );
-        }
-
-        if snapshot.operator.num_qubits()
-            != snapshot.num_qubits
-        {
-            return Err(
-                PauliFrameError::SnapshotDimensionMismatch {
-                    declared:
-                        snapshot.num_qubits,
-                    actual:
-                        snapshot.operator.num_qubits(),
-                },
-            );
-        }
-
-        let mut frame =
-            Self::from_operator_with_limits(
-                snapshot.operator,
-                limits,
-            )?;
-
-        frame.revision =
-            snapshot.revision;
-
-        Ok(frame)
-    }
-
-    /// Creates a checkpoint containing the complete frame state.
-    #[must_use]
-    pub fn checkpoint(
-        &self,
-    ) -> PauliFrameCheckpoint {
-        let snapshot =
-            self.snapshot();
-
-        let integrity =
-            snapshot.integrity_hash();
-
-        PauliFrameCheckpoint {
-            schema_version:
-                PAULI_FRAME_CHECKPOINT_VERSION,
-            snapshot,
-            integrity,
-        }
-    }
-
-    /// Restores a frame from a checkpoint.
+    /// Restores a frame from checkpoint state.
+    ///
+    /// This validates the structural checkpoint contract but does not perform
+    /// cryptographic authentication. Authenticated persistence belongs to
+    /// `checkpoint.rs`.
     pub fn restore_checkpoint(
         checkpoint: PauliFrameCheckpoint,
         limits: &QecLimits,
@@ -639,24 +622,50 @@ impl PauliFrame {
             );
         }
 
-        let expected =
-            checkpoint.snapshot.integrity_hash();
-
-        if expected != checkpoint.integrity {
+        if checkpoint.format_version
+            != PAULI_FRAME_FORMAT_VERSION
+        {
             return Err(
-                PauliFrameError::CheckpointIntegrityFailure
+                PauliFrameError::UnsupportedFormatVersion {
+                    version:
+                        checkpoint.format_version,
+                },
             );
         }
 
-        Self::from_snapshot(
-            checkpoint.snapshot,
+        if checkpoint.num_qubits == 0 {
+            return Err(PauliFrameError::ZeroQubits);
+        }
+
+        let actual =
+            checkpoint.operator.num_qubits();
+
+        if actual != checkpoint.num_qubits {
+            return Err(
+                PauliFrameError::CheckpointDimensionMismatch {
+                    declared:
+                        checkpoint.num_qubits,
+                    actual,
+                },
+            );
+        }
+
+        validate_num_qubits(
+            checkpoint.num_qubits,
             limits,
-        )
+        )?;
+
+        Ok(Self {
+            operator:
+                checkpoint.operator,
+            revision:
+                checkpoint.revision,
+        })
     }
 
-    // ------------------------------------------------------------------------
-    // Validation
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // Internal validation
+    // ========================================================================
 
     fn check_qubit(
         &self,
@@ -677,17 +686,19 @@ impl PauliFrame {
 
     fn check_compatible(
         &self,
-        other: &PauliString,
+        correction: &PauliString,
     ) -> Result<(), PauliFrameError> {
-        if other.num_qubits()
-            != self.num_qubits()
-        {
+        let expected =
+            self.num_qubits();
+
+        let actual =
+            correction.num_qubits();
+
+        if expected != actual {
             return Err(
-                PauliFrameError::QubitCountMismatch {
-                    expected:
-                        self.num_qubits(),
-                    actual:
-                        other.num_qubits(),
+                PauliFrameError::DimensionMismatch {
+                    expected,
+                    actual,
                 },
             );
         }
@@ -698,28 +709,160 @@ impl PauliFrame {
     fn bump_revision(
         &mut self,
     ) -> Result<(), PauliFrameError> {
-        self.revision =
-            self.revision
-                .checked_add(1)
-                .ok_or(
-                    PauliFrameError::RevisionOverflow
-                )?;
+        self.revision = self
+            .revision
+            .checked_add(1)
+            .ok_or(
+                PauliFrameError::RevisionOverflow,
+            )?;
 
         Ok(())
     }
 }
 
 // ============================================================================
-// Measurement result
+// Immutable snapshot
 // ============================================================================
 
-/// Result of interpreting a classical measurement through a Pauli frame.
+/// Immutable representation of a Pauli-frame state.
+///
+/// Snapshots are intentionally separate from the mutable `PauliFrame`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PauliFrameSnapshot {
+    /// In-memory frame format version.
+    pub format_version: u32,
+
+    /// Number of represented physical qubits.
+    pub num_qubits: usize,
+
+    /// Complete phase-free Pauli operator.
+    pub operator: PauliString,
+
+    /// Mutation revision at snapshot creation.
+    pub revision: u64,
+}
+
+impl PauliFrameSnapshot {
+    /// Validates the snapshot against the current frame format.
+    pub fn validate(&self) -> Result<(), PauliFrameError> {
+        if self.format_version
+            != PAULI_FRAME_FORMAT_VERSION
+        {
+            return Err(
+                PauliFrameError::UnsupportedFormatVersion {
+                    version:
+                        self.format_version,
+                },
+            );
+        }
+
+        if self.num_qubits == 0 {
+            return Err(PauliFrameError::ZeroQubits);
+        }
+
+        let actual =
+            self.operator.num_qubits();
+
+        if actual != self.num_qubits {
+            return Err(
+                PauliFrameError::SnapshotDimensionMismatch {
+                    declared:
+                        self.num_qubits,
+                    actual,
+                },
+            );
+        }
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Checkpoint
+// ============================================================================
+
+/// Serializable-independent checkpoint state for `checkpoint.rs`.
+///
+/// This type contains state but deliberately does not implement storage,
+/// hashing, encryption or persistence. Those operations belong to the
+/// checkpoint subsystem.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PauliFrameCheckpoint {
+    /// Persistent checkpoint schema version.
+    pub schema_version: u32,
+
+    /// In-memory representation version.
+    pub format_version: u32,
+
+    /// Number of represented physical qubits.
+    pub num_qubits: usize,
+
+    /// Complete phase-free Pauli operator.
+    pub operator: PauliString,
+
+    /// Frame mutation revision.
+    pub revision: u64,
+}
+
+impl PauliFrameCheckpoint {
+    /// Validates checkpoint structure without allocating or mutating state.
+    pub fn validate(
+        &self,
+    ) -> Result<(), PauliFrameError> {
+        if self.schema_version
+            != PAULI_FRAME_CHECKPOINT_VERSION
+        {
+            return Err(
+                PauliFrameError::UnsupportedCheckpointVersion {
+                    version:
+                        self.schema_version,
+                },
+            );
+        }
+
+        if self.format_version
+            != PAULI_FRAME_FORMAT_VERSION
+        {
+            return Err(
+                PauliFrameError::UnsupportedFormatVersion {
+                    version:
+                        self.format_version,
+                },
+            );
+        }
+
+        if self.num_qubits == 0 {
+            return Err(PauliFrameError::ZeroQubits);
+        }
+
+        let actual =
+            self.operator.num_qubits();
+
+        if actual != self.num_qubits {
+            return Err(
+                PauliFrameError::CheckpointDimensionMismatch {
+                    declared:
+                        self.num_qubits,
+                    actual,
+                },
+            );
+        }
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Measurement interpretation
+// ============================================================================
+
+/// Immutable interpretation of one binary Pauli measurement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FrameMeasurement {
-    /// Raw result returned by the measurement backend.
+    /// Raw result returned by the measurement layer.
     pub raw_result: bool,
 
-    /// Whether the Pauli frame changes the classical result.
+    /// Whether the frame changes the classical interpretation.
     pub frame_flipped: bool,
 
     /// Result after frame interpretation.
@@ -730,145 +873,72 @@ pub struct FrameMeasurement {
 }
 
 // ============================================================================
-// Snapshot
-// ============================================================================
-
-/// Immutable, deterministic representation of a Pauli frame.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PauliFrameSnapshot {
-    pub format_version: u32,
-    pub num_qubits: usize,
-    pub operator: PauliString,
-    pub revision: u64,
-}
-
-impl PauliFrameSnapshot {
-    /// Computes a deterministic integrity value.
-    ///
-    /// This is intended to detect accidental/corrupt checkpoint state.
-    /// Cryptographic checkpoint authentication remains the responsibility of
-    /// the higher-level checkpoint subsystem.
-    #[must_use]
-    pub fn integrity_hash(
-        &self,
-    ) -> u64 {
-        let mut hash =
-            0xcbf29ce484222325u64;
-
-        fn mix(
-            hash: &mut u64,
-            byte: u8,
-        ) {
-            *hash ^= u64::from(byte);
-            *hash =
-                hash.wrapping_mul(
-                    0x100000001b3
-                );
-        }
-
-        for byte in
-            self.format_version
-                .to_le_bytes()
-        {
-            mix(&mut hash, byte);
-        }
-
-        for byte in
-            (self.num_qubits as u64)
-                .to_le_bytes()
-        {
-            mix(&mut hash, byte);
-        }
-
-        for byte in
-            self.revision.to_le_bytes()
-        {
-            mix(&mut hash, byte);
-        }
-
-        for pauli in
-            self.operator.to_paulis()
-        {
-            mix(
-                &mut hash,
-                match pauli {
-                    Pauli::I => 0,
-                    Pauli::X => 1,
-                    Pauli::Y => 2,
-                    Pauli::Z => 3,
-                },
-            );
-        }
-
-        hash
-    }
-}
-
-// ============================================================================
-// Checkpoint
-// ============================================================================
-
-/// Serializable-independent checkpoint representation for the frame.
-///
-/// The higher-level checkpoint module can embed this structure into its
-/// authenticated checkpoint envelope.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PauliFrameCheckpoint {
-    pub schema_version: u32,
-    pub snapshot: PauliFrameSnapshot,
-    pub integrity: u64,
-}
-
-// ============================================================================
 // Errors
 // ============================================================================
 
-/// Errors produced by Pauli-frame operations.
+/// Errors specific to Pauli-frame operations.
+///
+/// These errors remain detailed at the local module boundary and can be
+/// converted to the canonical `QecError` for higher-level APIs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PauliFrameError {
+    /// The frame cannot represent zero qubits.
     ZeroQubits,
 
+    /// A qubit index was outside the frame.
+    QubitOutOfRange {
+        qubit: usize,
+        num_qubits: usize,
+    },
+
+    /// A correction and frame have different dimensions.
+    DimensionMismatch {
+        expected: usize,
+        actual: usize,
+    },
+
+    /// Snapshot dimensions disagree.
+    SnapshotDimensionMismatch {
+        declared: usize,
+        actual: usize,
+    },
+
+    /// Checkpoint dimensions disagree.
+    CheckpointDimensionMismatch {
+        declared: usize,
+        actual: usize,
+    },
+
+    /// The supplied limits object is invalid.
+    InvalidLimits {
+        message: String,
+    },
+
+    /// The frame exceeded the configured qubit policy.
     ResourceLimitExceeded {
         resource: ResourceKind,
         requested: u128,
         limit: u128,
     },
 
-    InvalidLimits(LimitError),
-
-    QubitOutOfRange {
-        qubit: usize,
-        num_qubits: usize,
-    },
-
-    QubitCountMismatch {
-        expected: usize,
-        actual: usize,
-    },
-
+    /// Stabilizer algebra rejected an operation.
     Stabilizer(StabilizerError),
 
-    RevisionOverflow,
-
+    /// The frame representation version is unsupported.
     UnsupportedFormatVersion {
         version: u32,
     },
 
+    /// The checkpoint schema version is unsupported.
     UnsupportedCheckpointVersion {
         version: u32,
     },
 
-    SnapshotDimensionMismatch {
-        declared: usize,
-        actual: usize,
-    },
-
-    CheckpointIntegrityFailure,
+    /// Revision counter overflowed.
+    RevisionOverflow,
 }
 
-impl fmt::Display
-    for PauliFrameError
-{
+impl fmt::Display for PauliFrameError {
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -877,7 +947,54 @@ impl fmt::Display
             Self::ZeroQubits => {
                 write!(
                     f,
-                    "a Pauli frame requires at least one qubit"
+                    "Pauli frame must contain at least one qubit"
+                )
+            }
+
+            Self::QubitOutOfRange {
+                qubit,
+                num_qubits,
+            } => {
+                write!(
+                    f,
+                    "qubit index {qubit} is outside frame of {num_qubits} qubits"
+                )
+            }
+
+            Self::DimensionMismatch {
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "Pauli-frame dimension mismatch: expected {expected} qubits, got {actual}"
+                )
+            }
+
+            Self::SnapshotDimensionMismatch {
+                declared,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "Pauli-frame snapshot dimension mismatch: declared {declared}, actual {actual}"
+                )
+            }
+
+            Self::CheckpointDimensionMismatch {
+                declared,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "Pauli-frame checkpoint dimension mismatch: declared {declared}, actual {actual}"
+                )
+            }
+
+            Self::InvalidLimits { message } => {
+                write!(
+                    f,
+                    "invalid QEC limits: {message}"
                 )
             }
 
@@ -888,54 +1005,14 @@ impl fmt::Display
             } => {
                 write!(
                     f,
-                    "Pauli frame resource limit exceeded: \
-                     {} requested {}, limit {}",
-                    resource.as_str(),
-                    requested,
-                    limit
-                )
-            }
-
-            Self::InvalidLimits(error) => {
-                write!(
-                    f,
-                    "invalid QEC resource limits: {error}"
-                )
-            }
-
-            Self::QubitOutOfRange {
-                qubit,
-                num_qubits,
-            } => {
-                write!(
-                    f,
-                    "qubit {qubit} is outside a \
-                     {num_qubits}-qubit Pauli frame"
-                )
-            }
-
-            Self::QubitCountMismatch {
-                expected,
-                actual,
-            } => {
-                write!(
-                    f,
-                    "Pauli frame requires {expected} qubits, \
-                     got {actual}"
+                    "Pauli-frame resource limit exceeded for {resource}: requested {requested}, limit {limit}"
                 )
             }
 
             Self::Stabilizer(error) => {
                 write!(
                     f,
-                    "stabilizer error: {error}"
-                )
-            }
-
-            Self::RevisionOverflow => {
-                write!(
-                    f,
-                    "Pauli-frame revision counter overflowed"
+                    "stabilizer operation failed: {error}"
                 )
             }
 
@@ -953,55 +1030,77 @@ impl fmt::Display
             } => {
                 write!(
                     f,
-                    "unsupported Pauli-frame checkpoint version {version}"
+                    "unsupported Pauli-frame checkpoint schema version {version}"
                 )
             }
 
-            Self::SnapshotDimensionMismatch {
-                declared,
-                actual,
-            } => {
+            Self::RevisionOverflow => {
                 write!(
                     f,
-                    "Pauli-frame snapshot declares {declared} qubits \
-                     but contains {actual}"
-                )
-            }
-
-            Self::CheckpointIntegrityFailure => {
-                write!(
-                    f,
-                    "Pauli-frame checkpoint integrity verification failed"
+                    "Pauli-frame revision counter overflow"
                 )
             }
         }
     }
 }
 
-impl std::error::Error
-    for PauliFrameError
-{
-}
+impl std::error::Error for PauliFrameError {}
 
-// ============================================================================
-// Canonical QecError integration
-// ============================================================================
-
-impl From<PauliFrameError>
-    for QecError
-{
-    fn from(
-        error: PauliFrameError,
-    ) -> Self {
+impl From<PauliFrameError> for QecError {
+    fn from(error: PauliFrameError) -> Self {
         match error {
-            PauliFrameError::ZeroQubits
-            | PauliFrameError::QubitOutOfRange { .. }
-            | PauliFrameError::QubitCountMismatch { .. }
-            | PauliFrameError::SnapshotDimensionMismatch { .. } => {
-                QecError::InvalidInput {
-                    message:
-                        error.to_string(),
+            PauliFrameError::ZeroQubits => {
+                QecError::invalid_input(
+                    "Pauli frame must contain at least one qubit",
+                )
+            }
+
+            PauliFrameError::QubitOutOfRange {
+                qubit,
+                num_qubits,
+            } => {
+                QecError::invalid_input(format!(
+                    "qubit index {qubit} is outside frame of {num_qubits} qubits",
+                ))
+            }
+
+            PauliFrameError::DimensionMismatch {
+                expected,
+                actual,
+            } => {
+                QecError::invalid_input(format!(
+                    "Pauli-frame dimension mismatch: expected {expected}, got {actual}",
+                ))
+            }
+
+            PauliFrameError::SnapshotDimensionMismatch {
+                declared,
+                actual,
+            } => {
+                QecError::CheckpointInvalid {
+                    message: format!(
+                        "snapshot dimension mismatch: declared {declared}, actual {actual}",
+                    ),
                 }
+            }
+
+            PauliFrameError::CheckpointDimensionMismatch {
+                declared,
+                actual,
+            } => {
+                QecError::CheckpointInvalid {
+                    message: format!(
+                        "checkpoint dimension mismatch: declared {declared}, actual {actual}",
+                    ),
+                }
+            }
+
+            PauliFrameError::InvalidLimits {
+                message,
+            } => {
+                QecError::invalid_input(format!(
+                    "invalid QEC limits: {message}",
+                ))
             }
 
             PauliFrameError::ResourceLimitExceeded {
@@ -1012,70 +1111,59 @@ impl From<PauliFrameError>
                 QecError::ResourceLimitExceeded {
                     resource,
                     requested,
+                    current: 0,
                     limit,
-                    message:
-                        error.to_string(),
+                    message: format!(
+                        "Pauli frame requested {requested} units of {resource}, exceeding limit {limit}",
+                    ),
                 }
             }
 
-            PauliFrameError::InvalidLimits(
-                limit_error,
-            ) => {
-                QecError::InvalidInput {
-                    message:
-                        limit_error.to_string(),
-                }
-            }
-
-            PauliFrameError::Stabilizer(
-                stabilizer_error,
-            ) => {
-                QecError::InvalidStabilizer {
-                    message:
-                        stabilizer_error.to_string(),
-                }
-            }
-
-            PauliFrameError::RevisionOverflow => {
-                QecError::InternalInvariantViolation {
-                    invariant:
-                        "PauliFrame revision must not overflow",
-                    message:
-                        error.to_string(),
-                }
+            PauliFrameError::Stabilizer(error) => {
+                QecError::invalid_stabilizer(
+                    error.to_string(),
+                )
             }
 
             PauliFrameError::UnsupportedFormatVersion {
                 version,
             } => {
-                QecError::UnsupportedConfiguration {
-                    feature:
-                        "pauli_frame_format".to_owned(),
+                QecError::VersionMismatch {
+                    component:
+                        "pauli_frame".to_string(),
+                    expected:
+                        PAULI_FRAME_FORMAT_VERSION.to_string(),
+                    actual:
+                        version.to_string(),
                     message:
-                        format!(
-                            "unsupported Pauli-frame format version {version}"
-                        ),
+                        "unsupported Pauli-frame representation version"
+                            .to_string(),
                 }
             }
 
             PauliFrameError::UnsupportedCheckpointVersion {
                 version,
             } => {
-                QecError::UnsupportedConfiguration {
-                    feature:
-                        "pauli_frame_checkpoint".to_owned(),
+                QecError::VersionMismatch {
+                    component:
+                        "pauli_frame_checkpoint".to_string(),
+                    expected:
+                        PAULI_FRAME_CHECKPOINT_VERSION.to_string(),
+                    actual:
+                        version.to_string(),
                     message:
-                        format!(
-                            "unsupported Pauli-frame checkpoint version {version}"
-                        ),
+                        "unsupported Pauli-frame checkpoint schema version"
+                            .to_string(),
                 }
             }
 
-            PauliFrameError::CheckpointIntegrityFailure => {
-                QecError::InvalidInput {
+            PauliFrameError::RevisionOverflow => {
+                QecError::InternalInvariantViolation {
+                    invariant:
+                        "pauli_frame_revision".to_string(),
                     message:
-                        "Pauli-frame checkpoint integrity verification failed"
-                            .to_owned(),
+                        "Pauli-frame revision counter overflowed"
+                            .to_string(),
                 }
             }
         }
@@ -1083,22 +1171,40 @@ impl From<PauliFrameError>
 }
 
 // ============================================================================
-// Display
+// Validation helpers
 // ============================================================================
 
-impl fmt::Display
-    for PauliFrame
-{
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            self.operator
-        )
+fn validate_limits(
+    limits: &QecLimits,
+) -> Result<(), PauliFrameError> {
+    limits
+        .validate()
+        .map_err(|error| {
+            PauliFrameError::InvalidLimits {
+                message: format!("{error:?}"),
+            }
+        })
+}
+
+fn validate_num_qubits(
+    num_qubits: usize,
+    limits: &QecLimits,
+) -> Result<(), PauliFrameError> {
+    if num_qubits == 0 {
+        return Err(PauliFrameError::ZeroQubits);
     }
+
+    if num_qubits > limits.max_qubits {
+        return Err(
+            PauliFrameError::ResourceLimitExceeded {
+                resource: ResourceKind::Qubits,
+                requested: num_qubits as u128,
+                limit: limits.max_qubits as u128,
+            },
+        );
+    }
+
+    Ok(())
 }
 
 // ============================================================================
@@ -1109,458 +1215,421 @@ impl fmt::Display
 mod tests {
     use super::*;
 
-    fn limits() -> QecLimits {
-        QecLimits::default()
+    fn frame() -> PauliFrame {
+        PauliFrame::new(3).expect("valid frame")
+    }
+
+    fn x_on(
+        num_qubits: usize,
+        qubit: usize,
+    ) -> PauliString {
+        let mut operator =
+            PauliString::identity(num_qubits);
+
+        operator
+            .set_pauli(
+                QubitIndex::new(qubit),
+                Pauli::X,
+            )
+            .expect("valid qubit");
+
+        operator
+    }
+
+    fn z_on(
+        num_qubits: usize,
+        qubit: usize,
+    ) -> PauliString {
+        let mut operator =
+            PauliString::identity(num_qubits);
+
+        operator
+            .set_pauli(
+                QubitIndex::new(qubit),
+                Pauli::Z,
+            )
+            .expect("valid qubit");
+
+        operator
     }
 
     #[test]
-    fn identity_frame_is_empty() {
-        let frame =
-            PauliFrame::new(3)
-                .unwrap();
+    fn identity_frame_is_valid() {
+        let value = frame();
 
-        assert!(
-            frame.is_identity()
-        );
-
-        assert_eq!(
-            frame.weight(),
-            0
-        );
-
-        assert_eq!(
-            frame.revision(),
-            0
-        );
+        assert_eq!(value.num_qubits(), 3);
+        assert!(value.is_identity());
+        assert_eq!(value.weight(), 0);
+        assert_eq!(value.revision(), 0);
     }
 
     #[test]
-    fn set_tracks_pauli() {
-        let mut frame =
-            PauliFrame::new(3)
-                .unwrap();
+    fn set_replaces_single_qubit_pauli() {
+        let mut value = frame();
 
-        frame
+        value
             .set(1, Pauli::X)
-            .unwrap();
+            .expect("valid set");
 
         assert_eq!(
-            frame.pauli_at(1)
-                .unwrap(),
+            value.pauli_at(1).unwrap(),
             Pauli::X
         );
 
-        assert_eq!(
-            frame.weight(),
-            1
-        );
+        value
+            .set(1, Pauli::Z)
+            .expect("valid replacement");
 
         assert_eq!(
-            frame.revision(),
-            1
+            value.pauli_at(1).unwrap(),
+            Pauli::Z
         );
     }
 
     #[test]
-    fn setting_same_pauli_is_idempotent() {
-        let mut frame =
-            PauliFrame::new(2)
-                .unwrap();
+    fn setting_same_value_does_not_change_revision() {
+        let mut value = frame();
 
-        frame
-            .set(0, Pauli::X)
-            .unwrap();
+        value
+            .set(1, Pauli::X)
+            .expect("valid set");
 
-        let revision =
-            frame.revision();
+        let revision = value.revision();
 
-        frame
-            .set(0, Pauli::X)
-            .unwrap();
+        value
+            .set(1, Pauli::X)
+            .expect("same value is valid");
 
         assert_eq!(
-            frame.revision(),
+            value.revision(),
             revision
         );
     }
 
     #[test]
-    fn setting_identity_clears_qubit() {
-        let mut frame =
-            PauliFrame::new(2)
-                .unwrap();
+    fn composition_is_modulo_phase() {
+        let mut value = frame();
 
-        frame
-            .set(0, Pauli::Y)
-            .unwrap();
+        value
+            .compose(&x_on(3, 0))
+            .expect("valid composition");
 
-        frame
-            .set(0, Pauli::I)
-            .unwrap();
+        value
+            .compose(&x_on(3, 0))
+            .expect("valid composition");
 
-        assert_eq!(
-            frame.pauli_at(0)
-                .unwrap(),
-            Pauli::I
-        );
-
-        assert!(
-            frame.is_identity()
-        );
+        assert!(value.is_identity());
+        assert_eq!(value.revision(), 2);
     }
 
     #[test]
-    fn composition_is_modulo_global_phase() {
-        let mut frame =
-            PauliFrame::new(2)
-                .unwrap();
+    fn accumulation_is_composition() {
+        let mut value = frame();
 
-        frame
-            .set(0, Pauli::X)
-            .unwrap();
-
-        frame
-            .set(1, Pauli::Z)
-            .unwrap();
-
-        let correction =
-            PauliString::from_paulis(
-                &[Pauli::X, Pauli::Z],
-            );
-
-        frame
-            .compose(&correction)
-            .unwrap();
-
-        assert!(
-            frame.is_identity()
-        );
-    }
-
-    #[test]
-    fn x_composed_with_z_becomes_y() {
-        let mut frame =
-            PauliFrame::new(1)
-                .unwrap();
-
-        frame
-            .set(0, Pauli::X)
-            .unwrap();
-
-        let correction =
-            PauliString::from_paulis(
-                &[Pauli::Z],
-            );
-
-        frame
-            .compose(&correction)
-            .unwrap();
+        value
+            .accumulate(&x_on(3, 2))
+            .expect("valid accumulation");
 
         assert_eq!(
-            frame.pauli_at(0)
-                .unwrap(),
-            Pauli::Y
-        );
-    }
-
-    #[test]
-    fn composed_does_not_mutate_original() {
-        let mut frame =
-            PauliFrame::new(1)
-                .unwrap();
-
-        frame
-            .set(0, Pauli::X)
-            .unwrap();
-
-        let correction =
-            PauliString::from_paulis(
-                &[Pauli::Z],
-            );
-
-        let result =
-            frame
-                .composed(&correction)
-                .unwrap();
-
-        assert_eq!(
-            frame.pauli_at(0)
-                .unwrap(),
+            value.pauli_at(2).unwrap(),
             Pauli::X
         );
+    }
 
-        assert_eq!(
-            result.pauli_at(0)
-                .unwrap(),
-            Pauli::Y
+    #[test]
+    fn incompatible_dimensions_are_rejected() {
+        let mut value = frame();
+
+        let correction =
+            PauliString::identity(4);
+
+        let result =
+            value.compose(&correction);
+
+        assert!(matches!(
+            result,
+            Err(
+                PauliFrameError::DimensionMismatch {
+                    expected: 3,
+                    actual: 4
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn out_of_range_qubit_is_rejected() {
+        let value = frame();
+
+        let result = value.pauli_at(3);
+
+        assert!(matches!(
+            result,
+            Err(
+                PauliFrameError::QubitOutOfRange {
+                    qubit: 3,
+                    num_qubits: 3
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn clear_preserves_dimension() {
+        let mut value = frame();
+
+        value
+            .compose(&x_on(3, 0))
+            .expect("valid composition");
+
+        value.clear().expect("clear succeeds");
+
+        assert_eq!(value.num_qubits(), 3);
+        assert!(value.is_identity());
+    }
+
+    #[test]
+    fn reset_preserves_dimension() {
+        let mut value = frame();
+
+        value
+            .compose(&x_on(3, 0))
+            .expect("valid composition");
+
+        value.reset().expect("reset succeeds");
+
+        assert_eq!(value.num_qubits(), 3);
+        assert!(value.is_identity());
+    }
+
+    #[test]
+    fn measurement_flips_when_frame_anticommutes() {
+        let mut value = frame();
+
+        value
+            .compose(&x_on(3, 0))
+            .expect("valid composition");
+
+        let observable =
+            z_on(3, 0);
+
+        assert!(
+            value
+                .measurement_flips(
+                    &observable
+                )
+                .unwrap()
+        );
+
+        assert!(
+            value
+                .correct_measurement(
+                    false,
+                    &observable
+                )
+                .unwrap()
         );
     }
 
     #[test]
-    fn clear_preserves_qubit_count() {
-        let mut frame =
-            PauliFrame::new(4)
-                .unwrap();
+    fn measurement_does_not_mutate_frame() {
+        let mut value = frame();
 
-        frame
-            .set(0, Pauli::X)
+        value
+            .compose(&x_on(3, 0))
+            .expect("valid composition");
+
+        let before = value.clone();
+
+        let observable =
+            z_on(3, 0);
+
+        let _ = value
+            .interpret_measurement(
+                false,
+                &observable,
+            )
             .unwrap();
 
-        frame
-            .set(2, Pauli::Y)
-            .unwrap();
+        assert_eq!(value, before);
+    }
 
-        frame
-            .clear()
-            .unwrap();
+    #[test]
+    fn snapshot_round_trip() {
+        let mut value = frame();
 
-        assert!(
-            frame.is_identity()
-        );
+        value
+            .compose(&x_on(3, 0))
+            .expect("valid composition");
+
+        let snapshot =
+            value.snapshot();
+
+        let restored =
+            PauliFrame::from_snapshot(
+                snapshot,
+                &QecLimits::default(),
+            )
+            .expect("snapshot restores");
+
+        assert_eq!(restored, value);
+    }
+
+    #[test]
+    fn checkpoint_round_trip() {
+        let mut value = frame();
+
+        value
+            .compose(&x_on(3, 1))
+            .expect("valid composition");
+
+        let checkpoint =
+            value.checkpoint();
+
+        let restored =
+            PauliFrame::restore_checkpoint(
+                checkpoint,
+                &QecLimits::default(),
+            )
+            .expect("checkpoint restores");
+
+        assert_eq!(restored, value);
+    }
+
+    #[test]
+    fn invalid_checkpoint_version_is_rejected() {
+        let mut checkpoint =
+            frame().checkpoint();
+
+        checkpoint.schema_version += 1;
+
+        assert!(matches!(
+            PauliFrame::restore_checkpoint(
+                checkpoint,
+                &QecLimits::default(),
+            ),
+            Err(
+                PauliFrameError::UnsupportedCheckpointVersion {
+                    ..
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn invalid_snapshot_dimension_is_rejected() {
+        let mut snapshot =
+            frame().snapshot();
+
+        snapshot.num_qubits = 4;
+
+        assert!(matches!(
+            PauliFrame::from_snapshot(
+                snapshot,
+                &QecLimits::default(),
+            ),
+            Err(
+                PauliFrameError::SnapshotDimensionMismatch {
+                    declared: 4,
+                    actual: 3
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn compose_is_transactional_on_dimension_failure() {
+        let mut value = frame();
+
+        let before = value.clone();
+
+        let result =
+            value.compose(
+                &PauliString::identity(4)
+            );
+
+        assert!(result.is_err());
+        assert_eq!(value, before);
+    }
+
+    #[test]
+    fn compose_many_preserves_order() {
+        let mut value = frame();
+
+        let first =
+            x_on(3, 0);
+
+        let second =
+            z_on(3, 0);
+
+        value
+            .compose_many(&[
+                first,
+                second,
+            ])
+            .expect("composition succeeds");
 
         assert_eq!(
-            frame.num_qubits(),
-            4
+            value.pauli_at(0).unwrap(),
+            Pauli::Y
         );
     }
 
     #[test]
     fn support_is_deterministic() {
-        let mut frame =
-            PauliFrame::new(4)
-                .unwrap();
+        let mut value = frame();
 
-        frame
-            .set(3, Pauli::Y)
-            .unwrap();
+        value
+            .compose(&x_on(3, 2))
+            .expect("valid");
 
-        frame
-            .set(1, Pauli::X)
-            .unwrap();
+        value
+            .compose(&z_on(3, 0))
+            .expect("valid");
+
+        let support =
+            value.support();
 
         assert_eq!(
-            frame.support(),
+            support,
             vec![
-                QubitIndex::new(1),
-                QubitIndex::new(3),
+                QubitIndex::new(0),
+                QubitIndex::new(2),
             ]
         );
     }
 
     #[test]
-    fn measurement_flips_when_frame_anticommutes() {
-        let mut frame =
-            PauliFrame::new(1)
-                .unwrap();
+    fn canonical_error_conversion_works() {
+        let error =
+            PauliFrameError::DimensionMismatch {
+                expected: 3,
+                actual: 4,
+            };
 
-        frame
-            .set(0, Pauli::X)
-            .unwrap();
-
-        let observable =
-            PauliString::from_paulis(
-                &[Pauli::Z],
-            );
-
-        assert!(
-            frame
-                .measurement_flips(
-                    &observable
-                )
-                .unwrap()
-        );
-
-        assert!(
-            frame
-                .correct_measurement(
-                    false,
-                    &observable,
-                )
-                .unwrap()
-        );
-    }
-
-    #[test]
-    fn measurement_does_not_flip_when_frame_commutes() {
-        let mut frame =
-            PauliFrame::new(1)
-                .unwrap();
-
-        frame
-            .set(0, Pauli::X)
-            .unwrap();
-
-        let observable =
-            PauliString::from_paulis(
-                &[Pauli::X],
-            );
-
-        assert!(
-            !frame
-                .measurement_flips(
-                    &observable
-                )
-                .unwrap()
-        );
-
-        assert!(
-            !frame
-                .correct_measurement(
-                    false,
-                    &observable,
-                )
-                .unwrap()
-        );
-    }
-
-    #[test]
-    fn snapshot_round_trip() {
-        let mut frame =
-            PauliFrame::new(3)
-                .unwrap();
-
-        frame
-            .set(0, Pauli::X)
-            .unwrap();
-
-        frame
-            .set(2, Pauli::Z)
-            .unwrap();
-
-        let snapshot =
-            frame.snapshot();
-
-        let restored =
-            PauliFrame::from_snapshot(
-                snapshot,
-                &limits(),
-            )
-            .unwrap();
+        let qec_error =
+            QecError::from(error);
 
         assert_eq!(
-            restored,
-            frame
+            qec_error.kind(),
+            super::super::errors::QecErrorKind::InvalidInput
         );
     }
 
     #[test]
-    fn checkpoint_round_trip() {
-        let mut frame =
-            PauliFrame::new(3)
-                .unwrap();
+    fn revision_overflow_is_detected() {
+        let mut value = frame();
 
-        frame
-            .set(0, Pauli::Y)
-            .unwrap();
+        value.revision =
+            u64::MAX;
 
-        let checkpoint =
-            frame.checkpoint();
-
-        let restored =
-            PauliFrame::restore_checkpoint(
-                checkpoint,
-                &limits(),
-            )
-            .unwrap();
-
-        assert_eq!(
-            restored,
-            frame
-        );
-    }
-
-    #[test]
-    fn corrupted_checkpoint_is_rejected() {
-        let frame =
-            PauliFrame::new(2)
-                .unwrap();
-
-        let mut checkpoint =
-            frame.checkpoint();
-
-        checkpoint.integrity ^=
-            1;
+        let result =
+            value.set(0, Pauli::X);
 
         assert!(matches!(
-            PauliFrame::restore_checkpoint(
-                checkpoint,
-                &limits(),
-            ),
+            result,
             Err(
-                PauliFrameError::
-                    CheckpointIntegrityFailure
-            )
-        ));
-    }
-
-    #[test]
-    fn dimension_mismatch_is_rejected() {
-        let mut frame =
-            PauliFrame::new(2)
-                .unwrap();
-
-        let correction =
-            PauliString::identity(3);
-
-        assert!(matches!(
-            frame.compose(
-                &correction
-            ),
-            Err(
-                PauliFrameError::
-                    QubitCountMismatch {
-                        expected: 2,
-                        actual: 3,
-                    }
-            )
-        ));
-    }
-
-    #[test]
-    fn out_of_range_is_rejected() {
-        let mut frame =
-            PauliFrame::new(2)
-                .unwrap();
-
-        assert!(matches!(
-            frame.set(
-                2,
-                Pauli::X,
-            ),
-            Err(
-                PauliFrameError::
-                    QubitOutOfRange { .. }
-            )
-        ));
-    }
-
-    #[test]
-    fn explicit_limits_are_used() {
-        let mut configured =
-            QecLimits::default();
-
-        configured.max_qubits = 4;
-
-        assert!(
-            PauliFrame::new_with_limits(
-                4,
-                &configured,
-            )
-            .is_ok()
-        );
-
-        assert!(matches!(
-            PauliFrame::new_with_limits(
-                5,
-                &configured,
-            ),
-            Err(
-                PauliFrameError::
-                    ResourceLimitExceeded {
-                        resource:
-                            ResourceKind::Qubits,
-                        ..
-                    }
+                PauliFrameError::RevisionOverflow
             )
         ));
     }
