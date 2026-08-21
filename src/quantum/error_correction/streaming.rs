@@ -1,63 +1,131 @@
-//! Zamani Quantum Error Correction — bounded syndrome streaming.
+//! Zamani Quantum Error Correction — bounded deterministic syndrome streaming.
 //!
-//! This module is the execution-layer streaming boundary for the QEC
-//! subsystem. Mathematical syndrome processing remains in `syndrome.rs`;
-//! cooperative cancellation remains in `cancellation.rs`; resource policy
-//! remains in `limits.rs`; canonical failures remain in `errors.rs`.
+//! # Architectural contract
 //!
-//! Architecture:
+//! `streaming.rs` owns the execution boundary for bounded syndrome streams.
+//!
+//! It owns:
+//!
+//! - bounded input buffering;
+//! - explicit backpressure;
+//! - lossless/lossy admission policy;
+//! - deterministic stream ordering;
+//! - stream lifecycle;
+//! - bounded processed-history retention;
+//! - incremental processing through `SyndromeProcessor`;
+//! - cancellation propagation;
+//! - stream-local metrics;
+//! - in-memory stream snapshots;
+//! - `SyndromeSource` integration.
+//!
+//! It does NOT own:
+//!
+//! - stabilizer mathematics (`stabilizer.rs`);
+//! - syndrome mathematics (`syndrome.rs`);
+//! - decoding (`decoder.rs`, `mwpm.rs`, `union_find.rs`);
+//! - decoding graph construction (`decoding_graph.rs`);
+//! - partitioning (`partition.rs`);
+//! - distributed transport (`distributed.rs`);
+//! - scheduling (`scheduler.rs`);
+//! - durable checkpoint serialization (`checkpoint.rs`);
+//! - QPU transport (`qpu_adapter.rs`);
+//! - telemetry transport (`telemetry.rs`).
+//!
+//! # Integration
 //!
 //! ```text
-//!                  UNTRUSTED SYNDROME SOURCE
-//!                             │
-//!                             ▼
+//!                 QPU / simulator / replay / source
+//!                              │
+//!                              ▼
 //!                    ┌──────────────────┐
-//!                    │ QecLimits        │
-//!                    │ Validation       │
+//!                    │ Syndrome         │
+//!                    │ validation       │
 //!                    └────────┬─────────┘
 //!                             │
 //!                             ▼
 //!                    ┌──────────────────┐
-//!                    │ Bounded Queue    │
-//!                    │ Backpressure     │
-//!                    │ Ordering         │
-//!                    └────────┬─────────┘
-//!                             │
-//!                             ▼
-//!                    ┌──────────────────┐
-//!                    │ SyndromeProcessor│
+//!                    │ SyndromeStream   │
 //!                    │                  │
-//!                    │ XOR rounds       │
-//!                    │ cancellation     │
-//!                    │ resource checks  │
+//!                    │ bounded buffer   │
+//!                    │ ordering        │
+//!                    │ backpressure    │
+//!                    │ cancellation    │
 //!                    └────────┬─────────┘
 //!                             │
 //!                             ▼
-//!                    Detection Events
+//!                    SyndromeProcessor
 //!                             │
-//!              ┌──────────────┼──────────────┐
-//!              ▼              ▼              ▼
-//!           Decoder       Graph          Checkpoint
+//!                             ▼
+//!                    DetectionEvent batch
+//!                             │
+//!                ┌────────────┼────────────┐
+//!                ▼            ▼            ▼
+//!             decoder       graph       partition
 //!
 //! ```
 //!
-//! ## Important invariants
+//! # Resource model
 //!
-//! * No unbounded input queue.
-//! * No unbounded output accumulation.
-//! * No duplicate cancellation abstraction.
-//! * No silent syndrome loss in lossless mode.
-//! * No out-of-order measurement rounds.
-//! * No sequence-number wrapping.
-//! * No unchecked resource arithmetic.
-//! * No decoding-specific logic.
-//! * No thread creation or async-runtime ownership.
-//! * Cancellation is checked before every externally visible operation and
-//!   before every potentially expensive processing step.
+//! `limits.rs` is the sole declarative production resource policy.
 //!
-//! Streaming means that the complete syndrome history does not need to remain
-//! in memory. It does **not** mean unlimited memory, unlimited execution time,
-//! or unlimited event production.
+//! ```text
+//! QecLimits
+//!     │
+//!     ├── buffer capacity
+//!     ├── syndrome count
+//!     ├── measurement rounds
+//!     ├── detection events
+//!     └── memory admission
+//!
+//! streaming.rs
+//!     │
+//!     └── bounded execution
+//!
+//! resources.rs
+//!     │
+//!     └── runtime accounting
+//!
+//! memory.rs
+//!     │
+//!     └── allocation enforcement
+//! ```
+//!
+//! This module deliberately does not introduce another `ResourceLimits`
+//! structure.
+//!
+//! # Losslessness
+//!
+//! Mathematical QEC decoding is lossless by default.
+//!
+//! `BackpressurePolicy::Reject` is therefore the canonical production mode.
+//! `DropNewest` and `DropOldest` require explicit opt-in through
+//! `allow_lossy(true)`.
+//!
+//! If any item is dropped, the stream is no longer suitable for claiming an
+//! exact decoding result from the complete submitted syndrome history.
+//!
+//! # Determinism
+//!
+//! The stream guarantees:
+//!
+//! - FIFO submission order;
+//! - monotonically increasing stream sequence numbers;
+//! - consecutive syndrome-round validation;
+//! - deterministic processing order;
+//! - deterministic history ordering;
+//! - no sequence-number wrapping;
+//! - no hidden concurrent mutation.
+//!
+//! Scheduling and distributed execution are deliberately outside this module.
+//!
+//! # Rust compatibility
+//!
+//! Target: Rust 1.97.1.
+//!
+//! No nightly-only language features are used.
+
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -77,75 +145,106 @@ use super::syndrome::{
 // Constants
 // ============================================================================
 
-/// Current logical streaming-state schema.
-pub const STREAM_STATE_VERSION: u16 = 2;
+/// Current in-memory stream-state schema.
+pub const STREAM_STATE_VERSION: u16 = 3;
 
-/// Conservative default input-buffer size.
+/// Conservative default bounded input capacity.
+///
+/// This is an implementation default, not a second resource policy.
+/// `QecLimits::max_stream_buffer_events` can reduce it.
 pub const DEFAULT_MAX_BUFFERED_SYNDROMES: usize = 1_024;
 
-/// Maximum number of rounds returned by one polling operation.
+/// Maximum outputs returned by one `poll()` call.
 pub const DEFAULT_MAX_POLL_ROUNDS: usize = 1_024;
 
-/// Stream-local sequence values reserve `u64::MAX` for overflow detection.
+/// `u64::MAX` is reserved so stream sequence numbers never wrap into a
+/// potentially valid sequence value.
 pub const MAX_STREAM_SEQUENCE: u64 = u64::MAX - 1;
+
+/// Minimum history required for consecutive-round detection.
+pub const MIN_HISTORY_ROUNDS: usize = 1;
 
 // ============================================================================
 // Backpressure
 // ============================================================================
 
-/// Policy used when the bounded input buffer is full.
+/// Policy applied when the bounded input buffer is full.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BackpressurePolicy {
-    /// Reject the new syndrome.
+    /// Reject the incoming syndrome.
     ///
-    /// This is the only policy permitted for lossless QEC decoding.
+    /// This is the only lossless policy and is the production default.
     Reject,
 
-    /// Reject the newest syndrome while retaining buffered data.
+    /// Reject the incoming syndrome and retain existing buffered data.
     ///
-    /// This is lossy and is only appropriate for explicitly lossy monitoring.
+    /// This is explicitly lossy because the submitted syndrome is not
+    /// processed.
     DropNewest,
 
-    /// Remove the oldest buffered syndrome before accepting the new one.
+    /// Remove the oldest buffered syndrome and accept the new syndrome.
     ///
-    /// This is lossy and must never silently be used for mathematical QEC
-    /// decoding.
+    /// This is explicitly lossy because an already accepted syndrome is
+    /// discarded before processing.
     DropOldest,
 }
 
 impl BackpressurePolicy {
-    /// Returns whether the policy preserves every submitted syndrome.
+    /// Returns `true` when every submitted syndrome is preserved.
     #[must_use]
     pub const fn is_lossless(self) -> bool {
         matches!(self, Self::Reject)
     }
+
+    /// Returns `true` when this policy can discard input.
+    #[must_use]
+    pub const fn is_lossy(self) -> bool {
+        !self.is_lossless()
+    }
 }
 
 // ============================================================================
-// Stream mode
+// History mode
 // ============================================================================
 
-/// Controls how much processed syndrome history the stream retains.
+/// Controls how much processed syndrome history is retained.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StreamMode {
-    /// Retain only the state required for consecutive-round processing.
+    /// Retain only the previous syndrome required for incremental decoding.
     Minimal,
 
-    /// Retain a bounded history for replay/inspection.
+    /// Retain a bounded number of processed syndrome rounds.
     Windowed {
-        /// Number of complete syndrome rounds retained.
+        /// Number of rounds retained.
         rounds: usize,
     },
 }
 
 impl StreamMode {
-    /// Returns the effective history size.
+    /// Returns the effective history capacity.
     #[must_use]
-    pub const fn rounds(self) -> usize {
+    pub const fn history_capacity(self) -> usize {
         match self {
-            Self::Minimal => 2,
-            Self::Windowed { rounds } if rounds < 2 => 2,
+            Self::Minimal => MIN_HISTORY_ROUNDS,
+            Self::Windowed { rounds } if rounds < MIN_HISTORY_ROUNDS => {
+                MIN_HISTORY_ROUNDS
+            }
             Self::Windowed { rounds } => rounds,
+        }
+    }
+
+    /// Validates the mode.
+    pub fn validate(self) -> Result<(), StreamingError> {
+        match self {
+            Self::Minimal => Ok(()),
+
+            Self::Windowed { rounds } if rounds < MIN_HISTORY_ROUNDS => {
+                Err(StreamingError::InvalidHistorySize {
+                    requested: rounds,
+                })
+            }
+
+            Self::Windowed { .. } => Ok(()),
         }
     }
 }
@@ -154,16 +253,16 @@ impl StreamMode {
 // Lifecycle
 // ============================================================================
 
-/// Lifecycle state of a syndrome stream.
+/// Lifecycle of a syndrome stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StreamStatus {
-    /// Accepting new input.
+    /// Accepting new syndrome input.
     Open,
 
-    /// Input has been closed but buffered work remains.
+    /// Input is closed; buffered work is still being drained.
     Closing,
 
-    /// Input is closed and all buffered work has been processed.
+    /// Input is closed and all buffered work has completed.
     Closed,
 
     /// Cancellation was observed.
@@ -174,13 +273,19 @@ pub enum StreamStatus {
 }
 
 impl StreamStatus {
-    /// Returns whether input can be submitted.
+    /// Returns whether new input can be submitted.
     #[must_use]
     pub const fn accepts_input(self) -> bool {
         matches!(self, Self::Open)
     }
 
-    /// Returns whether the stream is terminal.
+    /// Returns whether processing can continue.
+    #[must_use]
+    pub const fn can_process(self) -> bool {
+        matches!(self, Self::Open | Self::Closing)
+    }
+
+    /// Returns whether the lifecycle is terminal.
     #[must_use]
     pub const fn is_terminal(self) -> bool {
         matches!(
@@ -194,62 +299,76 @@ impl StreamStatus {
 // Errors
 // ============================================================================
 
-/// Streaming-specific diagnostic information.
+/// Streaming-specific errors.
 ///
-/// Public methods convert these conditions to `QecError`.
+/// These are converted into the repository-wide `QecError` boundary at the
+/// public API boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamingError {
-    /// Input is not currently accepted.
+    /// Input was submitted after the stream stopped accepting input.
     NotAcceptingInput,
 
-    /// Physical measurement rounds are not consecutive.
+    /// The stream is already terminal.
+    TerminalState,
+
+    /// A syndrome round was not consecutive with the accepted predecessor.
     OutOfOrderRound {
+        /// Expected round.
         expected: u64,
+
+        /// Received round.
         received: u64,
     },
 
-    /// Stream sequence number would wrap.
+    /// A stream sequence number would overflow.
     SequenceOverflow,
 
-    /// Input buffer reached its configured capacity.
+    /// The configured input buffer is full.
     BufferFull {
+        /// Buffer capacity.
         capacity: usize,
     },
 
-    /// Requested window is invalid.
-    InvalidWindowSize {
+    /// The configured history size is invalid.
+    InvalidHistorySize {
+        /// Requested history size.
         requested: usize,
     },
 
-    /// Requested polling size is invalid.
+    /// A polling request is invalid.
     InvalidPollSize {
+        /// Requested number of rounds.
         requested: usize,
     },
 
-    /// Lossy operation was requested without explicit permission.
+    /// A lossy backpressure policy was selected without authorization.
     LossyBackpressureNotAllowed,
 
-    /// Snapshot belongs to another schema.
+    /// A stream snapshot has an unsupported schema.
     UnsupportedStateVersion {
+        /// Found schema.
         version: u16,
     },
 
-    /// Snapshot violates a stream invariant.
+    /// A stream snapshot is internally inconsistent.
     InvalidState {
+        /// Human-readable diagnostic.
         message: String,
     },
 }
 
 impl fmt::Display for StreamingError {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotAcceptingInput => {
-                write!(
-                    formatter,
-                    "syndrome stream is not accepting input"
+                formatter.write_str(
+                    "syndrome stream is not accepting input",
+                )
+            }
+
+            Self::TerminalState => {
+                formatter.write_str(
+                    "syndrome stream is in a terminal state",
                 )
             }
 
@@ -259,64 +378,55 @@ impl fmt::Display for StreamingError {
             } => {
                 write!(
                     formatter,
-                    "out-of-order syndrome round: expected {}, received {}",
-                    expected,
-                    received
+                    "out-of-order syndrome round: \
+                     expected {expected}, received {received}"
                 )
             }
 
             Self::SequenceOverflow => {
-                write!(
-                    formatter,
-                    "syndrome stream sequence number overflow"
+                formatter.write_str(
+                    "syndrome stream sequence number overflow",
                 )
             }
 
             Self::BufferFull { capacity } => {
                 write!(
                     formatter,
-                    "syndrome stream buffer is full (capacity {})",
-                    capacity
+                    "syndrome stream input buffer is full \
+                     (capacity {capacity})"
                 )
             }
 
-            Self::InvalidWindowSize { requested } => {
+            Self::InvalidHistorySize { requested } => {
                 write!(
                     formatter,
-                    "invalid syndrome window size {}; minimum is 2",
-                    requested
+                    "invalid stream history size {requested}; \
+                     minimum is {MIN_HISTORY_ROUNDS}"
                 )
             }
 
             Self::InvalidPollSize { requested } => {
                 write!(
                     formatter,
-                    "invalid poll size {}; minimum is 1",
-                    requested
+                    "invalid stream poll size {requested}; minimum is 1"
                 )
             }
 
             Self::LossyBackpressureNotAllowed => {
-                write!(
-                    formatter,
-                    "lossy backpressure is not permitted for lossless QEC"
+                formatter.write_str(
+                    "lossy backpressure requires explicit authorization",
                 )
             }
 
             Self::UnsupportedStateVersion { version } => {
                 write!(
                     formatter,
-                    "unsupported streaming state version {}",
-                    version
+                    "unsupported streaming state version {version}"
                 )
             }
 
             Self::InvalidState { message } => {
-                write!(
-                    formatter,
-                    "invalid streaming state: {}",
-                    message
-                )
+                write!(formatter, "invalid streaming state: {message}")
             }
         }
     }
@@ -324,39 +434,69 @@ impl fmt::Display for StreamingError {
 
 impl std::error::Error for StreamingError {}
 
+impl From<StreamingError> for QecError {
+    fn from(error: StreamingError) -> Self {
+        match &error {
+            StreamingError::BufferFull { capacity } => {
+                QecError::resource_limit(
+                    ResourceKind::StreamBuffer,
+                    *capacity as u128 + 1,
+                    *capacity as u128,
+                    *capacity as u128,
+                    error.to_string(),
+                )
+            }
+
+            StreamingError::SequenceOverflow => {
+                QecError::invalid_input(error.to_string())
+            }
+
+            StreamingError::OutOfOrderRound { .. }
+            | StreamingError::InvalidHistorySize { .. }
+            | StreamingError::InvalidPollSize { .. }
+            | StreamingError::LossyBackpressureNotAllowed
+            | StreamingError::UnsupportedStateVersion { .. }
+            | StreamingError::InvalidState { .. }
+            | StreamingError::NotAcceptingInput
+            | StreamingError::TerminalState => {
+                QecError::invalid_input(error.to_string())
+            }
+        }
+    }
+}
+
 // ============================================================================
 // Metrics
 // ============================================================================
 
-/// Streaming metrics.
+/// Stream-local deterministic counters.
 ///
-/// These counters are intentionally independent from global telemetry. A
-/// caller may feed this snapshot into `metrics.rs` without making streaming
-/// itself responsible for telemetry policy.
+/// These are execution metrics, not telemetry. `telemetry.rs` remains
+/// responsible for deciding whether metrics may leave the process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct StreamMetrics {
-    /// Accepted syndrome rounds.
+    /// Number of accepted syndrome submissions.
     pub syndromes_accepted: u64,
 
-    /// Rejected syndrome submissions.
+    /// Number of rejected submissions.
     pub syndromes_rejected: u64,
 
-    /// Detection events generated.
+    /// Number of generated detection events.
     pub detection_events_generated: u64,
 
-    /// Detection events delivered to a consumer.
+    /// Number of events delivered to the consumer.
     pub detection_events_delivered: u64,
 
-    /// Current input-buffer occupancy.
+    /// Current buffered syndrome count.
     pub buffered_syndromes: u64,
 
-    /// Peak input-buffer occupancy.
+    /// Maximum observed buffer occupancy.
     pub peak_buffered_syndromes: u64,
 
-    /// Number of cancellation checks.
+    /// Number of cancellation polling operations.
     pub cancellation_checks: u64,
 
-    /// Number of backpressure incidents.
+    /// Number of full-buffer incidents.
     pub backpressure_events: u64,
 
     /// Number of successfully processed rounds.
@@ -368,18 +508,23 @@ pub struct StreamMetrics {
     /// Number of flush operations.
     pub flushes: u64,
 
-    /// Number of intentionally dropped syndromes.
-    ///
-    /// Non-zero values indicate a lossy stream and therefore invalidate
-    /// lossless-QEC assumptions.
+    /// Number of intentionally discarded syndromes.
     pub syndromes_dropped: u64,
+}
+
+impl StreamMetrics {
+    /// Returns whether this stream has remained lossless.
+    #[must_use]
+    pub const fn is_lossless(self) -> bool {
+        self.syndromes_dropped == 0
+    }
 }
 
 // ============================================================================
 // Stream item
 // ============================================================================
 
-/// A syndrome submitted to the stream.
+/// One accepted syndrome together with its deterministic stream sequence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StreamItem {
     sequence: u64,
@@ -387,7 +532,15 @@ pub struct StreamItem {
 }
 
 impl StreamItem {
-    /// Returns the stream-local sequence number.
+    /// Creates a stream item.
+    fn new(sequence: u64, syndrome: Syndrome) -> Self {
+        Self {
+            sequence,
+            syndrome,
+        }
+    }
+
+    /// Returns the stream sequence.
     #[must_use]
     pub const fn sequence(&self) -> u64 {
         self.sequence
@@ -398,27 +551,33 @@ impl StreamItem {
     pub const fn syndrome(&self) -> &Syndrome {
         &self.syndrome
     }
+
+    /// Consumes the item and returns its syndrome.
+    #[must_use]
+    pub fn into_syndrome(self) -> Syndrome {
+        self.syndrome
+    }
 }
 
 // ============================================================================
 // Stream output
 // ============================================================================
 
-/// Result of processing one syndrome round.
+/// Result produced after processing one accepted syndrome.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StreamOutput {
     /// Stream-local sequence number.
     pub sequence: u64,
 
-    /// Physical measurement round.
+    /// Measurement round represented by this output.
     pub round: MeasurementRound,
 
-    /// Detection events generated against the previous round.
+    /// Detection events generated from the previous round.
     pub events: Vec<DetectionEvent>,
 }
 
 impl StreamOutput {
-    /// Returns whether this output contains no detection events.
+    /// Returns `true` when no detection event was generated.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
@@ -437,21 +596,21 @@ impl StreamOutput {
 
 /// In-memory snapshot of stream execution state.
 ///
-/// This is deliberately not a wire-format checkpoint. `checkpoint.rs` owns
-/// serialization, compatibility validation, integrity protection and durable
+/// This is intentionally **not** the durable checkpoint format. `checkpoint.rs`
+/// owns serialization, integrity protection, schema compatibility and durable
 /// storage.
 ///
-/// The snapshot contains enough state to reconstruct deterministic stream
-/// processing without serializing the cancellation primitive itself.
+/// A checkpoint implementation can consume this structure rather than
+/// reimplementing the streaming state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StreamSnapshot {
     /// Snapshot schema.
     pub version: u16,
 
-    /// Stream lifecycle.
+    /// Lifecycle state.
     pub status: StreamStatus,
 
-    /// Next sequence number.
+    /// Next stream sequence number.
     pub next_sequence: u64,
 
     /// Stream mode.
@@ -460,19 +619,19 @@ pub struct StreamSnapshot {
     /// Backpressure policy.
     pub backpressure: BackpressurePolicy,
 
-    /// Whether lossy processing has been explicitly authorized.
+    /// Whether lossy processing was explicitly authorized.
     pub lossy_allowed: bool,
 
-    /// Configured buffer capacity.
+    /// Input buffer capacity.
     pub buffer_capacity: usize,
 
-    /// Buffered input.
+    /// Buffered input in FIFO order.
     pub buffered_input: Vec<StreamItem>,
 
-    /// Processed syndrome history.
+    /// Retained processed syndrome history in chronological order.
     pub history: Vec<Syndrome>,
 
-    /// Metrics at snapshot time.
+    /// Stream metrics.
     pub metrics: StreamMetrics,
 }
 
@@ -480,11 +639,10 @@ pub struct StreamSnapshot {
 // Syndrome stream
 // ============================================================================
 
-/// Bounded, deterministic syndrome streaming infrastructure.
+/// Bounded deterministic syndrome execution stream.
 ///
-/// `SyndromeStream` is intentionally synchronous. Scheduling, threading,
-/// distributed transport and QPU transport belong to their respective
-/// infrastructure modules.
+/// The type is intentionally synchronous. It does not create threads, own an
+/// async runtime, communicate over a network, or submit QPU work.
 pub struct SyndromeStream {
     limits: QecLimits,
     cancellation: CancellationToken,
@@ -506,11 +664,8 @@ pub struct SyndromeStream {
     metrics: StreamMetrics,
 }
 
-impl std::fmt::Debug for SyndromeStream {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
+impl fmt::Debug for SyndromeStream {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("SyndromeStream")
             .field("limits", &self.limits)
@@ -518,7 +673,7 @@ impl std::fmt::Debug for SyndromeStream {
             .field("backpressure", &self.backpressure)
             .field("lossy_allowed", &self.lossy_allowed)
             .field("buffer_capacity", &self.buffer_capacity)
-            .field("buffered_input", &self.buffer.len())
+            .field("buffered_syndromes", &self.buffer.len())
             .field("history_len", &self.history.len())
             .field("next_sequence", &self.next_sequence)
             .field("status", &self.status)
@@ -528,7 +683,11 @@ impl std::fmt::Debug for SyndromeStream {
 }
 
 impl SyndromeStream {
-    /// Creates a stream with the canonical default resource policy.
+    // ------------------------------------------------------------------------
+    // Construction
+    // ------------------------------------------------------------------------
+
+    /// Creates a stream using the canonical QEC limits and cancellation token.
     pub fn new() -> QecResult<Self> {
         Self::with_limits_and_cancellation(
             QecLimits::default(),
@@ -536,26 +695,22 @@ impl SyndromeStream {
         )
     }
 
-    /// Creates a stream with explicit resource limits.
-    pub fn with_limits(
-        limits: QecLimits,
-    ) -> QecResult<Self> {
+    /// Creates a stream with explicit QEC limits.
+    pub fn with_limits(limits: QecLimits) -> QecResult<Self> {
         Self::with_limits_and_cancellation(
             limits,
             CancellationToken::new(),
         )
     }
 
-    /// Creates a stream with explicit limits and the canonical cancellation
-    /// token.
+    /// Creates a stream with explicit limits and cancellation.
     pub fn with_limits_and_cancellation(
         limits: QecLimits,
         cancellation: CancellationToken,
     ) -> QecResult<Self> {
         limits.validate().map_err(|error| {
             QecError::invalid_input(format!(
-                "invalid QEC streaming limits: {}",
-                error
+                "invalid QEC streaming limits: {error}"
             ))
         })?;
 
@@ -568,7 +723,8 @@ impl SyndromeStream {
                 ResourceKind::StreamBuffer,
                 1,
                 0,
-                "stream input buffer capacity must be greater than zero",
+                limits.max_stream_buffer_events as u128,
+                "stream buffer capacity must be greater than zero",
             ));
         }
 
@@ -589,7 +745,9 @@ impl SyndromeStream {
             buffer_capacity: capacity,
             buffer: VecDeque::with_capacity(capacity),
 
-            history: VecDeque::new(),
+            history: VecDeque::with_capacity(
+                MIN_HISTORY_ROUNDS,
+            ),
 
             processor,
 
@@ -601,19 +759,44 @@ impl SyndromeStream {
     }
 
     // ------------------------------------------------------------------------
-    // Accessors
+    // Configuration
     // ------------------------------------------------------------------------
 
-    /// Returns the configured QEC limits.
-    #[must_use]
-    pub const fn limits(&self) -> QecLimits {
-        self.limits
-    }
+    /// Changes the retained-history mode.
+    ///
+    /// The requested history is checked against the canonical stream-buffer
+    /// resource limit before any allocation is attempted.
+    pub fn set_mode(
+        &mut self,
+        mode: StreamMode,
+    ) -> QecResult<()> {
+        self.check_cancelled()?;
 
-    /// Returns the stream status.
-    #[must_use]
-    pub const fn status(&self) -> StreamStatus {
-        self.status
+        mode.validate().map_err(QecError::from)?;
+
+        let requested = mode.history_capacity();
+
+        if requested > self.limits.max_stream_buffer_events {
+            return Err(QecError::resource_limit(
+                ResourceKind::StreamBuffer,
+                requested as u128,
+                self.history.len() as u128,
+                self.limits.max_stream_buffer_events as u128,
+                format!(
+                    "requested history capacity {requested} exceeds \
+                     configured stream-buffer limit {}",
+                    self.limits.max_stream_buffer_events
+                ),
+            ));
+        }
+
+        self.mode = mode;
+
+        while self.history.len() > requested {
+            self.history.pop_front();
+        }
+
+        Ok(())
     }
 
     /// Returns the current stream mode.
@@ -622,110 +805,19 @@ impl SyndromeStream {
         self.mode
     }
 
-    /// Returns the configured backpressure policy.
-    #[must_use]
-    pub const fn backpressure_policy(
-        &self,
-    ) -> BackpressurePolicy {
-        self.backpressure
-    }
-
-    /// Returns whether lossy processing has explicitly been enabled.
-    #[must_use]
-    pub const fn lossy_allowed(&self) -> bool {
-        self.lossy_allowed
-    }
-
-    /// Returns stream metrics.
-    #[must_use]
-    pub const fn metrics(&self) -> StreamMetrics {
-        self.metrics
-    }
-
-    /// Returns input-buffer occupancy.
-    #[must_use]
-    pub fn buffered_len(&self) -> usize {
-        self.buffer.len()
-    }
-
-    /// Returns configured input-buffer capacity.
-    #[must_use]
-    pub const fn capacity(&self) -> usize {
-        self.buffer_capacity
-    }
-
-    /// Returns whether no input is buffered.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.buffer.is_empty()
-    }
-
-    /// Returns retained syndrome history.
-    #[must_use]
-    pub fn history(&self) -> impl Iterator<Item = &Syndrome> {
-        self.history.iter()
-    }
-
-    // ------------------------------------------------------------------------
-    // Configuration
-    // ------------------------------------------------------------------------
-
-    /// Configures minimal-history operation.
-    pub fn set_minimal_mode(&mut self) {
-        self.mode = StreamMode::Minimal;
-
-        self.history.clear();
-    }
-
-    /// Configures bounded windowed history.
-    pub fn set_windowed_mode(
-        &mut self,
-        rounds: usize,
-    ) -> QecResult<()> {
-        if rounds < 2 {
-            return Err(
-                QecError::invalid_input(
-                    StreamingError::InvalidWindowSize {
-                        requested: rounds,
-                    }
-                    .to_string(),
-                ),
-            );
-        }
-
-        if rounds > self.limits.max_rounds {
-            return Err(QecError::resource_limit(
-                ResourceKind::MeasurementRounds,
-                rounds as u128,
-                self.limits.max_rounds as u128,
-                "streaming history window exceeds QEC round limit",
-            ));
-        }
-
-        self.mode = StreamMode::Windowed { rounds };
-
-        while self.history.len() > rounds {
-            self.history.pop_front();
-        }
-
-        Ok(())
-    }
-
-    /// Configures the backpressure policy.
+    /// Selects the backpressure policy.
     ///
-    /// Lossy policies require explicit opt-in through
-    /// [`Self::allow_lossy_processing`].
-    pub fn set_backpressure_policy(
+    /// Lossy policies cannot be selected until `allow_lossy(true)` has been
+    /// explicitly called.
+    pub fn set_backpressure(
         &mut self,
         policy: BackpressurePolicy,
     ) -> QecResult<()> {
-        if !policy.is_lossless() && !self.lossy_allowed {
+        self.check_cancelled()?;
+
+        if policy.is_lossy() && !self.lossy_allowed {
             return Err(
-                QecError::unsupported(
-                    "lossy_streaming",
-                    StreamingError::LossyBackpressureNotAllowed
-                        .to_string(),
-                ),
+                StreamingError::LossyBackpressureNotAllowed.into()
             );
         }
 
@@ -734,40 +826,126 @@ impl SyndromeStream {
         Ok(())
     }
 
-    /// Explicitly authorizes lossy monitoring/telemetry behavior.
+    /// Explicitly authorizes or revokes lossy processing.
     ///
-    /// This must never be enabled by a decoder automatically.
-    pub fn allow_lossy_processing(
+    /// Revoking authorization immediately restores lossless rejection mode.
+    pub fn allow_lossy(
         &mut self,
         allowed: bool,
-    ) {
+    ) -> QecResult<()> {
+        self.check_cancelled()?;
+
         self.lossy_allowed = allowed;
 
-        if !allowed && !self.backpressure.is_lossless() {
-            self.backpressure =
-                BackpressurePolicy::Reject;
+        if !allowed && self.backpressure.is_lossy() {
+            self.backpressure = BackpressurePolicy::Reject;
         }
+
+        Ok(())
+    }
+
+    /// Returns whether lossy processing is explicitly authorized.
+    #[must_use]
+    pub const fn lossy_allowed(&self) -> bool {
+        self.lossy_allowed
+    }
+
+    /// Returns the active backpressure policy.
+    #[must_use]
+    pub const fn backpressure(&self) -> BackpressurePolicy {
+        self.backpressure
+    }
+
+    // ------------------------------------------------------------------------
+    // State
+    // ------------------------------------------------------------------------
+
+    /// Returns the current lifecycle status.
+    #[must_use]
+    pub const fn status(&self) -> StreamStatus {
+        self.status
+    }
+
+    /// Returns whether the stream is terminal.
+    #[must_use]
+    pub const fn is_terminal(&self) -> bool {
+        self.status.is_terminal()
+    }
+
+    /// Returns the number of currently buffered syndromes.
+    #[must_use]
+    pub fn buffered_len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    /// Returns whether the input buffer is empty.
+    #[must_use]
+    pub fn is_buffer_empty(&self) -> bool {
+        self.buffer.is_empty()
+    }
+
+    /// Returns the admitted buffer capacity.
+    #[must_use]
+    pub const fn buffer_capacity(&self) -> usize {
+        self.buffer_capacity
+    }
+
+    /// Returns the next sequence number that will be assigned.
+    #[must_use]
+    pub const fn next_sequence(&self) -> u64 {
+        self.next_sequence
+    }
+
+    /// Returns stream metrics.
+    #[must_use]
+    pub const fn metrics(&self) -> StreamMetrics {
+        self.metrics
+    }
+
+    /// Returns the configured QEC limits.
+    #[must_use]
+    pub const fn limits(&self) -> QecLimits {
+        self.limits
+    }
+
+    /// Returns the retained history.
+    pub fn history(&self) -> impl Iterator<Item = &Syndrome> {
+        self.history.iter()
+    }
+
+    /// Returns the current processor baseline.
+    #[must_use]
+    pub fn previous_syndrome(&self) -> Option<&Syndrome> {
+        self.processor.previous()
     }
 
     // ------------------------------------------------------------------------
     // Cancellation
     // ------------------------------------------------------------------------
 
-    #[inline]
-    fn check_cancellation(&mut self) -> QecResult<()> {
-        self.metrics.cancellation_checks =
-            self.metrics
-                .cancellation_checks
-                .checked_add(1)
-                .ok_or_else(|| {
-                    QecError::internal_invariant(
-                        "stream cancellation metric overflow",
-                        "cancellation check counter overflowed",
-                    )
-                })?;
+    /// Returns the stream cancellation token.
+    ///
+    /// Callers should normally retain the corresponding `CancellationSource`
+    /// externally when they need to request cancellation.
+    #[must_use]
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.cancellation.clone()
+    }
+
+    fn check_cancelled(&mut self) -> QecResult<()> {
+        self.metrics.cancellation_checks = self
+            .metrics
+            .cancellation_checks
+            .checked_add(1)
+            .ok_or_else(|| {
+                QecError::invalid_input(
+                    "stream cancellation-check counter overflow",
+                )
+            })?;
 
         match self.cancellation.check() {
             Ok(()) => Ok(()),
+
             Err(error) => {
                 self.status = StreamStatus::Cancelled;
                 Err(error)
@@ -776,651 +954,408 @@ impl SyndromeStream {
     }
 
     // ------------------------------------------------------------------------
-    // Sequence numbers
+    // Admission
     // ------------------------------------------------------------------------
 
-    fn allocate_sequence(&mut self) -> QecResult<u64> {
+    /// Validates the next sequence number without modifying stream state.
+    fn next_sequence_value(&self) -> Result<u64, StreamingError> {
         if self.next_sequence > MAX_STREAM_SEQUENCE {
+            return Err(StreamingError::SequenceOverflow);
+        }
+
+        Ok(self.next_sequence)
+    }
+
+    /// Validates syndrome admission without modifying the queue.
+    fn validate_submission(
+        &mut self,
+        syndrome: &Syndrome,
+    ) -> QecResult<()> {
+        syndrome.preflight()?;
+
+        let expected_round = if let Some(last) =
+            self.buffer.back().map(StreamItem::syndrome)
+        {
+            last.round().next().map_err(QecError::from)?
+        } else if let Some(last) = self.history.back() {
+            last.round().next().map_err(QecError::from)?
+        } else if let Some(previous) =
+            self.processor.previous()
+        {
+            previous.round().next().map_err(QecError::from)?
+        } else {
+            // First syndrome establishes the baseline.
+            return Ok(());
+        };
+
+        if syndrome.round() != expected_round {
             return Err(
-                QecError::internal_invariant(
-                    "stream sequence does not wrap",
-                    StreamingError::SequenceOverflow
-                        .to_string(),
-                ),
+                StreamingError::OutOfOrderRound {
+                    expected: expected_round.value(),
+                    received: syndrome.round().value(),
+                }
+                .into(),
             );
         }
 
-        let sequence = self.next_sequence;
-
-        self.next_sequence =
-            self.next_sequence
-                .checked_add(1)
-                .ok_or_else(|| {
-                    QecError::internal_invariant(
-                        "stream sequence arithmetic is checked",
-                        StreamingError::SequenceOverflow
-                            .to_string(),
-                    )
-                })?;
-
-        Ok(sequence)
+        Ok(())
     }
 
-    // ------------------------------------------------------------------------
-    // Input
-    // ------------------------------------------------------------------------
-
-    /// Submits one syndrome to the bounded input queue.
+    /// Submits one syndrome into the bounded stream.
     ///
-    /// Submission itself does not perform decoding. This creates a genuine
-    /// producer/consumer boundary and therefore permits scheduler-driven
-    /// backpressure.
+    /// In lossless mode, a full buffer rejects the submission without
+    /// modifying existing buffered data.
     pub fn submit(
         &mut self,
         syndrome: Syndrome,
     ) -> QecResult<u64> {
-        self.check_cancellation()?;
+        self.check_cancelled()?;
 
         if !self.status.accepts_input() {
-            self.metrics.syndromes_rejected =
-                self.metrics
-                    .syndromes_rejected
-                    .checked_add(1)
-                    .ok_or_else(|| {
-                        QecError::internal_invariant(
-                            "syndrome rejection metric is monotonic",
-                            "rejection counter overflowed",
-                        )
-                    })?;
+            self.metrics.syndromes_rejected = self
+                .metrics
+                .syndromes_rejected
+                .saturating_add(1);
 
             return Err(
-                QecError::invalid_syndrome(
-                    StreamingError::NotAcceptingInput
-                        .to_string(),
-                ),
+                StreamingError::NotAcceptingInput.into()
             );
         }
 
-        /*
-         * Validate the syndrome before putting it into the queue.
-         * This prevents malformed input from consuming buffer capacity.
-         */
-        syndrome.preflight()?;
+        self.validate_submission(&syndrome)?;
 
-        /*
-         * Check the configured round ceiling before allocation.
-         *
-         * `SyndromeProcessor` performs the authoritative consecutive-round
-         * validation when processing begins.
-         */
-        if self.metrics.syndromes_accepted
-            >= u64::try_from(self.limits.max_rounds)
-                .map_err(|_| {
-                    QecError::numerical_failure(
-                        super::errors::NumericalOperation::IntegerConversion,
-                        "maximum round limit does not fit in u64",
-                    )
-                })?
-        {
-            return Err(QecError::resource_limit(
-                ResourceKind::MeasurementRounds,
-                self.metrics.syndromes_accepted as u128 + 1,
-                self.limits.max_rounds as u128,
-                "maximum syndrome-round limit exceeded",
-            ));
-        }
+        let sequence =
+            self.next_sequence_value().map_err(QecError::from)?;
 
         if self.buffer.len() >= self.buffer_capacity {
-            self.metrics.backpressure_events =
-                self.metrics
-                    .backpressure_events
-                    .checked_add(1)
-                    .ok_or_else(|| {
-                        QecError::internal_invariant(
-                            "backpressure metric is monotonic",
-                            "backpressure counter overflowed",
-                        )
-                    })?;
+            self.metrics.backpressure_events = self
+                .metrics
+                .backpressure_events
+                .saturating_add(1);
 
             match self.backpressure {
                 BackpressurePolicy::Reject => {
-                    self.metrics.syndromes_rejected =
-                        self.metrics
-                            .syndromes_rejected
-                            .checked_add(1)
-                            .ok_or_else(|| {
-                                QecError::internal_invariant(
-                                    "syndrome rejection metric is monotonic",
-                                    "rejection counter overflowed",
-                                )
-                            })?;
+                    self.metrics.syndromes_rejected = self
+                        .metrics
+                        .syndromes_rejected
+                        .saturating_add(1);
 
                     return Err(
-                        QecError::resource_limit(
-                            ResourceKind::StreamBuffer,
-                            self.buffer.len() as u128 + 1,
-                            self.buffer_capacity as u128,
-                            StreamingError::BufferFull {
-                                capacity: self.buffer_capacity,
-                            }
-                            .to_string(),
-                        ),
+                        StreamingError::BufferFull {
+                            capacity: self.buffer_capacity,
+                        }
+                        .into(),
                     );
                 }
 
                 BackpressurePolicy::DropNewest => {
-                    self.metrics.syndromes_rejected =
-                        self.metrics
-                            .syndromes_rejected
-                            .checked_add(1)
-                            .ok_or_else(|| {
-                                QecError::internal_invariant(
-                                    "syndrome rejection metric is monotonic",
-                                    "rejection counter overflowed",
-                                )
-                            })?;
+                    if !self.lossy_allowed {
+                        return Err(
+                            StreamingError::LossyBackpressureNotAllowed
+                                .into()
+                        );
+                    }
 
-                    self.metrics.syndromes_dropped =
-                        self.metrics
-                            .syndromes_dropped
-                            .checked_add(1)
-                            .ok_or_else(|| {
-                                QecError::internal_invariant(
-                                    "drop metric is monotonic",
-                                    "drop counter overflowed",
-                                )
-                            })?;
+                    self.metrics.syndromes_dropped = self
+                        .metrics
+                        .syndromes_dropped
+                        .checked_add(1)
+                        .ok_or_else(|| {
+                            QecError::invalid_input(
+                                "stream dropped-syndrome counter overflow",
+                            )
+                        })?;
 
-                    return Ok(self.next_sequence);
+                    self.metrics.syndromes_rejected = self
+                        .metrics
+                        .syndromes_rejected
+                        .saturating_add(1);
+
+                    return Ok(sequence);
                 }
 
                 BackpressurePolicy::DropOldest => {
-                    let _ = self.buffer.pop_front();
+                    if !self.lossy_allowed {
+                        return Err(
+                            StreamingError::LossyBackpressureNotAllowed
+                                .into()
+                        );
+                    }
 
-                    self.metrics.syndromes_dropped =
-                        self.metrics
-                            .syndromes_dropped
-                            .checked_add(1)
-                            .ok_or_else(|| {
-                                QecError::internal_invariant(
-                                    "drop metric is monotonic",
-                                    "drop counter overflowed",
-                                )
-                            })?;
+                    let removed = self.buffer.pop_front();
+
+                    if removed.is_none() {
+                        return Err(
+                            StreamingError::InvalidState {
+                                message:
+                                    "drop-oldest policy observed \
+                                     an empty full buffer"
+                                        .to_owned(),
+                            }
+                            .into(),
+                        );
+                    }
+
+                    self.metrics.syndromes_dropped = self
+                        .metrics
+                        .syndromes_dropped
+                        .checked_add(1)
+                        .ok_or_else(|| {
+                            QecError::invalid_input(
+                                "stream dropped-syndrome counter overflow",
+                            )
+                        })?;
                 }
             }
         }
 
-        let sequence = self.allocate_sequence()?;
+        self.buffer.push_back(
+            StreamItem::new(sequence, syndrome)
+        );
 
-        self.buffer.push_back(StreamItem {
-            sequence,
-            syndrome,
-        });
+        self.next_sequence = self
+            .next_sequence
+            .checked_add(1)
+            .ok_or_else(|| {
+                QecError::invalid_input(
+                    StreamingError::SequenceOverflow.to_string(),
+                )
+            })?;
 
-        self.metrics.syndromes_accepted =
-            self.metrics
-                .syndromes_accepted
-                .checked_add(1)
-                .ok_or_else(|| {
-                    QecError::internal_invariant(
-                        "syndrome acceptance metric is monotonic",
-                        "acceptance counter overflowed",
-                    )
-                })?;
+        self.metrics.syndromes_accepted = self
+            .metrics
+            .syndromes_accepted
+            .checked_add(1)
+            .ok_or_else(|| {
+                QecError::invalid_input(
+                    "stream accepted-syndrome counter overflow",
+                )
+            })?;
 
         self.metrics.buffered_syndromes =
-            u64::try_from(self.buffer.len())
-                .map_err(|_| {
-                    QecError::numerical_failure(
-                        super::errors::NumericalOperation::IntegerConversion,
-                        "stream buffer length does not fit in u64",
-                    )
-                })?;
+            self.buffer.len() as u64;
 
-        self.metrics.peak_buffered_syndromes =
-            self.metrics
-                .peak_buffered_syndromes
-                .max(self.metrics.buffered_syndromes);
+        let occupancy =
+            self.buffer.len() as u64;
+
+        if occupancy > self.metrics.peak_buffered_syndromes {
+            self.metrics.peak_buffered_syndromes =
+                occupancy;
+        }
 
         Ok(sequence)
-    }
-
-    /// Compatibility alias for producer-oriented callers.
-    pub fn push(
-        &mut self,
-        syndrome: Syndrome,
-    ) -> QecResult<u64> {
-        self.submit(syndrome)
     }
 
     // ------------------------------------------------------------------------
     // Processing
     // ------------------------------------------------------------------------
 
-    /// Processes the next buffered syndrome.
-    ///
-    /// Returns `None` when the input queue is empty.
-    pub fn process_next(
+    /// Processes one buffered syndrome.
+    pub fn process_one(
         &mut self,
     ) -> QecResult<Option<StreamOutput>> {
-        self.check_cancellation()?;
+        self.check_cancelled()?;
 
-        let item = match self.buffer.pop_front() {
-            Some(item) => item,
-            None => {
-                self.maybe_close_after_drain();
-                return Ok(None);
+        if !self.status.can_process() {
+            return Ok(None);
+        }
+
+        let Some(item) = self.buffer.pop_front() else {
+            if self.status == StreamStatus::Closing {
+                self.status = StreamStatus::Closed;
             }
+
+            self.metrics.buffered_syndromes =
+                self.buffer.len() as u64;
+
+            return Ok(None);
         };
 
         self.metrics.buffered_syndromes =
-            u64::try_from(self.buffer.len())
-                .map_err(|_| {
-                    QecError::numerical_failure(
-                        super::errors::NumericalOperation::IntegerConversion,
-                        "stream buffer length does not fit in u64",
-                    )
-                })?;
+            self.buffer.len() as u64;
 
-        /*
-         * The mathematical processing path is centralized in
-         * `SyndromeProcessor`. This prevents streaming.rs from maintaining a
-         * second XOR implementation with subtly different semantics.
-         */
-        let events = match self.processor.push(
-            item.syndrome.clone(),
-        ) {
+        let sequence = item.sequence();
+        let syndrome = item.into_syndrome();
+
+        let round = syndrome.round();
+
+        let events = match self.processor.push(syndrome.clone()) {
             Ok(events) => events,
-            Err(error) => {
-                self.status = if matches!(
-                    error,
-                    QecError::CancellationRequested { .. }
-                ) {
-                    StreamStatus::Cancelled
-                } else {
-                    StreamStatus::Failed
-                };
 
+            Err(error) => {
+                self.status = StreamStatus::Failed;
                 return Err(error);
             }
         };
 
-        self.metrics.rounds_processed =
-            self.metrics
-                .rounds_processed
-                .checked_add(1)
-                .ok_or_else(|| {
-                    QecError::internal_invariant(
-                        "processed-round counter is monotonic",
-                        "processed-round counter overflowed",
-                    )
-                })?;
+        self.retain_history(syndrome)?;
 
-        let generated =
-            u64::try_from(events.len())
-                .map_err(|_| {
-                    QecError::numerical_failure(
-                        super::errors::NumericalOperation::IntegerConversion,
-                        "event count does not fit in u64",
-                    )
-                })?;
+        self.metrics.rounds_processed = self
+            .metrics
+            .rounds_processed
+            .checked_add(1)
+            .ok_or_else(|| {
+                self.status = StreamStatus::Failed;
 
-        self.metrics.detection_events_generated =
-            self.metrics
-                .detection_events_generated
-                .checked_add(generated)
-                .ok_or_else(|| {
-                    QecError::internal_invariant(
-                        "detection-event metric is monotonic",
-                        "detection-event counter overflowed",
-                    )
-                })?;
-
-        self.record_history(item.syndrome.clone());
-
-        self.maybe_close_after_drain();
-
-        Ok(Some(StreamOutput {
-            sequence: item.sequence,
-            round: item.syndrome.round(),
-            events,
-        }))
-    }
-
-    fn record_history(
-        &mut self,
-        syndrome: Syndrome,
-    ) {
-        match self.mode {
-            StreamMode::Minimal => {
-                /*
-                 * The processor owns the mathematical previous-round state.
-                 * Minimal mode therefore intentionally stores no duplicate
-                 * history here.
-                 */
-            }
-
-            StreamMode::Windowed { rounds } => {
-                self.history.push_back(syndrome);
-
-                while self.history.len() > rounds {
-                    self.history.pop_front();
-                }
-            }
-        }
-    }
-
-    /// Processes up to `max_rounds` buffered syndrome rounds.
-    pub fn poll(
-        &mut self,
-        max_rounds: usize,
-    ) -> QecResult<Vec<StreamOutput>> {
-        self.check_cancellation()?;
-
-        if max_rounds == 0 {
-            return Err(
                 QecError::invalid_input(
-                    StreamingError::InvalidPollSize {
-                        requested: max_rounds,
-                    }
-                    .to_string(),
-                ),
-            );
-        }
+                    "stream processed-round counter overflow",
+                )
+            })?;
 
-        let max_rounds =
-            max_rounds.min(DEFAULT_MAX_POLL_ROUNDS);
+        self.metrics.detection_events_generated = self
+            .metrics
+            .detection_events_generated
+            .checked_add(events.len() as u64)
+            .ok_or_else(|| {
+                self.status = StreamStatus::Failed;
 
-        let mut outputs =
-            Vec::with_capacity(max_rounds.min(self.buffer.len()));
-
-        for _ in 0..max_rounds {
-            self.check_cancellation()?;
-
-            match self.process_next()? {
-                Some(output) => {
-                    let event_count =
-                        u64::try_from(output.events.len())
-                            .map_err(|_| {
-                                QecError::numerical_failure(
-                                    super::errors::NumericalOperation::IntegerConversion,
-                                    "event count does not fit in u64",
-                                )
-                            })?;
-
-                    self.metrics.detection_events_delivered =
-                        self.metrics
-                            .detection_events_delivered
-                            .checked_add(event_count)
-                            .ok_or_else(|| {
-                                QecError::internal_invariant(
-                                    "delivered-event metric is monotonic",
-                                    "delivered-event counter overflowed",
-                                )
-                            })?;
-
-                    outputs.push(output);
-                }
-
-                None => break,
-            }
-        }
-
-        self.metrics.polls =
-            self.metrics
-                .polls
-                .checked_add(1)
-                .ok_or_else(|| {
-                    QecError::internal_invariant(
-                        "poll counter is monotonic",
-                        "poll counter overflowed",
-                    )
-                })?;
-
-        Ok(outputs)
-    }
-
-    /// Drains all currently buffered input.
-    ///
-    /// The queue itself is bounded, so the returned vector is bounded by the
-    /// configured stream capacity.
-    pub fn flush(
-        &mut self,
-    ) -> QecResult<Vec<StreamOutput>> {
-        self.check_cancellation()?;
-
-        let mut outputs =
-            Vec::with_capacity(self.buffer.len());
-
-        while !self.buffer.is_empty() {
-            self.check_cancellation()?;
-
-            if let Some(output) = self.process_next()? {
-                let event_count =
-                    u64::try_from(output.events.len())
-                        .map_err(|_| {
-                            QecError::numerical_failure(
-                                super::errors::NumericalOperation::IntegerConversion,
-                                "event count does not fit in u64",
-                            )
-                        })?;
-
-                self.metrics.detection_events_delivered =
-                    self.metrics
-                        .detection_events_delivered
-                        .checked_add(event_count)
-                        .ok_or_else(|| {
-                            QecError::internal_invariant(
-                                "delivered-event metric is monotonic",
-                                "delivered-event counter overflowed",
-                            )
-                        })?;
-
-                outputs.push(output);
-            }
-        }
-
-        self.metrics.flushes =
-            self.metrics
-                .flushes
-                .checked_add(1)
-                .ok_or_else(|| {
-                    QecError::internal_invariant(
-                        "flush counter is monotonic",
-                        "flush counter overflowed",
-                    )
-                })?;
-
-        self.maybe_close_after_drain();
-
-        Ok(outputs)
-    }
-
-    // ------------------------------------------------------------------------
-    // Source integration
-    // ------------------------------------------------------------------------
-
-    /// Pulls at most `max_items` syndromes from an incremental source.
-    ///
-    /// Source transport remains outside this module.
-    pub fn ingest_source<S>(
-        &mut self,
-        source: &mut S,
-        max_items: usize,
-    ) -> QecResult<usize>
-    where
-        S: SyndromeSource,
-    {
-        self.check_cancellation()?;
-
-        if max_items == 0 {
-            return Err(
                 QecError::invalid_input(
-                    StreamingError::InvalidPollSize {
-                        requested: max_items,
-                    }
-                    .to_string(),
-                ),
-            );
-        }
+                    "stream detection-event counter overflow",
+                )
+            })?;
 
-        let max_items =
-            max_items.min(self.buffer_capacity);
-
-        let mut accepted = 0usize;
-
-        while accepted < max_items {
-            self.check_cancellation()?;
-
-            if self.buffer.len() >= self.buffer_capacity {
-                break;
-            }
-
-            match source.next_syndrome()? {
-                Some(syndrome) => {
-                    self.submit(syndrome)?;
-                    accepted = accepted
-                        .checked_add(1)
-                        .ok_or_else(|| {
-                            QecError::internal_invariant(
-                                "ingested-source counter is monotonic",
-                                "source counter overflowed",
-                            )
-                        })?;
-                }
-
-                None => {
-                    self.close_input()?;
-                    break;
-                }
-            }
-        }
-
-        Ok(accepted)
-    }
-
-    /// Repeatedly ingests and processes a source without retaining the entire
-    /// source history.
-    ///
-    /// This method returns outputs in deterministic stream order. The returned
-    /// vector is bounded by `max_outputs`; callers needing unbounded operation
-    /// should repeatedly call `ingest_source` and `poll`.
-    pub fn process_source<S>(
-        &mut self,
-        source: &mut S,
-        max_outputs: usize,
-    ) -> QecResult<Vec<StreamOutput>>
-    where
-        S: SyndromeSource,
-    {
-        self.check_cancellation()?;
-
-        if max_outputs == 0 {
-            return Err(
-                QecError::invalid_input(
-                    StreamingError::InvalidPollSize {
-                        requested: max_outputs,
-                    }
-                    .to_string(),
-                ),
-            );
-        }
-
-        let max_outputs =
-            max_outputs.min(DEFAULT_MAX_POLL_ROUNDS);
-
-        let mut outputs =
-            Vec::with_capacity(max_outputs);
-
-        while outputs.len() < max_outputs {
-            self.check_cancellation()?;
-
-            if self.buffer.is_empty()
-                && self.status.accepts_input()
-            {
-                let ingested =
-                    self.ingest_source(source, 1)?;
-
-                if ingested == 0 {
-                    break;
-                }
-            }
-
-            match self.process_next()? {
-                Some(output) => {
-                    let event_count =
-                        u64::try_from(output.events.len())
-                            .map_err(|_| {
-                                QecError::numerical_failure(
-                                    super::errors::NumericalOperation::IntegerConversion,
-                                    "event count does not fit in u64",
-                                )
-                            })?;
-
-                    self.metrics.detection_events_delivered =
-                        self.metrics
-                            .detection_events_delivered
-                            .checked_add(event_count)
-                            .ok_or_else(|| {
-                                QecError::internal_invariant(
-                                    "delivered-event metric is monotonic",
-                                    "delivered-event counter overflowed",
-                                )
-                            })?;
-
-                    outputs.push(output);
-                }
-
-                None => {
-                    if self.status.is_terminal() {
-                        break;
-                    }
-
-                    break;
-                }
-            }
-        }
-
-        Ok(outputs)
-    }
-
-    // ------------------------------------------------------------------------
-    // Lifecycle
-    // ------------------------------------------------------------------------
-
-    /// Stops accepting new syndrome rounds.
-    ///
-    /// Existing buffered input remains valid and can still be drained.
-    pub fn close_input(&mut self) -> QecResult<()> {
-        self.check_cancellation()?;
-
-        if self.status == StreamStatus::Open {
-            self.status = StreamStatus::Closing;
-        }
-
-        self.maybe_close_after_drain();
-
-        Ok(())
-    }
-
-    fn maybe_close_after_drain(&mut self) {
         if self.status == StreamStatus::Closing
             && self.buffer.is_empty()
         {
             self.status = StreamStatus::Closed;
         }
+
+        Ok(Some(StreamOutput {
+            sequence,
+            round,
+            events,
+        }))
     }
 
-    /// Explicitly marks the stream cancelled.
+    /// Processes up to `max_rounds` buffered syndromes.
+    pub fn poll(
+        &mut self,
+        max_rounds: usize,
+    ) -> QecResult<Vec<StreamOutput>> {
+        if max_rounds == 0 {
+            return Err(
+                StreamingError::InvalidPollSize {
+                    requested: max_rounds,
+                }
+                .into(),
+            );
+        }
+
+        if max_rounds > DEFAULT_MAX_POLL_ROUNDS {
+            return Err(
+                QecError::resource_limit(
+                    ResourceKind::StreamBuffer,
+                    max_rounds as u128,
+                    0,
+                    DEFAULT_MAX_POLL_ROUNDS as u128,
+                    format!(
+                        "poll size {max_rounds} exceeds \
+                         maximum poll size {DEFAULT_MAX_POLL_ROUNDS}"
+                    ),
+                )
+            );
+        }
+
+        self.check_cancelled()?;
+
+        let mut outputs = Vec::new();
+
+        for _ in 0..max_rounds {
+            self.check_cancelled()?;
+
+            let Some(output) = self.process_one()? else {
+                break;
+            };
+
+            outputs.push(output);
+        }
+
+        self.metrics.polls = self
+            .metrics
+            .polls
+            .checked_add(1)
+            .ok_or_else(|| {
+                QecError::invalid_input(
+                    "stream poll counter overflow",
+                )
+            })?;
+
+        Ok(outputs)
+    }
+
+    /// Processes all currently buffered input.
     ///
-    /// The underlying cancellation token remains owned by its source.
-    pub fn cancel(&mut self) -> QecResult<()> {
-        let _ = self.cancellation.request();
+    /// This does not close the stream.
+    pub fn flush(&mut self) -> QecResult<Vec<StreamOutput>> {
+        self.check_cancelled()?;
 
-        self.status = StreamStatus::Cancelled;
+        let mut outputs = Vec::new();
 
-        self.cancellation.check()
+        while !self.buffer.is_empty() {
+            self.check_cancelled()?;
+
+            let Some(output) = self.process_one()? else {
+                break;
+            };
+
+            outputs.push(output);
+        }
+
+        self.metrics.flushes = self
+            .metrics
+            .flushes
+            .checked_add(1)
+            .ok_or_else(|| {
+                QecError::invalid_input(
+                    "stream flush counter overflow",
+                )
+            })?;
+
+        Ok(outputs)
+    }
+
+    /// Closes input and drains all already accepted syndromes.
+    pub fn close(
+        &mut self,
+    ) -> QecResult<Vec<StreamOutput>> {
+        self.check_cancelled()?;
+
+        if self.status.is_terminal() {
+            return Ok(Vec::new());
+        }
+
+        self.status = StreamStatus::Closing;
+
+        self.flush()
+    }
+
+    // ------------------------------------------------------------------------
+    // History
+    // ------------------------------------------------------------------------
+
+    fn retain_history(
+        &mut self,
+        syndrome: Syndrome,
+    ) -> QecResult<()> {
+        let capacity =
+            self.mode.history_capacity();
+
+        if capacity == 0 {
+            return Err(
+                StreamingError::InvalidHistorySize {
+                    requested: capacity,
+                }
+                .into(),
+            );
+        }
+
+        if self.history.len() >= capacity {
+            self.history.pop_front();
+        }
+
+        self.history.push_back(syndrome);
+
+        Ok(())
     }
 
     // ------------------------------------------------------------------------
@@ -1428,72 +1363,71 @@ impl SyndromeStream {
     // ------------------------------------------------------------------------
 
     /// Creates a deterministic in-memory snapshot.
-    ///
-    /// Durable serialization and cryptographic integrity belong to
-    /// `checkpoint.rs`.
-    pub fn snapshot(&self) -> StreamSnapshot {
-        StreamSnapshot {
+    pub fn snapshot(&mut self) -> QecResult<StreamSnapshot> {
+        self.check_cancelled()?;
+
+        let buffered_input =
+            self.buffer.iter().cloned().collect::<Vec<_>>();
+
+        let history =
+            self.history.iter().cloned().collect::<Vec<_>>();
+
+        Ok(StreamSnapshot {
             version: STREAM_STATE_VERSION,
-
             status: self.status,
-
             next_sequence: self.next_sequence,
-
             mode: self.mode,
-
             backpressure: self.backpressure,
-
             lossy_allowed: self.lossy_allowed,
-
             buffer_capacity: self.buffer_capacity,
-
-            buffered_input: self.buffer.iter().cloned().collect(),
-
-            history: self.history.iter().cloned().collect(),
-
+            buffered_input,
+            history,
             metrics: self.metrics,
-        }
+        })
     }
 
-    /// Validates a snapshot against the active resource policy.
+    /// Validates a stream snapshot without constructing a stream.
     pub fn validate_snapshot(
-        &self,
         snapshot: &StreamSnapshot,
+        limits: QecLimits,
     ) -> QecResult<()> {
         if snapshot.version != STREAM_STATE_VERSION {
             return Err(
-                QecError::unsupported(
-                    "stream_state_version",
-                    StreamingError::UnsupportedStateVersion {
-                        version: snapshot.version,
-                    }
-                    .to_string(),
-                ),
+                StreamingError::UnsupportedStateVersion {
+                    version: snapshot.version,
+                }
+                .into(),
             );
         }
 
+        limits.validate().map_err(|error| {
+            QecError::invalid_input(format!(
+                "invalid QEC limits for stream restore: {error}"
+            ))
+        })?;
+
+        snapshot.mode.validate().map_err(QecError::from)?;
+
         if snapshot.buffer_capacity == 0 {
             return Err(
-                QecError::invalid_input(
-                    StreamingError::InvalidState {
-                        message:
-                            "snapshot buffer capacity is zero"
-                                .to_owned(),
-                    }
-                    .to_string(),
-                ),
+                StreamingError::InvalidState {
+                    message:
+                        "snapshot buffer capacity is zero"
+                            .to_owned(),
+                }
+                .into(),
             );
         }
 
         if snapshot.buffer_capacity
-            > self.limits.max_stream_buffer_events
+            > limits.max_stream_buffer_events
         {
             return Err(QecError::resource_limit(
                 ResourceKind::StreamBuffer,
                 snapshot.buffer_capacity as u128,
-                self.limits.max_stream_buffer_events
-                    as u128,
-                "snapshot buffer exceeds active QEC stream limit",
+                0,
+                limits.max_stream_buffer_events as u128,
+                "snapshot buffer capacity exceeds QEC stream-buffer limit",
             ));
         }
 
@@ -1501,66 +1435,274 @@ impl SyndromeStream {
             > snapshot.buffer_capacity
         {
             return Err(
-                QecError::invalid_input(
-                    StreamingError::InvalidState {
-                        message:
-                            "snapshot contains more buffered syndromes than capacity"
-                                .to_owned(),
-                    }
-                    .to_string(),
-                ),
+                StreamingError::InvalidState {
+                    message:
+                        "snapshot contains more buffered items \
+                         than its admitted capacity"
+                            .to_owned(),
+                }
+                .into(),
+            );
+        }
+
+        if snapshot.history.len()
+            > snapshot.mode.history_capacity()
+        {
+            return Err(
+                StreamingError::InvalidState {
+                    message:
+                        "snapshot history exceeds configured history window"
+                            .to_owned(),
+                }
+                .into(),
+            );
+        }
+
+        if snapshot.backpressure.is_lossy()
+            && !snapshot.lossy_allowed
+        {
+            return Err(
+                StreamingError::InvalidState {
+                    message:
+                        "snapshot enables lossy backpressure without \
+                         explicit authorization"
+                            .to_owned(),
+                }
+                .into(),
             );
         }
 
         if snapshot.next_sequence
-            > MAX_STREAM_SEQUENCE
+            > MAX_STREAM_SEQUENCE + 1
         {
             return Err(
-                QecError::invalid_input(
-                    StreamingError::InvalidState {
-                        message:
-                            "snapshot sequence number is out of range"
-                                .to_owned(),
-                    }
-                    .to_string(),
-                ),
+                StreamingError::SequenceOverflow.into()
             );
         }
 
-        if !snapshot.backpressure.is_lossless()
-            && !snapshot.lossy_allowed
+        // Validate FIFO sequence ordering.
+        let mut expected_sequence = snapshot
+            .buffered_input
+            .first()
+            .map(StreamItem::sequence);
+
+        for item in &snapshot.buffered_input {
+            if let Some(expected) = expected_sequence {
+                if item.sequence() != expected {
+                    return Err(
+                        StreamingError::InvalidState {
+                            message:
+                                "buffered stream sequence numbers \
+                                 are not contiguous"
+                                    .to_owned(),
+                        }
+                        .into(),
+                    );
+                }
+
+                expected_sequence =
+                    expected.checked_add(1);
+            }
+        }
+
+        if let Some(last) =
+            snapshot.buffered_input.last()
         {
-            return Err(
-                QecError::invalid_input(
+            let expected_next =
+                last.sequence()
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        QecError::invalid_input(
+                            "snapshot sequence overflow",
+                        )
+                    })?;
+
+            if snapshot.next_sequence != expected_next {
+                return Err(
                     StreamingError::InvalidState {
                         message:
-                            "snapshot enables lossy backpressure without explicit authorization"
+                            "snapshot next sequence does not follow \
+                             the buffered sequence"
                                 .to_owned(),
                     }
-                    .to_string(),
-                ),
-            );
+                    .into(),
+                );
+            }
+        }
+
+        // Validate retained history ordering.
+        let mut previous_round: Option<u64> = None;
+
+        for syndrome in &snapshot.history {
+            let round = syndrome.round().value();
+
+            if let Some(previous) = previous_round {
+                let expected =
+                    previous.checked_add(1).ok_or_else(|| {
+                        QecError::invalid_input(
+                            "snapshot history round overflow",
+                        )
+                    })?;
+
+                if round != expected {
+                    return Err(
+                        StreamingError::InvalidState {
+                            message:
+                                "snapshot history contains \
+                                 non-consecutive rounds"
+                                    .to_owned(),
+                        }
+                        .into(),
+                    );
+                }
+            }
+
+            previous_round = Some(round);
+
+            syndrome.preflight()?;
+        }
+
+        for item in &snapshot.buffered_input {
+            item.syndrome().preflight()?;
         }
 
         Ok(())
     }
 
-    // ------------------------------------------------------------------------
-    // Statistics
-    // ------------------------------------------------------------------------
+    /// Restores a stream from an in-memory snapshot.
+    ///
+    /// The cancellation token is intentionally supplied separately. A
+    /// cancellation token is execution state, not durable stream data.
+    pub fn from_snapshot(
+        snapshot: StreamSnapshot,
+        limits: QecLimits,
+        cancellation: CancellationToken,
+    ) -> QecResult<Self> {
+        Self::validate_snapshot(&snapshot, limits)?;
 
-    /// Returns the total number of processed syndrome rounds.
-    #[must_use]
-    pub const fn rounds_processed(&self) -> u64 {
-        self.metrics.rounds_processed
+        if snapshot.status == StreamStatus::Cancelled {
+            return Err(
+                StreamingError::InvalidState {
+                    message:
+                        "a cancelled stream cannot be restored without \
+                         creating a new execution context"
+                            .to_owned(),
+                }
+                .into(),
+            );
+        }
+
+        let mut stream =
+            Self::with_limits_and_cancellation(
+                limits,
+                cancellation,
+            )?;
+
+        stream.mode = snapshot.mode;
+        stream.backpressure = snapshot.backpressure;
+        stream.lossy_allowed =
+            snapshot.lossy_allowed;
+        stream.buffer_capacity =
+            snapshot.buffer_capacity;
+        stream.buffer =
+            VecDeque::from(snapshot.buffered_input);
+        stream.history =
+            VecDeque::from(snapshot.history);
+        stream.next_sequence =
+            snapshot.next_sequence;
+        stream.status =
+            snapshot.status;
+        stream.metrics =
+            snapshot.metrics;
+
+        // Reconstruct the incremental processor from retained history.
+        //
+        // Minimal mode retains one baseline. Windowed mode may retain more
+        // history, but the processor only needs consecutive input in order.
+        stream.processor.reset();
+
+        for syndrome in stream.history.iter().cloned() {
+            stream.processor.push(syndrome)?;
+        }
+
+        Ok(stream)
     }
 
-    /// Returns the total number of generated detection events.
-    #[must_use]
-    pub const fn detection_events_generated(
-        &self,
-    ) -> u64 {
-        self.metrics.detection_events_generated
+    // ------------------------------------------------------------------------
+    // Consumer integration
+    // ------------------------------------------------------------------------
+
+    /// Processes all input from a `SyndromeSource`.
+    ///
+    /// Detection-event batches are delivered immediately to `on_output`.
+    /// The complete event history is therefore not accumulated by this method.
+    pub fn process_source<S, F>(
+        &mut self,
+        source: &mut S,
+        mut on_output: F,
+    ) -> QecResult<()>
+    where
+        S: SyndromeSource,
+        F: FnMut(StreamOutput) -> QecResult<()>,
+    {
+        loop {
+            self.check_cancelled()?;
+
+            match source.next_syndrome()? {
+                Some(syndrome) => {
+                    self.submit(syndrome)?;
+
+                    while let Some(output) =
+                        self.process_one()?
+                    {
+                        on_output(output)?;
+                    }
+                }
+
+                None => {
+                    self.close()?;
+
+                    while let Some(output) =
+                        self.process_one()?
+                    {
+                        on_output(output)?;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Implements `SyndromeSource` for the stream itself.
+    ///
+    /// This exposes processed buffered input to another execution layer while
+    /// retaining FIFO ordering.
+    pub fn next_buffered_syndrome(
+        &mut self,
+    ) -> QecResult<Option<Syndrome>> {
+        self.check_cancelled()?;
+
+        if let Some(item) = self.buffer.pop_front() {
+            self.metrics.buffered_syndromes =
+                self.buffer.len() as u64;
+
+            Ok(Some(item.into_syndrome()))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+// ============================================================================
+// SyndromeSource integration
+// ============================================================================
+
+impl SyndromeSource for SyndromeStream {
+    fn next_syndrome(&mut self) -> QecResult<Option<Syndrome>> {
+        self.next_buffered_syndrome()
     }
 }
 
@@ -1571,32 +1713,24 @@ impl SyndromeStream {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::syndrome::{
+        MeasurementConfidence,
+        MeasurementRound,
+        MeasurementTimestamp,
+        StabilizerId,
+        SyndromeMeasurement,
+    };
 
-    fn limits() -> QecLimits {
-        let mut limits = QecLimits::default();
-
-        limits.max_stream_buffer_events = 4;
-        limits.max_syndrome_events = 64;
-        limits.max_rounds = 16;
-
-        limits
-    }
-
-    fn syndrome(round: u64, value: bool) -> Syndrome {
-        use super::super::syndrome::{
-            MeasurementConfidence,
-            MeasurementRound,
-            MeasurementTimestamp,
-            StabilizerId,
-            SyndromeMeasurement,
-        };
-
-        let mut syndrome = Syndrome::new_with_limits(
-            MeasurementRound::new(round).unwrap(),
-            MeasurementTimestamp::new(round).unwrap(),
-            limits(),
-        )
-        .unwrap();
+    fn syndrome(
+        round: u64,
+        value: bool,
+    ) -> Syndrome {
+        let mut syndrome = Syndrome::new(
+            MeasurementRound::new(round)
+                .expect("test round must be valid"),
+            MeasurementTimestamp::new(round)
+                .expect("test timestamp must be valid"),
+        );
 
         syndrome
             .insert(SyndromeMeasurement::new(
@@ -1604,202 +1738,349 @@ mod tests {
                 value,
                 MeasurementConfidence::FULL,
             ))
-            .unwrap();
+            .expect("test measurement must be valid");
 
         syndrome
     }
 
+    fn small_limits() -> QecLimits {
+        let mut limits = QecLimits::default();
+
+        limits.max_stream_buffer_events = 4;
+        limits.max_syndrome_events = 64;
+        limits.max_rounds = 64;
+
+        limits
+    }
+
     #[test]
-    fn default_stream_is_lossless() {
+    fn stream_starts_open() {
         let stream =
-            SyndromeStream::with_limits(limits())
-                .unwrap();
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .expect("stream must construct");
 
-        assert_eq!(
-            stream.backpressure_policy(),
-            BackpressurePolicy::Reject
-        );
-
-        assert!(!stream.lossy_allowed());
         assert_eq!(
             stream.status(),
             StreamStatus::Open
         );
-    }
 
-    #[test]
-    fn first_round_establishes_baseline() {
-        let mut stream =
-            SyndromeStream::with_limits(limits())
-                .unwrap();
-
-        stream.submit(syndrome(0, false)).unwrap();
-
-        let output =
-            stream.process_next().unwrap().unwrap();
-
-        assert!(output.events.is_empty());
-        assert_eq!(output.round.value(), 0);
-    }
-
-    #[test]
-    fn consecutive_rounds_generate_detection_events() {
-        let mut stream =
-            SyndromeStream::with_limits(limits())
-                .unwrap();
-
-        stream.submit(syndrome(0, false)).unwrap();
-        stream.submit(syndrome(1, true)).unwrap();
-
-        let first =
-            stream.process_next().unwrap().unwrap();
-
-        assert!(first.events.is_empty());
-
-        let second =
-            stream.process_next().unwrap().unwrap();
-
-        assert_eq!(second.events.len(), 1);
         assert_eq!(
-            second.events[0].stabilizer().index(),
+            stream.buffered_len(),
             0
         );
-        assert!(second.events[0].value());
-    }
 
-    #[test]
-    fn out_of_order_rounds_are_rejected() {
-        let mut stream =
-            SyndromeStream::with_limits(limits())
-                .unwrap();
-
-        stream.submit(syndrome(0, false)).unwrap();
-        stream.submit(syndrome(2, true)).unwrap();
-
-        stream.process_next().unwrap().unwrap();
-
-        let result = stream.process_next();
-
-        assert!(result.is_err());
         assert_eq!(
-            stream.status(),
-            StreamStatus::Failed
+            stream.backpressure(),
+            BackpressurePolicy::Reject
         );
     }
 
     #[test]
-    fn buffer_is_bounded() {
+    fn submission_is_fifo_and_sequenced() {
         let mut stream =
-            SyndromeStream::with_limits(limits())
-                .unwrap();
-
-        for round in 0..4 {
-            stream
-                .submit(syndrome(round, false))
-                .unwrap();
-        }
-
-        let result =
-            stream.submit(syndrome(4, false));
-
-        assert!(result.is_err());
-        assert_eq!(stream.buffered_len(), 4);
-    }
-
-    #[test]
-    fn lossy_backpressure_requires_explicit_opt_in() {
-        let mut stream =
-            SyndromeStream::with_limits(limits())
-                .unwrap();
-
-        let result =
-            stream.set_backpressure_policy(
-                BackpressurePolicy::DropOldest,
-            );
-
-        assert!(result.is_err());
-
-        stream.allow_lossy_processing(true);
-
-        stream
-            .set_backpressure_policy(
-                BackpressurePolicy::DropOldest,
+            SyndromeStream::with_limits(
+                small_limits(),
             )
             .unwrap();
 
         assert_eq!(
-            stream.backpressure_policy(),
-            BackpressurePolicy::DropOldest
+            stream.submit(syndrome(0, false))
+                .unwrap(),
+            0
+        );
+
+        assert_eq!(
+            stream.submit(syndrome(1, true))
+                .unwrap(),
+            1
+        );
+
+        assert_eq!(
+            stream.submit(syndrome(2, false))
+                .unwrap(),
+            2
+        );
+
+        assert_eq!(
+            stream.next_sequence(),
+            3
         );
     }
 
     #[test]
-    fn closing_drains_existing_input() {
+    fn out_of_order_round_is_rejected_before_queue_mutation() {
         let mut stream =
-            SyndromeStream::with_limits(limits())
-                .unwrap();
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
 
-        stream.submit(syndrome(0, false)).unwrap();
-        stream.close_input().unwrap();
+        stream.submit(
+            syndrome(0, false),
+        )
+        .unwrap();
+
+        let result =
+            stream.submit(
+                syndrome(2, true),
+            );
+
+        assert!(matches!(
+            result,
+            Err(QecError::InvalidInput { .. })
+                | Err(QecError::InvalidSyndrome { .. })
+        ));
 
         assert_eq!(
-            stream.status(),
-            StreamStatus::Closing
+            stream.buffered_len(),
+            1
+        );
+    }
+
+    #[test]
+    fn full_lossless_buffer_rejects_input() {
+        let mut stream =
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
+
+        for round in 0..4 {
+            stream
+                .submit(
+                    syndrome(round, false),
+                )
+                .unwrap();
+        }
+
+        let result =
+            stream.submit(
+                syndrome(4, true),
+            );
+
+        assert!(result.is_err());
+
+        assert_eq!(
+            stream.buffered_len(),
+            4
+        );
+    }
+
+    #[test]
+    fn lossy_mode_requires_explicit_authorization() {
+        let mut stream =
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
+
+        assert!(
+            stream
+                .set_backpressure(
+                    BackpressurePolicy::DropNewest,
+                )
+                .is_err()
         );
 
-        stream.process_next().unwrap().unwrap();
+        stream.allow_lossy(true).unwrap();
+
+        stream
+            .set_backpressure(
+                BackpressurePolicy::DropNewest,
+            )
+            .unwrap();
+
+        assert_eq!(
+            stream.backpressure(),
+            BackpressurePolicy::DropNewest
+        );
+    }
+
+    #[test]
+    fn processor_generates_detection_events() {
+        let mut stream =
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
+
+        stream
+            .submit(syndrome(0, false))
+            .unwrap();
+
+        stream
+            .submit(syndrome(1, true))
+            .unwrap();
+
+        let first =
+            stream.process_one()
+                .unwrap()
+                .unwrap();
+
+        assert!(first.events.is_empty());
+
+        let second =
+            stream.process_one()
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(
+            second.events.len(),
+            1
+        );
+    }
+
+    #[test]
+    fn process_one_preserves_sequence() {
+        let mut stream =
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
+
+        stream
+            .submit(syndrome(0, false))
+            .unwrap();
+
+        let output =
+            stream.process_one()
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(
+            output.sequence,
+            0
+        );
+
+        assert_eq!(
+            output.round.value(),
+            0
+        );
+    }
+
+    #[test]
+    fn close_drains_buffer() {
+        let mut stream =
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
+
+        for round in 0..3 {
+            stream
+                .submit(
+                    syndrome(round, false),
+                )
+                .unwrap();
+        }
+
+        let outputs =
+            stream.close()
+                .unwrap();
+
+        assert_eq!(
+            outputs.len(),
+            3
+        );
 
         assert_eq!(
             stream.status(),
             StreamStatus::Closed
         );
 
-        assert!(stream.submit(syndrome(1, false)).is_err());
+        assert_eq!(
+            stream.buffered_len(),
+            0
+        );
     }
 
     #[test]
-    fn snapshot_is_bounded_and_versioned() {
+    fn minimal_history_retains_previous_round() {
         let mut stream =
-            SyndromeStream::with_limits(limits())
-                .unwrap();
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
 
-        stream.submit(syndrome(0, false)).unwrap();
+        stream
+            .submit(syndrome(0, false))
+            .unwrap();
 
-        let snapshot = stream.snapshot();
+        stream
+            .process_one()
+            .unwrap();
 
         assert_eq!(
-            snapshot.version,
-            STREAM_STATE_VERSION
-        );
-
-        assert_eq!(
-            snapshot.buffered_input.len(),
+            stream.history().count(),
             1
         );
 
-        assert!(
-            stream.validate_snapshot(&snapshot).is_ok()
+        assert_eq!(
+            stream.previous_syndrome()
+                .unwrap()
+                .round()
+                .value(),
+            0
         );
     }
 
     #[test]
-    fn cancellation_is_terminal() {
-        let source = super::super::cancellation::CancellationSource::new();
-        let token = source.token();
+    fn windowed_history_is_bounded() {
+        let mut stream =
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
+
+        stream
+            .set_mode(
+                StreamMode::Windowed {
+                    rounds: 2,
+                },
+            )
+            .unwrap();
+
+        for round in 0..4 {
+            stream
+                .submit(
+                    syndrome(round, false),
+                )
+                .unwrap();
+
+            stream
+                .process_one()
+                .unwrap();
+        }
+
+        assert_eq!(
+            stream.history().count(),
+            2
+        );
+    }
+
+    #[test]
+    fn cancellation_stops_submission() {
+        let (source, token) =
+            super::super::cancellation::CancellationSource::new_pair();
+
+        source.request();
 
         let mut stream =
             SyndromeStream::with_limits_and_cancellation(
-                limits(),
+                small_limits(),
                 token,
             )
             .unwrap();
 
-        source.cancel();
-
         let result =
-            stream.submit(syndrome(0, false));
+            stream.submit(
+                syndrome(0, false),
+            );
 
         assert!(result.is_err());
+
         assert_eq!(
             stream.status(),
             StreamStatus::Cancelled
@@ -1807,18 +2088,173 @@ mod tests {
     }
 
     #[test]
-    fn deterministic_sequence_numbers() {
+    fn snapshot_round_trip() {
+        let limits =
+            small_limits();
+
         let mut stream =
-            SyndromeStream::with_limits(limits())
+            SyndromeStream::with_limits(
+                limits,
+            )
+            .unwrap();
+
+        stream
+            .submit(syndrome(0, false))
+            .unwrap();
+
+        stream
+            .process_one()
+            .unwrap();
+
+        stream
+            .submit(syndrome(1, true))
+            .unwrap();
+
+        let snapshot =
+            stream.snapshot()
                 .unwrap();
 
-        let a =
-            stream.submit(syndrome(0, false)).unwrap();
+        let restored =
+            SyndromeStream::from_snapshot(
+                snapshot,
+                limits,
+                CancellationToken::new(),
+            )
+            .unwrap();
 
-        let b =
-            stream.submit(syndrome(1, false)).unwrap();
+        assert_eq!(
+            restored.status(),
+            StreamStatus::Open
+        );
 
-        assert_eq!(a, 0);
-        assert_eq!(b, 1);
+        assert_eq!(
+            restored.next_sequence(),
+            stream.next_sequence()
+        );
+
+        assert_eq!(
+            restored.buffered_len(),
+            stream.buffered_len()
+        );
+    }
+
+    #[test]
+    fn snapshot_rejects_invalid_version() {
+        let limits =
+            small_limits();
+
+        let mut stream =
+            SyndromeStream::with_limits(
+                limits,
+            )
+            .unwrap();
+
+        let mut snapshot =
+            stream.snapshot()
+                .unwrap();
+
+        snapshot.version =
+            STREAM_STATE_VERSION + 1;
+
+        assert!(
+            SyndromeStream::validate_snapshot(
+                &snapshot,
+                limits,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn stream_implements_syndrome_source() {
+        let mut stream =
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
+
+        stream
+            .submit(syndrome(0, false))
+            .unwrap();
+
+        let result =
+            SyndromeSource::next_syndrome(
+                &mut stream,
+            )
+            .unwrap();
+
+        assert!(result.is_some());
+        assert_eq!(
+            stream.buffered_len(),
+            0
+        );
+    }
+
+    #[test]
+    fn metrics_remain_lossless_by_default() {
+        let mut stream =
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
+
+        stream
+            .submit(syndrome(0, false))
+            .unwrap();
+
+        stream
+            .process_one()
+            .unwrap();
+
+        assert!(
+            stream.metrics().is_lossless()
+        );
+
+        assert_eq!(
+            stream
+                .metrics()
+                .syndromes_dropped,
+            0
+        );
+    }
+
+    #[test]
+    fn drop_oldest_is_explicitly_lossy() {
+        let mut stream =
+            SyndromeStream::with_limits(
+                small_limits(),
+            )
+            .unwrap();
+
+        stream.allow_lossy(true).unwrap();
+
+        stream
+            .set_backpressure(
+                BackpressurePolicy::DropOldest,
+            )
+            .unwrap();
+
+        for round in 0..4 {
+            stream
+                .submit(
+                    syndrome(round, false),
+                )
+                .unwrap();
+        }
+
+        stream
+            .submit(syndrome(4, true))
+            .unwrap();
+
+        assert_eq!(
+            stream
+                .metrics()
+                .syndromes_dropped,
+            1
+        );
+
+        assert!(
+            !stream.metrics().is_lossless()
+        );
     }
 }
