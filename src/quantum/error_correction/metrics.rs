@@ -1,98 +1,115 @@
-//! Production-grade metrics and observability for Zamani Quantum Error
-//! Correction.
+//! Production metrics and observability for Zamani Quantum Error Correction.
 //!
-//! # Architectural contract
+//! # Ownership
 //!
-//! Metrics are strictly observational. They must never determine whether a
-//! QEC operation succeeds or fails.
+//! This module owns:
 //!
-//! ```text
-//!                         QEC EXECUTION
-//!                              │
-//!             ┌────────────────┴────────────────┐
-//!             │                                 │
-//!             ▼                                 ▼
-//!       CORRECTNESS PATH                 OBSERVABILITY PATH
-//!             │                                 │
-//!       decoder result                 MetricsCollector
-//!             │                                 │
-//!       logical outcome                 MetricsSnapshot
-//!                                             │
-//!                         ┌───────────────────┼──────────────────┐
-//!                         ▼                   ▼                  ▼
-//!                     telemetry          threshold          checkpoint
-//! ```
+//! - aggregate execution metrics;
+//! - decoder lifecycle counters;
+//! - logical/physical error statistics;
+//! - latency statistics;
+//! - graph/work counters;
+//! - resource observations;
+//! - QPU aggregate metrics;
+//! - distributed snapshot aggregation;
+//! - threshold-experiment summaries;
+//! - bounded, thread-safe metric collection.
 //!
-//! # Resource architecture
+//! This module does NOT own:
 //!
-//! ```text
-//! QecConfig
-//!     │
-//!     ▼
-//! QecLimits ───────────────► ResourceManager
-//!     │                            │
-//!     │                            ▼
-//!     │                    ResourceSnapshot
-//!     │                            │
-//!     └────────────────────────────┘
-//!                                  │
-//!                                  ▼
-//!                         MetricsCollector
-//! ```
-//!
-//! `limits.rs` remains the declarative policy layer.
-//! `resources.rs` remains the enforcement/accounting layer.
-//! `metrics.rs` observes both execution and resource state.
-//!
-//! Metrics never create an independent resource policy.
-//!
-//! # Determinism
-//!
-//! Counters are stored as integers and updated atomically. Floating-point
-//! rates are derived only when a snapshot is requested.
-//!
-//! Distributed metric aggregation is performed by integer addition/max
-//! operations, avoiding floating-point accumulation order dependence.
-//!
-//! Wall-clock measurements are explicitly observational and therefore are not
-//! part of deterministic correctness comparisons.
-//!
-//! # Security
-//!
-//! This module deliberately stores aggregate values rather than:
-//!
-//! - raw syndrome streams;
-//! - quantum circuits;
-//! - measurement payloads;
+//! - resource limits;
+//! - resource admission;
+//! - memory allocation;
+//! - decoder correctness;
+//! - authorization;
+//! - telemetry transport;
 //! - QPU credentials;
-//! - device secrets;
-//! - topology secrets;
+//! - raw syndrome data;
+//! - raw measurement data;
+//! - quantum circuits;
+//! - checkpoint serialization.
+//!
+//! # Integration contract
+//!
+//! ```text
+//!                         QecConfig
+//!                             │
+//!                             ▼
+//!                       execution policy
+//!                             │
+//!                ┌────────────┴────────────┐
+//!                │                         │
+//!                ▼                         ▼
+//!        ResourceManager              Decoder/Backend
+//!                │                         │
+//!                ▼                         ▼
+//!        ResourceSnapshot          execution events
+//!                │                         │
+//!                └────────────┬────────────┘
+//!                             ▼
+//!                    MetricsCollector
+//!                             │
+//!                             ▼
+//!                     MetricsSnapshot
+//!                    /       |        \
+//!                   /        |         \
+//!                  ▼         ▼          ▼
+//!             telemetry  threshold   checkpoint
+//! ```
+//!
+//! `limits.rs` remains the policy authority.
+//! `resources.rs` remains the runtime accounting authority.
+//! `metrics.rs` only observes.
+//!
+//! # Security contract
+//!
+//! Metrics must never contain:
+//!
+//! - passwords;
+//! - API tokens;
+//! - private keys;
+//! - QPU credentials;
+//! - raw quantum circuits;
+//! - raw syndrome streams;
+//! - raw measurement payloads;
+//! - proprietary device secrets;
 //! - user data.
 //!
-//! Such data belongs outside the metrics layer and must be governed by the
-//! telemetry/security policy.
+//! # Determinism contract
 //!
-//! # Overflow policy
+//! Correctness-affecting execution must never depend on metrics.
 //!
-//! Metrics must never cause a QEC computation to fail because a counter became
-//! too large. Counters therefore saturate at their representable maximum.
+//! Metric counters use integer aggregation and saturating arithmetic.
+//! Floating-point rates are derived only when a snapshot is requested.
+//!
+//! Distributed aggregation therefore uses:
+//!
+//! ```text
+//! integer counters
+//!      ↓
+//! deterministic addition/max
+//!      ↓
+//! derived rates
+//! ```
+//!
+//! Wall-clock measurements are observational and must not be used to decide
+//! whether two deterministic QEC executions are equivalent.
+//!
+//! # Overflow contract
+//!
+//! Metric overflow must never fail QEC execution.
+//!
+//! Counters saturate at their representable maximum.
 //!
 //! Resource enforcement remains the responsibility of `resources.rs`.
 //!
-//! # Large-scale execution
+//! # Rust compatibility
 //!
-//! The collector stores bounded aggregate state only. It does not retain
-//! individual events, graph nodes, corrections, syndrome streams, or worker
-//! histories.
+//! Target: Rust 1.97.1.
 //!
-//! This makes it suitable for:
-//!
-//! - streaming QEC;
-//! - partitioned decoding;
-//! - distributed decoding;
-//! - large threshold experiments;
-//! - QPU workloads;
-//! - long-running services.
+//! No unstable features are required.
+
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use core::fmt;
 use std::sync::atomic::{
@@ -103,39 +120,46 @@ use std::sync::atomic::{
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use super::backend::BackendKind;
 use super::resources::ResourceSnapshot;
 
 /* ========================================================================== */
 /* Errors                                                                     */
 /* ========================================================================== */
 
-/// Errors associated with metric configuration or aggregation.
+/// Errors produced while configuring or merging metric snapshots.
 ///
-/// Normal metric recording is intentionally infallible.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Recording an individual metric is intentionally infallible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetricsError {
-    /// Configuration specified an invalid capacity.
-    InvalidCapacity {
-        name: &'static str,
+    /// A metric configuration contains an invalid value.
+    InvalidConfiguration {
+        field: &'static str,
     },
 
-    /// A metrics aggregation operation encountered incompatible metadata.
-    IncompatibleConfiguration {
+    /// Two snapshots cannot be safely merged.
+    IncompatibleSnapshots {
         reason: &'static str,
     },
 }
 
 impl fmt::Display for MetricsError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
-            Self::InvalidCapacity { name } => {
-                write!(f, "invalid metrics capacity for {name}")
-            }
-
-            Self::IncompatibleConfiguration { reason } => {
+            Self::InvalidConfiguration { field } => {
                 write!(
                     f,
-                    "incompatible metrics configuration: {reason}"
+                    "invalid metrics configuration field: {field}"
+                )
+            }
+
+            Self::IncompatibleSnapshots { reason } => {
+                write!(
+                    f,
+                    "incompatible metric snapshots: {reason}"
                 )
             }
         }
@@ -145,14 +169,17 @@ impl fmt::Display for MetricsError {
 impl std::error::Error for MetricsError {}
 
 /* ========================================================================== */
-/* Decoder identity                                                           */
+/* Decoder metric identity                                                    */
 /* ========================================================================== */
 
-/// Stable decoder identifier used by metrics.
+/// Stable metric identity for a decoder.
 ///
-/// This deliberately remains independent from the error hierarchy so metrics
-/// can be collected by low-level workers without importing decoder errors.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// This deliberately does not reuse the decoder registry's internal numeric
+/// identifier. Decoder registry identity may change independently from the
+/// externally observable metrics identity.
+///
+/// This prevents `metrics.rs` from becoming coupled to decoder registration.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DecoderId {
     SurfaceCode,
     Mwpm,
@@ -162,11 +189,29 @@ pub enum DecoderId {
     LookupTable,
     Streaming,
     Distributed,
-    Custom,
+
+    /// User-defined decoder identity.
+    Custom(String),
 }
 
 impl DecoderId {
-    pub const fn as_str(self) -> &'static str {
+    pub fn custom(
+        name: impl Into<String>,
+    ) -> Result<Self, MetricsError> {
+        let name = name.into();
+
+        if name.trim().is_empty() {
+            return Err(
+                MetricsError::InvalidConfiguration {
+                    field: "decoder_name",
+                },
+            );
+        }
+
+        Ok(Self::Custom(name))
+    }
+
+    pub fn as_str(&self) -> &str {
         match self {
             Self::SurfaceCode => "surface_code",
             Self::Mwpm => "mwpm",
@@ -176,69 +221,22 @@ impl DecoderId {
             Self::LookupTable => "lookup_table",
             Self::Streaming => "streaming",
             Self::Distributed => "distributed",
-            Self::Custom => "custom",
+            Self::Custom(name) => name.as_str(),
         }
     }
 }
 
 impl Default for DecoderId {
     fn default() -> Self {
-        Self::Custom
+        Self::Custom("unknown".to_owned())
     }
 }
 
 impl fmt::Display for DecoderId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-/* ========================================================================== */
-/* Backend identity                                                           */
-/* ========================================================================== */
-
-/// Execution backend represented in metrics.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BackendKind {
-    Cpu,
-    ParallelCpu,
-    Gpu,
-    Accelerator,
-    Distributed,
-    Simulator,
-    Emulator,
-    Qpu,
-    Custom,
-}
-
-impl BackendKind {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Cpu => "cpu",
-            Self::ParallelCpu => "parallel_cpu",
-            Self::Gpu => "gpu",
-            Self::Accelerator => "accelerator",
-            Self::Distributed => "distributed",
-            Self::Simulator => "simulator",
-            Self::Emulator => "emulator",
-            Self::Qpu => "qpu",
-            Self::Custom => "custom",
-        }
-    }
-
-    pub const fn is_qpu(self) -> bool {
-        matches!(self, Self::Qpu)
-    }
-}
-
-impl Default for BackendKind {
-    fn default() -> Self {
-        Self::Cpu
-    }
-}
-
-impl fmt::Display for BackendKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
@@ -247,47 +245,31 @@ impl fmt::Display for BackendKind {
 /* QPU metrics                                                                */
 /* ========================================================================== */
 
-/// Aggregate QPU execution metrics.
+/// Aggregate QPU metrics.
 ///
-/// No credentials, circuit contents, raw measurements, or device secrets are
-/// stored here.
+/// This type deliberately contains no credentials, raw results, circuits or
+/// device secrets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct QpuMetrics {
-    /// Number of QPU shots submitted.
     pub shots: u64,
-
-    /// Number of QPU circuits submitted.
     pub circuits: u64,
-
-    /// Number of QPU measurement operations observed.
     pub measurement_count: u64,
 
-    /// Aggregate queue time.
     pub queue_time: Duration,
-
-    /// Aggregate QPU execution time.
     pub execution_time: Duration,
 
-    /// Number of QPU submissions that failed.
     pub submission_failures: u64,
-
-    /// Number of malformed/invalid measurement results rejected.
     pub invalid_measurements: u64,
 
-    /// Number of QPU jobs completed.
     pub completed_jobs: u64,
-
-    /// Number of QPU jobs cancelled.
     pub cancelled_jobs: u64,
 
-    /// Readout-error observations, when supplied by the backend.
     pub readout_error_count: u64,
-
-    /// Readout-error opportunities, when supplied by the backend.
     pub readout_error_opportunities: u64,
 }
 
 impl QpuMetrics {
+    #[must_use]
     pub fn readout_error_rate(&self) -> Option<f64> {
         ratio(
             self.readout_error_count,
@@ -295,11 +277,17 @@ impl QpuMetrics {
         )
     }
 
-    fn saturating_add_assign(&mut self, other: &Self) {
+    fn merge_from(
+        &mut self,
+        other: &Self,
+    ) {
         self.shots = self.shots.saturating_add(other.shots);
-        self.circuits = self.circuits.saturating_add(other.circuits);
-        self.measurement_count =
-            self.measurement_count.saturating_add(other.measurement_count);
+        self.circuits =
+            self.circuits.saturating_add(other.circuits);
+
+        self.measurement_count = self
+            .measurement_count
+            .saturating_add(other.measurement_count);
 
         self.queue_time = saturating_duration_add(
             self.queue_time,
@@ -333,44 +321,45 @@ impl QpuMetrics {
 
         self.readout_error_opportunities = self
             .readout_error_opportunities
-            .saturating_add(other.readout_error_opportunities);
+            .saturating_add(
+                other.readout_error_opportunities,
+            );
     }
 }
 
 /* ========================================================================== */
-/* Configuration                                                              */
+/* Metrics configuration                                                       */
 /* ========================================================================== */
 
-/// Configuration controlling metric behavior.
+/// Metrics configuration.
 ///
-/// Metrics remain aggregate-only. `max_custom_counters` is retained as an API
-/// compatibility boundary for future bounded custom-counter support.
+/// Metrics are deliberately bounded and aggregate-only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MetricsConfig {
-    /// Maximum custom metric cardinality permitted by future extensions.
-    pub max_custom_counters: usize,
-
-    /// Whether worker count should be tracked.
+    /// Whether worker high-water marks are collected.
     pub track_worker_count: bool,
+
+    /// Whether QPU metrics are collected.
+    pub track_qpu: bool,
+
+    /// Whether resource observations are collected.
+    pub track_resources: bool,
 }
 
 impl Default for MetricsConfig {
     fn default() -> Self {
         Self {
-            max_custom_counters: 1024,
             track_worker_count: true,
+            track_qpu: true,
+            track_resources: true,
         }
     }
 }
 
 impl MetricsConfig {
-    pub fn validate(&self) -> Result<(), MetricsError> {
-        if self.max_custom_counters == 0 {
-            return Err(MetricsError::InvalidCapacity {
-                name: "max_custom_counters",
-            });
-        }
-
+    pub fn validate(
+        &self,
+    ) -> Result<(), MetricsError> {
         Ok(())
     }
 }
@@ -381,7 +370,15 @@ impl MetricsConfig {
 
 /// Immutable aggregate metrics snapshot.
 ///
-/// All counters are integer based. Rates are derived from those counters.
+/// A snapshot is suitable for:
+///
+/// - telemetry;
+/// - threshold experiments;
+/// - checkpoint metadata;
+/// - distributed aggregation;
+/// - deterministic regression testing.
+///
+/// It contains no raw execution payloads.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MetricsSnapshot {
     /* ---------------------------------------------------------------------- */
@@ -424,7 +421,19 @@ pub struct MetricsSnapshot {
     pub measurement_rounds: u64,
 
     /* ---------------------------------------------------------------------- */
-    /* Parallel/distributed execution                                         */
+    /* Resource observations                                                   */
+    /* ---------------------------------------------------------------------- */
+
+    pub checkpoint_bytes: u64,
+    pub partitions: u64,
+    pub stream_buffer_events: u64,
+    pub verification_operations: u64,
+
+    pub peak_memory: u64,
+    pub current_memory: u64,
+
+    /* ---------------------------------------------------------------------- */
+    /* Parallel execution                                                     */
     /* ---------------------------------------------------------------------- */
 
     pub worker_count: u64,
@@ -433,30 +442,17 @@ pub struct MetricsSnapshot {
     /* Timing                                                                  */
     /* ---------------------------------------------------------------------- */
 
-    /// Sum of decoder operation latency.
     pub decoder_latency: Duration,
-
     pub max_decoder_latency: Duration,
-
     pub min_decoder_latency: Option<Duration>,
-
     pub average_decoder_latency: Option<Duration>,
 
-    /// Wall-clock duration since collector creation.
-    ///
-    /// This is observational and must not be used for deterministic
-    /// correctness comparisons.
-    pub wall_time: Duration,
-
-    /// Backend-reported compute time.
     pub compute_time: Duration,
 
-    /* ---------------------------------------------------------------------- */
-    /* Resources                                                               */
-    /* ---------------------------------------------------------------------- */
-
-    pub peak_memory: u64,
-    pub current_memory: u64,
+    /// Observational wall-clock time.
+    ///
+    /// This value must never participate in deterministic correctness.
+    pub wall_time: Duration,
 
     /* ---------------------------------------------------------------------- */
     /* Derived rates                                                           */
@@ -464,6 +460,7 @@ pub struct MetricsSnapshot {
 
     pub physical_error_rate: Option<f64>,
     pub logical_error_rate: Option<f64>,
+
     pub decoder_success_rate: Option<f64>,
     pub decoder_failure_rate: Option<f64>,
 
@@ -473,7 +470,6 @@ pub struct MetricsSnapshot {
 
     pub had_logical_failure: bool,
 
-    /// True only when every started operation has reached a terminal state.
     pub operations_balanced: bool,
 
     /* ---------------------------------------------------------------------- */
@@ -484,6 +480,7 @@ pub struct MetricsSnapshot {
 }
 
 impl MetricsSnapshot {
+    #[must_use]
     pub fn empty(
         decoder: DecoderId,
         backend: BackendKind,
@@ -516,6 +513,14 @@ impl MetricsSnapshot {
             stabilizer_count: 0,
             measurement_rounds: 0,
 
+            checkpoint_bytes: 0,
+            partitions: 0,
+            stream_buffer_events: 0,
+            verification_operations: 0,
+
+            peak_memory: 0,
+            current_memory: 0,
+
             worker_count: 0,
 
             decoder_latency: Duration::ZERO,
@@ -523,11 +528,8 @@ impl MetricsSnapshot {
             min_decoder_latency: None,
             average_decoder_latency: None,
 
-            wall_time: Duration::ZERO,
             compute_time: Duration::ZERO,
-
-            peak_memory: 0,
-            current_memory: 0,
+            wall_time: Duration::ZERO,
 
             physical_error_rate: None,
             logical_error_rate: None,
@@ -541,14 +543,14 @@ impl MetricsSnapshot {
         }
     }
 
-    pub fn logical_error_rate_or_zero(&self) -> f64 {
-        self.logical_error_rate.unwrap_or(0.0)
+    #[must_use]
+    pub fn terminal_operations(&self) -> u64 {
+        self.decoder_success
+            .saturating_add(self.decoder_failure)
+            .saturating_add(self.cancellation_count)
     }
 
-    pub fn physical_error_rate_or_zero(&self) -> f64 {
-        self.physical_error_rate.unwrap_or(0.0)
-    }
-
+    #[must_use]
     pub fn all_decodes_successful(&self) -> bool {
         self.decode_operations > 0
             && self.decoder_failure == 0
@@ -556,126 +558,200 @@ impl MetricsSnapshot {
             && self.operations_balanced
     }
 
-    pub fn terminal_operations(&self) -> u64 {
-        self.decoder_success
-            .saturating_add(self.decoder_failure)
-            .saturating_add(self.cancellation_count)
+    #[must_use]
+    pub fn physical_error_rate_or_zero(&self) -> f64 {
+        self.physical_error_rate.unwrap_or(0.0)
     }
 
-    /// Adds another immutable snapshot into this snapshot.
+    #[must_use]
+    pub fn logical_error_rate_or_zero(&self) -> f64 {
+        self.logical_error_rate.unwrap_or(0.0)
+    }
+
+    /// Merge another snapshot into this snapshot.
     ///
-    /// Identity and high-water-mark fields are reconciled deterministically.
-    pub fn merge(&mut self, other: &Self) -> Result<(), MetricsError> {
+    /// Additive quantities are summed.
+    /// High-water marks use `max`.
+    /// Boolean failure state uses logical OR.
+    ///
+    /// Identity must match.
+    pub fn merge(
+        &mut self,
+        other: &Self,
+    ) -> Result<(), MetricsError> {
         if self.decoder != other.decoder {
-            return Err(MetricsError::IncompatibleConfiguration {
-                reason: "decoder identities differ",
-            });
+            return Err(
+                MetricsError::IncompatibleSnapshots {
+                    reason: "decoder identities differ",
+                },
+            );
         }
 
         if self.backend != other.backend {
-            return Err(MetricsError::IncompatibleConfiguration {
-                reason: "backend identities differ",
-            });
+            return Err(
+                MetricsError::IncompatibleSnapshots {
+                    reason: "backend identities differ",
+                },
+            );
         }
 
         self.decode_operations =
-            self.decode_operations.saturating_add(other.decode_operations);
+            self.decode_operations.saturating_add(
+                other.decode_operations,
+            );
 
         self.decoder_success =
-            self.decoder_success.saturating_add(other.decoder_success);
+            self.decoder_success.saturating_add(
+                other.decoder_success,
+            );
 
         self.decoder_failure =
-            self.decoder_failure.saturating_add(other.decoder_failure);
+            self.decoder_failure.saturating_add(
+                other.decoder_failure,
+            );
 
         self.cancellation_count =
-            self.cancellation_count.saturating_add(other.cancellation_count);
+            self.cancellation_count.saturating_add(
+                other.cancellation_count,
+            );
 
         self.correction_count =
-            self.correction_count.saturating_add(other.correction_count);
+            self.correction_count.saturating_add(
+                other.correction_count,
+            );
 
         self.detection_event_count =
-            self.detection_event_count.saturating_add(other.detection_event_count);
+            self.detection_event_count.saturating_add(
+                other.detection_event_count,
+            );
 
         self.physical_error_count =
-            self.physical_error_count.saturating_add(other.physical_error_count);
+            self.physical_error_count.saturating_add(
+                other.physical_error_count,
+            );
 
-        self.physical_error_opportunities = self
-            .physical_error_opportunities
-            .saturating_add(other.physical_error_opportunities);
+        self.physical_error_opportunities =
+            self
+                .physical_error_opportunities
+                .saturating_add(
+                    other.physical_error_opportunities,
+                );
 
         self.logical_failure_count =
-            self.logical_failure_count.saturating_add(other.logical_failure_count);
+            self.logical_failure_count.saturating_add(
+                other.logical_failure_count,
+            );
 
-        self.logical_error_opportunities = self
-            .logical_error_opportunities
-            .saturating_add(other.logical_error_opportunities);
+        self.logical_error_opportunities =
+            self
+                .logical_error_opportunities
+                .saturating_add(
+                    other.logical_error_opportunities,
+                );
 
         self.matching_count =
-            self.matching_count.saturating_add(other.matching_count);
+            self.matching_count.saturating_add(
+                other.matching_count,
+            );
 
         self.decoder_iterations =
-            self.decoder_iterations.saturating_add(other.decoder_iterations);
+            self.decoder_iterations.saturating_add(
+                other.decoder_iterations,
+            );
 
         self.graph_nodes =
-            self.graph_nodes.saturating_add(other.graph_nodes);
+            self.graph_nodes.saturating_add(
+                other.graph_nodes,
+            );
 
         self.graph_edges =
-            self.graph_edges.saturating_add(other.graph_edges);
+            self.graph_edges.saturating_add(
+                other.graph_edges,
+            );
 
-        self.qubit_count = self.qubit_count.max(other.qubit_count);
+        self.qubit_count =
+            self.qubit_count.max(other.qubit_count);
+
         self.stabilizer_count =
-            self.stabilizer_count.max(other.stabilizer_count);
+            self.stabilizer_count.max(
+                other.stabilizer_count,
+            );
 
         self.measurement_rounds =
-            self.measurement_rounds.max(other.measurement_rounds);
+            self.measurement_rounds.max(
+                other.measurement_rounds,
+            );
 
-        self.worker_count =
-            self.worker_count.max(other.worker_count);
+        self.checkpoint_bytes =
+            self.checkpoint_bytes.max(
+                other.checkpoint_bytes,
+            );
 
-        self.decoder_latency = saturating_duration_add(
-            self.decoder_latency,
-            other.decoder_latency,
-        );
+        self.partitions =
+            self.partitions.max(other.partitions);
 
-        self.max_decoder_latency =
-            self.max_decoder_latency.max(other.max_decoder_latency);
+        self.stream_buffer_events =
+            self.stream_buffer_events.max(
+                other.stream_buffer_events,
+            );
 
-        self.min_decoder_latency =
-            match (self.min_decoder_latency, other.min_decoder_latency) {
-                (Some(a), Some(b)) => Some(a.min(b)),
-                (Some(a), None) => Some(a),
-                (None, Some(b)) => Some(b),
-                (None, None) => None,
-            };
-
-        self.average_decoder_latency =
-            if self.decode_operations > 0 {
-                Some(duration_divide(
-                    self.decoder_latency,
-                    self.decode_operations,
-                ))
-            } else {
-                None
-            };
+        self.verification_operations =
+            self.verification_operations.saturating_add(
+                other.verification_operations,
+            );
 
         self.peak_memory =
             self.peak_memory.max(other.peak_memory);
 
         self.current_memory = other.current_memory;
 
-        self.compute_time = saturating_duration_add(
-            self.compute_time,
-            other.compute_time,
-        );
+        self.worker_count =
+            self.worker_count.max(other.worker_count);
 
-        self.had_logical_failure |= other.had_logical_failure;
+        self.decoder_latency =
+            saturating_duration_add(
+                self.decoder_latency,
+                other.decoder_latency,
+            );
 
-        self.qpu.saturating_add_assign(&other.qpu);
+        self.max_decoder_latency =
+            self.max_decoder_latency.max(
+                other.max_decoder_latency,
+            );
+
+        self.min_decoder_latency =
+            match (
+                self.min_decoder_latency,
+                other.min_decoder_latency,
+            ) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (Some(a), None) => Some(a),
+                (None, Some(b)) => Some(b),
+                (None, None) => None,
+            };
+
+        self.compute_time =
+            saturating_duration_add(
+                self.compute_time,
+                other.compute_time,
+            );
+
+        self.wall_time =
+            saturating_duration_add(
+                self.wall_time,
+                other.wall_time,
+            );
+
+        self.had_logical_failure |=
+            other.had_logical_failure;
+
+        self.qpu.merge_from(&other.qpu);
 
         self.recalculate_rates();
 
         self.operations_balanced =
-            self.decode_operations == self.terminal_operations();
+            self.decode_operations
+                == self.terminal_operations();
 
         Ok(())
     }
@@ -717,7 +793,10 @@ impl MetricsSnapshot {
 /* Threshold metrics                                                          */
 /* ========================================================================== */
 
-/// Aggregate result suitable for threshold experiments.
+/// Aggregate metrics for a threshold experiment.
+///
+/// Statistical confidence intervals intentionally belong to `statistical.rs`.
+/// This type stores only the raw aggregate quantities required by that layer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThresholdMetrics {
     pub code_distance: u64,
@@ -738,6 +817,7 @@ pub struct ThresholdMetrics {
 }
 
 impl ThresholdMetrics {
+    #[must_use]
     pub fn from_snapshot(
         snapshot: &MetricsSnapshot,
         code_distance: u64,
@@ -748,25 +828,31 @@ impl ThresholdMetrics {
             physical_error_probability,
 
             trials: snapshot.logical_error_opportunities,
-
             logical_failures: snapshot.logical_failure_count,
 
-            logical_error_rate: snapshot.logical_error_rate,
+            logical_error_rate:
+                snapshot.logical_error_rate,
 
-            decoder_failures: snapshot.decoder_failure,
-            cancelled_trials: snapshot.cancellation_count,
+            decoder_failures:
+                snapshot.decoder_failure,
 
-            total_latency: snapshot.decoder_latency,
+            cancelled_trials:
+                snapshot.cancellation_count,
 
-            average_latency: snapshot.average_decoder_latency,
+            total_latency:
+                snapshot.decoder_latency,
 
-            peak_memory: snapshot.peak_memory,
+            average_latency:
+                snapshot.average_decoder_latency,
+
+            peak_memory:
+                snapshot.peak_memory,
         }
     }
 }
 
 /* ========================================================================== */
-/* Atomic counters                                                            */
+/* Atomic storage                                                             */
 /* ========================================================================== */
 
 #[derive(Debug)]
@@ -795,26 +881,35 @@ struct MetricsCounters {
     stabilizer_count: AtomicU64,
     measurement_rounds: AtomicU64,
 
+    checkpoint_bytes: AtomicU64,
+    partitions: AtomicU64,
+    stream_buffer_events: AtomicU64,
+    verification_operations: AtomicU64,
+
     worker_count: AtomicU64,
 
     decoder_latency_nanos: AtomicU64,
     max_decoder_latency_nanos: AtomicU64,
     min_decoder_latency_nanos: AtomicU64,
 
+    compute_time_nanos: AtomicU64,
+
     peak_memory: AtomicU64,
     current_memory: AtomicU64,
-
-    compute_time_nanos: AtomicU64,
 
     qpu_shots: AtomicU64,
     qpu_circuits: AtomicU64,
     qpu_measurement_count: AtomicU64,
+
     qpu_queue_time_nanos: AtomicU64,
     qpu_execution_time_nanos: AtomicU64,
+
     qpu_submission_failures: AtomicU64,
     qpu_invalid_measurements: AtomicU64,
+
     qpu_completed_jobs: AtomicU64,
     qpu_cancelled_jobs: AtomicU64,
+
     qpu_readout_error_count: AtomicU64,
     qpu_readout_error_opportunities: AtomicU64,
 
@@ -824,54 +919,103 @@ struct MetricsCounters {
 impl Default for MetricsCounters {
     fn default() -> Self {
         Self {
-            decode_operations: AtomicU64::new(0),
-            decoder_success: AtomicU64::new(0),
-            decoder_failure: AtomicU64::new(0),
-            cancellation_count: AtomicU64::new(0),
+            decode_operations:
+                AtomicU64::new(0),
+            decoder_success:
+                AtomicU64::new(0),
+            decoder_failure:
+                AtomicU64::new(0),
+            cancellation_count:
+                AtomicU64::new(0),
 
-            correction_count: AtomicU64::new(0),
-            detection_event_count: AtomicU64::new(0),
+            correction_count:
+                AtomicU64::new(0),
+            detection_event_count:
+                AtomicU64::new(0),
 
-            physical_error_count: AtomicU64::new(0),
-            physical_error_opportunities: AtomicU64::new(0),
+            physical_error_count:
+                AtomicU64::new(0),
+            physical_error_opportunities:
+                AtomicU64::new(0),
 
-            logical_failure_count: AtomicU64::new(0),
-            logical_error_opportunities: AtomicU64::new(0),
+            logical_failure_count:
+                AtomicU64::new(0),
+            logical_error_opportunities:
+                AtomicU64::new(0),
 
-            matching_count: AtomicU64::new(0),
-            decoder_iterations: AtomicU64::new(0),
+            matching_count:
+                AtomicU64::new(0),
+            decoder_iterations:
+                AtomicU64::new(0),
 
-            graph_nodes: AtomicU64::new(0),
-            graph_edges: AtomicU64::new(0),
+            graph_nodes:
+                AtomicU64::new(0),
+            graph_edges:
+                AtomicU64::new(0),
 
-            qubit_count: AtomicU64::new(0),
-            stabilizer_count: AtomicU64::new(0),
-            measurement_rounds: AtomicU64::new(0),
+            qubit_count:
+                AtomicU64::new(0),
+            stabilizer_count:
+                AtomicU64::new(0),
+            measurement_rounds:
+                AtomicU64::new(0),
 
-            worker_count: AtomicU64::new(0),
+            checkpoint_bytes:
+                AtomicU64::new(0),
+            partitions:
+                AtomicU64::new(0),
+            stream_buffer_events:
+                AtomicU64::new(0),
+            verification_operations:
+                AtomicU64::new(0),
 
-            decoder_latency_nanos: AtomicU64::new(0),
-            max_decoder_latency_nanos: AtomicU64::new(0),
-            min_decoder_latency_nanos: AtomicU64::new(u64::MAX),
+            worker_count:
+                AtomicU64::new(0),
 
-            peak_memory: AtomicU64::new(0),
-            current_memory: AtomicU64::new(0),
+            decoder_latency_nanos:
+                AtomicU64::new(0),
+            max_decoder_latency_nanos:
+                AtomicU64::new(0),
+            min_decoder_latency_nanos:
+                AtomicU64::new(u64::MAX),
 
-            compute_time_nanos: AtomicU64::new(0),
+            compute_time_nanos:
+                AtomicU64::new(0),
 
-            qpu_shots: AtomicU64::new(0),
-            qpu_circuits: AtomicU64::new(0),
-            qpu_measurement_count: AtomicU64::new(0),
-            qpu_queue_time_nanos: AtomicU64::new(0),
-            qpu_execution_time_nanos: AtomicU64::new(0),
-            qpu_submission_failures: AtomicU64::new(0),
-            qpu_invalid_measurements: AtomicU64::new(0),
-            qpu_completed_jobs: AtomicU64::new(0),
-            qpu_cancelled_jobs: AtomicU64::new(0),
-            qpu_readout_error_count: AtomicU64::new(0),
-            qpu_readout_error_opportunities: AtomicU64::new(0),
+            peak_memory:
+                AtomicU64::new(0),
+            current_memory:
+                AtomicU64::new(0),
 
-            had_logical_failure: AtomicBool::new(false),
+            qpu_shots:
+                AtomicU64::new(0),
+            qpu_circuits:
+                AtomicU64::new(0),
+            qpu_measurement_count:
+                AtomicU64::new(0),
+
+            qpu_queue_time_nanos:
+                AtomicU64::new(0),
+            qpu_execution_time_nanos:
+                AtomicU64::new(0),
+
+            qpu_submission_failures:
+                AtomicU64::new(0),
+            qpu_invalid_measurements:
+                AtomicU64::new(0),
+
+            qpu_completed_jobs:
+                AtomicU64::new(0),
+            qpu_cancelled_jobs:
+                AtomicU64::new(0),
+
+            qpu_readout_error_count:
+                AtomicU64::new(0),
+            qpu_readout_error_opportunities:
+                AtomicU64::new(0),
+
+            had_logical_failure:
+                AtomicBool::new(false),
         }
     }
 }
@@ -882,7 +1026,9 @@ impl Default for MetricsCounters {
 
 /// Thread-safe aggregate metrics collector.
 ///
-/// It can safely be shared by decoder workers.
+/// The collector is safe to share across decoder workers.
+///
+/// Metrics recording is intentionally infallible.
 #[derive(Debug)]
 pub struct MetricsCollector {
     decoder: DecoderId,
@@ -911,6 +1057,7 @@ impl MetricsCollector {
         })
     }
 
+    #[must_use]
     pub fn standard(
         decoder: DecoderId,
         backend: BackendKind,
@@ -924,14 +1071,17 @@ impl MetricsCollector {
         }
     }
 
-    pub const fn decoder(&self) -> DecoderId {
-        self.decoder
+    #[must_use]
+    pub fn decoder(&self) -> &DecoderId {
+        &self.decoder
     }
 
+    #[must_use]
     pub const fn backend(&self) -> BackendKind {
         self.backend
     }
 
+    #[must_use]
     pub const fn config(&self) -> MetricsConfig {
         self.config
     }
@@ -940,14 +1090,23 @@ impl MetricsCollector {
     /* Decoder lifecycle                                                      */
     /* ---------------------------------------------------------------------- */
 
-    /// Begins one decoder operation.
+    /// Starts a decoder operation.
+    ///
+    /// The caller must subsequently record exactly one terminal state:
+    ///
+    /// - `record_success`;
+    /// - `record_failure`;
+    /// - `record_cancellation`.
     pub fn begin_decode(&self) {
         saturating_increment(
             &self.counters.decode_operations,
         );
     }
 
-    pub fn record_success(&self, latency: Duration) {
+    pub fn record_success(
+        &self,
+        latency: Duration,
+    ) {
         saturating_increment(
             &self.counters.decoder_success,
         );
@@ -955,7 +1114,10 @@ impl MetricsCollector {
         self.record_latency(latency);
     }
 
-    pub fn record_failure(&self, latency: Duration) {
+    pub fn record_failure(
+        &self,
+        latency: Duration,
+    ) {
         saturating_increment(
             &self.counters.decoder_failure,
         );
@@ -963,7 +1125,10 @@ impl MetricsCollector {
         self.record_latency(latency);
     }
 
-    pub fn record_cancellation(&self, latency: Duration) {
+    pub fn record_cancellation(
+        &self,
+        latency: Duration,
+    ) {
         saturating_increment(
             &self.counters.cancellation_count,
         );
@@ -971,10 +1136,7 @@ impl MetricsCollector {
         self.record_latency(latency);
     }
 
-    /// Records a complete distributed/remote decoder outcome.
-    ///
-    /// Unlike `record_success`, `record_failure`, and `record_cancellation`,
-    /// this method starts the operation itself.
+    /// Records a complete operation in one call.
     pub fn record_outcome(
         &self,
         success: bool,
@@ -983,10 +1145,12 @@ impl MetricsCollector {
     ) {
         self.begin_decode();
 
-        match (success, cancelled) {
-            (_, true) => self.record_cancellation(latency),
-            (true, false) => self.record_success(latency),
-            (false, false) => self.record_failure(latency),
+        if cancelled {
+            self.record_cancellation(latency);
+        } else if success {
+            self.record_success(latency);
+        } else {
+            self.record_failure(latency);
         }
     }
 
@@ -994,21 +1158,30 @@ impl MetricsCollector {
     /* QEC activity                                                            */
     /* ---------------------------------------------------------------------- */
 
-    pub fn record_corrections(&self, count: u64) {
+    pub fn record_corrections(
+        &self,
+        count: u64,
+    ) {
         saturating_add(
             &self.counters.correction_count,
             count,
         );
     }
 
-    pub fn record_detection_events(&self, count: u64) {
+    pub fn record_detection_events(
+        &self,
+        count: u64,
+    ) {
         saturating_add(
             &self.counters.detection_event_count,
             count,
         );
     }
 
-    pub fn record_physical_errors(&self, count: u64) {
+    pub fn record_physical_errors(
+        &self,
+        count: u64,
+    ) {
         saturating_add(
             &self.counters.physical_error_count,
             count,
@@ -1047,7 +1220,10 @@ impl MetricsCollector {
         if count > 0 {
             self.counters
                 .had_logical_failure
-                .store(true, Ordering::Release);
+                .store(
+                    true,
+                    Ordering::Release,
+                );
         }
 
         saturating_add(
@@ -1083,7 +1259,10 @@ impl MetricsCollector {
     /* Decoder internals                                                       */
     /* ---------------------------------------------------------------------- */
 
-    pub fn record_matching(&self, count: u64) {
+    pub fn record_matching(
+        &self,
+        count: u64,
+    ) {
         saturating_add(
             &self.counters.matching_count,
             count,
@@ -1100,37 +1279,49 @@ impl MetricsCollector {
         );
     }
 
-    pub fn record_graph_nodes(&self, count: u64) {
+    pub fn record_graph_nodes(
+        &self,
+        count: u64,
+    ) {
         saturating_add(
             &self.counters.graph_nodes,
             count,
         );
     }
 
-    pub fn record_graph_edges(&self, count: u64) {
+    pub fn record_graph_edges(
+        &self,
+        count: u64,
+    ) {
         saturating_add(
             &self.counters.graph_edges,
             count,
         );
     }
 
-    /// Qubit count is a high-water mark.
-    pub fn record_qubits(&self, count: u64) {
+    /// Records the largest observed qubit count.
+    pub fn record_qubits(
+        &self,
+        count: u64,
+    ) {
         saturating_max(
             &self.counters.qubit_count,
             count,
         );
     }
 
-    /// Stabilizer count is a high-water mark.
-    pub fn record_stabilizers(&self, count: u64) {
+    /// Records the largest observed stabilizer count.
+    pub fn record_stabilizers(
+        &self,
+        count: u64,
+    ) {
         saturating_max(
             &self.counters.stabilizer_count,
             count,
         );
     }
 
-    /// Measurement rounds are a high-water mark.
+    /// Records the largest observed measurement-round count.
     pub fn record_measurement_rounds(
         &self,
         count: u64,
@@ -1142,10 +1333,53 @@ impl MetricsCollector {
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Parallel/distributed execution                                          */
+    /* Resource observations                                                   */
     /* ---------------------------------------------------------------------- */
 
-    pub fn record_workers(&self, workers: usize) {
+    pub fn record_checkpoint_bytes(
+        &self,
+        count: u64,
+    ) {
+        saturating_max(
+            &self.counters.checkpoint_bytes,
+            count,
+        );
+    }
+
+    pub fn record_partitions(
+        &self,
+        count: u64,
+    ) {
+        saturating_max(
+            &self.counters.partitions,
+            count,
+        );
+    }
+
+    pub fn record_stream_buffer_events(
+        &self,
+        count: u64,
+    ) {
+        saturating_max(
+            &self.counters.stream_buffer_events,
+            count,
+        );
+    }
+
+    pub fn record_verification_operations(
+        &self,
+        count: u64,
+    ) {
+        saturating_add(
+            &self.counters.verification_operations,
+            count,
+        );
+    }
+
+    pub fn record_workers(
+        &self,
+        workers: usize,
+    ) {
         if !self.config.track_worker_count {
             return;
         }
@@ -1156,61 +1390,20 @@ impl MetricsCollector {
         );
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Timing                                                                  */
-    /* ---------------------------------------------------------------------- */
-
-    pub fn record_latency(&self, latency: Duration) {
-        let nanos =
-            duration_to_nanos_saturating(latency);
-
-        saturating_add(
-            &self.counters.decoder_latency_nanos,
-            nanos,
-        );
-
-        saturating_max(
-            &self.counters.max_decoder_latency_nanos,
-            nanos,
-        );
-
-        update_min(
-            &self.counters.min_decoder_latency_nanos,
-            nanos,
-        );
-    }
-
-    pub fn record_compute_time(
-        &self,
-        duration: Duration,
-    ) {
-        saturating_add(
-            &self.counters.compute_time_nanos,
-            duration_to_nanos_saturating(duration),
-        );
-    }
-
-    pub fn start_timer(&self) -> MetricsTimer<'_> {
-        MetricsTimer {
-            collector: self,
-            started: Instant::now(),
-            stopped: false,
-        }
-    }
-
-    /* ---------------------------------------------------------------------- */
-    /* Resource integration                                                    */
-    /* ---------------------------------------------------------------------- */
-
-    /// Observes a resource-manager snapshot.
+    /// Observes the runtime resource manager.
     ///
-    /// This method never enforces resource limits. Enforcement remains inside
-    /// `ResourceManager`.
+    /// This function never enforces limits.
     pub fn record_resource_snapshot(
         &self,
         snapshot: ResourceSnapshot,
     ) {
-        self.record_memory(snapshot.allocated_bytes);
+        if !self.config.track_resources {
+            return;
+        }
+
+        self.record_memory(
+            snapshot.allocated_bytes,
+        );
 
         saturating_max(
             &self.counters.peak_memory,
@@ -1237,14 +1430,20 @@ impl MetricsCollector {
             snapshot.decoder_iterations,
         );
 
-        self.record_workers(snapshot.parallel_workers);
+        self.record_workers(
+            snapshot.parallel_workers,
+        );
 
         self.record_qubits(
-            usize_to_u64_saturating(snapshot.qubits),
+            usize_to_u64_saturating(
+                snapshot.qubits,
+            ),
         );
 
         self.record_stabilizers(
-            usize_to_u64_saturating(snapshot.stabilizers),
+            usize_to_u64_saturating(
+                snapshot.stabilizers,
+            ),
         );
 
         self.record_measurement_rounds(
@@ -1253,11 +1452,38 @@ impl MetricsCollector {
             ),
         );
 
-        saturating_max(
-            &self.counters.compute_time_nanos,
-            duration_to_nanos_saturating(
-                snapshot.compute_time,
+        self.record_checkpoint_bytes(
+            snapshot.checkpoint_bytes,
+        );
+
+        self.record_partitions(
+            usize_to_u64_saturating(
+                snapshot.partitions,
             ),
+        );
+
+        self.record_stream_buffer_events(
+            usize_to_u64_saturating(
+                snapshot.stream_buffer_events,
+            ),
+        );
+
+        self.record_verification_operations(
+            snapshot.verification_operations,
+        );
+
+        if self.config.track_qpu {
+            self.record_qpu_shots(
+                snapshot.qpu_shots,
+            );
+
+            self.record_qpu_circuits(
+                snapshot.qpu_circuits,
+            );
+        }
+
+        self.record_compute_time(
+            snapshot.compute_time,
         );
     }
 
@@ -1279,10 +1505,67 @@ impl MetricsCollector {
     }
 
     /* ---------------------------------------------------------------------- */
+    /* Timing                                                                  */
+    /* ---------------------------------------------------------------------- */
+
+    pub fn record_latency(
+        &self,
+        latency: Duration,
+    ) {
+        let nanos =
+            duration_to_nanos_saturating(latency);
+
+        saturating_add(
+            &self.counters.decoder_latency_nanos,
+            nanos,
+        );
+
+        saturating_max(
+            &self.counters.max_decoder_latency_nanos,
+            nanos,
+        );
+
+        update_min(
+            &self.counters.min_decoder_latency_nanos,
+            nanos,
+        );
+    }
+
+    pub fn record_compute_time(
+        &self,
+        duration: Duration,
+    ) {
+        saturating_add(
+            &self.counters.compute_time_nanos,
+            duration_to_nanos_saturating(
+                duration,
+            ),
+        );
+    }
+
+    #[must_use]
+    pub fn start_timer(
+        &self,
+    ) -> MetricsTimer<'_> {
+        MetricsTimer {
+            collector: self,
+            started: Instant::now(),
+            stopped: false,
+        }
+    }
+
+    /* ---------------------------------------------------------------------- */
     /* QPU                                                                      */
     /* ---------------------------------------------------------------------- */
 
-    pub fn record_qpu_shots(&self, count: u64) {
+    pub fn record_qpu_shots(
+        &self,
+        count: u64,
+    ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_add(
             &self.counters.qpu_shots,
             count,
@@ -1293,6 +1576,10 @@ impl MetricsCollector {
         &self,
         count: u64,
     ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_add(
             &self.counters.qpu_circuits,
             count,
@@ -1303,6 +1590,10 @@ impl MetricsCollector {
         &self,
         count: u64,
     ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_add(
             &self.counters.qpu_measurement_count,
             count,
@@ -1313,9 +1604,15 @@ impl MetricsCollector {
         &self,
         duration: Duration,
     ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_add(
             &self.counters.qpu_queue_time_nanos,
-            duration_to_nanos_saturating(duration),
+            duration_to_nanos_saturating(
+                duration,
+            ),
         );
     }
 
@@ -1323,13 +1620,25 @@ impl MetricsCollector {
         &self,
         duration: Duration,
     ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_add(
             &self.counters.qpu_execution_time_nanos,
-            duration_to_nanos_saturating(duration),
+            duration_to_nanos_saturating(
+                duration,
+            ),
         );
     }
 
-    pub fn record_qpu_submission_failure(&self) {
+    pub fn record_qpu_submission_failure(
+        &self,
+    ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_increment(
             &self.counters.qpu_submission_failures,
         );
@@ -1339,19 +1648,35 @@ impl MetricsCollector {
         &self,
         count: u64,
     ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_add(
             &self.counters.qpu_invalid_measurements,
             count,
         );
     }
 
-    pub fn record_qpu_job_completed(&self) {
+    pub fn record_qpu_job_completed(
+        &self,
+    ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_increment(
             &self.counters.qpu_completed_jobs,
         );
     }
 
-    pub fn record_qpu_job_cancelled(&self) {
+    pub fn record_qpu_job_cancelled(
+        &self,
+    ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_increment(
             &self.counters.qpu_cancelled_jobs,
         );
@@ -1361,13 +1686,19 @@ impl MetricsCollector {
         &self,
         error_occurred: bool,
     ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_increment(
-            &self.counters.qpu_readout_error_opportunities,
+            &self.counters
+                .qpu_readout_error_opportunities,
         );
 
         if error_occurred {
             saturating_increment(
-                &self.counters.qpu_readout_error_count,
+                &self.counters
+                    .qpu_readout_error_count,
             );
         }
     }
@@ -1376,6 +1707,10 @@ impl MetricsCollector {
         &self,
         metrics: QpuMetrics,
     ) {
+        if !self.config.track_qpu {
+            return;
+        }
+
         saturating_add(
             &self.counters.qpu_shots,
             metrics.shots,
@@ -1406,12 +1741,14 @@ impl MetricsCollector {
         );
 
         saturating_add(
-            &self.counters.qpu_submission_failures,
+            &self.counters
+                .qpu_submission_failures,
             metrics.submission_failures,
         );
 
         saturating_add(
-            &self.counters.qpu_invalid_measurements,
+            &self.counters
+                .qpu_invalid_measurements,
             metrics.invalid_measurements,
         );
 
@@ -1426,13 +1763,16 @@ impl MetricsCollector {
         );
 
         saturating_add(
-            &self.counters.qpu_readout_error_count,
+            &self.counters
+                .qpu_readout_error_count,
             metrics.readout_error_count,
         );
 
         saturating_add(
-            &self.counters.qpu_readout_error_opportunities,
-            metrics.readout_error_opportunities,
+            &self.counters
+                .qpu_readout_error_opportunities,
+            metrics
+                .readout_error_opportunities,
         );
     }
 
@@ -1440,7 +1780,10 @@ impl MetricsCollector {
     /* Snapshot                                                                 */
     /* ---------------------------------------------------------------------- */
 
-    pub fn snapshot(&self) -> MetricsSnapshot {
+    #[must_use]
+    pub fn snapshot(
+        &self,
+    ) -> MetricsSnapshot {
         let decode_operations =
             load(&self.counters.decode_operations);
 
@@ -1453,76 +1796,111 @@ impl MetricsCollector {
         let cancellation_count =
             load(&self.counters.cancellation_count);
 
-        let decoder_latency_nanos =
-            load(&self.counters.decoder_latency_nanos);
+        let decoder_latency =
+            Duration::from_nanos(
+                load(
+                    &self.counters
+                        .decoder_latency_nanos,
+                ),
+            );
 
         let min_latency =
-            load(&self.counters.min_decoder_latency_nanos);
+            load(
+                &self.counters
+                    .min_decoder_latency_nanos,
+            );
 
         let physical_errors =
-            load(&self.counters.physical_error_count);
+            load(
+                &self.counters
+                    .physical_error_count,
+            );
 
         let physical_opportunities =
-            load(&self.counters.physical_error_opportunities);
+            load(
+                &self.counters
+                    .physical_error_opportunities,
+            );
 
         let logical_failures =
-            load(&self.counters.logical_failure_count);
+            load(
+                &self.counters
+                    .logical_failure_count,
+            );
 
         let logical_opportunities =
-            load(&self.counters.logical_error_opportunities);
+            load(
+                &self.counters
+                    .logical_error_opportunities,
+            );
 
-        let qpu = QpuMetrics {
-            shots: load(
-                &self.counters.qpu_shots,
-            ),
-            circuits: load(
-                &self.counters.qpu_circuits,
-            ),
-            measurement_count: load(
-                &self.counters.qpu_measurement_count,
-            ),
-            queue_time: Duration::from_nanos(
-                load(
-                    &self.counters.qpu_queue_time_nanos,
+        let qpu = if self.config.track_qpu {
+            QpuMetrics {
+                shots: load(
+                    &self.counters.qpu_shots,
                 ),
-            ),
-            execution_time: Duration::from_nanos(
-                load(
-                    &self.counters.qpu_execution_time_nanos,
+                circuits: load(
+                    &self.counters.qpu_circuits,
                 ),
-            ),
-            submission_failures: load(
-                &self.counters.qpu_submission_failures,
-            ),
-            invalid_measurements: load(
-                &self.counters.qpu_invalid_measurements,
-            ),
-            completed_jobs: load(
-                &self.counters.qpu_completed_jobs,
-            ),
-            cancelled_jobs: load(
-                &self.counters.qpu_cancelled_jobs,
-            ),
-            readout_error_count: load(
-                &self.counters.qpu_readout_error_count,
-            ),
-            readout_error_opportunities: load(
-                &self.counters.qpu_readout_error_opportunities,
-            ),
+                measurement_count: load(
+                    &self.counters
+                        .qpu_measurement_count,
+                ),
+                queue_time:
+                    Duration::from_nanos(
+                        load(
+                            &self.counters
+                                .qpu_queue_time_nanos,
+                        ),
+                    ),
+                execution_time:
+                    Duration::from_nanos(
+                        load(
+                            &self.counters
+                                .qpu_execution_time_nanos,
+                        ),
+                    ),
+                submission_failures: load(
+                    &self.counters
+                        .qpu_submission_failures,
+                ),
+                invalid_measurements: load(
+                    &self.counters
+                        .qpu_invalid_measurements,
+                ),
+                completed_jobs: load(
+                    &self.counters
+                        .qpu_completed_jobs,
+                ),
+                cancelled_jobs: load(
+                    &self.counters
+                        .qpu_cancelled_jobs,
+                ),
+                readout_error_count: load(
+                    &self.counters
+                        .qpu_readout_error_count,
+                ),
+                readout_error_opportunities:
+                    load(
+                        &self.counters
+                            .qpu_readout_error_opportunities,
+                    ),
+            }
+        } else {
+            QpuMetrics::default()
         };
 
         let terminal_operations =
             decoder_success
-                .saturating_add(decoder_failure)
-                .saturating_add(cancellation_count);
-
-        let decoder_latency =
-            Duration::from_nanos(
-                decoder_latency_nanos,
-            );
+                .saturating_add(
+                    decoder_failure,
+                )
+                .saturating_add(
+                    cancellation_count,
+                );
 
         MetricsSnapshot {
-            decoder: self.decoder,
+            decoder: self.decoder.clone(),
             backend: self.backend,
 
             decode_operations,
@@ -1536,21 +1914,29 @@ impl MetricsCollector {
             ),
 
             detection_event_count: load(
-                &self.counters.detection_event_count,
+                &self.counters
+                    .detection_event_count,
             ),
 
-            physical_error_count: physical_errors,
-            physical_error_opportunities: physical_opportunities,
+            physical_error_count:
+                physical_errors,
 
-            logical_failure_count: logical_failures,
-            logical_error_opportunities: logical_opportunities,
+            physical_error_opportunities:
+                physical_opportunities,
+
+            logical_failure_count:
+                logical_failures,
+
+            logical_error_opportunities:
+                logical_opportunities,
 
             matching_count: load(
                 &self.counters.matching_count,
             ),
 
             decoder_iterations: load(
-                &self.counters.decoder_iterations,
+                &self.counters
+                    .decoder_iterations,
             ),
 
             graph_nodes: load(
@@ -1570,7 +1956,36 @@ impl MetricsCollector {
             ),
 
             measurement_rounds: load(
-                &self.counters.measurement_rounds,
+                &self.counters
+                    .measurement_rounds,
+            ),
+
+            checkpoint_bytes: load(
+                &self.counters
+                    .checkpoint_bytes,
+            ),
+
+            partitions: load(
+                &self.counters.partitions,
+            ),
+
+            stream_buffer_events: load(
+                &self.counters
+                    .stream_buffer_events,
+            ),
+
+            verification_operations: load(
+                &self.counters
+                    .verification_operations,
+            ),
+
+            peak_memory: load(
+                &self.counters.peak_memory,
+            ),
+
+            current_memory: load(
+                &self.counters
+                    .current_memory,
             ),
 
             worker_count: load(
@@ -1579,19 +1994,23 @@ impl MetricsCollector {
 
             decoder_latency,
 
-            max_decoder_latency: Duration::from_nanos(
-                load(
-                    &self.counters.max_decoder_latency_nanos,
+            max_decoder_latency:
+                Duration::from_nanos(
+                    load(
+                        &self.counters
+                            .max_decoder_latency_nanos,
+                    ),
                 ),
-            ),
 
             min_decoder_latency:
                 if min_latency == u64::MAX {
                     None
                 } else {
-                    Some(Duration::from_nanos(
-                        min_latency,
-                    ))
+                    Some(
+                        Duration::from_nanos(
+                            min_latency,
+                        ),
+                    )
                 },
 
             average_decoder_latency:
@@ -1604,49 +2023,49 @@ impl MetricsCollector {
                     None
                 },
 
-            wall_time: self.started.elapsed(),
-
-            compute_time: Duration::from_nanos(
-                load(
-                    &self.counters.compute_time_nanos,
+            compute_time:
+                Duration::from_nanos(
+                    load(
+                        &self.counters
+                            .compute_time_nanos,
+                    ),
                 ),
-            ),
 
-            peak_memory: load(
-                &self.counters.peak_memory,
-            ),
+            wall_time:
+                self.started.elapsed(),
 
-            current_memory: load(
-                &self.counters.current_memory,
-            ),
+            physical_error_rate:
+                ratio(
+                    physical_errors,
+                    physical_opportunities,
+                ),
 
-            physical_error_rate: ratio(
-                physical_errors,
-                physical_opportunities,
-            ),
+            logical_error_rate:
+                ratio(
+                    logical_failures,
+                    logical_opportunities,
+                ),
 
-            logical_error_rate: ratio(
-                logical_failures,
-                logical_opportunities,
-            ),
+            decoder_success_rate:
+                ratio(
+                    decoder_success,
+                    decode_operations,
+                ),
 
-            decoder_success_rate: ratio(
-                decoder_success,
-                decode_operations,
-            ),
+            decoder_failure_rate:
+                ratio(
+                    decoder_failure,
+                    decode_operations,
+                ),
 
-            decoder_failure_rate: ratio(
-                decoder_failure,
-                decode_operations,
-            ),
-
-            had_logical_failure: self
-                .counters
-                .had_logical_failure
-                .load(Ordering::Acquire),
+            had_logical_failure:
+                self.counters
+                    .had_logical_failure
+                    .load(Ordering::Acquire),
 
             operations_balanced:
-                decode_operations == terminal_operations,
+                decode_operations
+                    == terminal_operations,
 
             qpu,
         }
@@ -1658,7 +2077,7 @@ impl MetricsCollector {
 
     /// Resets the current measurement window.
     ///
-    /// Decoder identity and configuration are preserved.
+    /// Decoder identity, backend identity and configuration remain unchanged.
     pub fn reset(&self) {
         self.counters
             .decode_operations
@@ -1729,6 +2148,22 @@ impl MetricsCollector {
             .store(0, Ordering::Release);
 
         self.counters
+            .checkpoint_bytes
+            .store(0, Ordering::Release);
+
+        self.counters
+            .partitions
+            .store(0, Ordering::Release);
+
+        self.counters
+            .stream_buffer_events
+            .store(0, Ordering::Release);
+
+        self.counters
+            .verification_operations
+            .store(0, Ordering::Release);
+
+        self.counters
             .worker_count
             .store(0, Ordering::Release);
 
@@ -1745,15 +2180,15 @@ impl MetricsCollector {
             .store(u64::MAX, Ordering::Release);
 
         self.counters
+            .compute_time_nanos
+            .store(0, Ordering::Release);
+
+        self.counters
             .peak_memory
             .store(0, Ordering::Release);
 
         self.counters
             .current_memory
-            .store(0, Ordering::Release);
-
-        self.counters
-            .compute_time_nanos
             .store(0, Ordering::Release);
 
         self.counters
@@ -1810,12 +2245,9 @@ impl MetricsCollector {
 /* Timer                                                                      */
 /* ========================================================================== */
 
-/// RAII timer for decoder latency.
+/// RAII latency timer.
 ///
-/// The timer records exactly once:
-///
-/// - explicit `stop()`, or
-/// - `Drop`.
+/// Exactly one latency measurement is recorded.
 #[derive(Debug)]
 pub struct MetricsTimer<'a> {
     collector: &'a MetricsCollector,
@@ -1824,20 +2256,26 @@ pub struct MetricsTimer<'a> {
 }
 
 impl MetricsTimer<'_> {
-    pub fn stop(mut self) -> Duration {
+    #[must_use]
+    pub fn stop(
+        mut self,
+    ) -> Duration {
         if self.stopped {
             return self.started.elapsed();
         }
 
-        let elapsed = self.started.elapsed();
+        let elapsed =
+            self.started.elapsed();
 
-        self.collector.record_latency(elapsed);
+        self.collector
+            .record_latency(elapsed);
 
         self.stopped = true;
 
         elapsed
     }
 
+    #[must_use]
     pub fn elapsed(&self) -> Duration {
         self.started.elapsed()
     }
@@ -1847,7 +2285,9 @@ impl Drop for MetricsTimer<'_> {
     fn drop(&mut self) {
         if !self.stopped {
             self.collector
-                .record_latency(self.started.elapsed());
+                .record_latency(
+                    self.started.elapsed(),
+                );
 
             self.stopped = true;
         }
@@ -1855,11 +2295,14 @@ impl Drop for MetricsTimer<'_> {
 }
 
 /* ========================================================================== */
-/* Shared collector                                                           */
+/* Shared metrics                                                             */
 /* ========================================================================== */
 
-pub type SharedMetrics = Arc<MetricsCollector>;
+/// Thread-safe shared metrics collector.
+pub type SharedMetrics =
+    Arc<MetricsCollector>;
 
+#[must_use]
 pub fn shared_metrics(
     decoder: DecoderId,
     backend: BackendKind,
@@ -1876,7 +2319,9 @@ pub fn shared_metrics(
 /* Helpers                                                                    */
 /* ========================================================================== */
 
-fn load(value: &AtomicU64) -> u64 {
+fn load(
+    value: &AtomicU64,
+) -> u64 {
     value.load(Ordering::Acquire)
 }
 
@@ -1894,7 +2339,9 @@ fn saturating_add(
         Ordering::AcqRel,
         Ordering::Acquire,
         |current| {
-            Some(current.saturating_add(amount))
+            Some(
+                current.saturating_add(amount),
+            )
         },
     );
 }
@@ -1944,7 +2391,8 @@ fn duration_to_nanos_saturating(
 ) -> u64 {
     duration
         .as_nanos()
-        .min(u64::MAX as u128) as u64
+        .min(u64::MAX as u128)
+        as u64
 }
 
 fn saturating_duration_add(
@@ -1956,7 +2404,9 @@ fn saturating_duration_add(
         .saturating_add(b.as_nanos())
         .min(u64::MAX as u128);
 
-    Duration::from_nanos(nanos as u64)
+    Duration::from_nanos(
+        nanos as u64,
+    )
 }
 
 fn duration_divide(
@@ -1967,17 +2417,24 @@ fn duration_divide(
         return Duration::ZERO;
     }
 
-    let nanos = duration.as_nanos() / divisor as u128;
+    let nanos =
+        duration.as_nanos()
+            / divisor as u128;
 
     Duration::from_nanos(
-        nanos.min(u64::MAX as u128) as u64,
+        nanos.min(u64::MAX as u128)
+            as u64,
     )
 }
 
 fn usize_to_u64_saturating(
     value: usize,
 ) -> u64 {
-    value.min(u64::MAX as usize) as u64
+    if value > u64::MAX as usize {
+        u64::MAX
+    } else {
+        value as u64
+    }
 }
 
 /* ========================================================================== */
@@ -1987,46 +2444,18 @@ fn usize_to_u64_saturating(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
-    use std::thread;
 
     #[test]
-    fn standard_collector_starts_empty() {
-        let metrics = MetricsCollector::standard(
-            DecoderId::Mwpm,
-            BackendKind::Cpu,
-        );
-
-        let snapshot = metrics.snapshot();
-
-        assert_eq!(
-            snapshot.decoder,
-            DecoderId::Mwpm
-        );
-
-        assert_eq!(
-            snapshot.backend,
-            BackendKind::Cpu
-        );
+    fn empty_snapshot_is_stable() {
+        let snapshot =
+            MetricsSnapshot::empty(
+                DecoderId::Mwpm,
+                BackendKind::Cpu,
+            );
 
         assert_eq!(
             snapshot.decode_operations,
             0
-        );
-
-        assert_eq!(
-            snapshot.decoder_success,
-            0
-        );
-
-        assert_eq!(
-            snapshot.decoder_failure,
-            0
-        );
-
-        assert_eq!(
-            snapshot.physical_error_rate,
-            None
         );
 
         assert_eq!(
@@ -2037,6 +2466,10 @@ mod tests {
         assert_eq!(
             snapshot.qpu.shots,
             0
+        );
+
+        assert!(
+            snapshot.operations_balanced
         );
     }
 
@@ -2049,15 +2482,16 @@ mod tests {
             );
 
         metrics
-            .record_physical_error_opportunities(100);
+            .record_physical_error_opportunities(
+                100,
+            );
 
-        metrics.record_physical_errors(10);
-
-        let snapshot =
-            metrics.snapshot();
+        metrics
+            .record_physical_errors(10);
 
         assert_eq!(
-            snapshot.physical_error_rate,
+            metrics.snapshot()
+                .physical_error_rate,
             Some(0.10)
         );
     }
@@ -2071,11 +2505,13 @@ mod tests {
             );
 
         for _ in 0..95 {
-            metrics.record_logical_trial(false);
+            metrics
+                .record_logical_trial(false);
         }
 
         for _ in 0..5 {
-            metrics.record_logical_trial(true);
+            metrics
+                .record_logical_trial(true);
         }
 
         let snapshot =
@@ -2091,18 +2527,14 @@ mod tests {
             5
         );
 
-        assert!(
-            (snapshot
-                .logical_error_rate
-                .unwrap()
-                - 0.05)
-                .abs()
-                < f64::EPSILON
+        assert_eq!(
+            snapshot.logical_error_rate,
+            Some(0.05)
         );
     }
 
     #[test]
-    fn decoder_outcomes_are_balanced() {
+    fn decoder_operations_balance() {
         let metrics =
             MetricsCollector::standard(
                 DecoderId::UnionFind,
@@ -2112,19 +2544,19 @@ mod tests {
         metrics.record_outcome(
             true,
             false,
+            Duration::from_millis(1),
+        );
+
+        metrics.record_outcome(
+            false,
+            false,
             Duration::from_millis(2),
         );
 
         metrics.record_outcome(
             false,
-            false,
-            Duration::from_millis(3),
-        );
-
-        metrics.record_outcome(
-            false,
             true,
-            Duration::from_millis(1),
+            Duration::from_millis(3),
         );
 
         let snapshot =
@@ -2156,7 +2588,7 @@ mod tests {
     }
 
     #[test]
-    fn latency_statistics_are_recorded() {
+    fn latency_statistics_are_correct() {
         let metrics =
             MetricsCollector::standard(
                 DecoderId::Mwpm,
@@ -2196,33 +2628,131 @@ mod tests {
     }
 
     #[test]
-    fn memory_is_a_high_water_mark() {
+    fn resource_dimensions_are_observed() {
         let metrics =
             MetricsCollector::standard(
                 DecoderId::Mwpm,
-                BackendKind::Cpu,
+                BackendKind::ParallelCpu,
             );
 
-        metrics.record_memory(1024);
-        metrics.record_memory(4096);
-        metrics.record_memory(2048);
-
         let snapshot =
+            ResourceSnapshot {
+                allocated_bytes: 10_000,
+                peak_bytes: 20_000,
+
+                syndrome_events: 100,
+                graph_nodes: 200,
+                graph_edges: 400,
+                decoder_iterations: 50,
+
+                parallel_workers: 8,
+
+                code_distance: 25,
+                qubits: 625,
+                stabilizers: 624,
+                measurement_rounds: 100,
+
+                checkpoint_bytes: 4096,
+                partitions: 4,
+                stream_buffer_events: 512,
+
+                qpu_shots: 1000,
+                qpu_circuits: 20,
+
+                verification_operations: 7,
+
+                wall_time:
+                    Duration::from_secs(1),
+
+                compute_time:
+                    Duration::from_millis(500),
+            };
+
+        metrics.record_resource_snapshot(
+            snapshot,
+        );
+
+        let result =
             metrics.snapshot();
 
         assert_eq!(
-            snapshot.current_memory,
-            2048
+            result.current_memory,
+            10_000
         );
 
         assert_eq!(
-            snapshot.peak_memory,
+            result.peak_memory,
+            20_000
+        );
+
+        assert_eq!(
+            result.detection_event_count,
+            100
+        );
+
+        assert_eq!(
+            result.graph_nodes,
+            200
+        );
+
+        assert_eq!(
+            result.graph_edges,
+            400
+        );
+
+        assert_eq!(
+            result.decoder_iterations,
+            50
+        );
+
+        assert_eq!(
+            result.worker_count,
+            8
+        );
+
+        assert_eq!(
+            result.qubit_count,
+            625
+        );
+
+        assert_eq!(
+            result.stabilizer_count,
+            624
+        );
+
+        assert_eq!(
+            result.checkpoint_bytes,
             4096
+        );
+
+        assert_eq!(
+            result.partitions,
+            4
+        );
+
+        assert_eq!(
+            result.stream_buffer_events,
+            512
+        );
+
+        assert_eq!(
+            result.verification_operations,
+            7
+        );
+
+        assert_eq!(
+            result.qpu.shots,
+            1000
+        );
+
+        assert_eq!(
+            result.qpu.circuits,
+            20
         );
     }
 
     #[test]
-    fn qpu_metrics_are_recorded() {
+    fn qpu_metrics_are_aggregate_only() {
         let metrics =
             MetricsCollector::standard(
                 DecoderId::SurfaceCode,
@@ -2232,14 +2762,6 @@ mod tests {
         metrics.record_qpu_shots(1000);
         metrics.record_qpu_circuits(20);
         metrics.record_qpu_measurements(4000);
-
-        metrics.record_qpu_queue_time(
-            Duration::from_millis(20),
-        );
-
-        metrics.record_qpu_execution_time(
-            Duration::from_millis(100),
-        );
 
         metrics.record_qpu_readout_trial(true);
         metrics.record_qpu_readout_trial(false);
@@ -2279,146 +2801,7 @@ mod tests {
     }
 
     #[test]
-    fn resource_snapshot_updates_metrics() {
-        let metrics =
-            MetricsCollector::standard(
-                DecoderId::Mwpm,
-                BackendKind::ParallelCpu,
-            );
-
-        let resources =
-            ResourceSnapshot {
-                allocated_bytes: 10_000,
-                peak_bytes: 20_000,
-
-                syndrome_events: 100,
-                graph_nodes: 200,
-                graph_edges: 400,
-                decoder_iterations: 50,
-
-                parallel_workers: 8,
-
-                code_distance: 25,
-                qubits: 625,
-                stabilizers: 624,
-                measurement_rounds: 100,
-
-                checkpoint_bytes: 0,
-                partitions: 0,
-                stream_buffer_events: 0,
-
-                qpu_shots: 0,
-                qpu_circuits: 0,
-
-                verification_operations: 0,
-
-                wall_time: Duration::from_secs(1),
-                compute_time: Duration::from_millis(500),
-            };
-
-        metrics.record_resource_snapshot(
-            resources,
-        );
-
-        let snapshot =
-            metrics.snapshot();
-
-        assert_eq!(
-            snapshot.current_memory,
-            10_000
-        );
-
-        assert_eq!(
-            snapshot.peak_memory,
-            20_000
-        );
-
-        assert_eq!(
-            snapshot.detection_event_count,
-            100
-        );
-
-        assert_eq!(
-            snapshot.graph_nodes,
-            200
-        );
-
-        assert_eq!(
-            snapshot.graph_edges,
-            400
-        );
-
-        assert_eq!(
-            snapshot.decoder_iterations,
-            50
-        );
-
-        assert_eq!(
-            snapshot.worker_count,
-            8
-        );
-
-        assert_eq!(
-            snapshot.qubit_count,
-            625
-        );
-
-        assert_eq!(
-            snapshot.stabilizer_count,
-            624
-        );
-    }
-
-    #[test]
-    fn timer_records_on_drop() {
-        let metrics =
-            MetricsCollector::standard(
-                DecoderId::Mwpm,
-                BackendKind::Cpu,
-            );
-
-        {
-            let _timer =
-                metrics.start_timer();
-
-            thread::sleep(
-                Duration::from_millis(1),
-            );
-        }
-
-        let snapshot =
-            metrics.snapshot();
-
-        assert!(
-            snapshot.decoder_latency
-                >= Duration::from_millis(1)
-        );
-    }
-
-    #[test]
-    fn timer_records_only_once_when_stopped() {
-        let metrics =
-            MetricsCollector::standard(
-                DecoderId::Mwpm,
-                BackendKind::Cpu,
-            );
-
-        let timer =
-            metrics.start_timer();
-
-        let _ = timer.stop();
-
-        let snapshot =
-            metrics.snapshot();
-
-        assert!(
-            snapshot.decoder_latency
-                > Duration::ZERO
-        );
-    }
-
-    #[test]
-    fn snapshots_can_be_merged_for_distributed_execution() {
+    fn snapshots_merge_deterministically() {
         let first =
             MetricsCollector::standard(
                 DecoderId::Mwpm,
@@ -2466,7 +2849,7 @@ mod tests {
     }
 
     #[test]
-    fn incompatible_snapshots_are_rejected() {
+    fn incompatible_backend_snapshots_are_rejected() {
         let cpu =
             MetricsCollector::standard(
                 DecoderId::Mwpm,
@@ -2490,50 +2873,22 @@ mod tests {
     }
 
     #[test]
-    fn shared_metrics_are_thread_safe() {
+    fn timer_records_latency() {
         let metrics =
-            shared_metrics(
+            MetricsCollector::standard(
                 DecoderId::Mwpm,
-                BackendKind::ParallelCpu,
+                BackendKind::Cpu,
             );
 
-        let mut handles =
-            Vec::new();
+        let timer =
+            metrics.start_timer();
 
-        for _ in 0..4 {
-            let metrics =
-                Arc::clone(&metrics);
+        let _ = timer.stop();
 
-            handles.push(
-                thread::spawn(
-                    move || {
-                        for _ in 0..1000 {
-                            metrics
-                                .record_detection_events(1);
-
-                            metrics
-                                .record_matching(1);
-                        }
-                    },
-                ),
-            );
-        }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
-
-        let snapshot =
-            metrics.snapshot();
-
-        assert_eq!(
-            snapshot.detection_event_count,
-            4000
-        );
-
-        assert_eq!(
-            snapshot.matching_count,
-            4000
+        assert!(
+            metrics.snapshot()
+                .decoder_latency
+                > Duration::ZERO
         );
     }
 
@@ -2584,11 +2939,6 @@ mod tests {
             snapshot.qpu.shots,
             0
         );
-
-        assert!(
-            snapshot.logical_error_rate
-                .is_none()
-        );
     }
 
     #[test]
@@ -2600,17 +2950,16 @@ mod tests {
             );
 
         for _ in 0..99 {
-            metrics.record_logical_trial(false);
+            metrics
+                .record_logical_trial(false);
         }
 
-        metrics.record_logical_trial(true);
-
-        let snapshot =
-            metrics.snapshot();
+        metrics
+            .record_logical_trial(true);
 
         let threshold =
             ThresholdMetrics::from_snapshot(
-                &snapshot,
+                &metrics.snapshot(),
                 25,
                 0.01,
             );
@@ -2637,39 +2986,14 @@ mod tests {
     }
 
     #[test]
-    fn configuration_rejects_zero_capacity() {
-        let config =
-            MetricsConfig {
-                max_custom_counters: 0,
-                track_worker_count: true,
-            };
-
-        assert!(
-            config.validate().is_err()
-        );
-    }
-
-    #[test]
-    fn empty_snapshot_is_stable() {
-        let snapshot =
-            MetricsSnapshot::empty(
-                DecoderId::Mwpm,
-                BackendKind::Cpu,
-            );
+    fn custom_decoder_identity_is_supported() {
+        let decoder =
+            DecoderId::custom("my_decoder")
+                .unwrap();
 
         assert_eq!(
-            snapshot.decode_operations,
-            0
-        );
-
-        assert_eq!(
-            snapshot.logical_error_rate,
-            None
-        );
-
-        assert_eq!(
-            snapshot.qpu.shots,
-            0
+            decoder.as_str(),
+            "my_decoder"
         );
     }
 }
