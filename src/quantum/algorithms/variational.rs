@@ -1,208 +1,150 @@
-//! Zamani Quantum Algorithms — Variational Quantum Algorithms
+//! Zamani Quantum Algorithms — Generic Variational Orchestration.
 //!
-//! Production-grade orchestration for variational quantum algorithms (VQAs).
+//! This module is the stable orchestration layer shared by variational quantum
+//! algorithms. It deliberately does not implement an optimizer, objective,
+//! backend, hardware adapter, routing pass, or error-correction mechanism.
 //!
-//! This module owns:
-//!   - parameterized ansätze
-//!   - parameter vectors
-//!   - objective evaluation
-//!   - classical parameter optimization
-//!   - convergence control
-//!   - optimization history
+//! # Responsibility
 //!
-//! It deliberately does NOT own:
-//!   - quantum gate definitions
-//!   - qubit definitions
-//!   - circuit storage
-//!   - hardware topology
-//!   - physical qubit routing
-//!   - backend execution
+//! `variational.rs` owns only:
 //!
-//! Those responsibilities belong to:
-//!   quantum::ir
-//!   quantum::routing
-//!   quantum::hardware
+//! - the generic variational ansatz contract;
+//! - immutable variational problem validation;
+//! - variational orchestration configuration;
+//! - algorithm metadata and result assembly;
+//! - convergence-policy enforcement at the VQA boundary;
+//! - compatibility aliases for the former public variational API.
 //!
-//! The module is backend-independent.
+//! The canonical implementations remain in:
+//!
+//! ```text
+//! error.rs      -> AlgorithmError / Result
+//! types.rs      -> ParameterVector / metadata / limits
+//! objective.rs  -> Objective / ObjectiveEvaluation
+//! optimizer.rs  -> OptimizationConfig / Optimizer / OptimizationResult
+//! execution.rs  -> QuantumExecutor / ExecutionRequest / ExecutionResult
+//! quantum::ir   -> QuantumCircuit and circuit semantics
+//! ```
+//!
+//! # Architectural boundary
+//!
+//! ```text
+//! VariationalProblem
+//!        │
+//!        ├── Ansatz ───────────────► quantum::ir::QuantumCircuit
+//!        │
+//!        └── ParameterVector
+//!                  │
+//!                  ▼
+//!              Objective
+//!                  │
+//!                  ▼
+//!              Optimizer
+//!                  │
+//!                  ▼
+//!        OptimizationResult
+//!                  │
+//!                  ▼
+//!          VariationalResult
+//! ```
+//!
+//! A quantum objective is responsible for connecting its parameter vector to
+//! an ansatz and, where appropriate, to `execution::QuantumExecutor`. This
+//! module does not duplicate that execution path.
+//!
+//! # Important integration rule
+//!
+//! Algorithm-specific ansatz traits may wrap [`Ansatz`] when they need richer
+//! domain semantics. For example, VQE may require a Hamiltonian-specific
+//! contract. Such specialized traits must not redefine `ParameterVector` or
+//! optimizer/result types.
+//!
+//! # Determinism
+//!
+//! This module creates no randomness. Determinism belongs to the explicit
+//! execution configuration and optimizer/objective contracts. The generic
+//! orchestration layer only preserves and reports those contracts.
+//!
+//! # Numerical safety
+//!
+//! Parameter validation is delegated to `ParameterVector`. Objective values
+//! are validated by `ObjectiveEvaluation`, and optimizer results are validated
+//! by `OptimizationResult`. No raw unchecked floating-point result is exposed
+//! by this module.
+//!
+//! # Rust compatibility
+//!
+//! Rust 1.97.1. No nightly features and no external dependencies are required.
+//!
+//! # Safety
+//!
+//! This module contains no unsafe code.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
 
 use std::fmt;
 
-/// Result type used by the variational subsystem.
-pub type Result<T> = std::result::Result<T, VariationalError>;
+use crate::quantum::ir::QuantumCircuit;
 
-/// Errors produced by variational compilation/execution.
-#[derive(Debug, Clone, PartialEq)]
-pub enum VariationalError {
-    EmptyParameters,
-    InvalidParameter {
-        index: usize,
-        value: f64,
-    },
-    InvalidLearningRate(f64),
-    InvalidTolerance(f64),
-    InvalidIterationLimit,
-    ObjectiveEvaluationFailed(String),
-    OptimizationFailed(String),
-    NonFiniteObjective(f64),
-}
+use super::error::{AlgorithmError, Result};
 
-impl fmt::Display for VariationalError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::EmptyParameters => {
-                write!(f, "variational parameter vector cannot be empty")
-            }
-            Self::InvalidParameter { index, value } => {
-                write!(
-                    f,
-                    "invalid variational parameter at index {}: {}",
-                    index, value
-                )
-            }
-            Self::InvalidLearningRate(value) => {
-                write!(f, "learning rate must be finite and > 0, got {}", value)
-            }
-            Self::InvalidTolerance(value) => {
-                write!(f, "tolerance must be finite and > 0, got {}", value)
-            }
-            Self::InvalidIterationLimit => {
-                write!(f, "maximum iterations must be greater than zero")
-            }
-            Self::ObjectiveEvaluationFailed(message) => {
-                write!(f, "objective evaluation failed: {}", message)
-            }
-            Self::OptimizationFailed(message) => {
-                write!(f, "variational optimization failed: {}", message)
-            }
-            Self::NonFiniteObjective(value) => {
-                write!(f, "objective returned a non-finite value: {}", value)
-            }
-        }
-    }
-}
+pub use super::objective::{
+    Objective,
+    ObjectiveDirection,
+    ObjectiveStatistics,
+};
 
-impl std::error::Error for VariationalError {}
+pub use super::optimizer::{
+    ConvergenceStatus,
+    GradientDescent,
+    OptimizationConfig,
+    OptimizationResult,
+    OptimizationStatistics,
+    OptimizationStep,
+    Optimizer,
+};
 
-/// Parameter vector used by a variational ansatz.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Parameters {
-    values: Vec<f64>,
-}
+use super::types::{
+    AlgorithmId,
+    AlgorithmMetadata,
+    AlgorithmVersion,
+    ParameterVector,
+};
 
-impl Parameters {
-    pub fn new(values: Vec<f64>) -> Result<Self> {
-        if values.is_empty() {
-            return Err(VariationalError::EmptyParameters);
-        }
-
-        for (index, value) in values.iter().copied().enumerate() {
-            if !value.is_finite() {
-                return Err(VariationalError::InvalidParameter { index, value });
-            }
-        }
-
-        Ok(Self { values })
-    }
-
-    pub fn zeros(count: usize) -> Result<Self> {
-        Self::new(vec![0.0; count])
-    }
-
-    pub fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
-    }
-
-    pub fn as_slice(&self) -> &[f64] {
-        &self.values
-    }
-
-    pub fn as_mut_slice(&mut self) -> &mut [f64] {
-        &mut self.values
-    }
-
-    pub fn get(&self, index: usize) -> Option<f64> {
-        self.values.get(index).copied()
-    }
-
-    pub fn set(&mut self, index: usize, value: f64) -> Result<()> {
-        if !value.is_finite() {
-            return Err(VariationalError::InvalidParameter { index, value });
-        }
-
-        let slot = self
-            .values
-            .get_mut(index)
-            .ok_or_else(|| VariationalError::InvalidParameter { index, value })?;
-
-        *slot = value;
-        Ok(())
-    }
-}
-
-/// Objective function evaluated by the classical optimizer.
+/// Backward-compatible name for the canonical parameter vector.
 ///
-/// Lower values are assumed to be better.
-pub trait Objective {
-    fn evaluate(&mut self, parameters: &Parameters) -> Result<f64>;
-}
+/// New code should use [`ParameterVector`] from `types.rs` directly.
+pub type Parameters = ParameterVector;
 
-/// Classical optimization algorithm.
-pub trait Optimizer {
-    fn optimize(
-        &mut self,
-        objective: &mut dyn Objective,
-        initial: Parameters,
-        config: &OptimizationConfig,
-    ) -> Result<OptimizationResult>;
-}
+/// Stable semantic version of the generic variational orchestration contract.
+pub const VARIATIONAL_VERSION: AlgorithmVersion =
+    AlgorithmVersion::new(1, 0, 0);
 
-/// Configuration for variational optimization.
-#[derive(Debug, Clone, PartialEq)]
-pub struct OptimizationConfig {
-    pub learning_rate: f64,
-    pub tolerance: f64,
-    pub max_iterations: usize,
-    pub gradient_epsilon: f64,
-    pub patience: usize,
-}
+// =============================================================================
+// Ansatz
+// =============================================================================
 
-impl Default for OptimizationConfig {
-    fn default() -> Self {
-        Self {
-            learning_rate: 0.01,
-            tolerance: 1e-8,
-            max_iterations: 1_000,
-            gradient_epsilon: 1e-6,
-            patience: 20,
-        }
-    }
-}
+/// Backend-independent parameterized quantum ansatz.
+///
+/// The ansatz converts concrete classical values into a logical Quantum IR
+/// circuit. It never executes the circuit and therefore cannot depend on a
+/// simulator, QPU, hardware topology, credentials, or transport.
+pub trait Ansatz {
+    /// Returns the number of classical parameters accepted by this ansatz.
+    fn parameter_count(&self) -> Result<usize>;
 
-impl OptimizationConfig {
-    pub fn validate(&self) -> Result<()> {
-        if !self.learning_rate.is_finite() || self.learning_rate <= 0.0 {
-            return Err(VariationalError::InvalidLearningRate(
-                self.learning_rate,
-            ));
-        }
+    /// Builds a logical Quantum IR circuit from validated parameters.
+    fn build(&self, parameters: &ParameterVector) -> Result<QuantumCircuit>;
 
-        if !self.tolerance.is_finite() || self.tolerance <= 0.0 {
-            return Err(VariationalError::InvalidTolerance(self.tolerance));
-        }
+    /// Performs ansatz-local validation independent of a parameter vector.
+    fn validate(&self) -> Result<()> {
+        let parameter_count = self.parameter_count()?;
 
-        if self.max_iterations == 0 {
-            return Err(VariationalError::InvalidIterationLimit);
-        }
-
-        if !self.gradient_epsilon.is_finite()
-            || self.gradient_epsilon <= 0.0
-        {
-            return Err(VariationalError::InvalidTolerance(
-                self.gradient_epsilon,
+        if parameter_count == 0 {
+            return Err(AlgorithmError::invalid_configuration(
+                "parameter_count",
+                "a variational ansatz must expose at least one parameter",
             ));
         }
 
@@ -210,253 +152,661 @@ impl OptimizationConfig {
     }
 }
 
-/// One optimization observation.
-#[derive(Debug, Clone, PartialEq)]
-pub struct OptimizationStep {
-    pub iteration: usize,
-    pub objective: f64,
-    pub gradient_norm: f64,
-}
+// =============================================================================
+// Variational problem
+// =============================================================================
 
-/// Complete optimization result.
-#[derive(Debug, Clone, PartialEq)]
-pub struct OptimizationResult {
-    pub parameters: Parameters,
-    pub objective: f64,
-    pub iterations: usize,
-    pub converged: bool,
-    pub history: Vec<OptimizationStep>,
-}
-
-/// Simple deterministic gradient-descent optimizer.
+/// Immutable, validated input to generic variational orchestration.
 ///
-/// This is intentionally backend-independent. A production backend can later
-/// provide parameter-shift gradients or hardware-native gradient evaluation.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct GradientDescent;
+/// The problem owns the ansatz and initial parameters. Optimization policy is
+/// intentionally kept in [`VariationalConfig`] so the same problem can be
+/// executed with different optimizers without mutating the mathematical input.
+pub struct VariationalProblem<A> {
+    ansatz: A,
+    initial_parameters: ParameterVector,
+}
 
-impl GradientDescent {
-    fn numerical_gradient(
-        objective: &mut dyn Objective,
-        parameters: &Parameters,
-        epsilon: f64,
-    ) -> Result<Vec<f64>> {
-        let mut gradient = vec![0.0; parameters.len()];
-
-        for index in 0..parameters.len() {
-            let mut plus = parameters.clone();
-            let mut minus = parameters.clone();
-
-            plus.set(
-                index,
-                parameters.as_slice()[index] + epsilon,
-            )?;
-
-            minus.set(
-                index,
-                parameters.as_slice()[index] - epsilon,
-            )?;
-
-            let plus_value = objective.evaluate(&plus)?;
-            let minus_value = objective.evaluate(&minus)?;
-
-            if !plus_value.is_finite() {
-                return Err(VariationalError::NonFiniteObjective(
-                    plus_value,
-                ));
-            }
-
-            if !minus_value.is_finite() {
-                return Err(VariationalError::NonFiniteObjective(
-                    minus_value,
-                ));
-            }
-
-            gradient[index] =
-                (plus_value - minus_value) / (2.0 * epsilon);
-        }
-
-        Ok(gradient)
+impl<A> fmt::Debug for VariationalProblem<A>
+where
+    A: fmt::Debug,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("VariationalProblem")
+            .field("ansatz", &self.ansatz)
+            .field("initial_parameters", &self.initial_parameters)
+            .finish()
     }
 }
 
-impl Optimizer for GradientDescent {
-    fn optimize(
-        &mut self,
-        objective: &mut dyn Objective,
-        mut parameters: Parameters,
-        config: &OptimizationConfig,
-    ) -> Result<OptimizationResult> {
-        config.validate()?;
+impl<A> VariationalProblem<A>
+where
+    A: Ansatz,
+{
+    /// Creates and fully validates a variational problem.
+    pub fn new(
+        ansatz: A,
+        initial_parameters: ParameterVector,
+    ) -> Result<Self> {
+        ansatz.validate()?;
+        initial_parameters.validate()?;
+        initial_parameters.require_non_empty()?;
 
-        let mut history = Vec::new();
-        let mut best_value = f64::INFINITY;
-        let mut stagnant_iterations = 0usize;
+        let expected = ansatz.parameter_count()?;
+        let actual = initial_parameters.len();
 
-        for iteration in 0..config.max_iterations {
-            let value = objective.evaluate(&parameters)?;
-
-            if !value.is_finite() {
-                return Err(VariationalError::NonFiniteObjective(value));
-            }
-
-            if best_value - value > config.tolerance {
-                best_value = value;
-                stagnant_iterations = 0;
-            } else {
-                stagnant_iterations =
-                    stagnant_iterations.saturating_add(1);
-            }
-
-            let gradient = Self::numerical_gradient(
-                objective,
-                &parameters,
-                config.gradient_epsilon,
-            )?;
-
-            let gradient_norm = gradient
-                .iter()
-                .map(|v| v * v)
-                .sum::<f64>()
-                .sqrt();
-
-            history.push(OptimizationStep {
-                iteration,
-                objective: value,
-                gradient_norm,
+        if expected != actual {
+            return Err(AlgorithmError::DimensionMismatch {
+                expected_name: "ansatz parameter count".to_string(),
+                expected,
+                actual_name: "initial parameter count".to_string(),
+                actual,
+                message:
+                    "variational ansatz and initial parameter vector \
+                     dimensions must match"
+                        .to_string(),
             });
-
-            if gradient_norm <= config.tolerance
-                || stagnant_iterations >= config.patience
-            {
-                return Ok(OptimizationResult {
-                    parameters,
-                    objective: value,
-                    iterations: iteration + 1,
-                    converged: true,
-                    history,
-                });
-            }
-
-            for (parameter, gradient_value) in
-                parameters.as_mut_slice().iter_mut().zip(gradient)
-            {
-                *parameter -= config.learning_rate * gradient_value;
-
-                if !parameter.is_finite() {
-                    return Err(VariationalError::OptimizationFailed(
-                        "optimizer produced a non-finite parameter"
-                            .to_string(),
-                    ));
-                }
-            }
         }
 
-        let objective_value = objective.evaluate(&parameters)?;
-
-        Ok(OptimizationResult {
-            parameters,
-            objective: objective_value,
-            iterations: config.max_iterations,
-            converged: false,
-            history,
+        Ok(Self {
+            ansatz,
+            initial_parameters,
         })
     }
+
+    /// Returns the immutable ansatz.
+    #[must_use]
+    pub fn ansatz(&self) -> &A {
+        &self.ansatz
+    }
+
+    /// Returns the immutable initial parameters.
+    #[must_use]
+    pub fn initial_parameters(&self) -> &ParameterVector {
+        &self.initial_parameters
+    }
+
+    /// Returns the validated number of classical parameters.
+    pub fn parameter_count(&self) -> Result<usize> {
+        self.ansatz.parameter_count()
+    }
+
+    /// Builds the initial logical circuit without executing it.
+    ///
+    /// This is the explicit integration point between generic variational
+    /// orchestration and the canonical Quantum IR.
+    pub fn build_initial_circuit(&self) -> Result<QuantumCircuit> {
+        self.ansatz.build(&self.initial_parameters)
+    }
 }
 
-/// High-level variational optimizer.
-#[derive(Debug, Clone)]
-pub struct VariationalOptimizer<O = GradientDescent> {
-    optimizer: O,
-    config: OptimizationConfig,
+// =============================================================================
+// Variational configuration
+// =============================================================================
+
+/// Policy controlling one generic variational optimization invocation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariationalConfig {
+    /// Canonical classical optimization policy.
+    pub optimization: OptimizationConfig,
+
+    /// If true, a non-converged bounded result is returned as an error rather
+    /// than as a successful result carrying a non-converged status.
+    pub require_convergence: bool,
 }
 
-impl Default for VariationalOptimizer<GradientDescent> {
+impl Default for VariationalConfig {
     fn default() -> Self {
         Self {
-            optimizer: GradientDescent,
-            config: OptimizationConfig::default(),
+            optimization: OptimizationConfig::default(),
+            require_convergence: false,
         }
     }
 }
 
-impl<O: Optimizer> VariationalOptimizer<O> {
-    pub fn new(optimizer: O, config: OptimizationConfig) -> Result<Self> {
-        config.validate()?;
+impl VariationalConfig {
+    /// Validates the complete variational policy.
+    pub fn validate(&self) -> Result<()> {
+        self.optimization.validate()
+    }
+}
 
-        Ok(Self { optimizer, config })
+// =============================================================================
+// Variational statistics
+// =============================================================================
+
+/// Immutable accounting for a complete variational invocation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariationalStatistics {
+    /// Optimizer statistics.
+    pub optimization: OptimizationStatistics,
+
+    /// Objective-layer accounting.
+    pub objective: ObjectiveStatistics,
+}
+
+impl VariationalStatistics {
+    fn from_run(
+        optimization: &OptimizationResult,
+        objective: ObjectiveStatistics,
+    ) -> Self {
+        Self {
+            optimization: optimization.statistics.clone(),
+            objective,
+        }
+    }
+}
+
+// =============================================================================
+// Variational result
+// =============================================================================
+
+/// Complete, validated result of one generic variational invocation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariationalResult {
+    /// Stable algorithm metadata.
+    pub metadata: AlgorithmMetadata,
+
+    /// Direction used by the objective.
+    pub direction: ObjectiveDirection,
+
+    /// Canonical optimization result.
+    pub optimization: OptimizationResult,
+
+    /// Combined optimizer/objective accounting.
+    pub statistics: VariationalStatistics,
+}
+
+impl VariationalResult {
+    /// Returns the terminal convergence status.
+    #[must_use]
+    pub const fn status(&self) -> ConvergenceStatus {
+        self.optimization.status
     }
 
+    /// Returns whether the optimizer converged.
+    #[must_use]
+    pub const fn converged(&self) -> bool {
+        self.optimization.converged()
+    }
+
+    /// Returns the final parameter vector.
+    #[must_use]
+    pub fn parameters(&self) -> &ParameterVector {
+        &self.optimization.parameters
+    }
+
+    /// Returns the best parameter vector.
+    #[must_use]
+    pub fn best_parameters(&self) -> &ParameterVector {
+        &self.optimization.best_parameters
+    }
+
+    /// Returns the final objective value.
+    #[must_use]
+    pub fn objective(&self) -> super::types::ObjectiveValue {
+        self.optimization.objective
+    }
+
+    /// Returns the best objective value observed.
+    #[must_use]
+    pub fn best_objective(&self) -> super::types::ObjectiveValue {
+        self.optimization.best_objective
+    }
+
+    /// Validates the complete result contract.
+    pub fn validate(&self) -> Result<()> {
+        if self.metadata.algorithm != AlgorithmId::Variational {
+            return Err(AlgorithmError::internal_invariant(
+                "variational_result_algorithm_id",
+                "generic variational result metadata must identify \
+                 the variational algorithm",
+            ));
+        }
+
+        if self.metadata.version != VARIATIONAL_VERSION {
+            return Err(AlgorithmError::internal_invariant(
+                "variational_result_version",
+                "generic variational result metadata contains an \
+                 unexpected version",
+            ));
+        }
+
+        self.optimization.validate()?;
+
+        if self.statistics.optimization
+            != self.optimization.statistics
+        {
+            return Err(AlgorithmError::internal_invariant(
+                "variational_statistics_optimization",
+                "variational statistics must match optimizer statistics",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+// =============================================================================
+// Variational algorithm
+// =============================================================================
+
+/// Generic backend-independent variational algorithm orchestrator.
+///
+/// The optimizer is injected, which makes the orchestration independent from
+/// any particular optimization strategy and allows deterministic reference
+/// testing with [`GradientDescent`].
+#[derive(Debug, Clone)]
+pub struct VariationalAlgorithm<O = GradientDescent> {
+    optimizer: O,
+    config: VariationalConfig,
+    metadata: AlgorithmMetadata,
+}
+
+impl Default for VariationalAlgorithm<GradientDescent> {
+    fn default() -> Self {
+        Self {
+            optimizer: GradientDescent::new(),
+            config: VariationalConfig::default(),
+            metadata: AlgorithmMetadata::new(
+                AlgorithmId::Variational,
+                VARIATIONAL_VERSION,
+            ),
+        }
+    }
+}
+
+impl<O> VariationalAlgorithm<O>
+where
+    O: Optimizer,
+{
+    /// Creates a validated variational orchestrator.
+    pub fn new(
+        optimizer: O,
+        config: VariationalConfig,
+    ) -> Result<Self> {
+        config.validate()?;
+
+        Ok(Self {
+            optimizer,
+            config,
+            metadata: AlgorithmMetadata::new(
+                AlgorithmId::Variational,
+                VARIATIONAL_VERSION,
+            ),
+        })
+    }
+
+    /// Associates an implementation identifier with result metadata.
+    pub fn with_implementation<S: Into<String>>(
+        mut self,
+        implementation: S,
+    ) -> Result<Self> {
+        self.metadata = self
+            .metadata
+            .with_implementation(implementation)?;
+
+        Ok(self)
+    }
+
+    /// Returns the immutable variational configuration.
+    #[must_use]
+    pub const fn config(&self) -> &VariationalConfig {
+        &self.config
+    }
+
+    /// Returns the optimizer's stable name.
+    #[must_use]
+    pub fn optimizer_name(&self) -> &'static str {
+        self.optimizer.name()
+    }
+
+    /// Optimizes an already validated initial parameter vector.
+    ///
+    /// This is the low-level integration point used by specialized algorithms
+    /// such as VQE and QAOA. The objective remains responsible for converting
+    /// parameters into quantum execution when required.
     pub fn optimize(
         &mut self,
         objective: &mut dyn Objective,
-        initial: Parameters,
-    ) -> Result<OptimizationResult> {
-        self.optimizer
-            .optimize(objective, initial, &self.config)
+        initial: ParameterVector,
+    ) -> Result<VariationalResult> {
+        initial.validate()?;
+        initial.require_non_empty()?;
+
+        let direction = objective.direction();
+
+        let optimization = self.optimizer.optimize(
+            objective,
+            initial,
+            &self.config.optimization,
+        )?;
+
+        optimization.validate()?;
+
+        let objective_statistics = objective.statistics();
+
+        let result = VariationalResult {
+            metadata: self.metadata.clone(),
+            direction,
+            statistics: VariationalStatistics::from_run(
+                &optimization,
+                objective_statistics,
+            ),
+            optimization,
+        };
+
+        result.validate()?;
+
+        if self.config.require_convergence
+            && !result.converged()
+        {
+            return Err(AlgorithmError::convergence_failure(
+                AlgorithmId::Variational.as_str(),
+                None,
+                format!(
+                    "variational optimization terminated with status {}",
+                    result.status()
+                ),
+            ));
+        }
+
+        Ok(result)
     }
 
-    pub fn config(&self) -> &OptimizationConfig {
-        &self.config
+    /// Solves a validated variational problem using the supplied objective.
+    ///
+    /// The ansatz is validated by `VariationalProblem`. The objective remains
+    /// the execution-aware component, so this method does not execute the
+    /// initial circuit merely to validate the problem.
+    pub fn solve<A>(
+        &mut self,
+        problem: &VariationalProblem<A>,
+        objective: &mut dyn Objective,
+    ) -> Result<VariationalResult>
+    where
+        A: Ansatz,
+    {
+        let expected = problem.parameter_count()?;
+        let actual = problem.initial_parameters().len();
+
+        if expected != actual {
+            return Err(AlgorithmError::DimensionMismatch {
+                expected_name:
+                    "ansatz parameter count".to_string(),
+                expected,
+                actual_name:
+                    "initial parameter count".to_string(),
+                actual,
+                message:
+                    "variational problem dimensions changed after validation"
+                        .to_string(),
+            });
+        }
+
+        self.optimize(
+            objective,
+            problem.initial_parameters().clone(),
+        )
     }
 }
+
+// =============================================================================
+// Compatibility alias
+// =============================================================================
+
+/// Backward-compatible name for [`VariationalAlgorithm`].
+///
+/// Existing callers can migrate without retaining a second implementation.
+pub type VariationalOptimizer<O = GradientDescent> =
+    VariationalAlgorithm<O>;
+
+// =============================================================================
+// Tests
+// =============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    struct Quadratic;
+    struct QuadraticObjective;
 
-    impl Objective for Quadratic {
-        fn evaluate(&mut self, parameters: &Parameters) -> Result<f64> {
-            let x = parameters.as_slice()[0];
-            Ok((x - 2.0).powi(2))
+    impl Objective for QuadraticObjective {
+        fn evaluate(
+            &mut self,
+            parameters: &ParameterVector,
+        ) -> Result<
+            super::super::objective::ObjectiveEvaluation,
+        > {
+            let x = parameters.get(0).ok_or_else(|| {
+                AlgorithmError::invalid_input(
+                    "parameters",
+                    "quadratic objective requires one parameter",
+                )
+            })?;
+
+            let value =
+                super::super::types::ObjectiveValue::new(
+                    (x - 2.0).powi(2),
+                )?;
+
+            super::super::objective::ObjectiveEvaluation::classical(
+                value,
+                1,
+            )
+        }
+    }
+
+    #[derive(Debug)]
+    struct OneParameterAnsatz;
+
+    impl Ansatz for OneParameterAnsatz {
+        fn parameter_count(&self) -> Result<usize> {
+            Ok(1)
+        }
+
+        fn build(
+            &self,
+            _parameters: &ParameterVector,
+        ) -> Result<QuantumCircuit> {
+            Err(
+                AlgorithmError::UnsupportedOperation {
+                    operation:
+                        "test_ansatz_build".to_string(),
+                    message:
+                        "the unit test does not require circuit construction"
+                            .to_string(),
+                },
+            )
         }
     }
 
     #[test]
-    fn parameters_reject_non_finite_values() {
-        assert!(Parameters::new(vec![f64::NAN]).is_err());
-        assert!(Parameters::new(vec![f64::INFINITY]).is_err());
+    fn problem_rejects_dimension_mismatch() {
+        let result = VariationalProblem::new(
+            OneParameterAnsatz,
+            ParameterVector::new(vec![0.0, 1.0])
+                .unwrap(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(
+                AlgorithmError::DimensionMismatch { .. }
+            )
+        ));
     }
 
     #[test]
-    fn empty_parameters_are_rejected() {
-        assert!(Parameters::new(Vec::new()).is_err());
+    fn problem_rejects_empty_parameters() {
+        let result = VariationalProblem::new(
+            OneParameterAnsatz,
+            ParameterVector::new(Vec::new())
+                .unwrap(),
+        );
+
+        assert!(result.is_err());
     }
 
     #[test]
-    fn optimizer_reaches_quadratic_minimum() {
-        let parameters = Parameters::new(vec![0.0]).unwrap();
+    fn deterministic_gradient_descent_is_reproducible() {
+        let parameters =
+            ParameterVector::new(vec![0.0])
+                .unwrap();
 
-        let config = OptimizationConfig {
-            learning_rate: 0.1,
-            tolerance: 1e-7,
-            max_iterations: 500,
-            gradient_epsilon: 1e-6,
-            patience: 50,
+        let config = VariationalConfig {
+            optimization: OptimizationConfig {
+                learning_rate: 0.1,
+                tolerance: 1.0e-7,
+                max_iterations: 500,
+                gradient_epsilon: 1.0e-6,
+                patience: 50,
+                objective_improvement_tolerance:
+                    1.0e-10,
+                max_parameter_magnitude: 1.0e6,
+                max_objective_evaluations: 10_000,
+                max_gradient_evaluations: 1_000,
+                max_optimizer_steps: 1_000,
+                min_learning_rate: 1.0e-15,
+            },
+            require_convergence: true,
         };
 
-        let mut optimizer =
-            VariationalOptimizer::new(GradientDescent, config).unwrap();
-
-        let mut objective = Quadratic;
-
-        let result = optimizer
-            .optimize(&mut objective, parameters)
+        let mut first =
+            VariationalAlgorithm::new(
+                GradientDescent::new(),
+                config.clone(),
+            )
             .unwrap();
 
-        assert!((result.parameters.as_slice()[0] - 2.0).abs() < 1e-3);
-        assert!(result.objective < 1e-5);
+        let mut second =
+            VariationalAlgorithm::new(
+                GradientDescent::new(),
+                config,
+            )
+            .unwrap();
+
+        let mut objective_one =
+            QuadraticObjective;
+
+        let mut objective_two =
+            QuadraticObjective;
+
+        let result_one = first
+            .optimize(
+                &mut objective_one,
+                parameters.clone(),
+            )
+            .unwrap();
+
+        let result_two = second
+            .optimize(
+                &mut objective_two,
+                parameters,
+            )
+            .unwrap();
+
+        assert_eq!(result_one, result_two);
+
+        assert!(
+            (result_one
+                .best_parameters()
+                .get(0)
+                .unwrap()
+                - 2.0)
+                .abs()
+                < 1.0e-3
+        );
+
+        assert!(
+            result_one.best_objective().get()
+                < 1.0e-5
+        );
+
+        assert!(result_one.converged());
     }
 
     #[test]
-    fn invalid_configuration_is_rejected() {
-        let config = OptimizationConfig {
-            learning_rate: 0.0,
-            ..OptimizationConfig::default()
+    fn non_convergence_can_be_required() {
+        let config = VariationalConfig {
+            optimization: OptimizationConfig {
+                max_iterations: 1,
+                ..OptimizationConfig::default()
+            },
+            require_convergence: true,
         };
 
-        assert!(VariationalOptimizer::new(GradientDescent, config).is_err());
+        let mut algorithm =
+            VariationalAlgorithm::new(
+                GradientDescent::new(),
+                config,
+            )
+            .unwrap();
+
+        let mut objective =
+            QuadraticObjective;
+
+        let result = algorithm.optimize(
+            &mut objective,
+            ParameterVector::new(vec![0.0])
+                .unwrap(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(
+                AlgorithmError::ConvergenceFailure { .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn result_contract_is_self_consistent() {
+        let config = VariationalConfig {
+            optimization: OptimizationConfig {
+                learning_rate: 0.1,
+                max_iterations: 2,
+                max_objective_evaluations: 100,
+                max_gradient_evaluations: 10,
+                max_optimizer_steps: 10,
+                ..OptimizationConfig::default()
+            },
+            require_convergence: false,
+        };
+
+        let mut algorithm =
+            VariationalAlgorithm::new(
+                GradientDescent::new(),
+                config,
+            )
+            .unwrap();
+
+        let mut objective =
+            QuadraticObjective;
+
+        let result = algorithm
+            .optimize(
+                &mut objective,
+                ParameterVector::new(vec![0.0])
+                    .unwrap(),
+            )
+            .unwrap();
+
+        result.validate().unwrap();
+
+        assert_eq!(
+            result.statistics.optimization,
+            result.optimization.statistics
+        );
+
+        assert_eq!(
+            result.metadata.algorithm,
+            AlgorithmId::Variational
+        );
+
+        assert_eq!(
+            result.metadata.version,
+            VARIATIONAL_VERSION
+        );
     }
 }
