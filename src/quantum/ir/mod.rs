@@ -1,30 +1,154 @@
 //! Zamani Quantum Intermediate Representation.
 //!
-//! This module defines the hardware-independent representation of quantum
-//! programs. The IR is intentionally divided into:
+//! Canonical, hardware-independent representation of logical quantum
+//! programs.
 //!
-//! - `qubits`       — logical and physical qubit identities;
-//! - `gate`         — quantum operations;
-//! - `measurement` — quantum-to-classical measurement semantics;
-//! - `circuit`      — complete quantum circuit/program containers.
+//! # Architectural boundary
 //!
-//! Higher compiler stages should operate on these abstractions rather than
-//! directly on backend-specific hardware representations.
+//! The Quantum IR represents the logical program itself. It deliberately does
+//! not contain:
+//!
+//! - physical hardware topology;
+//! - logical-to-physical routing;
+//! - pulse schedules;
+//! - calibration;
+//! - backend-specific gate decomposition;
+//! - QPU communication;
+//! - hardware execution;
+//! - error-correction decoding;
+//! - hardware-specific error-correction geometry;
+//! - optimization algorithms;
+//! - frontend parsing.
+//!
+//! Those responsibilities belong to downstream quantum compiler/backend
+//! subsystems.
+//!
+//! # Public API
+//!
+//! This module is the stable public boundary for the Quantum IR. Individual
+//! implementation modules own their internal algorithms and local types, while
+//! this module controls what the rest of Zamani is expected to consume.
+//!
+//! The intended dependency direction is:
+//!
+//! ```text
+//! limits
+//!    │
+//!    ├──────────────┐
+//!    │              │
+//! errors       identity / parameter / qubits
+//!    │              │
+//!    └──────┬───────┘
+//!           │
+//!      measurement
+//!           │
+//!         gate
+//!           │
+//!      validation
+//!           │
+//!        circuit
+//!           │
+//!        analysis
+//!           │
+//!       integration
+//! ```
+//!
+//! `mod.rs` itself contains no domain logic. Its responsibility is:
+//!
+//! 1. declare the canonical IR modules;
+//! 2. expose the stable public types;
+//! 3. expose the canonical validation/analysis entry points;
+//! 4. provide a controlled prelude;
+//! 5. keep implementation-only details private.
+//!
+//! # Rust compatibility
+//!
+//! This module targets Rust 1.97.1.
+//!
+//! No nightly features are required.
+//! No external dependencies are required.
 
-// -----------------------------------------------------------------------------
-// Modules
-// -----------------------------------------------------------------------------
+#![allow(clippy::module_inception)]
 
+// =============================================================================
+// Canonical IR modules
+// =============================================================================
+
+/// Deterministic, read-only circuit analysis.
+pub mod analysis;
+
+/// Canonical logical circuit container.
 pub mod circuit;
+
+/// Canonical Quantum IR error vocabulary.
+pub mod errors;
+
+/// Quantum gate definitions and gate-level semantics.
 pub mod gate;
+
+/// Strongly typed IR, circuit, and operation identities.
+pub mod identity;
+
+/// Resource limits and overflow-safe resource accounting.
+pub mod limits;
+
+/// Hardware-independent measurement semantics.
 pub mod measurement;
+
+/// Typed quantum gate parameters.
+pub mod parameter;
+
+/// Logical and physical qubit identity/registration types.
 pub mod qubits;
 
-// -----------------------------------------------------------------------------
-// Core IR exports
-// -----------------------------------------------------------------------------
+/// Canonical whole-IR validation.
+pub mod validation;
 
-pub use circuit::QuantumCircuit;
+// =============================================================================
+// Integration tests
+// =============================================================================
+
+/// Cross-module Quantum IR integration tests.
+///
+/// Unit tests that belong exclusively to one implementation module should
+/// remain next to that implementation. This test module is reserved for
+/// contracts spanning multiple IR components.
+#[cfg(test)]
+mod tests;
+
+// =============================================================================
+// Canonical circuit API
+// =============================================================================
+
+pub use circuit::{
+    CircuitError,
+    CircuitMetadata,
+    QuantumCircuit,
+};
+
+// =============================================================================
+// Canonical error API
+// =============================================================================
+//
+// `errors.rs` is intentionally independent of the implementation modules.
+// These are therefore the errors that compiler-wide code should prefer when
+// crossing the Quantum IR boundary.
+
+pub use errors::{
+    IrError,
+    IrErrorKind,
+    IrGateError,
+    IrIdentifierError,
+    IrLimitError,
+    IrMeasurementError,
+    IrParameterError,
+    IrQubitError,
+    IrResult,
+};
+
+// =============================================================================
+// Gate API
+// =============================================================================
 
 pub use gate::{
     Gate,
@@ -32,6 +156,29 @@ pub use gate::{
     GateKind,
     GateParameter,
 };
+
+// =============================================================================
+// Identity API
+// =============================================================================
+
+pub use identity::{
+    CircuitId,
+    IrVersion,
+    OperationId,
+};
+
+// =============================================================================
+// Limits API
+// =============================================================================
+
+pub use limits::{
+    LimitsError,
+    QuantumIrLimits,
+};
+
+// =============================================================================
+// Measurement API
+// =============================================================================
 
 pub use measurement::{
     measure,
@@ -46,6 +193,24 @@ pub use measurement::{
     MeasurementMode,
 };
 
+// =============================================================================
+// Parameter API
+// =============================================================================
+//
+// `Parameter` is the canonical parameter abstraction for the upgraded IR.
+//
+// `GateParameter` remains exported because gate.rs currently exposes it as
+// part of its public construction API. New compiler code should prefer the
+// canonical `Parameter` abstraction where applicable.
+
+pub use parameter::{
+    Parameter,
+};
+
+// =============================================================================
+// Qubit API
+// =============================================================================
+
 pub use qubits::{
     validate_qubits,
     validate_unique_qubits,
@@ -57,36 +222,95 @@ pub use qubits::{
     QubitState,
 };
 
-// -----------------------------------------------------------------------------
-// Prelude
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Validation API
+// =============================================================================
 
-/// Common quantum IR types.
+pub use validation::{
+    validate_circuit,
+    validate_circuit_with_config,
+    validate_circuit_with_limits,
+    validate_gate,
+    validate_measurement,
+    validate_operation,
+    ValidationConfig,
+};
+
+// =============================================================================
+// Analysis API
+// =============================================================================
+
+pub use analysis::{
+    analyze,
+    analyze_with_limits,
+    basic_statistics,
+    basic_statistics_with_limits,
+    BasicCircuitStatistics,
+    CircuitStatistics,
+    GateKindCount,
+    QubitUsage,
+};
+
+// =============================================================================
+// Controlled prelude
+// =============================================================================
+
+/// Stable collection of the primary Quantum IR types.
 ///
-/// Compiler passes can import this prelude when they need the primary IR
-/// abstractions without depending on individual implementation modules.
+/// Downstream compiler stages should normally import from this prelude rather
+/// than reaching into individual IR implementation modules.
+///
+/// The prelude intentionally excludes:
+///
+/// - specialized internal errors that are only useful for implementation
+///   details;
+/// - analysis helper implementation types that are not part of the common
+///   compiler contract;
+/// - limits internals;
+/// - validation internals.
 pub mod prelude {
     pub use super::{
+        analyze,
+        analyze_with_limits,
+        basic_statistics,
+        basic_statistics_with_limits,
         measure,
         measure_x,
         measure_y,
+        validate_circuit,
+        validate_circuit_with_config,
+        validate_circuit_with_limits,
+        validate_gate,
+        validate_measurement,
+        validate_operation,
+        BasicCircuitStatistics,
+        CircuitError,
+        CircuitId,
+        CircuitMetadata,
+        CircuitStatistics,
         ClassicalBitId,
         ClassicalRegister,
         Gate,
-        GateError,
         GateKind,
+        GateKindCount,
         GateParameter,
+        IrError,
+        IrErrorKind,
+        IrResult,
+        IrVersion,
         Measurement,
         MeasurementBasis,
-        MeasurementError,
         MeasurementGroup,
         MeasurementMode,
+        OperationId,
+        Parameter,
         PhysicalQubitId,
         Qubit,
-        QubitError,
         QubitId,
         QubitRegister,
         QubitState,
         QuantumCircuit,
+        QuantumIrLimits,
+        ValidationConfig,
     };
 }
