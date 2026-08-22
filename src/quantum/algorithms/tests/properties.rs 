@@ -1,1 +1,788 @@
-#
+//! Property and invariant tests for `quantum::algorithms`.
+//!
+//! # Purpose
+//!
+//! This module verifies invariants shared by the complete quantum-algorithm
+//! subsystem without depending on concrete backend implementations.
+//!
+//! The tests deliberately exercise public contracts rather than private
+//! implementation details. This prevents later implementation changes in
+//! `error.rs`, `execution.rs`, `optimizer.rs`, VQE, QAOA, Grover, or the other
+//! algorithm modules from forcing this file to be rewritten.
+//!
+//! # Covered contracts
+//!
+//! - stable algorithm identifiers;
+//! - stable algorithm-version ordering;
+//! - metadata identity;
+//! - explicit deterministic seeds;
+//! - typed parameter indices;
+//! - positive and bounded qubit counts;
+//! - positive and bounded shot counts;
+//! - finite probability values;
+//! - probability range enforcement;
+//! - finite expectation values;
+//! - finite objective values;
+//! - finite energy values;
+//! - rejection of NaN and infinity;
+//! - boundary/resource-limit enforcement;
+//! - display stability for machine-readable identifiers;
+//! - value equality/ordering invariants;
+//! - absence of unsafe assumptions.
+//!
+//! # Integration boundary
+//!
+//! This file depends only on:
+//!
+//! ```text
+//! quantum::algorithms::error
+//! quantum::algorithms::types
+//! ```
+//!
+//! It intentionally does NOT depend directly on:
+//!
+//! - quantum IR;
+//! - circuit implementations;
+//! - simulators;
+//! - hardware;
+//! - routing;
+//! - transpilation;
+//! - error correction;
+//! - optimizer implementations;
+//! - concrete algorithm implementations.
+//!
+//! Those integration paths belong in `integration.rs` and `determinism.rs`.
+//!
+//! # Dependency contract
+//!
+//! ```text
+//! error.rs
+//!    │
+//!    ▼
+//! types.rs
+//!    │
+//!    ▼
+//! properties.rs
+//! ```
+//!
+//! No production module depends on this test module.
+//!
+//! # Rust compatibility
+//!
+//! Rust 1.97.1.
+//!
+//! No nightly features.
+//! No external property-testing crate.
+//!
+//! The tests use deterministic boundary/value sets instead of a third-party
+//! random generator so that the algorithm test suite remains dependency-free
+//! and reproducible.
+//!
+//! # Stability rule
+//!
+//! Do not match individual `AlgorithmError` fields here. Error representation
+//! is owned by `error.rs`; this test file verifies observable acceptance or
+//! rejection behavior only. This is intentional and prevents coupling to the
+//! internal diagnostic representation.
+
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+
+use super::super::types::{
+    AlgorithmId,
+    AlgorithmMetadata,
+    AlgorithmVersion,
+    Energy,
+    ExpectationValue,
+    ParameterIndex,
+    Probability,
+    QubitCount,
+    Seed,
+    ShotCount,
+    DEFAULT_MAX_QUBITS,
+    DEFAULT_MAX_SHOTS,
+};
+
+/// All currently supported algorithm identifiers must have stable,
+/// non-empty machine-readable names.
+#[test]
+fn algorithm_ids_are_stable_and_non_empty() {
+    let algorithms = [
+        AlgorithmId::Variational,
+        AlgorithmId::Vqe,
+        AlgorithmId::Qaoa,
+        AlgorithmId::Grover,
+        AlgorithmId::AmplitudeAmplification,
+        AlgorithmId::AmplitudeEstimation,
+        AlgorithmId::PhaseEstimation,
+    ];
+
+    for algorithm in algorithms {
+        let name = algorithm.as_str();
+
+        assert!(
+            !name.is_empty(),
+            "algorithm identifier must not be empty"
+        );
+
+        assert!(
+            name.is_ascii(),
+            "machine-readable algorithm identifiers must be ASCII: {name}"
+        );
+
+        assert!(
+            !name.chars().any(char::is_whitespace),
+            "algorithm identifiers must not contain whitespace: {name}"
+        );
+    }
+}
+
+/// Algorithm identifiers must be unique.
+#[test]
+fn algorithm_ids_are_unique() {
+    let algorithms = [
+        AlgorithmId::Variational,
+        AlgorithmId::Vqe,
+        AlgorithmId::Qaoa,
+        AlgorithmId::Grover,
+        AlgorithmId::AmplitudeAmplification,
+        AlgorithmId::AmplitudeEstimation,
+        AlgorithmId::PhaseEstimation,
+    ];
+
+    for left_index in 0..algorithms.len() {
+        for right_index in (left_index + 1)..algorithms.len() {
+            assert_ne!(
+                algorithms[left_index].as_str(),
+                algorithms[right_index].as_str(),
+                "algorithm identifiers must be unique"
+            );
+        }
+    }
+}
+
+/// Display for AlgorithmId must be exactly its stable machine-readable name.
+#[test]
+fn algorithm_id_display_matches_stable_name() {
+    let algorithms = [
+        AlgorithmId::Variational,
+        AlgorithmId::Vqe,
+        AlgorithmId::Qaoa,
+        AlgorithmId::Grover,
+        AlgorithmId::AmplitudeAmplification,
+        AlgorithmId::AmplitudeEstimation,
+        AlgorithmId::PhaseEstimation,
+    ];
+
+    for algorithm in algorithms {
+        assert_eq!(
+            algorithm.to_string(),
+            algorithm.as_str(),
+            "Display must remain aligned with as_str()"
+        );
+    }
+}
+
+/// The initial algorithm version must be exactly 1.0.0.
+#[test]
+fn initial_algorithm_version_is_stable() {
+    let version = AlgorithmVersion::initial();
+
+    assert_eq!(version.major, 1);
+    assert_eq!(version.minor, 0);
+    assert_eq!(version.patch, 0);
+
+    assert_eq!(version.to_string(), "1.0.0");
+}
+
+/// Version ordering must obey semantic-version component ordering.
+#[test]
+fn algorithm_version_ordering_is_component_wise() {
+    let base = AlgorithmVersion::new(1, 0, 0);
+    let minor = AlgorithmVersion::new(1, 1, 0);
+    let patch = AlgorithmVersion::new(1, 1, 1);
+    let major = AlgorithmVersion::new(2, 0, 0);
+
+    assert!(base < minor);
+    assert!(minor < patch);
+    assert!(patch < major);
+
+    assert_eq!(base, AlgorithmVersion::new(1, 0, 0));
+}
+
+/// Algorithm metadata must preserve algorithm identity and version.
+#[test]
+fn algorithm_metadata_preserves_identity() {
+    let metadata =
+        AlgorithmMetadata::new(AlgorithmId::Vqe, AlgorithmVersion::initial());
+
+    assert_eq!(metadata.algorithm_id(), AlgorithmId::Vqe);
+    assert_eq!(metadata.version(), AlgorithmVersion::initial());
+    assert!(metadata.implementation.is_none());
+}
+
+/// Valid implementation identifiers must be retained.
+#[test]
+fn algorithm_metadata_accepts_valid_implementation_identifier() {
+    let metadata =
+        AlgorithmMetadata::new(AlgorithmId::Vqe, AlgorithmVersion::initial())
+            .with_implementation("zamani-vqe")
+            .expect("valid implementation identifier must be accepted");
+
+    assert_eq!(
+        metadata.implementation.as_deref(),
+        Some("zamani-vqe")
+    );
+}
+
+/// Oversized implementation identifiers must be rejected at the public
+/// validation boundary.
+#[test]
+fn algorithm_metadata_rejects_oversized_implementation_identifier() {
+    let oversized = "x".repeat(1025);
+
+    let result =
+        AlgorithmMetadata::new(
+            AlgorithmId::Vqe,
+            AlgorithmVersion::initial(),
+        )
+        .with_implementation(oversized);
+
+    assert!(
+        result.is_err(),
+        "implementation identifiers exceeding the contract limit must be rejected"
+    );
+}
+
+/// Seed construction must be lossless.
+#[test]
+fn seeds_are_lossless() {
+    let values = [
+        0_u64,
+        1_u64,
+        42_u64,
+        u64::MAX,
+    ];
+
+    for value in values {
+        let seed = Seed::new(value);
+
+        assert_eq!(
+            seed.get(),
+            value,
+            "Seed must preserve its input exactly"
+        );
+
+        assert_eq!(
+            Seed::from(value),
+            seed,
+            "From<u64> and Seed::new must have identical semantics"
+        );
+    }
+}
+
+/// Parameter indices must preserve their exact index.
+#[test]
+fn parameter_indices_are_lossless() {
+    let values = [
+        0_usize,
+        1_usize,
+        7_usize,
+        1024_usize,
+        usize::MAX,
+    ];
+
+    for value in values {
+        let index = ParameterIndex::new(value);
+
+        assert_eq!(
+            index.get(),
+            value,
+            "ParameterIndex must preserve its input exactly"
+        );
+    }
+}
+
+/// Zero qubits are invalid because an algorithm-visible quantum register must
+/// contain at least one qubit.
+#[test]
+fn zero_qubits_are_rejected() {
+    assert!(
+        QubitCount::new(0).is_err(),
+        "zero qubits must be rejected"
+    );
+}
+
+/// Valid qubit-count boundaries must be accepted.
+#[test]
+fn valid_qubit_count_boundaries_are_accepted() {
+    let values = [
+        1_u64,
+        2_u64,
+        3_u64,
+        DEFAULT_MAX_QUBITS,
+    ];
+
+    for value in values {
+        let count =
+            QubitCount::new(value)
+                .expect("valid qubit count must be accepted");
+
+        assert_eq!(count.get(), value);
+        assert_eq!(count.to_string(), value.to_string());
+    }
+}
+
+/// Qubit counts above the global contract limit must be rejected.
+#[test]
+fn qubit_count_above_global_limit_is_rejected() {
+    assert!(
+        QubitCount::new(DEFAULT_MAX_QUBITS + 1).is_err(),
+        "qubit counts above the global limit must be rejected"
+    );
+}
+
+/// Zero shots are invalid because a measurement execution must request at
+/// least one shot.
+#[test]
+fn zero_shots_are_rejected() {
+    assert!(
+        ShotCount::new(0).is_err(),
+        "zero shots must be rejected"
+    );
+}
+
+/// Valid shot-count boundaries must be accepted.
+#[test]
+fn valid_shot_count_boundaries_are_accepted() {
+    let values = [
+        1_u64,
+        2_u64,
+        100_u64,
+        DEFAULT_MAX_SHOTS,
+    ];
+
+    for value in values {
+        let shots =
+            ShotCount::new(value)
+                .expect("valid shot count must be accepted");
+
+        assert_eq!(shots.get(), value);
+        assert_eq!(shots.to_string(), value.to_string());
+    }
+}
+
+/// Shot counts above the global contract limit must be rejected.
+#[test]
+fn shot_count_above_global_limit_is_rejected() {
+    assert!(
+        ShotCount::new(DEFAULT_MAX_SHOTS + 1).is_err(),
+        "shot counts above the global limit must be rejected"
+    );
+}
+
+/// Probability accepts both mathematical boundaries.
+#[test]
+fn probability_accepts_closed_interval_boundaries() {
+    let zero =
+        Probability::new(0.0)
+            .expect("zero is a valid probability");
+
+    let one =
+        Probability::new(1.0)
+            .expect("one is a valid probability");
+
+    assert_eq!(zero.get(), 0.0);
+    assert_eq!(one.get(), 1.0);
+}
+
+/// Probability accepts representative interior values.
+#[test]
+fn probability_accepts_interior_values() {
+    let values = [
+        0.000_001_f64,
+        0.1_f64,
+        0.25_f64,
+        0.5_f64,
+        0.75_f64,
+        0.999_999_f64,
+    ];
+
+    for value in values {
+        let probability =
+            Probability::new(value)
+                .expect("interior probability must be accepted");
+
+        assert_eq!(probability.get(), value);
+    }
+}
+
+/// Values outside [0, 1] must never be accepted as probabilities.
+#[test]
+fn probability_rejects_values_outside_closed_interval() {
+    let values = [
+        -f64::EPSILON,
+        -1.0,
+        1.0 + f64::EPSILON,
+        2.0,
+    ];
+
+    for value in values {
+        assert!(
+            Probability::new(value).is_err(),
+            "invalid probability was accepted: {value}"
+        );
+    }
+}
+
+/// NaN and infinities must never be accepted as probabilities.
+#[test]
+fn probability_rejects_non_finite_values() {
+    let values = [
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ];
+
+    for value in values {
+        assert!(
+            Probability::new(value).is_err(),
+            "non-finite probability was accepted: {value:?}"
+        );
+    }
+}
+
+/// Expectation values must accept all finite IEEE-754 values.
+#[test]
+fn expectation_values_accept_finite_values() {
+    let values = [
+        -1.0e12_f64,
+        -1.0_f64,
+        0.0_f64,
+        1.0_f64,
+        1.0e12_f64,
+    ];
+
+    for value in values {
+        let expectation =
+            ExpectationValue::new(value)
+                .expect("finite expectation value must be accepted");
+
+        assert_eq!(expectation.get(), value);
+    }
+}
+
+/// Expectation values must reject NaN and infinities.
+#[test]
+fn expectation_values_reject_non_finite_values() {
+    let values = [
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ];
+
+    for value in values {
+        assert!(
+            ExpectationValue::new(value).is_err(),
+            "non-finite expectation value was accepted: {value:?}"
+        );
+    }
+}
+
+/// Objective values must accept finite values.
+#[test]
+fn objective_values_accept_finite_values() {
+    let values = [
+        -1.0e12_f64,
+        -1.0_f64,
+        0.0_f64,
+        1.0_f64,
+        1.0e12_f64,
+    ];
+
+    for value in values {
+        let objective =
+            super::super::types::ObjectiveValue::new(value)
+                .expect("finite objective value must be accepted");
+
+        assert_eq!(objective.get(), value);
+    }
+}
+
+/// Objective values must reject non-finite values.
+#[test]
+fn objective_values_reject_non_finite_values() {
+    let values = [
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ];
+
+    for value in values {
+        assert!(
+            super::super::types::ObjectiveValue::new(value).is_err(),
+            "non-finite objective value was accepted: {value:?}"
+        );
+    }
+}
+
+/// Energies must accept finite values.
+#[test]
+fn energies_accept_finite_values() {
+    let values = [
+        -1.0e12_f64,
+        -1.0_f64,
+        0.0_f64,
+        1.0_f64,
+        1.0e12_f64,
+    ];
+
+    for value in values {
+        let energy =
+            Energy::new(value)
+                .expect("finite energy must be accepted");
+
+        assert_eq!(energy.get(), value);
+    }
+}
+
+/// Energies must reject non-finite values.
+#[test]
+fn energies_reject_non_finite_values() {
+    let values = [
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ];
+
+    for value in values {
+        assert!(
+            Energy::new(value).is_err(),
+            "non-finite energy was accepted: {value:?}"
+        );
+    }
+}
+
+/// Typed finite scalar values must preserve exact finite inputs.
+#[test]
+fn finite_scalar_types_are_lossless() {
+    let values = [
+        -1234.5_f64,
+        -1.0_f64,
+        -0.0_f64,
+        0.0_f64,
+        0.5_f64,
+        1234.5_f64,
+    ];
+
+    for value in values {
+        let expectation =
+            ExpectationValue::new(value)
+                .expect("finite value must be accepted");
+
+        let objective =
+            super::super::types::ObjectiveValue::new(value)
+                .expect("finite value must be accepted");
+
+        let energy =
+            Energy::new(value)
+                .expect("finite value must be accepted");
+
+        assert_eq!(expectation.get(), value);
+        assert_eq!(objective.get(), value);
+        assert_eq!(energy.get(), value);
+    }
+}
+
+/// Equal typed values must compare equal.
+#[test]
+fn typed_values_preserve_equality() {
+    let probability_a =
+        Probability::new(0.5)
+            .expect("valid probability");
+
+    let probability_b =
+        Probability::new(0.5)
+            .expect("valid probability");
+
+    assert_eq!(probability_a, probability_b);
+
+    let energy_a =
+        Energy::new(-1.25)
+            .expect("valid energy");
+
+    let energy_b =
+        Energy::new(-1.25)
+            .expect("valid energy");
+
+    assert_eq!(energy_a, energy_b);
+}
+
+/// Probability ordering must follow the underlying mathematical ordering.
+#[test]
+fn probability_ordering_is_mathematical() {
+    let low =
+        Probability::new(0.25)
+            .expect("valid probability");
+
+    let middle =
+        Probability::new(0.5)
+            .expect("valid probability");
+
+    let high =
+        Probability::new(0.75)
+            .expect("valid probability");
+
+    assert!(low < middle);
+    assert!(middle < high);
+    assert!(low < high);
+}
+
+/// Energy ordering must follow the underlying mathematical ordering.
+#[test]
+fn energy_ordering_is_mathematical() {
+    let low =
+        Energy::new(-2.0)
+            .expect("valid energy");
+
+    let middle =
+        Energy::new(0.0)
+            .expect("valid energy");
+
+    let high =
+        Energy::new(2.0)
+            .expect("valid energy");
+
+    assert!(low < middle);
+    assert!(middle < high);
+    assert!(low < high);
+}
+
+/// The typed scalar constructors must not silently normalize or clamp values.
+///
+/// In particular, invalid probabilities must fail rather than being converted
+/// into 0 or 1.
+#[test]
+fn validation_does_not_silently_clamp_invalid_values() {
+    assert!(Probability::new(-0.1).is_err());
+    assert!(Probability::new(1.1).is_err());
+
+    assert_eq!(
+        Probability::new(0.0)
+            .expect("0.0 is valid")
+            .get(),
+        0.0
+    );
+
+    assert_eq!(
+        Probability::new(1.0)
+            .expect("1.0 is valid")
+            .get(),
+        1.0
+    );
+}
+
+/// Repeated construction of the same deterministic values must always produce
+/// equal typed contracts.
+#[test]
+fn repeated_construction_is_deterministic() {
+    for value in [1_u64, 2, 17, 1024, DEFAULT_MAX_QUBITS] {
+        let first =
+            QubitCount::new(value)
+                .expect("valid qubit count");
+
+        let second =
+            QubitCount::new(value)
+                .expect("valid qubit count");
+
+        assert_eq!(first, second);
+    }
+
+    for value in [1_u64, 2, 100, DEFAULT_MAX_SHOTS] {
+        let first =
+            ShotCount::new(value)
+                .expect("valid shot count");
+
+        let second =
+            ShotCount::new(value)
+                .expect("valid shot count");
+
+        assert_eq!(first, second);
+    }
+}
+
+/// Display output for strongly typed scalar counts must be stable and must
+/// contain only the numeric value.
+#[test]
+fn scalar_count_display_is_stable() {
+    let qubits =
+        QubitCount::new(7)
+            .expect("valid qubit count");
+
+    let shots =
+        ShotCount::new(1024)
+            .expect("valid shot count");
+
+    assert_eq!(qubits.to_string(), "7");
+    assert_eq!(shots.to_string(), "1024");
+}
+
+/// The complete currently supported algorithm set must have valid metadata
+/// construction.
+#[test]
+fn every_algorithm_has_constructible_metadata() {
+    let algorithms = [
+        AlgorithmId::Variational,
+        AlgorithmId::Vqe,
+        AlgorithmId::Qaoa,
+        AlgorithmId::Grover,
+        AlgorithmId::AmplitudeAmplification,
+        AlgorithmId::AmplitudeEstimation,
+        AlgorithmId::PhaseEstimation,
+    ];
+
+    for algorithm in algorithms {
+        let metadata =
+            AlgorithmMetadata::new(
+                algorithm,
+                AlgorithmVersion::initial(),
+            );
+
+        assert_eq!(metadata.algorithm_id(), algorithm);
+        assert_eq!(
+            metadata.version(),
+            AlgorithmVersion::initial()
+        );
+    }
+}
+
+/// The public contracts must remain independent of global mutable state.
+///
+/// This test intentionally constructs all foundational values repeatedly.
+/// If their validity depends on initialization order or hidden global state,
+/// this test will expose it.
+#[test]
+fn foundational_contracts_are_free_of_initialization_order_dependencies() {
+    for _ in 0..16 {
+        assert!(QubitCount::new(1).is_ok());
+        assert!(ShotCount::new(1).is_ok());
+        assert!(Probability::new(0.5).is_ok());
+        assert!(ExpectationValue::new(0.0).is_ok());
+        assert!(
+            super::super::types::ObjectiveValue::new(0.0).is_ok()
+        );
+        assert!(Energy::new(0.0).is_ok());
+
+        let metadata =
+            AlgorithmMetadata::new(
+                AlgorithmId::Vqe,
+                AlgorithmVersion::initial(),
+            );
+
+        assert_eq!(
+            metadata.algorithm_id(),
+            AlgorithmId::Vqe
+        );
+    }
+}
