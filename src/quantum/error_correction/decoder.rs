@@ -1,479 +1,289 @@
 //! Zamani Quantum Error Correction — Decoder Contract.
 //!
-//! Production decoder boundary for the QEC subsystem.
+//! Production decoder boundary shared by MWPM, Union-Find, future decoders,
+//! streaming execution, distributed execution, QPU execution, replay,
+//! checkpointing, verification, and logical-equivalence analysis.
 //!
 //! # Ownership
 //!
 //! This module owns:
 //!
-//! - the common decoder interface;
-//! - stable decoder identity;
+//! - the common [`Decoder`] trait;
 //! - decoder execution context;
-//! - correction representation;
-//! - canonical decoder result at the current API layer;
-//! - decoder-local termination classification;
-//! - decoder-local statistics;
-//! - stabilizer-backed decoder validation helpers;
-//! - syndrome/correction compatibility validation;
-//! - deterministic decoder registration;
-//! - conversion of decoder-local failures into `QecError`.
+//! - decoder admission/preflight;
+//! - decoder input validation at the execution boundary;
+//! - decoder identity requirements;
+//! - decoder registration/dispatch contracts;
+//! - conversion of decoder-local failures into [`QecError`];
+//! - common decoder execution lifecycle.
 //!
 //! This module does NOT own:
 //!
+//! - canonical decoder results (`decoder_result.rs`);
 //! - Pauli/stabilizer mathematics (`stabilizer.rs`);
+//! - logical-equivalence mathematics (`logical_equivalence.rs`);
+//! - logical outcome definitions (`logical.rs`);
 //! - decoding-graph construction (`decoding_graph.rs`);
 //! - MWPM mathematics (`mwpm.rs`);
 //! - Union-Find mathematics (`union_find.rs`);
-//! - logical-equivalence mathematics (`logical.rs`);
 //! - resource policy (`limits.rs`);
 //! - runtime resource accounting (`resources.rs`);
 //! - memory allocation (`memory.rs`);
 //! - capability authority (`capabilities.rs`);
-//! - configuration composition (`configuration.rs`);
-//! - QPU access;
-//! - scheduling;
-//! - telemetry transport.
+//! - QPU access (`qpu_adapter.rs`);
+//! - syndrome extraction (`syndrome_extractor.rs`);
+//! - scheduling (`scheduler.rs`);
+//! - telemetry transport (`telemetry.rs`);
 //!
-//! # Integration contract
-//!
-//! ```text
-//!                         QecConfig
-//!                             |
-//!                             v
-//!                    DecodeContext
-//!             +---------------+---------------+
-//!             |               |               |
-//!             v               v               v
-//!       Cancellation     Determinism      Capabilities
-//!             |               |               |
-//!             +---------------+---------------+
-//!                             |
-//!                             v
-//!                       Decoder::decode
-//!                             |
-//!              +--------------+--------------+
-//!              |                             |
-//!              v                             v
-//!          Correction                  DecodeResult
-//!              |                             |
-//!              +--------------+--------------+
-//!                             v
-//!                       PauliFrame
-//!                             |
-//!                             v
-//!                   Logical classification
-//! ```
-//!
-//! `decoder.rs` intentionally provides the contract that future
-//! `decoder_result.rs` can re-export or extend without requiring a rewrite of
-//! the decoder trait.
-//!
-//! # Resource contract
-//!
-//! Resource policy belongs exclusively to `QecLimits`.
+//! # Canonical execution architecture
 //!
 //! ```text
-//! limits.rs       = permitted workload
-//! resources.rs    = runtime accounting
-//! memory.rs       = allocation enforcement
-//! decoder.rs      = decoder admission/preflight
+//! Input
+//!   │
+//!   ▼
+//! validation
+//!   │
+//!   ▼
+//! DecodeContext
+//!   │
+//!   ├── QecConfig
+//!   ├── QecLimits
+//!   ├── ResourceManager
+//!   ├── CancellationToken
+//!   ├── DeterministicContext
+//!   └── CapabilitySet
+//!   │
+//!   ▼
+//! Decoder::decode_with_context
+//!   │
+//!   ├───────────────┬──────────────────┐
+//!   ▼               ▼                  ▼
+//! MWPM          Union-Find       Future Decoder
+//!   │               │                  │
+//!   └───────────────┴──────────────────┘
+//!                   │
+//!                   ▼
+//!            decoder_result.rs
+//!                   │
+//!          ┌────────┼────────┐
+//!          ▼        ▼        ▼
+//!       correction metrics logical
+//!          │                 │
+//!          ▼                 ▼
+//!     pauli_frame     logical_equivalence
 //! ```
 //!
-//! A decoder must never invent a second production resource ceiling.
-//! Algorithm-specific implementation ceilings, if required, belong to the
-//! concrete decoder and must never silently override `QecLimits`.
+//! # Important architectural rule
 //!
-//! # Security contract
+//! `decoder.rs` defines the execution contract.
 //!
-//! Decoder execution requires the `Capability::Decode` capability when using
-//! `decode_with_context`.
+//! `decoder_result.rs` defines the result contract.
 //!
-//! A decoder receives no QPU credentials and no physical-hardware authority.
+//! A decoder implementation must never create its own incompatible result
+//! structure.
 //!
-//! # Cancellation contract
+//! # Resource model
 //!
-//! `decode_with_context` checks cancellation before execution and after the
-//! decoder returns. Concrete decoders performing expensive work must poll the
-//! supplied `CancellationToken` during their own loops.
+//! ```text
+//! limits.rs
+//!     = permitted workload
 //!
-//! # Determinism contract
+//! memory.rs
+//!     = allocation enforcement
 //!
-//! Concrete decoders must use the supplied `DeterministicContext` whenever
-//! execution can involve ordering, randomized choices, parallel reductions,
-//! or tie-breaking.
+//! resources.rs
+//!     = runtime accounting
 //!
-//! # Compatibility
+//! decoder.rs
+//!     = execution admission and contract enforcement
+//! ```
+//!
+//! No decoder is permitted to introduce an independent production-wide
+//! resource ceiling.
+//!
+//! # Security model
+//!
+//! Decoder execution requires [`Capability::Decode`].
+//!
+//! A decoder receives no QPU credentials, private keys, unrestricted backend
+//! handles, or calibration authority.
+//!
+//! Capability authorization remains owned by `capabilities.rs`.
+//!
+//! # Cancellation
+//!
+//! `decode_with_context` checks cancellation before admission and after the
+//! decoder returns.
+//!
+//! Concrete decoders MUST poll the supplied token during expensive loops.
+//!
+//! # Determinism
+//!
+//! Concrete decoders MUST use [`DeterministicContext`] for:
+//!
+//! - stable ordering;
+//! - tie-breaking;
+//! - randomized algorithms;
+//! - parallel reductions;
+//! - reproducible execution.
+//!
+//! # Rust compatibility
 //!
 //! Rust 1.97.1.
 //!
 //! No unstable language features are used.
+//!
+//! `unsafe` is forbidden.
 
 #![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::fmt;
-use std::collections::BTreeSet;
 
 use super::cancellation::CancellationToken;
-use super::capabilities::{
-    Capability,
-    CapabilitySet,
-};
+use super::capabilities::{Capability, CapabilitySet};
 use super::configuration::QecConfig;
+use super::decoder_result::{
+    Correction,
+    DecodeResult,
+    DecodeTermination,
+    DecoderId,
+};
 use super::deterministic::DeterministicContext;
-use super::errors::{
-    DecoderKind,
-    QecError,
-    QecResult,
-};
-use super::limits::QecLimits;
+use super::errors::{DecoderKind, QecError, QecResult};
 use super::resources::ResourceManager;
-use super::stabilizer::{
-    Pauli,
-    PauliString,
-    StabilizerError,
-    StabilizerGroup,
-    Syndrome,
-};
+use super::stabilizer::{PauliString, Syndrome};
 
 /* ========================================================================== */
-/* Decoder identity                                                           */
+/* Decoder input                                                              */
 /* ========================================================================== */
 
-/// Stable identity for a decoder instance.
+/// Canonical decoder input.
 ///
-/// This identifier is an execution-registry identity, not a metrics identity.
-/// `metrics.rs` intentionally has its own decoder identity model.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-)]
-pub struct DecoderId(pub usize);
-
-impl DecoderId {
-    /// Creates a decoder identity.
-    #[must_use]
-    pub const fn new(id: usize) -> Self {
-        Self(id)
-    }
-
-    /// Returns the numeric registry identity.
-    #[must_use]
-    pub const fn index(self) -> usize {
-        self.0
-    }
-}
-
-impl fmt::Display for DecoderId {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-        write!(
-            formatter,
-            "decoder-{}",
-            self.0
-        )
-    }
-}
-
-/* ========================================================================== */
-/* Decoder termination                                                        */
-/* ========================================================================== */
-
-/// Reason a decoder operation terminated.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-)]
-pub enum DecodeTermination {
-    /// Decoder completed normally.
-    Completed,
-
-    /// The input syndrome was already trivial.
-    TrivialInput,
-
-    /// Decoder stopped because cancellation was requested.
-    Cancelled,
-
-    /// Decoder stopped because a configured resource/time boundary was hit.
-    ResourceLimited,
-
-    /// Decoder could not produce a valid correction.
-    Failed,
-}
-
-impl DecodeTermination {
-    /// Returns whether the operation completed successfully.
-    #[must_use]
-    pub const fn is_success(self) -> bool {
-        matches!(
-            self,
-            Self::Completed | Self::TrivialInput
-        )
-    }
-
-    /// Returns whether the operation was cancelled.
-    #[must_use]
-    pub const fn is_cancelled(self) -> bool {
-        matches!(
-            self,
-            Self::Cancelled
-        )
-    }
-}
-
-/* ========================================================================== */
-/* Correction                                                                */
-/* ========================================================================== */
-
-/// A proposed physical Pauli correction.
+/// The decoder receives a validated syndrome representation and optional
+/// contextual information required by the decoding algorithm.
 ///
-/// A correction never mutates a quantum state. It is an immutable description
-/// of the operation selected by a decoder.
+/// The input deliberately does not contain:
 ///
-/// The underlying representation is the canonical binary-symplectic
-/// `PauliString` owned by `stabilizer.rs`.
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-)]
-pub struct Correction {
-    operator: PauliString,
-}
-
-impl Correction {
-    /// Creates a correction from a validated Pauli string.
-    #[must_use]
-    pub fn new(
-        operator: PauliString,
-    ) -> Self {
-        Self { operator }
-    }
-
-    /// Creates the identity correction.
-    #[must_use]
-    pub fn identity(
-        num_qubits: usize,
-    ) -> Self {
-        Self {
-            operator:
-                PauliString::identity(
-                    num_qubits,
-                ),
-        }
-    }
-
-    /// Returns the underlying Pauli operator.
-    #[must_use]
-    pub fn operator(
-        &self,
-    ) -> &PauliString {
-        &self.operator
-    }
-
-    /// Returns the number of physical qubits represented.
-    #[must_use]
-    pub fn num_qubits(
-        &self,
-    ) -> usize {
-        self.operator.num_qubits()
-    }
-
-    /// Returns physical Pauli weight.
-    #[must_use]
-    pub fn weight(
-        &self,
-    ) -> usize {
-        self.operator.weight()
-    }
-
-    /// Returns whether this is identity.
-    #[must_use]
-    pub fn is_identity(
-        &self,
-    ) -> bool {
-        self.operator.is_identity()
-    }
-
-    /// Consumes the wrapper and returns the Pauli operator.
-    #[must_use]
-    pub fn into_operator(
-        self,
-    ) -> PauliString {
-        self.operator
-    }
-}
-
-/* ========================================================================== */
-/* Decoder result                                                             */
-/* ========================================================================== */
-
-/// Canonical decoder result at the decoder-contract layer.
+/// - QPU credentials;
+/// - backend secrets;
+/// - mutable hardware handles;
+/// - capability authority.
 ///
-/// Later integration modules may enrich this result with logical-equivalence
-/// witnesses, metrics and resource snapshots. They should wrap or re-export
-/// this representation rather than creating incompatible decoder-specific
-/// result types.
-///
-/// This result deliberately contains no raw QPU data or credentials.
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-)]
-pub struct DecodeResult {
-    decoder: DecoderId,
+/// Those belong to other architectural layers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodeInput {
     syndrome: Syndrome,
-    correction: Correction,
-    termination: DecodeTermination,
-    iterations: u64,
 }
 
-impl DecodeResult {
-    /// Creates a completed decoder result.
+impl DecodeInput {
+    /// Creates a decoder input from a syndrome.
+    ///
+    /// This constructor does not perform policy validation. Full admission is
+    /// performed by [`DecodeContext::preflight`].
     #[must_use]
-    pub fn new(
-        decoder: DecoderId,
-        syndrome: Syndrome,
-        correction: Correction,
-    ) -> Self {
-        let termination =
-            if syndrome.is_trivial() {
-                DecodeTermination::TrivialInput
-            } else {
-                DecodeTermination::Completed
-            };
-
-        Self {
-            decoder,
-            syndrome,
-            correction,
-            termination,
-            iterations: 0,
-        }
+    pub fn new(syndrome: Syndrome) -> Self {
+        Self { syndrome }
     }
 
-    /// Creates a result with explicit termination and iteration count.
+    /// Returns the syndrome.
     #[must_use]
-    pub fn with_execution(
-        decoder: DecoderId,
-        syndrome: Syndrome,
-        correction: Correction,
-        termination: DecodeTermination,
-        iterations: u64,
-    ) -> Self {
-        Self {
-            decoder,
-            syndrome,
-            correction,
-            termination,
-            iterations,
-        }
-    }
-
-    /// Returns the decoder registry identity.
-    #[must_use]
-    pub const fn decoder(
-        &self,
-    ) -> DecoderId {
-        self.decoder
-    }
-
-    /// Returns the input syndrome.
-    #[must_use]
-    pub fn syndrome(
-        &self,
-    ) -> &Syndrome {
+    pub fn syndrome(&self) -> &Syndrome {
         &self.syndrome
     }
 
-    /// Returns the selected correction.
+    /// Consumes the input and returns its syndrome.
     #[must_use]
-    pub fn correction(
-        &self,
-    ) -> &Correction {
-        &self.correction
+    pub fn into_syndrome(self) -> Syndrome {
+        self.syndrome
     }
 
-    /// Returns the correction weight.
+    /// Returns whether the syndrome contains no active events.
     #[must_use]
-    pub fn correction_weight(
-        &self,
-    ) -> usize {
-        self.correction.weight()
-    }
-
-    /// Returns the termination reason.
-    #[must_use]
-    pub const fn termination(
-        &self,
-    ) -> DecodeTermination {
-        self.termination
-    }
-
-    /// Returns decoder iteration count.
-    #[must_use]
-    pub const fn iterations(
-        &self,
-    ) -> u64 {
-        self.iterations
-    }
-
-    /// Returns whether the original syndrome was trivial.
-    #[must_use]
-    pub fn is_trivial(
-        &self,
-    ) -> bool {
+    pub fn is_trivial(&self) -> bool {
         self.syndrome.is_trivial()
     }
 
-    /// Returns whether this result completed successfully.
+    /// Returns the number of syndrome events represented by this input.
     #[must_use]
-    pub const fn is_success(
-        &self,
-    ) -> bool {
-        self.termination.is_success()
+    pub fn len(&self) -> usize {
+        self.syndrome.len()
     }
 
-    /// Returns whether the selected correction is identity.
+    /// Returns whether the input contains no syndrome events.
     #[must_use]
-    pub fn is_identity_correction(
-        &self,
-    ) -> bool {
-        self.correction.is_identity()
+    pub fn is_empty(&self) -> bool {
+        self.syndrome.is_empty()
     }
+}
 
-    /// Replaces the termination state.
-    #[must_use]
-    pub fn with_termination(
-        mut self,
-        termination: DecodeTermination,
+/* ========================================================================== */
+/* Decoder metadata                                                           */
+/* ========================================================================== */
+
+/// Immutable metadata describing a decoder implementation.
+///
+/// This metadata is intentionally small and deterministic so it can safely be
+/// included in checkpoints, replay records, cache keys, metrics and audit
+/// records.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DecoderMetadata {
+    id: DecoderId,
+    name: String,
+    kind: DecoderKind,
+    algorithm_version: String,
+}
+
+impl DecoderMetadata {
+    /// Creates decoder metadata.
+    pub fn new(
+        id: DecoderId,
+        name: impl Into<String>,
+        kind: DecoderKind,
+        algorithm_version: impl Into<String>,
     ) -> Self {
-        self.termination = termination;
-        self
+        Self {
+            id,
+            name: name.into(),
+            kind,
+            algorithm_version: algorithm_version.into(),
+        }
     }
 
-    /// Replaces the iteration count.
+    /// Returns the stable decoder ID.
     #[must_use]
-    pub fn with_iterations(
-        mut self,
-        iterations: u64,
-    ) -> Self {
-        self.iterations = iterations;
-        self
+    pub const fn id(&self) -> DecoderId {
+        self.id
+    }
+
+    /// Returns the human-readable decoder name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the decoder category.
+    #[must_use]
+    pub const fn kind(&self) -> DecoderKind {
+        self.kind
+    }
+
+    /// Returns the algorithm version.
+    #[must_use]
+    pub fn algorithm_version(&self) -> &str {
+        &self.algorithm_version
+    }
+}
+
+impl fmt::Display for DecoderMetadata {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "{}@{} ({})",
+            self.name,
+            self.algorithm_version,
+            self.kind
+        )
     }
 }
 
@@ -481,17 +291,10 @@ impl DecodeResult {
 /* Decoder execution context                                                  */
 /* ========================================================================== */
 
-/// Immutable execution context supplied to production decoder execution.
+/// Immutable context supplied to a decoder during execution.
 ///
-/// The context is intentionally composed from existing subsystem contracts:
-///
-/// - `QecConfig` = validated execution policy;
-/// - `ResourceManager` = runtime accounting;
-/// - `CancellationToken` = cooperative cancellation;
-/// - `DeterministicContext` = deterministic execution;
-/// - `CapabilitySet` = authorization input.
-///
-/// The decoder does not own any of these objects.
+/// The context borrows all policy and runtime infrastructure. Ownership
+/// remains with the caller/execution layer.
 pub struct DecodeContext<'a> {
     config: &'a QecConfig,
     resources: &'a ResourceManager,
@@ -519,103 +322,78 @@ impl<'a> DecodeContext<'a> {
         }
     }
 
-    /// Returns the QEC configuration.
+    /// Returns the validated QEC configuration.
     #[must_use]
-    pub const fn config(
-        &self,
-    ) -> &QecConfig {
+    pub const fn config(&self) -> &QecConfig {
         self.config
     }
 
     /// Returns runtime resource accounting.
     #[must_use]
-    pub const fn resources(
-        &self,
-    ) -> &ResourceManager {
+    pub const fn resources(&self) -> &ResourceManager {
         self.resources
     }
 
     /// Returns the cancellation token.
     #[must_use]
-    pub const fn cancellation(
-        &self,
-    ) -> &CancellationToken {
+    pub const fn cancellation(&self) -> &CancellationToken {
         self.cancellation
     }
 
     /// Returns deterministic execution context.
     #[must_use]
-    pub const fn deterministic(
-        &self,
-    ) -> &DeterministicContext {
+    pub const fn deterministic(&self) -> &DeterministicContext {
         self.deterministic
     }
 
-    /// Returns the effective capability set.
+    /// Returns the effective capabilities.
     #[must_use]
-    pub const fn capabilities(
-        &self,
-    ) -> &CapabilitySet {
+    pub const fn capabilities(&self) -> &CapabilitySet {
         self.capabilities
     }
 
-    /// Performs decoder admission/preflight before algorithm execution.
+    /// Performs common decoder admission checks.
     ///
-    /// This method does not allocate memory, spawn workers, access hardware,
-    /// or mutate resource counters.
-    pub fn preflight(
-        &self,
-        syndrome: &Syndrome,
-    ) -> QecResult<()> {
+    /// This function:
+    ///
+    /// 1. checks cancellation;
+    /// 2. validates the configuration;
+    /// 3. verifies `Capability::Decode`;
+    /// 4. validates syndrome workload against canonical limits.
+    ///
+    /// It does not:
+    ///
+    /// - allocate decoder state;
+    /// - access a QPU;
+    /// - spawn workers;
+    /// - mutate decoder state.
+    pub fn preflight(&self, input: &DecodeInput) -> QecResult<()> {
         self.cancellation.check()?;
 
         self.config
             .validate()
             .map_err(|error| QecError::InvalidInput {
                 message: format!(
-                    "invalid QEC decoder configuration: {error}"
+                    "invalid QEC configuration for decoder execution: {error}"
                 ),
             })?;
 
-        if !self.capabilities.contains(
-            Capability::Decode,
-        ) {
-            return Err(
-                QecError::CapabilityDenied {
-                    capability:
-                        Capability::Decode
-                            .name()
-                            .to_owned(),
-                    operation:
-                        "decode".to_owned(),
-                    message:
-                        "decoder execution requires qec.decode"
-                            .to_owned(),
-                },
-            );
+        if !self.capabilities.contains(Capability::Decode) {
+            return Err(QecError::CapabilityDenied {
+                capability: Capability::Decode.name().to_owned(),
+                operation: "decode".to_owned(),
+                message: "decoder execution requires the Decode capability"
+                    .to_owned(),
+            });
         }
 
         self.config
             .limits
-            .validate_syndrome(
-                syndrome.len(),
-                1,
-            )
-            .map_err(|error| {
-                QecError::ResourceLimitExceeded {
-                    resource:
-                        super::errors::ResourceKind::SyndromeEvents,
-                    requested:
-                        syndrome.len() as u128,
-                    current: 0,
-                    limit:
-                        self.config
-                            .limits
-                            .max_syndrome_events
-                            as u128,
-                    message:
-                        error.to_string(),
-                }
+            .validate_syndrome(input.len(), 1)
+            .map_err(|error| QecError::InvalidInput {
+                message: format!(
+                    "decoder syndrome rejected by QEC limits: {error}"
+                ),
             })?;
 
         Ok(())
@@ -626,994 +404,516 @@ impl<'a> DecodeContext<'a> {
 /* Decoder trait                                                              */
 /* ========================================================================== */
 
-/// Common interface implemented by all QEC decoders.
+/// Common contract implemented by every QEC decoder.
 ///
-/// The one-argument `decode` method is retained as the lightweight,
-/// hardware-independent compatibility contract.
+/// Concrete implementations include:
 ///
-/// Production execution should call `decode_with_context`, which adds:
+/// - MWPM;
+/// - Union-Find;
+/// - exact small-instance decoders;
+/// - sparse decoders;
+/// - streaming decoders;
+/// - future hardware-aware classical decoders.
 ///
-/// - configuration validation;
-/// - capability authorization;
-/// - resource preflight;
-/// - cancellation boundaries;
-/// - canonical error conversion.
+/// The trait intentionally does not prescribe the internal decoding
+/// algorithm.
 ///
-/// Concrete decoders should implement `decode` and should poll the
-/// `CancellationToken` supplied through `DecodeContext` whenever performing
-/// expensive work.
-pub trait Decoder {
-    /// Returns the decoder's stable registry identity.
-    fn id(
-        &self,
-    ) -> DecoderId;
+/// # Required invariants
+///
+/// Implementations MUST:
+///
+/// - be deterministic when supplied deterministic input/context;
+/// - honor cancellation;
+/// - honor the canonical resource policy;
+/// - return a canonical [`DecodeResult`];
+/// - never fabricate a logical outcome;
+/// - never access QPU credentials;
+/// - never bypass capability checks performed by the execution boundary;
+/// - never silently truncate input;
+/// - never silently saturate resource usage.
+pub trait Decoder: Send + Sync {
+    /// Returns immutable decoder metadata.
+    fn metadata(&self) -> &DecoderMetadata;
 
-    /// Performs decoder mathematics without external execution policy.
+    /// Performs the decoder's actual mathematical work.
     ///
-    /// This method must remain deterministic for deterministic input.
+    /// The common execution boundary is already responsible for:
+    ///
+    /// - capability checks;
+    /// - configuration validation;
+    /// - initial cancellation;
+    /// - syndrome admission.
+    ///
+    /// The implementation remains responsible for:
+    ///
+    /// - algorithm-specific resource requests;
+    /// - periodic cancellation polling;
+    /// - deterministic ordering;
+    /// - producing a canonical result.
     fn decode(
         &self,
-        syndrome: &Syndrome,
-    ) -> Result<DecodeResult, DecoderError>;
+        input: &DecodeInput,
+        context: &DecodeContext<'_>,
+    ) -> QecResult<DecodeResult>;
 
-    /// Production execution boundary.
+    /// Executes the decoder through the canonical admission boundary.
     ///
-    /// This method must be used by execution infrastructure rather than
-    /// bypassing QEC policy.
+    /// This is the preferred production entry point.
     fn decode_with_context(
         &self,
-        syndrome: &Syndrome,
+        input: &DecodeInput,
         context: &DecodeContext<'_>,
     ) -> QecResult<DecodeResult> {
-        context.preflight(
-            syndrome,
-        )?;
+        context.preflight(input)?;
 
         context.cancellation.check()?;
 
-        let result = self
-            .decode(syndrome)
-            .map_err(
-                DecoderError::into_qec_error,
-            )?;
+        let result = self.decode(input, context)?;
 
-        validate_result(
+        context.cancellation.check()?;
+
+        validate_decoder_result(
+            self.metadata(),
+            input,
             &result,
-        )
-        .map_err(
-            DecoderError::into_qec_error,
         )?;
-
-        context.cancellation.check()?;
 
         Ok(result)
     }
+
+    /// Returns the stable decoder ID.
+    #[must_use]
+    fn id(&self) -> DecoderId {
+        self.metadata().id()
+    }
+
+    /// Returns the decoder category.
+    #[must_use]
+    fn kind(&self) -> DecoderKind {
+        self.metadata().kind()
+    }
+
+    /// Returns the stable decoder name.
+    #[must_use]
+    fn name(&self) -> &str {
+        self.metadata().name()
+    }
+
+    /// Returns the algorithm version.
+    #[must_use]
+    fn algorithm_version(&self) -> &str {
+        self.metadata().algorithm_version()
+    }
 }
 
 /* ========================================================================== */
-/* Stabilizer-backed decoder                                                  */
+/* Decoder result validation                                                  */
 /* ========================================================================== */
 
-/// Validated stabilizer model shared by decoder implementations.
+/// Validates that a decoder returned a result compatible with its input.
 ///
-/// Concrete decoders such as MWPM and Union-Find should use this helper
-/// instead of repeating stabilizer validation.
-#[derive(
-    Debug,
-    Clone,
-)]
-pub struct StabilizerDecoder {
-    id: DecoderId,
-    stabilizers: StabilizerGroup,
-}
-
-impl StabilizerDecoder {
-    /// Creates a decoder model from a validated stabilizer group.
-    pub fn new(
-        id: DecoderId,
-        stabilizers: StabilizerGroup,
-    ) -> Result<Self, DecoderError> {
-        stabilizers
-            .validate()
-            .map_err(
-                DecoderError::Stabilizer,
-            )?;
-
-        Ok(Self {
-            id,
-            stabilizers,
-        })
-    }
-
-    /// Returns decoder identity.
-    #[must_use]
-    pub const fn id(
-        &self,
-    ) -> DecoderId {
-        self.id
-    }
-
-    /// Returns the stabilizer group.
-    #[must_use]
-    pub fn stabilizers(
-        &self,
-    ) -> &StabilizerGroup {
-        &self.stabilizers
-    }
-
-    /// Returns physical qubit count.
-    #[must_use]
-    pub fn num_qubits(
-        &self,
-    ) -> usize {
-        self.stabilizers.num_qubits()
-    }
-
-    /// Returns stabilizer-generator count.
-    #[must_use]
-    pub fn generator_count(
-        &self,
-    ) -> usize {
-        self.stabilizers.len()
-    }
-
-    /// Recomputes the syndrome produced by a candidate error/correction.
-    pub fn syndrome_for_error(
-        &self,
-        error: &PauliString,
-    ) -> Result<Syndrome, DecoderError> {
-        self.stabilizers
-            .syndrome(error)
-            .map_err(
-                DecoderError::Stabilizer,
-            )
-    }
-
-    /// Checks whether a correction reproduces the requested syndrome.
-    pub fn correction_matches_syndrome(
-        &self,
-        correction: &Correction,
-        expected: &Syndrome,
-    ) -> Result<bool, DecoderError> {
-        validate_syndrome(
-            expected,
-            &self.stabilizers,
-        )?;
-
-        validate_correction(
-            correction,
-            self.num_qubits(),
-        )?;
-
-        let actual =
-            self.syndrome_for_error(
-                correction.operator(),
-            )?;
-
-        Ok(actual == *expected)
-    }
-}
-
-/* ========================================================================== */
-/* Identity decoder                                                           */
-/* ========================================================================== */
-
-/// Decoder that accepts only a trivial syndrome.
+/// This function intentionally validates only the decoder/result contract.
 ///
-/// The old implementation returned identity even for a non-trivial
-/// syndrome. That was mathematically unsafe because it silently reported a
-/// correction that did not explain the measured syndrome.
+/// It does NOT prove logical correctness.
 ///
-/// This implementation fails closed.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-)]
-pub struct IdentityDecoder {
-    id: DecoderId,
-    num_qubits: usize,
-}
-
-impl IdentityDecoder {
-    /// Creates an identity decoder.
-    pub fn new(
-        id: DecoderId,
-        num_qubits: usize,
-    ) -> Result<Self, DecoderError> {
-        if num_qubits == 0 {
-            return Err(
-                DecoderError::InvalidQubitCount {
-                    count: 0,
-                },
-            );
-        }
-
-        Ok(Self {
-            id,
-            num_qubits,
-        })
-    }
-
-    /// Returns decoder identity.
-    #[must_use]
-    pub const fn id(
-        &self,
-    ) -> DecoderId {
-        self.id
-    }
-
-    /// Returns physical qubit count.
-    #[must_use]
-    pub const fn num_qubits(
-        &self,
-    ) -> usize {
-        self.num_qubits
-    }
-}
-
-impl Decoder for IdentityDecoder {
-    fn id(
-        &self,
-    ) -> DecoderId {
-        self.id
-    }
-
-    fn decode(
-        &self,
-        syndrome: &Syndrome,
-    ) -> Result<DecodeResult, DecoderError> {
-        if !syndrome.is_trivial() {
-            return Err(
-                DecoderError::NonTrivialSyndrome {
-                    triggered:
-                        syndrome.triggered_count(),
-                },
-            );
-        }
-
-        Ok(
-            DecodeResult::with_execution(
-                self.id,
-                syndrome.clone(),
-                Correction::identity(
-                    self.num_qubits,
-                ),
-                DecodeTermination::TrivialInput,
-                0,
-            ),
-        )
-    }
-}
-
-/* ========================================================================== */
-/* Validation helpers                                                         */
-/* ========================================================================== */
-
-/// Validates a syndrome against a stabilizer group.
-///
-/// A primitive `stabilizer::Syndrome` represents one deterministic
-/// stabilizer-generator measurement vector. Multi-round/timestamped syndrome
-/// streams belong to `syndrome.rs`.
-pub fn validate_syndrome(
-    syndrome: &Syndrome,
-    stabilizers: &StabilizerGroup,
-) -> Result<(), DecoderError> {
-    if syndrome.len()
-        != stabilizers.len()
-    {
-        return Err(
-            DecoderError::SyndromeLengthMismatch {
-                expected:
-                    stabilizers.len(),
-                actual:
-                    syndrome.len(),
-            },
-        );
-    }
-
-    Ok(())
-}
-
-/// Validates that a correction belongs to the physical system.
-pub fn validate_correction(
-    correction: &Correction,
-    num_qubits: usize,
-) -> Result<(), DecoderError> {
-    if correction.num_qubits()
-        != num_qubits
-    {
-        return Err(
-            DecoderError::CorrectionQubitCountMismatch {
-                expected: num_qubits,
-                actual:
-                    correction.num_qubits(),
-            },
-        );
-    }
-
-    Ok(())
-}
-
-/// Validates that a correction reproduces the requested syndrome.
-pub fn validate_correction_for_syndrome(
-    correction: &Correction,
-    syndrome: &Syndrome,
-    stabilizers: &StabilizerGroup,
-) -> Result<bool, DecoderError> {
-    validate_syndrome(
-        syndrome,
-        stabilizers,
-    )?;
-
-    validate_correction(
-        correction,
-        stabilizers.num_qubits(),
-    )?;
-
-    let produced =
-        stabilizers
-            .syndrome(
-                correction.operator(),
-            )
-            .map_err(
-                DecoderError::Stabilizer,
-            )?;
-
-    Ok(produced == *syndrome)
-}
-
-/// Validates the structural invariants of a decoder result.
-pub fn validate_result(
+/// Logical correctness belongs to `logical_equivalence.rs`.
+pub fn validate_decoder_result(
+    metadata: &DecoderMetadata,
+    input: &DecodeInput,
     result: &DecodeResult,
-) -> Result<(), DecoderError> {
-    if result.syndrome.len()
-        != result.correction.num_qubits()
-        && !result.syndrome.is_empty()
-    {
-        // A primitive syndrome normally contains one bit per stabilizer, not
-        // one bit per physical qubit. Therefore this check intentionally only
-        // rejects impossible zero-qubit correction/result combinations below.
+) -> QecResult<()> {
+    if result.decoder() != metadata.id() {
+        return Err(QecError::DecoderFailure {
+            decoder: metadata.name().to_owned(),
+            message: format!(
+                "decoder result identity mismatch: expected {}, received {}",
+                metadata.id(),
+                result.decoder()
+            ),
+        });
     }
 
-    if result.correction.num_qubits()
-        == 0
-    {
-        return Err(
-            DecoderError::InvalidQubitCount {
-                count: 0,
-            },
-        );
+    if result.syndrome() != input.syndrome() {
+        return Err(QecError::DecoderFailure {
+            decoder: metadata.name().to_owned(),
+            message:
+                "decoder result does not correspond to the supplied syndrome"
+                    .to_owned(),
+        });
     }
 
-    if result.termination.is_success()
-        && matches!(
-            result.termination,
-            DecodeTermination::Completed
-        )
-        && result.syndrome.is_trivial()
-        && !result.correction.is_identity()
+    if result.correction().num_qubits()
+        != correction_qubit_count(input)
     {
-        return Err(
-            DecoderError::InvalidResult {
-                reason:
-                    "trivial syndrome cannot require a non-identity correction",
-            },
-        );
+        return Err(QecError::DecoderFailure {
+            decoder: metadata.name().to_owned(),
+            message:
+                "decoder correction qubit count is incompatible with input"
+                    .to_owned(),
+        });
+    }
+
+    match result.termination() {
+        DecodeTermination::Completed
+        | DecodeTermination::TrivialInput => {}
+
+        DecodeTermination::Cancelled
+        | DecodeTermination::ResourceLimited
+        | DecodeTermination::Failed => {
+            return Err(QecError::DecoderFailure {
+                decoder: metadata.name().to_owned(),
+                message: format!(
+                    "decoder returned non-success termination {:?} through \
+                     the successful result channel",
+                    result.termination()
+                ),
+            });
+        }
     }
 
     Ok(())
 }
 
-/* ========================================================================== */
-/* Syndrome classification                                                    */
-/* ========================================================================== */
-
-/// Classification of a primitive syndrome.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-)]
-pub enum SyndromeClass {
-    /// No stabilizer generator was triggered.
-    Trivial,
-
-    /// At least one stabilizer generator was triggered.
-    NonTrivial,
-}
-
-impl SyndromeClass {
-    /// Classifies a syndrome.
-    #[must_use]
-    pub const fn classify(
-        syndrome: &Syndrome,
-    ) -> Self {
-        if syndrome.is_trivial() {
-            Self::Trivial
-        } else {
-            Self::NonTrivial
-        }
-    }
-}
-
-/* ========================================================================== */
-/* Decoder statistics                                                         */
-/* ========================================================================== */
-
-/// Allocation-free aggregate decoder statistics.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    Eq,
-)]
-pub struct DecoderStatistics {
-    decoded: u64,
-    trivial: u64,
-    nontrivial: u64,
-    failed: u64,
-    cancelled: u64,
-}
-
-impl DecoderStatistics {
-    /// Creates empty statistics.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            decoded: 0,
-            trivial: 0,
-            nontrivial: 0,
-            failed: 0,
-            cancelled: 0,
-        }
-    }
-
-    /// Returns total successful decodes.
-    #[must_use]
-    pub const fn decoded(
-        &self,
-    ) -> u64 {
-        self.decoded
-    }
-
-    /// Returns trivial-input count.
-    #[must_use]
-    pub const fn trivial(
-        &self,
-    ) -> u64 {
-        self.trivial
-    }
-
-    /// Returns non-trivial-input count.
-    #[must_use]
-    pub const fn nontrivial(
-        &self,
-    ) -> u64 {
-        self.nontrivial
-    }
-
-    /// Returns failed-operation count.
-    #[must_use]
-    pub const fn failed(
-        &self,
-    ) -> u64 {
-        self.failed
-    }
-
-    /// Returns cancelled-operation count.
-    #[must_use]
-    pub const fn cancelled(
-        &self,
-    ) -> u64 {
-        self.cancelled
-    }
-
-    /// Records a decoder result.
-    pub fn record(
-        &mut self,
-        result: Result<
-            &DecodeResult,
-            &DecoderError,
-        >,
-    ) {
-        match result {
-            Ok(result) => {
-                self.decoded =
-                    self.decoded
-                        .saturating_add(1);
-
-                if result.is_trivial() {
-                    self.trivial =
-                        self.trivial
-                            .saturating_add(1);
-                } else {
-                    self.nontrivial =
-                        self.nontrivial
-                            .saturating_add(1);
-                }
-
-                if result
-                    .termination()
-                    .is_cancelled()
-                {
-                    self.cancelled =
-                        self.cancelled
-                            .saturating_add(1);
-                }
-            }
-
-            Err(error) => {
-                if matches!(
-                    error,
-                    DecoderError::Cancelled
-                ) {
-                    self.cancelled =
-                        self.cancelled
-                            .saturating_add(1);
-                } else {
-                    self.failed =
-                        self.failed
-                            .saturating_add(1);
-                }
-            }
-        }
-    }
-}
-
-/* ========================================================================== */
-/* Pauli helpers                                                              */
-/* ========================================================================== */
-
-/// Creates a single-qubit Pauli error.
-pub fn single_qubit_error(
-    num_qubits: usize,
-    qubit: usize,
-    pauli: Pauli,
-) -> Result<PauliString, DecoderError> {
-    if num_qubits == 0 {
-        return Err(
-            DecoderError::InvalidQubitCount {
-                count: 0,
-            },
-        );
-    }
-
-    if qubit >= num_qubits {
-        return Err(
-            DecoderError::QubitOutOfRange {
-                qubit,
-                num_qubits,
-            },
-        );
-    }
-
-    let mut error =
-        PauliString::identity(
-            num_qubits,
-        );
-
-    error
-        .set_pauli(
-            super::stabilizer::QubitIndex::new(
-                qubit,
-            ),
-            pauli,
-        )
-        .map_err(
-            DecoderError::Stabilizer,
-        )?;
-
-    Ok(error)
-}
-
-/// Creates a single-qubit X error.
-pub fn x_error(
-    num_qubits: usize,
-    qubit: usize,
-) -> Result<PauliString, DecoderError> {
-    single_qubit_error(
-        num_qubits,
-        qubit,
-        Pauli::X,
-    )
-}
-
-/// Creates a single-qubit Y error.
-pub fn y_error(
-    num_qubits: usize,
-    qubit: usize,
-) -> Result<PauliString, DecoderError> {
-    single_qubit_error(
-        num_qubits,
-        qubit,
-        Pauli::Y,
-    )
-}
-
-/// Creates a single-qubit Z error.
-pub fn z_error(
-    num_qubits: usize,
-    qubit: usize,
-) -> Result<PauliString, DecoderError> {
-    single_qubit_error(
-        num_qubits,
-        qubit,
-        Pauli::Z,
-    )
+/// Determines the physical qubit count represented by decoder input.
+///
+/// Syndrome is the canonical source of decoder workload, but its representation
+/// intentionally does not expose a direct "number of physical qubits" field.
+/// A decoder correction must therefore be validated by the concrete decoder
+/// against its code topology before producing the result.
+///
+/// This helper provides the conservative contract used by this module:
+/// a correction must represent at least the syndrome's referenced physical
+/// support. A zero-event syndrome is validated separately.
+fn correction_qubit_count(input: &DecodeInput) -> usize {
+    input
+        .syndrome()
+        .num_qubits()
 }
 
 /* ========================================================================== */
 /* Decoder registry                                                           */
 /* ========================================================================== */
 
-/// Deterministic registry of decoder identities.
+/// Deterministic collection of decoder implementations.
 ///
-/// The registry intentionally stores identity rather than decoder objects.
-/// Object ownership belongs to the execution layer.
-#[derive(
-    Debug,
-    Default,
-)]
+/// The registry owns decoder instances but not their execution resources.
+///
+/// Registration is explicit and duplicate IDs are rejected.
 pub struct DecoderRegistry {
-    ids: BTreeSet<DecoderId>,
+    decoders: Vec<Box<dyn Decoder>>,
 }
 
 impl DecoderRegistry {
-    /// Creates an empty registry.
+    /// Creates an empty decoder registry.
     #[must_use]
     pub fn new() -> Self {
         Self {
-            ids: BTreeSet::new(),
+            decoders: Vec::new(),
         }
     }
 
-    /// Registers a decoder identity.
-    pub fn register<D>(
+    /// Creates a registry with an initial decoder set.
+    ///
+    /// Registration order is normalized by decoder ID.
+    pub fn from_decoders(
+        decoders: Vec<Box<dyn Decoder>>,
+    ) -> QecResult<Self> {
+        let mut registry = Self::new();
+
+        for decoder in decoders {
+            registry.register(decoder)?;
+        }
+
+        Ok(registry)
+    }
+
+    /// Registers a decoder.
+    ///
+    /// Decoder IDs must be unique.
+    pub fn register(
         &mut self,
-        decoder: &D,
-    ) -> Result<(), DecoderError>
-    where
-        D: Decoder + ?Sized,
-    {
+        decoder: Box<dyn Decoder>,
+    ) -> QecResult<()> {
         let id = decoder.id();
 
-        if !self.ids.insert(id) {
-            return Err(
-                DecoderError::DuplicateDecoder {
-                    id,
-                },
-            );
+        if self.decoders.iter().any(|entry| entry.id() == id) {
+            return Err(QecError::DecoderFailure {
+                decoder: decoder.name().to_owned(),
+                message: format!(
+                    "duplicate decoder identity {}",
+                    id
+                ),
+            });
         }
+
+        self.decoders.push(decoder);
+
+        self.decoders.sort_by_key(|entry| entry.id());
 
         Ok(())
     }
 
-    /// Returns whether an identity is registered.
+    /// Returns a decoder by stable ID.
     #[must_use]
-    pub fn contains(
+    pub fn get(
         &self,
         id: DecoderId,
-    ) -> bool {
-        self.ids.contains(&id)
+    ) -> Option<&dyn Decoder> {
+        self.decoders
+            .iter()
+            .find(|decoder| decoder.id() == id)
+            .map(|decoder| decoder.as_ref())
     }
 
-    /// Returns registered decoder count.
+    /// Returns all registered decoder IDs in deterministic order.
     #[must_use]
-    pub fn len(
-        &self,
-    ) -> usize {
-        self.ids.len()
+    pub fn ids(&self) -> Vec<DecoderId> {
+        self.decoders
+            .iter()
+            .map(|decoder| decoder.id())
+            .collect()
     }
 
-    /// Returns whether no decoder is registered.
+    /// Returns the number of registered decoders.
     #[must_use]
-    pub fn is_empty(
-        &self,
-    ) -> bool {
-        self.ids.is_empty()
+    pub fn len(&self) -> usize {
+        self.decoders.len()
     }
 
-    /// Returns deterministic decoder identities.
+    /// Returns whether the registry contains no decoders.
     #[must_use]
-    pub fn ids(
-        &self,
-    ) -> Vec<DecoderId> {
-        self.ids.iter().copied().collect()
+    pub fn is_empty(&self) -> bool {
+        self.decoders.is_empty()
     }
-}
 
-/* ========================================================================== */
-/* Decoder errors                                                             */
-/* ========================================================================== */
-
-/// Local decoder-contract error.
-///
-/// Public execution APIs convert this type into the canonical `QecError`.
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-)]
-pub enum DecoderError {
-    /// Stabilizer mathematics failed.
-    Stabilizer(
-        StabilizerError,
-    ),
-
-    /// Decoder was constructed for zero physical qubits.
-    InvalidQubitCount {
-        count: usize,
-    },
-
-    /// Requested qubit does not exist.
-    QubitOutOfRange {
-        qubit: usize,
-        num_qubits: usize,
-    },
-
-    /// Syndrome length does not match the stabilizer system.
-    SyndromeLengthMismatch {
-        expected: usize,
-        actual: usize,
-    },
-
-    /// Correction belongs to another physical system.
-    CorrectionQubitCountMismatch {
-        expected: usize,
-        actual: usize,
-    },
-
-    /// Identity decoder received a non-trivial syndrome.
-    NonTrivialSyndrome {
-        triggered: usize,
-    },
-
-    /// Two decoders attempted to use the same registry identity.
-    DuplicateDecoder {
+    /// Executes a decoder selected by stable ID.
+    pub fn decode(
+        &self,
         id: DecoderId,
-    },
-
-    /// Decoder result violates a structural invariant.
-    InvalidResult {
-        reason: &'static str,
-    },
-
-    /// Execution was cancelled.
-    Cancelled,
-}
-
-impl DecoderError {
-    /// Converts the local error to the canonical QEC error boundary.
-    #[must_use]
-    pub fn into_qec_error(
-        self,
-    ) -> QecError {
-        match self {
-            Self::Stabilizer(error) => {
-                QecError::InvalidStabilizer {
-                    message:
-                        error.to_string(),
-                }
+        input: &DecodeInput,
+        context: &DecodeContext<'_>,
+    ) -> QecResult<DecodeResult> {
+        let decoder = self.get(id).ok_or_else(|| {
+            QecError::DecoderFailure {
+                decoder: id.to_string(),
+                message: "decoder is not registered".to_owned(),
             }
+        })?;
 
-            Self::InvalidQubitCount {
-                count,
-            } => {
-                QecError::InvalidInput {
-                    message: format!(
-                        "decoder requires at least one physical qubit; got {count}"
-                    ),
-                }
-            }
-
-            Self::QubitOutOfRange {
-                qubit,
-                num_qubits,
-            } => {
-                QecError::InvalidInput {
-                    message: format!(
-                        "qubit {qubit} is outside {num_qubits}-qubit decoder"
-                    ),
-                }
-            }
-
-            Self::SyndromeLengthMismatch {
-                expected,
-                actual,
-            } => {
-                QecError::InvalidSyndrome {
-                    message: format!(
-                        "syndrome length mismatch: expected {expected}, got {actual}"
-                    ),
-                }
-            }
-
-            Self::CorrectionQubitCountMismatch {
-                expected,
-                actual,
-            } => {
-                QecError::DecoderFailure {
-                    decoder:
-                        DecoderKind::Custom,
-                    message: format!(
-                        "correction qubit count mismatch: expected {expected}, got {actual}"
-                    ),
-                }
-            }
-
-            Self::NonTrivialSyndrome {
-                triggered,
-            } => {
-                QecError::DecoderFailure {
-                    decoder:
-                        DecoderKind::Identity,
-                    message: format!(
-                        "identity decoder cannot decode a non-trivial syndrome with {triggered} triggered generators"
-                    ),
-                }
-            }
-
-            Self::DuplicateDecoder {
-                id,
-            } => {
-                QecError::InvalidInput {
-                    message: format!(
-                        "decoder registry already contains {id}"
-                    ),
-                }
-            }
-
-            Self::InvalidResult {
-                reason,
-            } => {
-                QecError::InternalInvariantViolation {
-                    invariant:
-                        "decoder result invariant",
-                    message:
-                        reason.to_owned(),
-                }
-            }
-
-            Self::Cancelled => {
-                QecError::CancellationRequested {
-                    message:
-                        "decoder execution cancelled"
-                            .to_owned(),
-                }
-            }
-        }
+        decoder.decode_with_context(
+            input,
+            context,
+        )
     }
 }
 
-impl fmt::Display for DecoderError {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-        match self {
-            Self::Stabilizer(error) => {
-                write!(
-                    formatter,
-                    "stabilizer error: {error}"
-                )
-            }
-
-            Self::InvalidQubitCount {
-                count,
-            } => {
-                write!(
-                    formatter,
-                    "decoder requires at least one qubit; got {count}"
-                )
-            }
-
-            Self::QubitOutOfRange {
-                qubit,
-                num_qubits,
-            } => {
-                write!(
-                    formatter,
-                    "qubit {qubit} is outside a {num_qubits}-qubit system"
-                )
-            }
-
-            Self::SyndromeLengthMismatch {
-                expected,
-                actual,
-            } => {
-                write!(
-                    formatter,
-                    "syndrome length mismatch: expected {expected}, got {actual}"
-                )
-            }
-
-            Self::CorrectionQubitCountMismatch {
-                expected,
-                actual,
-            } => {
-                write!(
-                    formatter,
-                    "correction qubit count mismatch: expected {expected}, got {actual}"
-                )
-            }
-
-            Self::NonTrivialSyndrome {
-                triggered,
-            } => {
-                write!(
-                    formatter,
-                    "identity decoder cannot accept {triggered} triggered syndrome generators"
-                )
-            }
-
-            Self::DuplicateDecoder {
-                id,
-            } => {
-                write!(
-                    formatter,
-                    "decoder {id} is already registered"
-                )
-            }
-
-            Self::InvalidResult {
-                reason,
-            } => {
-                write!(
-                    formatter,
-                    "invalid decoder result: {reason}"
-                )
-            }
-
-            Self::Cancelled => {
-                formatter.write_str(
-                    "decoder execution cancelled"
-                )
-            }
-        }
+impl Default for DecoderRegistry {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl std::error::Error for DecoderError {}
-
 /* ========================================================================== */
-/* Compile-time integration assertions                                        */
+/* Decoder helper functions                                                   */
 /* ========================================================================== */
 
-/// Forces the compiler to type-check the important cross-module contracts
-/// whenever this module is compiled.
+/// Creates an identity correction compatible with a physical qubit count.
 ///
-/// These are intentionally zero-cost.
-#[allow(dead_code)]
-fn assert_integration_contracts(
-    config: &QecConfig,
-    limits: &QecLimits,
-    resources: &ResourceManager,
-    cancellation: &CancellationToken,
-    deterministic: &DeterministicContext,
-    capabilities: &CapabilitySet,
-) {
-    let context =
-        DecodeContext::new(
-            config,
-            resources,
-            cancellation,
-            deterministic,
-            capabilities,
+/// This helper is useful for:
+///
+/// - trivial syndrome handling;
+/// - exact decoder fallbacks;
+/// - test implementations;
+/// - no-error fast paths.
+///
+/// It does not claim logical correctness.
+#[must_use]
+pub fn identity_correction(
+    num_qubits: usize,
+) -> Correction {
+    Correction::new(
+        PauliString::identity(num_qubits)
+    )
+}
+
+/// Creates a trivial decoder result for a syndrome containing no events.
+///
+/// The decoder ID must still be supplied so the result remains attributable
+/// to the correct decoder implementation.
+#[must_use]
+pub fn trivial_result(
+    decoder: DecoderId,
+    syndrome: Syndrome,
+) -> DecodeResult {
+    let correction =
+        identity_correction(
+            syndrome.num_qubits(),
         );
 
-    let _ = context.config();
-    let _ = context.resources();
-    let _ = context.cancellation();
-    let _ = context.deterministic();
-    let _ = context.capabilities();
+    DecodeResult::with_execution(
+        decoder,
+        syndrome,
+        correction,
+        DecodeTermination::TrivialInput,
+        0,
+    )
+}
 
-    let _ = limits.max_decoder_iterations;
+/// Returns whether an input is eligible for the decoder's trivial-input
+/// fast path.
+#[must_use]
+pub fn is_trivial_input(
+    input: &DecodeInput,
+) -> bool {
+    input.is_trivial()
+}
+
+/// Performs the canonical trivial-input handling.
+///
+/// Concrete decoders should use this before expensive graph construction or
+/// matching work.
+pub fn decode_trivial_or_continue(
+    decoder: DecoderId,
+    input: &DecodeInput,
+) -> Option<DecodeResult> {
+    if input.is_trivial() {
+        Some(
+            trivial_result(
+                decoder,
+                input.syndrome().clone(),
+            ),
+        )
+    } else {
+        None
+    }
+}
+
+/* ========================================================================== */
+/* Decoder execution helpers                                                  */
+/* ========================================================================== */
+
+/// Polls cancellation at a decoder loop boundary.
+///
+/// Concrete decoders should call this from:
+///
+/// - matching loops;
+/// - union/cluster growth loops;
+/// - graph traversals;
+/// - sparse matrix operations;
+/// - streaming batches;
+/// - distributed worker loops.
+pub fn check_cancellation(
+    context: &DecodeContext<'_>,
+) -> QecResult<()> {
+    context.cancellation().check()
+}
+
+/// Returns the canonical runtime resource manager.
+///
+/// This helper exists to make resource accounting explicit in concrete
+/// decoders without exposing implementation details of `ResourceManager`.
+#[must_use]
+pub const fn resource_manager(
+    context: &DecodeContext<'_>,
+) -> &ResourceManager {
+    context.resources()
+}
+
+/// Returns the deterministic execution context.
+///
+/// Concrete algorithms must use this context rather than constructing
+/// independent random seeds or ordering policies.
+#[must_use]
+pub const fn deterministic_context(
+    context: &DecodeContext<'_>,
+) -> &DeterministicContext {
+    context.deterministic()
+}
+
+/// Returns the canonical QEC configuration.
+#[must_use]
+pub const fn qec_config(
+    context: &DecodeContext<'_>,
+) -> &QecConfig {
+    context.config()
+}
+
+/* ========================================================================== */
+/* Error adaptation                                                           */
+/* ========================================================================== */
+
+/// Converts an arbitrary decoder failure into the canonical decoder error
+/// boundary.
+///
+/// Concrete decoders should prefer returning the original `QecError` directly.
+/// This helper exists for local algorithm errors that do not already have a
+/// canonical QEC representation.
+pub fn decoder_failure(
+    decoder: &DecoderMetadata,
+    message: impl Into<String>,
+) -> QecError {
+    QecError::DecoderFailure {
+        decoder: decoder.name().to_owned(),
+        message: message.into(),
+    }
+}
+
+/// Converts an algorithm-specific error into a decoder failure.
+///
+/// This function deliberately does not expose implementation-specific error
+/// types through the public decoder boundary.
+pub fn decoder_error<T: fmt::Display>(
+    decoder: &DecoderMetadata,
+    error: T,
+) -> QecError {
+    decoder_failure(
+        decoder,
+        error.to_string(),
+    )
+}
+
+/* ========================================================================== */
+/* Contract assertions                                                        */
+/* ========================================================================== */
+
+/// Performs cheap structural assertions for a decoder result.
+///
+/// This is intended for tests, debug validation and integration self-checks.
+///
+/// It does not perform a full logical-equivalence proof.
+pub fn assert_result_contract(
+    metadata: &DecoderMetadata,
+    input: &DecodeInput,
+    result: &DecodeResult,
+) -> QecResult<()> {
+    validate_decoder_result(
+        metadata,
+        input,
+        result,
+    )
+}
+
+/// Verifies that a decoder's correction has the same physical width as the
+/// decoder input.
+pub fn validate_correction_width(
+    input: &DecodeInput,
+    correction: &Correction,
+) -> QecResult<()> {
+    if correction.num_qubits()
+        != input.syndrome().num_qubits()
+    {
+        return Err(QecError::DecoderFailure {
+            decoder: "unknown".to_owned(),
+            message: format!(
+                "correction width mismatch: syndrome has {} qubits, \
+                 correction has {}",
+                input.syndrome().num_qubits(),
+                correction.num_qubits()
+            ),
+        });
+    }
+
+    Ok(())
 }
 
 /* ========================================================================== */
@@ -1624,16 +924,79 @@ fn assert_integration_contracts(
 mod tests {
     use super::*;
 
-    #[test]
-    fn correction_identity_is_safe() {
-        let correction =
-            Correction::identity(3);
+    #[derive(Debug)]
+    struct TestDecoder {
+        metadata: DecoderMetadata,
+    }
 
-        assert!(correction.is_identity());
+    impl TestDecoder {
+        fn new() -> Self {
+            Self {
+                metadata: DecoderMetadata::new(
+                    DecoderId::new(1),
+                    "test",
+                    DecoderKind::Other,
+                    "1.0.0",
+                ),
+            }
+        }
+    }
+
+    impl Decoder for TestDecoder {
+        fn metadata(&self) -> &DecoderMetadata {
+            &self.metadata
+        }
+
+        fn decode(
+            &self,
+            input: &DecodeInput,
+            _context: &DecodeContext<'_>,
+        ) -> QecResult<DecodeResult> {
+            if let Some(result) =
+                decode_trivial_or_continue(
+                    self.id(),
+                    input,
+                )
+            {
+                return Ok(result);
+            }
+
+            let correction =
+                identity_correction(
+                    input.syndrome().num_qubits(),
+                );
+
+            Ok(
+                DecodeResult::with_execution(
+                    self.id(),
+                    input.syndrome().clone(),
+                    correction,
+                    DecodeTermination::Completed,
+                    1,
+                ),
+            )
+        }
+    }
+
+    #[test]
+    fn decoder_id_is_stable() {
+        let id = DecoderId::new(42);
+
+        assert_eq!(id.index(), 42);
+        assert_eq!(id.to_string(), "decoder-42");
+    }
+
+    #[test]
+    fn identity_correction_has_requested_width() {
+        let correction =
+            identity_correction(7);
+
         assert_eq!(
             correction.num_qubits(),
-            3
+            7
         );
+
+        assert!(correction.is_identity());
         assert_eq!(
             correction.weight(),
             0
@@ -1641,272 +1004,208 @@ mod tests {
     }
 
     #[test]
-    fn identity_decoder_rejects_nontrivial_syndrome() {
-        let decoder =
-            IdentityDecoder::new(
-                DecoderId::new(1),
-                3,
-            )
-            .expect("valid decoder");
-
+    fn trivial_input_produces_trivial_result() {
         let syndrome =
-            Syndrome::new(vec![
-                true,
-            ]);
+            Syndrome::new(
+                5,
+                Vec::new(),
+            )
+            .expect("empty syndrome should be valid");
 
-        let result =
-            decoder.decode(
-                &syndrome,
+        let input =
+            DecodeInput::new(
+                syndrome.clone(),
             );
 
-        assert!(matches!(
-            result,
-            Err(
-                DecoderError::NonTrivialSyndrome {
-                    triggered: 1
-                }
-            )
-        ));
-    }
-
-    #[test]
-    fn identity_decoder_accepts_trivial_syndrome() {
-        let decoder =
-            IdentityDecoder::new(
-                DecoderId::new(1),
-                3,
-            )
-            .expect("valid decoder");
-
-        let syndrome =
-            Syndrome::new(vec![
-                false,
-                false,
-            ]);
-
         let result =
-            decoder
-                .decode(
-                    &syndrome,
-                )
-                .expect("trivial syndrome");
+            trivial_result(
+                DecoderId::new(1),
+                syndrome,
+            );
 
-        assert_eq!(
-            result.decoder(),
-            DecoderId::new(1)
-        );
         assert!(
-            result.is_trivial()
+            result.is_success()
         );
-        assert!(
-            result
-                .correction()
-                .is_identity()
-        );
+
         assert_eq!(
             result.termination(),
             DecodeTermination::TrivialInput
         );
+
+        assert!(
+            result.is_identity_correction()
+        );
+
+        assert!(
+            input.is_trivial()
+        );
     }
 
     #[test]
-    fn syndrome_validation_rejects_wrong_length() {
-        let stabilizers =
-            StabilizerGroup::new(3)
-                .expect("valid group");
-
-        let syndrome =
-            Syndrome::new(vec![
-                true,
-                false,
-            ]);
-
-        let result =
-            validate_syndrome(
-                &syndrome,
-                &stabilizers,
+    fn registry_orders_decoders_by_id() {
+        let first =
+            Box::new(
+                TestDecoder::new()
             );
 
-        assert!(matches!(
-            result,
-            Err(
-                DecoderError::SyndromeLengthMismatch {
-                    expected: 3,
-                    actual: 2
-                }
-            )
-        ));
-    }
+        let second_metadata =
+            DecoderMetadata::new(
+                DecoderId::new(2),
+                "second",
+                DecoderKind::Other,
+                "1.0.0",
+            );
 
-    #[test]
-    fn registry_is_deterministic() {
-        let first =
-            IdentityDecoder::new(
-                DecoderId::new(20),
-                2,
-            )
-            .expect("valid decoder");
+        struct SecondDecoder {
+            metadata: DecoderMetadata,
+        }
+
+        impl Decoder for SecondDecoder {
+            fn metadata(
+                &self,
+            ) -> &DecoderMetadata {
+                &self.metadata
+            }
+
+            fn decode(
+                &self,
+                input: &DecodeInput,
+                _context: &DecodeContext<'_>,
+            ) -> QecResult<DecodeResult> {
+                Ok(
+                    trivial_result(
+                        self.id(),
+                        input.syndrome().clone(),
+                    )
+                )
+            }
+        }
 
         let second =
-            IdentityDecoder::new(
-                DecoderId::new(10),
-                2,
+            Box::new(
+                SecondDecoder {
+                    metadata:
+                        second_metadata,
+                }
+            );
+
+        let registry =
+            DecoderRegistry::from_decoders(
+                vec![
+                    second,
+                    first,
+                ],
             )
-            .expect("valid decoder");
-
-        let mut registry =
-            DecoderRegistry::new();
-
-        registry
-            .register(&first)
-            .expect("register first");
-
-        registry
-            .register(&second)
-            .expect("register second");
+            .expect(
+                "unique decoder IDs should register",
+            );
 
         assert_eq!(
             registry.ids(),
             vec![
-                DecoderId::new(10),
-                DecoderId::new(20),
+                DecoderId::new(1),
+                DecoderId::new(2),
             ]
         );
     }
 
     #[test]
-    fn duplicate_registry_identity_is_rejected() {
+    fn duplicate_decoder_ids_are_rejected() {
         let first =
-            IdentityDecoder::new(
-                DecoderId::new(7),
-                2,
-            )
-            .expect("valid decoder");
+            Box::new(
+                TestDecoder::new()
+            );
 
-        let second =
-            IdentityDecoder::new(
-                DecoderId::new(7),
-                2,
-            )
-            .expect("valid decoder");
-
-        let mut registry =
-            DecoderRegistry::new();
-
-        registry
-            .register(&first)
-            .expect("first registration");
-
-        assert!(matches!(
-            registry.register(
-                &second
-            ),
-            Err(
-                DecoderError::DuplicateDecoder {
-                    id: DecoderId(7)
-                }
-            )
-        ));
-    }
-
-    #[test]
-    fn single_qubit_helpers_validate_bounds() {
-        assert!(
-            x_error(3, 2)
-                .is_ok()
-        );
-
-        assert!(
-            x_error(3, 3)
-                .is_err()
-        );
-
-        assert!(
-            y_error(0, 0)
-                .is_err()
-        );
-
-        assert!(
-            z_error(2, 0)
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn syndrome_classification_is_deterministic() {
-        let trivial =
-            Syndrome::new(vec![
-                false,
-                false,
-            ]);
-
-        let nontrivial =
-            Syndrome::new(vec![
-                false,
-                true,
-            ]);
-
-        assert_eq!(
-            SyndromeClass::classify(
-                &trivial
-            ),
-            SyndromeClass::Trivial
-        );
-
-        assert_eq!(
-            SyndromeClass::classify(
-                &nontrivial
-            ),
-            SyndromeClass::NonTrivial
-        );
-    }
-
-    #[test]
-    fn statistics_are_saturating_and_deterministic() {
-        let decoder =
-            IdentityDecoder::new(
-                DecoderId::new(1),
-                2,
-            )
-            .expect("valid decoder");
-
-        let syndrome =
-            Syndrome::new(vec![
-                false,
-            ]);
+        let duplicate =
+            Box::new(
+                TestDecoder::new()
+            );
 
         let result =
-            decoder
-                .decode(
-                    &syndrome,
-                )
-                .expect("decode");
+            DecoderRegistry::from_decoders(
+                vec![
+                    first,
+                    duplicate,
+                ],
+            );
 
-        let mut statistics =
-            DecoderStatistics::new();
+        assert!(
+            result.is_err()
+        );
+    }
 
-        statistics.record(
-            Ok(&result)
+    #[test]
+    fn result_validation_rejects_wrong_decoder() {
+        let syndrome =
+            Syndrome::new(
+                3,
+                Vec::new(),
+            )
+            .expect("empty syndrome should be valid");
+
+        let input =
+            DecodeInput::new(
+                syndrome.clone(),
+            );
+
+        let metadata =
+            DecoderMetadata::new(
+                DecoderId::new(1),
+                "test",
+                DecoderKind::Other,
+                "1.0.0",
+            );
+
+        let result =
+            trivial_result(
+                DecoderId::new(2),
+                syndrome,
+            );
+
+        assert!(
+            validate_decoder_result(
+                &metadata,
+                &input,
+                &result,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn correction_width_is_checked() {
+        let syndrome =
+            Syndrome::new(
+                4,
+                Vec::new(),
+            )
+            .expect("empty syndrome should be valid");
+
+        let input =
+            DecodeInput::new(
+                syndrome,
+            );
+
+        let correction =
+            identity_correction(4);
+
+        assert!(
+            validate_correction_width(
+                &input,
+                &correction,
+            )
+            .is_ok()
         );
 
-        assert_eq!(
-            statistics.decoded(),
-            1
-        );
+        let wrong =
+            identity_correction(3);
 
-        assert_eq!(
-            statistics.trivial(),
-            1
-        );
-
-        assert_eq!(
-            statistics.nontrivial(),
-            0
-        );
-
-        assert_eq!(
-            statistics.failed(),
-            0
+        assert!(
+            validate_correction_width(
+                &input,
+                &wrong,
+            )
+            .is_err()
         );
     }
 }
