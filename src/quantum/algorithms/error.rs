@@ -7,14 +7,14 @@
 //!
 //! `error.rs` owns:
 //!
-//! - canonical algorithm error representation;
+//! - canonical algorithm errors;
 //! - stable machine-readable error codes;
-//! - stable high-level error classification;
-//! - error severity classification;
+//! - stable error classification;
+//! - severity classification;
 //! - retryability classification;
-//! - human-readable diagnostics;
-//! - the canonical `Result<T>` alias;
-//! - constructors for common algorithm failures.
+//! - structured diagnostics;
+//! - canonical `Result<T>`;
+//! - constructors for common failures.
 //!
 //! `error.rs` does NOT own:
 //!
@@ -25,111 +25,63 @@
 //! - execution backends;
 //! - hardware topology;
 //! - routing;
+//! - transpilation;
 //! - error correction;
-//! - optimization policy;
-//! - resource policy;
+//! - optimizer implementations;
+//! - objective implementations;
 //! - persistence;
-//! - telemetry transport.
+//! - telemetry.
 //!
 //! Those responsibilities belong to their respective modules.
 //!
 //! # Dependency direction
 //!
-//! This module intentionally has no dependency on sibling algorithm modules.
-//!
 //! ```text
-//!                    error.rs
-//!                       │
-//!          ┌────────────┼────────────┐
-//!          │            │            │
-//!          ▼            ▼            ▼
-//!       types.rs   execution.rs  objective.rs
-//!          │            │            │
-//!          └────────────┼────────────┘
-//!                       ▼
-//!                 optimizer.rs
-//!                       │
-//!                       ▼
-//!                variational.rs
-//!                       │
-//!             ┌─────────┼─────────┐
-//!             ▼         ▼         ▼
-//!            VQE       QAOA     other VQAs
-//!
-//! error.rs is therefore a foundation contract, not an integration layer.
+//!                         error.rs
+//!                            │
+//!              ┌─────────────┼─────────────┐
+//!              │             │             │
+//!              ▼             ▼             ▼
+//!          types.rs     execution.rs  objective.rs
+//!              │             │             │
+//!              └─────────────┼─────────────┘
+//!                            ▼
+//!                       optimizer.rs
+//!                            │
+//!                            ▼
+//!                      variational.rs
+//!                            │
+//!                   ┌────────┼────────┐
+//!                   ▼        ▼        ▼
+//!                  VQE      QAOA    other VQAs
 //! ```
 //!
-//! # Integration with Quantum IR
+//! `error.rs` is therefore a foundation contract.
 //!
-//! The quantum IR owns its own domain errors such as `GateError`,
-//! `MeasurementError`, and `QubitError`. This module deliberately does not
-//! redefine them.
+//! # Quantum IR integration
 //!
-//! Higher-level algorithm modules may map those errors into
-//! `AlgorithmError::InvalidCircuit`, `AlgorithmError::ExecutionFailed`, or
-//! another appropriate algorithm-level category.
+//! The Quantum IR owns circuit/gate/qubit/measurement-specific errors.
+//! This module does not duplicate those errors.
 //!
-//! ```text
-//! quantum::ir::*Error
-//!        │
-//!        ▼
-//! algorithm-level mapping
-//!        │
-//!        ▼
-//! AlgorithmError
-//! ```
+//! Higher-level modules map IR failures into an appropriate
+//! `AlgorithmError` variant.
 //!
-//! # Integration with execution
+//! # Determinism and replay
 //!
-//! `execution.rs` should use this boundary for failures such as:
+//! Stable `code()` and `kind()` values are intended for machine-readable
+//! diagnostics, replay metadata, and programmatic control flow.
 //!
-//! - invalid execution requests;
-//! - backend unavailability;
-//! - execution failure;
-//! - timeout;
-//! - cancellation;
-//! - resource exhaustion;
-//! - unsupported execution modes;
-//! - non-finite execution results.
-//!
-//! # Integration with optimization
-//!
-//! `optimizer.rs` should use this boundary for:
-//!
-//! - invalid optimization configuration;
-//! - objective evaluation failure;
-//! - non-finite objective values;
-//! - numerical instability;
-//! - convergence failure;
-//! - optimizer divergence;
-//! - resource exhaustion;
-//! - invalid parameter updates.
-//!
-//! # Integration with deterministic execution
-//!
-//! Deterministic execution is configured by higher-level modules.
-//! This file only provides the canonical errors for deterministic-contract
-//! violations.
-//!
-//! # Integration with replay/versioning
-//!
-//! Algorithm replay and versioning may use the stable `code()` and `kind()`
-//! values from this module. Error diagnostics must never be parsed to make
-//! control-flow decisions.
+//! Human-readable `Display` output must never be parsed for control flow.
 //!
 //! # Rust compatibility
 //!
-//! This file is intentionally implemented using stable Rust standard-library
-//! functionality compatible with Rust 1.97.1.
+//! Rust 1.97.1.
 //!
-//! No unstable features are required.
+//! No nightly features are required.
 //!
 //! # Safety
 //!
 //! This module contains no unsafe code.
-//!
-//! Invalid external input must be represented as an error rather than causing
-//! a panic.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
@@ -137,98 +89,96 @@
 use core::fmt;
 use std::error::Error;
 
-// ============================================================================
+// =============================================================================
 // Canonical Result
-// ============================================================================
+// =============================================================================
 
-/// Canonical result type for the complete quantum algorithms subsystem.
-///
-/// All public algorithm APIs should eventually return this result type
-/// instead of defining independent algorithm-specific result aliases.
+/// Canonical result type for the quantum algorithms subsystem.
 pub type Result<T> = std::result::Result<T, AlgorithmError>;
 
-// ============================================================================
+// =============================================================================
 // Error Kind
-// ============================================================================
+// =============================================================================
 
-/// Stable high-level classification of an algorithm failure.
+/// Stable machine-readable classification of an algorithm failure.
 ///
-/// Consumers should use this type for control flow instead of matching
-/// diagnostic strings.
+/// This type is intended for programmatic control flow.
+///
+/// Error messages must never be parsed to determine the error category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AlgorithmErrorKind {
-    /// Caller supplied malformed or invalid input.
+    /// Generic caller input is invalid.
     InvalidInput,
 
     /// Algorithm configuration is invalid.
     InvalidConfiguration,
 
-    /// Algorithm identifier or version is invalid/incompatible.
+    /// Algorithm identity or algorithm-specific identity is invalid.
     InvalidAlgorithm,
 
-    /// Qubit count or qubit-related configuration is invalid.
+    /// Qubit count is invalid.
     InvalidQubitCount,
 
-    /// Parameter vector or parameter value is invalid.
+    /// A parameter is invalid.
     InvalidParameter,
 
-    /// Two dimensions that must agree do not agree.
+    /// Required dimensions do not agree.
     DimensionMismatch,
 
-    /// Circuit supplied to or generated by an algorithm is invalid.
+    /// A circuit is invalid at the algorithm boundary.
     InvalidCircuit,
 
-    /// Requested operation is not supported by the algorithm contract.
+    /// Requested operation is unsupported.
     UnsupportedOperation,
 
-    /// An objective could not be evaluated successfully.
+    /// An objective could not be evaluated.
     ObjectiveEvaluationFailed,
 
-    /// Execution of a logical quantum program failed.
+    /// Execution failed after the request was accepted.
     ExecutionFailed,
 
-    /// Required execution backend is unavailable.
+    /// Required backend is unavailable.
     BackendUnavailable,
 
-    /// Execution or optimization exceeded a configured time limit.
+    /// Execution exceeded a time limit.
     Timeout,
 
-    /// Cooperative cancellation stopped execution.
+    /// Execution was cooperatively cancelled.
     Cancelled,
 
     /// A configured resource limit was exceeded.
     ResourceLimitExceeded,
 
-    /// A numerical value was NaN or infinite when a finite value was required.
+    /// A value was NaN or infinite.
     NonFiniteValue,
 
-    /// Numerical calculations became unstable or invalid.
+    /// Numerical processing became unstable.
     NumericalInstability,
 
-    /// Optimization failed to satisfy its convergence contract.
+    /// Required convergence was not achieved.
     ConvergenceFailure,
 
-    /// The optimizer itself failed.
+    /// The optimizer failed independently of convergence.
     OptimizationFailed,
 
-    /// Deterministic/reproducible execution requirements were violated.
+    /// Determinism requirements were violated.
     DeterminismViolation,
 
-    /// Serialization or deserialization failed.
+    /// Serialization failed.
     SerializationFailure,
 
-    /// Replay or reproduction validation failed.
+    /// Replay/reproduction validation failed.
     ReplayFailure,
 
     /// Version/schema compatibility failed.
     VersionMismatch,
 
-    /// An internal invariant was violated.
+    /// Internal invariant was violated.
     InternalInvariantViolation,
 }
 
 impl AlgorithmErrorKind {
-    /// Returns the stable machine-readable error category.
+    /// Returns the stable machine-readable code.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -240,60 +190,72 @@ impl AlgorithmErrorKind {
             Self::DimensionMismatch => "dimension_mismatch",
             Self::InvalidCircuit => "invalid_circuit",
             Self::UnsupportedOperation => "unsupported_operation",
-            Self::ObjectiveEvaluationFailed => "objective_evaluation_failed",
+            Self::ObjectiveEvaluationFailed => {
+                "objective_evaluation_failed"
+            }
             Self::ExecutionFailed => "execution_failed",
             Self::BackendUnavailable => "backend_unavailable",
             Self::Timeout => "timeout",
             Self::Cancelled => "cancelled",
-            Self::ResourceLimitExceeded => "resource_limit_exceeded",
+            Self::ResourceLimitExceeded => {
+                "resource_limit_exceeded"
+            }
             Self::NonFiniteValue => "non_finite_value",
-            Self::NumericalInstability => "numerical_instability",
+            Self::NumericalInstability => {
+                "numerical_instability"
+            }
             Self::ConvergenceFailure => "convergence_failure",
             Self::OptimizationFailed => "optimization_failed",
-            Self::DeterminismViolation => "determinism_violation",
-            Self::SerializationFailure => "serialization_failure",
+            Self::DeterminismViolation => {
+                "determinism_violation"
+            }
+            Self::SerializationFailure => {
+                "serialization_failure"
+            }
             Self::ReplayFailure => "replay_failure",
             Self::VersionMismatch => "version_mismatch",
-            Self::InternalInvariantViolation => "internal_invariant_violation",
+            Self::InternalInvariantViolation => {
+                "internal_invariant_violation"
+            }
         }
     }
 }
 
 impl fmt::Display for AlgorithmErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        formatter.write_str(self.as_str())
     }
 }
 
-// ============================================================================
+// =============================================================================
 // Error Severity
-// ============================================================================
+// =============================================================================
 
-/// Operational severity/classification of an algorithm error.
-///
-/// This classification is intentionally independent from telemetry systems.
+/// Operational severity classification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AlgorithmErrorSeverity {
     /// Caller supplied invalid input.
     Input,
 
-    /// Configuration is invalid or incompatible.
+    /// Configuration or compatibility failure.
     Configuration,
 
-    /// The requested operation could not be performed by the available
-    /// algorithm/backend.
+    /// Backend or operational failure.
     Operational,
 
-    /// A resource or execution boundary was reached.
+    /// Resource/time boundary.
     Resource,
 
-    /// Execution was intentionally stopped.
+    /// Intentional cancellation.
     Cancellation,
 
-    /// A numerical or convergence condition prevented reliable completion.
+    /// Numerical/convergence failure.
     Numerical,
 
-    /// An internal software invariant was violated.
+    /// Internal software defect.
     Internal,
 }
 
@@ -314,154 +276,147 @@ impl AlgorithmErrorSeverity {
 }
 
 impl fmt::Display for AlgorithmErrorSeverity {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        formatter.write_str(self.as_str())
     }
 }
 
-// ============================================================================
-// Resource Classification
-// ============================================================================
+// =============================================================================
+// Resource
+// =============================================================================
 
-/// Resource dimensions that the algorithms subsystem may enforce.
+/// Resource dimension associated with a resource-limit failure.
 ///
-/// This is classification only.
-///
-/// Resource policy belongs to `types.rs` / future resource-policy contracts,
-/// while execution accounting belongs to `execution.rs`.
+/// This remains independent of `types::AlgorithmLimits`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AlgorithmResource {
-    /// Logical qubits required by an algorithm.
     Qubits,
-
-    /// Quantum circuit gate count.
     Gates,
-
-    /// Circuit depth.
-    CircuitDepth,
-
-    /// Number of measurement shots.
+    Depth,
     Shots,
-
-    /// Number of algorithm iterations.
     Iterations,
-
-    /// Number of objective evaluations.
     ObjectiveEvaluations,
-
-    /// Number of gradient evaluations.
     GradientEvaluations,
-
-    /// Number of circuits submitted for execution.
-    CircuitExecutions,
-
-    /// Estimated/consumed memory in bytes.
-    MemoryBytes,
-
-    /// Execution time.
-    Time,
-
-    /// Number of optimizer steps.
-    OptimizerSteps,
-
-    /// Number of parameters.
     Parameters,
-
-    /// Algorithm-specific resource dimension.
+    CircuitExecutions,
+    MemoryBytes,
+    Time,
+    OptimizerSteps,
     Custom,
 }
 
 impl AlgorithmResource {
-    /// Returns the stable machine-readable resource identifier.
+    /// Returns the stable machine-readable resource name.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Qubits => "qubits",
             Self::Gates => "gates",
-            Self::CircuitDepth => "circuit_depth",
+            Self::Depth => "depth",
             Self::Shots => "shots",
             Self::Iterations => "iterations",
-            Self::ObjectiveEvaluations => "objective_evaluations",
-            Self::GradientEvaluations => "gradient_evaluations",
-            Self::CircuitExecutions => "circuit_executions",
+            Self::ObjectiveEvaluations => {
+                "objective_evaluations"
+            }
+            Self::GradientEvaluations => {
+                "gradient_evaluations"
+            }
+            Self::Parameters => "parameters",
+            Self::CircuitExecutions => {
+                "circuit_executions"
+            }
             Self::MemoryBytes => "memory_bytes",
             Self::Time => "time",
             Self::OptimizerSteps => "optimizer_steps",
-            Self::Parameters => "parameters",
             Self::Custom => "custom",
         }
     }
 }
 
 impl fmt::Display for AlgorithmResource {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        formatter.write_str(self.as_str())
     }
 }
 
-// ============================================================================
+// =============================================================================
 // Canonical Error
-// ============================================================================
+// =============================================================================
 
-/// Canonical error returned by the quantum algorithms subsystem.
+/// Canonical error for the entire quantum algorithms subsystem.
 ///
-/// This enum intentionally contains structured information where that
-/// information is useful to callers, while avoiding dependencies on future
-/// sibling modules.
+/// The fields intentionally remain backend-independent.
 ///
-/// The enum is the stable error boundary. New algorithm implementations
-/// should map their failures into these categories rather than introducing
-/// independent public error enums.
+/// This enum is the stable error boundary used by:
+///
+/// - `types.rs`;
+/// - `execution.rs`;
+/// - `objective.rs`;
+/// - `optimizer.rs`;
+/// - `variational.rs`;
+/// - VQE;
+/// - QAOA;
+/// - Grover;
+/// - amplitude algorithms;
+/// - phase estimation.
+///
+/// No concrete algorithm should introduce a second public error vocabulary.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AlgorithmError {
-    /// Generic malformed or invalid caller input.
+    /// Caller supplied invalid input.
     InvalidInput {
-        /// Human-readable diagnostic.
-        message: String,
+        /// Name of the invalid field/input.
+        field: String,
+
+        /// Structured human-readable reason.
+        reason: String,
     },
 
     /// Algorithm configuration failed validation.
     InvalidConfiguration {
-        /// Configuration field responsible for the failure.
+        /// Configuration field.
         field: String,
 
-        /// Human-readable diagnostic.
-        message: String,
+        /// Reason the configuration is invalid.
+        reason: String,
     },
 
-    /// Algorithm identity or algorithm-specific configuration is invalid.
+    /// Algorithm identity or algorithm-specific identity is invalid.
     InvalidAlgorithm {
         /// Algorithm identifier.
         algorithm: String,
 
-        /// Human-readable diagnostic.
-        message: String,
+        /// Reason for rejection.
+        reason: String,
     },
 
-    /// Invalid qubit count or qubit-related input.
+    /// Qubit count is invalid.
     InvalidQubitCount {
-        /// Supplied count.
+        /// Supplied qubit count.
         count: usize,
 
-        /// Human-readable diagnostic.
+        /// Reason for rejection.
         message: String,
     },
 
-    /// Invalid parameter value or parameter index.
+    /// Parameter value/index/name is invalid.
     InvalidParameter {
-        /// Parameter index when applicable.
-        index: Option<usize>,
+        /// Parameter name or index representation.
+        name: String,
 
-        /// Supplied value when applicable.
-        value: Option<f64>,
-
-        /// Human-readable diagnostic.
-        message: String,
+        /// Reason for rejection.
+        reason: String,
     },
 
-    /// Two dimensions that must agree are incompatible.
+    /// Required dimensions do not agree.
     DimensionMismatch {
-        /// Name of the first dimension.
+        /// Name of the expected dimension.
         expected_name: String,
 
         /// Expected dimension.
@@ -473,40 +428,40 @@ pub enum AlgorithmError {
         /// Actual dimension.
         actual: usize,
 
-        /// Human-readable diagnostic.
+        /// Human-readable explanation.
         message: String,
     },
 
-    /// A circuit failed algorithm-level validation.
+    /// Circuit is invalid at the algorithm boundary.
     ///
-    /// The IR itself remains responsible for its own detailed circuit errors.
+    /// Detailed circuit semantics remain owned by the Quantum IR.
     InvalidCircuit {
-        /// Optional circuit identifier or context.
+        /// Optional circuit identifier.
         circuit: Option<String>,
 
-        /// Human-readable diagnostic.
+        /// Mapped IR/algorithm diagnostic.
         message: String,
     },
 
-    /// Requested operation is outside the supported algorithm contract.
+    /// Requested operation is unsupported.
     UnsupportedOperation {
-        /// Operation that was requested.
+        /// Stable operation identifier.
         operation: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// An objective function could not be evaluated.
+    /// Objective evaluation failed.
     ObjectiveEvaluationFailed {
-        /// Evaluation number when known.
+        /// Objective evaluation number when known.
         evaluation: Option<u64>,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// Quantum execution failed after an execution request was accepted.
+    /// Execution failed after request acceptance.
     ExecutionFailed {
         /// Backend identifier when known.
         backend: Option<String>,
@@ -514,130 +469,124 @@ pub enum AlgorithmError {
         /// Operation being executed.
         operation: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// Required backend was not available.
+    /// Backend required by the request is unavailable.
     BackendUnavailable {
         /// Backend identifier.
         backend: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// Execution or algorithm processing exceeded a time limit.
+    /// Operation exceeded a configured time limit.
     Timeout {
         /// Operation that timed out.
         operation: String,
 
-        /// Configured limit in nanoseconds, when known.
+        /// Timeout in nanoseconds when known.
         limit_nanos: Option<u64>,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// Cooperative cancellation stopped the operation.
+    /// Operation was intentionally cancelled.
     Cancelled {
         /// Operation that was cancelled.
         operation: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
     /// A configured resource limit was exceeded.
     ResourceLimitExceeded {
-        /// Resource dimension.
-        resource: AlgorithmResource,
+        /// Stable resource identifier.
+        resource: String,
 
         /// Requested amount.
-        requested: u128,
+        requested: u64,
 
-        /// Configured limit.
-        limit: u128,
+        /// Configured maximum.
+        limit: u64,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// A value was non-finite where a finite value was required.
+    /// A numerical value was non-finite.
     NonFiniteValue {
-        /// Context in which the value was encountered.
-        context: String,
-
-        /// Index when applicable.
-        index: Option<usize>,
+        /// Field or mathematical context.
+        field: String,
 
         /// Invalid value.
         value: f64,
-
-        /// Human-readable diagnostic.
-        message: String,
     },
 
-    /// A numerical calculation became unstable.
+    /// Numerical processing became unstable.
     NumericalInstability {
-        /// Operation producing the instability.
+        /// Operation being evaluated.
         operation: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// The requested convergence contract was not satisfied.
+    /// Required convergence was not achieved.
     ConvergenceFailure {
-        /// Algorithm/optimizer context.
+        /// Algorithm/optimizer identifier.
         algorithm: String,
 
-        /// Number of iterations completed.
+        /// Number of iterations when known.
         iterations: Option<usize>,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// Classical optimization itself failed.
+    /// Optimizer itself failed.
     OptimizationFailed {
         /// Optimizer identifier.
         optimizer: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// Deterministic execution/reproduction requirements were violated.
+    /// Determinism contract was violated.
     DeterminismViolation {
-        /// Determinism contract being enforced.
+        /// Determinism contract.
         contract: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// Algorithm configuration/result serialization failed.
+    /// Serialization failed.
     SerializationFailure {
         /// Serialization operation.
         operation: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// Replay/reproduction validation failed.
+    /// Replay validation failed.
     ReplayFailure {
         /// Replay operation.
         operation: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// Algorithm/schema/backend compatibility failed.
+    /// Version/schema compatibility failed.
     VersionMismatch {
-        /// Component whose version was incompatible.
+        /// Component whose versions differ.
         component: String,
 
         /// Expected version.
@@ -646,33 +595,34 @@ pub enum AlgorithmError {
         /// Actual version.
         actual: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 
-    /// An internal invariant was violated.
-    ///
-    /// This represents a software defect rather than ordinary malformed
-    /// caller input.
+    /// Internal software invariant was violated.
     InternalInvariantViolation {
-        /// Name of the violated invariant.
+        /// Name of violated invariant.
         invariant: String,
 
-        /// Human-readable diagnostic.
+        /// Explanation.
         message: String,
     },
 }
 
-// ============================================================================
+// =============================================================================
 // Constructors
-// ============================================================================
+// =============================================================================
 
 impl AlgorithmError {
     /// Creates an invalid-input error.
     #[must_use]
-    pub fn invalid_input(message: impl Into<String>) -> Self {
+    pub fn invalid_input(
+        field: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
         Self::InvalidInput {
-            message: message.into(),
+            field: field.into(),
+            reason: reason.into(),
         }
     }
 
@@ -680,11 +630,11 @@ impl AlgorithmError {
     #[must_use]
     pub fn invalid_configuration(
         field: impl Into<String>,
-        message: impl Into<String>,
+        reason: impl Into<String>,
     ) -> Self {
         Self::InvalidConfiguration {
             field: field.into(),
-            message: message.into(),
+            reason: reason.into(),
         }
     }
 
@@ -692,11 +642,11 @@ impl AlgorithmError {
     #[must_use]
     pub fn invalid_algorithm(
         algorithm: impl Into<String>,
-        message: impl Into<String>,
+        reason: impl Into<String>,
     ) -> Self {
         Self::InvalidAlgorithm {
             algorithm: algorithm.into(),
-            message: message.into(),
+            reason: reason.into(),
         }
     }
 
@@ -715,14 +665,12 @@ impl AlgorithmError {
     /// Creates an invalid-parameter error.
     #[must_use]
     pub fn invalid_parameter(
-        index: Option<usize>,
-        value: Option<f64>,
-        message: impl Into<String>,
+        name: impl Into<String>,
+        reason: impl Into<String>,
     ) -> Self {
         Self::InvalidParameter {
-            index,
-            value,
-            message: message.into(),
+            name: name.into(),
+            reason: reason.into(),
         }
     }
 
@@ -768,7 +716,7 @@ impl AlgorithmError {
         }
     }
 
-    /// Creates an objective-evaluation error.
+    /// Creates an objective-evaluation failure.
     #[must_use]
     pub fn objective_evaluation_failed(
         evaluation: Option<u64>,
@@ -780,7 +728,7 @@ impl AlgorithmError {
         }
     }
 
-    /// Creates an execution error.
+    /// Creates an execution failure.
     #[must_use]
     pub fn execution_failed(
         backend: Option<String>,
@@ -835,13 +783,13 @@ impl AlgorithmError {
     /// Creates a resource-limit error.
     #[must_use]
     pub fn resource_limit_exceeded(
-        resource: AlgorithmResource,
-        requested: u128,
-        limit: u128,
+        resource: impl Into<String>,
+        requested: u64,
+        limit: u64,
         message: impl Into<String>,
     ) -> Self {
         Self::ResourceLimitExceeded {
-            resource,
+            resource: resource.into(),
             requested,
             limit,
             message: message.into(),
@@ -851,16 +799,12 @@ impl AlgorithmError {
     /// Creates a non-finite-value error.
     #[must_use]
     pub fn non_finite_value(
-        context: impl Into<String>,
-        index: Option<usize>,
+        field: impl Into<String>,
         value: f64,
-        message: impl Into<String>,
     ) -> Self {
         Self::NonFiniteValue {
-            context: context.into(),
-            index,
+            field: field.into(),
             value,
-            message: message.into(),
         }
     }
 
@@ -876,7 +820,7 @@ impl AlgorithmError {
         }
     }
 
-    /// Creates a convergence-failure error.
+    /// Creates a convergence failure.
     #[must_use]
     pub fn convergence_failure(
         algorithm: impl Into<String>,
@@ -890,7 +834,7 @@ impl AlgorithmError {
         }
     }
 
-    /// Creates an optimization-failure error.
+    /// Creates an optimization failure.
     #[must_use]
     pub fn optimization_failed(
         optimizer: impl Into<String>,
@@ -902,7 +846,7 @@ impl AlgorithmError {
         }
     }
 
-    /// Creates a determinism-contract violation.
+    /// Creates a determinism violation.
     #[must_use]
     pub fn determinism_violation(
         contract: impl Into<String>,
@@ -954,7 +898,7 @@ impl AlgorithmError {
         }
     }
 
-    /// Creates an internal invariant violation.
+    /// Creates an internal invariant failure.
     #[must_use]
     pub fn internal_invariant(
         invariant: impl Into<String>,
@@ -967,16 +911,18 @@ impl AlgorithmError {
     }
 }
 
-// ============================================================================
+// =============================================================================
 // Classification
-// ============================================================================
+// =============================================================================
 
 impl AlgorithmError {
-    /// Returns the stable high-level error category.
+    /// Returns the stable error kind.
     #[must_use]
     pub const fn kind(&self) -> AlgorithmErrorKind {
         match self {
-            Self::InvalidInput { .. } => AlgorithmErrorKind::InvalidInput,
+            Self::InvalidInput { .. } => {
+                AlgorithmErrorKind::InvalidInput
+            }
             Self::InvalidConfiguration { .. } => {
                 AlgorithmErrorKind::InvalidConfiguration
             }
@@ -1007,8 +953,12 @@ impl AlgorithmError {
             Self::BackendUnavailable { .. } => {
                 AlgorithmErrorKind::BackendUnavailable
             }
-            Self::Timeout { .. } => AlgorithmErrorKind::Timeout,
-            Self::Cancelled { .. } => AlgorithmErrorKind::Cancelled,
+            Self::Timeout { .. } => {
+                AlgorithmErrorKind::Timeout
+            }
+            Self::Cancelled { .. } => {
+                AlgorithmErrorKind::Cancelled
+            }
             Self::ResourceLimitExceeded { .. } => {
                 AlgorithmErrorKind::ResourceLimitExceeded
             }
@@ -1030,7 +980,9 @@ impl AlgorithmError {
             Self::SerializationFailure { .. } => {
                 AlgorithmErrorKind::SerializationFailure
             }
-            Self::ReplayFailure { .. } => AlgorithmErrorKind::ReplayFailure,
+            Self::ReplayFailure { .. } => {
+                AlgorithmErrorKind::ReplayFailure
+            }
             Self::VersionMismatch { .. } => {
                 AlgorithmErrorKind::VersionMismatch
             }
@@ -1041,9 +993,6 @@ impl AlgorithmError {
     }
 
     /// Returns the stable machine-readable error code.
-    ///
-    /// These codes are intended for logs, telemetry, replay records and
-    /// programmatic consumers. They must not depend on human-readable text.
     #[must_use]
     pub const fn code(&self) -> &'static str {
         self.kind().as_str()
@@ -1057,7 +1006,9 @@ impl AlgorithmError {
             | Self::InvalidQubitCount { .. }
             | Self::InvalidParameter { .. }
             | Self::DimensionMismatch { .. }
-            | Self::InvalidCircuit { .. } => AlgorithmErrorSeverity::Input,
+            | Self::InvalidCircuit { .. } => {
+                AlgorithmErrorSeverity::Input
+            }
 
             Self::InvalidConfiguration { .. }
             | Self::InvalidAlgorithm { .. }
@@ -1070,14 +1021,18 @@ impl AlgorithmError {
             | Self::ExecutionFailed { .. }
             | Self::BackendUnavailable { .. }
             | Self::SerializationFailure { .. }
-            | Self::ReplayFailure { .. } => AlgorithmErrorSeverity::Operational,
+            | Self::ReplayFailure { .. } => {
+                AlgorithmErrorSeverity::Operational
+            }
 
             Self::Timeout { .. }
             | Self::ResourceLimitExceeded { .. } => {
                 AlgorithmErrorSeverity::Resource
             }
 
-            Self::Cancelled { .. } => AlgorithmErrorSeverity::Cancellation,
+            Self::Cancelled { .. } => {
+                AlgorithmErrorSeverity::Cancellation
+            }
 
             Self::NonFiniteValue { .. }
             | Self::NumericalInstability { .. }
@@ -1093,10 +1048,9 @@ impl AlgorithmError {
         }
     }
 
-    /// Returns whether retrying the exact same operation may reasonably
-    /// succeed without changing the request.
+    /// Returns whether retrying the exact request may reasonably succeed.
     ///
-    /// This is deliberately conservative.
+    /// This classification is deliberately conservative.
     #[must_use]
     pub const fn is_retryable(&self) -> bool {
         match self {
@@ -1127,7 +1081,7 @@ impl AlgorithmError {
         }
     }
 
-    /// Returns whether the error is caused by caller-controlled input.
+    /// Returns whether the error originated from caller-controlled input.
     #[must_use]
     pub const fn is_input_error(&self) -> bool {
         matches!(
@@ -1136,7 +1090,7 @@ impl AlgorithmError {
         )
     }
 
-    /// Returns whether the error represents an internal software defect.
+    /// Returns whether the error represents an internal defect.
     #[must_use]
     pub const fn is_internal(&self) -> bool {
         matches!(
@@ -1145,8 +1099,8 @@ impl AlgorithmError {
         )
     }
 
-    /// Returns whether the failure represents an intentional resource or
-    /// execution boundary.
+    /// Returns whether the error represents an explicit resource,
+    /// timeout, or cancellation boundary.
     #[must_use]
     pub const fn is_resource_boundary(&self) -> bool {
         matches!(
@@ -1158,70 +1112,55 @@ impl AlgorithmError {
     }
 }
 
-// ============================================================================
+// =============================================================================
 // Display
-// ============================================================================
+// =============================================================================
 
 impl fmt::Display for AlgorithmError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
-            Self::InvalidInput { message } => {
-                write!(f, "invalid algorithm input: {message}")
-            }
+            Self::InvalidInput {
+                field,
+                reason,
+            } => write!(
+                formatter,
+                "invalid algorithm input '{field}': {reason}"
+            ),
 
             Self::InvalidConfiguration {
                 field,
-                message,
-            } => {
-                write!(
-                    f,
-                    "invalid algorithm configuration for '{field}': {message}"
-                )
-            }
+                reason,
+            } => write!(
+                formatter,
+                "invalid algorithm configuration '{field}': {reason}"
+            ),
 
             Self::InvalidAlgorithm {
                 algorithm,
-                message,
-            } => {
-                write!(
-                    f,
-                    "invalid algorithm '{algorithm}': {message}"
-                )
-            }
+                reason,
+            } => write!(
+                formatter,
+                "invalid algorithm '{algorithm}': {reason}"
+            ),
 
             Self::InvalidQubitCount {
                 count,
                 message,
-            } => {
-                write!(
-                    f,
-                    "invalid qubit count {count}: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "invalid qubit count {count}: {message}"
+            ),
 
             Self::InvalidParameter {
-                index,
-                value,
-                message,
-            } => {
-                match (index, value) {
-                    (Some(index), Some(value)) => write!(
-                        f,
-                        "invalid parameter at index {index} with value {value}: {message}"
-                    ),
-                    (Some(index), None) => write!(
-                        f,
-                        "invalid parameter at index {index}: {message}"
-                    ),
-                    (None, Some(value)) => write!(
-                        f,
-                        "invalid parameter value {value}: {message}"
-                    ),
-                    (None, None) => {
-                        write!(f, "invalid parameter: {message}")
-                    }
-                }
-            }
+                name,
+                reason,
+            } => write!(
+                formatter,
+                "invalid parameter '{name}': {reason}"
+            ),
 
             Self::DimensionMismatch {
                 expected_name,
@@ -1229,13 +1168,12 @@ impl fmt::Display for AlgorithmError {
                 actual_name,
                 actual,
                 message,
-            } => {
-                write!(
-                    f,
-                    "dimension mismatch: {expected_name}={expected}, \
-                     {actual_name}={actual}: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "dimension mismatch: \
+                 {expected_name}={expected}, \
+                 {actual_name}={actual}: {message}"
+            ),
 
             Self::InvalidCircuit {
                 circuit,
@@ -1243,23 +1181,24 @@ impl fmt::Display for AlgorithmError {
             } => {
                 if let Some(circuit) = circuit {
                     write!(
-                        f,
+                        formatter,
                         "invalid circuit '{circuit}': {message}"
                     )
                 } else {
-                    write!(f, "invalid circuit: {message}")
+                    write!(
+                        formatter,
+                        "invalid circuit: {message}"
+                    )
                 }
             }
 
             Self::UnsupportedOperation {
                 operation,
                 message,
-            } => {
-                write!(
-                    f,
-                    "unsupported operation '{operation}': {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "unsupported operation '{operation}': {message}"
+            ),
 
             Self::ObjectiveEvaluationFailed {
                 evaluation,
@@ -1267,12 +1206,13 @@ impl fmt::Display for AlgorithmError {
             } => {
                 if let Some(evaluation) = evaluation {
                     write!(
-                        f,
-                        "objective evaluation {evaluation} failed: {message}"
+                        formatter,
+                        "objective evaluation {evaluation} failed: \
+                         {message}"
                     )
                 } else {
                     write!(
-                        f,
+                        formatter,
                         "objective evaluation failed: {message}"
                     )
                 }
@@ -1285,13 +1225,14 @@ impl fmt::Display for AlgorithmError {
             } => {
                 if let Some(backend) = backend {
                     write!(
-                        f,
-                        "quantum execution failed on backend \
-                         '{backend}' during '{operation}': {message}"
+                        formatter,
+                        "quantum execution failed on \
+                         backend '{backend}' during \
+                         '{operation}': {message}"
                     )
                 } else {
                     write!(
-                        f,
+                        formatter,
                         "quantum execution failed during \
                          '{operation}': {message}"
                     )
@@ -1301,12 +1242,10 @@ impl fmt::Display for AlgorithmError {
             Self::BackendUnavailable {
                 backend,
                 message,
-            } => {
-                write!(
-                    f,
-                    "backend '{backend}' unavailable: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "backend '{backend}' unavailable: {message}"
+            ),
 
             Self::Timeout {
                 operation,
@@ -1315,14 +1254,15 @@ impl fmt::Display for AlgorithmError {
             } => {
                 if let Some(limit_nanos) = limit_nanos {
                     write!(
-                        f,
-                        "operation '{operation}' timed out after \
-                         {limit_nanos} ns: {message}"
+                        formatter,
+                        "operation '{operation}' timed out \
+                         after {limit_nanos} ns: {message}"
                     )
                 } else {
                     write!(
-                        f,
-                        "operation '{operation}' timed out: {message}"
+                        formatter,
+                        "operation '{operation}' timed out: \
+                         {message}"
                     )
                 }
             }
@@ -1330,55 +1270,38 @@ impl fmt::Display for AlgorithmError {
             Self::Cancelled {
                 operation,
                 message,
-            } => {
-                write!(
-                    f,
-                    "operation '{operation}' was cancelled: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "operation '{operation}' was cancelled: {message}"
+            ),
 
             Self::ResourceLimitExceeded {
                 resource,
                 requested,
                 limit,
                 message,
-            } => {
-                write!(
-                    f,
-                    "algorithm resource limit exceeded for {resource}: \
-                     requested {requested}, limit {limit}: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "resource limit exceeded for {resource}: \
+                 requested {requested}, limit {limit}: {message}"
+            ),
 
             Self::NonFiniteValue {
-                context,
-                index,
+                field,
                 value,
-                message,
-            } => {
-                if let Some(index) = index {
-                    write!(
-                        f,
-                        "non-finite value {value} in {context} at index \
-                         {index}: {message}"
-                    )
-                } else {
-                    write!(
-                        f,
-                        "non-finite value {value} in {context}: {message}"
-                    )
-                }
-            }
+            } => write!(
+                formatter,
+                "non-finite value in '{field}': {value}"
+            ),
 
             Self::NumericalInstability {
                 operation,
                 message,
-            } => {
-                write!(
-                    f,
-                    "numerical instability during '{operation}': {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "numerical instability during \
+                 '{operation}': {message}"
+            ),
 
             Self::ConvergenceFailure {
                 algorithm,
@@ -1387,14 +1310,16 @@ impl fmt::Display for AlgorithmError {
             } => {
                 if let Some(iterations) = iterations {
                     write!(
-                        f,
-                        "algorithm '{algorithm}' failed to converge after \
-                         {iterations} iterations: {message}"
+                        formatter,
+                        "algorithm '{algorithm}' failed to \
+                         converge after {iterations} iterations: \
+                         {message}"
                     )
                 } else {
                     write!(
-                        f,
-                        "algorithm '{algorithm}' failed to converge: {message}"
+                        formatter,
+                        "algorithm '{algorithm}' failed to \
+                         converge: {message}"
                     )
                 }
             }
@@ -1402,179 +1327,298 @@ impl fmt::Display for AlgorithmError {
             Self::OptimizationFailed {
                 optimizer,
                 message,
-            } => {
-                write!(
-                    f,
-                    "optimizer '{optimizer}' failed: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "optimizer '{optimizer}' failed: {message}"
+            ),
 
             Self::DeterminismViolation {
                 contract,
                 message,
-            } => {
-                write!(
-                    f,
-                    "determinism contract '{contract}' violated: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "determinism contract '{contract}' violated: \
+                 {message}"
+            ),
 
             Self::SerializationFailure {
                 operation,
                 message,
-            } => {
-                write!(
-                    f,
-                    "serialization operation '{operation}' failed: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "serialization operation '{operation}' failed: \
+                 {message}"
+            ),
 
             Self::ReplayFailure {
                 operation,
                 message,
-            } => {
-                write!(
-                    f,
-                    "replay operation '{operation}' failed: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "replay operation '{operation}' failed: {message}"
+            ),
 
             Self::VersionMismatch {
                 component,
                 expected,
                 actual,
                 message,
-            } => {
-                write!(
-                    f,
-                    "version mismatch for '{component}': expected \
-                     {expected}, actual {actual}: {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "version mismatch for '{component}': \
+                 expected {expected}, actual {actual}: {message}"
+            ),
 
             Self::InternalInvariantViolation {
                 invariant,
                 message,
-            } => {
-                write!(
-                    f,
-                    "internal algorithm invariant '{invariant}' violated: \
-                     {message}"
-                )
-            }
+            } => write!(
+                formatter,
+                "internal algorithm invariant \
+                 '{invariant}' violated: {message}"
+            ),
         }
     }
 }
 
 impl Error for AlgorithmError {}
 
-// ============================================================================
+// =============================================================================
 // Tests
-// ============================================================================
+// =============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn error_codes_are_stable_machine_readable_values() {
-        let error = AlgorithmError::invalid_input("invalid test input");
+    fn result_alias_uses_algorithm_error() {
+        let result: Result<()> =
+            Err(AlgorithmError::invalid_input(
+                "test",
+                "invalid value",
+            ));
 
-        assert_eq!(error.kind(), AlgorithmErrorKind::InvalidInput);
-        assert_eq!(error.code(), "invalid_input");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn error_codes_are_stable() {
         assert_eq!(
-            error.severity(),
-            AlgorithmErrorSeverity::Input
+            AlgorithmErrorKind::InvalidInput.as_str(),
+            "invalid_input"
+        );
+
+        assert_eq!(
+            AlgorithmErrorKind::ExecutionFailed.as_str(),
+            "execution_failed"
+        );
+
+        assert_eq!(
+            AlgorithmErrorKind::ResourceLimitExceeded.as_str(),
+            "resource_limit_exceeded"
         );
     }
 
     #[test]
-    fn invalid_parameter_is_classified_as_input_error() {
-        let error = AlgorithmError::invalid_parameter(
-            Some(3),
-            Some(f64::NAN),
-            "parameter must be finite",
-        );
+    fn invalid_input_is_classified_as_input() {
+        let error =
+            AlgorithmError::invalid_input(
+                "parameter",
+                "value is invalid",
+            );
 
         assert_eq!(
             error.kind(),
-            AlgorithmErrorKind::InvalidParameter
+            AlgorithmErrorKind::InvalidInput
         );
+
+        assert_eq!(
+            error.severity(),
+            AlgorithmErrorSeverity::Input
+        );
+
         assert!(error.is_input_error());
         assert!(!error.is_retryable());
     }
 
     #[test]
-    fn resource_limit_is_not_an_internal_failure() {
-        let error = AlgorithmError::resource_limit_exceeded(
-            AlgorithmResource::Qubits,
-            128,
-            64,
-            "requested circuit exceeds configured limit",
+    fn invalid_parameter_matches_types_contract() {
+        let error =
+            AlgorithmError::invalid_parameter(
+                "parameter[0]",
+                "value must be finite",
+            );
+
+        assert_eq!(
+            error.kind(),
+            AlgorithmErrorKind::InvalidParameter
         );
+
+        assert!(error.to_string().contains("parameter[0]"));
+    }
+
+    #[test]
+    fn qubit_error_matches_execution_contract() {
+        let error =
+            AlgorithmError::invalid_qubit_count(
+                0,
+                "qubit count must be positive",
+            );
+
+        assert_eq!(
+            error.kind(),
+            AlgorithmErrorKind::InvalidQubitCount
+        );
+
+        assert!(error.to_string().contains("0"));
+    }
+
+    #[test]
+    fn resource_error_is_structured() {
+        let error =
+            AlgorithmError::resource_limit_exceeded(
+                "qubits",
+                128,
+                64,
+                "requested circuit exceeds configured limit",
+            );
 
         assert_eq!(
             error.kind(),
             AlgorithmErrorKind::ResourceLimitExceeded
         );
+
         assert_eq!(
             error.severity(),
             AlgorithmErrorSeverity::Resource
         );
+
         assert!(error.is_resource_boundary());
         assert!(!error.is_internal());
         assert!(!error.is_retryable());
     }
 
     #[test]
-    fn backend_unavailability_is_retryable() {
-        let error = AlgorithmError::backend_unavailable(
-            "reference-simulator",
-            "backend is temporarily unavailable",
-        );
+    fn backend_unavailable_is_retryable() {
+        let error =
+            AlgorithmError::backend_unavailable(
+                "reference-simulator",
+                "backend is unavailable",
+            );
 
         assert_eq!(
             error.kind(),
             AlgorithmErrorKind::BackendUnavailable
         );
+
         assert!(error.is_retryable());
         assert!(!error.is_input_error());
     }
 
     #[test]
-    fn timeout_is_retryable_and_resource_classified() {
-        let error = AlgorithmError::timeout(
-            "execute",
-            Some(1_000_000),
-            "execution deadline exceeded",
+    fn execution_failure_is_retryable() {
+        let error =
+            AlgorithmError::execution_failed(
+                Some("simulator".to_owned()),
+                "measurement",
+                "execution failed",
+            );
+
+        assert_eq!(
+            error.kind(),
+            AlgorithmErrorKind::ExecutionFailed
         );
 
-        assert_eq!(error.kind(), AlgorithmErrorKind::Timeout);
         assert!(error.is_retryable());
-        assert!(error.is_resource_boundary());
-        assert_eq!(
-            error.severity(),
-            AlgorithmErrorSeverity::Resource
-        );
     }
 
     #[test]
-    fn cancellation_is_not_a_retryable_failure_by_default() {
-        let error = AlgorithmError::cancelled(
-            "optimization",
-            "caller requested cancellation",
+    fn timeout_is_retryable() {
+        let error =
+            AlgorithmError::timeout(
+                "execute",
+                Some(1_000_000),
+                "deadline exceeded",
+            );
+
+        assert_eq!(
+            error.kind(),
+            AlgorithmErrorKind::Timeout
         );
 
-        assert_eq!(error.kind(), AlgorithmErrorKind::Cancelled);
+        assert!(error.is_retryable());
+        assert!(error.is_resource_boundary());
+    }
+
+    #[test]
+    fn cancellation_is_not_retryable_by_default() {
+        let error =
+            AlgorithmError::cancelled(
+                "optimization",
+                "caller requested cancellation",
+            );
+
+        assert_eq!(
+            error.kind(),
+            AlgorithmErrorKind::Cancelled
+        );
+
         assert!(!error.is_retryable());
         assert!(error.is_resource_boundary());
     }
 
     #[test]
-    fn internal_invariant_is_classified_as_internal() {
-        let error = AlgorithmError::internal_invariant(
-            "parameter_count_matches_ansatz",
-            "internal state became inconsistent",
+    fn deterministic_contract_failure_is_structured() {
+        let error =
+            AlgorithmError::determinism_violation(
+                "deterministic execution",
+                "backend reported nondeterministic execution",
+            );
+
+        assert_eq!(
+            error.kind(),
+            AlgorithmErrorKind::DeterminismViolation
+        );
+
+        assert_eq!(
+            error.severity(),
+            AlgorithmErrorSeverity::Numerical
+        );
+    }
+
+    #[test]
+    fn non_finite_value_is_classified_correctly() {
+        let error =
+            AlgorithmError::non_finite_value(
+                "objective",
+                f64::NAN,
+            );
+
+        assert_eq!(
+            error.kind(),
+            AlgorithmErrorKind::NonFiniteValue
+        );
+
+        assert_eq!(
+            error.severity(),
+            AlgorithmErrorSeverity::Numerical
+        );
+
+        assert!(!error.is_retryable());
+    }
+
+    #[test]
+    fn internal_invariant_is_internal() {
+        let error =
+            AlgorithmError::internal_invariant(
+                "parameter_count_matches_ansatz",
+                "internal state became inconsistent",
+            );
+
+        assert_eq!(
+            error.kind(),
+            AlgorithmErrorKind::InternalInvariantViolation
         );
 
         assert!(error.is_internal());
@@ -1582,38 +1626,20 @@ mod tests {
             error.severity(),
             AlgorithmErrorSeverity::Internal
         );
+
         assert!(!error.is_retryable());
     }
 
     #[test]
-    fn non_finite_values_have_dedicated_classification() {
-        let error = AlgorithmError::non_finite_value(
-            "objective",
-            Some(0),
-            f64::INFINITY,
-            "objective must remain finite",
-        );
-
-        assert_eq!(
-            error.kind(),
-            AlgorithmErrorKind::NonFiniteValue
-        );
-        assert_eq!(
-            error.severity(),
-            AlgorithmErrorSeverity::Numerical
-        );
-        assert!(!error.is_retryable());
-    }
-
-    #[test]
-    fn dimension_mismatch_preserves_both_dimensions() {
-        let error = AlgorithmError::dimension_mismatch(
-            "ansatz_parameters",
-            4,
-            "provided_parameters",
-            3,
-            "parameter counts must match",
-        );
+    fn dimension_mismatch_preserves_context() {
+        let error =
+            AlgorithmError::dimension_mismatch(
+                "ansatz_parameters",
+                4,
+                "provided_parameters",
+                3,
+                "parameter counts must match",
+            );
 
         let text = error.to_string();
 
@@ -1622,48 +1648,41 @@ mod tests {
     }
 
     #[test]
+    fn display_is_diagnostic_only() {
+        let error =
+            AlgorithmError::execution_failed(
+                Some("reference-simulator".to_owned()),
+                "expectation",
+                "invalid backend result",
+            );
+
+        let text = error.to_string();
+
+        assert!(text.contains("reference-simulator"));
+        assert!(text.contains("expectation"));
+        assert!(text.contains("invalid backend result"));
+
+        assert_eq!(
+            error.code(),
+            "execution_failed"
+        );
+    }
+
+    #[test]
     fn resource_names_are_stable() {
+        assert_eq!(
+            AlgorithmResource::Qubits.as_str(),
+            "qubits"
+        );
+
         assert_eq!(
             AlgorithmResource::ObjectiveEvaluations.as_str(),
             "objective_evaluations"
         );
 
         assert_eq!(
-            AlgorithmResource::CircuitDepth.as_str(),
-            "circuit_depth"
+            AlgorithmResource::CircuitExecutions.as_str(),
+            "circuit_executions"
         );
-    }
-
-    #[test]
-    fn error_kind_names_are_stable() {
-        assert_eq!(
-            AlgorithmErrorKind::ExecutionFailed.as_str(),
-            "execution_failed"
-        );
-
-        assert_eq!(
-            AlgorithmErrorKind::DeterminismViolation.as_str(),
-            "determinism_violation"
-        );
-    }
-
-    #[test]
-    fn display_contains_context_without_being_required_for_classification() {
-        let error = AlgorithmError::execution_failed(
-            Some("test-backend".to_owned()),
-            "expectation",
-            "backend returned an invalid result",
-        );
-
-        assert_eq!(
-            error.kind(),
-            AlgorithmErrorKind::ExecutionFailed
-        );
-
-        let text = error.to_string();
-
-        assert!(text.contains("test-backend"));
-        assert!(text.contains("expectation"));
-        assert!(text.contains("invalid result"));
     }
 }
