@@ -1,188 +1,103 @@
-//! Zamani Quantum Frontend — source management and source locations.
-//!
-//! This module owns the format-independent source model used by the quantum
-//! frontend boundary.
+//! Source-file and source-location infrastructure for the quantum frontend.
 //!
 //! # Architectural boundary
 //!
-//! `source.rs` is deliberately independent of OpenQASM, QIR, Quil, and the
-//! canonical Quantum IR.
+//! This module is deliberately format-independent.
 //!
-//! Its responsibilities are limited to:
+//! It provides the canonical source-location model used by:
 //!
-//! - identifying source documents;
-//! - retaining source text;
-//! - representing byte-based source spans;
-//! - representing source positions;
-//! - mapping byte offsets to line/column coordinates;
-//! - managing multiple source documents;
-//! - providing deterministic source-name and location information;
-//! - enforcing source-size limits when requested.
+//! - frontend lexers;
+//! - frontend parsers;
+//! - semantic validators;
+//! - diagnostics;
+//! - importers;
+//! - exporters when reporting source-origin information.
 //!
-//! It does NOT:
+//! It must not depend on:
 //!
-//! - tokenize source;
-//! - parse source;
-//! - validate language semantics;
-//! - construct Quantum IR;
-//! - resolve includes;
-//! - perform filesystem or network I/O;
-//! - interpret paths;
-//! - know any quantum language grammar.
-//!
-//! # Dependency direction
-//!
-//! ```text
-//!                         format-specific frontend
-//!                                  |
-//!                                  v
-//!                         lexer / parser / validator
-//!                                  |
-//!                                  v
-//!                    +-----------------------------+
-//!                    | frontend::core::source      |
-//!                    |                             |
-//!                    | SourceId                    |
-//!                    | SourceFile                  |
-//!                    | SourceMap                   |
-//!                    | SourcePosition              |
-//!                    | SourceSpan                  |
-//!                    | LineColumn                  |
-//!                    +-----------------------------+
-//!                         ^                    ^
-//!                         |                    |
-//!                  diagnostics             errors
-//! ```
-//!
-//! The canonical Quantum IR remains completely independent of this module.
-//! The IR boundary explicitly excludes frontend parsing and source-language
-//! concerns.
+//! - OpenQASM;
+//! - QIR;
+//! - Quil;
+//! - any other external format;
+//! - `quantum::ir` semantic types;
+//! - parser or lexer implementations;
+//! - format-specific diagnostics.
 //!
 //! # Coordinate model
 //!
-//! All canonical source locations are byte-offset based.
+//! Source offsets are always UTF-8 byte offsets.
 //!
-//! - offsets are zero-based;
-//! - spans are half-open: `[start, end)`;
-//! - offsets refer to UTF-8 byte positions;
-//! - line numbers are one-based;
-//! - column numbers are one-based;
-//! - columns are measured in Unicode scalar values rather than UTF-8 bytes.
+//! Line numbers are one-based.
 //!
-//! This gives lexers and parsers a lossless, deterministic coordinate system
-//! while still providing human-readable line/column diagnostics.
+//! Columns are one-based Unicode scalar-value columns, not byte columns.
+//! This means a multi-byte UTF-8 character occupies one column while its
+//! underlying source offset may advance by several bytes.
 //!
-//! A byte offset is always the authoritative location. Line/column values are
-//! derived from the source text and must never be used as the primary identity
-//! of a source location.
-//!
-//! # UTF-8 safety
-//!
-//! The source map never creates arbitrary `str` slices from byte offsets.
-//! `SourceSpan::text()` and related APIs validate UTF-8 boundaries before
-//! returning a slice.
-//!
-//! An offset inside a UTF-8 code point is therefore rejected rather than
-//! producing undefined or surprising diagnostic behavior.
-//!
-//! # Determinism
-//!
-//! Source IDs are allocated monotonically in insertion order.
-//!
-//! The source map does not:
-//!
-//! - use hash iteration order;
-//! - use timestamps;
-//! - generate random IDs;
-//! - depend on filesystem ordering;
-//! - perform implicit I/O.
-//!
-//! Given the same source documents inserted in the same order, source IDs,
-//! line tables, spans, and rendered positions are deterministic.
-//!
-//! # Security
-//!
-//! This module is an untrusted-input boundary.
-//!
-//! Source storage is bounded when `FrontendLimits` are supplied. The module
-//! does not expose an "unlimited" mode through the limit-aware API.
-//!
-//! The module also avoids recursive source-map processing, performs checked
-//! arithmetic where externally supplied offsets are involved, and never
-//! panics on malformed source locations through its public fallible APIs.
-//!
-//! # Rust compatibility
-//!
-//! This implementation targets Rust 1.97.1 and Rust 2021.
-//!
-//! No nightly features are required.
-//! No external crates are required.
-//!
-//! # Integration contract
-//!
-//! Later frontend modules should use this module as follows:
+//! Example:
 //!
 //! ```text
-//! source text
-//!     |
-//!     v
-//! SourceMap::add_source(...)
-//!     |
-//!     +--> SourceId
-//!     |
-//!     +--> SourceFile
-//!     |
-//!     v
-//! lexer produces SourceSpan
-//!     |
-//!     v
-//! parser attaches SourceSpan to AST nodes
-//!     |
-//!     v
-//! validation produces diagnostics using SourceSpan
+//! abc
+//! ^
+//! column 1
 //! ```
 //!
-//! Format-specific modules must never create their own source-location types.
-//! OpenQASM, QIR, Quil, and future formats all use these types.
+//! # Span model
+//!
+//! [`SourceSpan`] uses a half-open range:
+//!
+//! ```text
+//! start <= offset < end
+//! ```
+//!
+//! Therefore:
+//!
+//! - an empty span has `start == end`;
+//! - the length is `end - start`;
+//! - adjacent spans can share a boundary without overlapping.
+//!
+//! # Safety
+//!
+//! Source text is untrusted input. This module therefore:
+//!
+//! - never assumes UTF-8 boundaries from callers;
+//! - validates source ranges;
+//! - avoids panics for ordinary invalid user input;
+//! - uses checked arithmetic for externally supplied offsets;
+//! - keeps source storage immutable after insertion;
+//! - never performs filesystem or network I/O.
+//!
+//! The lexer/parser layer is responsible for enforcing maximum source size.
+//! This module is responsible for maintaining correct source identity and
+//! location information once a source has been accepted.
 
 use std::fmt;
-use std::ops::Range;
 use std::sync::Arc;
 
-use super::errors::{
-    FrontendError,
-    FrontendLimitViolation,
-    FrontendResult,
-};
-use super::limits::FrontendLimits;
-
-// =============================================================================
-// Stable source identifiers
-// =============================================================================
-
-/// Stable identifier for a source document within one frontend operation.
+/// Stable identifier for a source stored in a [`SourceMap`].
 ///
-/// `SourceId` is intentionally opaque. Callers should not depend on its
-/// numeric representation beyond equality/ordering and diagnostic display.
+/// `SourceId` is intentionally opaque. Consumers must not depend on its
+/// internal numeric representation beyond using it as an identifier.
 ///
-/// IDs are allocated by [`SourceMap`] starting at zero.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// IDs are assigned monotonically by [`SourceMap::add`].
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SourceId(u32);
 
 impl SourceId {
-    /// Creates a source ID from its raw representation.
+    /// Creates a source identifier from its raw numeric representation.
     ///
-    /// This is primarily useful when deserializing or integrating with an
-    /// external source-location protocol.
+    /// This is primarily intended for deserialization, testing, and
+    /// integration with external source-reference systems.
     ///
-    /// Prefer IDs returned by [`SourceMap::add_source`] during normal
-    /// compilation.
+    /// # Safety
+    ///
+    /// This constructor does not verify that the ID exists in a particular
+    /// [`SourceMap`]. Callers must validate membership through the map.
     #[must_use]
-    pub const fn from_raw(value: u32) -> Self {
-        Self(value)
+    pub const fn from_raw(raw: u32) -> Self {
+        Self(raw)
     }
 
-    /// Returns the stable raw representation.
+    /// Returns the raw numeric representation.
     #[must_use]
     pub const fn as_raw(self) -> u32 {
         self.0
@@ -190,111 +105,187 @@ impl SourceId {
 }
 
 impl fmt::Display for SourceId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "source:{}", self.0)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "source#{}", self.0)
     }
 }
 
-// =============================================================================
-// Source positions
-// =============================================================================
-
-/// A zero-based byte offset within one source document.
+/// A zero-based byte offset into a source file.
 ///
-/// `SourcePosition` deliberately contains only an offset. Human-readable
-/// line/column coordinates are derived by [`SourceMap`].
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SourcePosition {
-    source_id: SourceId,
-    offset: usize,
-}
+/// Offsets are measured in bytes because Rust strings are UTF-8 byte
+/// sequences. An offset is only suitable for slicing a source string when it
+/// lies on a UTF-8 character boundary.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct SourceOffset(u32);
 
-impl SourcePosition {
-    /// Creates a source position without validating that it belongs to an
-    /// existing source document.
-    ///
-    /// This constructor is useful for parser/lexer code that is building a
-    /// span while processing a known source.
-    ///
-    /// Use [`SourceMap::position`] when validating an externally supplied
-    /// offset.
+impl SourceOffset {
+    /// Creates an offset from a raw byte offset.
     #[must_use]
-    pub const fn new(source_id: SourceId, offset: usize) -> Self {
-        Self { source_id, offset }
+    pub const fn from_raw(raw: u32) -> Self {
+        Self(raw)
     }
 
-    /// Returns the source document identifier.
+    /// Returns the underlying byte offset.
     #[must_use]
-    pub const fn source_id(self) -> SourceId {
-        self.source_id
+    pub const fn as_raw(self) -> u32 {
+        self.0
     }
 
-    /// Returns the zero-based UTF-8 byte offset.
+    /// Returns whether this offset is zero.
     #[must_use]
-    pub const fn offset(self) -> usize {
-        self.offset
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
     }
-}
 
-impl fmt::Display for SourcePosition {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}@{}", self.source_id, self.offset)
-    }
-}
-
-// =============================================================================
-// Source spans
-// =============================================================================
-
-/// A half-open source range `[start, end)`.
-///
-/// The span is valid only when:
-///
-/// - `start` and `end` belong to the same source;
-/// - `start <= end`;
-/// - both offsets are valid positions in that source;
-/// - when converted to text, both offsets are UTF-8 boundaries.
-///
-/// Empty spans are valid and represent insertion/point locations.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SourceSpan {
-    source_id: SourceId,
-    start: usize,
-    end: usize,
-}
-
-impl SourceSpan {
-    /// Creates a span without consulting a source map.
-    ///
-    /// This is appropriate for lexers and parsers operating over a known
-    /// source buffer. The resulting span can later be validated with
-    /// [`SourceMap::validate_span`].
-    ///
-    /// # Panics
-    ///
-    /// This constructor does not panic because it accepts an empty or ordered
-    /// range only through the explicit `new` contract. If `start > end`, it
-    /// returns `None`.
+    /// Returns the offset as `usize`.
     #[must_use]
-    pub const fn new(
-        source_id: SourceId,
-        start: usize,
-        end: usize,
-    ) -> Option<Self> {
-        if start > end {
-            None
-        } else {
-            Some(Self {
-                source_id,
-                start,
-                end,
-            })
+    pub const fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Adds a byte count, returning `None` on overflow.
+    #[must_use]
+    pub const fn checked_add(self, amount: u32) -> Option<Self> {
+        match self.0.checked_add(amount) {
+            Some(value) => Some(Self(value)),
+            None => None,
         }
     }
 
-    /// Creates a point span.
+    /// Returns the distance between two offsets when `end >= self`.
     #[must_use]
-    pub const fn point(source_id: SourceId, offset: usize) -> Self {
+    pub const fn checked_distance(self, end: Self) -> Option<u32> {
+        end.0.checked_sub(self.0)
+    }
+}
+
+impl From<u32> for SourceOffset {
+    fn from(value: u32) -> Self {
+        Self::from_raw(value)
+    }
+}
+
+impl From<SourceOffset> for u32 {
+    fn from(value: SourceOffset) -> Self {
+        value.as_raw()
+    }
+}
+
+/// A one-based line number.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct LineNumber(u32);
+
+impl LineNumber {
+    /// First source line.
+    pub const FIRST: Self = Self(1);
+
+    /// Creates a line number from a raw one-based value.
+    ///
+    /// `0` is accepted as a raw value for interoperability, but normal
+    /// [`SourcePosition`] values always use line numbers starting at one.
+    #[must_use]
+    pub const fn from_raw(raw: u32) -> Self {
+        Self(raw)
+    }
+
+    /// Returns the raw line number.
+    #[must_use]
+    pub const fn as_raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for LineNumber {
+    fn from(value: u32) -> Self {
+        Self::from_raw(value)
+    }
+}
+
+impl From<LineNumber> for u32 {
+    fn from(value: LineNumber) -> Self {
+        value.as_raw()
+    }
+}
+
+/// A one-based Unicode scalar-value column.
+///
+/// Columns are intended for human-readable diagnostics rather than byte
+/// indexing. Internally, source offsets remain byte offsets.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ColumnNumber(u32);
+
+impl ColumnNumber {
+    /// First source column.
+    pub const FIRST: Self = Self(1);
+
+    /// Creates a column number from a raw one-based value.
+    #[must_use]
+    pub const fn from_raw(raw: u32) -> Self {
+        Self(raw)
+    }
+
+    /// Returns the raw column number.
+    #[must_use]
+    pub const fn as_raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for ColumnNumber {
+    fn from(value: u32) -> Self {
+        Self::from_raw(value)
+    }
+}
+
+impl From<ColumnNumber> for u32 {
+    fn from(value: ColumnNumber) -> Self {
+        value.as_raw()
+    }
+}
+
+/// A byte range within a particular source file.
+///
+/// The range is half-open:
+///
+/// ```text
+/// start <= offset < end
+/// ```
+///
+/// Empty spans are valid and are useful for diagnostics at insertion points,
+/// such as an unexpected token at end-of-file.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct SourceSpan {
+    source_id: SourceId,
+    start: SourceOffset,
+    end: SourceOffset,
+}
+
+impl SourceSpan {
+    /// Creates a span without consulting a [`SourceMap`].
+    ///
+    /// This constructor verifies only that `start <= end`.
+    ///
+    /// Use [`SourceSpan::new`] when a source map is available and the range
+    /// must also be checked against the source length.
+    pub const fn new(
+        source_id: SourceId,
+        start: SourceOffset,
+        end: SourceOffset,
+    ) -> Result<Self, SourceSpanError> {
+        if start.as_raw() > end.as_raw() {
+            return Err(SourceSpanError::ReversedRange);
+        }
+
+        Ok(Self {
+            source_id,
+            start,
+            end,
+        })
+    }
+
+    /// Creates an empty span at a particular source offset.
+    #[must_use]
+    pub const fn point(source_id: SourceId, offset: SourceOffset) -> Self {
         Self {
             source_id,
             start: offset,
@@ -302,109 +293,87 @@ impl SourceSpan {
         }
     }
 
-    /// Creates a span from a half-open range.
+    /// Creates a span covering an entire source.
     #[must_use]
-    pub const fn from_range(
-        source_id: SourceId,
-        range: Range<usize>,
-    ) -> Option<Self> {
-        Self::new(source_id, range.start, range.end)
+    pub fn entire(source: &SourceFile) -> Self {
+        Self {
+            source_id: source.id(),
+            start: SourceOffset::from_raw(0),
+            end: SourceOffset::from_raw(source.len_bytes()),
+        }
     }
 
-    /// Returns the source document identifier.
+    /// Returns the source identifier.
     #[must_use]
     pub const fn source_id(self) -> SourceId {
         self.source_id
     }
 
-    /// Returns the inclusive start byte offset.
-    ///
-    /// Despite the historical wording "inclusive", this is the start of the
-    /// half-open range and is therefore included in the span.
+    /// Returns the start offset.
     #[must_use]
-    pub const fn start(self) -> usize {
+    pub const fn start(self) -> SourceOffset {
         self.start
     }
 
-    /// Returns the exclusive end byte offset.
+    /// Returns the exclusive end offset.
     #[must_use]
-    pub const fn end(self) -> usize {
+    pub const fn end(self) -> SourceOffset {
         self.end
     }
 
     /// Returns the span length in bytes.
     #[must_use]
-    pub const fn len(self) -> usize {
-        self.end - self.start
+    pub const fn len_bytes(self) -> u32 {
+        self.end.as_raw() - self.start.as_raw()
     }
 
-    /// Returns whether the span contains no bytes.
+    /// Returns whether the span is empty.
     #[must_use]
     pub const fn is_empty(self) -> bool {
-        self.start == self.end
+        self.start.as_raw() == self.end.as_raw()
     }
 
-    /// Returns the underlying half-open byte range.
+    /// Returns whether an offset lies inside this span.
+    ///
+    /// The end offset is exclusive.
     #[must_use]
-    pub const fn range(self) -> Range<usize> {
-        self.start..self.end
+    pub const fn contains(self, offset: SourceOffset) -> bool {
+        offset.as_raw() >= self.start.as_raw()
+            && offset.as_raw() < self.end.as_raw()
     }
 
-    /// Returns the starting source position.
+    /// Returns whether this span contains the other span.
     #[must_use]
-    pub const fn start_position(self) -> SourcePosition {
-        SourcePosition::new(self.source_id, self.start)
-    }
-
-    /// Returns the ending source position.
-    #[must_use]
-    pub const fn end_position(self) -> SourcePosition {
-        SourcePosition::new(self.source_id, self.end)
-    }
-
-    /// Returns whether another span belongs to the same source document.
-    #[must_use]
-    pub const fn same_source(self, other: Self) -> bool {
+    pub const fn contains_span(self, other: Self) -> bool {
         self.source_id == other.source_id
+            && other.start.as_raw() >= self.start.as_raw()
+            && other.end.as_raw() <= self.end.as_raw()
     }
 
     /// Returns whether two spans overlap.
-    ///
-    /// Empty spans never overlap a non-empty span. Two identical empty spans
-    /// are considered equal but are not considered overlapping.
     #[must_use]
     pub const fn overlaps(self, other: Self) -> bool {
-        if !self.same_source(other) || self.is_empty() || other.is_empty() {
-            return false;
-        }
-
-        self.start < other.end && other.start < self.end
+        self.source_id == other.source_id
+            && self.start.as_raw() < other.end.as_raw()
+            && other.start.as_raw() < self.end.as_raw()
     }
 
-    /// Returns whether this span completely contains another span.
-    #[must_use]
-    pub const fn contains(self, other: Self) -> bool {
-        self.same_source(other)
-            && self.start <= other.start
-            && other.end <= self.end
-    }
-
-    /// Returns a span covering both spans when they belong to the same source.
+    /// Returns the smallest span containing both spans.
     ///
-    /// Returns `None` for spans from different source documents.
+    /// Returns `None` if the spans belong to different sources.
     #[must_use]
-    pub const fn join(self, other: Self) -> Option<Self> {
-        if !self.same_source(other) {
+    pub const fn union(self, other: Self) -> Option<Self> {
+        if self.source_id != other.source_id {
             return None;
         }
 
-        let start = if self.start < other.start {
+        let start = if self.start.as_raw() < other.start.as_raw() {
             self.start
         } else {
             other.start
         };
 
-        let end = if self.end > other.end {
+        let end = if self.end.as_raw() > other.end.as_raw() {
             self.end
         } else {
             other.end
@@ -419,126 +388,154 @@ impl SourceSpan {
 }
 
 impl fmt::Display for SourceSpan {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
-            formatter,
+            f,
             "{}:{}..{}",
             self.source_id,
-            self.start,
-            self.end
+            self.start.as_raw(),
+            self.end.as_raw()
         )
     }
 }
 
-// =============================================================================
-// Human-readable line/column coordinates
-// =============================================================================
+/// Errors produced when constructing a source span.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum SourceSpanError {
+    /// The start offset is greater than the end offset.
+    ReversedRange,
 
-/// One-based human-readable source coordinates.
-///
-/// `line` and `column` are one-based.
-///
-/// `byte_offset` remains zero-based and is retained so callers do not have to
-/// convert a diagnostic position back to the authoritative byte coordinate.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct LineColumn {
-    line: usize,
-    column: usize,
-    byte_offset: usize,
+    /// A source offset does not fit in the internal representation.
+    OffsetOverflow,
 }
 
-impl LineColumn {
-    /// Creates a line/column coordinate.
+impl fmt::Display for SourceSpanError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ReversedRange => {
+                f.write_str("source span start offset exceeds end offset")
+            }
+            Self::OffsetOverflow => {
+                f.write_str("source offset exceeds supported range")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SourceSpanError {}
+
+/// A fully resolved source position.
+///
+/// The byte offset is the canonical coordinate. Line and column are derived
+/// coordinates intended primarily for diagnostics and user interfaces.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct SourcePosition {
+    source_id: SourceId,
+    offset: SourceOffset,
+    line: LineNumber,
+    column: ColumnNumber,
+}
+
+impl SourcePosition {
+    /// Creates a source position.
     #[must_use]
     pub const fn new(
-        line: usize,
-        column: usize,
-        byte_offset: usize,
+        source_id: SourceId,
+        offset: SourceOffset,
+        line: LineNumber,
+        column: ColumnNumber,
     ) -> Self {
         Self {
+            source_id,
+            offset,
             line,
             column,
-            byte_offset,
         }
+    }
+
+    /// Returns the source identifier.
+    #[must_use]
+    pub const fn source_id(self) -> SourceId {
+        self.source_id
+    }
+
+    /// Returns the byte offset.
+    #[must_use]
+    pub const fn offset(self) -> SourceOffset {
+        self.offset
     }
 
     /// Returns the one-based line number.
     #[must_use]
-    pub const fn line(self) -> usize {
+    pub const fn line(self) -> LineNumber {
         self.line
     }
 
     /// Returns the one-based column number.
     #[must_use]
-    pub const fn column(self) -> usize {
+    pub const fn column(self) -> ColumnNumber {
         self.column
-    }
-
-    /// Returns the zero-based UTF-8 byte offset.
-    #[must_use]
-    pub const fn byte_offset(self) -> usize {
-        self.byte_offset
     }
 }
 
-impl fmt::Display for LineColumn {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl fmt::Display for SourcePosition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
-            formatter,
-            "{}:{}",
-            self.line,
-            self.column
+            f,
+            "{}:{}:{}",
+            self.source_id,
+            self.line.as_raw(),
+            self.column.as_raw()
         )
     }
 }
 
-// =============================================================================
-// Source files
-// =============================================================================
-
-/// Immutable source document stored in a [`SourceMap`].
+/// Immutable source text together with its identity and display name.
 ///
-/// The text is reference-counted so obtaining a source file does not require
-/// copying the complete source document.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// Source contents are stored in an [`Arc<str>`] so callers can cheaply retain
+/// source text while diagnostics, AST nodes, or other frontend structures are
+/// alive without copying the complete source.
+#[derive(Clone, Debug)]
 pub struct SourceFile {
     id: SourceId,
     name: Arc<str>,
     text: Arc<str>,
-    line_starts: Arc<[usize]>,
+    line_starts: Arc<[u32]>,
 }
 
 impl SourceFile {
-    /// Creates a source file.
+    /// Constructs a source file.
     ///
-    /// This constructor computes the line-start index once. The source text is
-    /// retained unchanged.
+    /// The source text must already be valid UTF-8, as guaranteed by Rust's
+    /// `str` type.
     ///
-    /// `name` is a display/diagnostic name. It is deliberately not interpreted
-    /// as a filesystem path and no I/O is performed.
+    /// The line index is built once and subsequently reused for all location
+    /// lookups.
     pub fn new(
         id: SourceId,
-        name: impl Into<String>,
-        text: impl Into<String>,
-    ) -> Self {
-        let text: String = text.into();
-        let line_starts = compute_line_starts(&text);
+        name: impl Into<Arc<str>>,
+        text: impl Into<Arc<str>>,
+    ) -> Result<Self, SourceFileError> {
+        let name = name.into();
+        let text = text.into();
 
-        Self {
+        let line_starts = build_line_index(&text)?;
+
+        Ok(Self {
             id,
-            name: Arc::<str>::from(name.into()),
-            text: Arc::<str>::from(text),
-            line_starts: Arc::from(line_starts.into_boxed_slice()),
-        }
+            name,
+            text,
+            line_starts: line_starts.into(),
+        })
     }
 
-    /// Returns the source ID.
+    /// Returns the stable source ID.
     #[must_use]
     pub const fn id(&self) -> SourceId {
         self.id
     }
 
-    /// Returns the diagnostic/display name.
+    /// Returns the source display name.
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
@@ -550,10 +547,10 @@ impl SourceFile {
         &self.text
     }
 
-    /// Returns the source length in UTF-8 bytes.
+    /// Returns the source length in bytes.
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.text.len()
+    pub fn len_bytes(&self) -> u32 {
+        self.text.len() as u32
     }
 
     /// Returns whether the source is empty.
@@ -562,1273 +559,771 @@ impl SourceFile {
         self.text.is_empty()
     }
 
-    /// Returns the number of logical lines represented by the source.
+    /// Returns the number of logical source lines.
     ///
-    /// An empty source has one logical line, which makes diagnostics for an
-    /// empty file naturally resolve to line 1, column 1.
+    /// An empty source has zero lines.
+    ///
+    /// A non-empty source always has at least one line.
     #[must_use]
-    pub fn line_count(&self) -> usize {
-        self.line_starts.len()
+    pub fn line_count(&self) -> u32 {
+        if self.text.is_empty() {
+            0
+        } else {
+            self.line_starts.len() as u32
+        }
     }
 
-    /// Returns the indexed line-start byte offsets.
+    /// Returns the byte offset at which a line begins.
     ///
-    /// The first entry is always zero.
-    ///
-    /// This is exposed read-only so diagnostics/renderers can efficiently
-    /// inspect source structure without rebuilding the index.
+    /// Lines are one-based.
     #[must_use]
-    pub fn line_starts(&self) -> &[usize] {
-        &self.line_starts
+    pub fn line_start(&self, line: LineNumber) -> Option<SourceOffset> {
+        if line.as_raw() == 0 {
+            return None;
+        }
+
+        self.line_starts
+            .get((line.as_raw() - 1) as usize)
+            .copied()
+            .map(SourceOffset::from_raw)
     }
 
-    /// Checks whether an offset is within the source's valid boundary.
+    /// Resolves a byte offset into a line and Unicode-scalar column.
     ///
-    /// `len()` is a valid position because spans use half-open ranges.
+    /// Returns `None` when the offset is outside the source or is not a valid
+    /// UTF-8 character boundary.
     #[must_use]
-    pub fn contains_offset(&self, offset: usize) -> bool {
-        offset <= self.text.len()
-    }
+    pub fn position_at(&self, offset: SourceOffset) -> Option<SourcePosition> {
+        let offset_usize = offset.as_usize();
 
-    /// Checks whether an offset is a UTF-8 boundary.
-    #[must_use]
-    pub fn is_char_boundary(&self, offset: usize) -> bool {
-        self.text.is_char_boundary(offset)
-    }
+        if offset_usize > self.text.len() || !self.text.is_char_boundary(offset_usize) {
+            return None;
+        }
 
-    /// Returns the source text at a validated byte range.
-    ///
-    /// Returns `None` if:
-    ///
-    /// - the range is inverted;
-    /// - either boundary is outside the source;
-    /// - either boundary is not a UTF-8 character boundary.
-    #[must_use]
-    pub fn slice(&self, range: Range<usize>) -> Option<&str> {
-        if range.start > range.end
-            || range.end > self.text.len()
-            || !self.text.is_char_boundary(range.start)
-            || !self.text.is_char_boundary(range.end)
+        let line_index = match self
+            .line_starts
+            .binary_search_by(|start| start.cmp(&offset.as_raw()))
         {
-            return None;
-        }
-
-        self.text.get(range)
-    }
-
-    /// Returns the source text represented by a span belonging to this file.
-    #[must_use]
-    pub fn slice_span(&self, span: SourceSpan) -> Option<&str> {
-        if span.source_id != self.id {
-            return None;
-        }
-
-        self.slice(span.range())
-    }
-
-    /// Returns the line/column for a validated byte offset.
-    ///
-    /// The offset must be within the source and on a UTF-8 boundary.
-    #[must_use]
-    pub fn line_column(&self, offset: usize) -> Option<LineColumn> {
-        if !self.contains_offset(offset)
-            || !self.is_char_boundary(offset)
-        {
-            return None;
-        }
-
-        let line_index = match self.line_starts.binary_search(&offset) {
             Ok(index) => index,
-            Err(insertion_point) => insertion_point.saturating_sub(1),
+            Err(index) => index.saturating_sub(1),
         };
 
-        let line_start = self.line_starts[line_index];
+        let line_start = *self.line_starts.get(line_index)? as usize;
 
-        // `line_start` and `offset` are UTF-8 boundaries. Counting chars is
-        // therefore safe and produces Unicode-scalar-value columns.
-        let column = self.text[line_start..offset]
+        let column = self.text[line_start..offset_usize]
             .chars()
             .count()
-            + 1;
+            .checked_add(1)?;
 
-        Some(LineColumn::new(
-            line_index + 1,
-            column,
+        let column = u32::try_from(column).ok()?;
+        let line = u32::try_from(line_index.checked_add(1)?).ok()?;
+
+        Some(SourcePosition::new(
+            self.id,
             offset,
+            LineNumber::from_raw(line),
+            ColumnNumber::from_raw(column),
         ))
     }
 
-    /// Returns the line containing the supplied byte offset.
-    ///
-    /// The returned range excludes the line terminator.
+    /// Resolves a span's starting position.
     #[must_use]
-    pub fn line_range(&self, offset: usize) -> Option<Range<usize>> {
-        let position = self.line_column(offset)?;
+    pub fn start_position(&self, span: SourceSpan) -> Option<SourcePosition> {
+        if span.source_id() != self.id {
+            return None;
+        }
 
-        let line_index = position.line - 1;
-        let start = self.line_starts[line_index];
-
-        let end = if line_index + 1 < self.line_starts.len() {
-            let next_start = self.line_starts[line_index + 1];
-
-            // Strip the line terminator from the returned logical line.
-            if next_start >= 2
-                && self.text.as_bytes()[next_start - 2] == b'\r'
-                && self.text.as_bytes()[next_start - 1] == b'\n'
-            {
-                next_start - 2
-            } else if next_start >= 1 {
-                next_start - 1
-            } else {
-                next_start
-            }
-        } else {
-            self.text.len()
-        };
-
-        Some(start..end)
+        self.position_at(span.start())
     }
 
-    /// Returns the complete logical line containing the supplied offset.
+    /// Resolves a span's ending position.
+    ///
+    /// Because spans are half-open, this is the position immediately after
+    /// the final byte represented by the span.
     #[must_use]
-    pub fn line_text(&self, offset: usize) -> Option<&str> {
-        let range = self.line_range(offset)?;
-        self.text.get(range)
+    pub fn end_position(&self, span: SourceSpan) -> Option<SourcePosition> {
+        if span.source_id() != self.id {
+            return None;
+        }
+
+        self.position_at(span.end())
+    }
+
+    /// Returns the source text covered by a span.
+    ///
+    /// Returns `None` if:
+    ///
+    /// - the span belongs to another source;
+    /// - the offsets exceed the source length;
+    /// - either offset is not a UTF-8 character boundary.
+    #[must_use]
+    pub fn slice(&self, span: SourceSpan) -> Option<&str> {
+        if span.source_id() != self.id {
+            return None;
+        }
+
+        let start = span.start().as_usize();
+        let end = span.end().as_usize();
+
+        if start > end
+            || end > self.text.len()
+            || !self.text.is_char_boundary(start)
+            || !self.text.is_char_boundary(end)
+        {
+            return None;
+        }
+
+        self.text.get(start..end)
+    }
+
+    /// Returns the line containing the specified byte offset.
+    ///
+    /// The returned range includes the line terminator when one exists.
+    #[must_use]
+    pub fn line_span_at(&self, offset: SourceOffset) -> Option<SourceSpan> {
+        let position = self.position_at(offset)?;
+
+        let index = (position.line().as_raw() - 1) as usize;
+        let start = *self.line_starts.get(index)?;
+
+        let end = self
+            .line_starts
+            .get(index + 1)
+            .copied()
+            .unwrap_or_else(|| self.text.len() as u32);
+
+        Some(SourceSpan {
+            source_id: self.id,
+            start: SourceOffset::from_raw(start),
+            end: SourceOffset::from_raw(end),
+        })
+    }
+
+    /// Returns the text of the line containing the specified offset.
+    #[must_use]
+    pub fn line_text_at(&self, offset: SourceOffset) -> Option<&str> {
+        let span = self.line_span_at(offset)?;
+        self.slice(span)
+    }
+
+    /// Returns all line-start byte offsets.
+    ///
+    /// The returned slice is immutable and may be retained cheaply.
+    #[must_use]
+    pub fn line_starts(&self) -> &[u32] {
+        &self.line_starts
     }
 }
 
-// =============================================================================
-// Source map
-// =============================================================================
+/// Errors encountered while constructing a [`SourceFile`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum SourceFileError {
+    /// The source length cannot be represented by the frontend's compact
+    /// 32-bit offset representation.
+    SourceTooLarge,
 
-/// Immutable-after-publication collection of source documents.
+    /// The source contains more lines than can be represented.
+    TooManyLines,
+}
+
+impl fmt::Display for SourceFileError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SourceTooLarge => {
+                f.write_str("source file is too large for the frontend source model")
+            }
+            Self::TooManyLines => {
+                f.write_str("source file contains too many lines for the frontend source model")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SourceFileError {}
+
+/// Collection of immutable source files known to the frontend.
 ///
-/// `SourceMap` owns all source files for one frontend operation.
+/// `SourceMap` is deliberately unaware of filesystems. A caller supplies the
+/// source name and source contents; loading policy belongs to the caller or
+/// to a future format-specific include resolver.
 ///
-/// A source map may contain:
+/// This makes the source infrastructure suitable for:
 ///
-/// - one primary source document;
-/// - multiple included/imported documents;
-/// - generated/virtual documents supplied by callers.
-///
-/// It does not know how a source was obtained.
-///
-/// File access, include resolution, network access, and sandbox policy belong
-/// to higher-level frontend components.
+/// - ordinary files;
+/// - in-memory editor buffers;
+/// - embedded sources;
+/// - generated sources;
+/// - tests;
+/// - sandboxed compilation environments.
 #[derive(Clone, Debug, Default)]
 pub struct SourceMap {
-    sources: Vec<SourceFile>,
+    files: Vec<SourceFile>,
 }
 
 impl SourceMap {
     /// Creates an empty source map.
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            sources: Vec::new(),
-        }
+        Self { files: Vec::new() }
     }
 
-    /// Creates a source map with preallocated storage.
-    #[must_use]
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            sources: Vec::with_capacity(capacity),
-        }
-    }
-
-    /// Returns the number of source documents.
+    /// Returns the number of registered sources.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.sources.len()
+        self.files.len()
     }
 
-    /// Returns whether the source map contains no documents.
+    /// Returns whether the source map contains no sources.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.sources.is_empty()
+        self.files.is_empty()
     }
 
-    /// Returns all source files in deterministic insertion order.
-    #[must_use]
-    pub fn sources(&self) -> &[SourceFile] {
-        &self.sources
-    }
-
-    /// Adds a source document without a frontend-limit policy.
+    /// Adds a source and returns its stable identifier.
     ///
-    /// This low-level method is intended for callers that already enforce
-    /// their own source-size policy or for trusted/generated source.
+    /// IDs are assigned monotonically.
     ///
-    /// For external/untrusted input, prefer
-    /// [`SourceMap::add_source_with_limits`].
-    ///
-    /// Returns `None` if the source-map ID space is exhausted.
-    pub fn add_source(
+    /// The source map owns the resulting immutable source object.
+    pub fn add(
         &mut self,
-        name: impl Into<String>,
-        text: impl Into<String>,
-    ) -> Option<SourceId> {
-        let id = SourceId::from_raw(
-            u32::try_from(self.sources.len()).ok()?,
-        );
+        name: impl Into<Arc<str>>,
+        text: impl Into<Arc<str>>,
+    ) -> Result<SourceId, SourceFileError> {
+        let raw_id =
+            u32::try_from(self.files.len()).map_err(|_| SourceFileError::TooManyLines)?;
 
-        self.sources.push(SourceFile::new(id, name, text));
+        let id = SourceId::from_raw(raw_id);
+        let source = SourceFile::new(id, name, text)?;
 
-        Some(id)
-    }
-
-    /// Adds a source document while enforcing frontend resource limits.
-    ///
-    /// The source itself is never partially inserted. If a limit is exceeded,
-    /// the source map remains unchanged.
-    pub fn add_source_with_limits(
-        &mut self,
-        name: impl Into<String>,
-        text: impl Into<String>,
-        limits: &FrontendLimits,
-    ) -> FrontendResult<SourceId> {
-        let name = name.into();
-        let text = text.into();
-
-        limits.validate().map_err(|error| {
-            FrontendError::invalid_input(error.to_string())
-                .context("component", "source_map")
-        })?;
-
-        let source_bytes = text.len() as u64;
-
-        if source_bytes > limits.max_source_bytes() {
-            return Err(FrontendError::limit_exceeded(
-                FrontendLimitViolation::new(
-                    "max_source_bytes",
-                    text.len(),
-                    u64_to_usize_saturating(
-                        limits.max_source_bytes(),
-                    ),
-                ),
-            )
-            .context("source", name));
-        }
-
-        let next_file_count = self
-            .sources
-            .len()
-            .checked_add(1)
-            .ok_or_else(|| {
-                FrontendError::limit_exceeded(
-                    FrontendLimitViolation::new(
-                        "max_source_files",
-                        usize::MAX,
-                        u64_to_usize_saturating(
-                            limits.max_source_files(),
-                        ),
-                    ),
-                )
-            })?;
-
-        if next_file_count as u64 > limits.max_source_files() {
-            return Err(FrontendError::limit_exceeded(
-                FrontendLimitViolation::new(
-                    "max_source_files",
-                    next_file_count,
-                    u64_to_usize_saturating(
-                        limits.max_source_files(),
-                    ),
-                ),
-            ));
-        }
-
-        let total_bytes = self.total_source_bytes();
-        let new_total = total_bytes
-            .checked_add(source_bytes)
-            .ok_or_else(|| {
-                FrontendError::limit_exceeded(
-                    FrontendLimitViolation::new(
-                        "max_total_source_bytes",
-                        usize::MAX,
-                        u64_to_usize_saturating(
-                            limits.max_total_source_bytes(),
-                        ),
-                    ),
-                )
-            })?;
-
-        if new_total > limits.max_total_source_bytes() {
-            return Err(FrontendError::limit_exceeded(
-                FrontendLimitViolation::new(
-                    "max_total_source_bytes",
-                    u64_to_usize_saturating(new_total),
-                    u64_to_usize_saturating(
-                        limits.max_total_source_bytes(),
-                    ),
-                ),
-            ));
-        }
-
-        let id = self.add_source(name, text).ok_or_else(|| {
-            FrontendError::limit_exceeded(
-                FrontendLimitViolation::new(
-                    "source_id_capacity",
-                    self.sources.len(),
-                    u32::MAX as usize,
-                ),
-            )
-        })?;
+        self.files.push(source);
 
         Ok(id)
     }
 
-    /// Returns a source file by ID.
+    /// Returns a source by ID.
     #[must_use]
     pub fn get(&self, id: SourceId) -> Option<&SourceFile> {
-        self.sources.get(id.as_raw() as usize)
+        self.files.get(id.as_raw() as usize)
     }
 
-    /// Returns the source file by ID or a structured frontend error.
-    pub fn require(
-        &self,
-        id: SourceId,
-    ) -> FrontendResult<&SourceFile> {
-        self.get(id).ok_or_else(|| {
-            FrontendError::invalid_input(
-                "source ID does not exist in the source map",
-            )
-            .context("source_id", id.as_raw().to_string())
-        })
+    /// Returns a source by ID, or a structured lookup error.
+    pub fn require(&self, id: SourceId) -> Result<&SourceFile, SourceLookupError> {
+        self.get(id).ok_or(SourceLookupError::UnknownSource(id))
     }
 
-    /// Returns the total number of source bytes.
+    /// Returns the source text for a span.
     #[must_use]
-    pub fn total_source_bytes(&self) -> u64 {
-        self.sources
-            .iter()
-            .map(|source| source.len() as u64)
-            .sum()
+    pub fn slice(&self, span: SourceSpan) -> Option<&str> {
+        self.get(span.source_id())?.slice(span)
     }
 
-    /// Creates and validates a source position.
-    ///
-    /// The returned position is guaranteed to reference an existing source
-    /// and a valid UTF-8 boundary.
-    pub fn position(
+    /// Resolves a byte offset into a source position.
+    #[must_use]
+    pub fn position_at(&self, source_id: SourceId, offset: SourceOffset) -> Option<SourcePosition> {
+        self.get(source_id)?.position_at(offset)
+    }
+
+    /// Returns the line containing a byte offset.
+    #[must_use]
+    pub fn line_span_at(
         &self,
         source_id: SourceId,
-        offset: usize,
-    ) -> FrontendResult<SourcePosition> {
-        let source = self.require(source_id)?;
-
-        if offset > source.len() {
-            return Err(FrontendError::invalid_input(
-                "source position is outside the source",
-            )
-            .context("source_id", source_id.as_raw().to_string())
-            .context("offset", offset.to_string())
-            .context("source_length", source.len().to_string()));
-        }
-
-        if !source.is_char_boundary(offset) {
-            return Err(FrontendError::invalid_input(
-                "source position is not on a UTF-8 character boundary",
-            )
-            .context("source_id", source_id.as_raw().to_string())
-            .context("offset", offset.to_string()));
-        }
-
-        Ok(SourcePosition::new(source_id, offset))
+        offset: SourceOffset,
+    ) -> Option<SourceSpan> {
+        self.get(source_id)?.line_span_at(offset)
     }
 
-    /// Creates and validates a source span.
-    ///
-    /// Both boundaries must belong to the source and be UTF-8 boundaries.
-    pub fn span(
-        &self,
-        source_id: SourceId,
-        start: usize,
-        end: usize,
-    ) -> FrontendResult<SourceSpan> {
-        if start > end {
-            return Err(FrontendError::invalid_input(
-                "source span start exceeds end",
-            )
-            .context("source_id", source_id.as_raw().to_string())
-            .context("start", start.to_string())
-            .context("end", end.to_string()));
-        }
-
-        let source = self.require(source_id)?;
-
-        if end > source.len() {
-            return Err(FrontendError::invalid_input(
-                "source span exceeds source length",
-            )
-            .context("source_id", source_id.as_raw().to_string())
-            .context("end", end.to_string())
-            .context("source_length", source.len().to_string()));
-        }
-
-        if !source.is_char_boundary(start)
-            || !source.is_char_boundary(end)
-        {
-            return Err(FrontendError::invalid_input(
-                "source span boundary is not a UTF-8 character boundary",
-            )
-            .context("source_id", source_id.as_raw().to_string())
-            .context("start", start.to_string())
-            .context("end", end.to_string()));
-        }
-
-        // `start <= end` was checked above, so this construction cannot fail.
-        Ok(SourceSpan::new(source_id, start, end)
-            .expect("validated source span must be ordered"))
-    }
-
-    /// Validates an existing source span.
-    pub fn validate_span(
-        &self,
-        span: SourceSpan,
-    ) -> FrontendResult<()> {
-        let _ = self.span(
-            span.source_id(),
-            span.start(),
-            span.end(),
-        )?;
-
-        Ok(())
-    }
-
-    /// Converts a source position into one-based line/column coordinates.
-    pub fn line_column(
-        &self,
-        position: SourcePosition,
-    ) -> FrontendResult<LineColumn> {
-        let source = self.require(position.source_id())?;
-
-        source
-            .line_column(position.offset())
-            .ok_or_else(|| {
-                FrontendError::invalid_input(
-                    "source position is invalid for its source",
-                )
-                .context(
-                    "source_id",
-                    position.source_id().as_raw().to_string(),
-                )
-                .context(
-                    "offset",
-                    position.offset().to_string(),
-                )
-            })
-    }
-
-    /// Converts a span's start position into one-based line/column
-    /// coordinates.
-    pub fn span_start_line_column(
-        &self,
-        span: SourceSpan,
-    ) -> FrontendResult<LineColumn> {
-        self.line_column(span.start_position())
-    }
-
-    /// Converts a span's end position into one-based line/column coordinates.
-    pub fn span_end_line_column(
-        &self,
-        span: SourceSpan,
-    ) -> FrontendResult<LineColumn> {
-        self.line_column(span.end_position())
-    }
-
-    /// Returns the exact source text represented by a span.
-    pub fn text(
-        &self,
-        span: SourceSpan,
-    ) -> FrontendResult<&str> {
-        let source = self.require(span.source_id())?;
-
-        source
-            .slice_span(span)
-            .ok_or_else(|| {
-                FrontendError::invalid_input(
-                    "source span is not a valid UTF-8 range",
-                )
-                .context(
-                    "source_id",
-                    span.source_id().as_raw().to_string(),
-                )
-                .context("start", span.start().to_string())
-                .context("end", span.end().to_string())
-            })
-    }
-
-    /// Returns the complete logical line containing a span's start.
-    pub fn line_text(
-        &self,
-        span: SourceSpan,
-    ) -> FrontendResult<&str> {
-        let source = self.require(span.source_id())?;
-
-        source
-            .line_text(span.start())
-            .ok_or_else(|| {
-                FrontendError::invalid_input(
-                    "source span start does not identify a valid line",
-                )
-                .context(
-                    "source_id",
-                    span.source_id().as_raw().to_string(),
-                )
-                .context("offset", span.start().to_string())
-            })
+    /// Returns an iterator over all registered source files.
+    pub fn iter(&self) -> impl Iterator<Item = &SourceFile> {
+        self.files.iter()
     }
 }
 
-// =============================================================================
-// Limit integration
-// =============================================================================
-
-/// Extension methods used by `source.rs` to consume the generic frontend
-/// limits without exposing the limits implementation's internal fields.
-///
-/// These methods intentionally keep the actual `FrontendLimits` fields private
-/// to `limits.rs`.
-trait FrontendLimitsAccess {
-    fn max_source_bytes(&self) -> u64;
-    fn max_total_source_bytes(&self) -> u64;
-    fn max_source_files(&self) -> u64;
+/// Error returned when a source ID cannot be resolved.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum SourceLookupError {
+    /// The requested source does not exist in the map.
+    UnknownSource(SourceId),
 }
 
-impl FrontendLimitsAccess for FrontendLimits {
-    fn max_source_bytes(&self) -> u64 {
-        self.max_source_bytes()
-    }
-
-    fn max_total_source_bytes(&self) -> u64 {
-        self.max_total_source_bytes()
-    }
-
-    fn max_source_files(&self) -> u64 {
-        self.max_source_files()
+impl fmt::Display for SourceLookupError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownSource(id) => write!(f, "unknown source: {id}"),
+        }
     }
 }
 
-// =============================================================================
-// Internal helpers
-// =============================================================================
+impl std::error::Error for SourceLookupError {}
 
-/// Computes the byte offset of every logical line start.
+/// Builds the line-start index for a UTF-8 source.
 ///
-/// The first line always starts at byte zero.
+/// Both LF and CRLF are treated as line terminators. A standalone CR is also
+/// treated as a line terminator so that source diagnostics remain sensible
+/// for legacy text inputs.
 ///
-/// Both Unix (`\n`) and Windows (`\r\n`) line endings are recognized. A
-/// standalone `\r` is also treated as a line terminator so source diagnostics
-/// remain useful for legacy/Mac-style text.
-fn compute_line_starts(text: &str) -> Vec<usize> {
-    let mut starts = Vec::with_capacity(
-        text.as_bytes()
-            .iter()
-            .filter(|byte| **byte == b'\n')
-            .count()
-            .saturating_add(1),
-    );
+/// For CRLF, only the byte after `\n` is recorded as the next line start, so
+/// the CRLF pair remains part of the preceding line's source span.
+fn build_line_index(text: &str) -> Result<Vec<u32>, SourceFileError> {
+    if text.len() > u32::MAX as usize {
+        return Err(SourceFileError::SourceTooLarge);
+    }
+
+    if text.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut starts = Vec::new();
 
     starts.push(0);
 
-    for (index, byte) in text.as_bytes().iter().enumerate() {
-        if *byte == b'\n' {
-            let next = index.saturating_add(1);
+    let bytes = text.as_bytes();
+    let mut index = 0usize;
 
-            if next <= text.len() {
-                starts.push(next);
-            }
-        } else if *byte == b'\r' {
-            let next = if text.as_bytes().get(index + 1) == Some(&b'\n') {
-                index.saturating_add(2)
-            } else {
-                index.saturating_add(1)
-            };
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\n' => {
+                let next = index
+                    .checked_add(1)
+                    .ok_or(SourceFileError::SourceTooLarge)?;
 
-            if next <= text.len()
-                && text.as_bytes().get(index + 1) != Some(&b'\n')
-            {
+                let next = u32::try_from(next).map_err(|_| SourceFileError::SourceTooLarge)?;
+
                 starts.push(next);
+                index = next as usize;
             }
+            b'\r' => {
+                if index + 1 < bytes.len() && bytes[index + 1] == b'\n' {
+                    let next = index
+                        .checked_add(2)
+                        .ok_or(SourceFileError::SourceTooLarge)?;
+
+                    let next =
+                        u32::try_from(next).map_err(|_| SourceFileError::SourceTooLarge)?;
+
+                    starts.push(next);
+                    index = next as usize;
+                } else {
+                    let next = index
+                        .checked_add(1)
+                        .ok_or(SourceFileError::SourceTooLarge)?;
+
+                    let next =
+                        u32::try_from(next).map_err(|_| SourceFileError::SourceTooLarge)?;
+
+                    starts.push(next);
+                    index = next as usize;
+                }
+            }
+            _ => {
+                index += 1;
+            }
+        }
+
+        if starts.len() > u32::MAX as usize {
+            return Err(SourceFileError::TooManyLines);
         }
     }
 
-    starts
+    Ok(starts)
 }
-
-/// Converts a u64 policy value into the largest representable `usize`.
-///
-/// This is used only for diagnostic metadata because the actual policy
-/// comparisons remain in `u64`.
-fn u64_to_usize_saturating(value: u64) -> usize {
-    if value > usize::MAX as u64 {
-        usize::MAX
-    } else {
-        value as usize
-    }
-}
-
-// =============================================================================
-// Tests
-// =============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn limits() -> FrontendLimits {
-        FrontendLimits::production()
-    }
-
-    // -------------------------------------------------------------------------
-    // SourceId
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn source_id_is_stable_and_orderable() {
-        let first = SourceId::from_raw(0);
-        let second = SourceId::from_raw(1);
-
-        assert_eq!(first.as_raw(), 0);
-        assert_eq!(second.as_raw(), 1);
-        assert!(first < second);
-        assert_eq!(first.to_string(), "source:0");
-    }
-
-    // -------------------------------------------------------------------------
-    // SourceSpan
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn source_span_is_half_open() {
-        let span = SourceSpan::new(SourceId::from_raw(7), 2, 8)
-            .expect("ordered span");
-
-        assert_eq!(span.start(), 2);
-        assert_eq!(span.end(), 8);
-        assert_eq!(span.len(), 6);
-        assert!(!span.is_empty());
-        assert_eq!(span.range(), 2..8);
+    fn source() -> SourceFile {
+        SourceFile::new(
+            SourceId::from_raw(7),
+            "example.qasm",
+            "OPENQASM 3;\nqubit[2] q;\n// hello\nx q[0];",
+        )
+        .expect("test source must be valid")
     }
 
     #[test]
-    fn reversed_span_is_rejected() {
+    fn source_id_round_trips() {
+        let id = SourceId::from_raw(42);
+
+        assert_eq!(id.as_raw(), 42);
+        assert_eq!(SourceId::from_raw(id.as_raw()), id);
+        assert_eq!(id.to_string(), "source#42");
+    }
+
+    #[test]
+    fn source_offset_operations_are_checked() {
+        let offset = SourceOffset::from_raw(10);
+
+        assert_eq!(offset.as_usize(), 10);
+        assert_eq!(offset.checked_add(5), Some(SourceOffset::from_raw(15)));
         assert_eq!(
-            SourceSpan::new(SourceId::from_raw(0), 8, 2),
+            SourceOffset::from_raw(5).checked_distance(offset),
+            Some(5)
+        );
+        assert_eq!(
+            offset.checked_distance(SourceOffset::from_raw(5)),
             None
         );
     }
 
     #[test]
-    fn point_span_is_empty() {
-        let span = SourceSpan::point(SourceId::from_raw(0), 4);
-
-        assert!(span.is_empty());
-        assert_eq!(span.len(), 0);
-        assert_eq!(span.start(), 4);
-        assert_eq!(span.end(), 4);
-    }
-
-    #[test]
-    fn span_join_requires_same_source() {
-        let a = SourceSpan::new(SourceId::from_raw(0), 1, 4)
-            .expect("valid span");
-        let b = SourceSpan::new(SourceId::from_raw(0), 7, 9)
-            .expect("valid span");
-        let c = SourceSpan::new(SourceId::from_raw(1), 2, 5)
-            .expect("valid span");
-
-        assert_eq!(
-            a.join(b),
-            Some(
-                SourceSpan::new(SourceId::from_raw(0), 1, 9)
-                    .expect("valid span")
-            )
-        );
-
-        assert_eq!(a.join(c), None);
-    }
-
-    #[test]
-    fn span_overlap_is_deterministic() {
-        let a = SourceSpan::new(SourceId::from_raw(0), 1, 5)
-            .expect("valid span");
-        let b = SourceSpan::new(SourceId::from_raw(0), 4, 8)
-            .expect("valid span");
-        let c = SourceSpan::new(SourceId::from_raw(0), 5, 8)
-            .expect("valid span");
-
-        assert!(a.overlaps(b));
-        assert!(!a.overlaps(c));
-    }
-
-    // -------------------------------------------------------------------------
-    // UTF-8 source handling
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn source_preserves_utf8_text() {
-        let source = SourceFile::new(
-            SourceId::from_raw(0),
-            "unicode.qasm",
-            "H q[0]; π q[1];",
-        );
-
-        assert_eq!(source.text(), "H q[0]; π q[1];");
-        assert!(source.is_char_boundary(8));
-    }
-
-    #[test]
-    fn invalid_utf8_byte_boundary_is_rejected() {
-        let source = SourceFile::new(
-            SourceId::from_raw(0),
-            "unicode",
-            "π",
-        );
-
-        // `π` occupies two UTF-8 bytes, so offset 1 is inside the code point.
-        assert!(!source.is_char_boundary(1));
-        assert!(source.line_column(1).is_none());
-        assert!(source.slice(0..1).is_none());
-    }
-
-    // -------------------------------------------------------------------------
-    // Line indexing
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn empty_source_has_one_logical_line() {
-        let source = SourceFile::new(
-            SourceId::from_raw(0),
-            "empty",
-            "",
-        );
-
-        assert_eq!(source.line_count(), 1);
-        assert_eq!(
-            source.line_column(0),
-            Some(LineColumn::new(1, 1, 0))
-        );
-        assert_eq!(source.line_text(0), Some(""));
-    }
-
-    #[test]
-    fn unix_lines_are_indexed_correctly() {
-        let source = SourceFile::new(
-            SourceId::from_raw(0),
-            "test",
-            "abc\ndef\nxyz",
-        );
-
-        assert_eq!(source.line_count(), 3);
-        assert_eq!(
-            source.line_column(0),
-            Some(LineColumn::new(1, 1, 0))
-        );
-        assert_eq!(
-            source.line_column(4),
-            Some(LineColumn::new(2, 1, 4))
-        );
-        assert_eq!(
-            source.line_column(8),
-            Some(LineColumn::new(3, 1, 8))
-        );
-
-        assert_eq!(source.line_text(0), Some("abc"));
-        assert_eq!(source.line_text(4), Some("def"));
-        assert_eq!(source.line_text(8), Some("xyz"));
-    }
-
-    #[test]
-    fn windows_lines_are_indexed_without_crlf_in_line_text() {
-        let source = SourceFile::new(
-            SourceId::from_raw(0),
-            "test",
-            "abc\r\ndef\r\nxyz",
-        );
-
-        assert_eq!(source.line_count(), 3);
-        assert_eq!(source.line_text(0), Some("abc"));
-        assert_eq!(source.line_text(5), Some("def"));
-        assert_eq!(source.line_text(10), Some("xyz"));
-    }
-
-    #[test]
-    fn standalone_carriage_returns_are_line_breaks() {
-        let source = SourceFile::new(
-            SourceId::from_raw(0),
-            "legacy",
-            "abc\rdef",
-        );
-
-        assert_eq!(source.line_count(), 2);
-        assert_eq!(source.line_text(0), Some("abc"));
-        assert_eq!(source.line_text(4), Some("def"));
-    }
-
-    #[test]
-    fn unicode_columns_count_unicode_scalars_not_bytes() {
-        let source = SourceFile::new(
-            SourceId::from_raw(0),
-            "unicode",
-            "aπ中z",
-        );
-
-        // a=column 1, π=column 2, 中=column 3, z=column 4.
-        let z_offset = "aπ中".len();
-
-        assert_eq!(
-            source.line_column(z_offset),
-            Some(LineColumn::new(1, 4, z_offset))
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // SourceMap
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn source_map_allocates_deterministic_ids() {
-        let mut map = SourceMap::new();
-
-        let first = map
-            .add_source("first.qasm", "OPENQASM 3.1;")
-            .expect("first source ID");
-
-        let second = map
-            .add_source("second.qasm", "OPENQASM 3.1;")
-            .expect("second source ID");
-
-        assert_eq!(first, SourceId::from_raw(0));
-        assert_eq!(second, SourceId::from_raw(1));
-        assert_eq!(map.len(), 2);
-    }
-
-    #[test]
-    fn source_map_preserves_insertion_order() {
-        let mut map = SourceMap::new();
-
-        map.add_source("a", "A")
-            .expect("source ID");
-        map.add_source("b", "B")
-            .expect("source ID");
-        map.add_source("c", "C")
-            .expect("source ID");
-
-        let names: Vec<&str> = map
-            .sources()
-            .iter()
-            .map(SourceFile::name)
-            .collect();
-
-        assert_eq!(names, vec!["a", "b", "c"]);
-    }
-
-    #[test]
-    fn source_map_can_retrieve_sources_by_id() {
-        let mut map = SourceMap::new();
-
-        let id = map
-            .add_source("program.qasm", "H q[0];")
-            .expect("source ID");
-
-        let source = map.get(id).expect("source exists");
-
-        assert_eq!(source.id(), id);
-        assert_eq!(source.name(), "program.qasm");
-        assert_eq!(source.text(), "H q[0];");
-    }
-
-    #[test]
-    fn missing_source_returns_structured_error() {
-        let map = SourceMap::new();
-
-        let error = map
-            .require(SourceId::from_raw(99))
-            .expect_err("source should not exist");
-
-        assert_eq!(
-            error.kind(),
-            super::super::errors::FrontendErrorKind::InvalidInput
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // Validated positions and spans
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn source_map_validates_positions() {
-        let mut map = SourceMap::new();
-
-        let id = map
-            .add_source("test", "abc")
-            .expect("source ID");
-
-        assert!(map.position(id, 0).is_ok());
-        assert!(map.position(id, 3).is_ok());
-        assert!(map.position(id, 4).is_err());
-    }
-
-    #[test]
-    fn source_map_validates_utf8_positions() {
-        let mut map = SourceMap::new();
-
-        let id = map
-            .add_source("test", "π")
-            .expect("source ID");
-
-        assert!(map.position(id, 0).is_ok());
-        assert!(map.position(id, 2).is_ok());
-
-        // Offset 1 is inside π.
-        assert!(map.position(id, 1).is_err());
-    }
-
-    #[test]
-    fn source_map_validates_spans() {
-        let mut map = SourceMap::new();
-
-        let id = map
-            .add_source("test", "abcdef")
-            .expect("source ID");
-
-        let span = map
-            .span(id, 1, 4)
-            .expect("valid span");
-
-        assert_eq!(
-            map.text(span).expect("span text"),
-            "bcd"
-        );
-    }
-
-    #[test]
-    fn source_map_rejects_reversed_spans() {
-        let mut map = SourceMap::new();
-
-        let id = map
-            .add_source("test", "abcdef")
-            .expect("source ID");
-
-        assert!(map.span(id, 5, 2).is_err());
-    }
-
-    #[test]
-    fn source_map_rejects_span_beyond_source() {
-        let mut map = SourceMap::new();
-
-        let id = map
-            .add_source("test", "abcdef")
-            .expect("source ID");
-
-        assert!(map.span(id, 1, 7).is_err());
-    }
-
-    #[test]
-    fn source_map_rejects_span_inside_utf8_character() {
-        let mut map = SourceMap::new();
-
-        let id = map
-            .add_source("test", "π")
-            .expect("source ID");
-
-        assert!(map.span(id, 1, 2).is_err());
-    }
-
-    #[test]
-    fn source_map_resolves_span_locations() {
-        let mut map = SourceMap::new();
-
-        let id = map
-            .add_source("test", "abc\ndef")
-            .expect("source ID");
-
-        let span = map
-            .span(id, 4, 7)
-            .expect("valid span");
-
-        assert_eq!(
-            map.span_start_line_column(span)
-                .expect("line/column"),
-            LineColumn::new(2, 1, 4)
-        );
-
-        assert_eq!(
-            map.span_end_line_column(span)
-                .expect("line/column"),
-            LineColumn::new(2, 4, 7)
-        );
-    }
-
-    #[test]
-    fn source_text_is_available_from_span() {
-        let mut map = SourceMap::new();
-
-        let id = map
-            .add_source("test", "OPENQASM 3.1;")
-            .expect("source ID");
-
-        let span = map
-            .span(id, 0, 13)
-            .expect("valid span");
-
-        assert_eq!(
-            map.text(span).expect("text"),
-            "OPENQASM 3.1;"
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // Limits integration
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn source_limit_rejects_oversized_source_before_insertion() {
-        let mut map = SourceMap::new();
-
-        let limits = FrontendLimits::strict();
-
-        let oversized = "x".repeat(
-            limits
-                .max_source_bytes_for_tests()
-                .saturating_add(1),
-        );
-
-        let result = map.add_source_with_limits(
-            "large.qasm",
-            oversized,
-            &limits,
-        );
-
-        assert!(result.is_err());
-        assert!(map.is_empty());
-    }
-
-    #[test]
-    fn total_source_limit_is_enforced() {
-        let mut map = SourceMap::new();
-
-        let limits = FrontendLimits::strict();
-
-        let per_file = limits
-            .max_source_bytes_for_tests()
-            .min(64);
-
-        let first = "a".repeat(per_file);
-
-        map.add_source_with_limits(
-            "first",
-            first,
-            &limits,
-        )
-        .expect("first source");
-
-        // This test uses a local reduced policy so the total boundary can be
-        // exercised without allocating large strings.
-        let reduced = FrontendLimitsTestBuilder::new()
-            .max_source_bytes(64)
-            .max_total_source_bytes(64)
-            .max_source_files(4)
-            .build();
-
-        let mut reduced_map = SourceMap::new();
-
-        reduced_map
-            .add_source_with_limits(
-                "first",
-                "12345678901234567890123456789012",
-                &reduced,
-            )
-            .expect("first source");
-
-        let second = reduced_map.add_source_with_limits(
-            "second",
-            "12345678901234567890123456789012",
-            &reduced,
-        );
-
-        assert!(second.is_err());
-    }
-
-    #[test]
-    fn failed_limit_insert_does_not_mutate_map() {
-        let limits = FrontendLimitsTestBuilder::new()
-            .max_source_bytes(4)
-            .max_total_source_bytes(8)
-            .max_source_files(2)
-            .build();
-
-        let mut map = SourceMap::new();
-
-        map.add_source_with_limits(
-            "first",
-            "1234",
-            &limits,
-        )
-        .expect("first source");
-
-        let result = map.add_source_with_limits(
-            "too-large",
-            "12345",
-            &limits,
-        );
-
-        assert!(result.is_err());
-        assert_eq!(map.len(), 1);
-        assert_eq!(map.total_source_bytes(), 4);
-    }
-
-    // -------------------------------------------------------------------------
-    // Determinism
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn identical_sources_produce_identical_source_models() {
-        let mut first = SourceMap::new();
-        let mut second = SourceMap::new();
-
-        first
-            .add_source("program.qasm", "OPENQASM 3.1;\nqbit")
-            .expect("source ID");
-
-        second
-            .add_source("program.qasm", "OPENQASM 3.1;\nqbit")
-            .expect("source ID");
-
-        assert_eq!(first.sources(), second.sources());
-        assert_eq!(
-            first.total_source_bytes(),
-            second.total_source_bytes()
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // Display contracts
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn positions_and_spans_have_deterministic_display() {
-        let position = SourcePosition::new(
-            SourceId::from_raw(3),
-            42,
-        );
-
+    fn spans_are_half_open() {
+        let id = SourceId::from_raw(1);
         let span = SourceSpan::new(
-            SourceId::from_raw(3),
-            42,
-            49,
+            id,
+            SourceOffset::from_raw(2),
+            SourceOffset::from_raw(5),
+        )
+        .expect("span must be valid");
+
+        assert_eq!(span.len_bytes(), 3);
+        assert!(!span.is_empty());
+        assert!(span.contains(SourceOffset::from_raw(2)));
+        assert!(span.contains(SourceOffset::from_raw(4)));
+        assert!(!span.contains(SourceOffset::from_raw(5)));
+    }
+
+    #[test]
+    fn reversed_spans_are_rejected() {
+        let result = SourceSpan::new(
+            SourceId::from_raw(1),
+            SourceOffset::from_raw(10),
+            SourceOffset::from_raw(5),
+        );
+
+        assert_eq!(result, Err(SourceSpanError::ReversedRange));
+    }
+
+    #[test]
+    fn span_union_requires_same_source() {
+        let first = SourceSpan::new(
+            SourceId::from_raw(1),
+            SourceOffset::from_raw(2),
+            SourceOffset::from_raw(5),
         )
         .expect("valid span");
 
+        let second = SourceSpan::new(
+            SourceId::from_raw(1),
+            SourceOffset::from_raw(7),
+            SourceOffset::from_raw(10),
+        )
+        .expect("valid span");
+
+        let union = first.union(second).expect("same source");
+
+        assert_eq!(union.start().as_raw(), 2);
+        assert_eq!(union.end().as_raw(), 10);
+
+        let other_source = SourceSpan::new(
+            SourceId::from_raw(2),
+            SourceOffset::from_raw(1),
+            SourceOffset::from_raw(4),
+        )
+        .expect("valid span");
+
+        assert!(first.union(other_source).is_none());
+    }
+
+    #[test]
+    fn source_line_index_handles_lf() {
+        let source =
+            SourceFile::new(SourceId::from_raw(0), "test", "one\ntwo\nthree").expect("valid source");
+
+        assert_eq!(source.line_count(), 3);
+        assert_eq!(source.line_start(LineNumber::from_raw(1)).unwrap().as_raw(), 0);
+        assert_eq!(source.line_start(LineNumber::from_raw(2)).unwrap().as_raw(), 4);
+        assert_eq!(source.line_start(LineNumber::from_raw(3)).unwrap().as_raw(), 8);
+    }
+
+    #[test]
+    fn source_line_index_handles_crlf() {
+        let source =
+            SourceFile::new(SourceId::from_raw(0), "test", "one\r\ntwo\r\nthree").expect("valid source");
+
+        assert_eq!(source.line_count(), 3);
+        assert_eq!(source.line_start(LineNumber::from_raw(1)).unwrap().as_raw(), 0);
+        assert_eq!(source.line_start(LineNumber::from_raw(2)).unwrap().as_raw(), 5);
+        assert_eq!(source.line_start(LineNumber::from_raw(3)).unwrap().as_raw(), 10);
+    }
+
+    #[test]
+    fn source_line_index_handles_standalone_cr() {
+        let source =
+            SourceFile::new(SourceId::from_raw(0), "test", "one\rtwo\rthree").expect("valid source");
+
+        assert_eq!(source.line_count(), 3);
+        assert_eq!(source.line_start(LineNumber::from_raw(2)).unwrap().as_raw(), 4);
+        assert_eq!(source.line_start(LineNumber::from_raw(3)).unwrap().as_raw(), 8);
+    }
+
+    #[test]
+    fn empty_source_has_zero_lines() {
+        let source =
+            SourceFile::new(SourceId::from_raw(0), "empty", "").expect("valid source");
+
+        assert_eq!(source.line_count(), 0);
+        assert!(source.is_empty());
+        assert_eq!(source.len_bytes(), 0);
+    }
+
+    #[test]
+    fn position_is_one_based() {
+        let source = SourceFile::new(SourceId::from_raw(0), "test", "abc\ndef").expect("valid");
+
+        let position = source
+            .position_at(SourceOffset::from_raw(0))
+            .expect("position");
+
+        assert_eq!(position.line().as_raw(), 1);
+        assert_eq!(position.column().as_raw(), 1);
+
+        let position = source
+            .position_at(SourceOffset::from_raw(2))
+            .expect("position");
+
+        assert_eq!(position.line().as_raw(), 1);
+        assert_eq!(position.column().as_raw(), 3);
+
+        let position = source
+            .position_at(SourceOffset::from_raw(4))
+            .expect("position");
+
+        assert_eq!(position.line().as_raw(), 2);
+        assert_eq!(position.column().as_raw(), 1);
+    }
+
+    #[test]
+    fn unicode_columns_are_scalar_based() {
+        let source = SourceFile::new(
+            SourceId::from_raw(0),
+            "test",
+            "aé中x",
+        )
+        .expect("valid");
+
+        // `é` occupies two UTF-8 bytes and `中` occupies three, but both
+        // count as one human-readable column.
+        let x_offset = "aé中".len();
+
+        let position = source
+            .position_at(SourceOffset::from_raw(
+                u32::try_from(x_offset).expect("small test offset"),
+            ))
+            .expect("position");
+
+        assert_eq!(position.line().as_raw(), 1);
+        assert_eq!(position.column().as_raw(), 4);
+    }
+
+    #[test]
+    fn invalid_utf8_boundary_is_rejected_for_position() {
+        let source = SourceFile::new(SourceId::from_raw(0), "test", "éx").expect("valid");
+
+        // Byte offset 1 is inside the two-byte UTF-8 encoding of `é`.
+        assert!(source.position_at(SourceOffset::from_raw(1)).is_none());
+    }
+
+    #[test]
+    fn invalid_utf8_boundary_is_rejected_for_slice() {
+        let source = SourceFile::new(SourceId::from_raw(0), "test", "éx").expect("valid");
+
+        let span = SourceSpan::new(
+            SourceId::from_raw(0),
+            SourceOffset::from_raw(1),
+            SourceOffset::from_raw(2),
+        )
+        .expect("range itself is ordered");
+
+        assert!(source.slice(span).is_none());
+    }
+
+    #[test]
+    fn source_slice_returns_exact_text() {
+        let source = SourceFile::new(
+            SourceId::from_raw(0),
+            "test",
+            "OPENQASM 3;",
+        )
+        .expect("valid");
+
+        let span = SourceSpan::new(
+            SourceId::from_raw(0),
+            SourceOffset::from_raw(0),
+            SourceOffset::from_raw(8),
+        )
+        .expect("valid");
+
+        assert_eq!(source.slice(span), Some("OPENQASM"));
+    }
+
+    #[test]
+    fn line_span_includes_line_terminator() {
+        let source =
+            SourceFile::new(SourceId::from_raw(0), "test", "abc\ndef").expect("valid");
+
+        let span = source
+            .line_span_at(SourceOffset::from_raw(1))
+            .expect("line span");
+
+        assert_eq!(source.slice(span), Some("abc\n"));
+    }
+
+    #[test]
+    fn final_line_has_no_artificial_terminator() {
+        let source =
+            SourceFile::new(SourceId::from_raw(0), "test", "abc\ndef").expect("valid");
+
+        let span = source
+            .line_span_at(SourceOffset::from_raw(5))
+            .expect("line span");
+
+        assert_eq!(source.slice(span), Some("def"));
+    }
+
+    #[test]
+    fn line_text_is_resolved_without_copying() {
+        let source =
+            SourceFile::new(SourceId::from_raw(0), "test", "abc\ndef").expect("valid");
+
         assert_eq!(
-            position.to_string(),
-            "source:3@42"
+            source.line_text_at(SourceOffset::from_raw(5)),
+            Some("def")
+        );
+    }
+
+    #[test]
+    fn source_map_assigns_stable_ids() {
+        let mut map = SourceMap::new();
+
+        let first = map.add("first.qasm", "x q[0];").expect("source");
+        let second = map.add("second.qasm", "h q[1];").expect("source");
+
+        assert_eq!(first.as_raw(), 0);
+        assert_eq!(second.as_raw(), 1);
+        assert_eq!(map.len(), 2);
+        assert!(!map.is_empty());
+
+        assert_eq!(map.get(first).unwrap().name(), "first.qasm");
+        assert_eq!(map.get(second).unwrap().name(), "second.qasm");
+    }
+
+    #[test]
+    fn source_map_rejects_unknown_sources() {
+        let map = SourceMap::new();
+        let id = SourceId::from_raw(99);
+
+        assert!(map.get(id).is_none());
+        assert_eq!(
+            map.require(id),
+            Err(SourceLookupError::UnknownSource(id))
+        );
+    }
+
+    #[test]
+    fn source_map_resolves_positions() {
+        let mut map = SourceMap::new();
+
+        let id = map.add("test.qasm", "h q[0];\nx q[1];").expect("source");
+
+        let position = map
+            .position_at(id, SourceOffset::from_raw(8))
+            .expect("position");
+
+        assert_eq!(position.line().as_raw(), 2);
+        assert_eq!(position.column().as_raw(), 1);
+    }
+
+    #[test]
+    fn source_map_slice_rejects_foreign_span() {
+        let mut map = SourceMap::new();
+
+        let first = map.add("first", "abc").expect("source");
+        let _second = map.add("second", "xyz").expect("source");
+
+        let span = SourceSpan::new(
+            SourceId::from_raw(first.as_raw() + 1),
+            SourceOffset::from_raw(0),
+            SourceOffset::from_raw(1),
+        )
+        .expect("valid span");
+
+        assert!(map.slice(span).is_some());
+
+        let foreign = SourceSpan::new(
+            SourceId::from_raw(100),
+            SourceOffset::from_raw(0),
+            SourceOffset::from_raw(1),
+        )
+        .expect("valid span");
+
+        assert!(map.slice(foreign).is_none());
+    }
+
+    #[test]
+    fn entire_source_span_is_correct() {
+        let source = source();
+        let span = SourceSpan::entire(&source);
+
+        assert_eq!(span.source_id(), source.id());
+        assert_eq!(span.start().as_raw(), 0);
+        assert_eq!(span.end().as_raw(), source.len_bytes());
+        assert_eq!(source.slice(span), Some(source.text()));
+    }
+
+    #[test]
+    fn point_span_is_empty() {
+        let span = SourceSpan::point(
+            SourceId::from_raw(1),
+            SourceOffset::from_raw(10),
         );
 
-        assert_eq!(
-            span.to_string(),
-            "source:3:42..49"
+        assert!(span.is_empty());
+        assert_eq!(span.len_bytes(), 0);
+        assert!(!span.contains(SourceOffset::from_raw(10)));
+    }
+
+    #[test]
+    fn spans_from_different_sources_do_not_overlap() {
+        let first = SourceSpan::new(
+            SourceId::from_raw(1),
+            SourceOffset::from_raw(0),
+            SourceOffset::from_raw(10),
+        )
+        .expect("valid");
+
+        let second = SourceSpan::new(
+            SourceId::from_raw(2),
+            SourceOffset::from_raw(0),
+            SourceOffset::from_raw(10),
+        )
+        .expect("valid");
+
+        assert!(!first.overlaps(second));
+        assert!(!first.contains_span(second));
+    }
+
+    #[test]
+    fn source_position_display_is_stable() {
+        let position = SourcePosition::new(
+            SourceId::from_raw(3),
+            SourceOffset::from_raw(12),
+            LineNumber::from_raw(4),
+            ColumnNumber::from_raw(7),
         );
+
+        assert_eq!(position.to_string(), "source#3:4:7");
     }
 
-    // -------------------------------------------------------------------------
-    // Test-only limit builder
-    // -------------------------------------------------------------------------
-    //
-    // The production FrontendLimits API intentionally remains immutable and
-    // controlled. These helpers are compiled only for tests and avoid making
-    // the public production configuration surface unnecessarily mutable.
+    #[test]
+    fn source_span_display_is_stable() {
+        let span = SourceSpan::new(
+            SourceId::from_raw(3),
+            SourceOffset::from_raw(12),
+            SourceOffset::from_raw(20),
+        )
+        .expect("valid");
 
-    #[derive(Clone, Copy)]
-    struct FrontendLimitsTestBuilder {
-        max_source_bytes: u64,
-        max_total_source_bytes: u64,
-        max_source_files: u64,
-    }
-
-    impl FrontendLimitsTestBuilder {
-        fn new() -> Self {
-            Self {
-                max_source_bytes: 1024,
-                max_total_source_bytes: 4096,
-                max_source_files: 16,
-            }
-        }
-
-        fn max_source_bytes(mut self, value: u64) -> Self {
-            self.max_source_bytes = value;
-            self
-        }
-
-        fn max_total_source_bytes(mut self, value: u64) -> Self {
-            self.max_total_source_bytes = value;
-            self
-        }
-
-        fn max_source_files(mut self, value: u64) -> Self {
-            self.max_source_files = value;
-            self
-        }
-
-        fn build(self) -> FrontendLimits {
-            FrontendLimits::for_source_tests(
-                self.max_source_bytes,
-                self.max_total_source_bytes,
-                self.max_source_files,
-            )
-        }
+        assert_eq!(span.to_string(), "source#3:12..20");
     }
 }
-
-// =============================================================================
-// Integration hooks for the existing limits module
-// =============================================================================
-//
-// These methods are intentionally implemented in this module rather than
-// making FrontendLimits' internal fields public. The production limits module
-// therefore retains ownership of its representation while source.rs consumes
-// a stable accessor contract.
-
-#[cfg(test)]
-mod limit_test_access {
-    // Intentionally empty. The test-only constructors are supplied by the
-    // limits module's `cfg(test)` implementation contract.
-}
-
-Important integration correction before committing this exact file: the current "limits.rs" keeps its fields private, so "source.rs" should consume public accessors rather than trying to access private fields. The existing file already has the limits model but the retrieved portion does not show its complete accessor API.
-
-Therefore, to satisfy your “finish this file once and never re-edit it later” requirement, "source.rs" should be paired with the accessor contract already intended by "limits.rs": "max_source_bytes()", "max_total_source_bytes()", and "max_source_files()". If those accessors are not yet present in the remainder of "limits.rs", they must be finalized in "limits.rs" before this file is considered integrated. I would not make the source module reach into private fields.
-
-There is also one test-support issue in the draft above: the test-only "FrontendLimits::for_source_tests(...)" accessor is not visible in the retrieved portion of "limits.rs". Rather than smuggling test construction into "source.rs", that helper belongs in "limits.rs"'s own "#[cfg(test)]" section.
-
-Final integration contract
-
-Once those existing "limits.rs" accessors/test constructor are present, "source.rs" has this clean dependency boundary:
-
-frontend/core/source.rs
-        │
-        ├── frontend/core/errors.rs
-        │      └── FrontendError
-        │      └── FrontendLimitViolation
-        │      └── FrontendResult
-        │
-        └── frontend/core/limits.rs
-               └── FrontendLimits
-
-and nothing else.
-
-The Quantum IR remains untouched; that is correct because the IR explicitly excludes frontend parsing/source concerns and remains the canonical representation.
-
-The resulting API is ready for the next frontend files to consume:
-
-- "lexer.rs" → creates "SourceSpan"
-- "parser.rs" → attaches "SourceSpan" to AST nodes
-- "validation.rs" → reports spans through diagnostics
-- "diagnostics.rs" → resolves spans through "SourceMap"
-- "importer.rs" → owns a "SourceMap" for the complete import operation
-- "include.rs" → adds resolved source documents to the same "SourceMap"
-
-No OpenQASM-specific code is required in "source.rs", so adding or removing OpenQASM, QIR, Quil, or another format later will not require changing this file.
