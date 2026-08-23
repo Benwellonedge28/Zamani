@@ -36,7 +36,7 @@
 //!    │
 //!    ├──────────────┐
 //!    │              │
-//! errors       identity / parameter / qubits
+//! errors       identity / parameter / qubit
 //!    │              │
 //!    └──────┬───────┘
 //!           │
@@ -53,13 +53,47 @@
 //!       integration
 //! ```
 //!
+//! Frontends consume this module's public API when lowering validated
+//! source-language representations into canonical Quantum IR.
+//!
+//! ```text
+//! external format
+//!       │
+//!       ▼
+//! quantum::frontend
+//!       │
+//!       │ validated lowering
+//!       ▼
+//! quantum::ir
+//!       │
+//!       ▼
+//! compiler / algorithms
+//!       │
+//!       ▼
+//! backend / hardware
+//! ```
+//!
 //! `mod.rs` itself contains no domain logic. Its responsibility is:
 //!
 //! 1. declare the canonical IR modules;
 //! 2. expose the stable public types;
-//! 3. expose the canonical validation/analysis entry points;
+//! 3. expose canonical validation and analysis entry points;
 //! 4. provide a controlled prelude;
-//! 5. keep implementation-only details private.
+//! 5. keep implementation-only details out of the public boundary.
+//!
+//! # Module/file naming
+//!
+//! The canonical qubit implementation is `qubit.rs`, therefore the Rust
+//! module is `qubit`, not `qubits`.
+//!
+//! This distinction is intentional. Rust module declarations must correspond
+//! to the actual source file layout:
+//!
+//! ```text
+//! src/quantum/ir/qubit.rs
+//!             │
+//!             └── pub mod qubit;
+//! ```
 //!
 //! # Rust compatibility
 //!
@@ -67,8 +101,6 @@
 //!
 //! No nightly features are required.
 //! No external dependencies are required.
-
-#![allow(clippy::module_inception)]
 
 // =============================================================================
 // Canonical IR modules
@@ -98,8 +130,10 @@ pub mod measurement;
 /// Typed quantum gate parameters.
 pub mod parameter;
 
-/// Logical and physical qubit identity/registration types.
-pub mod qubits;
+/// Logical and physical qubit identity and registration types.
+///
+/// The implementation is located in `qubit.rs`.
+pub mod qubit;
 
 /// Canonical whole-IR validation.
 pub mod validation;
@@ -131,8 +165,8 @@ pub use circuit::{
 // =============================================================================
 //
 // `errors.rs` is intentionally independent of the implementation modules.
-// These are therefore the errors that compiler-wide code should prefer when
-// crossing the Quantum IR boundary.
+// These are the errors that compiler-wide code should prefer when crossing
+// the Quantum IR boundary.
 
 pub use errors::{
     IrError,
@@ -203,15 +237,13 @@ pub use measurement::{
 // part of its public construction API. New compiler code should prefer the
 // canonical `Parameter` abstraction where applicable.
 
-pub use parameter::{
-    Parameter,
-};
+pub use parameter::Parameter;
 
 // =============================================================================
 // Qubit API
 // =============================================================================
 
-pub use qubits::{
+pub use qubit::{
     validate_qubits,
     validate_unique_qubits,
     PhysicalQubitId,
