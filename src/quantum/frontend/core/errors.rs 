@@ -45,7 +45,7 @@ pub enum FrontendErrorKind {
     /// Token sequence does not satisfy the selected format's grammar.
     Syntax,
 
-    /// Parsed source violates the source format's semantic rules.
+    /// Parsed source violates the selected format's semantic rules.
     Semantic,
 
     /// Requested format, version, or feature is not supported.
@@ -320,7 +320,9 @@ impl FrontendError {
     }
 
     /// Creates a resource-limit error with structured limit information.
-    pub fn limit_exceeded(violation: FrontendLimitViolation) -> Self {
+    pub fn limit_exceeded(
+        violation: FrontendLimitViolation,
+    ) -> Self {
         Self {
             kind: FrontendErrorKind::LimitExceeded,
             code: FrontendErrorCode::LIMIT_EXCEEDED,
@@ -490,19 +492,27 @@ mod tests {
     #[test]
     fn limit_errors_preserve_structured_values() {
         let violation =
-            FrontendLimitViolation::new("max_source_bytes", 1025, 1024);
+            FrontendLimitViolation::new(
+                "max_source_bytes",
+                1025,
+                1024,
+            );
 
-        let error = FrontendError::limit_exceeded(violation.clone());
+        let error =
+            FrontendError::limit_exceeded(violation.clone());
 
         assert!(error.is_limit_exceeded());
+
         assert_eq!(
             error.code(),
             FrontendErrorCode::LIMIT_EXCEEDED
         );
+
         assert_eq!(
             error.limit_violation(),
             Some(&violation)
         );
+
         assert_eq!(
             error.message(),
             violation.to_string()
@@ -511,10 +521,12 @@ mod tests {
 
     #[test]
     fn io_errors_become_import_errors() {
-        let error = FrontendError::from(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "missing source",
-        ));
+        let error = FrontendError::from(
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "missing source",
+            ),
+        );
 
         assert_eq!(
             error.kind(),
@@ -551,5 +563,98 @@ mod tests {
         .context("version", "3.1");
 
         assert_eq!(error.clone(), error);
+    }
+
+    #[test]
+    fn error_kind_display_is_stable() {
+        assert_eq!(
+            FrontendErrorKind::Lexical.to_string(),
+            "lexical"
+        );
+
+        assert_eq!(
+            FrontendErrorKind::Syntax.to_string(),
+            "syntax"
+        );
+
+        assert_eq!(
+            FrontendErrorKind::Semantic.to_string(),
+            "semantic"
+        );
+
+        assert_eq!(
+            FrontendErrorKind::Unsupported.to_string(),
+            "unsupported"
+        );
+
+        assert_eq!(
+            FrontendErrorKind::LimitExceeded.to_string(),
+            "limit_exceeded"
+        );
+
+        assert_eq!(
+            FrontendErrorKind::Lowering.to_string(),
+            "lowering"
+        );
+    }
+
+    #[test]
+    fn custom_context_is_preserved_in_order() {
+        let error = FrontendError::internal("invariant")
+            .with_context(
+                FrontendErrorContext::new(
+                    "stage",
+                    "lowering",
+                ),
+            )
+            .with_context(
+                FrontendErrorContext::new(
+                    "format",
+                    "OpenQASM",
+                ),
+            );
+
+        assert_eq!(
+            error.contexts()[0].key(),
+            "stage"
+        );
+
+        assert_eq!(
+            error.contexts()[1].key(),
+            "format"
+        );
+    }
+
+    #[test]
+    fn convenience_constructors_have_expected_kinds() {
+        assert_eq!(
+            FrontendError::invalid_input("x").kind(),
+            FrontendErrorKind::InvalidInput
+        );
+
+        assert_eq!(
+            FrontendError::unsupported("x").kind(),
+            FrontendErrorKind::Unsupported
+        );
+
+        assert_eq!(
+            FrontendError::import("x").kind(),
+            FrontendErrorKind::Import
+        );
+
+        assert_eq!(
+            FrontendError::export("x").kind(),
+            FrontendErrorKind::Export
+        );
+
+        assert_eq!(
+            FrontendError::lowering("x").kind(),
+            FrontendErrorKind::Lowering
+        );
+
+        assert_eq!(
+            FrontendError::internal("x").kind(),
+            FrontendErrorKind::Internal
+        );
     }
 }
