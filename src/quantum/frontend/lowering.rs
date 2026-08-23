@@ -19,8 +19,8 @@
 //!                          │
 //!                          ▼
 //!              ┌────────────────────────┐
-//!              │  Frontend lowering     │
-//!              │  (this module)         │
+//!              │    Frontend lowering   │
+//!              │      this module       │
 //!              └───────────┬────────────┘
 //!                          │
 //!                          ▼
@@ -36,83 +36,75 @@
 //!
 //! # Responsibility
 //!
-//! This module owns the *boundary contract* for lowering. It does not own any
-//! external format's syntax or semantics.
+//! This module owns the format-independent lowering contract.
 //!
-//! In particular, this module must not contain:
+//! It does NOT own:
 //!
 //! - OpenQASM grammar;
 //! - QIR grammar;
 //! - Quil grammar;
 //! - format-specific ASTs;
-//! - format-specific gate-name tables;
+//! - format-specific gate tables;
 //! - hardware topology;
-//! - routing;
+//! - qubit routing;
 //! - scheduling;
 //! - optimization;
+//! - backend decomposition;
 //! - execution;
-//! - backend-specific decomposition;
-//! - implicit filesystem access;
-//! - implicit network access;
+//! - filesystem access;
+//! - network access;
 //! - external process execution.
 //!
-//! Format implementations supply a [`LoweringSource`] implementation and use
-//! [`LoweringContext`] to construct the canonical IR.
+//! Format implementations are responsible for translating their own validated
+//! representations into canonical `quantum::ir` objects and then passing those
+//! objects through this boundary.
 //!
 //! # Canonical IR ownership
 //!
-//! The canonical Quantum IR remains the sole owner of:
+//! The Quantum IR remains the sole owner of:
 //!
 //! - `QuantumCircuit`;
 //! - `Gate`;
 //! - `GateKind`;
 //! - `Parameter`;
-//! - qubit identities;
+//! - logical qubit identity;
 //! - measurement semantics;
-//! - circuit invariants;
-//! - IR validation.
+//! - operation invariants;
+//! - IR resource limits;
+//! - canonical IR validation.
 //!
-//! The IR explicitly defines frontend parsing as outside its responsibility.
+//! The frontend must never create a competing semantic circuit model.
 //!
-//! # Safety model
+//! # Transactional guarantee
 //!
-//! Lowering is an untrusted-input boundary. A format parser may have produced a
-//! syntactically and semantically valid representation while still presenting
-//! resource sizes that must be checked against the canonical IR policy.
-//!
-//! Consequently this module:
-//!
-//! 1. checks lowering input sizes before mutation;
-//! 2. uses checked arithmetic;
-//! 3. never partially commits a failed operation;
-//! 4. validates the complete circuit before returning it;
-//! 5. never silently discards an unsupported operation;
-//! 6. never performs external effects.
-//!
-//! # Atomicity
-//!
-//! A lowering operation is transactional at the public boundary:
+//! The public [`Lowerer::lower`] operation is transactional:
 //!
 //! ```text
-//! external representation
-//!          │
-//!          ▼
-//!       lowering
-//!          │
-//!     ┌────┴────┐
-//!     │         │
-//!   success    error
-//!     │         │
-//!     ▼         ▼
-//! QuantumCircuit  no circuit returned
+//! validated source
+//!       │
+//!       ▼
+//!   lowering context
+//!       │
+//!       ├──────────────► error
+//!       │                  │
+//!       │                  ▼
+//!       │             no circuit returned
+//!       │
+//!       ▼
+//! canonical QuantumCircuit
+//!       │
+//!       ▼
+//! whole-circuit validation
+//!       │
+//!       ▼
+//! successful result
 //! ```
 //!
-//! A failed lowering operation must never be presented as a successful
-//! partially lowered circuit.
+//! A caller never receives a partially lowered circuit from `lower()`.
 //!
 //! # Format independence
 //!
-//! Adding or removing a format must not require modification of this module.
+//! Every format lowers directly into the canonical Quantum IR:
 //!
 //! ```text
 //! OpenQASM ────────┐
@@ -127,27 +119,46 @@
 //! OpenQASM → QIR → lowering
 //! ```
 //!
-//! Each format lowers independently into the canonical IR.
+//! Adding or removing a format therefore does not require changing this module.
+//!
+//! # Resource safety
+//!
+//! Lowering is an untrusted-input boundary.
+//!
+//! This module therefore:
+//!
+//! 1. validates the frontend limit configuration;
+//! 2. validates the format-specific source before mutation;
+//! 3. checks source resource declarations against frontend limits;
+//! 4. checks source resource declarations against IR limits;
+//! 5. uses checked arithmetic for counters;
+//! 6. validates every gate through the canonical IR mutation API;
+//! 7. verifies the declared operation count against the actual operation stream;
+//! 8. performs whole-circuit canonical IR validation before success;
+//! 9. never silently discards unsupported constructs;
+//! 10. performs no external effects.
 //!
 //! # Rust compatibility
 //!
-//! Target toolchain: Rust 1.97.1 / Rust 2021.
+//! Target:
 //!
-//! No nightly features are required.
-//! No new dependencies are required.
+//! - Rust 1.97.1
+//! - Rust 2021
+//! - stable Rust only
+//! - no new dependencies
 
 use std::fmt;
 
 use crate::quantum::ir::{
     validate_circuit_with_limits,
     Gate,
-    GateParameter,
     QuantumCircuit,
     QuantumIrLimits,
 };
 
 use super::core::errors::{
     FrontendError,
+    FrontendErrorCode,
     FrontendErrorKind,
     FrontendResult,
 };
@@ -161,22 +172,24 @@ use super::format::{
 // Public result types
 // =============================================================================
 
-/// Result produced by a complete lowering operation.
+/// Result type used by the lowering subsystem.
 pub type LoweringResult<T> = FrontendResult<T>;
 
-/// Result produced by lowering one externally supplied operation.
+/// Result of successfully lowering one canonical gate.
 ///
-/// The operation is returned as the canonical Quantum IR [`Gate`].
-pub type LoweredGateResult = FrontendResult<Gate>;
+/// The returned gate is cloned from the validated source operation. This alias
+/// exists as part of the stable API for callers that lower individual
+/// operations.
+pub type LoweredGateResult = LoweringResult<Gate>;
 
 // =============================================================================
 // Lowering source contract
 // =============================================================================
 
-/// Format-independent source of canonical IR operations.
+/// Format-independent source of already-translated canonical operations.
 ///
-/// A format-specific frontend implements this trait for its own validated
-/// representation.
+/// A concrete format owns its parser, AST, symbol table, semantic validation,
+/// and source-to-IR translation.
 ///
 /// For example:
 ///
@@ -186,13 +199,27 @@ pub type LoweredGateResult = FrontendResult<Gate>;
 /// Quil AST     ──► QuilLoweringSource
 /// ```
 ///
-/// Each implementation is independent.
+/// The generic lowering layer never needs to know the structure of those
+/// formats.
 ///
-/// # Important
+/// # Contract
 ///
-/// `LoweringSource` is intentionally an operation-oriented abstraction rather
-/// than a generic AST abstraction. It must not force future formats to adopt
-/// an OpenQASM-shaped representation.
+/// Implementations MUST:
+///
+/// - return deterministic metadata;
+/// - return logical, not physical, qubit counts;
+/// - return the exact number of operations exposed by `operations()`;
+/// - expose operations in canonical source order;
+/// - perform format-specific semantic validation in `validate()`;
+/// - avoid external side effects.
+///
+/// Implementations MUST NOT:
+///
+/// - mutate the canonical IR from `validate()`;
+/// - access the network;
+/// - access arbitrary files;
+/// - execute programs;
+/// - silently discard unsupported semantics.
 pub trait LoweringSource {
     /// Returns the external format identity.
     fn format(&self) -> FormatId;
@@ -202,33 +229,34 @@ pub trait LoweringSource {
 
     /// Returns the number of logical qubits required by the source.
     ///
-    /// This value must already represent the logical namespace required by the
-    /// source language. It must not represent physical hardware resources.
+    /// This represents the source's logical namespace, not physical hardware
+    /// resources.
     fn num_qubits(&self) -> usize;
 
     /// Returns the number of classical bits required by the source.
     ///
-    /// If the source format has no classical namespace, this must return zero.
+    /// Formats without a classical namespace must return zero.
     fn num_classical_bits(&self) -> usize;
 
-    /// Returns the number of operations that will be lowered.
+    /// Returns the number of operations exposed by [`Self::operations`].
     ///
-    /// This value is used before mutation to enforce operation limits.
+    /// This value MUST exactly match the number of yielded operations.
     fn operation_count(&self) -> usize;
 
-    /// Returns the source operations in their canonical source order.
+    /// Returns operations in deterministic source order.
     ///
-    /// The returned iterator must be deterministic.
-    ///
-    /// The source representation remains owned by the format implementation.
-    /// This trait only exposes the lowering view.
-    fn operations(&self) -> Box<dyn Iterator<Item = LoweringOperation<'_>> + '_>;
+    /// The iterator must not reorder operations.
+    fn operations(
+        &self,
+    ) -> Box<dyn Iterator<Item = LoweringOperation<'_>> + '_>;
 
-    /// Performs format-specific validation that is required before lowering.
+    /// Performs format-specific validation before generic lowering begins.
     ///
-    /// This method must not mutate the canonical IR because format validation
-    /// belongs to the format implementation.
-    fn validate(&self, limits: &FrontendLimits) -> LoweringResult<()>;
+    /// This is deliberately separate from canonical IR validation.
+    fn validate(
+        &self,
+        limits: &FrontendLimits,
+    ) -> LoweringResult<()>;
 }
 
 // =============================================================================
@@ -237,27 +265,29 @@ pub trait LoweringSource {
 
 /// One operation presented to the generic lowering layer.
 ///
-/// This deliberately contains the canonical IR operation rather than an
-/// OpenQASM/QIR/Quil-specific gate representation.
-///
-/// Format-specific implementations are responsible for translating their
-/// source semantics into this canonical representation.
+/// The canonical IR owns quantum operation semantics. Format-specific
+/// implementations therefore translate their own source constructs before
+/// presenting them here.
 pub enum LoweringOperation<'a> {
-    /// Canonical quantum gate.
+    /// A canonical validated Quantum IR gate.
     Gate(&'a Gate),
 
-    /// A format-specific construct that has no canonical IR representation.
+    /// A source construct that cannot currently be represented by the
+    /// canonical IR.
     ///
-    /// Such constructs must be rejected by the format's lowering logic rather
-    /// than silently ignored.
+    /// This variant exists specifically to make accidental semantic loss
+    /// impossible. It must never be ignored.
     Unsupported {
-        /// Stable format-specific feature name.
+        /// Stable description of the unsupported construct.
         feature: &'a str,
     },
 }
 
 impl<'a> fmt::Debug for LoweringOperation<'a> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::Gate(gate) => formatter
                 .debug_tuple("Gate")
@@ -276,64 +306,60 @@ impl<'a> fmt::Debug for LoweringOperation<'a> {
 // Lowering configuration
 // =============================================================================
 
-/// Configuration controlling a lowering operation.
+/// Configuration for one lowering transaction.
 ///
-/// This configuration deliberately separates:
+/// Frontend and IR limits intentionally remain separate:
 ///
-/// - frontend limits, which protect parsing/lowering input;
-/// - IR limits, which protect the resulting canonical representation.
-///
-/// These policies have different ownership and must not be conflated.
+/// ```text
+/// FrontendLimits
+///     │
+///     ├── protects parsing/lowering complexity
+///     │
+///     ▼
+/// lowering
+///     │
+///     ▼
+/// QuantumIrLimits
+///     │
+///     └── constrains canonical IR
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LoweringConfig {
-    /// Resource limits for the frontend input.
     frontend_limits: FrontendLimits,
-
-    /// Resource limits for the resulting canonical Quantum IR.
     ir_limits: QuantumIrLimits,
-
-    /// Whether canonical IR validation must be performed after construction.
-    ///
-    /// This is always enabled by [`Lowerer::lower`]. The field exists only as
-    /// part of the explicit configuration contract and is intentionally not
-    /// exposed as a way to bypass validation.
-    validate_output: bool,
 }
 
 impl LoweringConfig {
-    /// Creates a production lowering configuration.
+    /// Creates a lowering configuration.
     ///
-    /// Canonical output validation is always enabled.
+    /// Validation of the supplied policies occurs when lowering starts, so an
+    /// invalid configuration can be reported through the normal
+    /// `FrontendResult` API without introducing another public error type.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         frontend_limits: FrontendLimits,
         ir_limits: QuantumIrLimits,
     ) -> Self {
         Self {
             frontend_limits,
             ir_limits,
-            validate_output: true,
         }
     }
 
     /// Returns frontend resource limits.
     #[must_use]
-    pub const fn frontend_limits(&self) -> &FrontendLimits {
+    pub const fn frontend_limits(
+        &self,
+    ) -> &FrontendLimits {
         &self.frontend_limits
     }
 
-    /// Returns canonical IR resource limits.
+    /// Returns canonical Quantum IR limits.
     #[must_use]
-    pub const fn ir_limits(&self) -> &QuantumIrLimits {
+    pub const fn ir_limits(
+        &self,
+    ) -> &QuantumIrLimits {
         &self.ir_limits
-    }
-
-    /// Returns whether output validation is enabled.
-    ///
-    /// This is always `true` for production lowering.
-    #[must_use]
-    pub const fn validates_output(&self) -> bool {
-        self.validate_output
     }
 }
 
@@ -341,7 +367,7 @@ impl Default for LoweringConfig {
     fn default() -> Self {
         Self::new(
             FrontendLimits::default(),
-            QuantumIrLimits::default(),
+            QuantumIrLimits::production(),
         )
     }
 }
@@ -350,13 +376,13 @@ impl Default for LoweringConfig {
 // Lowering context
 // =============================================================================
 
-/// Context used while lowering a validated source representation.
+/// Mutable transaction state used during lowering.
 ///
-/// The context owns the destination `QuantumCircuit` and applies the IR's
-/// canonical mutation API.
+/// `LoweringContext` is intentionally not the public result of lowering.
+/// It may contain a partially constructed circuit while an operation is being
+/// processed. Only [`LoweringContext::finish`] can commit it to the caller.
 ///
-/// Format-specific code should use this context rather than constructing an
-/// alternative circuit representation.
+/// The public [`Lowerer::lower`] API never exposes this intermediate state.
 pub struct LoweringContext {
     format: FormatId,
     version: FormatVersion,
@@ -366,23 +392,29 @@ pub struct LoweringContext {
 }
 
 impl fmt::Debug for LoweringContext {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter
             .debug_struct("LoweringContext")
             .field("format", &self.format)
             .field("version", &self.version)
-            .field("lowered_operations", &self.lowered_operations)
+            .field(
+                "lowered_operations",
+                &self.lowered_operations,
+            )
             .field("config", &self.config)
+            .field("circuit", &self.circuit)
             .finish()
     }
 }
 
 impl LoweringContext {
-    /// Creates a lowering context.
+    /// Creates a lowering context for a validated source.
     ///
-    /// The destination circuit is created using the canonical Quantum IR.
-    ///
-    /// No external side effects occur.
+    /// This method performs all pre-mutation checks before creating the
+    /// destination circuit.
     pub fn new<S>(
         source: &S,
         config: LoweringConfig,
@@ -390,15 +422,31 @@ impl LoweringContext {
     where
         S: LoweringSource + ?Sized,
     {
+        Self::validate_configuration(&config)?;
+
         source.validate(config.frontend_limits())?;
 
-        Self::check_source_limits(source, &config)?;
+        Self::check_source_capacity(
+            source,
+            &config,
+        )?;
 
-        let circuit = Self::create_circuit(
+        let circuit = QuantumCircuit::try_new_with_limits(
             source.num_qubits(),
             source.num_classical_bits(),
-            config.ir_limits(),
-        )?;
+            config.ir_limits().clone(),
+        )
+        .map_err(|error| {
+            FrontendError::with_code(
+                FrontendErrorKind::Lowering,
+                FrontendErrorCode::new("LOWER-E001"),
+                format!(
+                    "failed to construct canonical Quantum IR circuit: {error}"
+                ),
+            )
+            .context("format", source.format().to_string())
+            .context("version", source.version().to_string())
+        })?;
 
         Ok(Self {
             format: source.format(),
@@ -409,265 +457,385 @@ impl LoweringContext {
         })
     }
 
-    /// Returns the source format.
+    /// Returns the source format identity.
     #[must_use]
-    pub const fn format(&self) -> &FormatId {
+    pub const fn format(
+        &self,
+    ) -> &FormatId {
         &self.format
     }
 
     /// Returns the source format version.
     #[must_use]
-    pub const fn version(&self) -> &FormatVersion {
+    pub const fn version(
+        &self,
+    ) -> &FormatVersion {
         &self.version
     }
 
-    /// Returns the number of operations successfully lowered so far.
+    /// Returns the number of successfully inserted operations.
     #[must_use]
-    pub const fn lowered_operations(&self) -> usize {
+    pub const fn lowered_operations(
+        &self,
+    ) -> usize {
         self.lowered_operations
     }
 
-    /// Returns the lowering configuration.
+    /// Returns the active lowering configuration.
     #[must_use]
-    pub const fn config(&self) -> &LoweringConfig {
+    pub const fn config(
+        &self,
+    ) -> &LoweringConfig {
         &self.config
     }
 
-    /// Returns a read-only view of the partially constructed circuit.
+    /// Returns a read-only view of the current circuit.
     ///
-    /// This is intended for diagnostics and controlled inspection only.
+    /// This is intended for diagnostics and controlled inspection.
     #[must_use]
-    pub const fn circuit(&self) -> &QuantumCircuit {
+    pub const fn circuit(
+        &self,
+    ) -> &QuantumCircuit {
         &self.circuit
     }
 
-    /// Adds one canonical gate to the destination circuit.
+    /// Lowers and inserts one canonical gate.
     ///
-    /// The gate is validated by the canonical IR mutation boundary.
-    ///
-    /// No operation is counted as successfully lowered until the IR accepts
-    /// the mutation.
+    /// The canonical `QuantumCircuit::push` method remains the final local
+    /// mutation authority. This prevents the frontend from duplicating IR
+    /// validation logic.
     pub fn push_gate(
         &mut self,
         gate: &Gate,
     ) -> LoweredGateResult {
         self.ensure_operation_capacity()?;
 
-        self.insert_gate(gate)?;
+        self.circuit
+            .push(gate.clone())
+            .map_err(|error| {
+                FrontendError::with_code(
+                    FrontendErrorKind::Lowering,
+                    FrontendErrorCode::new("LOWER-E002"),
+                    format!(
+                        "canonical Quantum IR rejected lowered operation: {error}"
+                    ),
+                )
+                .context("format", self.format.to_string())
+                .context("version", self.version.to_string())
+                .context("stage", "canonical-ir-insertion")
+            })?;
 
         self.lowered_operations = self
             .lowered_operations
             .checked_add(1)
             .ok_or_else(|| {
-                FrontendError::internal(
-                    "lowered operation counter overflowed",
+                FrontendError::with_code(
+                    FrontendErrorKind::Internal,
+                    FrontendErrorCode::new("LOWER-I001"),
+                    "lowering operation counter overflowed",
                 )
             })?;
 
         Ok(gate.clone())
     }
 
-    /// Rejects a source-level construct that cannot be represented by the
-    /// canonical IR.
+    /// Rejects a construct that cannot be represented by the canonical IR.
     ///
-    /// Unsupported constructs must never be silently discarded.
+    /// Unsupported semantics are never silently discarded.
     pub fn reject_unsupported(
         &self,
         feature: &str,
     ) -> LoweringResult<()> {
-        if feature.is_empty() {
-            return Err(FrontendError::invalid_input(
-                "unsupported lowering feature name must not be empty",
-            ));
+        if feature.trim().is_empty() {
+            return Err(
+                FrontendError::with_code(
+                    FrontendErrorKind::InvalidInput,
+                    FrontendErrorCode::new("LOWER-E003"),
+                    "unsupported feature name must not be empty",
+                )
+                .context("stage", "lowering"),
+            );
         }
 
-        Err(FrontendError::unsupported(format!(
-            "format `{}` version `{}` contains unsupported construct `{feature}`",
-            self.format,
-            self.version,
-        )))
+        Err(
+            FrontendError::with_code(
+                FrontendErrorKind::Unsupported,
+                FrontendErrorCode::new("LOWER-U001"),
+                format!(
+                    "format `{}` version `{}` contains unsupported construct `{feature}`",
+                    self.format,
+                    self.version,
+                ),
+            )
+            .context("format", self.format.to_string())
+            .context("version", self.version.to_string())
+            .context("feature", feature),
+        )
     }
 
-    /// Completes lowering and returns the canonical Quantum IR.
+    /// Commits the lowering transaction.
     ///
-    /// This is the commit point.
-    ///
-    /// The circuit is subjected to whole-circuit canonical IR validation before
-    /// being returned.
-    pub fn finish(self) -> LoweringResult<QuantumCircuit> {
-        if !self.config.validates_output() {
-            return Err(FrontendError::internal(
-                "canonical Quantum IR validation cannot be disabled",
-            ));
-        }
-
+    /// Whole-circuit canonical validation is mandatory.
+    pub fn finish(
+        self,
+    ) -> LoweringResult<QuantumCircuit> {
         validate_circuit_with_limits(
             &self.circuit,
             self.config.ir_limits(),
         )
         .map_err(|error| {
-            FrontendError::lowering(format!(
-                "lowering produced invalid canonical Quantum IR: {error}"
-            ))
+            FrontendError::with_code(
+                FrontendErrorKind::Lowering,
+                FrontendErrorCode::new("LOWER-E004"),
+                format!(
+                    "lowering produced invalid canonical Quantum IR: {error}"
+                ),
+            )
+            .context("format", self.format.to_string())
+            .context("version", self.version.to_string())
+            .context("stage", "canonical-ir-validation")
         })?;
 
         Ok(self.circuit)
     }
 
     // -------------------------------------------------------------------------
-    // Internal construction helpers
+    // Internal validation
     // -------------------------------------------------------------------------
 
-    fn check_source_limits<S>(
+    fn validate_configuration(
+        config: &LoweringConfig,
+    ) -> LoweringResult<()> {
+        config
+            .frontend_limits()
+            .validate()
+            .map_err(|error| {
+                FrontendError::with_code(
+                    FrontendErrorKind::InvalidInput,
+                    FrontendErrorCode::new("LOWER-C001"),
+                    format!(
+                        "invalid frontend limit configuration: {error}"
+                    ),
+                )
+                .context("stage", "lowering-configuration")
+            })?;
+
+        config
+            .ir_limits()
+            .validate()
+            .map_err(|error| {
+                FrontendError::with_code(
+                    FrontendErrorKind::InvalidInput,
+                    FrontendErrorCode::new("LOWER-C002"),
+                    format!(
+                        "invalid Quantum IR limit configuration: {error}"
+                    ),
+                )
+                .context("stage", "lowering-configuration")
+            })?;
+
+        Ok(())
+    }
+
+    fn check_source_capacity<S>(
         source: &S,
         config: &LoweringConfig,
     ) -> LoweringResult<()>
     where
         S: LoweringSource + ?Sized,
     {
-        let frontend_limits = config.frontend_limits();
+        let num_qubits = source.num_qubits();
+        let num_classical_bits =
+            source.num_classical_bits();
+        let operation_count =
+            source.operation_count();
 
-        if source.num_qubits() > frontend_limits.max_register_size() {
-            return Err(FrontendError::limit_exceeded(format!(
-                "source requires {} logical qubits, exceeding frontend register limit {}",
-                source.num_qubits(),
-                frontend_limits.max_register_size(),
-            )));
-        }
-
-        if source.num_classical_bits()
-            > frontend_limits.max_register_size()
-        {
-            return Err(FrontendError::limit_exceeded(format!(
-                "source requires {} classical bits, exceeding frontend register limit {}",
-                source.num_classical_bits(),
-                frontend_limits.max_register_size(),
-            )));
-        }
-
-        if source.operation_count() > frontend_limits.max_gate_operations() {
-            return Err(FrontendError::limit_exceeded(format!(
-                "source contains {} operations, exceeding frontend operation limit {}",
-                source.operation_count(),
-                frontend_limits.max_gate_operations(),
-            )));
-        }
-
-        Ok(())
-    }
-
-    fn create_circuit(
-        num_qubits: usize,
-        num_classical_bits: usize,
-        limits: &QuantumIrLimits,
-    ) -> LoweringResult<QuantumCircuit> {
-        /*
-         * IMPORTANT INTEGRATION CONTRACT
-         * --------------------------------
-         *
-         * QuantumCircuit construction belongs exclusively to
-         * quantum::ir::circuit.
-         *
-         * This function is intentionally the only place in this file where a
-         * lowering context obtains a destination circuit.
-         *
-         * The exact constructor must remain the canonical QuantumCircuit
-         * constructor exposed by the IR module.
-         *
-         * If the IR constructor changes, only this adapter point should need
-         * adjustment; no format implementation should construct QuantumCircuit
-         * directly.
-         */
-
-        QuantumCircuit::new(
-            num_qubits,
-            num_classical_bits,
-            limits.clone(),
-        )
-        .map_err(|error| {
-            FrontendError::lowering(format!(
-                "failed to create canonical Quantum IR circuit: {error}"
-            ))
-        })
-    }
-
-    fn ensure_operation_capacity(&self) -> LoweringResult<()> {
-        let next = self
-            .lowered_operations
-            .checked_add(1)
-            .ok_or_else(|| {
-                FrontendError::internal(
-                    "lowering operation count overflowed",
+        let qubits_u64 =
+            u64::try_from(num_qubits).map_err(|_| {
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L001"),
+                    "logical qubit count cannot be represented by frontend limits",
                 )
             })?;
 
-        if next > self.config.ir_limits().max_operations() {
-            return Err(FrontendError::limit_exceeded(format!(
-                "lowering would exceed canonical Quantum IR operation limit {}",
-                self.config.ir_limits().max_operations(),
-            )));
+        let classical_bits_u64 =
+            u64::try_from(num_classical_bits).map_err(|_| {
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L002"),
+                    "classical-bit count cannot be represented by frontend limits",
+                )
+            })?;
+
+        let operations_u64 =
+            u64::try_from(operation_count).map_err(|_| {
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L003"),
+                    "operation count cannot be represented by frontend limits",
+                )
+            })?;
+
+        let frontend_limits =
+            config.frontend_limits();
+
+        if qubits_u64
+            > frontend_limits.max_register_size()
+        {
+            return Err(
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L004"),
+                    format!(
+                        "source requires {num_qubits} logical qubits, exceeding frontend register limit {}",
+                        frontend_limits.max_register_size(),
+                    ),
+                )
+                .context("resource", "logical-qubits"),
+            );
         }
+
+        if classical_bits_u64
+            > frontend_limits.max_register_size()
+        {
+            return Err(
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L005"),
+                    format!(
+                        "source requires {num_classical_bits} classical bits, exceeding frontend register limit {}",
+                        frontend_limits.max_register_size(),
+                    ),
+                )
+                .context("resource", "classical-bits"),
+            );
+        }
+
+        if operations_u64
+            > frontend_limits.max_gate_operations()
+        {
+            return Err(
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L006"),
+                    format!(
+                        "source contains {operation_count} operations, exceeding frontend operation limit {}",
+                        frontend_limits.max_gate_operations(),
+                    ),
+                )
+                .context("resource", "operations"),
+            );
+        }
+
+        // Check the same declarations against the canonical IR policy.
+        //
+        // This is intentionally delegated to QuantumIrLimits so the frontend
+        // does not duplicate IR resource semantics.
+        config
+            .ir_limits()
+            .check_qubits(num_qubits)
+            .map_err(|error| {
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L007"),
+                    format!(
+                        "source logical-qubit count violates canonical Quantum IR limits: {error}"
+                    ),
+                )
+                .context("resource", "logical-qubits")
+            })?;
+
+        config
+            .ir_limits()
+            .check_classical_bits(
+                num_classical_bits,
+            )
+            .map_err(|error| {
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L008"),
+                    format!(
+                        "source classical-bit count violates canonical Quantum IR limits: {error}"
+                    ),
+                )
+                .context("resource", "classical-bits")
+            })?;
+
+        config
+            .ir_limits()
+            .check_operations(operation_count)
+            .map_err(|error| {
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L009"),
+                    format!(
+                        "source operation count violates canonical Quantum IR limits: {error}"
+                    ),
+                )
+                .context("resource", "operations")
+            })?;
 
         Ok(())
     }
 
-    fn insert_gate(
-        &mut self,
-        gate: &Gate,
+    fn ensure_operation_capacity(
+        &self,
     ) -> LoweringResult<()> {
-        /*
-         * The canonical QuantumCircuit API is the semantic authority.
-         *
-         * Do not manually validate:
-         *
-         * - qubit ranges;
-         * - gate arity;
-         * - duplicate operands;
-         * - parameter counts;
-         * - operation IDs;
-         * - circuit operation limits.
-         *
-         * Those belong to the Quantum IR.
-         *
-         * This keeps frontend lowering independent from IR implementation
-         * details while still guaranteeing canonical validation.
-         */
+        let next_count = self
+            .lowered_operations
+            .checked_add(1)
+            .ok_or_else(|| {
+                FrontendError::with_code(
+                    FrontendErrorKind::Internal,
+                    FrontendErrorCode::new("LOWER-I002"),
+                    "lowering operation counter overflowed",
+                )
+            })?;
 
-        self.circuit
-            .add_gate(gate.clone())
+        self.config
+            .ir_limits()
+            .check_operations(next_count)
             .map_err(|error| {
-                FrontendError::lowering(format!(
-                    "canonical Quantum IR rejected lowered gate: {error}"
-                ))
-            })
+                FrontendError::with_code(
+                    FrontendErrorKind::LimitExceeded,
+                    FrontendErrorCode::new("LOWER-L010"),
+                    format!(
+                        "lowering would exceed canonical Quantum IR operation limit: {error}"
+                    ),
+                )
+                .context("resource", "operations")
+            })?;
+
+        Ok(())
     }
 }
 
 // =============================================================================
-// Complete lowering API
+// Stateless lowerer
 // =============================================================================
 
 /// Stateless production lowerer.
 ///
-/// The type exists to provide a stable public API while keeping all mutable
-/// construction state inside [`LoweringContext`].
+/// All mutable state belongs to [`LoweringContext`], allowing the lowerer to
+/// remain cheap to construct and safely share between independent operations.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Lowerer;
 
 impl Lowerer {
-    /// Creates a production lowerer.
+    /// Creates a stateless lowerer.
     #[must_use]
     pub const fn new() -> Self {
         Self
     }
 
-    /// Lowers a validated format-specific source into canonical Quantum IR.
+    /// Lowers a complete validated source into canonical Quantum IR.
     ///
-    /// The operation is transactional from the caller's perspective:
+    /// The result is transactional:
     ///
-    /// - success returns a fully validated `QuantumCircuit`;
-    /// - failure returns a `FrontendError`;
-    /// - no partially constructed circuit is returned.
+    /// - success returns a fully validated circuit;
+    /// - failure returns a frontend error;
+    /// - no partial circuit escapes.
     pub fn lower<S>(
         &self,
         source: &S,
@@ -676,18 +844,55 @@ impl Lowerer {
     where
         S: LoweringSource + ?Sized,
     {
-        let mut context = LoweringContext::new(source, config)?;
+        let expected_operations =
+            source.operation_count();
+
+        let mut context =
+            LoweringContext::new(source, config)?;
+
+        let mut observed_operations =
+            0usize;
 
         for operation in source.operations() {
+            observed_operations =
+                observed_operations
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        FrontendError::with_code(
+                            FrontendErrorKind::Internal,
+                            FrontendErrorCode::new("LOWER-I003"),
+                            "source operation iterator counter overflowed",
+                        )
+                    })?;
+
             match operation {
                 LoweringOperation::Gate(gate) => {
                     context.push_gate(gate)?;
                 }
 
-                LoweringOperation::Unsupported { feature } => {
-                    context.reject_unsupported(feature)?;
+                LoweringOperation::Unsupported {
+                    feature,
+                } => {
+                    context
+                        .reject_unsupported(feature)?;
                 }
             }
+        }
+
+        if observed_operations
+            != expected_operations
+        {
+            return Err(
+                FrontendError::with_code(
+                    FrontendErrorKind::Lowering,
+                    FrontendErrorCode::new("LOWER-E005"),
+                    format!(
+                        "source operation-count contract violated: declared {expected_operations}, yielded {observed_operations}",
+                    ),
+                )
+                .context("format", context.format().to_string())
+                .context("version", context.version().to_string()),
+            );
         }
 
         context.finish()
@@ -698,9 +903,7 @@ impl Lowerer {
 // Convenience API
 // =============================================================================
 
-/// Lowers a format-specific source using the default production configuration.
-///
-/// This function is intentionally format-independent.
+/// Lowers a source using the default production configuration.
 pub fn lower<S>(
     source: &S,
 ) -> LoweringResult<QuantumCircuit>
@@ -714,13 +917,13 @@ where
 }
 
 // =============================================================================
-// Validation helpers
+// Capacity validation helper
 // =============================================================================
 
-/// Verifies that a lowering source can fit inside both frontend and IR limits.
+/// Validates whether a source can fit inside the configured frontend and
+/// canonical IR resource policies.
 ///
-/// This function performs only resource checks. It does not construct or
-/// mutate a `QuantumCircuit`.
+/// This performs no circuit construction and no mutation.
 pub fn validate_lowering_capacity<S>(
     source: &S,
     config: &LoweringConfig,
@@ -728,37 +931,18 @@ pub fn validate_lowering_capacity<S>(
 where
     S: LoweringSource + ?Sized,
 {
-    source.validate(config.frontend_limits())?;
+    LoweringContext::validate_configuration(
+        config,
+    )?;
 
-    if source.num_qubits() > config.ir_limits().max_qubits() {
-        return Err(FrontendError::limit_exceeded(format!(
-            "source requires {} qubits, exceeding canonical Quantum IR limit {}",
-            source.num_qubits(),
-            config.ir_limits().max_qubits(),
-        )));
-    }
+    source.validate(
+        config.frontend_limits(),
+    )?;
 
-    if source.num_classical_bits()
-        > config.ir_limits().max_classical_bits()
-    {
-        return Err(FrontendError::limit_exceeded(format!(
-            "source requires {} classical bits, exceeding canonical Quantum IR limit {}",
-            source.num_classical_bits(),
-            config.ir_limits().max_classical_bits(),
-        )));
-    }
-
-    if source.operation_count()
-        > config.ir_limits().max_operations()
-    {
-        return Err(FrontendError::limit_exceeded(format!(
-            "source contains {} operations, exceeding canonical Quantum IR limit {}",
-            source.operation_count(),
-            config.ir_limits().max_operations(),
-        )));
-    }
-
-    Ok(())
+    LoweringContext::check_source_capacity(
+        source,
+        config,
+    )
 }
 
 // =============================================================================
@@ -769,61 +953,240 @@ where
 mod tests {
     use super::*;
 
-    /*
-     * These tests intentionally test the generic lowering boundary rather than
-     * OpenQASM.
-     *
-     * OpenQASM-specific lowering tests belong in:
-     *
-     *     frontend/tests/openqasm/importer.rs
-     *     frontend/tests/openqasm/integration.rs
-     *
-     * This prevents the generic frontend contract from becoming coupled to
-     * OpenQASM.
-     */
+    struct EmptySource {
+        format: FormatId,
+        version: FormatVersion,
+    }
 
-    #[test]
-    fn default_lowering_config_enables_output_validation() {
-        let config = LoweringConfig::default();
+    impl EmptySource {
+        fn new() -> Self {
+            Self {
+                format: FormatId::new(
+                    "test-format",
+                )
+                .expect(
+                    "test format identifier must be valid",
+                ),
+                version: FormatVersion::new(
+                    1,
+                    0,
+                    0,
+                ),
+            }
+        }
+    }
 
-        assert!(config.validates_output());
+    impl LoweringSource for EmptySource {
+        fn format(&self) -> FormatId {
+            self.format.clone()
+        }
+
+        fn version(&self) -> FormatVersion {
+            self.version
+        }
+
+        fn num_qubits(&self) -> usize {
+            0
+        }
+
+        fn num_classical_bits(&self) -> usize {
+            0
+        }
+
+        fn operation_count(&self) -> usize {
+            0
+        }
+
+        fn operations(
+            &self,
+        ) -> Box<
+            dyn Iterator<
+                    Item = LoweringOperation<'_>,
+                > + '_,
+        > {
+            Box::new(
+                std::iter::empty(),
+            )
+        }
+
+        fn validate(
+            &self,
+            _limits: &FrontendLimits,
+        ) -> LoweringResult<()> {
+            Ok(())
+        }
+    }
+
+    struct MismatchedCountSource;
+
+    impl LoweringSource
+        for MismatchedCountSource
+    {
+        fn format(&self) -> FormatId {
+            FormatId::new(
+                "test-mismatch",
+            )
+            .expect(
+                "test format identifier must be valid",
+            )
+        }
+
+        fn version(&self) -> FormatVersion {
+            FormatVersion::new(
+                1,
+                0,
+                0,
+            )
+        }
+
+        fn num_qubits(&self) -> usize {
+            0
+        }
+
+        fn num_classical_bits(&self) -> usize {
+            0
+        }
+
+        fn operation_count(&self) -> usize {
+            1
+        }
+
+        fn operations(
+            &self,
+        ) -> Box<
+            dyn Iterator<
+                    Item = LoweringOperation<'_>,
+                > + '_,
+        > {
+            Box::new(
+                std::iter::empty(),
+            )
+        }
+
+        fn validate(
+            &self,
+            _limits: &FrontendLimits,
+        ) -> LoweringResult<()> {
+            Ok(())
+        }
     }
 
     #[test]
-    fn lowerer_is_constructible_without_state() {
-        let _lowerer = Lowerer::new();
+    fn default_config_uses_production_ir_limits() {
+        let config =
+            LoweringConfig::default();
+
+        assert_eq!(
+            config.ir_limits(),
+            &QuantumIrLimits::production(),
+        );
     }
 
     #[test]
-    fn lowering_config_keeps_frontend_and_ir_limits_separate() {
-        let frontend_limits = FrontendLimits::default();
-        let ir_limits = QuantumIrLimits::default();
+    fn empty_source_lowers_to_valid_circuit() {
+        let source =
+            EmptySource::new();
 
-        let config = LoweringConfig::new(
-            frontend_limits.clone(),
-            ir_limits.clone(),
+        let circuit =
+            lower(&source)
+                .expect(
+                    "empty source should lower successfully",
+                );
+
+        assert_eq!(
+            circuit.num_qubits(),
+            0,
         );
 
         assert_eq!(
+            circuit.num_classical_bits(),
+            0,
+        );
+
+        assert!(
+            circuit.is_empty(),
+        );
+
+        circuit
+            .validate()
+            .expect(
+                "lowered circuit must pass canonical IR validation",
+            );
+    }
+
+    #[test]
+    fn lowerer_is_stateless() {
+        let lowerer =
+            Lowerer::new();
+
+        let source =
+            EmptySource::new();
+
+        let circuit =
+            lowerer
+                .lower(
+                    &source,
+                    LoweringConfig::default(),
+                )
+                .expect(
+                    "source should lower successfully",
+                );
+
+        assert!(
+            circuit.is_empty(),
+        );
+    }
+
+    #[test]
+    fn capacity_validation_does_not_construct_a_circuit() {
+        let source =
+            EmptySource::new();
+
+        validate_lowering_capacity(
+            &source,
+            &LoweringConfig::default(),
+        )
+        .expect(
+            "empty source should fit all limits",
+        );
+    }
+
+    #[test]
+    fn operation_count_contract_is_enforced() {
+        let source =
+            MismatchedCountSource;
+
+        let result =
+            lower(&source);
+
+        assert!(
+            result.is_err(),
+            "declared and yielded operation counts must agree",
+        );
+    }
+
+    #[test]
+    fn lowering_configuration_preserves_distinct_policies() {
+        let frontend =
+            FrontendLimits::strict();
+
+        let ir =
+            QuantumIrLimits::production();
+
+        let config =
+            LoweringConfig::new(
+                frontend,
+                ir.clone(),
+            );
+
+        assert_eq!(
             config.frontend_limits(),
-            &frontend_limits
+            &frontend,
         );
 
         assert_eq!(
             config.ir_limits(),
-            &ir_limits
+            &ir,
         );
-    }
-
-    #[test]
-    fn unsupported_operations_are_not_silently_discarded() {
-        /*
-         * This behavioral rule is deliberately documented here even though
-         * constructing a complete format source is format-specific.
-         *
-         * Every format adapter must ultimately route unsupported constructs
-         * through LoweringContext::reject_unsupported().
-         */
-        let _ = FrontendErrorKind::Unsupported;
     }
 }
