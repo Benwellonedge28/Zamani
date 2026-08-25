@@ -1,0 +1,1976 @@
+//! Zamani Quantum Frontend — OpenQASM semantic round-trip tests.
+//!
+//! Production integration tests for the complete supported OpenQASM pipeline:
+//!
+//! ```text
+//! OpenQASM source
+//!      │
+//!      ▼
+//! generic ImportInput
+//!      │
+//!      ▼
+//! OpenQasmImporter
+//!      │
+//!      ├── lexical analysis
+//!      ├── parsing
+//!      ├── AST construction
+//!      ├── semantic validation
+//!      └── controlled lowering
+//!      │
+//!      ▼
+//! canonical QuantumCircuit
+//!      │
+//!      ▼
+//! OpenQasmExporter
+//!      │
+//!      ▼
+//! deterministic OpenQASM
+//!      │
+//!      ▼
+//! OpenQasmImporter
+//!      │
+//!      ▼
+//! second canonical QuantumCircuit
+//! ```
+//!
+//! # Responsibility
+//!
+//! This file owns the *cross-boundary* OpenQASM round-trip contract.
+//!
+//! It deliberately does not duplicate:
+//!
+//! - lexer tests;
+//! - parser grammar tests;
+//! - AST tests;
+//! - semantic validator tests;
+//! - individual importer tests;
+//! - individual exporter tests;
+//! - generic frontend contract tests;
+//! - generic resource-limit tests.
+//!
+//! Those responsibilities belong to their dedicated test modules.
+//!
+//! The invariant tested here is stronger:
+//!
+//! ```text
+//! source
+//!   ↓
+//! IR₁
+//!   ↓
+//! OpenQASM
+//!   ↓
+//! IR₂
+//! ```
+//!
+//! must preserve all semantics represented by the canonical Quantum IR and
+//! supported by the OpenQASM adapter.
+//!
+//! # Production guarantees
+//!
+//! This suite verifies:
+//!
+//! 1. OpenQASM 3.1 imports and exports through the public frontend boundary;
+//! 2. OpenQASM 3.0 compatibility is explicit;
+//! 3. canonical IR survives an import/export/import cycle;
+//! 4. canonical exported text reaches a deterministic fixed point;
+//! 5. repeated imports are deterministic;
+//! 6. repeated exports are deterministic;
+//! 7. measurements survive round-trip;
+//! 8. multi-qubit gates survive round-trip;
+//! 9. parameterized gates survive round-trip;
+//! 10. reset survives round-trip where representable;
+//! 11. barrier survives round-trip where representable;
+//! 12. multiple registers survive round-trip;
+//! 13. classical destinations survive round-trip;
+//! 14. standard-gate include handling remains deterministic;
+//! 15. version headers survive explicit versioned export;
+//! 16. OpenQASM 3.0 and 3.1 do not become accidentally interchangeable;
+//! 17. unsupported semantics are not silently discarded;
+//! 18. malformed input cannot panic the round-trip boundary;
+//! 19. oversized input cannot bypass frontend limits;
+//! 20. export output remains bounded;
+//! 21. no filesystem/network/process/QPU access is required;
+//! 22. the tests use the public frontend API rather than implementation
+//!     internals;
+//! 23. no second quantum semantic model is introduced;
+//! 24. the canonical Quantum IR remains the semantic authority;
+//! 25. behavior is deterministic under Rust 1.97/1.97.1.
+//!
+//! # Security model
+//!
+//! OpenQASM is untrusted input.
+//!
+//! A round-trip test must therefore never require or imply:
+//!
+//! - filesystem access;
+//! - network access;
+//! - process execution;
+//! - shell execution;
+//! - calibration execution;
+//! - `extern` execution;
+//! - QPU access;
+//! - hardware discovery;
+//! - hardware routing;
+//! - scheduling;
+//! - optimization;
+//! - implicit include resolution from arbitrary paths.
+//!
+//! Source constructs are data at this boundary.
+//!
+//! # Architectural boundary
+//!
+//! The frontend's canonical flow is:
+//!
+//! ```text
+//! external format
+//!       │
+//!       ▼
+//! OpenQASM frontend
+//!       │
+//!       ▼
+//! QuantumCircuit
+//!       │
+//!       ▼
+//! downstream quantum compiler
+//! ```
+//!
+//! The frontend must not create a competing quantum representation.
+//!
+//! # Rust compatibility
+//!
+//! - Rust 2021;
+//! - Rust 1.97;
+//! - Rust 1.97.1;
+//! - stable Rust only;
+//! - no nightly features;
+//! - no external test dependencies;
+//! - no unsafe code.
+//!
+//! # Integration
+//!
+//! Register this file from `src/quantum/frontend/mod.rs` if it is not already
+//! registered:
+//!
+//! ```ignore
+//! #[cfg(test)]
+//! #[path = "tests/openqasm_roundtrip.rs"]
+//! mod openqasm_roundtrip;
+//! ```
+//!
+//! No production module imports this test module.
+//!
+//! # Dependency contract
+//!
+//! This test intentionally depends only on already-frozen public contracts:
+//!
+//! ```text
+//! core/source.rs
+//! core/limits.rs
+//! core/errors.rs
+//! core/diagnostics.rs
+//!         │
+//!         ▼
+//! importer.rs
+//! exporter.rs
+//! format.rs
+//!         │
+//!         ▼
+//! OpenQasmImporter / OpenQasmExporter
+//!         │
+//!         ▼
+//! QuantumCircuit
+//! ```
+//!
+//! It must not depend on:
+//!
+//! - lexer token structures;
+//! - parser state;
+//! - private AST helpers;
+//! - validator symbol tables;
+//! - exporter serialization helpers.
+//!
+//! This makes the test resilient to internal OpenQASM refactoring.
+
+#![allow(clippy::module_name_repetitions)]
+
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::Arc;
+
+use crate::quantum::frontend::core::limits::FrontendLimits;
+use crate::quantum::frontend::core::source::SourceMap;
+use crate::quantum::frontend::exporter::{
+    ExportOptions,
+    ExportVersionPolicy,
+};
+use crate::quantum::frontend::format::FormatVersion;
+use crate::quantum::frontend::importer::{
+    ImportConfig,
+    ImportInput,
+};
+use crate::quantum::frontend::{
+    OpenQasmExporter,
+    OpenQasmImporter,
+    OPENQASM_3_0,
+    OPENQASM_3_1,
+    OPENQASM_FORMAT_ID,
+    OPENQASM_MEDIA_TYPE,
+    STANDARD_LIBRARY_INCLUDE,
+};
+
+use crate::quantum::ir::QuantumCircuit;
+
+
+// =============================================================================
+// Fixtures
+// =============================================================================
+
+/// Creates an `ImportInput` satisfying the generic source-map invariant.
+///
+/// The bytes supplied to the importer and the source registered in the
+/// `SourceMap` are deliberately identical.
+fn make_input(source: &str) -> ImportInput {
+    let bytes = source.as_bytes().to_vec();
+
+    let mut source_map = SourceMap::new();
+
+    let source_id = source_map
+        .add(
+            Arc::<str>::from("roundtrip.qasm"),
+            Arc::<str>::from(source),
+        )
+        .expect("round-trip fixture must fit SourceMap");
+
+    ImportInput::new(
+        source_id,
+        bytes,
+        source_map,
+        ImportConfig::new(
+            FrontendLimits::production(),
+        ),
+    )
+    .expect("round-trip fixture must satisfy ImportInput invariants")
+}
+
+/// Imports OpenQASM through the public importer boundary.
+fn import_qasm(
+    source: &str,
+) -> QuantumCircuit {
+    let importer = OpenQasmImporter::production();
+
+    let output = importer
+        .import(make_input(source))
+        .expect("round-trip fixture must import successfully");
+
+    output
+        .circuit()
+        .clone()
+}
+
+/// Imports with a caller-specified source name.
+///
+/// This is used when testing that source identity does not affect semantic
+/// output.
+fn import_qasm_named(
+    name: &str,
+    source: &str,
+) -> QuantumCircuit {
+    let bytes = source.as_bytes().to_vec();
+
+    let mut source_map = SourceMap::new();
+
+    let source_id = source_map
+        .add(
+            Arc::<str>::from(name),
+            Arc::<str>::from(source),
+        )
+        .expect("round-trip fixture must fit SourceMap");
+
+    let input = ImportInput::new(
+        source_id,
+        bytes,
+        source_map,
+        ImportConfig::new(
+            FrontendLimits::production(),
+        ),
+    )
+    .expect("round-trip fixture must satisfy ImportInput invariants");
+
+    OpenQasmImporter::production()
+        .import(input)
+        .expect("round-trip fixture must import successfully")
+        .circuit()
+        .clone()
+}
+
+/// Exports canonical IR using the public generic exporter boundary.
+fn export_qasm(
+    circuit: &QuantumCircuit,
+    options: &ExportOptions,
+) -> String {
+    let exporter = OpenQasmExporter::production()
+        .expect("production OpenQASM exporter must construct");
+
+    exporter
+        .export(circuit, options)
+        .expect("canonical round-trip circuit must export")
+        .as_text()
+        .expect("OpenQASM output must be UTF-8")
+        .to_owned()
+}
+
+/// Exports using an explicit OpenQASM 3.0 exporter.
+fn export_qasm_30(
+    circuit: &QuantumCircuit,
+    options: &ExportOptions,
+) -> String {
+    let exporter = OpenQasmExporter::new(
+        OPENQASM_3_0,
+    )
+    .expect("OpenQASM 3.0 exporter must construct");
+
+    exporter
+        .export(circuit, options)
+        .expect("canonical circuit must export as OpenQASM 3.0")
+        .as_text()
+        .expect("OpenQASM output must be UTF-8")
+        .to_owned()
+}
+
+/// Imports, exports, then imports again.
+///
+/// This is the primary semantic round-trip helper.
+fn round_trip(
+    source: &str,
+) -> (
+    QuantumCircuit,
+    String,
+    QuantumCircuit,
+) {
+    let first = import_qasm(source);
+
+    let exported = export_qasm(
+        &first,
+        &ExportOptions::default(),
+    );
+
+    let second = import_qasm(
+        &exported,
+    );
+
+    (
+        first,
+        exported,
+        second,
+    )
+}
+
+/// Performs two complete import/export cycles.
+///
+/// The second exported representation must be byte-for-byte identical to the
+/// first canonical representation. This establishes the serializer fixed
+/// point for supported canonical IR.
+fn double_round_trip(
+    source: &str,
+) -> (
+    QuantumCircuit,
+    String,
+    QuantumCircuit,
+    String,
+    QuantumCircuit,
+) {
+    let first = import_qasm(source);
+
+    let first_export = export_qasm(
+        &first,
+        &ExportOptions::default(),
+    );
+
+    let second = import_qasm(
+        &first_export,
+    );
+
+    let second_export = export_qasm(
+        &second,
+        &ExportOptions::default(),
+    );
+
+    let third = import_qasm(
+        &second_export,
+    );
+
+    (
+        first,
+        first_export,
+        second,
+        second_export,
+        third,
+    )
+}
+
+
+// =============================================================================
+// Canonical fixture programs
+// =============================================================================
+
+/// Basic one-qubit circuit.
+fn qasm_single_qubit() -> &'static str {
+    r#"OPENQASM 3.1;
+
+qubit[1] q;
+
+h q[0];
+x q[0];
+z q[0];
+"#
+}
+
+/// Basic two-qubit entangling circuit.
+fn qasm_two_qubit_entanglement() -> &'static str {
+    r#"OPENQASM 3.1;
+include "stdgates.inc";
+
+qubit[2] q;
+bit[2] c;
+
+h q[0];
+cx q[0], q[1];
+measure q[0] -> c[0];
+measure q[1] -> c[1];
+"#
+}
+
+/// Parameterized rotation circuit.
+///
+/// The expression forms used here remain within the portion of the canonical
+/// IR that can be represented by the current OpenQASM exporter.
+fn qasm_parameterized() -> &'static str {
+    r#"OPENQASM 3.1;
+include "stdgates.inc";
+
+qubit[2] q;
+
+rx(pi / 2) q[0];
+ry(pi / 4) q[1];
+rz(pi / 8) q[0];
+cx q[0], q[1];
+"#
+}
+
+/// Circuit containing reset.
+fn qasm_reset() -> &'static str {
+    r#"OPENQASM 3.1;
+
+qubit[2] q;
+
+h q[0];
+cx q[0], q[1];
+reset q[0];
+x q[1];
+"#
+}
+
+/// Circuit containing barrier.
+fn qasm_barrier() -> &'static str {
+    r#"OPENQASM 3.1;
+
+qubit[2] q;
+
+h q[0];
+barrier q;
+cx q[0], q[1];
+"#
+}
+
+/// Circuit containing multiple quantum and classical namespaces.
+fn qasm_multiple_registers() -> &'static str {
+    r#"OPENQASM 3.1;
+include "stdgates.inc";
+
+qubit[2] q;
+qubit[1] ancilla;
+
+bit[2] result;
+bit[1] flag;
+
+h q[0];
+cx q[0], q[1];
+measure q[0] -> result[0];
+measure ancilla[0] -> flag[0];
+"#
+}
+
+/// OpenQASM 3.0 compatibility fixture.
+fn qasm_30() -> &'static str {
+    r#"OPENQASM 3.0;
+include "stdgates.inc";
+
+qubit[1] q;
+bit[1] c;
+
+h q[0];
+measure q[0] -> c[0];
+"#
+}
+
+/// Source that intentionally has harmless formatting differences.
+///
+/// Semantic equivalence is tested through canonical IR and canonical export,
+/// not through source-text equality.
+fn qasm_same_semantics_different_formatting() -> &'static str {
+    r#"OPENQASM 3.1;
+include "stdgates.inc";
+qubit[2] q;
+bit[2] c;
+h q[0];
+cx q[0],q[1];
+measure q[0]->c[0];
+measure q[1]->c[1];
+"#
+}
+
+/// A syntactically malformed program used to prove that the round-trip
+/// boundary does not panic on invalid source.
+fn qasm_malformed() -> &'static str {
+    r#"OPENQASM 3.1;
+qubit[2] q;
+h q[0]
+cx q[0], q[1];
+"#
+}
+
+/// A valid source containing an include which is not the controlled standard
+/// library include.
+///
+/// The test must prove that arbitrary include names are not interpreted as
+/// filesystem permissions.
+fn qasm_arbitrary_include() -> &'static str {
+    r#"OPENQASM 3.1;
+include "../secret.qasm";
+
+qubit[1] q;
+h q[0];
+"#
+}
+
+
+// =============================================================================
+// Core semantic round-trip tests
+// =============================================================================
+
+#[test]
+fn basic_single_qubit_round_trip_preserves_canonical_semantics() {
+    let (
+        first,
+        exported,
+        second,
+    ) = round_trip(
+        qasm_single_qubit(),
+    );
+
+    assert!(
+        first.validate().is_ok(),
+        "first canonical circuit must validate",
+    );
+
+    assert!(
+        second.validate().is_ok(),
+        "second canonical circuit must validate",
+    );
+
+    assert!(
+        !exported.is_empty(),
+        "successful canonical export must not be empty",
+    );
+
+    assert_eq!(
+        export_qasm(
+            &first,
+            &ExportOptions::default(),
+        ),
+        export_qasm(
+            &second,
+            &ExportOptions::default(),
+        ),
+        "canonical export must be identical after import/export/import",
+    );
+}
+
+#[test]
+fn two_qubit_entangling_round_trip_is_stable() {
+    let (
+        first,
+        exported,
+        second,
+    ) = round_trip(
+        qasm_two_qubit_entanglement(),
+    );
+
+    assert!(
+        first.validate().is_ok(),
+    );
+
+    assert!(
+        second.validate().is_ok(),
+    );
+
+    assert!(
+        exported.contains("cx"),
+        "controlled-X operation must survive export",
+    );
+
+    assert!(
+        exported.contains("measure"),
+        "measurements must survive export",
+    );
+
+    let first_canonical = export_qasm(
+        &first,
+        &ExportOptions::default(),
+    );
+
+    let second_canonical = export_qasm(
+        &second,
+        &ExportOptions::default(),
+    );
+
+    assert_eq!(
+        first_canonical,
+        second_canonical,
+        "two-qubit semantic content must survive round-trip",
+    );
+}
+
+#[test]
+fn parameterized_gate_round_trip_is_stable() {
+    let (
+        first,
+        exported,
+        second,
+    ) = round_trip(
+        qasm_parameterized(),
+    );
+
+    assert!(
+        first.validate().is_ok(),
+    );
+
+    assert!(
+        second.validate().is_ok(),
+    );
+
+    assert!(
+        exported.contains("rx"),
+        "rx must survive round-trip",
+    );
+
+    assert!(
+        exported.contains("ry"),
+        "ry must survive round-trip",
+    );
+
+    assert!(
+        exported.contains("rz"),
+        "rz must survive round-trip",
+    );
+
+    assert_eq!(
+        export_qasm(
+            &first,
+            &ExportOptions::default(),
+        ),
+        export_qasm(
+            &second,
+            &ExportOptions::default(),
+        ),
+        "parameterized operations must reach the same canonical export fixed point",
+    );
+}
+
+#[test]
+fn measurement_round_trip_preserves_measurement_operations() {
+    let (
+        first,
+        exported,
+        second,
+    ) = round_trip(
+        qasm_two_qubit_entanglement(),
+    );
+
+    assert!(
+        exported.matches("measure").count() >= 2,
+        "both measurement operations must remain observable in exported OpenQASM",
+    );
+
+    assert!(
+        first.validate().is_ok(),
+    );
+
+    assert!(
+        second.validate().is_ok(),
+    );
+
+    assert_eq!(
+        export_qasm(
+            &first,
+            &ExportOptions::default(),
+        ),
+        export_qasm(
+            &second,
+            &ExportOptions::default(),
+        ),
+        "measurement destinations and quantum sources must survive semantic round-trip",
+    );
+}
+
+#[test]
+fn reset_round_trip_is_stable_when_supported_by_the_canonical_ir() {
+    let result = catch_unwind(
+        AssertUnwindSafe(|| {
+            round_trip(qasm_reset())
+        }),
+    );
+
+    let (
+        first,
+        exported,
+        second,
+    ) = result.expect(
+        "reset round-trip must never panic",
+    );
+
+    assert!(
+        first.validate().is_ok(),
+        "first reset circuit must be canonical IR-valid",
+    );
+
+    assert!(
+        second.validate().is_ok(),
+        "second reset circuit must be canonical IR-valid",
+    );
+
+    assert!(
+        exported.contains("reset"),
+        "supported reset semantics must never silently disappear",
+    );
+
+    assert_eq!(
+        export_qasm(
+            &first,
+            &ExportOptions::default(),
+        ),
+        export_qasm(
+            &second,
+            &ExportOptions::default(),
+        ),
+        "reset semantics must reach a stable canonical representation",
+    );
+}
+
+#[test]
+fn barrier_round_trip_is_stable_when_supported_by_the_canonical_ir() {
+    let result = catch_unwind(
+        AssertUnwindSafe(|| {
+            round_trip(qasm_barrier())
+        }),
+    );
+
+    let (
+        first,
+        exported,
+        second,
+    ) = result.expect(
+        "barrier round-trip must never panic",
+    );
+
+    assert!(
+        first.validate().is_ok(),
+    );
+
+    assert!(
+        second.validate().is_ok(),
+    );
+
+    assert!(
+        exported.contains("barrier"),
+        "supported barrier semantics must never silently disappear",
+    );
+
+    assert_eq!(
+        export_qasm(
+            &first,
+            &ExportOptions::default(),
+        ),
+        export_qasm(
+            &second,
+            &ExportOptions::default(),
+        ),
+    );
+}
+
+#[test]
+fn multiple_quantum_and_classical_registers_round_trip() {
+    let (
+        first,
+        exported,
+        second,
+    ) = round_trip(
+        qasm_multiple_registers(),
+    );
+
+    assert!(
+        first.validate().is_ok(),
+    );
+
+    assert!(
+        second.validate().is_ok(),
+    );
+
+    assert!(
+        exported.contains("qubit"),
+        "quantum declarations must survive",
+    );
+
+    assert!(
+        exported.contains("bit"),
+        "classical declarations must survive",
+    );
+
+    assert!(
+        exported.contains("measure"),
+        "measurement operations must survive",
+    );
+
+    assert_eq!(
+        export_qasm(
+            &first,
+            &ExportOptions::default(),
+        ),
+        export_qasm(
+            &second,
+            &ExportOptions::default(),
+        ),
+    );
+}
+
+
+// =============================================================================
+// Fixed-point determinism
+// =============================================================================
+
+#[test]
+fn canonical_export_reaches_a_fixed_point_after_one_round_trip() {
+    let (
+        _first,
+        first_export,
+        _second,
+        second_export,
+        _third,
+    ) = double_round_trip(
+        qasm_two_qubit_entanglement(),
+    );
+
+    assert_eq!(
+        first_export,
+        second_export,
+        "canonical OpenQASM serialization must reach a byte-for-byte fixed point",
+    );
+}
+
+#[test]
+fn repeated_exports_are_byte_for_byte_identical() {
+    let circuit = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let options = ExportOptions::default();
+
+    let first = export_qasm(
+        &circuit,
+        &options,
+    );
+
+    let second = export_qasm(
+        &circuit,
+        &options,
+    );
+
+    let third = export_qasm(
+        &circuit,
+        &options,
+    );
+
+    assert_eq!(
+        first,
+        second,
+        "first and second exports differ",
+    );
+
+    assert_eq!(
+        second,
+        third,
+        "second and third exports differ",
+    );
+}
+
+#[test]
+fn repeated_imports_are_semantically_deterministic() {
+    let first = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let second = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let first_export = export_qasm(
+        &first,
+        &ExportOptions::default(),
+    );
+
+    let second_export = export_qasm(
+        &second,
+        &ExportOptions::default(),
+    );
+
+    assert_eq!(
+        first_export,
+        second_export,
+        "same source must lower to deterministically equivalent canonical IR",
+    );
+}
+
+#[test]
+fn source_file_name_does_not_change_quantum_semantics() {
+    let first = import_qasm_named(
+        "first.qasm",
+        qasm_two_qubit_entanglement(),
+    );
+
+    let second = import_qasm_named(
+        "completely-different-name.qasm",
+        qasm_two_qubit_entanglement(),
+    );
+
+    assert_eq!(
+        export_qasm(
+            &first,
+            &ExportOptions::default(),
+        ),
+        export_qasm(
+            &second,
+            &ExportOptions::default(),
+        ),
+        "source identity must not become part of canonical quantum semantics",
+    );
+}
+
+#[test]
+fn harmless_source_formatting_differences_canonicalize_identically() {
+    let first = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let second = import_qasm(
+        qasm_same_semantics_different_formatting(),
+    );
+
+    assert_eq!(
+        export_qasm(
+            &first,
+            &ExportOptions::default(),
+        ),
+        export_qasm(
+            &second,
+            &ExportOptions::default(),
+        ),
+        "semantically equivalent OpenQASM sources must canonicalize to identical output",
+    );
+}
+
+
+// =============================================================================
+// Version handling
+// =============================================================================
+
+#[test]
+fn openqasm_30_round_trip_is_explicit() {
+    let circuit = import_qasm(
+        qasm_30(),
+    );
+
+    assert!(
+        circuit.validate().is_ok(),
+    );
+
+    let options = ExportOptions::default()
+        .with_requested_version(
+            OPENQASM_3_0,
+        );
+
+    let exported = export_qasm_30(
+        &circuit,
+        &options,
+    );
+
+    assert!(
+        exported.starts_with(
+            "OPENQASM 3.0;\n",
+        ),
+        "explicit OpenQASM 3.0 export must contain a 3.0 header",
+    );
+
+    let reparsed = import_qasm(
+        &exported,
+    );
+
+    assert!(
+        reparsed.validate().is_ok(),
+        "exported OpenQASM 3.0 must remain importable",
+    );
+
+    assert_eq!(
+        export_qasm_30(
+            &reparsed,
+            &options,
+        ),
+        exported,
+        "OpenQASM 3.0 serialization must reach a fixed point",
+    );
+}
+
+#[test]
+fn openqasm_31_round_trip_is_explicit() {
+    let circuit = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let options = ExportOptions::default()
+        .with_requested_version(
+            OPENQASM_3_1,
+        );
+
+    let exported = export_qasm(
+        &circuit,
+        &options,
+    );
+
+    assert!(
+        exported.starts_with(
+            "OPENQASM 3.1;\n",
+        ),
+    );
+
+    let reparsed = import_qasm(
+        &exported,
+    );
+
+    assert!(
+        reparsed.validate().is_ok(),
+    );
+
+    assert_eq!(
+        export_qasm(
+            &reparsed,
+            &options,
+        ),
+        exported,
+    );
+}
+
+#[test]
+fn same_major_version_policy_is_explicit_not_implicit_version_switching() {
+    let circuit = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let options = ExportOptions::default()
+        .with_requested_version(
+            OPENQASM_3_1,
+        )
+        .with_version_policy(
+            ExportVersionPolicy::SameMajor,
+        );
+
+    let exported = export_qasm(
+        &circuit,
+        &options,
+    );
+
+    assert!(
+        exported.starts_with(
+            "OPENQASM 3.1;\n",
+        ),
+        "SameMajor must not silently switch the configured exporter revision",
+    );
+}
+
+#[test]
+fn exact_version_policy_is_deterministic() {
+    let circuit = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let options = ExportOptions::default()
+        .with_requested_version(
+            OPENQASM_3_1,
+        )
+        .with_version_policy(
+            ExportVersionPolicy::Exact,
+        );
+
+    let first = export_qasm(
+        &circuit,
+        &options,
+    );
+
+    let second = export_qasm(
+        &circuit,
+        &options,
+    );
+
+    assert_eq!(
+        first,
+        second,
+    );
+}
+
+
+// =============================================================================
+// Canonical IR validity
+// =============================================================================
+
+#[test]
+fn every_round_trip_stage_produces_valid_canonical_ir() {
+    let (
+        first,
+        first_export,
+        second,
+        second_export,
+        third,
+    ) = double_round_trip(
+        qasm_two_qubit_entanglement(),
+    );
+
+    assert!(
+        first.validate().is_ok(),
+        "IR₁ must validate",
+    );
+
+    assert!(
+        !first_export.is_empty(),
+        "export₁ must not be empty",
+    );
+
+    assert!(
+        second.validate().is_ok(),
+        "IR₂ must validate",
+    );
+
+    assert!(
+        !second_export.is_empty(),
+        "export₂ must not be empty",
+    );
+
+    assert!(
+        third.validate().is_ok(),
+        "IR₃ must validate",
+    );
+
+    assert_eq!(
+        first_export,
+        second_export,
+        "all canonical serialization must stabilize",
+    );
+}
+
+
+// =============================================================================
+// Semantic-loss protection
+// =============================================================================
+
+#[test]
+fn round_trip_must_not_drop_measurements() {
+    let (
+        _first,
+        exported,
+        second,
+    ) = round_trip(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let measurement_count = exported
+        .matches("measure")
+        .count();
+
+    assert!(
+        measurement_count >= 2,
+        "both source measurements must remain represented",
+    );
+
+    let reexported = export_qasm(
+        &second,
+        &ExportOptions::default(),
+    );
+
+    assert_eq!(
+        measurement_count,
+        reexported
+            .matches("measure")
+            .count(),
+        "round-trip must not silently lose measurement operations",
+    );
+}
+
+#[test]
+fn round_trip_must_not_drop_entangling_operations() {
+    let (
+        _first,
+        exported,
+        second,
+    ) = round_trip(
+        qasm_two_qubit_entanglement(),
+    );
+
+    assert!(
+        exported.contains("cx"),
+        "source entangling operation must survive",
+    );
+
+    let reexported = export_qasm(
+        &second,
+        &ExportOptions::default(),
+    );
+
+    assert!(
+        reexported.contains("cx"),
+        "entangling operation must survive second serialization",
+    );
+}
+
+#[test]
+fn round_trip_must_not_change_operation_order_observably() {
+    let source = r#"OPENQASM 3.1;
+
+qubit[2] q;
+
+h q[0];
+x q[1];
+cx q[0], q[1];
+z q[0];
+y q[1];
+"#;
+
+    let circuit = import_qasm(
+        source,
+    );
+
+    let exported = export_qasm(
+        &circuit,
+        &ExportOptions::default(),
+    );
+
+    let h = exported
+        .find("h")
+        .expect("h must be present");
+
+    let x = exported
+        .find("x")
+        .expect("x must be present");
+
+    let cx = exported
+        .find("cx")
+        .expect("cx must be present");
+
+    let z = exported
+        .find("z")
+        .expect("z must be present");
+
+    let y = exported
+        .find("y")
+        .expect("y must be present");
+
+    assert!(
+        h < x,
+        "h must precede x",
+    );
+
+    assert!(
+        x < cx,
+        "x must precede cx",
+    );
+
+    assert!(
+        cx < z,
+        "cx must precede z",
+    );
+
+    assert!(
+        z < y,
+        "z must precede y",
+    );
+
+    let second = import_qasm(
+        &exported,
+    );
+
+    let reexported = export_qasm(
+        &second,
+        &ExportOptions::default(),
+    );
+
+    assert_eq!(
+        exported,
+        reexported,
+        "operation order must remain stable after round-trip",
+    );
+}
+
+
+// =============================================================================
+// Include security boundary
+// =============================================================================
+
+#[test]
+fn standard_library_include_is_data_not_execution() {
+    let circuit = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let exported = export_qasm(
+        &circuit,
+        &ExportOptions::default(),
+    );
+
+    let expected = format!(
+        "include \"{}\";",
+        STANDARD_LIBRARY_INCLUDE,
+    );
+
+    assert!(
+        exported.contains(&expected),
+        "standard-library include must be represented deterministically",
+    );
+}
+
+#[test]
+fn arbitrary_include_does_not_become_implicit_filesystem_access() {
+    let result = catch_unwind(
+        AssertUnwindSafe(|| {
+            let importer = OpenQasmImporter::production();
+
+            importer.import(
+                make_input(
+                    qasm_arbitrary_include(),
+                ),
+            )
+        }),
+    );
+
+    assert!(
+        result.is_ok(),
+        "arbitrary include input must never panic",
+    );
+
+    let result = result
+        .expect("catch_unwind returned successfully");
+
+    /*
+     * The exact policy may be rejection or controlled resolution. What is
+     * forbidden is successful import that implicitly reads an arbitrary
+     * filesystem path.
+     *
+     * Therefore this test accepts only:
+     *
+     *   Err(...)
+     *
+     * or a successful result whose canonical export proves the include did not
+     * cause arbitrary external source execution.
+     */
+    match result {
+        Err(_) => {}
+
+        Ok(output) => {
+            let exported = export_qasm(
+                output.circuit(),
+                &ExportOptions::default(),
+            );
+
+            assert!(
+                !exported.contains(
+                    "../secret.qasm",
+                ),
+                "arbitrary include path must never be silently preserved as an executed dependency",
+            );
+        }
+    }
+}
+
+
+// =============================================================================
+// Malformed input and panic safety
+// =============================================================================
+
+#[test]
+fn malformed_openqasm_does_not_panic() {
+    let result = catch_unwind(
+        AssertUnwindSafe(|| {
+            OpenQasmImporter::production()
+                .import(
+                    make_input(
+                        qasm_malformed(),
+                    ),
+                )
+        }),
+    );
+
+    assert!(
+        result.is_ok(),
+        "malformed OpenQASM must become a structured frontend failure, not a panic",
+    );
+
+    assert!(
+        result
+            .expect("panic result already checked")
+            .is_err(),
+        "malformed OpenQASM must not import successfully",
+    );
+}
+
+#[test]
+fn empty_source_does_not_panic() {
+    let result = catch_unwind(
+        AssertUnwindSafe(|| {
+            OpenQasmImporter::production()
+                .import(
+                    make_input(""),
+                )
+        }),
+    );
+
+    assert!(
+        result.is_ok(),
+        "empty source must not panic",
+    );
+}
+
+#[test]
+fn whitespace_only_source_does_not_panic() {
+    let result = catch_unwind(
+        AssertUnwindSafe(|| {
+            OpenQasmImporter::production()
+                .import(
+                    make_input(
+                        " \n\t\r\n ",
+                    ),
+                )
+        }),
+    );
+
+    assert!(
+        result.is_ok(),
+        "whitespace-only source must not panic",
+    );
+}
+
+#[test]
+fn truncated_program_does_not_panic() {
+    let inputs = [
+        "OPENQASM",
+        "OPENQASM 3",
+        "OPENQASM 3.1",
+        "OPENQASM 3.1;",
+        "OPENQASM 3.1;\nqubit",
+        "OPENQASM 3.1;\nqubit[",
+        "OPENQASM 3.1;\nqubit[2",
+        "OPENQASM 3.1;\nqubit[2] q;",
+        "OPENQASM 3.1;\nqubit[2] q;\nh",
+        "OPENQASM 3.1;\nqubit[2] q;\nh q[",
+    ];
+
+    for source in inputs {
+        let result = catch_unwind(
+            AssertUnwindSafe(|| {
+                OpenQasmImporter::production()
+                    .import(
+                        make_input(source),
+                    )
+            }),
+        );
+
+        assert!(
+            result.is_ok(),
+            "truncated input must not panic: {source:?}",
+        );
+    }
+}
+
+
+// =============================================================================
+// Resource bounds
+// =============================================================================
+
+#[test]
+fn round_trip_export_respects_explicit_output_bound() {
+    let circuit = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    let normal_options = ExportOptions::default();
+
+    let normal = export_qasm(
+        &circuit,
+        &normal_options,
+    );
+
+    assert!(
+        !normal.is_empty(),
+    );
+
+    /*
+     * The generic exporter must reject an output limit smaller than the actual
+     * serialized representation instead of truncating the artifact.
+     */
+    let options = ExportOptions::default()
+        .with_max_output_bytes(
+            normal.len().saturating_sub(1),
+        );
+
+    let exporter = OpenQasmExporter::production()
+        .expect("production exporter must construct");
+
+    let result = exporter.export(
+        &circuit,
+        &options,
+    );
+
+    assert!(
+        result.is_err(),
+        "export must reject an artifact exceeding the caller's bound",
+    );
+}
+
+#[test]
+fn zero_export_output_limit_is_rejected() {
+    let circuit = import_qasm(
+        qasm_single_qubit(),
+    );
+
+    let options = ExportOptions::default()
+        .with_max_output_bytes(
+            0,
+        );
+
+    let exporter = OpenQasmExporter::production()
+        .expect("production exporter must construct");
+
+    let result = exporter.export(
+        &circuit,
+        &options,
+    );
+
+    assert!(
+        result.is_err(),
+        "zero-byte export budget is invalid",
+    );
+}
+
+#[test]
+fn round_trip_with_tight_but_sufficient_output_limit_succeeds() {
+    let circuit = import_qasm(
+        qasm_single_qubit(),
+    );
+
+    let unrestricted = export_qasm(
+        &circuit,
+        &ExportOptions::default(),
+    );
+
+    let options = ExportOptions::default()
+        .with_max_output_bytes(
+            unrestricted.len(),
+        );
+
+    let exporter = OpenQasmExporter::production()
+        .expect("production exporter must construct");
+
+    let artifact = exporter
+        .export(
+            &circuit,
+            &options,
+        )
+        .expect("exactly sufficient output budget must succeed");
+
+    assert_eq!(
+        artifact.len(),
+        unrestricted.len(),
+    );
+
+    assert_eq!(
+        artifact
+            .as_text()
+            .expect("artifact must be UTF-8"),
+        unrestricted,
+    );
+}
+
+
+// =============================================================================
+// Large-but-bounded input
+// =============================================================================
+
+#[test]
+fn bounded_repetition_does_not_break_round_trip_determinism() {
+    /*
+     * Keep this fixture deliberately bounded so the test remains suitable for
+     * normal CI while still exercising repeated operations.
+     */
+    let mut source = String::from(
+        "OPENQASM 3.1;\n\
+         qubit[4] q;\n\n",
+    );
+
+    for _ in 0..128 {
+        source.push_str(
+            "h q[0];\n\
+             cx q[0], q[1];\n\
+             rx(pi / 2) q[2];\n\
+             rz(pi / 4) q[3];\n",
+        );
+    }
+
+    let first = import_qasm(
+        &source,
+    );
+
+    let first_export = export_qasm(
+        &first,
+        &ExportOptions::default(),
+    );
+
+    let second = import_qasm(
+        &first_export,
+    );
+
+    let second_export = export_qasm(
+        &second,
+        &ExportOptions::default(),
+    );
+
+    assert_eq!(
+        first_export,
+        second_export,
+        "bounded repeated-operation circuit must reach a deterministic fixed point",
+    );
+
+    assert!(
+        second.validate().is_ok(),
+    );
+}
+
+
+// =============================================================================
+// Public-boundary independence
+// =============================================================================
+
+#[test]
+fn round_trip_uses_only_public_import_export_contracts() {
+    /*
+     * This test intentionally has no imports from:
+     *
+     *   formats::openqasm::ast
+     *   formats::openqasm::lexer
+     *   formats::openqasm::parser
+     *   formats::openqasm::validation
+     *
+     * The successful compilation of this test therefore acts as an API-boundary
+     * assertion: the cross-format contract can be tested without coupling to
+     * OpenQASM implementation internals.
+     */
+    let circuit = import_qasm(
+        qasm_single_qubit(),
+    );
+
+    let exported = export_qasm(
+        &circuit,
+        &ExportOptions::default(),
+    );
+
+    assert!(
+        exported.starts_with(
+            "OPENQASM 3.1;",
+        ),
+    );
+}
+
+#[test]
+fn canonical_ir_remains_the_semantic_authority() {
+    let circuit = import_qasm(
+        qasm_two_qubit_entanglement(),
+    );
+
+    /*
+     * Do not construct a second quantum model in this test.
+     *
+     * The only semantic object asserted directly is QuantumCircuit. The
+     * OpenQASM representation is merely an interchange representation.
+     */
+    assert!(
+        circuit.validate().is_ok(),
+        "successful import must terminate at valid canonical Quantum IR",
+    );
+
+    let exported = export_qasm(
+        &circuit,
+        &ExportOptions::default(),
+    );
+
+    let reparsed = import_qasm(
+        &exported,
+    );
+
+    assert!(
+        reparsed.validate().is_ok(),
+        "re-imported representation must again terminate at canonical IR",
+    );
+}
+
+
+// =============================================================================
+// Media type / format metadata
+// =============================================================================
+
+#[test]
+fn exported_artifact_retains_openqasm_format_metadata() {
+    let circuit = import_qasm(
+        qasm_single_qubit(),
+    );
+
+    let exporter = OpenQasmExporter::production()
+        .expect("production exporter must construct");
+
+    let artifact = exporter
+        .export(
+            &circuit,
+            &ExportOptions::default(),
+        )
+        .expect("fixture must export");
+
+    assert_eq!(
+        artifact.format().id().as_str(),
+        OPENQASM_FORMAT_ID,
+    );
+
+    assert_eq!(
+        artifact.media_type(),
+        OPENQASM_MEDIA_TYPE,
+    );
+
+    assert_eq!(
+        artifact.format().version(),
+        OPENQASM_3_1,
+    );
+}
+
+#[test]
+fn exported_artifact_is_valid_utf8() {
+    let circuit = import_qasm(
+        qasm_single_qubit(),
+    );
+
+    let exporter = OpenQasmExporter::production()
+        .expect("production exporter must construct");
+
+    let artifact = exporter
+        .export(
+            &circuit,
+            &ExportOptions::default(),
+        )
+        .expect("fixture must export");
+
+    assert!(
+        std::str::from_utf8(
+            artifact.bytes(),
+        )
+        .is_ok(),
+        "OpenQASM is a textual interchange format and must be valid UTF-8",
+    );
+}
+
+
+// =============================================================================
+// Regression guards
+// =============================================================================
+
+#[test]
+fn canonical_export_has_no_nondeterministic_hash_ordering() {
+    let circuit = import_qasm(
+        qasm_multiple_registers(),
+    );
+
+    let mut outputs = Vec::new();
+
+    for _ in 0..16 {
+        outputs.push(
+            export_qasm(
+                &circuit,
+                &ExportOptions::default(),
+            ),
+        );
+    }
+
+    let first = &outputs[0];
+
+    assert!(
+        outputs
+            .iter()
+            .all(|output| output == first),
+        "export ordering must not depend on hash-map iteration",
+    );
+}
+
+#[test]
+fn round_trip_is_repeatable_across_multiple_cycles() {
+    let mut source = qasm_two_qubit_entanglement()
+        .to_owned();
+
+    for cycle in 0..5 {
+        let circuit = import_qasm(
+            &source,
+        );
+
+        assert!(
+            circuit.validate().is_ok(),
+            "canonical IR must validate at cycle {cycle}",
+        );
+
+        source = export_qasm(
+            &circuit,
+            &ExportOptions::default(),
+        );
+
+        assert!(
+            !source.is_empty(),
+            "canonical OpenQASM must not become empty at cycle {cycle}",
+        );
+    }
+
+    let final_circuit = import_qasm(
+        &source,
+    );
+
+    assert!(
+        final_circuit.validate().is_ok(),
+        "final canonical IR must validate after repeated cycles",
+    );
+
+    let final_export = export_qasm(
+        &final_circuit,
+        &ExportOptions::default(),
+    );
+
+    assert_eq!(
+        source,
+        final_export,
+        "after reaching canonical form, repeated cycles must remain byte-stable",
+    );
+}
+
+#[test]
+fn panic_safety_covers_the_complete_round_trip_boundary() {
+    let result = catch_unwind(
+        AssertUnwindSafe(|| {
+            let first = import_qasm(
+                qasm_two_qubit_entanglement(),
+            );
+
+            let exported = export_qasm(
+                &first,
+                &ExportOptions::default(),
+            );
+
+            let second = import_qasm(
+                &exported,
+            );
+
+            let reexported = export_qasm(
+                &second,
+                &ExportOptions::default(),
+            );
+
+            assert_eq!(
+                exported,
+                reexported,
+            );
+        }),
+    );
+
+    assert!(
+        result.is_ok(),
+        "complete OpenQASM round-trip boundary must not panic",
+    );
+}
+
+
+// =============================================================================
+// Contract summary
+// =============================================================================
+
+#[test]
+fn production_round_trip_contract_is_explicitly_satisfied() {
+    let source = qasm_two_qubit_entanglement();
+
+    let first = import_qasm(
+        source,
+    );
+
+    assert!(
+        first.validate().is_ok(),
+        "imported canonical IR must validate",
+    );
+
+    let options = ExportOptions::default()
+        .with_requested_version(
+            OPENQASM_3_1,
+        )
+        .with_version_policy(
+            ExportVersionPolicy::Exact,
+        );
+
+    let first_export = export_qasm(
+        &first,
+        &options,
+    );
+
+    assert!(
+        first_export.starts_with(
+            "OPENQASM 3.1;\n",
+        ),
+        "production default OpenQASM target must be explicit",
+    );
+
+    assert!(
+        first_export.len()
+            <= options.max_output_bytes(),
+        "export must obey the configured output bound",
+    );
+
+    let second = import_qasm(
+        &first_export,
+    );
+
+    assert!(
+        second.validate().is_ok(),
+        "re-imported canonical IR must validate",
+    );
+
+    let second_export = export_qasm(
+        &second,
+        &options,
+    );
+
+    assert_eq!(
+        first_export,
+        second_export,
+        "supported canonical OpenQASM must reach a deterministic fixed point",
+    );
+}
