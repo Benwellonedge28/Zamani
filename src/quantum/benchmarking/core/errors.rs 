@@ -1,0 +1,912 @@
+//! Production error model for the Zamani quantum benchmarking subsystem.
+//!
+//! This module is intentionally independent of the rest of the benchmarking
+//! tree. It is the first foundation layer and must not depend on benchmark
+//! protocols, statistics, execution backends, Quantum IR, or reporting.
+//!
+//! Every other module under `quantum::benchmarking` should use
+//! [`BenchmarkResult`] and [`BenchmarkError`] instead of defining a competing
+//! top-level error hierarchy.
+//!
+//! The error model contains structured data rather than only formatted
+//! strings so CI, the Zamani language frontend, reporting, and future
+//! machine-readable APIs can inspect failures without parsing display text.
+//!
+//! Rust compatibility: Rust 1.97.1 / Rust 2021.
+//! External dependencies: none.
+
+use std::fmt;
+
+/// Result type used throughout quantum benchmarking.
+pub type BenchmarkResult<T> = Result<T, BenchmarkError>;
+
+/// Stable high-level classification of a benchmarking error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum BenchmarkErrorKind {
+    Configuration,
+    Experiment,
+    Workload,
+    Capability,
+    Execution,
+    Cancellation,
+    Observation,
+    Statistics,
+    Numerical,
+    ResourceLimit,
+    Unsupported,
+    Reproducibility,
+    Serialization,
+    Validation,
+    External,
+    Internal,
+}
+
+impl BenchmarkErrorKind {
+    /// Stable machine-readable category.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Configuration => "configuration",
+            Self::Experiment => "experiment",
+            Self::Workload => "workload",
+            Self::Capability => "capability",
+            Self::Execution => "execution",
+            Self::Cancellation => "cancellation",
+            Self::Observation => "observation",
+            Self::Statistics => "statistics",
+            Self::Numerical => "numerical",
+            Self::ResourceLimit => "resource_limit",
+            Self::Unsupported => "unsupported",
+            Self::Reproducibility => "reproducibility",
+            Self::Serialization => "serialization",
+            Self::Validation => "validation",
+            Self::External => "external",
+            Self::Internal => "internal",
+        }
+    }
+}
+
+impl fmt::Display for BenchmarkErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Complete production error hierarchy for quantum benchmarking.
+///
+/// The variants intentionally remain independent of concrete quantum
+/// backends, IR types, statistical crates, and serialization libraries.
+/// Integration layers translate their native errors into these variants.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BenchmarkError {
+    InvalidConfiguration {
+        field: String,
+        reason: String,
+    },
+
+    InvalidExperiment {
+        experiment_id: String,
+        reason: String,
+    },
+
+    InvalidIdentifier {
+        field: String,
+        value: String,
+    },
+
+    InvalidRange {
+        field: String,
+        value: String,
+        minimum: Option<String>,
+        maximum: Option<String>,
+    },
+
+    MissingValue {
+        field: String,
+    },
+
+    InconsistentConfiguration {
+        first: String,
+        second: String,
+        reason: String,
+    },
+
+    InvalidWorkload {
+        workload: String,
+        reason: String,
+    },
+
+    UnsupportedCapability {
+        capability: String,
+        backend: Option<String>,
+    },
+
+    BackendUnavailable {
+        backend: String,
+        reason: String,
+    },
+
+    ResourceLimitExceeded {
+        resource: String,
+        requested: u64,
+        maximum: u64,
+    },
+
+    Timeout {
+        operation: String,
+        timeout_ms: u64,
+    },
+
+    Cancelled {
+        operation: String,
+    },
+
+    ExecutionFailed {
+        backend: String,
+        operation: String,
+        reason: String,
+    },
+
+    PartialExecution {
+        completed: usize,
+        failed: usize,
+        total: usize,
+        reason: String,
+    },
+
+    InvalidObservation {
+        field: String,
+        reason: String,
+    },
+
+    InvalidProbability {
+        field: String,
+        value: String,
+    },
+
+    InvalidCount {
+        field: String,
+        value: u64,
+        maximum: Option<u64>,
+    },
+
+    InsufficientSamples {
+        required: usize,
+        actual: usize,
+        context: String,
+    },
+
+    InvalidConfidenceLevel {
+        value: String,
+    },
+
+    StatisticalFitFailed {
+        model: String,
+        reason: String,
+    },
+
+    InvalidStatisticalModel {
+        model: String,
+        reason: String,
+    },
+
+    NumericalOverflow {
+        operation: String,
+        value: Option<String>,
+    },
+
+    NonFiniteValue {
+        field: String,
+        value: String,
+    },
+
+    UnsupportedOperation {
+        operation: String,
+        reason: String,
+    },
+
+    ReproducibilityFailure {
+        component: String,
+        expected: String,
+        actual: String,
+    },
+
+    MissingProvenance {
+        field: String,
+    },
+
+    FingerprintMismatch {
+        component: String,
+        expected: String,
+        actual: String,
+    },
+
+    SerializationFailed {
+        format: String,
+        reason: String,
+    },
+
+    InvalidSerializedData {
+        format: String,
+        reason: String,
+    },
+
+    ValidationFailed {
+        invariant: String,
+        reason: String,
+    },
+
+    PhysicalInvariantViolation {
+        quantity: String,
+        value: String,
+        reason: String,
+    },
+
+    ExternalFailure {
+        system: String,
+        operation: String,
+        reason: String,
+    },
+
+    InternalInvariant {
+        invariant: String,
+        reason: String,
+    },
+
+    /// Adds contextual information while retaining the original error.
+    Context {
+        context: String,
+        source: Box<BenchmarkError>,
+    },
+}
+
+impl BenchmarkError {
+    /// Returns the stable broad error category.
+    pub fn kind(&self) -> BenchmarkErrorKind {
+        match self {
+            Self::InvalidConfiguration { .. }
+            | Self::InvalidIdentifier { .. }
+            | Self::InvalidRange { .. }
+            | Self::MissingValue { .. }
+            | Self::InconsistentConfiguration { .. } => {
+                BenchmarkErrorKind::Configuration
+            }
+
+            Self::InvalidExperiment { .. } => BenchmarkErrorKind::Experiment,
+
+            Self::InvalidWorkload { .. } => BenchmarkErrorKind::Workload,
+
+            Self::UnsupportedCapability { .. } => BenchmarkErrorKind::Capability,
+
+            Self::BackendUnavailable { .. }
+            | Self::ExecutionFailed { .. }
+            | Self::PartialExecution { .. } => BenchmarkErrorKind::Execution,
+
+            Self::Timeout { .. } | Self::Cancelled { .. } => {
+                BenchmarkErrorKind::Cancellation
+            }
+
+            Self::InvalidObservation { .. } | Self::InvalidCount { .. } => {
+                BenchmarkErrorKind::Observation
+            }
+
+            Self::InvalidProbability { .. }
+            | Self::InsufficientSamples { .. }
+            | Self::InvalidConfidenceLevel { .. }
+            | Self::StatisticalFitFailed { .. }
+            | Self::InvalidStatisticalModel { .. } => {
+                BenchmarkErrorKind::Statistics
+            }
+
+            Self::NumericalOverflow { .. }
+            | Self::NonFiniteValue { .. } => BenchmarkErrorKind::Numerical,
+
+            Self::ResourceLimitExceeded { .. } => {
+                BenchmarkErrorKind::ResourceLimit
+            }
+
+            Self::UnsupportedOperation { .. } => BenchmarkErrorKind::Unsupported,
+
+            Self::ReproducibilityFailure { .. }
+            | Self::MissingProvenance { .. }
+            | Self::FingerprintMismatch { .. } => {
+                BenchmarkErrorKind::Reproducibility
+            }
+
+            Self::SerializationFailed { .. }
+            | Self::InvalidSerializedData { .. } => {
+                BenchmarkErrorKind::Serialization
+            }
+
+            Self::ValidationFailed { .. }
+            | Self::PhysicalInvariantViolation { .. } => {
+                BenchmarkErrorKind::Validation
+            }
+
+            Self::ExternalFailure { .. } => BenchmarkErrorKind::External,
+
+            Self::InternalInvariant { .. } => BenchmarkErrorKind::Internal,
+
+            Self::Context { source, .. } => source.kind(),
+        }
+    }
+
+    /// Stable machine-readable error code.
+    ///
+    /// These codes can be persisted in benchmark reports and consumed by CI
+    /// without depending on Rust enum names or display strings.
+    pub const fn code(&self) -> &'static str {
+        match self {
+            Self::InvalidConfiguration { .. } => "QBENCH-CONFIG-001",
+            Self::InvalidExperiment { .. } => "QBENCH-EXPERIMENT-001",
+            Self::InvalidIdentifier { .. } => "QBENCH-CONFIG-002",
+            Self::InvalidRange { .. } => "QBENCH-CONFIG-003",
+            Self::MissingValue { .. } => "QBENCH-CONFIG-004",
+            Self::InconsistentConfiguration { .. } => "QBENCH-CONFIG-005",
+
+            Self::InvalidWorkload { .. } => "QBENCH-WORKLOAD-001",
+
+            Self::UnsupportedCapability { .. } => "QBENCH-CAPABILITY-001",
+
+            Self::BackendUnavailable { .. } => "QBENCH-EXEC-001",
+            Self::ExecutionFailed { .. } => "QBENCH-EXEC-002",
+            Self::PartialExecution { .. } => "QBENCH-EXEC-003",
+
+            Self::ResourceLimitExceeded { .. } => "QBENCH-LIMIT-001",
+
+            Self::Timeout { .. } => "QBENCH-CANCEL-001",
+            Self::Cancelled { .. } => "QBENCH-CANCEL-002",
+
+            Self::InvalidObservation { .. } => "QBENCH-OBS-001",
+            Self::InvalidCount { .. } => "QBENCH-OBS-002",
+
+            Self::InvalidProbability { .. } => "QBENCH-STAT-001",
+            Self::InsufficientSamples { .. } => "QBENCH-STAT-002",
+            Self::InvalidConfidenceLevel { .. } => "QBENCH-STAT-003",
+            Self::StatisticalFitFailed { .. } => "QBENCH-STAT-004",
+            Self::InvalidStatisticalModel { .. } => "QBENCH-STAT-005",
+
+            Self::NumericalOverflow { .. } => "QBENCH-NUM-001",
+            Self::NonFiniteValue { .. } => "QBENCH-NUM-002",
+
+            Self::UnsupportedOperation { .. } => "QBENCH-UNSUPPORTED-001",
+
+            Self::ReproducibilityFailure { .. } => "QBENCH-REPRO-001",
+            Self::MissingProvenance { .. } => "QBENCH-REPRO-002",
+            Self::FingerprintMismatch { .. } => "QBENCH-REPRO-003",
+
+            Self::SerializationFailed { .. } => "QBENCH-SERIAL-001",
+            Self::InvalidSerializedData { .. } => "QBENCH-SERIAL-002",
+
+            Self::ValidationFailed { .. } => "QBENCH-VALID-001",
+            Self::PhysicalInvariantViolation { .. } => "QBENCH-VALID-002",
+
+            Self::ExternalFailure { .. } => "QBENCH-EXT-001",
+
+            Self::InternalInvariant { .. } => "QBENCH-INTERNAL-001",
+
+            Self::Context { source, .. } => source.code(),
+        }
+    }
+
+    /// Adds context without destroying the original error.
+    pub fn with_context(self, context: impl Into<String>) -> Self {
+        Self::Context {
+            context: context.into(),
+            source: Box::new(self),
+        }
+    }
+
+    /// Returns the outermost context, when present.
+    pub fn context(&self) -> Option<&str> {
+        match self {
+            Self::Context { context, .. } => Some(context),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying error after removing context wrappers.
+    pub fn root(&self) -> &Self {
+        match self {
+            Self::Context { source, .. } => source.root(),
+            _ => self,
+        }
+    }
+
+    /// Whether the caller can normally correct the problem by changing the
+    /// benchmark request/configuration.
+    pub fn is_user_correctable(&self) -> bool {
+        matches!(
+            self.kind(),
+            BenchmarkErrorKind::Configuration
+                | BenchmarkErrorKind::Experiment
+                | BenchmarkErrorKind::Workload
+                | BenchmarkErrorKind::Capability
+                | BenchmarkErrorKind::ResourceLimit
+                | BenchmarkErrorKind::Unsupported
+                | BenchmarkErrorKind::Validation
+        )
+    }
+
+    /// Whether retrying the same experiment may succeed.
+    pub fn is_retryable(&self) -> bool {
+        matches!(
+            self.root(),
+            Self::BackendUnavailable { .. }
+                | Self::Timeout { .. }
+                | Self::ExecutionFailed { .. }
+                | Self::ExternalFailure { .. }
+        )
+    }
+
+    /// Whether the error represents an internal implementation defect.
+    pub fn is_internal(&self) -> bool {
+        self.kind() == BenchmarkErrorKind::Internal
+    }
+
+    /// Whether the operation was cancelled or exceeded its deadline.
+    pub fn is_cancelled(&self) -> bool {
+        matches!(
+            self.root(),
+            Self::Timeout { .. } | Self::Cancelled { .. }
+        )
+    }
+}
+
+impl fmt::Display for BenchmarkError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidConfiguration { field, reason } => {
+                write!(
+                    f,
+                    "invalid benchmark configuration '{}': {}",
+                    field, reason
+                )
+            }
+
+            Self::InvalidExperiment {
+                experiment_id,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "invalid benchmark experiment '{}': {}",
+                    experiment_id, reason
+                )
+            }
+
+            Self::InvalidIdentifier { field, value } => {
+                write!(
+                    f,
+                    "invalid benchmark identifier '{}' for field '{}'",
+                    value, field
+                )
+            }
+
+            Self::InvalidRange {
+                field,
+                value,
+                minimum,
+                maximum,
+            } => {
+                write!(
+                    f,
+                    "value '{}' for '{}' is outside the permitted range",
+                    value, field
+                )?;
+
+                if let Some(minimum) = minimum {
+                    write!(f, " (minimum {})", minimum)?;
+                }
+
+                if let Some(maximum) = maximum {
+                    write!(f, " (maximum {})", maximum)?;
+                }
+
+                Ok(())
+            }
+
+            Self::MissingValue { field } => {
+                write!(
+                    f,
+                    "required benchmark value '{}' is missing",
+                    field
+                )
+            }
+
+            Self::InconsistentConfiguration {
+                first,
+                second,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "inconsistent benchmark configuration between '{}' and '{}': {}",
+                    first, second, reason
+                )
+            }
+
+            Self::InvalidWorkload { workload, reason } => {
+                write!(
+                    f,
+                    "invalid quantum benchmark workload '{}': {}",
+                    workload, reason
+                )
+            }
+
+            Self::UnsupportedCapability {
+                capability,
+                backend,
+            } => {
+                if let Some(backend) = backend {
+                    write!(
+                        f,
+                        "benchmark requires unsupported capability '{}' on backend '{}'",
+                        capability, backend
+                    )
+                } else {
+                    write!(
+                        f,
+                        "benchmark requires unsupported capability '{}'",
+                        capability
+                    )
+                }
+            }
+
+            Self::BackendUnavailable { backend, reason } => {
+                write!(
+                    f,
+                    "benchmark backend '{}' is unavailable: {}",
+                    backend, reason
+                )
+            }
+
+            Self::ResourceLimitExceeded {
+                resource,
+                requested,
+                maximum,
+            } => {
+                write!(
+                    f,
+                    "benchmark resource limit exceeded for '{}': requested {}, maximum {}",
+                    resource, requested, maximum
+                )
+            }
+
+            Self::Timeout {
+                operation,
+                timeout_ms,
+            } => {
+                write!(
+                    f,
+                    "benchmark operation '{}' exceeded its {} ms timeout",
+                    operation, timeout_ms
+                )
+            }
+
+            Self::Cancelled { operation } => {
+                write!(
+                    f,
+                    "benchmark operation '{}' was cancelled",
+                    operation
+                )
+            }
+
+            Self::ExecutionFailed {
+                backend,
+                operation,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "benchmark execution failed on backend '{}' during '{}': {}",
+                    backend, operation, reason
+                )
+            }
+
+            Self::PartialExecution {
+                completed,
+                failed,
+                total,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "benchmark execution partially completed: {}/{} succeeded, {} failed: {}",
+                    completed, total, failed, reason
+                )
+            }
+
+            Self::InvalidObservation { field, reason } => {
+                write!(
+                    f,
+                    "invalid benchmark observation '{}': {}",
+                    field, reason
+                )
+            }
+
+            Self::InvalidProbability { field, value } => {
+                write!(
+                    f,
+                    "invalid probability for '{}': {} (expected a finite value in [0, 1])",
+                    field, value
+                )
+            }
+
+            Self::InvalidCount {
+                field,
+                value,
+                maximum,
+            } => {
+                write!(f, "invalid count for '{}': {}", field, value)?;
+
+                if let Some(maximum) = maximum {
+                    write!(f, " (maximum {})", maximum)?;
+                }
+
+                Ok(())
+            }
+
+            Self::InsufficientSamples {
+                required,
+                actual,
+                context,
+            } => {
+                write!(
+                    f,
+                    "insufficient benchmark samples for {}: required {}, received {}",
+                    context, required, actual
+                )
+            }
+
+            Self::InvalidConfidenceLevel { value } => {
+                write!(
+                    f,
+                    "invalid confidence level {} (expected a finite value strictly between 0 and 1)",
+                    value
+                )
+            }
+
+            Self::StatisticalFitFailed { model, reason } => {
+                write!(
+                    f,
+                    "statistical fit '{}' failed: {}",
+                    model, reason
+                )
+            }
+
+            Self::InvalidStatisticalModel { model, reason } => {
+                write!(
+                    f,
+                    "invalid statistical model '{}': {}",
+                    model, reason
+                )
+            }
+
+            Self::NumericalOverflow { operation, value } => {
+                if let Some(value) = value {
+                    write!(
+                        f,
+                        "numerical overflow during '{}' for value {}",
+                        operation, value
+                    )
+                } else {
+                    write!(
+                        f,
+                        "numerical overflow during '{}'",
+                        operation
+                    )
+                }
+            }
+
+            Self::NonFiniteValue { field, value } => {
+                write!(
+                    f,
+                    "non-finite benchmark value for '{}': {}",
+                    field, value
+                )
+            }
+
+            Self::UnsupportedOperation { operation, reason } => {
+                write!(
+                    f,
+                    "unsupported benchmark operation '{}': {}",
+                    operation, reason
+                )
+            }
+
+            Self::ReproducibilityFailure {
+                component,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "benchmark reproducibility failure for '{}': expected {}, got {}",
+                    component, expected, actual
+                )
+            }
+
+            Self::MissingProvenance { field } => {
+                write!(
+                    f,
+                    "required benchmark provenance '{}' is missing",
+                    field
+                )
+            }
+
+            Self::FingerprintMismatch {
+                component,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "benchmark fingerprint mismatch for '{}': expected {}, got {}",
+                    component, expected, actual
+                )
+            }
+
+            Self::SerializationFailed { format, reason } => {
+                write!(
+                    f,
+                    "benchmark {} serialization failed: {}",
+                    format, reason
+                )
+            }
+
+            Self::InvalidSerializedData { format, reason } => {
+                write!(
+                    f,
+                    "invalid benchmark {} data: {}",
+                    format, reason
+                )
+            }
+
+            Self::ValidationFailed { invariant, reason } => {
+                write!(
+                    f,
+                    "benchmark invariant '{}' failed: {}",
+                    invariant, reason
+                )
+            }
+
+            Self::PhysicalInvariantViolation {
+                quantity,
+                value,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "physical/mathematical invariant '{}' violated: value {}: {}",
+                    quantity, value, reason
+                )
+            }
+
+            Self::ExternalFailure {
+                system,
+                operation,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "external benchmark integration '{}' failed during '{}': {}",
+                    system, operation, reason
+                )
+            }
+
+            Self::InternalInvariant {
+                invariant,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "internal benchmarking invariant '{}' was violated: {}",
+                    invariant, reason
+                )
+            }
+
+            Self::Context { context, source } => {
+                write!(f, "{}: {}", context, source)
+            }
+        }
+    }
+}
+
+impl std::error::Error for BenchmarkError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Context { source, .. } => Some(source.as_ref()),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_categories_are_stable() {
+        let error = BenchmarkError::InvalidProbability {
+            field: "heavy_output_probability".to_owned(),
+            value: "NaN".to_owned(),
+        };
+
+        assert_eq!(error.kind(), BenchmarkErrorKind::Statistics);
+        assert_eq!(error.code(), "QBENCH-STAT-001");
+        assert!(error.is_user_correctable());
+        assert!(!error.is_internal());
+    }
+
+    #[test]
+    fn context_preserves_root_category_and_code() {
+        let error = BenchmarkError::StatisticalFitFailed {
+            model: "exponential_decay".to_owned(),
+            reason: "singular fit".to_owned(),
+        }
+        .with_context("analyzing randomized benchmarking sequence");
+
+        assert_eq!(error.kind(), BenchmarkErrorKind::Statistics);
+        assert_eq!(error.code(), "QBENCH-STAT-004");
+        assert_eq!(error.root().kind(), BenchmarkErrorKind::Statistics);
+        assert_eq!(
+            error.context(),
+            Some("analyzing randomized benchmarking sequence")
+        );
+        assert!(!error.is_retryable());
+    }
+
+    #[test]
+    fn retryability_is_explicit() {
+        let unavailable = BenchmarkError::BackendUnavailable {
+            backend: "local-qpu".to_owned(),
+            reason: "maintenance".to_owned(),
+        };
+
+        let invalid = BenchmarkError::InvalidConfiguration {
+            field: "shots".to_owned(),
+            reason: "must be greater than zero".to_owned(),
+        };
+
+        assert!(unavailable.is_retryable());
+        assert!(!invalid.is_retryable());
+    }
+
+    #[test]
+    fn cancellation_detection_handles_timeout_and_context() {
+        let error = BenchmarkError::Timeout {
+            operation: "execute batch".to_owned(),
+            timeout_ms: 5_000,
+        }
+        .with_context("running quantum volume");
+
+        assert!(error.is_cancelled());
+        assert_eq!(error.kind(), BenchmarkErrorKind::Cancellation);
+        assert_eq!(error.code(), "QBENCH-CANCEL-001");
+    }
+
+    #[test]
+    fn display_is_human_readable() {
+        let error = BenchmarkError::ResourceLimitExceeded {
+            resource: "shots".to_owned(),
+            requested: 10_000,
+            maximum: 1_000,
+        };
+
+        let text = error.to_string();
+
+        assert!(text.contains("shots"));
+        assert!(text.contains("10000"));
+        assert!(text.contains("1000"));
+        assert_eq!(error.code(), "QBENCH-LIMIT-001");
+    }
+
+    #[test]
+    fn error_is_cloneable_and_comparable() {
+        let error = BenchmarkError::MissingProvenance {
+            field: "compiler_version".to_owned(),
+        };
+
+        assert_eq!(error.clone(), error);
+    }
+}
