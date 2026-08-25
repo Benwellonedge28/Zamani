@@ -6,81 +6,114 @@
 //! # Architectural boundary
 //!
 //! ```text
-//! External source
-//!      │
-//!      ▼
-//! ┌──────────────────────┐
-//! │ Format-specific      │
-//! │ lexer/parser/AST     │
-//! └──────────┬───────────┘
-//!            │
-//!            ▼
-//! ┌──────────────────────┐
-//! │ Format validation    │
-//! └──────────┬───────────┘
-//!            │
-//!            ▼
-//! ┌──────────────────────┐
-//! │ FormatImporter       │  ← this contract
-//! └──────────┬───────────┘
-//!            │
-//!            ▼
-//! ┌──────────────────────┐
-//! │ Frontend lowering    │
-//! └──────────┬───────────┘
-//!            │
-//!            ▼
-//! ┌──────────────────────┐
-//! │ Zamani Quantum IR    │
-//! │ QuantumCircuit       │
-//! └──────────────────────┘
+//! Untrusted external source
+//!          │
+//!          ▼
+//! ┌──────────────────────────────┐
+//! │ ImportInput                  │
+//! │                              │
+//! │ bytes + SourceId + SourceMap │
+//! │ + immutable ImportConfig     │
+//! └──────────────┬───────────────┘
+//!                │
+//!                ▼
+//! ┌──────────────────────────────┐
+//! │ FormatImporter               │
+//! │                              │
+//! │ format lexer/parser          │
+//! │ format AST                   │
+//! │ format validation            │
+//! │ format lowering              │
+//! └──────────────┬───────────────┘
+//!                │
+//!                ▼
+//! ┌──────────────────────────────┐
+//! │ QuantumCircuit               │
+//! │                              │
+//! │ canonical Zamani Quantum IR  │
+//! └──────────────┬───────────────┘
+//!                │
+//!                ▼
+//!        compiler / optimizer
+//!        / mapper / scheduler
+//!        / backend
 //! ```
 //!
-//! The importer contract is intentionally format-independent.
+//! # Architectural ownership
 //!
-//! OpenQASM, QIR, Quil, or any future format must implement this boundary
-//! independently. No format implementation may depend on another format
-//! implementation.
+//! This module owns:
 //!
-//! # Important ownership rules
+//! - the format-independent import API;
+//! - import configuration;
+//! - resource-limit propagation;
+//! - source ownership at the import boundary;
+//! - importer registration and lookup;
+//! - successful import result representation;
+//! - explicit format/version selection.
 //!
 //! This module does **not** own:
 //!
 //! - quantum gate semantics;
-//! - qubit semantics;
-//! - measurement semantics;
-//! - circuit invariants;
+//! - quantum type semantics;
+//! - format-specific grammars;
+//! - format-specific ASTs;
+//! - format-specific validation;
+//! - lowering rules for individual formats;
 //! - optimization;
 //! - routing;
 //! - scheduling;
 //! - hardware mapping;
-//! - execution;
-//! - format-specific parsing;
-//! - format-specific ASTs.
+//! - QPU execution;
+//! - network access;
+//! - filesystem access;
+//! - process execution.
 //!
-//! Those responsibilities belong to the appropriate frontend format,
-//! canonical Quantum IR, compiler, algorithm, or backend layers.
+//! # Security boundary
 //!
-//! # Security
+//! Importing is an untrusted-input operation.
 //!
-//! Import is an untrusted-input boundary. Implementations must respect
-//! frontend resource limits and must never execute source-level external
-//! effects merely because they were encountered while importing.
+//! Implementations must therefore:
 //!
-//! In particular, an importer must not implicitly:
+//! - enforce `FrontendLimits`;
+//! - reject oversized input before parsing;
+//! - avoid unbounded recursion;
+//! - avoid unbounded diagnostic generation;
+//! - avoid unbounded output;
+//! - never execute source-level operations;
+//! - never implicitly access the filesystem;
+//! - never implicitly access the network;
+//! - never spawn external processes;
+//! - never access quantum hardware;
+//! - never silently discard unsupported semantics;
+//! - never return an invalid `QuantumCircuit` as successful output.
 //!
-//! - access the network;
-//! - execute external programs;
-//! - access arbitrary filesystem paths;
-//! - allocate unbounded memory;
-//! - recurse without configured limits;
-//! - silently discard unsupported semantics.
+//! Format-specific facilities such as OpenQASM `include` resolution must be
+//! supplied explicitly by a higher-level policy/resolver. This generic module
+//! never performs I/O itself.
+//!
+//! # Determinism
+//!
+//! Given the same:
+//!
+//! - source bytes;
+//! - source identity;
+//! - source map;
+//! - format;
+//! - format version;
+//! - import configuration;
+//! - resource limits;
+//!
+//! an importer must produce deterministic results.
+//!
+//! Registry lookup is exact and deterministic. The registry never guesses a
+//! format or silently chooses a different version.
 //!
 //! # Rust compatibility
 //!
-//! This module is written for the repository's Rust 2021 / Rust 1.97.1
-//! toolchain and intentionally uses only standard-library facilities plus
-//! the project's existing frontend/IR contracts.
+//! This implementation targets Rust 1.97 / 1.97.1 and Rust 2021.
+//!
+//! It intentionally uses only standard-library facilities and the existing
+//! Zamani frontend/Quantum IR contracts.
 
 use std::fmt;
 
@@ -97,25 +130,25 @@ pub type ImportResult = FrontendResult<ImportOutput>;
 
 /// Configuration supplied to an importer.
 ///
-/// The configuration is deliberately format-neutral. Format-specific
-/// configuration belongs to the corresponding format module.
+/// This configuration is intentionally format-independent.
 ///
-/// For example, OpenQASM-specific options belong in
-/// `frontend::formats::openqasm`, not here.
+/// Format-specific options belong to the corresponding format module.
+///
+/// For example, OpenQASM-specific configuration must remain under
+/// `frontend::formats::openqasm` rather than being added here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImportConfig {
     /// Resource limits applied to untrusted frontend input.
     limits: FrontendLimits,
 
-    /// Whether warnings should be retained in the import result.
+    /// Whether non-error diagnostics should be retained.
     ///
-    /// Errors are always retained and always cause import failure.
+    /// Errors are never suppressible through this option.
     retain_warnings: bool,
 }
 
 impl ImportConfig {
-    /// Creates a production configuration using the supplied frontend
-    /// resource limits.
+    /// Creates a production import configuration.
     #[must_use]
     pub fn new(limits: FrontendLimits) -> Self {
         Self {
@@ -136,10 +169,10 @@ impl ImportConfig {
         self.retain_warnings
     }
 
-    /// Enables or disables warning retention.
+    /// Enables or disables retention of warnings.
     ///
-    /// This does not disable validation. Warnings and errors are separate
-    /// concepts; an implementation must never turn an error into a warning.
+    /// This does not disable validation and does not convert errors into
+    /// warnings.
     #[must_use]
     pub const fn with_retain_warnings(mut self, retain: bool) -> Self {
         self.retain_warnings = retain;
@@ -155,35 +188,32 @@ impl Default for ImportConfig {
 
 /// Input supplied to a format importer.
 ///
-/// The source itself is kept as bytes rather than assuming UTF-8 at the
-/// generic boundary. Individual formats decide whether their source
-/// representation requires UTF-8 or another encoding.
+/// The generic frontend boundary deliberately accepts bytes. Individual
+/// formats decide their own encoding rules.
 ///
-/// This prevents the generic importer contract from accidentally becoming
-/// OpenQASM-specific.
+/// OpenQASM, for example, may require UTF-8 and can report a format-specific
+/// decoding diagnostic without forcing all future formats to use UTF-8.
 #[derive(Clone, Debug)]
 pub struct ImportInput {
-    /// Stable source identity.
+    /// Stable identity of the source being imported.
     source_id: SourceId,
 
     /// Original source bytes.
     source: Vec<u8>,
 
-    /// Source map containing the source associated with `source_id`.
-    ///
-    /// Keeping this alongside the input ensures diagnostics can preserve
-    /// source identity without requiring global mutable state.
+    /// Source map containing the source represented by `source_id`.
     source_map: SourceMap,
 
-    /// Import configuration.
+    /// Immutable import configuration.
     config: ImportConfig,
 }
 
 impl ImportInput {
-    /// Creates a new import input.
+    /// Creates an import input.
     ///
-    /// Implementations should reject the input through their normal
-    /// `FrontendError` path if the source exceeds configured limits.
+    /// The source size is checked before the input is accepted.
+    ///
+    /// The supplied `SourceMap` must contain `source_id`.
     pub fn new(
         source_id: SourceId,
         source: Vec<u8>,
@@ -191,9 +221,31 @@ impl ImportInput {
         config: ImportConfig,
     ) -> FrontendResult<Self> {
         if source.len() > config.limits().max_source_bytes() {
-            return Err(FrontendError::limit_exceeded(
-                "frontend source exceeds the configured maximum size",
+            return Err(frontend_limit_error(
+                "source_bytes",
+                source.len(),
+                config.limits().max_source_bytes(),
             ));
+        }
+
+        let source_file = source_map.get(source_id).ok_or_else(|| {
+            FrontendError::invalid_input(format!(
+                "source identifier `{source_id}` is not present in the supplied source map"
+            ))
+        })?;
+
+        /*
+         * The source map is part of the import contract, so its source must
+         * correspond exactly to the bytes supplied to the importer.
+         *
+         * This prevents a particularly dangerous class of diagnostic bugs
+         * where parser offsets refer to one source while diagnostics display
+         * another source.
+         */
+        if source_file.text().as_bytes() != source.as_slice() {
+            return Err(FrontendError::invalid_input(format!(
+                "source bytes for `{source_id}` do not match the source text registered in the source map"
+            )));
         }
 
         Ok(Self {
@@ -233,15 +285,32 @@ impl ImportInput {
     pub fn into_source(self) -> Vec<u8> {
         self.source
     }
+
+    /// Consumes the input and returns all components.
+    #[must_use]
+    pub fn into_parts(
+        self,
+    ) -> (
+        SourceId,
+        Vec<u8>,
+        SourceMap,
+        ImportConfig,
+    ) {
+        (
+            self.source_id,
+            self.source,
+            self.source_map,
+            self.config,
+        )
+    }
 }
 
-/// Successful result of an import operation.
+/// Successful result of a frontend import.
 ///
-/// A successful import contains a canonical Zamani Quantum IR circuit and
-/// any non-fatal diagnostics generated during processing.
+/// A successful `ImportOutput` contains a canonical Quantum IR circuit that
+/// has passed the canonical IR validation boundary.
 ///
-/// The circuit must have passed the canonical IR validation boundary before
-/// being returned as successful output.
+/// This invariant is intentionally enforced by `try_new`.
 #[derive(Clone, Debug)]
 pub struct ImportOutput {
     /// Canonical Zamani Quantum IR.
@@ -253,17 +322,45 @@ pub struct ImportOutput {
     /// Format version used during import.
     version: FormatVersion,
 
-    /// Non-fatal diagnostics produced while importing.
+    /// Non-fatal diagnostics generated during import.
     diagnostics: DiagnosticBag,
 }
 
 impl ImportOutput {
-    /// Creates a successful import result.
+    /// Creates a validated successful import result.
     ///
-    /// The importer implementation is responsible for ensuring that
-    /// `circuit` has already passed canonical Quantum IR validation.
+    /// This constructor validates the canonical circuit before allowing it
+    /// to cross the public successful-import boundary.
+    ///
+    /// `try_new` should be preferred by all production importer
+    /// implementations.
+    pub fn try_new(
+        circuit: QuantumCircuit,
+        format: FormatId,
+        version: FormatVersion,
+        diagnostics: DiagnosticBag,
+    ) -> ImportResult {
+        validate_canonical_circuit(&circuit)?;
+
+        Ok(Self {
+            circuit,
+            format,
+            version,
+            diagnostics,
+        })
+    }
+
+    /// Creates an import result without re-validating the circuit.
+    ///
+    /// # Safety contract
+    ///
+    /// This constructor is intentionally crate-private. It exists for
+    /// situations where a caller has already established the canonical IR
+    /// invariant and must avoid performing duplicate validation.
+    ///
+    /// External users cannot construct an unchecked successful import.
     #[must_use]
-    pub fn new(
+    pub(crate) fn from_validated(
         circuit: QuantumCircuit,
         format: FormatId,
         version: FormatVersion,
@@ -307,7 +404,7 @@ impl ImportOutput {
         &self.diagnostics
     }
 
-    /// Consumes the output and returns all components.
+    /// Consumes the result and returns all components.
     #[must_use]
     pub fn into_parts(
         self,
@@ -326,11 +423,9 @@ impl ImportOutput {
     }
 }
 
-/// Capability-independent importer contract.
+/// Format-independent importer contract.
 ///
-/// Each supported quantum format implements this trait independently.
-///
-/// Example:
+/// Every supported format implements this trait independently.
 ///
 /// ```text
 /// OpenQASM ──implements──► FormatImporter
@@ -338,67 +433,57 @@ impl ImportOutput {
 /// Quil     ──implements──► FormatImporter
 /// ```
 ///
-/// There is deliberately no relationship such as:
+/// No format is allowed to route through another format's importer as an
+/// architectural shortcut.
 ///
-/// ```text
-/// OpenQASM → QIR → IR
-/// ```
-///
-/// Every format lowers independently to the canonical Zamani Quantum IR.
+/// Every format lowers directly into the canonical Zamani Quantum IR.
 pub trait FormatImporter: Send + Sync {
     /// Returns the stable format identity.
     fn format(&self) -> FormatId;
 
-    /// Returns the format version supported by this importer.
+    /// Returns the exact format version supported by this importer.
     fn version(&self) -> FormatVersion;
 
-    /// Imports source into validated canonical Zamani Quantum IR.
+    /// Imports external source into validated canonical Quantum IR.
     ///
-    /// Implementations must:
+    /// A production implementation must perform:
     ///
-    /// 1. enforce configured frontend limits;
-    /// 2. lex/tokenize if applicable;
-    /// 3. parse into the format's own representation;
-    /// 4. perform format-specific semantic validation;
-    /// 5. lower into Zamani Quantum IR;
-    /// 6. invoke canonical IR validation;
-    /// 7. return errors instead of silently discarding semantics.
+    /// 1. input-limit enforcement;
+    /// 2. lexical analysis where applicable;
+    /// 3. parsing;
+    /// 4. format-specific semantic validation;
+    /// 5. lowering;
+    /// 6. canonical Quantum IR validation;
+    /// 7. deterministic diagnostic construction.
     ///
-    /// Implementations must not:
+    /// It must not:
     ///
-    /// - optimize the circuit;
-    /// - route qubits;
-    /// - schedule operations;
-    /// - execute operations;
-    /// - perform hardware mapping;
-    /// - access the network implicitly;
-    /// - execute external programs;
-    /// - silently drop unsupported constructs.
+    /// - optimize;
+    /// - route;
+    /// - schedule;
+    /// - map to hardware;
+    /// - execute;
+    /// - perform implicit filesystem access;
+    /// - perform implicit network access;
+    /// - execute external processes;
+    /// - access hardware;
+    /// - silently discard unsupported semantics.
     fn import(&self, input: ImportInput) -> ImportResult;
 }
 
-/// Object-safe alias for dynamically selected frontend importers.
+/// Object-safe importer type.
 pub type BoxedImporter = Box<dyn FormatImporter>;
 
-/// Registry of independently implemented importers.
+/// Registry of independently implemented frontend importers.
 ///
-/// The registry deliberately stores importer objects rather than matching
-/// on every possible format in a giant central `match`.
-///
-/// This means adding a new format does not require changing the implementation
-/// of existing formats.
-///
-/// A caller may construct a registry containing only the formats it wants:
+/// Registration is keyed by the exact pair:
 ///
 /// ```text
-/// OpenQASM only
-/// OpenQASM + QIR
-/// OpenQASM + Quil
-/// private/custom format only
+/// (FormatId, FormatVersion)
 /// ```
 ///
-/// The registry itself is optional infrastructure; individual format
-/// implementations remain independently removable.
+/// There may therefore be multiple importers for the same format at
+/// different versions, but never duplicate registrations for the same pair.
 #[derive(Default)]
 pub struct ImporterRegistry {
     importers: Vec<BoxedImporter>,
@@ -422,20 +507,27 @@ impl ImporterRegistry {
         }
     }
 
-    /// Creates a registry with the supplied importers.
-    #[must_use]
-    pub fn with_importer<I>(mut self, importer: I) -> Self
+    /// Creates a registry containing one importer.
+    ///
+    /// Duplicate registration is checked immediately.
+    pub fn with_importer<I>(
+        mut self,
+        importer: I,
+    ) -> FrontendResult<Self>
     where
         I: FormatImporter + 'static,
     {
-        self.importers.push(Box::new(importer));
-        self
+        self.register(importer)?;
+        Ok(self)
     }
 
     /// Registers an importer.
     ///
-    /// Registration rejects duplicate `(FormatId, FormatVersion)` pairs.
-    pub fn register<I>(&mut self, importer: I) -> FrontendResult<()>
+    /// Duplicate `(FormatId, FormatVersion)` registrations are rejected.
+    pub fn register<I>(
+        &mut self,
+        importer: I,
+    ) -> FrontendResult<()>
     where
         I: FormatImporter + 'static,
     {
@@ -445,14 +537,18 @@ impl ImporterRegistry {
         if self
             .importers
             .iter()
-            .any(|existing| existing.format() == format && existing.version() == version)
+            .any(|existing| {
+                existing.format() == format
+                    && existing.version() == version
+            })
         {
-            return Err(FrontendError::invalid_input(
-                "an importer for this format and version is already registered",
-            ));
+            return Err(FrontendError::invalid_input(format!(
+                "an importer for format `{format}` version `{version}` is already registered"
+            )));
         }
 
         self.importers.push(Box::new(importer));
+
         Ok(())
     }
 
@@ -462,7 +558,7 @@ impl ImporterRegistry {
         self.importers.len()
     }
 
-    /// Returns whether no importers are registered.
+    /// Returns whether the registry contains no importers.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.importers.is_empty()
@@ -477,14 +573,14 @@ impl ImporterRegistry {
     ) -> Option<&dyn FormatImporter> {
         self.importers
             .iter()
-            .find(|importer| importer.format() == *format && importer.version() == *version)
+            .find(|importer| {
+                importer.format() == *format
+                    && importer.version() == *version
+            })
             .map(Box::as_ref)
     }
 
     /// Imports using an exact format/version pair.
-    ///
-    /// This is the preferred registry entry point when the caller already
-    /// knows the external format.
     pub fn import(
         &self,
         format: &FormatId,
@@ -500,34 +596,39 @@ impl ImporterRegistry {
         importer.import(input)
     }
 
-    /// Returns an iterator over registered importers.
-    pub fn iter(&self) -> impl Iterator<Item = &dyn FormatImporter> {
+    /// Iterates over registered importers in deterministic registration
+    /// order.
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = &dyn FormatImporter> {
         self.importers.iter().map(Box::as_ref)
     }
 }
 
 /// Explicit source-format selection.
 ///
-/// Automatic format detection is intentionally not part of the core import
-/// contract. If automatic detection is eventually introduced, it should be
-/// a separate bounded, deterministic facility rather than changing the
-/// semantics of `FormatImporter`.
+/// Automatic detection deliberately does not belong to the core importer
+/// contract. If it is introduced later, it must be a separate bounded and
+/// deterministic facility.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ImportSelection {
-    /// Explicitly select a format and version.
+    /// Explicit format/version selection.
     Explicit {
-        /// Format identity.
+        /// Selected format.
         format: FormatId,
 
-        /// Format version.
+        /// Selected version.
         version: FormatVersion,
     },
 }
 
 impl ImportSelection {
-    /// Creates an explicit format selection.
+    /// Creates an explicit selection.
     #[must_use]
-    pub const fn explicit(format: FormatId, version: FormatVersion) -> Self {
+    pub const fn explicit(
+        format: FormatId,
+        version: FormatVersion,
+    ) -> Self {
         Self::Explicit { format, version }
     }
 
@@ -550,77 +651,125 @@ impl ImportSelection {
 
 /// Imports using an explicit format selection.
 ///
-/// This function provides a small stable facade for callers that do not need
-/// direct access to the registry implementation.
+/// This is the preferred high-level entry point for callers that already
+/// know the external format.
 pub fn import(
     registry: &ImporterRegistry,
     selection: &ImportSelection,
     input: ImportInput,
 ) -> ImportResult {
-    registry.import(selection.format(), selection.version(), input)
+    registry.import(
+        selection.format(),
+        selection.version(),
+        input,
+    )
 }
 
-/// Imports a source using a specific importer.
+/// Returns a structured frontend limit error.
 ///
-/// This is useful for applications that deliberately avoid a registry and
-/// want to compile against exactly one format implementation.
-pub fn import_with<I>(importer: &I, input: ImportInput) -> ImportResult
-where
-    I: FormatImporter + ?Sized,
-{
-    importer.import(input)
+/// Keeping this helper here avoids duplicating the construction of resource
+/// errors throughout this module.
+///
+/// The concrete `FrontendError` implementation owns the final stable error
+/// code/category.
+fn frontend_limit_error(
+    resource: &str,
+    actual: usize,
+    maximum: usize,
+) -> FrontendError {
+    FrontendError::limit_exceeded(format!(
+        "frontend resource limit exceeded: {resource} is {actual} bytes/elements; maximum is {maximum}"
+    ))
 }
 
-/// Verifies that a successful import satisfies the canonical IR boundary.
+/// Validates canonical Quantum IR before it crosses the successful import
+/// boundary.
 ///
-/// Format implementations should normally perform this check as the final
-/// lowering step. This helper exists so that the common importer contract
-/// has one canonical place for the invariant.
+/// The exact IR validation API is intentionally isolated here. This is the
+/// only place in this module that needs to know how the canonical IR exposes
+/// its invariant check.
 ///
-/// The exact IR validation API remains owned by `quantum::ir`; this module
-/// does not duplicate those rules.
-pub fn validate_imported_circuit(
+/// If the current Quantum IR exposes `validate()` as a fallible operation,
+/// this function delegates to it. If the repository uses a different public
+/// validation method, only this adapter should need adjustment; the importer
+/// contract itself remains unchanged.
+fn validate_canonical_circuit(
     circuit: &QuantumCircuit,
 ) -> FrontendResult<()> {
-    circuit
-        .validate()
-        .map_err(|error| FrontendError::lowering(error.to_string()))
+    circuit.validate().map_err(|error| {
+        FrontendError::invalid_input(format!(
+            "format importer produced invalid canonical Quantum IR: {error}"
+        ))
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn import_selection_preserves_explicit_identity() {
-        let format = FormatId::new("test");
-        let version = FormatVersion::new(1, 0, 0);
-
-        let selection = ImportSelection::explicit(format.clone(), version.clone());
-
-        assert_eq!(selection.format(), &format);
-        assert_eq!(selection.version(), &version);
-    }
+    /*
+     * These tests deliberately focus on the generic importer contract rather
+     * than any particular format.
+     *
+     * Format implementations have their own tests under:
+     *
+     * frontend/formats/<format>/
+     */
 
     #[test]
-    fn empty_registry_is_empty() {
-        let registry = ImporterRegistry::new();
-
-        assert!(registry.is_empty());
-        assert_eq!(registry.len(), 0);
-    }
-
-    #[test]
-    fn config_retains_warnings_by_default() {
+    fn default_import_config_retains_warnings() {
         let config = ImportConfig::default();
 
         assert!(config.retain_warnings());
     }
 
     #[test]
-    fn config_can_disable_warning_retention() {
-        let config = ImportConfig::default().with_retain_warnings(false);
+    fn warning_retention_can_be_disabled() {
+        let config = ImportConfig::default()
+            .with_retain_warnings(false);
 
         assert!(!config.retain_warnings());
+    }
+
+    #[test]
+    fn explicit_selection_preserves_format_and_version() {
+        /*
+         * This test intentionally uses the public FormatId/FormatVersion
+         * constructors used by the frontend contract.
+         *
+         * The exact values are not semantically important here; this test
+         * verifies that selection is not altered by the generic layer.
+         */
+        let format = FormatId::new("test-format")
+            .expect("test format identifier must be valid");
+
+        let version = FormatVersion::new(1, 0, 0);
+
+        let selection =
+            ImportSelection::explicit(
+                format.clone(),
+                version,
+            );
+
+        assert_eq!(selection.format(), &format);
+        assert_eq!(selection.version(), &version);
+    }
+
+    #[test]
+    fn registry_starts_empty() {
+        let registry = ImporterRegistry::new();
+
+        assert_eq!(registry.len(), 0);
+        assert!(registry.is_empty());
+    }
+
+    #[test]
+    fn registry_debug_does_not_expose_importer_internals() {
+        let registry = ImporterRegistry::new();
+
+        let rendered = format!("{registry:?}");
+
+        assert!(rendered.contains("ImporterRegistry"));
+        assert!(rendered.contains("importer_count"));
     }
 }
