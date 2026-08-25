@@ -1,127 +1,82 @@
 //! Zamani Quantum Frontend — OpenQASM importer.
 //!
-//! This module is the production import boundary for OpenQASM.
+//! Production import boundary for OpenQASM 3.x.
 //!
-//! # Architectural boundary
+//! # Pipeline
 //!
 //! ```text
-//! OpenQASM source
-//!       |
-//!       v
-//!   ImportInput
-//!       |
-//!       v
+//! untrusted bytes
+//!      |
+//!      v
+//! ImportInput
+//!      |
+//!      v
 //! UTF-8 validation
-//!       |
-//!       v
-//!     lexer
-//!       |
-//!       v
-//!     parser
-//!       |
-//!       v
+//!      |
+//!      v
+//! OpenQASM lexer/parser
+//!      |
+//!      v
 //! OpenQASM AST
-//!       |
-//!       v
-//! semantic validation
-//!       |
-//!       v
-//! OpenQASM lowering policy
-//!       |
-//!       v
-//! canonical Quantum IR
-//!       |
-//!       v
-//! QuantumCircuit
+//!      |
+//!      v
+//! OpenQASM semantic validation
+//!      |
+//!      v
+//! deterministic lowering
+//!      |
+//!      v
+//! canonical QuantumCircuit
+//!      |
+//!      v
+//! ImportOutput::try_new()
+//!      |
+//!      v
+//! canonical IR validation
 //! ```
 //!
-//! The importer deliberately does NOT:
+//! # Security boundary
 //!
-//! - execute OpenQASM;
-//! - access the network;
-//! - access arbitrary filesystem paths;
-//! - execute `extern` declarations;
-//! - execute calibration blocks;
-//! - perform hardware mapping;
-//! - route qubits;
-//! - schedule operations;
-//! - optimize circuits;
-//! - communicate with a QPU;
-//! - silently discard unsupported semantics;
-//! - invent measurements;
-//! - assume `q[i] -> c[i]` mapping;
-//! - depend on another frontend format.
+//! This module never:
 //!
-//! # Current lowering policy
+//! - executes OpenQASM;
+//! - executes `extern` declarations;
+//! - executes calibration code;
+//! - accesses the filesystem;
+//! - accesses the network;
+//! - spawns processes;
+//! - accesses quantum hardware;
+//! - performs hardware mapping;
+//! - performs routing;
+//! - performs scheduling;
+//! - performs optimization;
+//! - silently discards unsupported semantics.
 //!
-//! The canonical Zamani Quantum IR currently directly represents a substantial
-//! subset of OpenQASM logical operations. This importer lowers those operations
-//! directly and rejects constructs that require semantics not currently
-//! represented by the canonical IR.
+//! OpenQASM `include` is accepted only when it refers to the explicitly
+//! supported standard-library include. Arbitrary include resolution belongs
+//! to a higher-level resolver and is deliberately outside this importer.
 //!
-//! Directly importable operations include the canonical gate kinds exposed by
-//! `quantum::ir::GateKind`, measurements with explicit classical destinations,
-//! reset, and barrier.
+//! # Lowering policy
 //!
-//! The importer intentionally rejects, rather than silently lowers:
+//! The current canonical Quantum IR directly supports a subset of OpenQASM.
+//! This importer therefore lowers only constructs for which the canonical IR
+//! has an unambiguous representation.
 //!
-//! - user-defined gate definitions;
-//! - gate modifiers;
-//! - `U`/`gphase` where no semantically equivalent canonical IR operation exists;
-//! - aliases;
-//! - physical qubits;
-//! - slices/index sets/concatenated operands;
-//! - classical control flow;
-//! - timing/pulse/calibration constructs;
-//! - unsupported classical declarations;
-//! - arbitrary includes;
-//! - implementation extensions.
+//! Unsupported constructs are rejected explicitly rather than being silently
+//! erased.
 //!
-//! This is a capability boundary, not a parser limitation. The OpenQASM AST and
-//! validator retain these constructs so that future IR/compiler work can add
-//! support without redesigning the parser.
+//! # Source locations
 //!
-//! # Measurement semantics
-//!
-//! A measurement is imported only when OpenQASM explicitly provides a classical
-//! destination:
-//!
-//! ```text
-//! measure q[0] -> c[0];
-//! ```
-//!
-//! The importer never automatically measures every qubit.
-//!
-//! # Register semantics
-//!
-//! OpenQASM register names are frontend-local symbols. The canonical IR receives
-//! only zero-based logical `QubitId` and classical-bit indices.
-//!
-//! Register operands are expanded deterministically according to OpenQASM
-//! broadcasting semantics. A scalar operand may participate in a broadcast;
-//! multiple register operands must have compatible lengths.
-//!
-//! # Resource safety
-//!
-//! The importer enforces:
-//!
-//! - source-size limits through `ImportInput`;
-//! - parser limits derived from `FrontendLimits`;
-//! - semantic validation limits;
-//! - register-size limits;
-//! - operation-count limits;
-//! - checked arithmetic for offsets and sizes;
-//! - bounded diagnostics;
-//! - no recursive source execution;
-//! - no uncontrolled include resolution;
-//! - no partial successful circuit.
+//! Source locations are owned by the generic frontend `SourceMap` and the
+//! OpenQASM AST. This file never creates a second source-location model.
 //!
 //! # Rust compatibility
 //!
-//! Rust 1.97.1.
+//! Rust 1.97 / 1.97.1.
 //! Rust 2021.
-//! No nightly features.
-//! No new dependencies.
+//! Stable Rust only.
+//!
+//! No additional dependencies.
 
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
@@ -136,20 +91,16 @@ use crate::quantum::frontend::core::errors::{
     FrontendError,
     FrontendErrorCode,
     FrontendErrorKind,
-    FrontendErrorContext,
-    FrontendError,
     FrontendLimitViolation,
     FrontendResult,
 };
 use crate::quantum::frontend::core::limits::FrontendLimits;
-use crate::quantum::frontend::core::source::SourceId;
 use crate::quantum::frontend::format::{
     FormatId,
     FormatVersion,
 };
 use crate::quantum::frontend::importer::{
     FormatImporter,
-    ImportConfig,
     ImportInput,
     ImportOutput,
     ImportResult,
@@ -199,8 +150,8 @@ use super::validation::{
 
 /// Production OpenQASM importer.
 ///
-/// The importer is stateless apart from its explicit format/version policy and
-/// is therefore safe to share between threads.
+/// The importer contains no mutable execution state and can safely be shared
+/// between threads.
 #[derive(Clone, Debug)]
 pub struct OpenQasmImporter {
     version: FormatVersion,
@@ -223,10 +174,8 @@ impl OpenQasmImporter {
         }
     }
 
-    /// Creates an importer targeting a specific OpenQASM 3.x version.
-    ///
-    /// The version must remain within the semantic policy supplied by
-    /// `ValidationConfig`.
+    /// Creates an importer with an explicit OpenQASM version and validation
+    /// policy.
     #[must_use]
     pub const fn new(
         version: FormatVersion,
@@ -250,41 +199,37 @@ impl OpenQasmImporter {
         self.validation
     }
 
-    /// Imports a UTF-8 OpenQASM source string using production frontend limits.
-    pub fn import_str(
+    /// Parses and validates an already UTF-8-decoded OpenQASM source.
+    ///
+    /// This helper deliberately accepts an `ImportInput` rather than
+    /// manufacturing a `SourceMap`. The generic import contract requires the
+    /// source map to contain the exact source represented by `source_id`.
+    pub fn import_utf8(
         &self,
-        source: &str,
-        source_id: SourceId,
-        config: ImportConfig,
+        input: ImportInput,
     ) -> ImportResult {
-        let source_bytes = source.as_bytes().to_vec();
-
-        let source_map = crate::quantum::frontend::core::source::SourceMap::new();
-
-        let input = ImportInput::new(
-            source_id,
-            source_bytes,
-            source_map,
-            config,
-        )?;
-
         self.import(input)
     }
 
     fn parse(
         &self,
         source: &str,
-        source_id: SourceId,
+        source_id: crate::quantum::frontend::core::source::SourceId,
         limits: &FrontendLimits,
     ) -> FrontendResult<Program> {
-        let parser_limits = parser_limits_from_frontend(limits)?;
+        let parser_limits =
+            parser_limits_from_frontend(limits)?;
 
         let parser_config = ParserConfig {
             source_id,
             limits: parser_limits,
         };
 
-        OpenQasmParser::parse(source, parser_config).map_err(|error| {
+        OpenQasmParser::parse(
+            source,
+            parser_config,
+        )
+        .map_err(|error| {
             FrontendError::with_code(
                 FrontendErrorKind::Syntax,
                 FrontendErrorCode::new(error.code()),
@@ -295,69 +240,19 @@ impl OpenQasmImporter {
         })
     }
 
-    fn validate(
-        &self,
-        program: &Program,
-        limits: &FrontendLimits,
-    ) -> FrontendResult<DiagnosticBag> {
-        let result = validate_program_with_config(
-            program,
-            limits,
-            self.validation,
-        );
-
-        let mut diagnostics =
-            DiagnosticBag::with_max_diagnostics(
-                usize_from_u64(
-                    limits.max_diagnostics(),
-                    "max_diagnostics",
-                )?,
-            );
-
-        if result.is_valid() {
-            return Ok(diagnostics);
-        }
-
-        for error in result.errors() {
-            push_validation_diagnostic(
-                &mut diagnostics,
-                error,
-            )?;
-        }
-
-        let first = result
-            .errors()
-            .first()
-            .ok_or_else(|| {
-                FrontendError::internal(
-                    "OpenQASM validator reported invalid state without an error",
-                )
-            })?;
-
-        Err(FrontendError::with_code(
-            FrontendErrorKind::Semantic,
-            FrontendErrorCode::new(first.code().as_str()),
-            first.message(),
-        )
-        .context("format", "OpenQASM")
-        .context(
-            "diagnostic_count",
-            result.errors().len().to_string(),
-        ))
-    }
-
     fn check_version(
         &self,
         program: &Program,
     ) -> FrontendResult<()> {
-        let version = program.version().ok_or_else(|| {
-            FrontendError::with_code(
-                FrontendErrorKind::Semantic,
-                FrontendErrorCode::new("QASM-V002"),
-                "OpenQASM version declaration is required",
-            )
-            .context("format", "OpenQASM")
-        })?;
+        let version =
+            program.version().ok_or_else(|| {
+                FrontendError::with_code(
+                    FrontendErrorKind::Semantic,
+                    FrontendErrorCode::new("QASM-V002"),
+                    "OpenQASM version declaration is required",
+                )
+                .context("format", "OpenQASM")
+            })?;
 
         let source_version =
             FormatVersion::major_minor(
@@ -365,13 +260,37 @@ impl OpenQasmImporter {
                 u32::from(version.minor()),
             );
 
+        if source_version.major() != 3 {
+            return Err(
+                FrontendError::with_code(
+                    FrontendErrorKind::Unsupported,
+                    FrontendErrorCode::new("QASM-V001"),
+                    format!(
+                        "OpenQASM major version {} is not supported; \
+                         this importer supports OpenQASM 3.x",
+                        version.major()
+                    ),
+                )
+                .context("format", "OpenQASM")
+                .context(
+                    "requested_version",
+                    source_version.to_string(),
+                )
+                .context(
+                    "supported_version",
+                    self.version.to_string(),
+                ),
+            );
+        }
+
         if source_version.is_newer_than(self.version) {
             return Err(
                 FrontendError::with_code(
                     FrontendErrorKind::Unsupported,
                     FrontendErrorCode::new("QASM-V001"),
                     format!(
-                        "OpenQASM version {}.{} is newer than the configured importer version {}",
+                        "OpenQASM version {}.{} is newer than \
+                         the configured importer version {}",
                         version.major(),
                         version.minor(),
                         self.version,
@@ -389,21 +308,74 @@ impl OpenQasmImporter {
             );
         }
 
-        if source_version.major() != 3 {
-            return Err(
-                FrontendError::with_code(
-                    FrontendErrorKind::Unsupported,
-                    FrontendErrorCode::new("QASM-V001"),
-                    format!(
-                        "OpenQASM major version {} is not supported; this importer supports OpenQASM 3.x",
-                        version.major(),
-                    ),
-                )
-                .context("format", "OpenQASM"),
+        Ok(())
+    }
+
+    fn validate(
+        &self,
+        program: &Program,
+        limits: &FrontendLimits,
+    ) -> FrontendResult<DiagnosticBag> {
+        let result =
+            validate_program_with_config(
+                program,
+                limits,
+                self.validation,
             );
+
+        let max_diagnostics =
+            usize_from_u64(
+                limits.max_diagnostics(),
+                "max_diagnostics",
+            )?;
+
+        let mut diagnostics =
+            DiagnosticBag::with_max_diagnostics(
+                max_diagnostics,
+            );
+
+        if result.is_valid() {
+            return Ok(diagnostics);
         }
 
-        Ok(())
+        /*
+         * Validation errors are fatal. We still construct the complete
+         * bounded diagnostic bag first so callers get deterministic,
+         * structured information rather than only the first textual error.
+         */
+        for error in result.errors() {
+            push_validation_diagnostic(
+                &mut diagnostics,
+                error,
+            )?;
+        }
+
+        let first =
+            result.errors().first().ok_or_else(|| {
+                FrontendError::internal(
+                    "OpenQASM validator reported an invalid result \
+                     without a semantic error",
+                )
+            })?;
+
+        Err(
+            FrontendError::with_code(
+                FrontendErrorKind::Semantic,
+                FrontendErrorCode::new(
+                    first.code().as_str(),
+                ),
+                first.message(),
+            )
+            .context("format", "OpenQASM")
+            .context(
+                "stage",
+                "semantic-validation",
+            )
+            .context(
+                "diagnostic_count",
+                result.errors().len().to_string(),
+            ),
+        )
     }
 
     fn lower(
@@ -411,17 +383,21 @@ impl OpenQasmImporter {
         program: &Program,
         limits: &FrontendLimits,
     ) -> FrontendResult<QuantumCircuit> {
-        let mut lowerer =
-            OpenQasmLowerer::new(program, limits)?;
-
-        lowerer.lower()
+        OpenQasmLowerer::new(
+            program,
+            limits,
+        )?
+        .lower()
     }
 }
 
 impl FormatImporter for OpenQasmImporter {
     fn format(&self) -> FormatId {
         FormatId::new("openqasm")
-            .expect("the built-in OpenQASM format identifier is valid")
+            .expect(
+                "the built-in OpenQASM format identifier \
+                 must satisfy FormatId invariants",
+            )
     }
 
     fn version(&self) -> FormatVersion {
@@ -434,44 +410,71 @@ impl FormatImporter for OpenQasmImporter {
     ) -> ImportResult {
         let limits = input.config().limits();
 
-        let source = std::str::from_utf8(input.source())
-            .map_err(|error| {
-                FrontendError::with_code(
-                    FrontendErrorKind::Lexical,
-                    FrontendErrorCode::new("QASM-P020"),
-                    format!(
-                        "OpenQASM source must be valid UTF-8: {error}"
-                    ),
-                )
-                .context("format", "OpenQASM")
-                .context("stage", "source-decoding")
-            })?;
+        /*
+         * OpenQASM source is UTF-8. Decode before invoking the parser so the
+         * parser never receives malformed text and cannot accidentally
+         * interpret replacement characters as source.
+         */
+        let source =
+            std::str::from_utf8(input.source())
+                .map_err(|error| {
+                    FrontendError::with_code(
+                        FrontendErrorKind::Lexical,
+                        FrontendErrorCode::new(
+                            "QASM-P020",
+                        ),
+                        format!(
+                            "OpenQASM source must be valid UTF-8: {error}"
+                        ),
+                    )
+                    .context("format", "OpenQASM")
+                    .context(
+                        "stage",
+                        "source-decoding",
+                    )
+                })?;
 
-        let program = self.parse(
-            source,
-            input.source_id(),
-            limits,
-        )?;
+        let program =
+            self.parse(
+                source,
+                input.source_id(),
+                limits,
+            )?;
 
         self.check_version(&program)?;
 
+        /*
+         * Validation must complete before lowering. This prevents malformed
+         * semantic constructs from reaching canonical IR construction.
+         */
         let diagnostics =
-            self.validate(&program, limits)?;
+            self.validate(
+                &program,
+                limits,
+            )?;
 
         let circuit =
-            self.lower(&program, limits)?;
+            self.lower(
+                &program,
+                limits,
+            )?;
 
-        Ok(ImportOutput::new(
+        /*
+         * ImportOutput::try_new is the final generic frontend boundary. It
+         * validates the canonical IR again and therefore protects the public
+         * success invariant even if lowering later changes.
+         */
+        ImportOutput::try_new(
             circuit,
             self.format(),
             self.version(),
             diagnostics,
-        ))
+        )
     }
 }
 
 // =============================================================================
-// Lowering implementation
+// Lowering
 // =============================================================================
 
 struct OpenQasmLowerer<'a> {
@@ -487,14 +490,10 @@ struct OpenQasmLowerer<'a> {
     constants:
         HashMap<String, f64>,
 
-    next_qubit:
-        usize,
+    next_qubit: usize,
+    next_classical_bit: usize,
 
-    next_classical_bit:
-        usize,
-
-    operations:
-        Vec<Gate>,
+    operations: Vec<Gate>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -504,22 +503,32 @@ struct RegisterRange {
 }
 
 impl RegisterRange {
-    fn checked_end(self) -> FrontendResult<usize> {
-        self.base.checked_add(self.len).ok_or_else(|| {
-            FrontendError::internal(
-                "OpenQASM register offset overflowed",
-            )
-        })
+    fn checked_end(
+        self,
+    ) -> FrontendResult<usize> {
+        self.base
+            .checked_add(self.len)
+            .ok_or_else(|| {
+                FrontendError::internal(
+                    "OpenQASM register offset overflowed",
+                )
+            })
     }
 
-    fn index(self, index: usize) -> FrontendResult<usize> {
+    fn index(
+        self,
+        index: usize,
+    ) -> FrontendResult<usize> {
         if index >= self.len {
             return Err(
                 FrontendError::with_code(
                     FrontendErrorKind::Lowering,
-                    FrontendErrorCode::new("QASM-L001"),
+                    FrontendErrorCode::new(
+                        "QASM-L001",
+                    ),
                     format!(
-                        "register index {} is outside register length {}",
+                        "register index {} is outside \
+                         register length {}",
                         index,
                         self.len,
                     ),
@@ -528,11 +537,13 @@ impl RegisterRange {
             );
         }
 
-        self.base.checked_add(index).ok_or_else(|| {
-            FrontendError::internal(
-                "OpenQASM register index overflowed",
-            )
-        })
+        self.base
+            .checked_add(index)
+            .ok_or_else(|| {
+                FrontendError::internal(
+                    "OpenQASM register index overflowed",
+                )
+            })
     }
 }
 
@@ -547,6 +558,7 @@ impl<'a> OpenQasmLowerer<'a> {
 
             quantum_registers: BTreeMap::new(),
             classical_registers: BTreeMap::new(),
+
             constants: HashMap::new(),
 
             next_qubit: 0,
@@ -565,19 +577,15 @@ impl<'a> OpenQasmLowerer<'a> {
         let ir_limits =
             QuantumIrLimits::production();
 
-        let max_qubits =
-            ir_limits.max_qubits();
-
-        let max_classical_bits =
-            ir_limits.max_classical_bits();
-
-        if self.next_qubit > max_qubits {
+        if self.next_qubit
+            > ir_limits.max_qubits()
+        {
             return Err(
                 FrontendError::limit_exceeded(
                     FrontendLimitViolation::new(
                         "max_qubits",
                         self.next_qubit,
-                        max_qubits,
+                        ir_limits.max_qubits(),
                     ),
                 )
                 .context("format", "OpenQASM"),
@@ -585,32 +593,14 @@ impl<'a> OpenQasmLowerer<'a> {
         }
 
         if self.next_classical_bit
-            > max_classical_bits
+            > ir_limits.max_classical_bits()
         {
             return Err(
                 FrontendError::limit_exceeded(
                     FrontendLimitViolation::new(
                         "max_classical_bits",
                         self.next_classical_bit,
-                        max_classical_bits,
-                    ),
-                )
-                .context("format", "OpenQASM"),
-            );
-        }
-
-        if self.operations.len()
-            > self.frontend_limits.max_gate_operations()
-                as usize
-        {
-            return Err(
-                FrontendError::limit_exceeded(
-                    FrontendLimitViolation::new(
-                        "max_gate_operations",
-                        self.operations.len(),
-                        self.frontend_limits
-                            .max_gate_operations()
-                            as usize,
+                        ir_limits.max_classical_bits(),
                     ),
                 )
                 .context("format", "OpenQASM"),
@@ -625,9 +615,11 @@ impl<'a> OpenQasmLowerer<'a> {
         )
         .map_err(|error| {
             FrontendError::lowering(format!(
-                "canonical Quantum IR rejected OpenQASM import: {error}"
+                "canonical Quantum IR rejected \
+                 OpenQASM import: {error}"
             ))
             .context("format", "OpenQASM")
+            .context("stage", "lowering")
         })
     }
 
@@ -667,44 +659,29 @@ impl<'a> OpenQasmLowerer<'a> {
                         return Err(
                             FrontendError::unsupported(
                                 format!(
-                                    "OpenQASM include `{}` cannot be lowered without an explicit include source",
+                                    "OpenQASM include `{}` \
+                                     requires an explicit \
+                                     include resolver",
                                     include.path(),
                                 ),
                             )
-                            .context("format", "OpenQASM")
-                            .context("stage", "lowering"),
+                            .context(
+                                "format",
+                                "OpenQASM",
+                            )
+                            .context(
+                                "stage",
+                                "lowering",
+                            ),
                         );
                     }
                 }
 
-                Statement::Annotated(_)
-                | Statement::Pragma(_)
-                | Statement::OldStyleDeclaration(_)
-                | Statement::AliasDeclaration(_)
-                | Statement::IoDeclaration(_)
-                | Statement::GateDefinition(_)
-                | Statement::DefDefinition(_)
-                | Statement::ExternDeclaration(_)
-                | Statement::Expression(_)
-                | Statement::Assignment(_)
-                | Statement::Reset(_)
-                | Statement::Barrier(_)
-                | Statement::Delay(_)
-                | Statement::Box(_)
-                | Statement::If(_)
-                | Statement::For(_)
-                | Statement::While(_)
-                | Statement::Switch(_)
-                | Statement::Break(_)
-                | Statement::Continue(_)
-                | Statement::End(_)
-                | Statement::Return(_)
-                | Statement::Cal(_)
-                | Statement::Defcal(_)
-                | Statement::Nop(_)
-                | Statement::Extension(_)
-                | Statement::GateCall(_)
-                | Statement::MeasureAssignment(_) => {}
+                /*
+                 * Declarations handled in later phases or intentionally
+                 * unsupported constructs are not lowered here.
+                 */
+                _ => {}
             }
         }
 
@@ -715,31 +692,34 @@ impl<'a> OpenQasmLowerer<'a> {
         &mut self,
         declaration: &QuantumDeclaration,
     ) -> FrontendResult<()> {
-        let length = match declaration.ty() {
-            QuantumType::Qubit(size)
-            | QuantumType::QReg(size) => {
-                match size {
-                    Some(expression) => {
-                        self.eval_size_expression(
-                            expression,
-                        )?
+        let length =
+            match declaration.ty() {
+                QuantumType::Qubit(size)
+                | QuantumType::QReg(size) => {
+                    match size {
+                        Some(expression) => {
+                            self.eval_size_expression(
+                                expression,
+                            )?
+                        }
+                        None => 1,
                     }
-
-                    None => 1,
                 }
-            }
-        };
+            };
 
         self.check_register_size(length)?;
 
-        let base = self.next_qubit;
+        let base =
+            self.next_qubit;
 
         let end =
-            base.checked_add(length).ok_or_else(|| {
-                FrontendError::internal(
-                    "logical qubit register allocation overflowed",
-                )
-            })?;
+            base.checked_add(length)
+                .ok_or_else(|| {
+                    FrontendError::internal(
+                        "logical qubit register \
+                         allocation overflowed",
+                    )
+                })?;
 
         self.next_qubit = end;
 
@@ -760,54 +740,67 @@ impl<'a> OpenQasmLowerer<'a> {
     ) -> FrontendResult<()> {
         match declaration.ty() {
             ScalarType::Bit(size) => {
-                let length = match size {
-                    Some(expression) => {
-                        self.eval_size_expression(
-                            expression,
-                        )?
-                    }
-
-                    None => 1,
-                };
+                let length =
+                    match size {
+                        Some(expression) => {
+                            self.eval_size_expression(
+                                expression,
+                            )?
+                        }
+                        None => 1,
+                    };
 
                 self.check_register_size(length)?;
 
                 let base =
                     self.next_classical_bit;
 
-                let end = base
-                    .checked_add(length)
-                    .ok_or_else(|| {
-                        FrontendError::internal(
-                            "classical register allocation overflowed",
-                        )
-                    })?;
+                let end =
+                    base.checked_add(length)
+                        .ok_or_else(|| {
+                            FrontendError::internal(
+                                "classical register \
+                                 allocation overflowed",
+                            )
+                        })?;
 
                 self.next_classical_bit =
                     end;
 
-                self.classical_registers.insert(
-                    declaration
-                        .name()
-                        .as_str()
-                        .to_owned(),
-                    RegisterRange {
-                        base,
-                        len: length,
-                    },
-                );
+                self.classical_registers
+                    .insert(
+                        declaration
+                            .name()
+                            .as_str()
+                            .to_owned(),
+                        RegisterRange {
+                            base,
+                            len: length,
+                        },
+                    );
             }
 
             _ => {
                 return Err(
                     FrontendError::unsupported(
                         format!(
-                            "classical type `{}` has no canonical Quantum IR declaration representation",
-                            format!("{:?}", declaration.ty()),
+                            "classical type `{}` has no \
+                             canonical Quantum IR \
+                             declaration representation",
+                            format!(
+                                "{:?}",
+                                declaration.ty()
+                            ),
                         ),
                     )
-                    .context("format", "OpenQASM")
-                    .context("stage", "lowering"),
+                    .context(
+                        "format",
+                        "OpenQASM",
+                    )
+                    .context(
+                        "stage",
+                        "lowering",
+                    ),
                 );
             }
         }
@@ -825,7 +818,10 @@ impl<'a> OpenQasmLowerer<'a> {
             )?;
 
         self.constants.insert(
-            declaration.name().as_str().to_owned(),
+            declaration
+                .name()
+                .as_str()
+                .to_owned(),
             value,
         );
 
@@ -841,8 +837,9 @@ impl<'a> OpenQasmLowerer<'a> {
 
                 Statement::ConstDeclaration(_) => {}
 
-                Statement::QuantumDeclaration(_)
-                | Statement::ClassicalDeclaration(_) => {}
+                Statement::QuantumDeclaration(_) => {}
+
+                Statement::ClassicalDeclaration(_) => {}
 
                 Statement::GateCall(call) => {
                     self.lower_gate_call(call)?;
@@ -873,12 +870,23 @@ impl<'a> OpenQasmLowerer<'a> {
                     return Err(
                         FrontendError::unsupported(
                             format!(
-                                "OpenQASM statement `{}` is not representable by the current canonical Quantum IR",
-                                statement_name(statement),
+                                "OpenQASM statement `{}` \
+                                 is not representable by \
+                                 the current canonical \
+                                 Quantum IR",
+                                statement_name(
+                                    statement
+                                ),
                             ),
                         )
-                        .context("format", "OpenQASM")
-                        .context("stage", "lowering"),
+                        .context(
+                            "format",
+                            "OpenQASM",
+                        )
+                        .context(
+                            "stage",
+                            "lowering",
+                        ),
                     );
                 }
             }
@@ -895,7 +903,9 @@ impl<'a> OpenQasmLowerer<'a> {
             return Err(
                 FrontendError::unsupported(
                     format!(
-                        "gate modifiers on `{}` are not currently representable by the canonical Quantum IR",
+                        "gate modifiers on `{}` are not \
+                         currently representable by the \
+                         canonical Quantum IR",
                         call.name(),
                     ),
                 )
@@ -911,7 +921,8 @@ impl<'a> OpenQasmLowerer<'a> {
             .ok_or_else(|| {
                 FrontendError::unsupported(
                     format!(
-                        "OpenQASM gate `{}` is not available in the current standard-gate catalogue",
+                        "OpenQASM gate `{}` is not available \
+                         in the standard-gate catalogue",
                         call.name(),
                     ),
                 )
@@ -920,16 +931,25 @@ impl<'a> OpenQasmLowerer<'a> {
             })?;
 
         let kind =
-            standard_gate.gate_kind().ok_or_else(|| {
-                FrontendError::unsupported(
-                    format!(
-                        "OpenQASM gate `{}` has no direct canonical Quantum IR representation",
-                        call.name(),
-                    ),
-                )
-                .context("format", "OpenQASM")
-                .context("stage", "lowering")
-            })?;
+            standard_gate.gate_kind().ok_or_else(
+                || {
+                    FrontendError::unsupported(
+                        format!(
+                            "OpenQASM gate `{}` has no direct \
+                             canonical Quantum IR representation",
+                            call.name(),
+                        ),
+                    )
+                    .context(
+                        "format",
+                        "OpenQASM",
+                    )
+                    .context(
+                        "stage",
+                        "lowering",
+                    )
+                },
+            )?;
 
         let parameters =
             self.lower_parameters(
@@ -943,7 +963,7 @@ impl<'a> OpenQasmLowerer<'a> {
             )?;
 
         for expanded in operands {
-            self.push_gate(
+            let gate =
                 Gate::new(
                     kind,
                     expanded,
@@ -954,12 +974,14 @@ impl<'a> OpenQasmLowerer<'a> {
                 .map_err(|error| {
                     FrontendError::lowering(
                         format!(
-                            "failed to construct canonical gate for OpenQASM `{}`: {error}",
+                            "failed to construct canonical \
+                             gate for OpenQASM `{}`: {error}",
                             call.name(),
                         ),
                     )
-                })?,
-            )?;
+                })?;
+
+            self.push_gate(gate)?;
         }
 
         Ok(())
@@ -970,11 +992,15 @@ impl<'a> OpenQasmLowerer<'a> {
         expressions: &[Expression],
     ) -> FrontendResult<Vec<Parameter>> {
         let mut parameters =
-            Vec::with_capacity(expressions.len());
+            Vec::with_capacity(
+                expressions.len(),
+            );
 
         for expression in expressions {
             parameters.push(
-                self.lower_parameter(expression)?,
+                self.lower_parameter(
+                    expression
+                )?,
             );
         }
 
@@ -986,20 +1012,23 @@ impl<'a> OpenQasmLowerer<'a> {
         expression: &Expression,
     ) -> FrontendResult<Parameter> {
         if let Ok(value) =
-            self.eval_numeric_expression(expression)
+            self.eval_numeric_expression(
+                expression
+            )
         {
             return Parameter::constant(value)
                 .map_err(|error| {
                     FrontendError::lowering(
                         format!(
-                            "invalid OpenQASM numeric parameter: {error}"
+                            "invalid OpenQASM numeric \
+                             parameter: {error}"
                         ),
                     )
                 });
         }
 
         self.expression_to_parameter(
-            expression,
+            expression
         )
     }
 
@@ -1010,7 +1039,8 @@ impl<'a> OpenQasmLowerer<'a> {
         match expression {
             Expression::BoolLiteral { .. } => {
                 Err(FrontendError::unsupported(
-                    "boolean expression cannot be used as a quantum gate parameter",
+                    "boolean expression cannot be used \
+                     as a quantum gate parameter",
                 ))
             }
 
@@ -1019,13 +1049,18 @@ impl<'a> OpenQasmLowerer<'a> {
                 ..
             } => {
                 let numeric =
-                    parse_integer_literal(value)?;
-                Parameter::constant(numeric)
-                    .map_err(|error| {
-                        FrontendError::lowering(
-                            error.to_string(),
-                        )
-                    })
+                    parse_integer_literal(
+                        value
+                    )?;
+
+                Parameter::constant(
+                    numeric
+                )
+                .map_err(|error| {
+                    FrontendError::lowering(
+                        error.to_string()
+                    )
+                })
             }
 
             Expression::FloatLiteral {
@@ -1033,58 +1068,82 @@ impl<'a> OpenQasmLowerer<'a> {
                 ..
             } => {
                 let numeric =
-                    value.raw().parse::<f64>()
+                    value.raw()
+                        .parse::<f64>()
                         .map_err(|error| {
                             FrontendError::lowering(
                                 format!(
-                                    "invalid OpenQASM floating-point parameter: {error}"
+                                    "invalid OpenQASM \
+                                     floating-point parameter: \
+                                     {error}"
                                 ),
                             )
                         })?;
 
-                Parameter::constant(numeric)
-                    .map_err(|error| {
-                        FrontendError::lowering(
-                            error.to_string(),
-                        )
-                    })
-            }
+                checked_finite(numeric)?;
 
-            Expression::Identifier(identifier) => {
-                if let Some(value) =
-                    self.constants.get(
-                        identifier.as_str(),
-                    )
-                {
-                    return Parameter::constant(
-                        *value,
-                    )
-                    .map_err(|error| {
-                        FrontendError::lowering(
-                            error.to_string(),
-                        )
-                    });
-                }
-
-                if identifier.as_str() == "pi" {
-                    return Parameter::constant(
-                        std::f64::consts::PI,
-                    )
-                    .map_err(|error| {
-                        FrontendError::lowering(
-                            error.to_string(),
-                        )
-                    });
-                }
-
-                Parameter::symbol(
-                    identifier.as_str(),
+                Parameter::constant(
+                    numeric
                 )
                 .map_err(|error| {
                     FrontendError::lowering(
-                        error.to_string(),
+                        error.to_string()
                     )
                 })
+            }
+
+            Expression::Identifier(
+                identifier,
+            ) => {
+                if let Some(value) =
+                    self.constants.get(
+                        identifier.as_str()
+                    )
+                {
+                    return Parameter::constant(
+                        *value
+                    )
+                    .map_err(|error| {
+                        FrontendError::lowering(
+                            error.to_string()
+                        )
+                    });
+                }
+
+                match identifier.as_str() {
+                    "pi" => {
+                        Parameter::constant(
+                            std::f64::consts::PI
+                        )
+                        .map_err(|error| {
+                            FrontendError::lowering(
+                                error.to_string()
+                            )
+                        })
+                    }
+
+                    "tau" => {
+                        Parameter::constant(
+                            std::f64::consts::TAU
+                        )
+                        .map_err(|error| {
+                            FrontendError::lowering(
+                                error.to_string()
+                            )
+                        })
+                    }
+
+                    _ => {
+                        Parameter::symbol(
+                            identifier.as_str()
+                        )
+                        .map_err(|error| {
+                            FrontendError::lowering(
+                                error.to_string()
+                            )
+                        })
+                    }
+                }
             }
 
             Expression::Unary {
@@ -1094,7 +1153,7 @@ impl<'a> OpenQasmLowerer<'a> {
             } => {
                 let value =
                     self.expression_to_parameter(
-                        operand,
+                        operand
                     )?;
 
                 match operator {
@@ -1105,20 +1164,22 @@ impl<'a> OpenQasmLowerer<'a> {
                     crate::quantum::frontend::formats::openqasm::ast::UnaryOperator::Minus => {
                         Parameter::expression(
                             ParameterExpression::Negate(
-                                Box::new(value),
-                            ),
+                                Box::new(value)
+                            )
                         )
                         .map_err(|error| {
                             FrontendError::lowering(
-                                error.to_string(),
+                                error.to_string()
                             )
                         })
                     }
 
                     _ => Err(
                         FrontendError::unsupported(
-                            "logical/bitwise unary operator is not a quantum parameter",
-                        ),
+                            "logical or bitwise unary \
+                             operator cannot be used as a \
+                             canonical quantum parameter",
+                        )
                     ),
                 }
             }
@@ -1131,11 +1192,12 @@ impl<'a> OpenQasmLowerer<'a> {
             } => {
                 let lhs =
                     self.expression_to_parameter(
-                        left,
+                        left
                     )?;
+
                 let rhs =
                     self.expression_to_parameter(
-                        right,
+                        right
                     )?;
 
                 let expression =
@@ -1167,18 +1229,21 @@ impl<'a> OpenQasmLowerer<'a> {
                         _ => {
                             return Err(
                                 FrontendError::unsupported(
-                                    "comparison, logical, bitwise, shift, or power expressions are not representable as canonical quantum parameters",
-                                ),
+                                    "comparison, logical, bitwise, \
+                                     or unsupported power expression \
+                                     cannot be represented as a \
+                                     canonical quantum parameter",
+                                )
                             );
                         }
                     };
 
                 Parameter::expression(
-                    expression,
+                    expression
                 )
                 .map_err(|error| {
                     FrontendError::lowering(
-                        error.to_string(),
+                        error.to_string()
                     )
                 })
             }
@@ -1188,7 +1253,7 @@ impl<'a> OpenQasmLowerer<'a> {
                 ..
             } => {
                 self.expression_to_parameter(
-                    expression,
+                    expression
                 )
             }
 
@@ -1199,17 +1264,21 @@ impl<'a> OpenQasmLowerer<'a> {
                 Err(
                     FrontendError::unsupported(
                         format!(
-                            "OpenQASM parameter function `{}` is not representable by the current canonical Quantum IR parameter expression",
+                            "OpenQASM parameter function `{}` \
+                             is not currently representable by \
+                             the canonical Quantum IR parameter \
+                             expression",
                             name,
                         ),
-                    ),
+                    )
                 )
             }
 
             _ => Err(
                 FrontendError::unsupported(
-                    "OpenQASM expression cannot be represented as a canonical quantum parameter",
-                ),
+                    "OpenQASM expression cannot be represented \
+                     as a canonical quantum parameter",
+                )
             ),
         }
     }
@@ -1223,9 +1292,12 @@ impl<'a> OpenQasmLowerer<'a> {
             return Err(
                 FrontendError::with_code(
                     FrontendErrorKind::Lowering,
-                    FrontendErrorCode::new("QASM-G001"),
+                    FrontendErrorCode::new(
+                        "QASM-G001",
+                    ),
                     format!(
-                        "gate requires {} operands, received {}",
+                        "gate requires {} operands, \
+                         received {}",
                         expected,
                         operands.len(),
                     ),
@@ -1235,13 +1307,15 @@ impl<'a> OpenQasmLowerer<'a> {
         }
 
         let mut expanded =
-            Vec::with_capacity(expected);
+            Vec::with_capacity(
+                expected
+            );
 
         for operand in operands {
             expanded.push(
                 self.expand_quantum_operand(
-                    operand,
-                )?,
+                    operand
+                )?
             );
         }
 
@@ -1255,8 +1329,9 @@ impl<'a> OpenQasmLowerer<'a> {
         if broadcast_len == 0 {
             return Err(
                 FrontendError::lowering(
-                    "OpenQASM gate operand expansion produced no qubits",
-                ),
+                    "OpenQASM gate operand expansion \
+                     produced no qubits",
+                )
             );
         }
 
@@ -1270,28 +1345,32 @@ impl<'a> OpenQasmLowerer<'a> {
                         FrontendErrorCode::new(
                             "QASM-Q004",
                         ),
-                        "OpenQASM register operands have incompatible broadcast lengths",
-                    ),
+                        "OpenQASM register operands have \
+                         incompatible broadcast lengths",
+                    )
                 );
             }
         }
 
         let mut result =
-            Vec::with_capacity(broadcast_len);
+            Vec::with_capacity(
+                broadcast_len
+            );
 
         for index in 0..broadcast_len {
             let mut gate_operands =
-                Vec::with_capacity(expected);
+                Vec::with_capacity(
+                    expected
+                );
 
             for values in &expanded {
-                let qubit =
+                gate_operands.push(
                     if values.len() == 1 {
                         values[0]
                     } else {
                         values[index]
-                    };
-
-                gate_operands.push(qubit);
+                    }
+                );
             }
 
             result.push(gate_operands);
@@ -1305,15 +1384,17 @@ impl<'a> OpenQasmLowerer<'a> {
         operand: &GateOperand,
     ) -> FrontendResult<Vec<QubitId>> {
         match operand {
-            GateOperand::Physical(physical) => {
+            GateOperand::Physical(
+                physical
+            ) => {
                 Err(
                     FrontendError::unsupported(
                         format!(
-                            "physical qubit ${} cannot be lowered into hardware-independent logical Quantum IR",
+                            "physical qubit ${} cannot be lowered \
+                             into hardware-independent logical Quantum IR",
                             physical.index(),
-                        ),
+                        )
                     )
-                    .context("format", "OpenQASM"),
                 )
             }
 
@@ -1321,19 +1402,19 @@ impl<'a> OpenQasmLowerer<'a> {
                 Err(
                     FrontendError::unsupported(
                         format!(
-                            "OpenQASM alias `{}` is not currently representable at the canonical IR boundary",
+                            "OpenQASM alias `{}` is not currently \
+                             representable by the canonical Quantum IR",
                             alias,
-                        ),
+                        )
                     )
-                    .context("format", "OpenQASM"),
                 )
             }
 
             GateOperand::Designator(
-                designator,
+                designator
             ) => {
                 self.expand_quantum_designator(
-                    designator,
+                    designator
                 )
             }
         }
@@ -1346,7 +1427,7 @@ impl<'a> OpenQasmLowerer<'a> {
         let register =
             self.quantum_registers
                 .get(
-                    designator.name().as_str(),
+                    designator.name().as_str()
                 )
                 .ok_or_else(|| {
                     FrontendError::with_code(
@@ -1368,58 +1449,62 @@ impl<'a> OpenQasmLowerer<'a> {
 
                 let mut result =
                     Vec::with_capacity(
-                        register.len,
+                        register.len
                     );
 
-                for index in register.base
-                    ..end
+                for index in
+                    register.base..end
                 {
                     result.push(
-                        QubitId::new(index),
+                        QubitId::new(index)
                     );
                 }
 
                 Ok(result)
             }
 
-            Some(IndexExpression::Index(
-                expression,
-            )) => {
+            Some(
+                IndexExpression::Index(
+                    expression
+                )
+            ) => {
                 let index =
                     self.eval_index_expression(
-                        expression,
+                        expression
                     )?;
 
                 Ok(vec![
                     QubitId::new(
-                        register.index(
-                            index,
-                        )?,
-                    ),
+                        register.index(index)?
+                    )
                 ])
             }
 
-            Some(_) => Err(
-                FrontendError::unsupported(
-                    "OpenQASM slices, ranges, index sets, and register concatenation are not currently representable at the canonical logical-qubit boundary",
-                ),
-            ),
+            Some(_) => {
+                Err(
+                    FrontendError::unsupported(
+                        "OpenQASM slices, ranges, index sets, \
+                         and register concatenation are not currently \
+                         representable at the canonical logical-qubit boundary",
+                    )
+                )
+            }
         }
     }
 
     fn lower_measurement_assignment(
-        &self,
+        &mut self,
         source: &MeasureExpression,
         destination: &Designator,
     ) -> FrontendResult<()> {
         let source_qubits =
             self.expand_quantum_designator(
-                source.operand(),
+                source.operand()
             )?;
 
         let destination_bits =
             self.expand_classical_designator(
-                destination,
+                destination
             )?;
 
         if source_qubits.len()
@@ -1431,8 +1516,9 @@ impl<'a> OpenQasmLowerer<'a> {
                     FrontendErrorCode::new(
                         "QASM-M003",
                     ),
-                    "measurement source and destination registers must have equal length",
-                ),
+                    "measurement source and destination \
+                     registers must have equal length",
+                )
             );
         }
 
@@ -1446,7 +1532,7 @@ impl<'a> OpenQasmLowerer<'a> {
             let measurement =
                 Measurement::new(
                     qubit,
-                    classical_bit.into(),
+                    classical_bit,
                 );
 
             let gate =
@@ -1460,7 +1546,8 @@ impl<'a> OpenQasmLowerer<'a> {
                 .map_err(|error| {
                     FrontendError::lowering(
                         format!(
-                            "failed to construct canonical measurement: {error}"
+                            "failed to construct canonical \
+                             measurement: {error}"
                         ),
                     )
                 })?;
@@ -1478,7 +1565,7 @@ impl<'a> OpenQasmLowerer<'a> {
         let register =
             self.classical_registers
                 .get(
-                    designator.name().as_str(),
+                    designator.name().as_str()
                 )
                 .ok_or_else(|| {
                     FrontendError::with_code(
@@ -1500,39 +1587,45 @@ impl<'a> OpenQasmLowerer<'a> {
 
                 Ok(
                     (register.base..end)
-                        .collect(),
+                        .collect()
                 )
             }
 
-            Some(IndexExpression::Index(
-                expression,
-            )) => {
+            Some(
+                IndexExpression::Index(
+                    expression
+                )
+            ) => {
                 let index =
                     self.eval_index_expression(
-                        expression,
+                        expression
                     )?;
 
                 Ok(vec![
-                    register.index(index)?,
+                    register.index(index)?
                 ])
             }
 
-            Some(_) => Err(
-                FrontendError::unsupported(
-                    "OpenQASM classical slices, ranges, index sets, and concatenation are not currently representable by the canonical Quantum IR measurement boundary",
-                ),
-            ),
+            Some(_) => {
+                Err(
+                    FrontendError::unsupported(
+                        "OpenQASM classical slices, ranges, \
+                         index sets, and concatenation are not currently \
+                         representable by the canonical measurement boundary",
+                    )
+                )
+            }
         }
     }
 
     fn lower_reset(
-        &self,
+        &mut self,
         operands: &[GateOperand],
     ) -> FrontendResult<()> {
         for operand in operands {
             let qubits =
                 self.expand_quantum_operand(
-                    operand,
+                    operand
                 )?;
 
             for qubit in qubits {
@@ -1547,7 +1640,8 @@ impl<'a> OpenQasmLowerer<'a> {
                     .map_err(|error| {
                         FrontendError::lowering(
                             format!(
-                                "failed to construct canonical reset: {error}"
+                                "failed to construct canonical \
+                                 reset: {error}"
                             ),
                         )
                     })?;
@@ -1560,7 +1654,7 @@ impl<'a> OpenQasmLowerer<'a> {
     }
 
     fn lower_barrier(
-        &self,
+        &mut self,
         operands: &[GateOperand],
     ) -> FrontendResult<()> {
         let mut qubits =
@@ -1569,8 +1663,8 @@ impl<'a> OpenQasmLowerer<'a> {
         for operand in operands {
             qubits.extend(
                 self.expand_quantum_operand(
-                    operand,
-                )?,
+                    operand
+                )?
             );
         }
 
@@ -1578,7 +1672,7 @@ impl<'a> OpenQasmLowerer<'a> {
             return Err(
                 FrontendError::lowering(
                     "OpenQASM barrier contains no logical qubits",
-                ),
+                )
             );
         }
 
@@ -1606,7 +1700,8 @@ impl<'a> OpenQasmLowerer<'a> {
         gate: Gate,
     ) -> FrontendResult<()> {
         let next =
-            self.operations.len()
+            self.operations
+                .len()
                 .checked_add(1)
                 .ok_or_else(|| {
                     FrontendError::internal(
@@ -1615,19 +1710,22 @@ impl<'a> OpenQasmLowerer<'a> {
                 })?;
 
         let maximum =
-            self.frontend_limits
-                .max_gate_operations();
+            usize_from_u64(
+                self.frontend_limits
+                    .max_gate_operations(),
+                "max_gate_operations",
+            )?;
 
-        if next > maximum as usize {
+        if next > maximum {
             return Err(
                 FrontendError::limit_exceeded(
                     FrontendLimitViolation::new(
                         "max_gate_operations",
                         next,
-                        maximum as usize,
+                        maximum,
                     ),
                 )
-                .context("format", "OpenQASM"),
+                .context("format", "OpenQASM")
             );
         }
 
@@ -1641,21 +1739,22 @@ impl<'a> OpenQasmLowerer<'a> {
         size: usize,
     ) -> FrontendResult<()> {
         let maximum =
-            self.frontend_limits
-                .max_register_size();
+            usize_from_u64(
+                self.frontend_limits
+                    .max_register_size(),
+                "max_register_size",
+            )?;
 
-        if size
-            > maximum as usize
-        {
+        if size > maximum {
             return Err(
                 FrontendError::limit_exceeded(
                     FrontendLimitViolation::new(
                         "max_register_size",
                         size,
-                        maximum as usize,
+                        maximum,
                     ),
                 )
-                .context("format", "OpenQASM"),
+                .context("format", "OpenQASM")
             );
         }
 
@@ -1668,7 +1767,7 @@ impl<'a> OpenQasmLowerer<'a> {
     ) -> FrontendResult<usize> {
         let value =
             self.eval_numeric_expression(
-                expression,
+                expression
             )?;
 
         if !value.is_finite()
@@ -1681,8 +1780,9 @@ impl<'a> OpenQasmLowerer<'a> {
                     FrontendErrorCode::new(
                         "QASM-T001",
                     ),
-                    "OpenQASM register size must be a finite non-negative integer",
-                ),
+                    "OpenQASM register size must be \
+                     a finite non-negative integer",
+                )
             );
         }
 
@@ -1695,8 +1795,9 @@ impl<'a> OpenQasmLowerer<'a> {
                     FrontendErrorCode::new(
                         "QASM-T001",
                     ),
-                    "OpenQASM register size exceeds the host index range",
-                ),
+                    "OpenQASM register size exceeds \
+                     the host index range",
+                )
             );
         }
 
@@ -1708,7 +1809,7 @@ impl<'a> OpenQasmLowerer<'a> {
         expression: &Expression,
     ) -> FrontendResult<usize> {
         self.eval_size_expression(
-            expression,
+            expression
         )
     }
 
@@ -1720,16 +1821,17 @@ impl<'a> OpenQasmLowerer<'a> {
             Expression::IntegerLiteral {
                 value,
                 ..
-            } => parse_integer_literal(
-                value,
-            ),
+            } => {
+                parse_integer_literal(value)
+            }
 
             Expression::FloatLiteral {
                 value,
                 ..
             } => {
                 let number =
-                    value.raw().parse::<f64>()
+                    value.raw()
+                        .parse::<f64>()
                         .map_err(|error| {
                             FrontendError::with_code(
                                 FrontendErrorKind::Lowering,
@@ -1737,55 +1839,48 @@ impl<'a> OpenQasmLowerer<'a> {
                                     "QASM-E005",
                                 ),
                                 format!(
-                                    "invalid OpenQASM numeric literal: {error}"
+                                    "invalid OpenQASM numeric \
+                                     literal: {error}"
                                 ),
                             )
                         })?;
 
-                if number.is_finite() {
-                    Ok(number)
-                } else {
-                    Err(
-                        FrontendError::with_code(
-                            FrontendErrorKind::Lowering,
-                            FrontendErrorCode::new(
-                                "QASM-E004",
-                            ),
-                            "OpenQASM numeric literal is not finite",
-                        ),
-                    )
-                }
+                checked_finite(number)
             }
 
-            Expression::Identifier(identifier) => {
+            Expression::Identifier(
+                identifier
+            ) => {
                 if let Some(value) =
                     self.constants.get(
-                        identifier.as_str(),
+                        identifier.as_str()
                     )
                 {
                     return Ok(*value);
                 }
 
                 match identifier.as_str() {
-                    "pi" =>
-                        Ok(std::f64::consts::PI),
+                    "pi" => {
+                        Ok(std::f64::consts::PI)
+                    }
 
-                    "tau" =>
-                        Ok(std::f64::consts::TAU),
+                    "tau" => {
+                        Ok(std::f64::consts::TAU)
+                    }
 
-                    _ =>
-                        Err(
-                            FrontendError::with_code(
-                                FrontendErrorKind::Lowering,
-                                FrontendErrorCode::new(
-                                    "QASM-E001",
-                                ),
-                                format!(
-                                    "OpenQASM identifier `{}` is not a compile-time numeric constant",
-                                    identifier,
-                                ),
+                    _ => Err(
+                        FrontendError::with_code(
+                            FrontendErrorKind::Lowering,
+                            FrontendErrorCode::new(
+                                "QASM-E001",
                             ),
-                        ),
+                            format!(
+                                "OpenQASM identifier `{}` \
+                                 is not a compile-time numeric constant",
+                                identifier,
+                            ),
+                        )
+                    )
                 }
             }
 
@@ -1796,22 +1891,26 @@ impl<'a> OpenQasmLowerer<'a> {
             } => {
                 let value =
                     self.eval_numeric_expression(
-                        operand,
+                        operand
                     )?;
 
                 match operator {
-                    crate::quantum::frontend::formats::openqasm::ast::UnaryOperator::Plus =>
-                        Ok(value),
+                    crate::quantum::frontend::formats::openqasm::ast::UnaryOperator::Plus => {
+                        Ok(value)
+                    }
 
-                    crate::quantum::frontend::formats::openqasm::ast::UnaryOperator::Minus =>
-                        checked_finite(-value),
+                    crate::quantum::frontend::formats::openqasm::ast::UnaryOperator::Minus => {
+                        checked_finite(-value)
+                    }
 
-                    _ =>
+                    _ => {
                         Err(
                             FrontendError::unsupported(
-                                "logical/bitwise unary operation is not a numeric compile-time expression",
-                            ),
-                        ),
+                                "logical or bitwise unary operation \
+                                 is not a numeric compile-time expression",
+                            )
+                        )
+                    }
                 }
             }
 
@@ -1823,12 +1922,12 @@ impl<'a> OpenQasmLowerer<'a> {
             } => {
                 let lhs =
                     self.eval_numeric_expression(
-                        left,
+                        left
                     )?;
 
                 let rhs =
                     self.eval_numeric_expression(
-                        right,
+                        right
                     )?;
 
                 let value =
@@ -1850,8 +1949,9 @@ impl<'a> OpenQasmLowerer<'a> {
                                         FrontendErrorCode::new(
                                             "QASM-E006",
                                         ),
-                                        "division by zero in OpenQASM constant expression",
-                                    ),
+                                        "division by zero in \
+                                         OpenQASM constant expression",
+                                    )
                                 );
                             }
 
@@ -1861,12 +1961,15 @@ impl<'a> OpenQasmLowerer<'a> {
                         BinaryOperator::Power =>
                             lhs.powf(rhs),
 
-                        _ =>
+                        _ => {
                             return Err(
                                 FrontendError::unsupported(
-                                    "comparison/logical/bitwise expression is not a numeric compile-time expression",
-                                ),
-                            ),
+                                    "comparison, logical, or bitwise \
+                                     expression is not a numeric \
+                                     compile-time expression",
+                                )
+                            );
+                        }
                     };
 
                 checked_finite(value)
@@ -1875,20 +1978,27 @@ impl<'a> OpenQasmLowerer<'a> {
             Expression::Parenthesized {
                 expression,
                 ..
-            } =>
+            } => {
                 self.eval_numeric_expression(
-                    expression,
-                ),
+                    expression
+                )
+            }
 
-            _ =>
+            _ => {
                 Err(
                     FrontendError::unsupported(
-                        "OpenQASM expression cannot be evaluated as a compile-time numeric value",
-                    ),
-                ),
+                        "OpenQASM expression cannot be evaluated \
+                         as a compile-time numeric value",
+                    )
+                )
+            }
         }
     }
 }
+
+// =============================================================================
+// Limit conversion
+// =============================================================================
 
 fn parser_limits_from_frontend(
     limits: &FrontendLimits,
@@ -1953,12 +2063,20 @@ fn usize_from_u64(
     value: u64,
     field: &'static str,
 ) -> FrontendResult<usize> {
-    usize::try_from(value).map_err(|_| {
-        FrontendError::internal(format!(
-            "frontend limit `{field}` cannot be represented by this target's usize",
-        ))
-    })
+    usize::try_from(value)
+        .map_err(|_| {
+            FrontendError::internal(
+                format!(
+                    "frontend limit `{field}` cannot be represented \
+                     by this target's usize",
+                ),
+            )
+        })
 }
+
+// =============================================================================
+// Numeric conversion
+// =============================================================================
 
 fn checked_finite(
     value: f64,
@@ -1972,72 +2090,112 @@ fn checked_finite(
                 FrontendErrorCode::new(
                     "QASM-E004",
                 ),
-                "OpenQASM numeric expression evaluated to a non-finite value",
-            ),
+                "OpenQASM numeric expression evaluated \
+                 to a non-finite value",
+            )
         )
     }
 }
 
 fn parse_integer_literal(
-    literal: &crate::quantum::frontend::formats::openqasm::ast::IntegerLiteral,
+    literal:
+        &crate::quantum::frontend::formats::openqasm::ast::IntegerLiteral,
 ) -> FrontendResult<f64> {
     let raw = literal.raw();
 
-    let value = match literal.radix() {
-        crate::quantum::frontend::formats::openqasm::ast::IntegerRadix::Decimal => {
-            u128::from_str_radix(raw, 10)
-        }
+    let value =
+        match literal.radix() {
+            crate::quantum::frontend::formats::openqasm::ast::IntegerRadix::Decimal => {
+                u128::from_str_radix(
+                    raw,
+                    10
+                )
+            }
 
-        crate::quantum::frontend::formats::openqasm::ast::IntegerRadix::Binary => {
-            u128::from_str_radix(
-                raw.trim_start_matches("0b"),
-                2,
-            )
-        }
+            crate::quantum::frontend::formats::openqasm::ast::IntegerRadix::Binary => {
+                u128::from_str_radix(
+                    raw.trim_start_matches(
+                        "0b"
+                    ),
+                    2
+                )
+            }
 
-        crate::quantum::frontend::formats::openqasm::ast::IntegerRadix::Octal => {
-            u128::from_str_radix(
-                raw.trim_start_matches("0o"),
-                8,
-            )
-        }
+            crate::quantum::frontend::formats::openqasm::ast::IntegerRadix::Octal => {
+                u128::from_str_radix(
+                    raw.trim_start_matches(
+                        "0o"
+                    ),
+                    8
+                )
+            }
 
-        crate::quantum::frontend::formats::openqasm::ast::IntegerRadix::Hexadecimal => {
-            u128::from_str_radix(
-                raw.trim_start_matches("0x"),
-                16,
-            )
+            crate::quantum::frontend::formats::openqasm::ast::IntegerRadix::Hexadecimal => {
+                u128::from_str_radix(
+                    raw.trim_start_matches(
+                        "0x"
+                    ),
+                    16
+                )
+            }
         }
+        .map_err(|error| {
+            FrontendError::with_code(
+                FrontendErrorKind::Lowering,
+                FrontendErrorCode::new(
+                    "QASM-E005",
+                ),
+                format!(
+                    "invalid OpenQASM integer literal `{raw}`: {error}"
+                ),
+            )
+        })?;
+
+    /*
+     * Do not allow a large integer to silently wrap when converted to f64.
+     * The canonical parameter representation currently uses f64, so values
+     * beyond the exactly representable integer range are rejected rather than
+     * changing their mathematical meaning during lowering.
+     */
+    if value > (1_u128 << 53) {
+        return Err(
+            FrontendError::with_code(
+                FrontendErrorKind::Lowering,
+                FrontendErrorCode::new(
+                    "QASM-E007",
+                ),
+                "OpenQASM integer literal is too large \
+                 to be represented exactly by the current \
+                 canonical floating-point parameter representation",
+            )
+        );
     }
-    .map_err(|error| {
-        FrontendError::with_code(
-            FrontendErrorKind::Lowering,
-            FrontendErrorCode::new(
-                "QASM-E005",
-            ),
-            format!(
-                "invalid OpenQASM integer literal `{raw}`: {error}"
-            ),
-        )
-    })?;
 
-    let value = value as f64;
-
-    checked_finite(value)
+    checked_finite(
+        value as f64
+    )
 }
+
+// =============================================================================
+// Diagnostics
+// =============================================================================
 
 fn push_validation_diagnostic(
     diagnostics: &mut DiagnosticBag,
     error: &ValidationError,
 ) -> FrontendResult<()> {
-    let code = DiagnosticCode::new(
-        error.code().as_str().to_owned(),
-    )
-    .ok_or_else(|| {
-        FrontendError::internal(
-            "OpenQASM validation produced an invalid diagnostic code",
+    let code =
+        DiagnosticCode::new(
+            error.code()
+                .as_str()
+                .to_owned(),
         )
-    })?;
+        .ok_or_else(|| {
+            FrontendError::internal(
+                "OpenQASM validation produced \
+                 an invalid diagnostic code",
+            )
+        })?;
 
     let diagnostic =
         Diagnostic::new(
@@ -2047,23 +2205,20 @@ fn push_validation_diagnostic(
         );
 
     let diagnostic =
-        match diagnostic
+        diagnostic
             .primary_label(
                 error.span(),
                 "OpenQASM semantic error",
-            ) {
-            Ok(builder) => builder.build(),
-
-            Err(error) => {
-                return Err(
-                    FrontendError::internal(
-                        format!(
-                            "failed to construct OpenQASM diagnostic: {error}"
-                        ),
+            )
+            .map_err(|error| {
+                FrontendError::internal(
+                    format!(
+                        "failed to construct OpenQASM \
+                         diagnostic: {error}"
                     ),
-                );
-            }
-        };
+                )
+            })?
+            .build();
 
     diagnostics
         .push(diagnostic)
@@ -2081,6 +2236,10 @@ fn push_validation_diagnostic(
 
     Ok(())
 }
+
+// =============================================================================
+// Statement names
+// =============================================================================
 
 fn statement_name(
     statement: &Statement,
