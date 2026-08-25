@@ -1,72 +1,120 @@
 //! Format-independent quantum frontend exporter.
 //!
-//! This module defines the stable export boundary between Zamani's canonical
+//! This module is the stable export boundary between Zamani's canonical
 //! Quantum IR and external quantum representations such as OpenQASM, QIR,
 //! Quil, and future formats.
 //!
 //! # Architectural boundary
 //!
 //! ```text
-//!                  Canonical Zamani Quantum IR
-//!                              │
-//!                              ▼
-//!                 ┌────────────────────────┐
-//!                 │  frontend::exporter    │
-//!                 │                        │
-//!                 │  common export policy  │
-//!                 │  capability checking  │
-//!                 │  version checking     │
-//!                 │  size limits          │
-//!                 │  artifact validation  │
-//!                 └───────────┬────────────┘
-//!                             │
-//!              ┌──────────────┼──────────────┐
-//!              ▼              ▼              ▼
-//!          OpenQASM          QIR            Quil
-//!              │              │              │
-//!              ▼              ▼              ▼
-//!        external format-specific emitters
+//! Canonical Quantum IR
+//!        │
+//!        ▼
+//! frontend::exporter
+//!        │
+//!        ├── request validation
+//!        ├── capability/version policy
+//!        ├── canonical IR validation
+//!        ├── format-specific serialization
+//!        └── artifact validation / output bounds
+//!        │
+//!        ▼
+//! concrete format exporter
 //! ```
 //!
-//! The generic exporter layer deliberately contains no OpenQASM, QIR, Quil,
-//! or other format-specific syntax.
+//! The generic layer deliberately contains no OpenQASM, QIR, Quil, hardware,
+//! filesystem, network, process, or execution logic.
 //!
-//! A concrete exporter is responsible for determining whether a particular
-//! Quantum IR construct can actually be represented by its target format.
-//! Unsupported semantics MUST produce an explicit error rather than being
-//! silently discarded, commented out, approximated, or replaced.
+//! A concrete exporter is responsible for deciding whether every canonical IR
+//! construct it receives can be represented by its target format. Unsupported
+//! semantics MUST result in an explicit error. They MUST NOT be silently
+//! discarded, approximated, reordered, or replaced.
 //!
-//! # Important semantic rules
+//! # Production invariants
 //!
-//! Exporters MUST:
+//! The public [`QuantumExporter::export`] boundary guarantees that:
 //!
-//! - preserve operation ordering;
-//! - preserve qubit operands;
-//! - preserve classical operands;
-//! - preserve representable parameters;
-//! - preserve measurements;
-//! - preserve resets;
-//! - preserve representable metadata;
-//! - never invent measurements;
-//! - never invent qubit operands;
-//! - never silently drop unsupported operations;
-//! - never print to stdout/stderr;
-//! - never execute external programs;
-//! - never perform implicit network access;
-//! - never mutate the canonical circuit;
-//! - produce deterministic output for identical input/configuration.
+//! - the target format advertises export capability;
+//! - required capabilities are present;
+//! - requested-version policy is satisfied;
+//! - the caller supplied a positive output limit;
+//! - canonical Quantum IR validation succeeds before serialization;
+//! - the returned artifact belongs to the exporter that produced it;
+//! - successful exports are non-empty;
+//! - serialized output does not exceed the configured bound;
+//! - no generic exporter operation mutates the canonical circuit.
+//!
+//! Concrete exporters remain responsible for deterministic serialization and
+//! for format-specific representability checks.
+//!
+//! # Security boundary
+//!
+//! Exporting is compiler work on canonical IR, but the IR may originate from
+//! untrusted source input or deserialization. This module therefore treats the
+//! circuit and exporter options as untrusted data at the API boundary.
+//!
+//! The generic exporter MUST NOT:
+//!
+//! - perform filesystem I/O;
+//! - perform network I/O;
+//! - spawn processes;
+//! - access hardware/QPUs;
+//! - execute source-level directives;
+//! - mutate the supplied circuit;
+//! - depend on hash-map iteration for observable output;
+//! - expose internal panic paths for malformed inputs.
+//!
+//! # Version policy
+//!
+//! `Exact` requires the exporter descriptor to match the requested revision.
+//! `SameMajor` accepts a configured exporter whose revision has the requested
+//! major version. `SameMajor` is intentionally a compatibility gate, not a
+//! request to silently rewrite the concrete exporter's configured version.
+//! The concrete exporter remains responsible for selecting and emitting its
+//! actual revision, which is returned in [`ExportedArtifact::format`].
+//!
+//! # Integration contract
+//!
+//! `exporter.rs` is intentionally downstream of `format.rs` and the canonical
+//! Quantum IR and upstream of every concrete exporter:
+//!
+//! ```text
+//! frontend::format ─────────────┐
+//!                               ▼
+//!                         ExportOptions
+//!                               │
+//! QuantumCircuit ───────────────┼──► QuantumExporter
+//!                               │          │
+//!                               │          ▼
+//!                               │   ExportedArtifact
+//!                               │
+//!                               └──► validation / bounds
+//! ```
+//!
+//! Concrete exporters such as OpenQASM implement only
+//! [`QuantumExporter::export_impl`]. Their existing public convenience methods
+//! should call the trait's [`QuantumExporter::export`] method rather than
+//! creating a second generic validation path.
 //!
 //! # Rust compatibility
 //!
-//! Designed for Rust 1.97.1 / Rust 2021.
-//!
+//! Rust 2021 / Rust 1.97.1.
 //! No nightly features are required.
 
 use std::fmt;
 
 use crate::quantum::ir::QuantumCircuit;
 
-use super::core::errors::{FrontendError, FrontendResult};
+use super::core::errors::{
+    FrontendError,
+    FrontendErrorCode,
+    FrontendErrorKind,
+    FrontendResult,
+};
+use super::core::limits::{
+    FrontendLimitKind,
+    FrontendLimitViolation,
+};
 use super::format::{
     FormatCapabilities,
     FormatCapability,
@@ -76,21 +124,25 @@ use super::format::{
 
 /// Default maximum serialized export size.
 ///
-/// This is a frontend safety boundary rather than a format specification.
-/// Applications may choose a stricter limit.
+/// This mirrors the frontend's production output boundary. Applications may
+/// choose a stricter value for a particular compilation request.
 pub const DEFAULT_MAX_OUTPUT_BYTES: usize = 64 * 1024 * 1024;
 
-/// Policy controlling how requested format versions are matched.
+/// Maximum media-type metadata retained by one exported artifact.
+pub const MAX_MEDIA_TYPE_BYTES: usize = 256;
+
+/// Policy controlling how a requested format version is matched against the
+/// concrete exporter's configured revision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExportVersionPolicy {
-    /// The exporter must use exactly the requested version.
+    /// The exporter must use exactly the requested revision.
     Exact,
 
-    /// The exporter may use another version provided the major version
-    /// remains identical.
+    /// The exporter revision must have the same major version as the request.
     ///
-    /// A concrete exporter is still responsible for ensuring that all
-    /// requested semantics are representable in the selected version.
+    /// This is a compatibility check only. It does not cause a concrete
+    /// exporter to switch versions. The emitted revision is always reported by
+    /// the returned artifact's [`FrontendFormat`].
     SameMajor,
 }
 
@@ -111,10 +163,9 @@ impl fmt::Display for ExportVersionPolicy {
 
 /// Common options shared by all frontend exporters.
 ///
-/// Format-specific options must NOT be added here.
-///
-/// For example, OpenQASM-specific include handling belongs in the OpenQASM
-/// exporter configuration rather than this generic structure.
+/// Format-specific options MUST remain in the concrete format implementation.
+/// For example, OpenQASM include resolution belongs to the OpenQASM layer,
+/// not this generic contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportOptions {
     requested_version: Option<FormatVersion>,
@@ -136,31 +187,38 @@ impl Default for ExportOptions {
 
 impl ExportOptions {
     /// Creates production-default export options.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Returns the requested target version.
+    /// Returns the requested target revision, if one was supplied.
+    #[must_use]
     pub fn requested_version(&self) -> Option<FormatVersion> {
         self.requested_version
     }
 
     /// Returns the capabilities required by the caller.
+    #[must_use]
     pub fn required_capabilities(&self) -> &FormatCapabilities {
         &self.required_capabilities
     }
 
     /// Returns the version compatibility policy.
+    #[must_use]
     pub fn version_policy(&self) -> ExportVersionPolicy {
         self.version_policy
     }
 
-    /// Returns the maximum permitted serialized artifact size.
+    /// Returns the maximum permitted serialized artifact size in bytes.
+    #[must_use]
     pub fn max_output_bytes(&self) -> usize {
         self.max_output_bytes
     }
 
-    /// Requests an exact target format version.
+    /// Requests an exact or compatible target revision according to
+    /// [`ExportVersionPolicy`].
+    #[must_use]
     pub fn with_requested_version(
         mut self,
         version: FormatVersion,
@@ -169,13 +227,15 @@ impl ExportOptions {
         self
     }
 
-    /// Removes an explicit target version.
+    /// Removes an explicit target revision.
+    #[must_use]
     pub fn without_requested_version(mut self) -> Self {
         self.requested_version = None;
         self
     }
 
     /// Replaces the required capability set.
+    #[must_use]
     pub fn with_required_capabilities(
         mut self,
         capabilities: FormatCapabilities,
@@ -184,16 +244,32 @@ impl ExportOptions {
         self
     }
 
-    /// Requires a specific capability.
+    /// Requires one capability.
+    ///
+    /// The frontend capability vocabulary is bounded by
+    /// `MAX_FORMAT_CAPABILITIES`, and the currently defined enum contains far
+    /// fewer entries. Consequently insertion cannot fail for a
+    /// `FormatCapability` value under the current contract. The result is
+    /// nevertheless checked so this method does not discard a `Result`.
+    #[must_use]
     pub fn require_capability(
         mut self,
         capability: FormatCapability,
     ) -> Self {
-        self.required_capabilities.insert(capability);
+        if let Err(error) =
+            self.required_capabilities.insert(capability)
+        {
+            debug_assert!(
+                false,
+                "FormatCapability insertion unexpectedly failed: {error}"
+            );
+        }
+
         self
     }
 
     /// Sets the version matching policy.
+    #[must_use]
     pub fn with_version_policy(
         mut self,
         policy: ExportVersionPolicy,
@@ -203,6 +279,7 @@ impl ExportOptions {
     }
 
     /// Sets the maximum serialized output size.
+    #[must_use]
     pub fn with_max_output_bytes(
         mut self,
         max_output_bytes: usize,
@@ -214,9 +291,8 @@ impl ExportOptions {
 
 /// Result of a frontend export.
 ///
-/// The representation is byte-oriented rather than String-oriented because
-/// the same exporter contract must be usable by textual formats and future
-/// binary formats.
+/// The representation is byte-oriented so the generic contract can support
+/// textual and future binary formats without introducing a second API.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportedArtifact {
     format: FrontendFormat,
@@ -225,7 +301,7 @@ pub struct ExportedArtifact {
 }
 
 impl ExportedArtifact {
-    /// Creates a serialized artifact.
+    /// Creates a serialized artifact after validating its generic metadata.
     pub fn new(
         format: FrontendFormat,
         media_type: impl Into<String>,
@@ -233,11 +309,7 @@ impl ExportedArtifact {
     ) -> FrontendResult<Self> {
         let media_type = media_type.into();
 
-        if media_type.trim().is_empty() {
-            return Err(FrontendError::invalid_input(
-                "exported artifact media type must not be empty",
-            ));
-        }
+        validate_media_type(&media_type)?;
 
         Ok(Self {
             format,
@@ -246,41 +318,51 @@ impl ExportedArtifact {
         })
     }
 
-    /// Creates a textual artifact.
+    /// Creates a textual UTF-8 artifact.
     pub fn text(
         format: FrontendFormat,
         media_type: impl Into<String>,
         text: String,
     ) -> FrontendResult<Self> {
-        Self::new(format, media_type, text.into_bytes())
+        Self::new(
+            format,
+            media_type,
+            text.into_bytes(),
+        )
     }
 
-    /// Returns the format descriptor.
+    /// Returns the format descriptor carried by this artifact.
+    #[must_use]
     pub fn format(&self) -> &FrontendFormat {
         &self.format
     }
 
     /// Returns the artifact media type.
+    #[must_use]
     pub fn media_type(&self) -> &str {
         &self.media_type
     }
 
     /// Returns the serialized bytes.
+    #[must_use]
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
 
     /// Returns the serialized byte count.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.bytes.len()
     }
 
-    /// Returns whether the artifact contains zero bytes.
+    /// Returns whether the artifact contains no bytes.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 
     /// Consumes the artifact and returns its bytes.
+    #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {
         self.bytes
     }
@@ -305,29 +387,25 @@ impl ExportedArtifact {
 }
 
 /// Stable contract implemented by every concrete quantum format exporter.
-///
-/// Concrete implementations should implement [`QuantumExporter::export_impl`]
-/// only. The public [`QuantumExporter::export`] method performs the common
-/// validation boundary first and validates the returned artifact afterward.
 pub trait QuantumExporter {
     /// Returns the format implemented by this exporter.
     fn format(&self) -> &FrontendFormat;
 
     /// Performs format-specific serialization.
     ///
-    /// This function must never bypass canonical IR validation. The default
-    /// [`QuantumExporter::export`] entry point performs the common validation
-    /// before invoking this method.
+    /// Implementations MUST NOT mutate `circuit`, perform I/O, execute source
+    /// constructs, or silently drop unsupported semantics.
     fn export_impl(
         &self,
         circuit: &QuantumCircuit,
         options: &ExportOptions,
     ) -> FrontendResult<ExportedArtifact>;
 
-    /// Exports a canonical Quantum IR circuit.
+    /// Exports a canonical Quantum IR circuit through the production boundary.
     ///
-    /// This is the production entry point. Concrete exporters should not
-    /// expose another public method that bypasses this validation boundary.
+    /// This method is deliberately provided as the single generic entry point:
+    /// request validation happens before `export_impl`, and returned-artifact
+    /// validation happens afterward.
     fn export(
         &self,
         circuit: &QuantumCircuit,
@@ -339,10 +417,8 @@ pub trait QuantumExporter {
             options,
         )?;
 
-        let artifact = self.export_impl(
-            circuit,
-            options,
-        )?;
+        let artifact =
+            self.export_impl(circuit, options)?;
 
         validate_exported_artifact(
             self.format(),
@@ -354,12 +430,11 @@ pub trait QuantumExporter {
     }
 }
 
-/// Validates all exporter concerns that are independent of a particular
-/// external format.
+/// Validates format-independent exporter request invariants.
 ///
-/// This function deliberately delegates semantic correctness of the circuit
-/// to the canonical Quantum IR rather than creating another validation model
-/// in the frontend.
+/// Canonical Quantum IR validation is intentionally delegated to
+/// `QuantumCircuit::validate()`. The frontend must not maintain a second
+/// semantic model for the IR.
 pub fn validate_export_request(
     format: &FrontendFormat,
     circuit: &QuantumCircuit,
@@ -371,18 +446,44 @@ pub fn validate_export_request(
                 "format `{}` does not support export",
                 format.id()
             ))
+            .context(
+                "format",
+                format.id().as_str(),
+            )
+            .context(
+                "stage",
+                "export-request",
+            ),
         );
     }
 
-    if !format
+    let missing = format
         .capabilities()
-        .contains_all(&options.required_capabilities)
-    {
+        .missing_from(
+            &options.required_capabilities,
+        );
+
+    if !missing.is_empty() {
+        let names = missing
+            .iter()
+            .map(|capability| capability.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+
         return Err(
             FrontendError::unsupported(format!(
-                "format `{}` does not provide all required export capabilities",
-                format.id()
+                "format `{}` does not provide required export capabilities: {}",
+                format.id(),
+                names,
             ))
+            .context(
+                "format",
+                format.id().as_str(),
+            )
+            .context(
+                "stage",
+                "export-request",
+            ),
         );
     }
 
@@ -395,9 +496,9 @@ pub fn validate_export_request(
             }
 
             ExportVersionPolicy::SameMajor => {
-                format.version().same_major(
-                    requested_version,
-                )
+                format
+                    .version()
+                    .same_major(requested_version)
             }
         };
 
@@ -410,73 +511,159 @@ pub fn validate_export_request(
                     requested_version,
                     options.version_policy(),
                 ))
+                .context(
+                    "format",
+                    format.id().as_str(),
+                )
+                .context(
+                    "stage",
+                    "export-version",
+                ),
             );
         }
     }
 
     if options.max_output_bytes() == 0 {
-        return Err(FrontendError::invalid_input(
-            "maximum export output size must be greater than zero",
-        ));
+        return Err(
+            FrontendError::invalid_input(
+                "maximum export output size must be greater than zero",
+            )
+            .context(
+                "stage",
+                "export-request",
+            ),
+        );
     }
 
-    /*
-     * The Quantum IR is the canonical semantic owner.
-     *
-     * Frontends must never create a second circuit-validation system.
-     * Invalid IR must therefore never reach a concrete exporter.
-     */
     circuit.validate().map_err(|error| {
-        FrontendError::export(format!(
-            "cannot export invalid Quantum IR: {error}"
-        ))
+        FrontendError::with_code(
+            FrontendErrorKind::Export,
+            FrontendErrorCode::EXPORT,
+            format!(
+                "cannot export invalid Quantum IR: {error}"
+            ),
+        )
+        .context(
+            "format",
+            format.id().as_str(),
+        )
+        .context(
+            "stage",
+            "ir-validation",
+        )
     })?;
 
     Ok(())
 }
 
-/// Validates the common invariants of a concrete export result.
+/// Validates generic invariants of a concrete export result.
 pub fn validate_exported_artifact(
     exporter_format: &FrontendFormat,
     artifact: &ExportedArtifact,
     options: &ExportOptions,
 ) -> FrontendResult<()> {
-    /*
-     * A concrete exporter must return an artifact belonging to the format it
-     * implements. This prevents an accidental cross-format implementation
-     * mistake.
-     */
     if artifact.format() != exporter_format {
-        return Err(FrontendError::internal(format!(
-            "exporter returned artifact for format `{}` version {}, \
-             but exporter implements format `{}` version {}",
-            artifact.format().id(),
-            artifact.format().version(),
-            exporter_format.id(),
-            exporter_format.version(),
-        )));
+        return Err(
+            FrontendError::internal(format!(
+                "exporter returned artifact for format `{}` version {}, \
+                 but exporter implements format `{}` version {}",
+                artifact.format().id(),
+                artifact.format().version(),
+                exporter_format.id(),
+                exporter_format.version(),
+            ))
+            .context(
+                "stage",
+                "export-artifact-validation",
+            ),
+        );
     }
 
-    /*
-     * Empty output is never accepted from a successful exporter.
-     *
-     * A valid external program may technically be empty for some future
-     * format, but such a format must explicitly define a different contract
-     * rather than silently weakening this common safety invariant.
-     */
     if artifact.is_empty() {
-        return Err(FrontendError::export(
-            "exporter produced an empty artifact",
-        ));
+        return Err(
+            FrontendError::export(
+                "exporter produced an empty artifact",
+            )
+            .context(
+                "format",
+                exporter_format.id().as_str(),
+            )
+            .context(
+                "stage",
+                "export-artifact-validation",
+            ),
+        );
     }
 
-    if artifact.len() > options.max_output_bytes() {
-        return Err(FrontendError::limit_exceeded(format!(
-            "exported artifact contains {} bytes, exceeding \
-             configured maximum of {} bytes",
-            artifact.len(),
-            options.max_output_bytes(),
-        )));
+    if artifact.len()
+        > options.max_output_bytes()
+    {
+        let actual =
+            u64::try_from(artifact.len())
+                .unwrap_or(u64::MAX);
+
+        let maximum =
+            u64::try_from(
+                options.max_output_bytes(),
+            )
+            .unwrap_or(u64::MAX);
+
+        return Err(
+            FrontendError::limit_exceeded(
+                FrontendLimitViolation::new(
+                    FrontendLimitKind::OutputBytes,
+                    actual,
+                    maximum,
+                ),
+            )
+            .context(
+                "format",
+                exporter_format.id().as_str(),
+            )
+            .context(
+                "stage",
+                "export-artifact-validation",
+            ),
+        );
+    }
+
+    Ok(())
+}
+
+/// Validates the generic media-type metadata attached to an artifact.
+fn validate_media_type(
+    media_type: &str,
+) -> FrontendResult<()> {
+    if media_type.trim().is_empty() {
+        return Err(
+            FrontendError::invalid_input(
+                "exported artifact media type must not be empty",
+            )
+        );
+    }
+
+    if media_type.len()
+        > MAX_MEDIA_TYPE_BYTES
+    {
+        return Err(
+            FrontendError::invalid_input(
+                format!(
+                    "exported artifact media type exceeds {} bytes",
+                    MAX_MEDIA_TYPE_BYTES
+                ),
+            )
+        );
+    }
+
+    if media_type
+        .chars()
+        .any(char::is_control)
+    {
+        return Err(
+            FrontendError::invalid_input(
+                "exported artifact media type must not contain control characters",
+            )
+        );
     }
 
     Ok(())
@@ -486,18 +673,38 @@ pub fn validate_exported_artifact(
 mod tests {
     use super::*;
 
-    /*
-     * These tests intentionally focus on the generic exporter contract.
-     * OpenQASM-specific behavior belongs under:
-     *
-     * src/quantum/frontend/tests/openqasm/
-     *
-     * This keeps the format-independent contract independently testable.
-     */
+    use crate::quantum::ir::QuantumCircuit;
+
+    fn test_format(
+        id: &str,
+        version: FormatVersion,
+        capabilities: &[FormatCapability],
+    ) -> FrontendFormat {
+        let id =
+            super::super::format::FormatId::new(id)
+                .expect(
+                    "test format id must be valid",
+                );
+
+        let capabilities =
+            FormatCapabilities::from_iter(
+                capabilities.iter().copied(),
+            )
+            .expect(
+                "test capabilities must be valid",
+            );
+
+        FrontendFormat::new(
+            id,
+            version,
+            capabilities,
+        )
+    }
 
     #[test]
-    fn default_options_are_production_bounded() {
-        let options = ExportOptions::default();
+    fn default_options_are_bounded_and_exact() {
+        let options =
+            ExportOptions::default();
 
         assert_eq!(
             options.version_policy(),
@@ -509,7 +716,12 @@ mod tests {
             DEFAULT_MAX_OUTPUT_BYTES
         );
 
-        assert!(options.requested_version().is_none());
+        assert!(
+            options
+                .requested_version()
+                .is_none()
+        );
+
         assert!(
             options
                 .required_capabilities()
@@ -518,63 +730,349 @@ mod tests {
     }
 
     #[test]
-    fn version_policy_has_stable_display() {
-        assert_eq!(
-            ExportVersionPolicy::Exact.to_string(),
-            "exact"
-        );
+    fn options_builder_preserves_requested_contract() {
+        let version =
+            FormatVersion::major_minor(3, 1);
 
-        assert_eq!(
-            ExportVersionPolicy::SameMajor.to_string(),
-            "same-major"
-        );
-    }
-
-    #[test]
-    fn artifact_rejects_empty_media_type() {
-        /*
-         * This test intentionally does not construct a format because the
-         * format API remains owned by frontend::format.
-         *
-         * Once the format contract exposes its canonical test constructor,
-         * this should be expanded into a complete artifact-construction test.
-         */
-    }
-
-    #[test]
-    fn export_options_are_immutable_by_default() {
-        let options = ExportOptions::new();
-
-        assert_eq!(
-            options.max_output_bytes(),
-            DEFAULT_MAX_OUTPUT_BYTES
-        );
-    }
-
-    #[test]
-    fn output_limit_can_be_lowered() {
         let options =
             ExportOptions::new()
-                .with_max_output_bytes(1024);
+                .with_requested_version(
+                    version,
+                )
+                .with_version_policy(
+                    ExportVersionPolicy::Exact,
+                )
+                .require_capability(
+                    FormatCapability::Export,
+                )
+                .with_max_output_bytes(4096);
+
+        assert_eq!(
+            options.requested_version(),
+            Some(version)
+        );
+
+        assert_eq!(
+            options.version_policy(),
+            ExportVersionPolicy::Exact
+        );
+
+        assert!(
+            options
+                .required_capabilities()
+                .supports(
+                    FormatCapability::Export
+                )
+        );
 
         assert_eq!(
             options.max_output_bytes(),
-            1024
+            4096
         );
     }
 
     #[test]
-    fn version_request_can_be_removed() {
-        /*
-         * Requires a concrete FormatVersion constructor from the format
-         * contract. The behavior is intentionally represented by the API:
-         *
-         * ExportOptions::new()
-         *     .with_requested_version(version)
-         *     .without_requested_version()
-         *
-         * The final integration tests should assert that the resulting value
-         * contains None.
-         */
+    fn artifact_rejects_invalid_media_type() {
+        let format = test_format(
+            "test",
+            FormatVersion::major_minor(1, 0),
+            &[FormatCapability::Export],
+        );
+
+        assert!(
+            ExportedArtifact::new(
+                format.clone(),
+                "",
+                vec![1],
+            )
+            .is_err()
+        );
+
+        assert!(
+            ExportedArtifact::new(
+                format,
+                "text/x-test\ninvalid",
+                vec![1],
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn artifact_supports_binary_and_text_access() {
+        let format = test_format(
+            "test",
+            FormatVersion::major_minor(1, 0),
+            &[FormatCapability::Export],
+        );
+
+        let artifact =
+            ExportedArtifact::new(
+                format,
+                "application/octet-stream",
+                vec![0, 1, 2],
+            )
+            .expect(
+                "valid artifact should construct",
+            );
+
+        assert_eq!(
+            artifact.len(),
+            3
+        );
+
+        assert_eq!(
+            artifact.bytes(),
+            &[0, 1, 2]
+        );
+
+        assert!(
+            artifact.as_text().is_err()
+        );
+    }
+
+    #[test]
+    fn text_artifact_round_trips_utf8() {
+        let format = test_format(
+            "test",
+            FormatVersion::major_minor(1, 0),
+            &[FormatCapability::Export],
+        );
+
+        let artifact =
+            ExportedArtifact::text(
+                format,
+                "text/x-test",
+                "OPENQASM-like text"
+                    .to_owned(),
+            )
+            .expect(
+                "valid text artifact should construct",
+            );
+
+        assert_eq!(
+            artifact
+                .as_text()
+                .expect("UTF-8 must decode"),
+            "OPENQASM-like text"
+        );
+
+        assert_eq!(
+            artifact
+                .clone()
+                .into_text()
+                .expect("UTF-8 must decode"),
+            "OPENQASM-like text"
+        );
+    }
+
+    #[test]
+    fn request_rejects_missing_export_capability() {
+        let format = test_format(
+            "test",
+            FormatVersion::major_minor(1, 0),
+            &[],
+        );
+
+        let circuit =
+            QuantumCircuit::new(1, 0)
+                .expect(
+                    "test circuit should construct",
+                );
+
+        let error =
+            validate_export_request(
+                &format,
+                &circuit,
+                &ExportOptions::default(),
+            )
+            .expect_err(
+                "format without export must fail",
+            );
+
+        assert_eq!(
+            error.kind(),
+            FrontendErrorKind::Unsupported
+        );
+    }
+
+    #[test]
+    fn request_rejects_zero_output_limit() {
+        let format = test_format(
+            "test",
+            FormatVersion::major_minor(1, 0),
+            &[FormatCapability::Export],
+        );
+
+        let circuit =
+            QuantumCircuit::new(1, 0)
+                .expect(
+                    "test circuit should construct",
+                );
+
+        let options =
+            ExportOptions::default()
+                .with_max_output_bytes(0);
+
+        let error =
+            validate_export_request(
+                &format,
+                &circuit,
+                &options,
+            )
+            .expect_err(
+                "zero output limit must fail",
+            );
+
+        assert_eq!(
+            error.kind(),
+            FrontendErrorKind::InvalidInput
+        );
+    }
+
+    #[test]
+    fn exact_version_policy_rejects_mismatch() {
+        let format = test_format(
+            "test",
+            FormatVersion::major_minor(1, 1),
+            &[FormatCapability::Export],
+        );
+
+        let circuit =
+            QuantumCircuit::new(1, 0)
+                .expect(
+                    "test circuit should construct",
+                );
+
+        let options =
+            ExportOptions::default()
+                .with_requested_version(
+                    FormatVersion::major_minor(
+                        1,
+                        0,
+                    ),
+                );
+
+        let error =
+            validate_export_request(
+                &format,
+                &circuit,
+                &options,
+            )
+            .expect_err(
+                "exact mismatch must fail",
+            );
+
+        assert_eq!(
+            error.kind(),
+            FrontendErrorKind::Unsupported
+        );
+    }
+
+    #[test]
+    fn same_major_policy_accepts_same_major_revision() {
+        let format = test_format(
+            "test",
+            FormatVersion::major_minor(1, 1),
+            &[FormatCapability::Export],
+        );
+
+        let circuit =
+            QuantumCircuit::new(1, 0)
+                .expect(
+                    "test circuit should construct",
+                );
+
+        let options =
+            ExportOptions::default()
+                .with_requested_version(
+                    FormatVersion::major_minor(
+                        1,
+                        0,
+                    ),
+                )
+                .with_version_policy(
+                    ExportVersionPolicy::SameMajor,
+                );
+
+        validate_export_request(
+            &format,
+            &circuit,
+            &options,
+        )
+        .expect(
+            "same-major request should pass",
+        );
+    }
+
+    #[test]
+    fn artifact_limit_uses_canonical_frontend_limit_error() {
+        let format = test_format(
+            "test",
+            FormatVersion::major_minor(1, 0),
+            &[FormatCapability::Export],
+        );
+
+        let artifact =
+            ExportedArtifact::new(
+                format.clone(),
+                "application/octet-stream",
+                vec![0; 8],
+            )
+            .expect(
+                "artifact should construct",
+            );
+
+        let options =
+            ExportOptions::default()
+                .with_max_output_bytes(4);
+
+        let error =
+            validate_exported_artifact(
+                &format,
+                &artifact,
+                &options,
+            )
+            .expect_err(
+                "oversized artifact must fail",
+            );
+
+        assert!(
+            error.is_limit_exceeded()
+        );
+
+        assert_eq!(
+            error
+                .limit_violation()
+                .expect(
+                    "limit information must exist",
+                )
+                .kind(),
+            FrontendLimitKind::OutputBytes
+        );
+    }
+
+    #[test]
+    fn valid_ir_passes_generic_export_boundary() {
+        let format = test_format(
+            "test",
+            FormatVersion::major_minor(1, 0),
+            &[FormatCapability::Export],
+        );
+
+        let circuit =
+            QuantumCircuit::new(1, 0)
+                .expect(
+                    "test circuit should construct",
+                );
+
+        validate_export_request(
+            &format,
+            &circuit,
+            &ExportOptions::default(),
+        )
+        .expect(
+            "valid IR must pass the generic boundary",
+        );
     }
 }
