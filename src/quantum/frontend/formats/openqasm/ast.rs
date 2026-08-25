@@ -1,150 +1,135 @@
 //! OpenQASM 3.x abstract syntax tree.
 //!
-//! This module contains the source-language representation of OpenQASM.
+//! This module is the source-language representation of OpenQASM.
 //!
-//! # Architectural boundary
+//! Architectural boundary:
 //!
 //! ```text
 //! OpenQASM source
-//!       │
-//!       ▼
+//!       |
+//!       v
 //!     lexer
-//!       │
-//!       ▼
-//! OpenQASM AST  ← this module
-//!       │
-//!       ▼
-//! OpenQASM semantic validation
-//!       │
-//!       ▼
-//! OpenQASM lowering
-//!       │
-//!       ▼
-//! quantum::ir
+//!       |
+//!       v
+//!   OpenQASM AST              <- this module
+//!       |
+//!       v
+//!   semantic validation
+//!       |
+//!       v
+//!   frontend lowering
+//!       |
+//!       v
+//!   canonical Quantum IR
 //! ```
 //!
-//! This AST intentionally does NOT contain:
+//! # Responsibilities
 //!
-//! - `QuantumCircuit`;
-//! - `Gate`;
-//! - `GateKind`;
-//! - `QubitId`;
-//! - `Parameter` from the canonical quantum IR;
-//! - backend topology;
-//! - routing;
-//! - scheduling;
-//! - optimization;
-//! - hardware calibration semantics;
-//! - QIR/Quil/other-format representations.
+//! This module:
 //!
-//! Those concerns belong to later layers.
+//! - represents OpenQASM syntax;
+//! - preserves source ordering;
+//! - preserves source identifiers;
+//! - preserves source spans;
+//! - preserves symbolic expressions;
+//! - preserves classical types;
+//! - preserves quantum declarations;
+//! - preserves gate definitions and modifiers;
+//! - preserves subroutine definitions;
+//! - preserves control flow;
+//! - preserves timing constructs;
+//! - preserves calibration constructs;
+//! - preserves annotations and pragmas;
+//! - preserves constructs that cannot currently be lowered to Quantum IR.
 //!
-//! # Design goals
+//! This module does NOT:
 //!
-//! The AST is designed to:
+//! - resolve symbols;
+//! - perform type checking;
+//! - perform gate validation;
+//! - perform include resolution;
+//! - access the filesystem;
+//! - access the network;
+//! - execute code;
+//! - execute calibration;
+//! - construct QuantumCircuit;
+//! - construct GateKind;
+//! - perform optimization;
+//! - perform routing;
+//! - perform scheduling;
+//! - perform hardware mapping.
 //!
-//! - represent OpenQASM syntax without prematurely applying IR semantics;
-//! - preserve source-level names and indexing;
-//! - preserve source ordering;
-//! - preserve constructs that may be parsed but cannot yet be lowered;
-//! - support OpenQASM 3.0 and 3.1 version-aware validation;
-//! - support Unicode identifiers;
-//! - support symbolic expressions;
-//! - support classical and quantum declarations;
-//! - support user-defined gates;
-//! - support subroutines;
-//! - support control flow;
-//! - support switch/case/default;
-//! - support timing constructs;
-//! - support annotations and pragmas;
-//! - provide enough structure for diagnostics;
-//! - avoid hidden filesystem/network access;
-//! - avoid execution during parsing;
-//! - remain independent from future frontend formats.
+//! Those responsibilities belong to later frontend layers.
 //!
 //! # Source spans
 //!
-//! Every syntactic node carries a [`SourceSpan`].
-//!
-//! `SourceSpan` is deliberately imported from the shared frontend source
-//! infrastructure.  The OpenQASM frontend must not define a competing span
-//! representation.
-//!
-//! # Semantic ownership
-//!
-//! This AST describes what the source says.
-//!
-//! `validation.rs` determines whether that source is semantically valid
-//! OpenQASM.
-//!
-//! `lowering.rs` determines whether a validated construct can be represented
-//! by the canonical Zamani Quantum IR.
-//!
-//! The AST therefore does not reject a syntactically valid OpenQASM construct
-//! merely because the current Zamani IR cannot represent it.
+//! All syntactic nodes that can participate in diagnostics carry a
+//! `SourceSpan` from the shared frontend source infrastructure.
 //!
 //! # Rust compatibility
 //!
-//! Target compiler: Rust 1.97.1.
-//!
-//! This file intentionally uses only stable Rust language/library facilities.
+//! Rust 1.97.1.
+//! Rust 2021.
+//! Stable Rust only.
 //!
 //! # OpenQASM compatibility
 //!
-//! The model follows the official OpenQASM 3.x language structure.  OpenQASM
-//! 3.1 is the current target version. Version-specific semantic restrictions
-//! belong in `validation.rs`, not scattered throughout this AST.
+//! The AST is intentionally capable of representing OpenQASM 3.x syntax.
+//! Version-specific semantic restrictions belong in `validation.rs`.
 //!
 //! Official specification:
 //! <https://openqasm.com/versions/3.1/>
 
 use crate::quantum::frontend::core::source::SourceSpan;
 
-// -----------------------------------------------------------------------------
-// Basic AST infrastructure
-// -----------------------------------------------------------------------------
+use std::fmt;
 
-/// Result of an AST structural validation operation.
-///
-/// Semantic validation is intentionally performed by `validation.rs`.
-/// This result exists for local AST invariants only.
+// ============================================================================
+// Core AST infrastructure
+// ============================================================================
+
+/// Result of an AST-local operation.
 pub type AstResult<T> = Result<T, AstError>;
 
-/// Errors representing malformed AST structure rather than invalid OpenQASM
-/// semantics.
+/// Structural AST errors.
+///
+/// These are not OpenQASM semantic errors. Semantic validation belongs in
+/// `validation.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstError {
-    /// A required AST field was absent.
     MissingRequiredField {
         field: &'static str,
     },
 
-    /// A list that must not be empty was empty.
     EmptyRequiredList {
         field: &'static str,
     },
 
-    /// A syntactic structure contained an invalid number of children.
     InvalidChildCount {
         node: &'static str,
         expected: &'static str,
         actual: usize,
     },
 
-    /// A source span was invalid.
     InvalidSpan,
 
-    /// An AST nesting level exceeded the supplied structural limit.
+    InvalidVersion {
+        major: u32,
+        minor: u32,
+    },
+
+    InvalidIdentifier,
+
     NestingLimitExceeded {
         limit: usize,
     },
 }
 
-impl std::fmt::Display for AstError {
+impl fmt::Display for AstError {
     fn fmt(
         &self,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::MissingRequiredField { field } => {
                 write!(f, "missing required AST field `{field}`")
@@ -169,10 +154,24 @@ impl std::fmt::Display for AstError {
                 write!(f, "AST node contains an invalid source span")
             }
 
+            Self::InvalidVersion { major, minor } => {
+                write!(
+                    f,
+                    "unsupported OpenQASM AST version {}.{}",
+                    major,
+                    minor
+                )
+            }
+
+            Self::InvalidIdentifier => {
+                write!(f, "invalid OpenQASM identifier")
+            }
+
             Self::NestingLimitExceeded { limit } => {
                 write!(
                     f,
-                    "AST nesting depth exceeds configured limit {limit}"
+                    "AST nesting depth exceeds configured limit {}",
+                    limit
                 )
             }
         }
@@ -181,34 +180,61 @@ impl std::fmt::Display for AstError {
 
 impl std::error::Error for AstError {}
 
-/// Every top-level OpenQASM AST node that participates in diagnostics should
-/// expose its source span.
+/// Trait implemented by AST nodes that have a source span.
 pub trait Spanned {
-    /// Returns the complete source span occupied by this node.
     fn span(&self) -> SourceSpan;
 }
 
-/// OpenQASM language version.
+/// Compatibility trait used by parser/tooling code that wants a common AST
+/// node abstraction.
 ///
-/// Version is represented explicitly because semantic and standard-library
-/// availability can depend on the selected language version.
+/// This trait deliberately exposes only source-location information.
+pub trait AstNode: Spanned {
+    fn node_kind(&self) -> AstNodeKind;
+}
+
+/// Stable AST node classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AstNodeKind {
+    Program,
+    VersionDeclaration,
+    Statement,
+    Identifier,
+    Literal,
+    Expression,
+    TypeSpecifier,
+    QuantumType,
+    ScalarType,
+    GateDefinition,
+    GateCall,
+    Measurement,
+    Declaration,
+    ControlFlow,
+    Annotation,
+    Pragma,
+}
+
+// ============================================================================
+// OpenQASM version
+// ============================================================================
+
+/// Supported OpenQASM major/minor language version.
+///
+/// The AST represents only versions that have an explicit semantic policy.
+/// Future versions must not be silently mapped to the newest supported
+/// version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum OpenQasmVersion {
-    /// OpenQASM 3.0.
     V3_0,
-
-    /// OpenQASM 3.1.
     V3_1,
 }
 
 impl OpenQasmVersion {
-    /// Returns the canonical numeric major version.
     #[must_use]
     pub const fn major(self) -> u8 {
         3
     }
 
-    /// Returns the minor version.
     #[must_use]
     pub const fn minor(self) -> u8 {
         match self {
@@ -217,7 +243,6 @@ impl OpenQasmVersion {
         }
     }
 
-    /// Returns the canonical source spelling used by the exporter.
     #[must_use]
     pub const fn source_text(self) -> &'static str {
         match self {
@@ -225,52 +250,106 @@ impl OpenQasmVersion {
             Self::V3_1 => "OPENQASM 3.1;",
         }
     }
+
+    #[must_use]
+    pub const fn from_major_minor(
+        major: u32,
+        minor: u32,
+    ) -> Option<Self> {
+        match (major, minor) {
+            (3, 0) => Some(Self::V3_0),
+            (3, 1) => Some(Self::V3_1),
+            _ => None,
+        }
+    }
 }
 
-impl std::fmt::Display for OpenQasmVersion {
+impl fmt::Display for OpenQasmVersion {
     fn fmt(
         &self,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         write!(f, "{}.{}", self.major(), self.minor())
     }
 }
 
-// -----------------------------------------------------------------------------
-// Program
-// -----------------------------------------------------------------------------
-
-/// Complete OpenQASM source program.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Program {
-    /// Source span covering the complete program.
+/// `OPENQASM 3.x;`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VersionDeclaration {
     pub span: SourceSpan,
-
-    /// Language version declared by the source.
-    pub version: Option<VersionDeclaration>,
-
-    /// Ordered top-level statements.
-    ///
-    /// Source ordering is significant and must never be replaced by a map.
-    pub statements: Vec<Statement>,
-
-    /// Optional source-level trailing annotations/comments that the parser
-    /// explicitly chooses to preserve.
-    ///
-    /// Comments are normally lexer trivia and need not enter the AST.  This
-    /// field is intentionally absent; comments should not become semantic
-    /// program data unless a future formatter explicitly requires a trivia
-    /// AST.
+    pub version: OpenQasmVersion,
 }
 
-impl Spanned for Program {
+impl VersionDeclaration {
+    /// Constructor used by the parser.
+    ///
+    /// Keeping this constructor accepts numeric major/minor components and
+    /// centralizes version conversion inside the AST contract.
+    pub fn new(
+        span: SourceSpan,
+        major: u32,
+        minor: u32,
+    ) -> AstResult<Self> {
+        let version =
+            OpenQasmVersion::from_major_minor(major, minor)
+                .ok_or(AstError::InvalidVersion {
+                    major,
+                    minor,
+                })?;
+
+        Ok(Self {
+            span,
+            version,
+        })
+    }
+
+    #[must_use]
+    pub const fn from_version(
+        span: SourceSpan,
+        version: OpenQasmVersion,
+    ) -> Self {
+        Self {
+            span,
+            version,
+        }
+    }
+
+    #[must_use]
+    pub const fn major(&self) -> u8 {
+        self.version.major()
+    }
+
+    #[must_use]
+    pub const fn minor(&self) -> u8 {
+        self.version.minor()
+    }
+}
+
+impl Spanned for VersionDeclaration {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
+impl AstNode for VersionDeclaration {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::VersionDeclaration
+    }
+}
+
+// ============================================================================
+// Program
+// ============================================================================
+
+/// Complete OpenQASM source program.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Program {
+    pub span: SourceSpan,
+    pub version: Option<VersionDeclaration>,
+    pub statements: Vec<Statement>,
+}
+
 impl Program {
-    /// Creates a program.
     #[must_use]
     pub fn new(
         span: SourceSpan,
@@ -284,187 +363,59 @@ impl Program {
         }
     }
 
-    /// Returns the program's declared version.
     #[must_use]
     pub fn version(&self) -> Option<OpenQasmVersion> {
-        self.version.as_ref().map(|version| version.version)
+        self.version.as_ref().map(|v| v.version)
+    }
+
+    #[must_use]
+    pub fn statements(&self) -> &[Statement] {
+        &self.statements
     }
 }
 
-/// The OpenQASM version declaration.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VersionDeclaration {
-    /// Complete source span.
-    pub span: SourceSpan,
-
-    /// Declared language version.
-    pub version: OpenQasmVersion,
-}
-
-impl Spanned for VersionDeclaration {
+impl Spanned for Program {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
-// -----------------------------------------------------------------------------
-// Statements
-// -----------------------------------------------------------------------------
-
-/// A top-level or block-level OpenQASM statement.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Statement {
-    /// Include another OpenQASM source.
-    Include(IncludeStatement),
-
-    /// Import a calibration grammar.
-    DefcalGrammar(DefcalGrammarStatement),
-
-    /// Quantum declaration.
-    QuantumDeclaration(QuantumDeclaration),
-
-    /// Classical declaration.
-    ClassicalDeclaration(ClassicalDeclaration),
-
-    /// Alias declaration.
-    AliasDeclaration(AliasDeclaration),
-
-    /// User-defined gate.
-    GateDefinition(GateDefinition),
-
-    /// User-defined subroutine.
-    SubroutineDefinition(SubroutineDefinition),
-
-    /// External function declaration.
-    ExternDeclaration(ExternDeclaration),
-
-    /// Gate invocation.
-    GateCall(GateCall),
-
-    /// Measurement.
-    Measurement(MeasurementStatement),
-
-    /// Reset.
-    Reset(ResetStatement),
-
-    /// Barrier.
-    Barrier(BarrierStatement),
-
-    /// Delay.
-    Delay(DelayStatement),
-
-    /// Boxed timing block.
-    Box(BoxStatement),
-
-    /// Assignment.
-    Assignment(AssignmentStatement),
-
-    /// Variable declaration with optional initializer.
-    VariableDeclaration(VariableDeclaration),
-
-    /// Classical expression used as a statement.
-    Expression(ExpressionStatement),
-
-    /// If/else control flow.
-    If(IfStatement),
-
-    /// For loop.
-    For(ForStatement),
-
-    /// While loop.
-    While(WhileStatement),
-
-    /// Switch/case/default control flow.
-    Switch(SwitchStatement),
-
-    /// Return from a subroutine.
-    Return(ReturnStatement),
-
-    /// Break from a loop.
-    Break(BreakStatement),
-
-    /// Continue a loop.
-    Continue(ContinueStatement),
-
-    /// `let` binding.
-    Let(LetStatement),
-
-    /// Inline calibration definition.
-    Defcal(DefcalDefinition),
-
-    /// Inline calibration execution block.
-    Calibration(CalibrationStatement),
-
-    /// OpenPulse/calibration statement.
-    ///
-    /// The exact pulse grammar is deliberately represented separately so that
-    /// the normal OpenQASM AST does not become coupled to backend pulse
-    /// semantics.
-    Pulse(PulseStatement),
-
-    /// OpenQASM pragma.
-    Pragma(PragmaStatement),
-
-    /// OpenQASM annotation.
-    Annotation(AnnotationStatement),
-
-    /// Explicit empty statement.
-    Empty(EmptyStatement),
-}
-
-impl Spanned for Statement {
-    fn span(&self) -> SourceSpan {
-        match self {
-            Self::Include(value) => value.span(),
-            Self::DefcalGrammar(value) => value.span(),
-            Self::QuantumDeclaration(value) => value.span(),
-            Self::ClassicalDeclaration(value) => value.span(),
-            Self::AliasDeclaration(value) => value.span(),
-            Self::GateDefinition(value) => value.span(),
-            Self::SubroutineDefinition(value) => value.span(),
-            Self::ExternDeclaration(value) => value.span(),
-            Self::GateCall(value) => value.span(),
-            Self::Measurement(value) => value.span(),
-            Self::Reset(value) => value.span(),
-            Self::Barrier(value) => value.span(),
-            Self::Delay(value) => value.span(),
-            Self::Box(value) => value.span(),
-            Self::Assignment(value) => value.span(),
-            Self::VariableDeclaration(value) => value.span(),
-            Self::Expression(value) => value.span(),
-            Self::If(value) => value.span(),
-            Self::For(value) => value.span(),
-            Self::While(value) => value.span(),
-            Self::Switch(value) => value.span(),
-            Self::Return(value) => value.span(),
-            Self::Break(value) => value.span(),
-            Self::Continue(value) => value.span(),
-            Self::Let(value) => value.span(),
-            Self::Defcal(value) => value.span(),
-            Self::Calibration(value) => value.span(),
-            Self::Pulse(value) => value.span(),
-            Self::Pragma(value) => value.span(),
-            Self::Annotation(value) => value.span(),
-            Self::Empty(value) => value.span(),
-        }
+impl AstNode for Program {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Program
     }
 }
 
-// -----------------------------------------------------------------------------
-// Identifiers and literals
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Identifier
+// ============================================================================
 
-/// OpenQASM identifier.
+/// Source-level OpenQASM identifier.
 ///
-/// The parser/validator must enforce the OpenQASM Unicode identifier rules.
-/// The AST deliberately does not reduce identifiers to ASCII.
+/// Lexical validity is established by the lexer. Semantic restrictions such
+/// as reserved names are established by validation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Identifier {
-    /// Complete source span.
     pub span: SourceSpan,
-
-    /// Source spelling.
     pub name: String,
+}
+
+impl Identifier {
+    #[must_use]
+    pub fn new(
+        span: SourceSpan,
+        name: impl Into<String>,
+    ) -> Self {
+        Self {
+            span,
+            name: name.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
 }
 
 impl Spanned for Identifier {
@@ -473,95 +424,93 @@ impl Spanned for Identifier {
     }
 }
 
-impl Identifier {
-    /// Creates an identifier without performing semantic validation.
-    ///
-    /// Lexical validation belongs to the lexer; reserved-name validation
-    /// belongs to semantic validation.
-    #[must_use]
-    pub fn new(
-        span: SourceSpan,
-        name: String,
-    ) -> Self {
-        Self { span, name }
-    }
-
-    /// Returns the source spelling.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.name
+impl AstNode for Identifier {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Identifier
     }
 }
 
-/// A source-level literal.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
-    /// Boolean literal.
-    Bool {
-        span: SourceSpan,
-        value: bool,
-    },
+// ============================================================================
+// Literals
+// ============================================================================
 
-    /// Integer literal preserving its original spelling/base.
-    Integer(IntegerLiteral),
-
-    /// Floating-point literal preserving source spelling.
-    Float(FloatLiteral),
-
-    /// Imaginary literal.
-    Imaginary(ImaginaryLiteral),
-
-    /// Bit-string literal.
-    BitString(BitStringLiteral),
-
-    /// String literal.
-    String(StringLiteral),
-
-    /// Duration literal.
-    Duration(DurationLiteral),
-
-    /// Stretch literal.
-    Stretch(StretchLiteral),
-}
-
-impl Spanned for Literal {
-    fn span(&self) -> SourceSpan {
-        match self {
-            Self::Bool { span, .. } => *span,
-            Self::Integer(value) => value.span(),
-            Self::Float(value) => value.span(),
-            Self::Imaginary(value) => value.span(),
-            Self::BitString(value) => value.span(),
-            Self::String(value) => value.span(),
-            Self::Duration(value) => value.span(),
-            Self::Stretch(value) => value.span(),
-        }
-    }
-}
-
-/// Integer literal base.
+/// Integer radix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum IntegerBase {
+pub enum IntegerRadix {
     Binary,
     Octal,
     Decimal,
     Hexadecimal,
 }
 
+impl IntegerRadix {
+    #[must_use]
+    pub const fn radix(self) -> u32 {
+        match self {
+            Self::Binary => 2,
+            Self::Octal => 8,
+            Self::Decimal => 10,
+            Self::Hexadecimal => 16,
+        }
+    }
+}
+
+/// Compatibility alias used by newer AST code.
+pub type IntegerBase = IntegerRadix;
+
 /// Integer literal.
 ///
-/// The original spelling is preserved because an AST is a source
-/// representation, not a canonical numerical representation.
+/// The original spelling is retained. The AST must not prematurely convert
+/// arbitrary literals to machine integers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntegerLiteral {
     pub span: SourceSpan,
     pub raw: String,
-    pub base: IntegerBase,
+    pub radix: IntegerRadix,
+}
+
+impl IntegerLiteral {
+    #[must_use]
+    pub fn new(
+        span: SourceSpan,
+        raw: impl Into<String>,
+        radix: IntegerRadix,
+    ) -> Self {
+        Self {
+            span,
+            raw: raw.into(),
+            radix,
+        }
+    }
+
+    #[must_use]
+    pub fn value_u128(&self) -> Option<u128> {
+        let digits = match self.radix {
+            IntegerRadix::Binary => self.raw.strip_prefix("0b"),
+            IntegerRadix::Octal => self.raw.strip_prefix("0o"),
+            IntegerRadix::Decimal => Some(self.raw.as_str()),
+            IntegerRadix::Hexadecimal => {
+                self.raw.strip_prefix("0x")
+            }
+        }?;
+
+        u128::from_str_radix(
+            digits.replace('_', "").as_str(),
+            self.radix.radix(),
+        )
+        .ok()
+    }
 }
 
 impl Spanned for IntegerLiteral {
     fn span(&self) -> SourceSpan {
         self.span
+    }
+}
+
+impl AstNode for IntegerLiteral {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Literal
     }
 }
 
@@ -578,6 +527,12 @@ impl Spanned for FloatLiteral {
     }
 }
 
+impl AstNode for FloatLiteral {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Literal
+    }
+}
+
 /// Imaginary literal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImaginaryLiteral {
@@ -588,6 +543,34 @@ pub struct ImaginaryLiteral {
 impl Spanned for ImaginaryLiteral {
     fn span(&self) -> SourceSpan {
         self.span
+    }
+}
+
+impl AstNode for ImaginaryLiteral {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Literal
+    }
+}
+
+/// String literal.
+///
+/// The AST preserves the decoded logical value and the source span. It does
+/// not retain the original quote style because that is lexical presentation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StringLiteral {
+    pub span: SourceSpan,
+    pub value: String,
+}
+
+impl Spanned for StringLiteral {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+impl AstNode for StringLiteral {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Literal
     }
 }
 
@@ -604,34 +587,45 @@ impl Spanned for BitStringLiteral {
     }
 }
 
-/// String literal.
-///
-/// The parser should store the decoded value and preserve the raw spelling
-/// only if the lexer/parser contract explicitly requires it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StringLiteral {
-    pub span: SourceSpan,
-    pub value: String,
-}
-
-impl Spanned for StringLiteral {
-    fn span(&self) -> SourceSpan {
-        self.span
+impl AstNode for BitStringLiteral {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Literal
     }
 }
 
-/// OpenQASM duration literal.
+/// Duration unit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DurationUnit {
+    Dt,
+    S,
+    Ms,
+    Us,
+    Ns,
+    Ps,
+    Fs,
+}
+
+impl DurationUnit {
+    #[must_use]
+    pub const fn source_text(self) -> &'static str {
+        match self {
+            Self::Dt => "dt",
+            Self::S => "s",
+            Self::Ms => "ms",
+            Self::Us => "us",
+            Self::Ns => "ns",
+            Self::Ps => "ps",
+            Self::Fs => "fs",
+        }
+    }
+}
+
+/// Duration literal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DurationLiteral {
     pub span: SourceSpan,
-    pub raw: String,
-}
-
-/// OpenQASM stretch literal.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StretchLiteral {
-    pub span: SourceSpan,
-    pub raw: String,
+    pub value: String,
+    pub unit: DurationUnit,
 }
 
 impl Spanned for DurationLiteral {
@@ -640,377 +634,114 @@ impl Spanned for DurationLiteral {
     }
 }
 
+impl AstNode for DurationLiteral {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Literal
+    }
+}
+
+/// Stretch literal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StretchLiteral {
+    pub span: SourceSpan,
+    pub raw: String,
+}
+
 impl Spanned for StretchLiteral {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
-// -----------------------------------------------------------------------------
-// Include/directive statements
-// -----------------------------------------------------------------------------
-
-/// `include "file";`
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IncludeStatement {
-    pub span: SourceSpan,
-    pub path: StringLiteral,
-}
-
-impl Spanned for IncludeStatement {
-    fn span(&self) -> SourceSpan {
-        self.span
+impl AstNode for StretchLiteral {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Literal
     }
 }
 
-/// `defcalgrammar "name";`
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DefcalGrammarStatement {
-    pub span: SourceSpan,
-    pub path: StringLiteral,
-}
-
-impl Spanned for DefcalGrammarStatement {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// `pragma ...`
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PragmaStatement {
-    pub span: SourceSpan,
-
-    /// Text following the pragma directive.
-    pub body: String,
-}
-
-impl Spanned for PragmaStatement {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// `@annotation ...`
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AnnotationStatement {
-    pub span: SourceSpan,
-
-    /// Annotation keyword without the leading `@`.
-    pub name: Identifier,
-
-    /// Raw annotation arguments/text.
-    pub arguments: String,
-}
-
-impl Spanned for AnnotationStatement {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Quantum declarations
-// -----------------------------------------------------------------------------
-
-/// Quantum declaration.
+/// Literal expression.
 #[derive(Debug, Clone, PartialEq)]
-pub struct QuantumDeclaration {
-    pub span: SourceSpan,
-    pub name: Identifier,
-    pub size: Option<Expression>,
-    pub input: bool,
-    pub output: bool,
-}
-
-impl Spanned for QuantumDeclaration {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// Physical qubit reference such as `$0`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PhysicalQubit {
-    pub span: SourceSpan,
-    pub index: u64,
-}
-
-impl Spanned for PhysicalQubit {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// Quantum operand.
-///
-/// This is still a source-level operand. It is deliberately not a canonical
-/// IR qubit identifier.
-#[derive(Debug, Clone, PartialEq)]
-pub enum QuantumOperand {
-    /// A named quantum object.
-    Identifier(Identifier),
-
-    /// A single indexed element.
-    Indexed(IndexExpression),
-
-    /// A slice/range.
-    Slice(SliceExpression),
-
-    /// A physical hardware qubit.
-    Physical(PhysicalQubit),
-
-    /// A concatenation or expanded register expression.
-    Concatenation {
+pub enum Literal {
+    Bool {
         span: SourceSpan,
-        operands: Vec<QuantumOperand>,
+        value: bool,
     },
+
+    Integer(IntegerLiteral),
+    Float(FloatLiteral),
+    Imaginary(ImaginaryLiteral),
+    BitString(BitStringLiteral),
+    String(StringLiteral),
+    Duration(DurationLiteral),
+    Stretch(StretchLiteral),
 }
 
-impl Spanned for QuantumOperand {
+impl Spanned for Literal {
     fn span(&self) -> SourceSpan {
         match self {
-            Self::Identifier(value) => value.span(),
-            Self::Indexed(value) => value.span(),
-            Self::Slice(value) => value.span(),
-            Self::Physical(value) => value.span(),
-            Self::Concatenation { span, .. } => *span,
+            Self::Bool { span, .. } => *span,
+            Self::Integer(v) => v.span(),
+            Self::Float(v) => v.span(),
+            Self::Imaginary(v) => v.span(),
+            Self::BitString(v) => v.span(),
+            Self::String(v) => v.span(),
+            Self::Duration(v) => v.span(),
+            Self::Stretch(v) => v.span(),
         }
     }
 }
 
-/// Generic operand usable by gate/subroutine calls.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Argument {
-    Quantum(QuantumOperand),
-    Classical(Expression),
-}
-
-impl Spanned for Argument {
-    fn span(&self) -> SourceSpan {
-        match self {
-            Self::Quantum(value) => value.span(),
-            Self::Classical(value) => value.span(),
-        }
+impl AstNode for Literal {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Literal
     }
 }
 
-// -----------------------------------------------------------------------------
-// Classical types
-// -----------------------------------------------------------------------------
-
-/// OpenQASM type.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Type {
-    /// `bool`
-    Bool,
-
-    /// `bit`
-    Bit {
-        width: Option<u64>,
-    },
-
-    /// Signed integer.
-    Int {
-        width: u64,
-    },
-
-    /// Unsigned integer.
-    Uint {
-        width: u64,
-    },
-
-    /// Floating-point value.
-    Float {
-        width: u64,
-    },
-
-    /// Angle.
-    Angle {
-        width: u64,
-    },
-
-    /// Complex value.
-    Complex {
-        width: u64,
-    },
-
-    /// Duration.
-    Duration,
-
-    /// Stretch.
-    Stretch,
-
-    /// Void return type.
-    Void,
-
-    /// Array type.
-    Array {
-        element: Box<Type>,
-        dimensions: Vec<Expression>,
-    },
-
-    /// Named/implementation-defined type.
-    Named(Identifier),
-}
-
-impl Type {
-    /// Returns true for a quantum-free classical type.
-    #[must_use]
-    pub const fn is_classical(&self) -> bool {
-        true
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Classical declarations
-// -----------------------------------------------------------------------------
-
-/// Classical declaration.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ClassicalDeclaration {
-    pub span: SourceSpan,
-    pub ty: Type,
-    pub name: Identifier,
-    pub initializer: Option<Expression>,
-    pub input: bool,
-    pub output: bool,
-    pub readonly: bool,
-    pub mutable: bool,
-    pub constant: bool,
-}
-
-impl Spanned for ClassicalDeclaration {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// General variable declaration.
-#[derive(Debug, Clone, PartialEq)]
-pub struct VariableDeclaration {
-    pub span: SourceSpan,
-    pub ty: Type,
-    pub name: Identifier,
-    pub initializer: Option<Expression>,
-    pub input: bool,
-    pub output: bool,
-    pub readonly: bool,
-    pub mutable: bool,
-    pub constant: bool,
-}
-
-impl Spanned for VariableDeclaration {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// `let` binding.
-#[derive(Debug, Clone, PartialEq)]
-pub struct LetStatement {
-    pub span: SourceSpan,
-    pub name: Identifier,
-    pub value: Expression,
-}
-
-impl Spanned for LetStatement {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// Alias declaration.
-///
-/// The exact semantic restrictions are checked by `validation.rs`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct AliasDeclaration {
-    pub span: SourceSpan,
-    pub name: Identifier,
-    pub value: AliasExpression,
-}
-
-impl Spanned for AliasDeclaration {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// Alias source expression.
-#[derive(Debug, Clone, PartialEq)]
-pub enum AliasExpression {
-    Operand(QuantumOperand),
-
-    Concatenation {
-        span: SourceSpan,
-        operands: Vec<QuantumOperand>,
-    },
-
-    Slice {
-        span: SourceSpan,
-        operand: Box<QuantumOperand>,
-        index: Box<IndexExpression>,
-    },
-}
-
-impl Spanned for AliasExpression {
-    fn span(&self) -> SourceSpan {
-        match self {
-            Self::Operand(value) => value.span(),
-            Self::Concatenation { span, .. } => *span,
-            Self::Slice { span, .. } => *span,
-        }
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Indexing and slices
-// -----------------------------------------------------------------------------
-
-/// Index expression.
-#[derive(Debug, Clone, PartialEq)]
-pub struct IndexExpression {
-    pub span: SourceSpan,
-    pub target: Identifier,
-    pub index: Expression,
-}
-
-impl Spanned for IndexExpression {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// Slice expression.
-///
-/// `start`, `stop`, and `step` are optional according to the OpenQASM slicing
-/// grammar supported by the parser.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SliceExpression {
-    pub span: SourceSpan,
-    pub target: Identifier,
-    pub start: Option<Expression>,
-    pub stop: Option<Expression>,
-    pub step: Option<Expression>,
-}
-
-impl Spanned for SliceExpression {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Expressions
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// OpenQASM expression.
-///
-/// Expressions remain source-level and are not lowered to the canonical IR
-/// `ParameterExpression` in this module.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UnaryOperator {
+    Plus,
+    Minus,
+    LogicalNot,
+    BitNot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BinaryOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    Power,
+
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+
+    LogicalAnd,
+    LogicalOr,
+
+    BitAnd,
+    BitOr,
+    BitXor,
+
+    ShiftLeft,
+    ShiftRight,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
-    Literal(Literal),
+    Literal {
+        span: SourceSpan,
+        value: Literal,
+    },
 
     Identifier(Identifier),
 
@@ -1027,51 +758,39 @@ pub enum Expression {
         right: Box<Expression>,
     },
 
-    Call {
+    Cast {
+        span: SourceSpan,
+        target: TypeSpecifier,
+        expression: Box<Expression>,
+    },
+
+    Index(IndexExpression),
+
+    Slice {
+        span: SourceSpan,
+        expression: Box<Expression>,
+        start: Option<Box<Expression>>,
+        end: Option<Box<Expression>>,
+        step: Option<Box<Expression>>,
+    },
+
+    FunctionCall {
         span: SourceSpan,
         function: Identifier,
         arguments: Vec<Expression>,
     },
 
-    Cast {
-        span: SourceSpan,
-        target: Type,
-        expression: Box<Expression>,
-    },
-
-    Index {
-        span: SourceSpan,
-        target: Box<Expression>,
-        index: Box<Expression>,
-    },
-
-    Slice {
-        span: SourceSpan,
-        target: Box<Expression>,
-        start: Option<Box<Expression>>,
-        stop: Option<Box<Expression>>,
-        step: Option<Box<Expression>>,
-    },
-
     ArrayLiteral {
         span: SourceSpan,
-        values: Vec<Expression>,
-    },
-
-    Bitstring {
-        span: SourceSpan,
-        value: BitStringLiteral,
+        elements: Vec<Expression>,
     },
 
     DurationOf {
         span: SourceSpan,
-        body: Box<Statement>,
+        body: Box<StatementOrScope>,
     },
 
-    FunctionReference {
-        span: SourceSpan,
-        name: Identifier,
-    },
+    QuantumCall(QuantumCallExpression),
 
     Parenthesized {
         span: SourceSpan,
@@ -1082,199 +801,248 @@ pub enum Expression {
 impl Spanned for Expression {
     fn span(&self) -> SourceSpan {
         match self {
-            Self::Literal(value) => value.span(),
-            Self::Identifier(value) => value.span(),
-
-            Self::Unary { span, .. }
-            | Self::Binary { span, .. }
-            | Self::Call { span, .. }
-            | Self::Cast { span, .. }
-            | Self::Index { span, .. }
-            | Self::Slice { span, .. }
-            | Self::ArrayLiteral { span, .. }
-            | Self::Bitstring { span, .. }
-            | Self::DurationOf { span, .. }
-            | Self::FunctionReference { span, .. }
-            | Self::Parenthesized { span, .. } => *span,
+            Self::Literal { span, .. } => *span,
+            Self::Identifier(v) => v.span(),
+            Self::Unary { span, .. } => *span,
+            Self::Binary { span, .. } => *span,
+            Self::Cast { span, .. } => *span,
+            Self::Index(v) => v.span(),
+            Self::Slice { span, .. } => *span,
+            Self::FunctionCall { span, .. } => *span,
+            Self::ArrayLiteral { span, .. } => *span,
+            Self::DurationOf { span, .. } => *span,
+            Self::QuantumCall(v) => v.span(),
+            Self::Parenthesized { span, .. } => *span,
         }
     }
 }
 
-/// Unary operator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UnaryOperator {
-    Plus,
-    Minus,
-    LogicalNot,
-    BitwiseNot,
-}
-
-/// Binary operator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BinaryOperator {
-    Add,
-    Subtract,
-    Multiply,
-    Divide,
-    Modulo,
-    Power,
-
-    Equal,
-    NotEqual,
-
-    Less,
-    LessEqual,
-    Greater,
-    GreaterEqual,
-
-    LogicalAnd,
-    LogicalOr,
-
-    BitwiseAnd,
-    BitwiseOr,
-    BitwiseXor,
-
-    ShiftLeft,
-    ShiftRight,
-}
-
-// -----------------------------------------------------------------------------
-// Gate definitions
-// -----------------------------------------------------------------------------
-
-/// User-defined gate.
-#[derive(Debug, Clone, PartialEq)]
-pub struct GateDefinition {
-    pub span: SourceSpan,
-    pub name: Identifier,
-    pub parameters: Vec<GateParameterDeclaration>,
-    pub qubits: Vec<GateQubitDeclaration>,
-    pub body: Vec<GateBodyStatement>,
-}
-
-impl Spanned for GateDefinition {
-    fn span(&self) -> SourceSpan {
-        self.span
+impl AstNode for Expression {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Expression
     }
 }
 
-/// Gate parameter declaration.
+// ============================================================================
+// Indexing
+// ============================================================================
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct GateParameterDeclaration {
-    pub span: SourceSpan,
-    pub name: Identifier,
+pub enum IndexExpression {
+    Single {
+        span: SourceSpan,
+        index: Box<Expression>,
+    },
+
+    Range {
+        span: SourceSpan,
+        start: Option<Box<Expression>>,
+        end: Option<Box<Expression>>,
+        step: Option<Box<Expression>>,
+    },
+
+    Set {
+        span: SourceSpan,
+        values: Vec<Expression>,
+    },
+
+    Concatenation {
+        span: SourceSpan,
+        values: Vec<Expression>,
+    },
 }
 
-impl Spanned for GateParameterDeclaration {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// Gate-local qubit declaration.
-#[derive(Debug, Clone, PartialEq)]
-pub struct GateQubitDeclaration {
-    pub span: SourceSpan,
-    pub name: Identifier,
-}
-
-impl Spanned for GateQubitDeclaration {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// Statements permitted in a gate body.
-#[derive(Debug, Clone, PartialEq)]
-pub enum GateBodyStatement {
-    GateCall(GateCall),
-
-    Barrier(BarrierStatement),
-
-    Delay(DelayStatement),
-
-    Box(BoxStatement),
-
-    If(IfStatement),
-
-    For(ForStatement),
-
-    While(WhileStatement),
-
-    Switch(SwitchStatement),
-
-    Annotation(AnnotationStatement),
-}
-
-impl Spanned for GateBodyStatement {
+impl Spanned for IndexExpression {
     fn span(&self) -> SourceSpan {
         match self {
-            Self::GateCall(value) => value.span(),
-            Self::Barrier(value) => value.span(),
-            Self::Delay(value) => value.span(),
-            Self::Box(value) => value.span(),
-            Self::If(value) => value.span(),
-            Self::For(value) => value.span(),
-            Self::While(value) => value.span(),
-            Self::Switch(value) => value.span(),
-            Self::Annotation(value) => value.span(),
+            Self::Single { span, .. } => *span,
+            Self::Range { span, .. } => *span,
+            Self::Set { span, .. } => *span,
+            Self::Concatenation { span, .. } => *span,
         }
     }
 }
 
-// -----------------------------------------------------------------------------
-// Gate calls
-// -----------------------------------------------------------------------------
-
-/// Gate invocation.
-///
-/// This is the critical source-level structure used by the future importer.
-/// It preserves the actual operand list rather than assuming qubit positions.
-#[derive(Debug, Clone, PartialEq)]
-pub struct GateCall {
-    pub span: SourceSpan,
-
-    /// Optional modifiers such as `ctrl`, `negctrl`, `inv`, and `pow`.
-    pub modifiers: Vec<GateModifier>,
-
-    /// Gate identifier.
-    pub name: Identifier,
-
-    /// Gate parameter expressions.
-    pub parameters: Vec<Expression>,
-
-    /// Quantum operands in source order.
-    pub operands: Vec<QuantumOperand>,
+impl AstNode for IndexExpression {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Expression
+    }
 }
 
-impl Spanned for GateCall {
+// ============================================================================
+// Types
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScalarType {
+    Bool,
+    Bit,
+    Int {
+        width: u32,
+    },
+    UInt {
+        width: u32,
+    },
+    Float {
+        width: u32,
+    },
+    Angle {
+        width: Option<u32>,
+    },
+    Complex {
+        width: Option<u32>,
+    },
+    Duration,
+    Stretch,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum QuantumType {
+    Qubit {
+        size: Option<Expression>,
+    },
+
+    HardwareQubit,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeSpecifier {
+    Scalar(ScalarType),
+
+    Quantum(QuantumType),
+
+    Array {
+        element: Box<TypeSpecifier>,
+        dimensions: Vec<Expression>,
+    },
+
+    Void,
+}
+
+impl Spanned for TypeSpecifier {
+    fn span(&self) -> SourceSpan {
+        match self {
+            Self::Scalar(_) => {
+                // Type spans are carried by the declaration using them.
+                SourceSpan::default()
+            }
+
+            Self::Quantum(_) => {
+                SourceSpan::default()
+            }
+
+            Self::Array { .. } => {
+                SourceSpan::default()
+            }
+
+            Self::Void => {
+                SourceSpan::default()
+            }
+        }
+    }
+}
+
+impl AstNode for TypeSpecifier {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::TypeSpecifier
+    }
+}
+
+/// Qualifiers such as `const`, `input`, `output`, and `readonly`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TypeQualifier {
+    Const,
+    Input,
+    Output,
+    Readonly,
+}
+
+// ============================================================================
+// Designators
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Designator {
+    pub span: SourceSpan,
+    pub expression: Expression,
+}
+
+impl Spanned for Designator {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
-/// Gate modifier.
+// ============================================================================
+// Quantum operands
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PhysicalQubit {
+    Identifier {
+        span: SourceSpan,
+        index: u64,
+    },
+}
+
+impl Spanned for PhysicalQubit {
+    fn span(&self) -> SourceSpan {
+        match self {
+            Self::Identifier { span, .. } => *span,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GateOperand {
+    Identifier(Identifier),
+
+    Indexed {
+        span: SourceSpan,
+        identifier: Identifier,
+        index: IndexExpression,
+    },
+
+    Physical(PhysicalQubit),
+
+    Concatenation {
+        span: SourceSpan,
+        operands: Vec<GateOperand>,
+    },
+}
+
+impl Spanned for GateOperand {
+    fn span(&self) -> SourceSpan {
+        match self {
+            Self::Identifier(v) => v.span(),
+            Self::Indexed { span, .. } => *span,
+            Self::Physical(v) => v.span(),
+            Self::Concatenation { span, .. } => *span,
+        }
+    }
+}
+
+// ============================================================================
+// Gate modifiers
+// ============================================================================
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum GateModifier {
-    /// `ctrl`
     Ctrl {
         span: SourceSpan,
         count: Option<Expression>,
     },
 
-    /// `negctrl`
     NegCtrl {
         span: SourceSpan,
         count: Option<Expression>,
     },
 
-    /// `inv`
-    Inverse {
+    Inv {
         span: SourceSpan,
     },
 
-    /// `pow(...)`
-    Power {
+    Pow {
         span: SourceSpan,
         exponent: Expression,
     },
@@ -1283,31 +1051,282 @@ pub enum GateModifier {
 impl Spanned for GateModifier {
     fn span(&self) -> SourceSpan {
         match self {
-            Self::Ctrl { span, .. }
-            | Self::NegCtrl { span, .. }
-            | Self::Inverse { span }
-            | Self::Power { span, .. } => *span,
+            Self::Ctrl { span, .. } => *span,
+            Self::NegCtrl { span, .. } => *span,
+            Self::Inv { span } => *span,
+            Self::Pow { span, .. } => *span,
         }
     }
 }
 
-// -----------------------------------------------------------------------------
-// Measurement/reset/barrier
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Gate invocation
+// ============================================================================
 
-/// Measurement statement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GateCall {
+    pub span: SourceSpan,
+    pub modifiers: Vec<GateModifier>,
+    pub name: Identifier,
+    pub parameters: Vec<Expression>,
+    pub operands: Vec<GateOperand>,
+}
+
+impl Spanned for GateCall {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+// ============================================================================
+// Quantum declarations
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuantumDeclaration {
+    pub span: SourceSpan,
+    pub name: Identifier,
+    pub quantum_type: QuantumType,
+    pub designator: Option<Designator>,
+}
+
+impl Spanned for QuantumDeclaration {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+impl AstNode for QuantumDeclaration {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Declaration
+    }
+}
+
+// ============================================================================
+// Classical declarations
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassicalDeclaration {
+    pub span: SourceSpan,
+    pub qualifiers: Vec<TypeQualifier>,
+    pub type_specifier: TypeSpecifier,
+    pub name: Identifier,
+    pub initializer: Option<Expression>,
+}
+
+impl Spanned for ClassicalDeclaration {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+impl AstNode for ClassicalDeclaration {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Declaration
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConstDeclaration {
+    pub span: SourceSpan,
+    pub type_specifier: TypeSpecifier,
+    pub name: Identifier,
+    pub initializer: Expression,
+}
+
+impl Spanned for ConstDeclaration {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariableDeclaration {
+    pub span: SourceSpan,
+    pub declaration: ClassicalDeclaration,
+}
+
+impl Spanned for VariableDeclaration {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+// ============================================================================
+// I/O declarations
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IoDeclaration {
+    pub span: SourceSpan,
+    pub qualifier: TypeQualifier,
+    pub type_specifier: TypeSpecifier,
+    pub name: Identifier,
+    pub initializer: Option<Expression>,
+}
+
+impl Spanned for IoDeclaration {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+// ============================================================================
+// Legacy OpenQASM 2-style declarations
+// ============================================================================
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OldStyleDeclarationKind {
+    Qreg,
+    Creg,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OldStyleDeclaration {
+    pub span: SourceSpan,
+    pub kind: OldStyleDeclarationKind,
+    pub name: Identifier,
+    pub size: Expression,
+}
+
+impl Spanned for OldStyleDeclaration {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+// ============================================================================
+// Alias
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AliasDeclaration {
+    pub span: SourceSpan,
+    pub name: Identifier,
+    pub operands: Vec<GateOperand>,
+}
+
+impl Spanned for AliasDeclaration {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+// ============================================================================
+// Gate definitions
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArgumentDefinition {
+    pub span: SourceSpan,
+    pub name: Identifier,
+    pub type_specifier: Option<TypeSpecifier>,
+}
+
+impl Spanned for ArgumentDefinition {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GateDefinition {
+    pub span: SourceSpan,
+    pub name: Identifier,
+    pub parameters: Vec<ArgumentDefinition>,
+    pub qubits: Vec<ArgumentDefinition>,
+    pub body: Vec<Statement>,
+}
+
+impl Spanned for GateDefinition {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+// ============================================================================
+// Subroutines
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReturnSignature {
+    pub span: SourceSpan,
+    pub type_specifier: Option<TypeSpecifier>,
+}
+
+impl Spanned for ReturnSignature {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SubroutineDefinition {
+    pub span: SourceSpan,
+    pub name: Identifier,
+    pub arguments: Vec<ArgumentDefinition>,
+    pub return_signature: Option<ReturnSignature>,
+    pub body: StatementOrScope,
+}
+
+impl Spanned for SubroutineDefinition {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+// ============================================================================
+// Extern
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExternArgument {
+    pub span: SourceSpan,
+    pub type_specifier: TypeSpecifier,
+}
+
+impl Spanned for ExternArgument {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExternDeclaration {
+    pub span: SourceSpan,
+    pub name: Identifier,
+    pub arguments: Vec<ExternArgument>,
+    pub return_signature: Option<ReturnSignature>,
+}
+
+impl Spanned for ExternDeclaration {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+// ============================================================================
+// Measurement
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeasureExpression {
+    pub span: SourceSpan,
+    pub operand: GateOperand,
+}
+
+impl Spanned for MeasureExpression {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeasurementStatement {
     pub span: SourceSpan,
-
-    /// Quantum source being measured.
-    pub source: QuantumOperand,
-
-    /// Optional classical destination.
-    ///
-    /// Keeping this optional is important because validation must distinguish
-    /// source-language forms from semantic validity.
-    pub destination: Option<Expression>,
+    pub expression: MeasureExpression,
+    pub destination: Option<GateOperand>,
 }
 
 impl Spanned for MeasurementStatement {
@@ -1316,11 +1335,27 @@ impl Spanned for MeasurementStatement {
     }
 }
 
-/// Reset statement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeasureAssignmentStatement {
+    pub span: SourceSpan,
+    pub destination: GateOperand,
+    pub measurement: MeasureExpression,
+}
+
+impl Spanned for MeasureAssignmentStatement {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+// ============================================================================
+// Quantum operations
+// ============================================================================
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResetStatement {
     pub span: SourceSpan,
-    pub target: QuantumOperand,
+    pub operand: GateOperand,
 }
 
 impl Spanned for ResetStatement {
@@ -1329,11 +1364,10 @@ impl Spanned for ResetStatement {
     }
 }
 
-/// Barrier statement.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BarrierStatement {
     pub span: SourceSpan,
-    pub operands: Vec<QuantumOperand>,
+    pub operands: Vec<GateOperand>,
 }
 
 impl Spanned for BarrierStatement {
@@ -1342,20 +1376,11 @@ impl Spanned for BarrierStatement {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Timing
-// -----------------------------------------------------------------------------
-
-/// Delay statement.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DelayStatement {
     pub span: SourceSpan,
-
-    /// Duration expression.
     pub duration: Expression,
-
-    /// Quantum targets.
-    pub targets: Vec<QuantumOperand>,
+    pub operands: Vec<GateOperand>,
 }
 
 impl Spanned for DelayStatement {
@@ -1364,53 +1389,32 @@ impl Spanned for DelayStatement {
     }
 }
 
-/// Boxed timing construct.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BoxStatement {
-    pub span: SourceSpan,
+// ============================================================================
+// Assignment
+// ============================================================================
 
-    /// Optional duration bound.
-    pub duration: Option<Expression>,
-
-    /// Body.
-    pub body: Vec<Statement>,
-}
-
-impl Spanned for BoxStatement {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Assignments and expressions
-// -----------------------------------------------------------------------------
-
-/// Assignment operator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AssignmentOperator {
     Assign,
     AddAssign,
-    SubtractAssign,
-    MultiplyAssign,
-    DivideAssign,
-    BitAndAssign,
-    BitOrAssign,
-    BitXorAssign,
-    BitNotAssign,
-    ShiftLeftAssign,
-    ShiftRightAssign,
-    ModuloAssign,
-    PowerAssign,
+    SubAssign,
+    MulAssign,
+    DivAssign,
+    ModAssign,
 }
 
-/// Assignment statement.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssignmentValue {
+    Expression(Expression),
+    Measurement(MeasureExpression),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssignmentStatement {
     pub span: SourceSpan,
     pub target: Expression,
     pub operator: AssignmentOperator,
-    pub value: Expression,
+    pub value: AssignmentValue,
 }
 
 impl Spanned for AssignmentStatement {
@@ -1419,7 +1423,6 @@ impl Spanned for AssignmentStatement {
     }
 }
 
-/// Expression statement.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpressionStatement {
     pub span: SourceSpan,
@@ -1432,30 +1435,57 @@ impl Spanned for ExpressionStatement {
     }
 }
 
-// -----------------------------------------------------------------------------
+// ============================================================================
 // Control flow
-// -----------------------------------------------------------------------------
+// ============================================================================
 
-/// General statement block.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Block {
+pub enum StatementOrScope {
+    Statement(Statement),
+
+    Scope(Scope),
+}
+
+impl Spanned for StatementOrScope {
+    fn span(&self) -> SourceSpan {
+        match self {
+            Self::Statement(v) => v.span(),
+            Self::Scope(v) => v.span(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Scope {
     pub span: SourceSpan,
     pub statements: Vec<Statement>,
 }
 
-impl Spanned for Block {
+impl Spanned for Scope {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
-/// If statement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ControlStatement {
+    pub span: SourceSpan,
+    pub condition: Expression,
+    pub body: StatementOrScope,
+}
+
+impl Spanned for ControlStatement {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfStatement {
     pub span: SourceSpan,
     pub condition: Expression,
-    pub then_body: Block,
-    pub else_body: Option<Block>,
+    pub then_branch: StatementOrScope,
+    pub else_branch: Option<StatementOrScope>,
 }
 
 impl Spanned for IfStatement {
@@ -1464,27 +1494,39 @@ impl Spanned for IfStatement {
     }
 }
 
-/// For-loop variable.
 #[derive(Debug, Clone, PartialEq)]
-pub struct LoopVariable {
-    pub span: SourceSpan,
-    pub name: Identifier,
-    pub ty: Option<Type>,
+pub enum ForIterable {
+    Range {
+        span: SourceSpan,
+        start: Expression,
+        end: Expression,
+        step: Option<Expression>,
+    },
+
+    Set {
+        span: SourceSpan,
+        values: Vec<Expression>,
+    },
+
+    Expression(Expression),
 }
 
-impl Spanned for LoopVariable {
+impl Spanned for ForIterable {
     fn span(&self) -> SourceSpan {
-        self.span
+        match self {
+            Self::Range { span, .. } => *span,
+            Self::Set { span, .. } => *span,
+            Self::Expression(v) => v.span(),
+        }
     }
 }
 
-/// For loop.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForStatement {
     pub span: SourceSpan,
-    pub variable: LoopVariable,
-    pub iterable: Expression,
-    pub body: Block,
+    pub variable: Identifier,
+    pub iterable: ForIterable,
+    pub body: StatementOrScope,
 }
 
 impl Spanned for ForStatement {
@@ -1493,12 +1535,11 @@ impl Spanned for ForStatement {
     }
 }
 
-/// While loop.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhileStatement {
     pub span: SourceSpan,
     pub condition: Expression,
-    pub body: Block,
+    pub body: StatementOrScope,
 }
 
 impl Spanned for WhileStatement {
@@ -1507,27 +1548,11 @@ impl Spanned for WhileStatement {
     }
 }
 
-/// Switch statement.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SwitchStatement {
-    pub span: SourceSpan,
-    pub expression: Expression,
-    pub cases: Vec<SwitchCase>,
-    pub default: Option<Block>,
-}
-
-impl Spanned for SwitchStatement {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// Switch case.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SwitchCase {
     pub span: SourceSpan,
-    pub values: Vec<Expression>,
-    pub body: Block,
+    pub labels: Vec<Expression>,
+    pub body: Vec<Statement>,
 }
 
 impl Spanned for SwitchCase {
@@ -1536,11 +1561,30 @@ impl Spanned for SwitchCase {
     }
 }
 
-/// Return statement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SwitchStatement {
+    pub span: SourceSpan,
+    pub expression: Expression,
+    pub cases: Vec<SwitchCase>,
+    pub default: Option<Scope>,
+}
+
+impl Spanned for SwitchStatement {
+    fn span(&self) -> SourceSpan {
+        self.span
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReturnValue {
+    Expression(Expression),
+    Measurement(MeasureExpression),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReturnStatement {
     pub span: SourceSpan,
-    pub value: Option<Expression>,
+    pub value: Option<ReturnValue>,
 }
 
 impl Spanned for ReturnStatement {
@@ -1549,8 +1593,7 @@ impl Spanned for ReturnStatement {
     }
 }
 
-/// Break statement.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BreakStatement {
     pub span: SourceSpan,
 }
@@ -1561,8 +1604,7 @@ impl Spanned for BreakStatement {
     }
 }
 
-/// Continue statement.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContinueStatement {
     pub span: SourceSpan,
 }
@@ -1573,98 +1615,78 @@ impl Spanned for ContinueStatement {
     }
 }
 
-/// Empty statement.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EmptyStatement {
-    pub span: SourceSpan,
-}
-
-impl Spanned for EmptyStatement {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Subroutines
-// -----------------------------------------------------------------------------
-
-/// User-defined subroutine.
 #[derive(Debug, Clone, PartialEq)]
-pub struct SubroutineDefinition {
+pub struct LetStatement {
     pub span: SourceSpan,
     pub name: Identifier,
-    pub return_type: Option<Type>,
-    pub parameters: Vec<SubroutineParameter>,
-    pub body: Block,
+    pub value: Expression,
 }
 
-impl Spanned for SubroutineDefinition {
+impl Spanned for LetStatement {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
-/// Subroutine parameter.
+// ============================================================================
+// Timing
+// ============================================================================
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct SubroutineParameter {
+pub struct BoxStatement {
     pub span: SourceSpan,
-    pub ty: Type,
-    pub name: Identifier,
-    pub input: bool,
-    pub output: bool,
-    pub readonly: bool,
-    pub mutable: bool,
+    pub duration: Option<Expression>,
+    pub body: Vec<Statement>,
 }
 
-impl Spanned for SubroutineParameter {
+impl Spanned for BoxStatement {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
-/// External function declaration.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExternDeclaration {
+// ============================================================================
+// Include
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncludeStatement {
     pub span: SourceSpan,
-    pub name: Identifier,
-    pub return_type: Type,
-    pub parameters: Vec<ExternParameter>,
+    pub path: String,
 }
 
-impl Spanned for ExternDeclaration {
+impl Spanned for IncludeStatement {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
-/// External function parameter.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExternParameter {
+// ============================================================================
+// Calibration
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CalibrationGrammarStatement {
     pub span: SourceSpan,
-    pub ty: Type,
-    pub name: Option<Identifier>,
+    pub name: String,
 }
 
-impl Spanned for ExternParameter {
+impl Spanned for CalibrationGrammarStatement {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
-// -----------------------------------------------------------------------------
-// Defcal / calibration
-// -----------------------------------------------------------------------------
+/// Compatibility name used by the current parser.
+pub type DefcalGrammarStatement = CalibrationGrammarStatement;
 
-/// Inline calibration definition.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DefcalDefinition {
     pub span: SourceSpan,
     pub name: Identifier,
-    pub parameters: Vec<Expression>,
-    pub qubits: Vec<QuantumOperand>,
-    pub return_type: Option<Type>,
-    pub body: CalibrationBody,
+    pub parameters: Vec<ArgumentDefinition>,
+    pub operands: Vec<GateOperand>,
+    pub body: Vec<Statement>,
 }
 
 impl Spanned for DefcalDefinition {
@@ -1673,11 +1695,10 @@ impl Spanned for DefcalDefinition {
     }
 }
 
-/// Calibration statement.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CalibrationStatement {
     pub span: SourceSpan,
-    pub body: CalibrationBody,
+    pub body: String,
 }
 
 impl Spanned for CalibrationStatement {
@@ -1686,30 +1707,10 @@ impl Spanned for CalibrationStatement {
     }
 }
 
-/// Calibration body.
-///
-/// Raw text is intentionally retained at this boundary. The parser can later
-/// expose a richer OpenPulse AST without changing ordinary OpenQASM nodes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CalibrationBody {
-    pub span: SourceSpan,
-    pub source: String,
-}
-
-impl Spanned for CalibrationBody {
-    fn span(&self) -> SourceSpan {
-        self.span
-    }
-}
-
-/// Pulse-level statement.
-///
-/// This is intentionally opaque to the ordinary circuit importer. A later
-/// OpenPulse-specific layer can lower supported constructs explicitly.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PulseStatement {
     pub span: SourceSpan,
-    pub source: String,
+    pub body: String,
 }
 
 impl Spanned for PulseStatement {
@@ -1718,570 +1719,230 @@ impl Spanned for PulseStatement {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Return / call helpers
-// -----------------------------------------------------------------------------
+// ============================================================================
+// Annotations and pragmas
+// ============================================================================
 
-/// A generic source-level callable invocation.
-#[derive(Debug, Clone, PartialEq)]
-pub struct CallExpression {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Annotation {
     pub span: SourceSpan,
-    pub name: Identifier,
-    pub arguments: Vec<Expression>,
+    pub text: String,
 }
 
-impl Spanned for CallExpression {
+impl Spanned for Annotation {
     fn span(&self) -> SourceSpan {
         self.span
     }
 }
 
-// -----------------------------------------------------------------------------
-// AST utilities
-// -----------------------------------------------------------------------------
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnnotatedStatement {
+    pub span: SourceSpan,
+    pub annotations: Vec<Annotation>,
+    pub statement: Box<Statement>,
+}
 
-impl Program {
-    /// Walk all top-level statements in source order.
-    ///
-    /// This does not perform semantic validation.
-    pub fn visit_statements<F>(
-        &self,
-        mut visitor: F,
-    )
-    where
-        F: FnMut(&Statement),
-    {
-        for statement in &self.statements {
-            visitor(statement);
-        }
-    }
-
-    /// Returns the number of top-level statements.
-    #[must_use]
-    pub fn statement_count(&self) -> usize {
-        self.statements.len()
+impl Spanned for AnnotatedStatement {
+    fn span(&self) -> SourceSpan {
+        self.span
     }
 }
 
-impl GateCall {
-    /// Returns true when the call has no explicit modifiers.
-    #[must_use]
-    pub fn is_unmodified(&self) -> bool {
-        self.modifiers.is_empty()
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnnotationStatement {
+    pub span: SourceSpan,
+    pub annotation: Annotation,
+}
 
-    /// Returns the number of quantum operands.
-    #[must_use]
-    pub fn operand_count(&self) -> usize {
-        self.operands.len()
-    }
-
-    /// Returns the number of gate parameters.
-    #[must_use]
-    pub fn parameter_count(&self) -> usize {
-        self.parameters.len()
+impl Spanned for AnnotationStatement {
+    fn span(&self) -> SourceSpan {
+        self.span
     }
 }
 
-impl GateDefinition {
-    /// Returns the number of formal quantum operands.
-    #[must_use]
-    pub fn qubit_parameter_count(&self) -> usize {
-        self.qubits.len()
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PragmaStatement {
+    pub span: SourceSpan,
+    pub text: String,
+}
 
-    /// Returns the number of formal scalar parameters.
-    #[must_use]
-    pub fn parameter_count(&self) -> usize {
-        self.parameters.len()
+impl Spanned for PragmaStatement {
+    fn span(&self) -> SourceSpan {
+        self.span
     }
 }
 
-impl MeasurementStatement {
-    /// Returns true when the measurement has an explicit classical target.
-    #[must_use]
-    pub fn has_destination(&self) -> bool {
-        self.destination.is_some()
+// ============================================================================
+// Quantum call expressions
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuantumCallExpression {
+    pub span: SourceSpan,
+    pub name: Identifier,
+    pub parameters: Vec<Expression>,
+    pub operands: Vec<GateOperand>,
+}
+
+impl Spanned for QuantumCallExpression {
+    fn span(&self) -> SourceSpan {
+        self.span
     }
 }
 
-impl BarrierStatement {
-    /// Returns the number of barrier operands.
-    #[must_use]
-    pub fn operand_count(&self) -> usize {
-        self.operands.len()
+// ============================================================================
+// Statement enum
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Statement {
+    Include(IncludeStatement),
+
+    DefcalGrammar(CalibrationGrammarStatement),
+
+    QuantumDeclaration(QuantumDeclaration),
+
+    ClassicalDeclaration(ClassicalDeclaration),
+
+    ConstDeclaration(ConstDeclaration),
+
+    IoDeclaration(IoDeclaration),
+
+    OldStyleDeclaration(OldStyleDeclaration),
+
+    AliasDeclaration(AliasDeclaration),
+
+    GateDefinition(GateDefinition),
+
+    SubroutineDefinition(SubroutineDefinition),
+
+    ExternDeclaration(ExternDeclaration),
+
+    GateCall(GateCall),
+
+    Measurement(MeasurementStatement),
+
+    MeasureAssignment(MeasureAssignmentStatement),
+
+    Reset(ResetStatement),
+
+    Barrier(BarrierStatement),
+
+    Delay(DelayStatement),
+
+    Box(BoxStatement),
+
+    Assignment(AssignmentStatement),
+
+    VariableDeclaration(VariableDeclaration),
+
+    Expression(ExpressionStatement),
+
+    If(IfStatement),
+
+    For(ForStatement),
+
+    While(WhileStatement),
+
+    Switch(SwitchStatement),
+
+    Return(ReturnStatement),
+
+    Break(BreakStatement),
+
+    Continue(ContinueStatement),
+
+    Let(LetStatement),
+
+    Defcal(DefcalDefinition),
+
+    Calibration(CalibrationStatement),
+
+    Pulse(PulseStatement),
+
+    Pragma(PragmaStatement),
+
+    Annotation(AnnotationStatement),
+}
+
+impl Spanned for Statement {
+    fn span(&self) -> SourceSpan {
+        match self {
+            Self::Include(v) => v.span(),
+            Self::DefcalGrammar(v) => v.span(),
+            Self::QuantumDeclaration(v) => v.span(),
+            Self::ClassicalDeclaration(v) => v.span(),
+            Self::ConstDeclaration(v) => v.span(),
+            Self::IoDeclaration(v) => v.span(),
+            Self::OldStyleDeclaration(v) => v.span(),
+            Self::AliasDeclaration(v) => v.span(),
+            Self::GateDefinition(v) => v.span(),
+            Self::SubroutineDefinition(v) => v.span(),
+            Self::ExternDeclaration(v) => v.span(),
+            Self::GateCall(v) => v.span(),
+            Self::Measurement(v) => v.span(),
+            Self::MeasureAssignment(v) => v.span(),
+            Self::Reset(v) => v.span(),
+            Self::Barrier(v) => v.span(),
+            Self::Delay(v) => v.span(),
+            Self::Box(v) => v.span(),
+            Self::Assignment(v) => v.span(),
+            Self::VariableDeclaration(v) => v.span(),
+            Self::Expression(v) => v.span(),
+            Self::If(v) => v.span(),
+            Self::For(v) => v.span(),
+            Self::While(v) => v.span(),
+            Self::Switch(v) => v.span(),
+            Self::Return(v) => v.span(),
+            Self::Break(v) => v.span(),
+            Self::Continue(v) => v.span(),
+            Self::Let(v) => v.span(),
+            Self::Defcal(v) => v.span(),
+            Self::Calibration(v) => v.span(),
+            Self::Pulse(v) => v.span(),
+            Self::Pragma(v) => v.span(),
+            Self::Annotation(v) => v.span(),
+        }
     }
 }
 
-impl DelayStatement {
-    /// Returns the number of delayed quantum targets.
-    #[must_use]
-    pub fn target_count(&self) -> usize {
-        self.targets.len()
+impl AstNode for Statement {
+    fn node_kind(&self) -> AstNodeKind {
+        AstNodeKind::Statement
     }
 }
 
-impl Block {
-    /// Returns true when the block has no statements.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.statements.is_empty()
+// ============================================================================
+// Compatibility helpers
+// ============================================================================
+
+/// Convenience constructor for a source-level boolean literal.
+#[must_use]
+pub fn boolean_literal(
+    span: SourceSpan,
+    value: bool,
+) -> Literal {
+    Literal::Bool {
+        span,
+        value,
     }
 }
 
-// -----------------------------------------------------------------------------
-// Structural validation
-// -----------------------------------------------------------------------------
-
-impl Program {
-    /// Performs only structural validation.
-    ///
-    /// This deliberately does NOT check:
-    ///
-    /// - undefined identifiers;
-    /// - duplicate names;
-    /// - scope;
-    /// - type compatibility;
-    /// - gate arity;
-    /// - standard-library availability;
-    /// - OpenQASM version rules;
-    /// - IR representability.
-    ///
-    /// Those belong to `validation.rs`.
-    pub fn validate_structure(
-        &self,
-        max_depth: usize,
-    ) -> AstResult<()> {
-        for statement in &self.statements {
-            validate_statement_depth(statement, 0, max_depth)?;
-        }
-
-        Ok(())
-    }
+/// Convenience constructor for an identifier expression.
+#[must_use]
+pub fn identifier_expression(
+    identifier: Identifier,
+) -> Expression {
+    Expression::Identifier(identifier)
 }
 
-fn validate_statement_depth(
-    statement: &Statement,
-    depth: usize,
-    max_depth: usize,
-) -> AstResult<()> {
-    if depth > max_depth {
-        return Err(
-            AstError::NestingLimitExceeded {
-                limit: max_depth,
-            },
-        );
-    }
-
-    match statement {
-        Statement::If(value) => {
-            validate_block_depth(
-                &value.then_body,
-                depth + 1,
-                max_depth,
-            )?;
-
-            if let Some(body) = &value.else_body {
-                validate_block_depth(
-                    body,
-                    depth + 1,
-                    max_depth,
-                )?;
-            }
-        }
-
-        Statement::For(value) => {
-            validate_block_depth(
-                &value.body,
-                depth + 1,
-                max_depth,
-            )?;
-        }
-
-        Statement::While(value) => {
-            validate_block_depth(
-                &value.body,
-                depth + 1,
-                max_depth,
-            )?;
-        }
-
-        Statement::Switch(value) => {
-            for case in &value.cases {
-                validate_block_depth(
-                    &case.body,
-                    depth + 1,
-                    max_depth,
-                )?;
-            }
-
-            if let Some(body) = &value.default {
-                validate_block_depth(
-                    body,
-                    depth + 1,
-                    max_depth,
-                )?;
-            }
-        }
-
-        Statement::Box(value) => {
-            for child in &value.body {
-                validate_statement_depth(
-                    child,
-                    depth + 1,
-                    max_depth,
-                )?;
-            }
-        }
-
-        Statement::GateDefinition(value) => {
-            for child in &value.body {
-                validate_gate_body_depth(
-                    child,
-                    depth + 1,
-                    max_depth,
-                )?;
-            }
-        }
-
-        Statement::SubroutineDefinition(value) => {
-            validate_block_depth(
-                &value.body,
-                depth + 1,
-                max_depth,
-            )?;
-        }
-
-        _ => {}
-    }
-
-    Ok(())
-}
-
-fn validate_block_depth(
-    block: &Block,
-    depth: usize,
-    max_depth: usize,
-) -> AstResult<()> {
-    if depth > max_depth {
-        return Err(
-            AstError::NestingLimitExceeded {
-                limit: max_depth,
-            },
-        );
-    }
-
-    for statement in &block.statements {
-        validate_statement_depth(
-            statement,
-            depth + 1,
-            max_depth,
-        )?;
-    }
-
-    Ok(())
-}
-
-fn validate_gate_body_depth(
-    statement: &GateBodyStatement,
-    depth: usize,
-    max_depth: usize,
-) -> AstResult<()> {
-    if depth > max_depth {
-        return Err(
-            AstError::NestingLimitExceeded {
-                limit: max_depth,
-            },
-        );
-    }
-
-    match statement {
-        GateBodyStatement::If(value) => {
-            validate_block_depth(
-                &value.then_body,
-                depth + 1,
-                max_depth,
-            )?;
-
-            if let Some(body) = &value.else_body {
-                validate_block_depth(
-                    body,
-                    depth + 1,
-                    max_depth,
-                )?;
-            }
-        }
-
-        GateBodyStatement::For(value) => {
-            validate_block_depth(
-                &value.body,
-                depth + 1,
-                max_depth,
-            )?;
-        }
-
-        GateBodyStatement::While(value) => {
-            validate_block_depth(
-                &value.body,
-                depth + 1,
-                max_depth,
-            )?;
-        }
-
-        GateBodyStatement::Switch(value) => {
-            for case in &value.cases {
-                validate_block_depth(
-                    &case.body,
-                    depth + 1,
-                    max_depth,
-                )?;
-            }
-
-            if let Some(body) = &value.default {
-                validate_block_depth(
-                    body,
-                    depth + 1,
-                    max_depth,
-                )?;
-            }
-        }
-
-        GateBodyStatement::Box(value) => {
-            for child in &value.body {
-                validate_statement_depth(
-                    child,
-                    depth + 1,
-                    max_depth,
-                )?;
-            }
-        }
-
-        GateBodyStatement::GateCall(_)
-        | GateBodyStatement::Barrier(_)
-        | GateBodyStatement::Delay(_)
-        | GateBodyStatement::Annotation(_) => {}
-    }
-
-    Ok(())
-}
-
-// -----------------------------------------------------------------------------
-// Source-independent classification helpers
-// -----------------------------------------------------------------------------
-
-impl Statement {
-    /// Returns true for operations that directly apply to quantum operands.
-    #[must_use]
-    pub const fn is_quantum_operation(&self) -> bool {
-        matches!(
-            self,
-            Self::GateCall(_)
-                | Self::Measurement(_)
-                | Self::Reset(_)
-                | Self::Barrier(_)
-                | Self::Delay(_)
-                | Self::Box(_)
-        )
-    }
-
-    /// Returns true when the statement defines a named symbol.
-    #[must_use]
-    pub fn defines_symbol(&self) -> bool {
-        matches!(
-            self,
-            Self::QuantumDeclaration(_)
-                | Self::ClassicalDeclaration(_)
-                | Self::VariableDeclaration(_)
-                | Self::AliasDeclaration(_)
-                | Self::GateDefinition(_)
-                | Self::SubroutineDefinition(_)
-                | Self::ExternDeclaration(_)
-                | Self::Defcal(_)
-        )
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Tests
-// -----------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn span() -> SourceSpan {
-        SourceSpan::new(
-            0,
-            0,
-            0,
-        )
-    }
-
-    #[test]
-    fn version_is_explicit() {
-        assert_eq!(
-            OpenQasmVersion::V3_0.to_string(),
-            "3.0"
-        );
-
-        assert_eq!(
-            OpenQasmVersion::V3_1.to_string(),
-            "3.1"
-        );
-    }
-
-    #[test]
-    fn version_source_text_is_stable() {
-        assert_eq!(
-            OpenQasmVersion::V3_0.source_text(),
-            "OPENQASM 3.0;"
-        );
-
-        assert_eq!(
-            OpenQasmVersion::V3_1.source_text(),
-            "OPENQASM 3.1;"
-        );
-    }
-
-    #[test]
-    fn gate_call_preserves_operand_order() {
-        let call = GateCall {
-            span: span(),
-            modifiers: Vec::new(),
-            name: Identifier::new(
-                span(),
-                "cx".to_owned(),
-            ),
-            parameters: Vec::new(),
-            operands: vec![
-                QuantumOperand::Identifier(
-                    Identifier::new(
-                        span(),
-                        "q".to_owned(),
-                    ),
-                ),
-                QuantumOperand::Indexed(
-                    IndexExpression {
-                        span: span(),
-                        target: Identifier::new(
-                            span(),
-                            "q".to_owned(),
-                        ),
-                        index: Expression::Literal(
-                            Literal::Integer(
-                                IntegerLiteral {
-                                    span: span(),
-                                    raw: "1".to_owned(),
-                                    base: IntegerBase::Decimal,
-                                },
-                            ),
-                        ),
-                    },
-                ),
-            ],
-        };
-
-        assert_eq!(call.operand_count(), 2);
-        assert_eq!(
-            call.parameters.len(),
-            0
-        );
-    }
-
-    #[test]
-    fn measurement_does_not_force_a_destination() {
-        let measurement = MeasurementStatement {
-            span: span(),
-            source: QuantumOperand::Identifier(
-                Identifier::new(
-                    span(),
-                    "q".to_owned(),
-                ),
-            ),
-            destination: None,
-        };
-
-        assert!(!measurement.has_destination());
-    }
-
-    #[test]
-    fn program_preserves_statement_order() {
-        let program = Program::new(
-            span(),
-            Some(VersionDeclaration {
-                span: span(),
-                version: OpenQasmVersion::V3_1,
-            }),
-            vec![
-                Statement::Empty(
-                    EmptyStatement {
-                        span: span(),
-                    },
-                ),
-                Statement::Empty(
-                    EmptyStatement {
-                        span: span(),
-                    },
-                ),
-            ],
-        );
-
-        assert_eq!(
-            program.statement_count(),
-            2
-        );
-    }
-
-    #[test]
-    fn nested_blocks_are_checked_against_depth() {
-        let program = Program::new(
-            span(),
-            None,
-            vec![
-                Statement::If(
-                    IfStatement {
-                        span: span(),
-                        condition:
-                            Expression::Literal(
-                                Literal::Bool {
-                                    span: span(),
-                                    value: true,
-                                },
-                            ),
-                        then_body: Block {
-                            span: span(),
-                            statements: vec![],
-                        },
-                        else_body: None,
-                    },
-                ),
-            ],
-        );
-
-        assert!(
-            program
-                .validate_structure(4)
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn statement_classification_is_source_level() {
-        let statement = Statement::GateCall(
-            GateCall {
-                span: span(),
-                modifiers: Vec::new(),
-                name: Identifier::new(
-                    span(),
-                    "h".to_owned(),
-                ),
-                parameters: Vec::new(),
-                operands: vec![],
-            },
-        );
-
-        assert!(
-            statement.is_quantum_operation()
-        );
+/// Convenience constructor for an integer expression.
+#[must_use]
+pub fn integer_expression(
+    literal: IntegerLiteral,
+) -> Expression {
+    Expression::Literal {
+        span: literal.span,
+        value: Literal::Integer(literal),
     }
 }
