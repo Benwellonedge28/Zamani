@@ -1,7 +1,7 @@
 //! Quantum frontend format contracts.
 //!
 //! This module defines the format-independent identity, version, capability,
-//! and feature model used by the quantum frontend.
+//! and compatibility model used by the Zamani quantum frontend.
 //!
 //! # Architectural boundary
 //!
@@ -21,24 +21,46 @@
 //!
 //! Concrete formats implement the contracts defined here.
 //!
-//! The intended dependency direction is:
+//! The dependency direction is:
 //!
 //! ```text
-//! Concrete format
+//! concrete format
 //!       │
 //!       ▼
 //! frontend::format
 //!       │
-//!       ├── importer contract
-//!       └── exporter contract
+//!       ├──────────────► importer contract
+//!       ├──────────────► exporter contract
+//!       └──────────────► lowering contract
 //!
-//! Concrete format
+//! concrete format
+//!       │
+//!       ▼
+//! frontend
 //!       │
 //!       ▼
 //! Zamani Quantum IR
 //! ```
 //!
 //! A format must never depend on another format.
+//!
+//! # Important semantic distinction
+//!
+//! A format capability describes what a format can express or transport.
+//! It does NOT guarantee that every construct expressible by that format can
+//! be represented by the canonical Zamani Quantum IR.
+//!
+//! Therefore:
+//!
+//! ```text
+//! format capability
+//!        ≠
+//! IR representability
+//!        ≠
+//! backend capability
+//! ```
+//!
+//! Those questions belong to separate layers.
 //!
 //! # Design goals
 //!
@@ -48,54 +70,59 @@
 //! - explicit version identity;
 //! - deterministic capability declarations;
 //! - feature-level capability queries;
-//! - safe comparison of format versions;
+//! - safe format-aware compatibility checks;
 //! - format-independent API contracts;
+//! - bounded metadata;
+//! - deterministic iteration;
 //! - no stringly-typed capability checks;
-//! - forward-compatible capability extension;
-//! - zero knowledge of concrete formats.
+//! - no concrete-format dependencies;
+//! - no filesystem/network/process/hardware access.
 //!
 //! # Rust compatibility
 //!
-//! This implementation targets Rust 1.97.1 and Rust 2021.
+//! This implementation targets:
+//!
+//! - Rust 1.97.1
+//! - Rust 2021
 //!
 //! # Stability
 //!
-//! `FormatId`, `FormatVersion`, `FormatCapability`, and
-//! `FormatCapabilities` are intended to form the stable frontend contract.
+//! The following types form the stable frontend format contract:
 //!
-//! Concrete format implementations should not expose their internal parser
-//! or AST types through this module.
+//! - [`FormatId`]
+//! - [`FormatVersion`]
+//! - [`FormatCapability`]
+//! - [`FormatCapabilities`]
+//! - [`FrontendFormat`]
+//! - [`FormatCompatibility`]
+//!
+//! Concrete format implementations should not expose their lexer, parser,
+//! validator, AST, or other internal implementation details through this
+//! module.
 
 use core::fmt;
 use core::str::FromStr;
 use std::collections::BTreeSet;
-use std::convert::Infallible;
 
-/// Result type used by operations that parse or construct format identifiers.
+/// Maximum number of bytes permitted in a format identifier.
 ///
-/// This alias intentionally uses `Infallible` because `FormatId` is currently
-/// a closed set of syntactically valid, owned identifiers represented by a
-/// normalized string.
-///
-/// Future registry-based APIs may introduce a dedicated validation error
-/// without changing the `FormatId` representation.
-pub type FormatResult<T> = Result<T, FormatError>;
-
-/// Maximum length of a format identifier in bytes.
-///
-/// This prevents accidentally creating enormous identifiers while keeping the
-/// limit generous enough for vendor and implementation-specific formats.
+/// Format identifiers are protocol identifiers rather than arbitrary user
+/// strings. The bound prevents accidental or maliciously oversized metadata.
 pub const MAX_FORMAT_ID_LENGTH: usize = 128;
 
-/// Maximum number of capabilities that may be stored in one capability set.
+/// Maximum number of capabilities permitted in one capability set.
 ///
-/// This is primarily a defensive bound for programmatically constructed
-/// capability sets.
+/// The value is deliberately much larger than the number of capabilities
+/// currently defined, allowing future extensions without changing the
+/// defensive invariant.
 pub const MAX_FORMAT_CAPABILITIES: usize = 256;
+
+/// Result used by fallible format-contract constructors.
+pub type FormatResult<T> = Result<T, FormatError>;
 
 /// Stable identifier for a frontend format.
 ///
-/// A `FormatId` identifies the *format family*, not a particular version.
+/// A `FormatId` identifies a format family, not a particular version.
 ///
 /// Examples:
 ///
@@ -105,35 +132,37 @@ pub const MAX_FORMAT_CAPABILITIES: usize = 256;
 /// quil
 /// ```
 ///
-/// Version information belongs in [`FormatVersion`].
+/// Version information belongs to [`FormatVersion`].
 ///
-/// The identifier is intentionally represented as an owned string so future
-/// formats can be added without modifying this file. This is important for
-/// independent format addition/removal.
+/// # Canonical representation
 ///
-/// # Normalization
-///
-/// Format identifiers:
+/// Format IDs:
 ///
 /// - are ASCII;
-/// - are lowercase;
-/// - may contain ASCII letters, digits, `-`, `_`, and `.`;
-/// - must begin with an ASCII letter;
-/// - must not contain whitespace;
-/// - must not exceed [`MAX_FORMAT_ID_LENGTH`] bytes.
+/// - are normalized to lowercase;
+/// - begin with an ASCII letter;
+/// - may contain ASCII letters;
+/// - may contain ASCII digits;
+/// - may contain `-`, `_`, and `.` after the first character;
+/// - contain no whitespace;
+/// - contain no control characters;
+/// - do not exceed [`MAX_FORMAT_ID_LENGTH`] bytes.
 ///
 /// The canonical representation is returned by [`FormatId::as_str`].
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FormatId(String);
 
 impl FormatId {
-    /// Creates a validated format identifier.
+    /// Creates and validates a format identifier.
     ///
-    /// The input is normalized to ASCII lowercase before validation.
+    /// ASCII letters are normalized to lowercase.
     ///
-    /// This function is deliberately strict. Format identifiers are protocol
-    /// identifiers, not user-facing display names.
-    pub fn new(value: impl AsRef<str>) -> Result<Self, FormatError> {
+    /// # Errors
+    ///
+    /// Returns [`FormatError`] when the identifier is empty, too long,
+    /// non-ASCII, begins with an invalid character, or contains unsupported
+    /// characters.
+    pub fn new(value: impl AsRef<str>) -> FormatResult<Self> {
         let value = value.as_ref();
 
         if value.is_empty() {
@@ -165,10 +194,12 @@ impl FormatId {
             });
         }
 
-        if !normalized
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_' || byte == b'.')
-        {
+        if !normalized.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || byte == b'-'
+                || byte == b'_'
+                || byte == b'.'
+        }) {
             return Err(FormatError::InvalidFormatIdCharacters {
                 value: normalized,
             });
@@ -177,10 +208,10 @@ impl FormatId {
         Ok(Self(normalized))
     }
 
-    /// Returns the canonical format identifier.
+    /// Returns the canonical identifier.
     #[inline]
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.0.as_str()
     }
 
     /// Consumes the identifier and returns its owned string.
@@ -215,23 +246,24 @@ impl FromStr for FormatId {
 
 /// Version of a frontend format.
 ///
-/// Versions are intentionally represented numerically rather than as arbitrary
-/// strings so callers can perform deterministic compatibility checks.
+/// Versions are represented numerically so callers can perform deterministic
+/// comparisons without parsing version strings.
 ///
 /// For example:
 ///
 /// ```text
-/// 3.0
-/// 3.1
+/// 3.0.0
+/// 3.1.0
+/// 4.0.0
 /// ```
 ///
-/// `patch` is optional in the semantic sense but always stored explicitly as
-/// zero when absent.
+/// A two-component version such as `3.1` is represented as `3.1.0`.
 ///
-/// Pre-release/build metadata is deliberately not part of this primitive
-/// contract. Concrete formats that need richer version semantics should own
-/// that representation while exposing a normalized [`FormatVersion`] here.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+/// Pre-release and build metadata are intentionally outside this primitive
+/// contract. Concrete formats that require richer version semantics may keep
+/// their richer representation internally and expose a normalized
+/// [`FormatVersion`] here.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FormatVersion {
     major: u32,
     minor: u32,
@@ -239,7 +271,7 @@ pub struct FormatVersion {
 }
 
 impl FormatVersion {
-    /// Creates a new format version.
+    /// Creates a complete format version.
     pub const fn new(major: u32, minor: u32, patch: u32) -> Self {
         Self {
             major,
@@ -253,76 +285,69 @@ impl FormatVersion {
         Self::new(major, minor, 0)
     }
 
-    /// Returns the major version.
+    /// Returns the major component.
     #[inline]
     pub const fn major(self) -> u32 {
         self.major
     }
 
-    /// Returns the minor version.
+    /// Returns the minor component.
     #[inline]
     pub const fn minor(self) -> u32 {
         self.minor
     }
 
-    /// Returns the patch version.
+    /// Returns the patch component.
     #[inline]
     pub const fn patch(self) -> u32 {
         self.patch
     }
 
-    /// Returns `true` when this version has the same major component as
-    /// `other`.
+    /// Returns whether both versions have the same major component.
     ///
-    /// Major-version compatibility is only a coarse classification. Concrete
-    /// format implementations must still perform feature/capability checks.
+    /// This is only a coarse compatibility signal. It does not mean that the
+    /// two versions are semantically interchangeable.
     #[inline]
     pub const fn same_major(self, other: Self) -> bool {
         self.major == other.major
     }
 
-    /// Returns `true` when this version is older than `other`.
+    /// Returns whether this version is older than `other`.
     #[inline]
     pub const fn is_older_than(self, other: Self) -> bool {
-        self.major < other.major
-            || (self.major == other.major && self.minor < other.minor)
-            || (self.major == other.major
-                && self.minor == other.minor
-                && self.patch < other.patch)
+        self < other
     }
 
-    /// Returns `true` when this version is newer than `other`.
+    /// Returns whether this version is newer than `other`.
     #[inline]
     pub const fn is_newer_than(self, other: Self) -> bool {
-        self.major > other.major
-            || (self.major == other.major && self.minor > other.minor)
-            || (self.major == other.major
-                && self.minor == other.minor
-                && self.patch > other.patch)
+        self > other
     }
 }
 
 impl fmt::Display for FormatVersion {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}.{}.{}", self.major, self.minor, self.patch)
+        write!(
+            formatter,
+            "{}.{}.{}",
+            self.major, self.minor, self.patch
+        )
     }
 }
 
-/// A single capability that a frontend format may advertise.
+/// A capability advertised by a frontend format.
 ///
-/// Capabilities describe what a format implementation can represent, import,
-/// or export. They do **not** assert that every program using the feature can
-/// necessarily be lowered to the canonical Zamani IR.
+/// Capabilities describe format-level expressive or interchange features.
 ///
-/// This distinction is important:
+/// They do not guarantee that:
 ///
-/// ```text
-/// Format capability
-///        ≠
-/// IR representability
-/// ```
+/// - the Zamani IR can represent every instance;
+/// - a backend can execute the construct;
+/// - lowering is lossless;
+/// - optimization preserves the construct;
+/// - export is possible for every IR operation.
 ///
-/// Lowering remains the responsibility of the importer/lowering boundary.
+/// Those concerns belong to their respective layers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum FormatCapability {
     /// The format can be imported into Zamani.
@@ -331,7 +356,7 @@ pub enum FormatCapability {
     /// The format can be exported from Zamani.
     Export,
 
-    /// The format supports parameterized quantum operations.
+    /// The format supports parameterized operations.
     Parameters,
 
     /// The format supports measurement operations.
@@ -361,10 +386,10 @@ pub enum FormatCapability {
     /// The format supports subroutines/functions.
     Subroutines,
 
-    /// The format supports named includes/imports.
+    /// The format supports include/import declarations.
     Includes,
 
-    /// The format supports explicit timing constructs.
+    /// The format supports timing constructs.
     Timing,
 
     /// The format supports delay constructs.
@@ -376,39 +401,39 @@ pub enum FormatCapability {
     /// The format supports pulse-level constructs.
     Pulse,
 
-    /// The format supports annotations or directives.
+    /// The format supports annotations/directives/pragmas.
     Annotations,
 
-    /// The format can represent classical integer values.
+    /// The format supports classical integer values.
     ClassicalIntegers,
 
-    /// The format can represent classical floating-point values.
+    /// The format supports classical floating-point values.
     ClassicalFloats,
 
-    /// The format can represent boolean values.
+    /// The format supports boolean values.
     ClassicalBooleans,
 
-    /// The format can represent arrays.
+    /// The format supports arrays.
     Arrays,
 
-    /// The format can represent arbitrary classical expressions.
+    /// The format supports classical expressions.
     Expressions,
 
-    /// The format can preserve source-level symbolic names.
+    /// The format preserves symbolic identifiers.
     SymbolicNames,
 
-    /// The format supports explicit qubit/register declarations.
+    /// The format supports explicit qubit/bit/register declarations.
     RegisterDeclarations,
 
     /// The format supports dynamic resource allocation.
     DynamicResources,
 
-    /// The format supports physical-qubit references.
+    /// The format supports explicit physical-qubit references.
     PhysicalQubits,
 }
 
 impl FormatCapability {
-    /// Returns a stable machine-readable capability name.
+    /// Returns the stable machine-readable name of the capability.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Import => "import",
@@ -448,14 +473,10 @@ impl fmt::Display for FormatCapability {
     }
 }
 
-/// A deterministic set of capabilities advertised by a format implementation.
+/// Deterministic set of capabilities advertised by a format.
 ///
-/// Internally this uses `BTreeSet`, not `HashSet`, so iteration and formatting
-/// are deterministic across executions.
-///
-/// This is intentionally a value type rather than a global registry. A format
-/// implementation can construct its capabilities without modifying central
-/// frontend code.
+/// A `BTreeSet` is deliberately used instead of `HashSet` so externally
+/// observable iteration and formatting remain deterministic between runs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FormatCapabilities {
     capabilities: BTreeSet<FormatCapability>,
@@ -469,8 +490,10 @@ impl FormatCapabilities {
         }
     }
 
-    /// Creates a capability set containing the supplied capabilities.
-    pub fn from_iter<I>(capabilities: I) -> Result<Self, FormatError>
+    /// Creates a capability set from an iterator.
+    ///
+    /// Duplicate capabilities are harmless and are collapsed.
+    pub fn from_iter<I>(capabilities: I) -> FormatResult<Self>
     where
         I: IntoIterator<Item = FormatCapability>,
     {
@@ -484,7 +507,9 @@ impl FormatCapabilities {
     }
 
     /// Adds one capability.
-    pub fn insert(&mut self, capability: FormatCapability) -> Result<(), FormatError> {
+    ///
+    /// Duplicate insertion is idempotent.
+    pub fn insert(&mut self, capability: FormatCapability) -> FormatResult<()> {
         if !self.capabilities.contains(&capability)
             && self.capabilities.len() >= MAX_FORMAT_CAPABILITIES
         {
@@ -497,12 +522,14 @@ impl FormatCapabilities {
         Ok(())
     }
 
-    /// Removes one capability.
+    /// Removes a capability.
+    ///
+    /// Returns `true` when the capability existed.
     pub fn remove(&mut self, capability: FormatCapability) -> bool {
         self.capabilities.remove(&capability)
     }
 
-    /// Returns whether a capability is present.
+    /// Returns whether the capability exists.
     #[inline]
     pub fn supports(&self, capability: FormatCapability) -> bool {
         self.capabilities.contains(&capability)
@@ -514,25 +541,24 @@ impl FormatCapabilities {
         self.capabilities.len()
     }
 
-    /// Returns whether no capabilities are advertised.
+    /// Returns whether the capability set is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.capabilities.is_empty()
     }
 
-    /// Returns capabilities in deterministic order.
+    /// Returns capabilities in deterministic enum order.
     pub fn iter(&self) -> impl Iterator<Item = FormatCapability> + '_ {
         self.capabilities.iter().copied()
     }
 
-    /// Returns the underlying capabilities as a slice-like deterministic
-    /// vector.
+    /// Returns the capabilities as a deterministic vector.
     pub fn to_vec(&self) -> Vec<FormatCapability> {
         self.iter().collect()
     }
 
-    /// Returns a new set containing capabilities from both sets.
-    pub fn union(&self, other: &Self) -> Result<Self, FormatError> {
+    /// Returns a new capability set containing the union of both sets.
+    pub fn union(&self, other: &Self) -> FormatResult<Self> {
         let mut result = self.clone();
 
         for capability in other.iter() {
@@ -542,12 +568,23 @@ impl FormatCapabilities {
         Ok(result)
     }
 
-    /// Returns whether this set contains every capability in `required`.
+    /// Returns whether every capability in `required` is available.
     pub fn contains_all(&self, required: &Self) -> bool {
         required
             .capabilities
             .iter()
             .all(|capability| self.capabilities.contains(capability))
+    }
+
+    /// Returns the capabilities that are present in `required` but absent from
+    /// this set.
+    pub fn missing_from(&self, required: &Self) -> Vec<FormatCapability> {
+        required
+            .capabilities
+            .iter()
+            .copied()
+            .filter(|capability| !self.capabilities.contains(capability))
+            .collect()
     }
 }
 
@@ -557,21 +594,24 @@ impl Default for FormatCapabilities {
     }
 }
 
-/// Stable description of a frontend format.
+/// Stable description of one frontend format revision.
 ///
-/// `FrontendFormat` is deliberately descriptive rather than executable.
+/// `FrontendFormat` is descriptive only.
 ///
-/// It tells the frontend system:
+/// It does not contain:
 ///
-/// - which format this is;
-/// - which version is represented;
-/// - what the implementation claims to support.
+/// - a parser;
+/// - a lexer;
+/// - an importer;
+/// - an exporter;
+/// - an AST;
+/// - a validator;
+/// - a Quantum IR object.
 ///
-/// It does **not** contain an importer or exporter object. Those belong to
-/// `importer.rs` and `exporter.rs`.
+/// Those belong to other layers.
 ///
-/// This separation prevents the format identity layer from becoming coupled
-/// to concrete implementations.
+/// This separation prevents the format contract from becoming coupled to
+/// concrete frontend implementations.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FrontendFormat {
     id: FormatId,
@@ -580,7 +620,7 @@ pub struct FrontendFormat {
 }
 
 impl FrontendFormat {
-    /// Creates a format descriptor.
+    /// Creates a format descriptor from already validated components.
     pub fn new(
         id: FormatId,
         version: FormatVersion,
@@ -593,7 +633,7 @@ impl FrontendFormat {
         }
     }
 
-    /// Returns the stable format identifier.
+    /// Returns the format-family identifier.
     #[inline]
     pub fn id(&self) -> &FormatId {
         &self.id
@@ -611,32 +651,53 @@ impl FrontendFormat {
         &self.capabilities
     }
 
-    /// Returns whether this format supports the requested capability.
+    /// Returns whether this format supports a capability.
     #[inline]
     pub fn supports(&self, capability: FormatCapability) -> bool {
         self.capabilities.supports(capability)
     }
 
-    /// Returns whether this descriptor represents the same format family as
-    /// another descriptor.
+    /// Returns whether two descriptors belong to the same format family.
+    ///
+    /// Version differences do not affect this result.
     #[inline]
     pub fn same_format(&self, other: &Self) -> bool {
         self.id == other.id
     }
 
-    /// Returns whether the descriptor represents exactly the same format
-    /// family and version.
+    /// Returns whether two descriptors identify the exact same format revision.
     #[inline]
     pub fn same_revision(&self, other: &Self) -> bool {
         self.id == other.id && self.version == other.version
     }
 
-    /// Returns a deterministic compatibility decision based on the format
-    /// identity and requested capabilities.
+    /// Compares this descriptor with another complete format descriptor.
     ///
-    /// This deliberately does not make assumptions about semantic
-    /// compatibility between arbitrary versions. Concrete formats may impose
-    /// stricter rules.
+    /// This is the preferred compatibility API because it verifies the
+    /// format identity as well as version and capabilities.
+    pub fn compatibility_with_format(
+        &self,
+        requested: &FrontendFormat,
+        required_capabilities: &FormatCapabilities,
+    ) -> FormatCompatibility {
+        if self.id != requested.id {
+            return FormatCompatibility::DifferentFormat;
+        }
+
+        self.compatibility_with(
+            requested.version,
+            required_capabilities,
+        )
+    }
+
+    /// Compares this descriptor with a requested version and required
+    /// capabilities.
+    ///
+    /// This method assumes the caller has already established that both
+    /// descriptors refer to the same format family.
+    ///
+    /// For a comparison where format identity must be enforced, use
+    /// [`FrontendFormat::compatibility_with_format`].
     pub fn compatibility_with(
         &self,
         requested_version: FormatVersion,
@@ -658,40 +719,59 @@ impl FrontendFormat {
             FormatCompatibility::IncompatibleVersion
         }
     }
+
+    /// Returns the capabilities required by the caller but unavailable in this
+    /// descriptor.
+    pub fn missing_capabilities(
+        &self,
+        required: &FormatCapabilities,
+    ) -> Vec<FormatCapability> {
+        self.capabilities.missing_from(required)
+    }
 }
 
-/// Result of comparing a format descriptor with a requested version/capability
-/// set.
+/// Result of comparing a format descriptor with another format/version and a
+/// required capability set.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FormatCompatibility {
-    /// Exact version and all required capabilities are available.
+    /// The requested format family and exact version are available and all
+    /// required capabilities are present.
     Exact,
 
-    /// Exact version exists, but one or more requested capabilities are
-    /// unavailable.
+    /// The exact requested version exists but one or more required
+    /// capabilities are unavailable.
     ExactVersionMissingCapabilities,
 
-    /// A different version with the same major version is available and all
-    /// requested capabilities are present.
+    /// The format family matches and a different version with the same major
+    /// version is available with all required capabilities.
     SameMajorVersion,
 
-    /// Same major version is available, but requested capabilities are missing.
+    /// The format family matches and a same-major version is available, but
+    /// one or more required capabilities are unavailable.
     SameMajorVersionMissingCapabilities,
 
-    /// The available and requested major versions differ.
+    /// The format family is different.
+    ///
+    /// This state is intentionally distinct from an incompatible version.
+    /// Version numbers have meaning only within a format family.
+    DifferentFormat,
+
+    /// The same format family was requested but the major versions differ.
     IncompatibleVersion,
 }
 
 impl FormatCompatibility {
-    /// Returns `true` only for an exact match.
+    /// Returns `true` only when the requested format and version are exact and
+    /// all required capabilities are present.
     #[inline]
     pub const fn is_exact(self) -> bool {
         matches!(self, Self::Exact)
     }
 
-    /// Returns `true` when the versions are considered potentially compatible.
+    /// Returns whether the format family is the same and the version relationship
+    /// is exact or same-major.
     ///
-    /// Capability deficiencies still need to be handled separately.
+    /// Capability deficiencies do not make this return `false`.
     #[inline]
     pub const fn same_major(self) -> bool {
         matches!(
@@ -703,7 +783,7 @@ impl FormatCompatibility {
         )
     }
 
-    /// Returns `true` when requested capabilities are missing.
+    /// Returns whether one or more required capabilities are unavailable.
     #[inline]
     pub const fn missing_capabilities(self) -> bool {
         matches!(
@@ -713,46 +793,83 @@ impl FormatCompatibility {
         )
     }
 
-    /// Returns `true` when the version relationship is incompatible.
+    /// Returns whether the requested format family differs from the available
+    /// format family.
+    #[inline]
+    pub const fn different_format(self) -> bool {
+        matches!(self, Self::DifferentFormat)
+    }
+
+    /// Returns whether the same format family was requested but the major
+    /// versions are incompatible.
     #[inline]
     pub const fn incompatible_version(self) -> bool {
         matches!(self, Self::IncompatibleVersion)
+    }
+
+    /// Returns whether this result can be accepted as an exact supported
+    /// request without further negotiation.
+    #[inline]
+    pub const fn is_acceptable(self) -> bool {
+        matches!(self, Self::Exact)
+    }
+
+    /// Returns whether this result requires capability negotiation or explicit
+    /// unsupported-feature handling.
+    #[inline]
+    pub const fn requires_negotiation(self) -> bool {
+        matches!(
+            self,
+            Self::ExactVersionMissingCapabilities
+                | Self::SameMajorVersion
+                | Self::SameMajorVersionMissingCapabilities
+        )
+    }
+
+    /// Returns whether the request cannot be satisfied by this format
+    /// descriptor.
+    #[inline]
+    pub const fn is_incompatible(self) -> bool {
+        matches!(
+            self,
+            Self::DifferentFormat | Self::IncompatibleVersion
+        )
     }
 }
 
 /// Errors produced while constructing format-independent descriptors.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FormatError {
-    /// The format identifier was empty.
+    /// The format identifier is empty.
     EmptyFormatId,
 
-    /// The format identifier exceeded the maximum permitted length.
+    /// The format identifier is longer than the permitted limit.
     FormatIdTooLong {
         /// Maximum permitted length.
         max: usize,
 
-        /// Actual length.
+        /// Actual identifier length.
         actual: usize,
     },
 
-    /// Format identifiers must be ASCII.
+    /// The format identifier contains non-ASCII characters.
     NonAsciiFormatId,
 
-    /// The first character was not an ASCII letter.
+    /// The first identifier character is not an ASCII letter.
     InvalidFormatIdStart {
-        /// Normalized invalid identifier.
+        /// Invalid normalized identifier.
         value: String,
     },
 
-    /// The identifier contains an unsupported character.
+    /// The identifier contains unsupported characters.
     InvalidFormatIdCharacters {
-        /// Normalized invalid identifier.
+        /// Invalid normalized identifier.
         value: String,
     },
 
-    /// A capability set exceeded the defensive maximum.
+    /// The capability set exceeded its defensive maximum.
     TooManyCapabilities {
-        /// Maximum number of capabilities.
+        /// Maximum permitted capability count.
         max: usize,
     },
 }
@@ -763,27 +880,37 @@ impl fmt::Display for FormatError {
             Self::EmptyFormatId => {
                 formatter.write_str("format identifier must not be empty")
             }
+
             Self::FormatIdTooLong { max, actual } => {
                 write!(
                     formatter,
-                    "format identifier exceeds maximum length: maximum={max}, actual={actual}"
+                    "format identifier exceeds maximum length: \
+                     maximum={max}, actual={actual}"
                 )
             }
+
             Self::NonAsciiFormatId => {
-                formatter.write_str("format identifier must contain only ASCII characters")
+                formatter.write_str(
+                    "format identifier must contain only ASCII characters",
+                )
             }
+
             Self::InvalidFormatIdStart { value } => {
                 write!(
                     formatter,
-                    "format identifier must begin with an ASCII letter: {value:?}"
+                    "format identifier must begin with an ASCII \
+                     letter: {value:?}"
                 )
             }
+
             Self::InvalidFormatIdCharacters { value } => {
                 write!(
                     formatter,
-                    "format identifier contains unsupported characters: {value:?}"
+                    "format identifier contains unsupported \
+                     characters: {value:?}"
                 )
             }
+
             Self::TooManyCapabilities { max } => {
                 write!(
                     formatter,
@@ -796,16 +923,16 @@ impl fmt::Display for FormatError {
 
 impl std::error::Error for FormatError {}
 
-/// Convenience constructor for a format descriptor.
+/// Defines a validated frontend format descriptor.
 ///
-/// This function intentionally returns a `Result` so future validation rules
-/// can be introduced without changing callers that already use the fallible
-/// constructor pattern.
+/// This is the preferred constructor for concrete format modules because it
+/// validates the externally supplied format identifier before constructing the
+/// descriptor.
 pub fn define_format(
     id: impl AsRef<str>,
     version: FormatVersion,
     capabilities: FormatCapabilities,
-) -> Result<FrontendFormat, FormatError> {
+) -> FormatResult<FrontendFormat> {
     Ok(FrontendFormat::new(
         FormatId::new(id)?,
         version,
@@ -813,37 +940,12 @@ pub fn define_format(
     ))
 }
 
-/// Creates a capability set from a fixed array.
-///
-/// This is useful for concrete formats while keeping construction concise.
-///
-/// # Example
-///
-/// ```
-/// # use crate::quantum::frontend::format::{
-/// #     capabilities, FormatCapability,
-/// # };
-/// let caps = capabilities(&[
-///     FormatCapability::Import,
-///     FormatCapability::Export,
-/// ]);
-/// assert!(caps.is_ok());
-/// ```
+/// Convenience constructor for deterministic capability sets.
 pub fn capabilities(
     values: &[FormatCapability],
-) -> Result<FormatCapabilities, FormatError> {
+) -> FormatResult<FormatCapabilities> {
     FormatCapabilities::from_iter(values.iter().copied())
 }
-
-/// Compile-time assertion that `FormatVersion` remains cheaply copyable.
-///
-/// This is intentionally expressed through a function rather than relying on
-/// unstable compile-time reflection.
-const _: fn(FormatVersion) -> FormatVersion = |version| version;
-
-/// Compile-time assertion for the `Infallible` import kept intentionally out
-/// of the public API surface.
-const _: fn(Result<(), Infallible>) -> Result<(), Infallible> = |value| value;
 
 #[cfg(test)]
 mod tests {
@@ -851,46 +953,85 @@ mod tests {
 
     #[test]
     fn format_id_normalizes_ascii_case() {
-        let id = FormatId::new("OpenQASM").expect("valid format id");
+        let id = FormatId::new("OpenQASM").expect("valid format ID");
 
         assert_eq!(id.as_str(), "openqasm");
     }
 
     #[test]
-    fn format_id_accepts_supported_identifier_characters() {
+    fn format_id_accepts_valid_identifiers() {
         assert!(FormatId::new("openqasm").is_ok());
         assert!(FormatId::new("qir").is_ok());
+        assert!(FormatId::new("quil").is_ok());
         assert!(FormatId::new("vendor-format").is_ok());
         assert!(FormatId::new("vendor_format").is_ok());
         assert!(FormatId::new("vendor.format").is_ok());
         assert!(FormatId::new("format2").is_ok());
+        assert!(FormatId::new("a").is_ok());
     }
 
     #[test]
-    fn format_id_rejects_invalid_values() {
+    fn format_id_rejects_empty_identifier() {
         assert_eq!(
-            FormatId::new("").expect_err("empty identifier must fail"),
+            FormatId::new("")
+                .expect_err("empty ID must fail"),
             FormatError::EmptyFormatId
         );
+    }
 
+    #[test]
+    fn format_id_rejects_identifier_starting_with_digit() {
         assert!(matches!(
             FormatId::new("1qasm"),
             Err(FormatError::InvalidFormatIdStart { .. })
         ));
+    }
 
+    #[test]
+    fn format_id_rejects_identifier_starting_with_symbol() {
+        assert!(matches!(
+            FormatId::new("_qasm"),
+            Err(FormatError::InvalidFormatIdStart { .. })
+        ));
+    }
+
+    #[test]
+    fn format_id_rejects_whitespace() {
         assert!(matches!(
             FormatId::new("open qasm"),
             Err(FormatError::InvalidFormatIdCharacters { .. })
         ));
+    }
 
+    #[test]
+    fn format_id_rejects_non_ascii() {
         assert_eq!(
-            FormatId::new("qåsm").expect_err("non-ascii identifier must fail"),
+            FormatId::new("qåsm")
+                .expect_err("non-ASCII ID must fail"),
             FormatError::NonAsciiFormatId
         );
     }
 
     #[test]
-    fn format_id_is_case_insensitive_at_construction() {
+    fn format_id_rejects_control_characters() {
+        assert!(matches!(
+            FormatId::new("qasm\n"),
+            Err(FormatError::InvalidFormatIdCharacters { .. })
+        ));
+    }
+
+    #[test]
+    fn format_id_rejects_overlong_identifier() {
+        let value = "a".repeat(MAX_FORMAT_ID_LENGTH + 1);
+
+        assert!(matches!(
+            FormatId::new(value),
+            Err(FormatError::FormatIdTooLong { .. })
+        ));
+    }
+
+    #[test]
+    fn equivalent_identifier_case_has_same_identity() {
         let lower = FormatId::new("openqasm").expect("valid");
         let upper = FormatId::new("OPENQASM").expect("valid");
 
@@ -898,24 +1039,68 @@ mod tests {
     }
 
     #[test]
-    fn format_version_orders_correctly() {
+    fn format_id_display_is_canonical() {
+        let id = FormatId::new("OpenQASM").expect("valid");
+
+        assert_eq!(id.to_string(), "openqasm");
+    }
+
+    #[test]
+    fn format_id_from_str_works() {
+        let id: FormatId = "OpenQASM"
+            .parse()
+            .expect("valid format ID");
+
+        assert_eq!(id.as_str(), "openqasm");
+    }
+
+    #[test]
+    fn format_version_constructor_is_correct() {
+        let version = FormatVersion::new(3, 1, 2);
+
+        assert_eq!(version.major(), 3);
+        assert_eq!(version.minor(), 1);
+        assert_eq!(version.patch(), 2);
+    }
+
+    #[test]
+    fn format_version_major_minor_sets_zero_patch() {
+        let version = FormatVersion::major_minor(3, 1);
+
+        assert_eq!(version, FormatVersion::new(3, 1, 0));
+    }
+
+    #[test]
+    fn format_version_ordering_is_numeric() {
+        let v300 = FormatVersion::new(3, 0, 0);
+        let v301 = FormatVersion::new(3, 0, 1);
+        let v310 = FormatVersion::new(3, 1, 0);
+        let v400 = FormatVersion::new(4, 0, 0);
+
+        assert!(v300 < v301);
+        assert!(v301 < v310);
+        assert!(v310 < v400);
+    }
+
+    #[test]
+    fn format_version_helpers_are_correct() {
         let v30 = FormatVersion::new(3, 0, 0);
         let v31 = FormatVersion::new(3, 1, 0);
-        let v310 = FormatVersion::new(3, 1, 0);
         let v40 = FormatVersion::new(4, 0, 0);
 
         assert!(v30.is_older_than(v31));
         assert!(v40.is_newer_than(v31));
-        assert_eq!(v31, v310);
-        assert!(v31.same_major(v30));
-        assert!(!v31.same_major(v40));
+
+        assert!(v30.same_major(v31));
+        assert!(!v30.same_major(v40));
     }
 
     #[test]
-    fn format_version_formats_deterministically() {
-        let version = FormatVersion::new(3, 1, 0);
-
-        assert_eq!(version.to_string(), "3.1.0");
+    fn format_version_display_is_deterministic() {
+        assert_eq!(
+            FormatVersion::new(3, 1, 0).to_string(),
+            "3.1.0"
+        );
     }
 
     #[test]
@@ -925,28 +1110,36 @@ mod tests {
             FormatCapability::Import,
             FormatCapability::Measurements,
         ])
-        .expect("valid capabilities");
+        .expect("valid capability set");
 
-        let names: Vec<_> = caps.iter().map(FormatCapability::as_str).collect();
+        let names: Vec<&str> = caps
+            .iter()
+            .map(FormatCapability::as_str)
+            .collect();
 
         assert_eq!(
             names,
-            vec!["import", "export", "measurements"]
+            vec![
+                "import",
+                "export",
+                "measurements",
+            ]
         );
     }
 
     #[test]
-    fn capability_sets_support_membership_queries() {
+    fn capabilities_support_membership_queries() {
         let caps = capabilities(&[
             FormatCapability::Import,
             FormatCapability::Export,
             FormatCapability::Measurements,
         ])
-        .expect("valid capabilities");
+        .expect("valid capability set");
 
         assert!(caps.supports(FormatCapability::Import));
         assert!(caps.supports(FormatCapability::Export));
         assert!(caps.supports(FormatCapability::Measurements));
+
         assert!(!caps.supports(FormatCapability::Pulse));
     }
 
@@ -956,21 +1149,39 @@ mod tests {
             FormatCapability::Import,
             FormatCapability::Import,
             FormatCapability::Export,
+            FormatCapability::Export,
         ])
-        .expect("valid capabilities");
+        .expect("valid capability set");
 
         assert_eq!(caps.len(), 2);
     }
 
     #[test]
-    fn capability_union_is_deterministic() {
+    fn removing_capability_is_correct() {
+        let mut caps = capabilities(&[
+            FormatCapability::Import,
+            FormatCapability::Export,
+        ])
+        .expect("valid capability set");
+
+        assert!(caps.remove(FormatCapability::Import));
+        assert!(!caps.supports(FormatCapability::Import));
+        assert!(!caps.remove(FormatCapability::Import));
+    }
+
+    #[test]
+    fn capability_union_is_correct() {
         let first =
-            capabilities(&[FormatCapability::Import]).expect("valid capabilities");
+            capabilities(&[FormatCapability::Import])
+                .expect("valid capability set");
 
         let second =
-            capabilities(&[FormatCapability::Export]).expect("valid capabilities");
+            capabilities(&[FormatCapability::Export])
+                .expect("valid capability set");
 
-        let combined = first.union(&second).expect("union must succeed");
+        let combined =
+            first.union(&second)
+                .expect("union must succeed");
 
         assert!(combined.supports(FormatCapability::Import));
         assert!(combined.supports(FormatCapability::Export));
@@ -978,65 +1189,154 @@ mod tests {
     }
 
     #[test]
-    fn contains_all_checks_required_capabilities() {
+    fn contains_all_accepts_complete_requirement() {
         let available = capabilities(&[
             FormatCapability::Import,
             FormatCapability::Export,
             FormatCapability::Measurements,
         ])
-        .expect("valid capabilities");
+        .expect("valid");
 
-        let required =
-            capabilities(&[FormatCapability::Import, FormatCapability::Export])
-                .expect("valid capabilities");
+        let required = capabilities(&[
+            FormatCapability::Import,
+            FormatCapability::Export,
+        ])
+        .expect("valid");
 
         assert!(available.contains_all(&required));
     }
 
     #[test]
-    fn contains_all_rejects_missing_capabilities() {
+    fn contains_all_rejects_missing_requirement() {
         let available =
-            capabilities(&[FormatCapability::Import]).expect("valid capabilities");
+            capabilities(&[FormatCapability::Import])
+                .expect("valid");
 
-        let required =
-            capabilities(&[FormatCapability::Import, FormatCapability::Export])
-                .expect("valid capabilities");
+        let required = capabilities(&[
+            FormatCapability::Import,
+            FormatCapability::Export,
+        ])
+        .expect("valid");
 
         assert!(!available.contains_all(&required));
     }
 
     #[test]
-    fn frontend_format_preserves_identity_version_and_capabilities() {
+    fn missing_from_returns_only_missing_capabilities() {
+        let available =
+            capabilities(&[FormatCapability::Import])
+                .expect("valid");
+
+        let required = capabilities(&[
+            FormatCapability::Import,
+            FormatCapability::Export,
+            FormatCapability::Measurements,
+        ])
+        .expect("valid");
+
+        assert_eq!(
+            available.missing_from(&required),
+            vec![
+                FormatCapability::Export,
+                FormatCapability::Measurements,
+            ]
+        );
+    }
+
+    #[test]
+    fn frontend_format_preserves_identity() {
         let caps = capabilities(&[
             FormatCapability::Import,
             FormatCapability::Export,
             FormatCapability::Parameters,
         ])
-        .expect("valid capabilities");
+        .expect("valid");
 
-        let format =
-            define_format("OpenQASM", FormatVersion::major_minor(3, 1), caps)
-                .expect("valid format");
+        let format = define_format(
+            "OpenQASM",
+            FormatVersion::major_minor(3, 1),
+            caps,
+        )
+        .expect("valid format");
 
         assert_eq!(format.id().as_str(), "openqasm");
-        assert_eq!(format.version(), FormatVersion::new(3, 1, 0));
+        assert_eq!(
+            format.version(),
+            FormatVersion::new(3, 1, 0)
+        );
         assert!(format.supports(FormatCapability::Parameters));
     }
 
     #[test]
-    fn exact_compatibility_is_reported() {
-        let caps = capabilities(&[
+    fn same_format_ignores_version() {
+        let caps = FormatCapabilities::new();
+
+        let first = define_format(
+            "openqasm",
+            FormatVersion::new(3, 0, 0),
+            caps.clone(),
+        )
+        .expect("valid");
+
+        let second = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            caps,
+        )
+        .expect("valid");
+
+        assert!(first.same_format(&second));
+        assert!(!first.same_revision(&second));
+    }
+
+    #[test]
+    fn different_format_is_detected() {
+        let caps = FormatCapabilities::new();
+
+        let openqasm = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            caps.clone(),
+        )
+        .expect("valid");
+
+        let qir = define_format(
+            "qir",
+            FormatVersion::new(1, 0, 0),
+            caps,
+        )
+        .expect("valid");
+
+        assert!(!openqasm.same_format(&qir));
+        assert!(!openqasm.same_revision(&qir));
+    }
+
+    #[test]
+    fn exact_compatibility_requires_capabilities() {
+        let available = capabilities(&[
             FormatCapability::Import,
             FormatCapability::Export,
         ])
-        .expect("valid capabilities");
+        .expect("valid");
 
-        let format =
-            define_format("qir", FormatVersion::new(1, 0, 0), caps.clone())
-                .expect("valid format");
+        let required = capabilities(&[
+            FormatCapability::Import,
+            FormatCapability::Export,
+        ])
+        .expect("valid");
+
+        let format = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            available,
+        )
+        .expect("valid");
 
         assert_eq!(
-            format.compatibility_with(FormatVersion::new(1, 0, 0), &caps),
+            format.compatibility_with(
+                FormatVersion::new(3, 1, 0),
+                &required,
+            ),
             FormatCompatibility::Exact
         );
     }
@@ -1044,108 +1344,258 @@ mod tests {
     #[test]
     fn exact_version_with_missing_capability_is_reported() {
         let available =
-            capabilities(&[FormatCapability::Import]).expect("valid capabilities");
+            capabilities(&[FormatCapability::Import])
+                .expect("valid");
 
-        let required =
-            capabilities(&[FormatCapability::Import, FormatCapability::Export])
-                .expect("valid capabilities");
+        let required = capabilities(&[
+            FormatCapability::Import,
+            FormatCapability::Export,
+        ])
+        .expect("valid");
 
-        let format =
-            define_format("qir", FormatVersion::new(1, 0, 0), available)
-                .expect("valid format");
+        let format = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            available,
+        )
+        .expect("valid");
 
         assert_eq!(
-            format.compatibility_with(FormatVersion::new(1, 0, 0), &required),
+            format.compatibility_with(
+                FormatVersion::new(3, 1, 0),
+                &required,
+            ),
             FormatCompatibility::ExactVersionMissingCapabilities
         );
     }
 
     #[test]
-    fn same_major_version_is_potentially_compatible() {
+    fn same_major_version_is_reported() {
         let caps =
-            capabilities(&[FormatCapability::Import]).expect("valid capabilities");
+            capabilities(&[FormatCapability::Import])
+                .expect("valid");
 
-        let format =
-            define_format("openqasm", FormatVersion::new(3, 1, 0), caps.clone())
-                .expect("valid format");
+        let format = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            caps.clone(),
+        )
+        .expect("valid");
 
         assert_eq!(
-            format.compatibility_with(FormatVersion::new(3, 2, 0), &caps),
+            format.compatibility_with(
+                FormatVersion::new(3, 2, 0),
+                &caps,
+            ),
             FormatCompatibility::SameMajorVersion
         );
     }
 
     #[test]
-    fn different_major_versions_are_incompatible() {
-        let caps =
-            capabilities(&[FormatCapability::Import]).expect("valid capabilities");
+    fn same_major_missing_capability_is_reported() {
+        let available =
+            capabilities(&[FormatCapability::Import])
+                .expect("valid");
 
-        let format =
-            define_format("openqasm", FormatVersion::new(3, 1, 0), caps.clone())
-                .expect("valid format");
+        let required = capabilities(&[
+            FormatCapability::Import,
+            FormatCapability::Export,
+        ])
+        .expect("valid");
+
+        let format = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            available,
+        )
+        .expect("valid");
 
         assert_eq!(
-            format.compatibility_with(FormatVersion::new(4, 0, 0), &caps),
+            format.compatibility_with(
+                FormatVersion::new(3, 2, 0),
+                &required,
+            ),
+            FormatCompatibility::SameMajorVersionMissingCapabilities
+        );
+    }
+
+    #[test]
+    fn different_major_version_is_incompatible() {
+        let caps =
+            capabilities(&[FormatCapability::Import])
+                .expect("valid");
+
+        let format = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            caps.clone(),
+        )
+        .expect("valid");
+
+        assert_eq!(
+            format.compatibility_with(
+                FormatVersion::new(4, 0, 0),
+                &caps,
+            ),
             FormatCompatibility::IncompatibleVersion
+        );
+    }
+
+    #[test]
+    fn compatibility_with_format_rejects_different_format() {
+        let caps =
+            capabilities(&[FormatCapability::Import])
+                .expect("valid");
+
+        let openqasm = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            caps.clone(),
+        )
+        .expect("valid");
+
+        let qir = define_format(
+            "qir",
+            FormatVersion::new(3, 1, 0),
+            caps.clone(),
+        )
+        .expect("valid");
+
+        assert_eq!(
+            openqasm.compatibility_with_format(
+                &qir,
+                &caps,
+            ),
+            FormatCompatibility::DifferentFormat
+        );
+    }
+
+    #[test]
+    fn compatibility_with_format_accepts_exact_match() {
+        let caps = capabilities(&[
+            FormatCapability::Import,
+            FormatCapability::Export,
+        ])
+        .expect("valid");
+
+        let first = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            caps.clone(),
+        )
+        .expect("valid");
+
+        let second = define_format(
+            "openqasm",
+            FormatVersion::new(3, 1, 0),
+            caps.clone(),
+        )
+        .expect("valid");
+
+        assert_eq!(
+            first.compatibility_with_format(
+                &second,
+                &caps,
+            ),
+            FormatCompatibility::Exact
         );
     }
 
     #[test]
     fn compatibility_helpers_are_consistent() {
         assert!(FormatCompatibility::Exact.is_exact());
+        assert!(FormatCompatibility::Exact.is_acceptable());
         assert!(!FormatCompatibility::Exact.missing_capabilities());
         assert!(!FormatCompatibility::Exact.incompatible_version());
+        assert!(!FormatCompatibility::Exact.different_format());
 
-        assert!(FormatCompatibility::ExactVersionMissingCapabilities.same_major());
         assert!(
             FormatCompatibility::ExactVersionMissingCapabilities
                 .missing_capabilities()
         );
 
-        assert!(FormatCompatibility::IncompatibleVersion.incompatible_version());
-        assert!(!FormatCompatibility::IncompatibleVersion.same_major());
-    }
+        assert!(
+            FormatCompatibility::SameMajorVersion.same_major()
+        );
 
-    #[test]
-    fn format_identity_is_independent_of_version() {
-        let caps = FormatCapabilities::new();
+        assert!(
+            FormatCompatibility::SameMajorVersionMissingCapabilities
+                .requires_negotiation()
+        );
 
-        let first =
-            define_format("openqasm", FormatVersion::new(3, 0, 0), caps.clone())
-                .expect("valid format");
+        assert!(
+            FormatCompatibility::DifferentFormat
+                .different_format()
+        );
 
-        let second =
-            define_format("openqasm", FormatVersion::new(3, 1, 0), caps)
-                .expect("valid format");
+        assert!(
+            FormatCompatibility::DifferentFormat
+                .is_incompatible()
+        );
 
-        assert!(first.same_format(&second));
-        assert!(!first.same_revision(&second));
-    }
+        assert!(
+            FormatCompatibility::IncompatibleVersion
+                .incompatible_version()
+        );
 
-    #[test]
-    fn different_formats_are_not_the_same_format() {
-        let caps = FormatCapabilities::new();
-
-        let openqasm =
-            define_format("openqasm", FormatVersion::new(3, 1, 0), caps.clone())
-                .expect("valid format");
-
-        let qir =
-            define_format("qir", FormatVersion::new(1, 0, 0), caps)
-                .expect("valid format");
-
-        assert!(!openqasm.same_format(&qir));
+        assert!(
+            FormatCompatibility::IncompatibleVersion
+                .is_incompatible()
+        );
     }
 
     #[test]
     fn capability_names_are_stable() {
-        assert_eq!(FormatCapability::Import.as_str(), "import");
-        assert_eq!(FormatCapability::Export.as_str(), "export");
+        assert_eq!(
+            FormatCapability::Import.as_str(),
+            "import"
+        );
+
+        assert_eq!(
+            FormatCapability::Export.as_str(),
+            "export"
+        );
+
         assert_eq!(
             FormatCapability::GateDefinitions.as_str(),
             "gate-definitions"
         );
-        assert_eq!(FormatCapability::ClassicalControl.as_str(), "classical-control");
-        assert_eq!(FormatCapability::PhysicalQubits.as_str(), "physical-qubits");
+
+        assert_eq!(
+            FormatCapability::ClassicalControl.as_str(),
+            "classical-control"
+        );
+
+        assert_eq!(
+            FormatCapability::PhysicalQubits.as_str(),
+            "physical-qubits"
+        );
+    }
+
+    #[test]
+    fn define_format_normalizes_identifier() {
+        let format = define_format(
+            "OPENQASM",
+            FormatVersion::new(3, 1, 0),
+            FormatCapabilities::new(),
+        )
+        .expect("valid");
+
+        assert_eq!(format.id().as_str(), "openqasm");
+    }
+
+    #[test]
+    fn empty_capability_set_is_valid() {
+        let capabilities = FormatCapabilities::new();
+
+        assert!(capabilities.is_empty());
+        assert_eq!(capabilities.len(), 0);
+    }
+
+    #[test]
+    fn capability_set_default_is_empty() {
+        let capabilities = FormatCapabilities::default();
+
+        assert!(capabilities.is_empty());
     }
 }
