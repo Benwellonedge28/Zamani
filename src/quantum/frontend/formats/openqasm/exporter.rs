@@ -1,53 +1,62 @@
 //! Zamani Quantum Frontend — OpenQASM exporter.
 //!
-//! Production OpenQASM 3 exporter from the canonical Zamani Quantum IR.
+//! Production OpenQASM 3.0/3.1 exporter from the canonical Zamani Quantum IR.
 //!
 //! # Architectural boundary
 //!
 //! ```text
-//!                         QuantumCircuit
-//!                              │
-//!                              ▼
-//!                    generic frontend exporter
-//!                              │
-//!                              ▼
-//!                    OpenQASM exporter
-//!                              │
-//!               ┌──────────────┴──────────────┐
-//!               ▼                             ▼
-//!        capability check               serialization
-//!               │                             │
-//!               └──────────────┬──────────────┘
-//!                              ▼
-//!                     valid OpenQASM 3.x
+//! Canonical Quantum IR
+//!        │
+//!        ▼
+//! generic frontend exporter
+//!        │
+//!        ▼
+//! OpenQASM exporter
+//!        │
+//!        ├── representability validation
+//!        ├── deterministic serialization
+//!        └── bounded artifact construction
+//!        │
+//!        ▼
+//! valid OpenQASM 3.x
 //! ```
 //!
 //! This module is deliberately OpenQASM-specific.
 //!
 //! It MUST NOT:
 //!
-//! - define an alternative Quantum IR;
+//! - define a second Quantum IR;
 //! - mutate `QuantumCircuit`;
-//! - perform optimization;
-//! - perform routing;
-//! - perform scheduling;
-//! - perform hardware mapping;
+//! - optimize;
+//! - route;
+//! - schedule;
+//! - map to hardware;
 //! - execute a circuit;
 //! - access the filesystem;
 //! - access the network;
-//! - print to stdout/stderr;
-//! - silently discard operations;
+//! - spawn processes;
+//! - access QPU hardware;
+//! - silently discard unsupported operations;
 //! - silently approximate unsupported operations;
 //! - invent measurements;
 //! - invent qubit operands;
+//! - invent classical destinations;
 //! - assume `q[i] -> c[i]` measurement mapping;
 //! - depend on another frontend format.
 //!
-//! # Export policy
+//! # Version support
 //!
-//! The exporter emits OpenQASM 3.1 by default.
+//! This exporter supports OpenQASM 3.0 and 3.1.
 //!
-//! The currently supported direct IR subset is:
+//! The production constructor defaults to OpenQASM 3.1.
+//!
+//! The concrete exporter never changes its configured version merely because
+//! a caller requests `SameMajor` compatibility. Version compatibility is
+//! handled by the generic exporter contract.
+//!
+//! # Supported canonical IR
+//!
+//! Directly representable operations:
 //!
 //! - `I`
 //! - `X`
@@ -75,61 +84,67 @@
 //! - `SWAP`
 //! - `CCX`
 //! - `CSWAP`
-//! - `Measure` in the Z basis with a non-destructive measurement mode
+//! - `Measure` when represented by a Z-basis, non-destructive measurement
 //! - `Reset`
 //! - `Barrier`
 //!
-//! The following IR operations are deliberately rejected because OpenQASM
-//! `stdgates.inc` does not provide a semantically identical direct operation
-//! for the current IR representation:
+//! Explicitly unsupported direct operations:
 //!
 //! - `V`
 //! - `Vdg`
 //! - `ISWAP`
 //! - `ECR`
 //!
-//! The exporter also rejects:
-//!
-//! - X/Y-basis measurements;
-//! - destructive measurements;
-//! - unsupported measurement metadata;
-//! - invalid OpenQASM parameter identifiers;
-//! - invalid IR;
-//! - unsupported gate parameter arity;
-//! - unsupported future IR operations.
-//!
-//! This is intentional. A production exporter must fail explicitly rather
-//! than produce an apparently valid but semantically different program.
+//! The exporter does not decompose these operations. Such decomposition is a
+//! downstream compiler responsibility and must not be hidden inside a format
+//! serializer.
 //!
 //! # Measurement semantics
 //!
-//! OpenQASM 3 measurement is Z-basis measurement and leaves the qubit
-//! available for subsequent computation. Therefore only the IR's
-//! non-destructive Z-basis measurement maps directly.
+//! OpenQASM measurement is a computational/Z-basis measurement and the
+//! resulting classical value is explicitly assigned to a classical bit.
 //!
-//! If `reset_after` is explicitly requested in the IR, the exporter emits:
+//! The canonical IR measurement contains both the logical qubit and the
+//! classical destination. The exporter therefore preserves those identities
+//! exactly.
+//!
+//! If the IR explicitly requests reset-after-measurement, the exporter emits:
 //!
 //! ```text
 //! measure q[i] -> c[j];
 //! reset q[i];
 //! ```
 //!
-//! No measurement is ever inserted merely because a qubit exists.
+//! No measurement or reset is ever invented by the exporter.
 //!
-//! # Versioning
+//! # Parameter semantics
 //!
-//! The exporter supports OpenQASM 3.x versions represented by the generic
-//! frontend `FormatVersion` contract. The production constructor selects
-//! OpenQASM 3.1.
+//! Canonical IR parameters are preserved symbolically.
+//!
+//! The exporter never evaluates symbolic expressions because doing so could
+//! change runtime/compiler semantics.
+//!
+//! Canonical expressions are emitted using their deterministic IR expression
+//! representation.
+//!
+//! # Security
+//!
+//! Output is bounded during serialization, not after serialization.
+//!
+//! This is important because checking `String::len()` after constructing an
+//! enormous string would still allow an attacker-controlled IR to consume
+//! excessive memory.
+//!
+//! Every externally observable output is deterministic.
 //!
 //! # Rust compatibility
 //!
-//! Rust 1.97.1 / Rust 2021.
+//! Rust 2021 / Rust 1.97.1.
 //!
 //! No nightly features are required.
 //! No additional dependencies are required.
 
-use std::fmt::Write as _;
+use std::fmt::{self, Write as _};
 
 use crate::quantum::frontend::core::errors::{
     FrontendError,
@@ -162,15 +177,15 @@ use crate::quantum::ir::{
 /// Canonical OpenQASM format identifier.
 pub const OPENQASM_FORMAT_ID: &str = "openqasm";
 
-/// OpenQASM 3.0 version.
+/// OpenQASM 3.0.
 pub const OPENQASM_3_0: FormatVersion =
     FormatVersion::new(3, 0, 0);
 
-/// OpenQASM 3.1 version.
+/// OpenQASM 3.1.
 pub const OPENQASM_3_1: FormatVersion =
     FormatVersion::new(3, 1, 0);
 
-/// OpenQASM standard-library include.
+/// OpenQASM standard library.
 pub const STANDARD_LIBRARY_INCLUDE: &str =
     "stdgates.inc";
 
@@ -178,29 +193,44 @@ pub const STANDARD_LIBRARY_INCLUDE: &str =
 pub const OPENQASM_MEDIA_TYPE: &str =
     "text/x-openqasm";
 
-/// Maximum number of characters emitted by one identifier.
+/// Maximum symbolic identifier length accepted by this exporter.
+///
+/// The canonical IR currently constrains symbolic names to an ASCII-compatible
+/// subset. The OpenQASM language itself permits a broader Unicode identifier
+/// set, but the exporter must never silently transform an IR identifier.
 const MAX_IDENTIFIER_BYTES: usize = 256;
 
-/// Maximum output line length generated by one operation.
+/// Maximum generated source line.
 ///
-/// This is an exporter-local defensive invariant. The global artifact limit
-/// remains controlled by `ExportOptions`.
+/// This protects against pathological expressions, register declarations,
+/// or future large-arity operations.
 const MAX_OPERATION_LINE_BYTES: usize = 64 * 1024;
 
-/// Stable exporter error codes.
+/// Stable exporter error code: generic format construction failure.
 const CODE_FORMAT: &str = "QASM-E001";
+
+/// Stable exporter error code: version failure.
 const CODE_VERSION: &str = "QASM-E002";
+
+/// Stable exporter error code: gate representability failure.
 const CODE_GATE: &str = "QASM-E003";
+
+/// Stable exporter error code: parameter failure.
 const CODE_PARAMETER: &str = "QASM-E004";
+
+/// Stable exporter error code: measurement failure.
 const CODE_MEASUREMENT: &str = "QASM-E005";
+
+/// Stable exporter error code: identifier failure.
 const CODE_IDENTIFIER: &str = "QASM-E006";
-const CODE_EMPTY_CIRCUIT: &str = "QASM-E007";
+
+/// Stable exporter error code: output/resource failure.
 const CODE_ARTIFACT: &str = "QASM-E008";
 
 /// Production OpenQASM exporter.
 ///
-/// The exporter is immutable and contains no mutable compilation state.
-/// Multiple exporter instances may therefore safely be used concurrently.
+/// The exporter contains only immutable configuration and is therefore safe to
+/// share between callers when the surrounding compiler uses it concurrently.
 #[derive(Clone, Debug)]
 pub struct OpenQasmExporter {
     format: FrontendFormat,
@@ -208,27 +238,30 @@ pub struct OpenQasmExporter {
 
 impl OpenQasmExporter {
     /// Creates the production OpenQASM 3.1 exporter.
-    ///
-    /// The constructor cannot fail because all format metadata is composed
-    /// from compile-time-valid constants and the standard frontend capability
-    /// vocabulary.
     pub fn production() -> FrontendResult<Self> {
         Self::new(OPENQASM_3_1)
     }
 
-    /// Creates an OpenQASM exporter for a specific OpenQASM 3.x version.
-    ///
-    /// Only major version 3 is accepted. This prevents accidentally creating
-    /// an OpenQASM 2 exporter under an OpenQASM 3 implementation.
+    /// Creates an OpenQASM exporter for an explicit OpenQASM 3.x version.
     pub fn new(version: FormatVersion) -> FrontendResult<Self> {
         if version.major() != 3 {
             return Err(export_error(
                 FrontendErrorKind::Unsupported,
                 CODE_VERSION,
                 format!(
-                    "OpenQASM exporter supports major version 3.x, \
-                     not {}",
-                    version
+                    "OpenQASM exporter supports only OpenQASM 3.x; \
+                     requested version {version}"
+                ),
+            ));
+        }
+
+        if version.minor() > 1 {
+            return Err(export_error(
+                FrontendErrorKind::Unsupported,
+                CODE_VERSION,
+                format!(
+                    "OpenQASM exporter supports versions 3.0 and 3.1; \
+                     requested unsupported version {version}"
                 ),
             ));
         }
@@ -258,73 +291,74 @@ impl OpenQasmExporter {
         self.format.version()
     }
 
-    /// Returns the immutable format descriptor.
+    /// Returns the immutable generic format descriptor.
     #[must_use]
     pub fn descriptor(&self) -> &FrontendFormat {
         &self.format
     }
 
-    /// Exports a circuit using the production default options.
+    /// Convenience method using generic production export options.
+    ///
+    /// All actual validation still passes through `QuantumExporter::export`.
     pub fn export_circuit(
         &self,
         circuit: &QuantumCircuit,
     ) -> FrontendResult<ExportedArtifact> {
-        self.export(circuit, &ExportOptions::default())
+        self.export(
+            circuit,
+            &ExportOptions::default(),
+        )
     }
 
-    /// Builds the OpenQASM program.
+    /// Serializes a canonical circuit using the supplied output limit.
     ///
-    /// This function assumes the generic exporter validation boundary has
-    /// already validated the circuit.
+    /// The limit is enforced while writing, rather than after a potentially
+    /// unbounded allocation.
     fn serialize(
         &self,
         circuit: &QuantumCircuit,
+        max_output_bytes: usize,
     ) -> FrontendResult<String> {
-        if circuit.num_qubits() == 0 {
+        if max_output_bytes == 0 {
             return Err(export_error(
-                FrontendErrorKind::Export,
-                CODE_EMPTY_CIRCUIT,
-                "OpenQASM requires at least one logical \
-                 qubit for the currently supported Zamani \
-                 Quantum IR subset",
+                FrontendErrorKind::LimitExceeded,
+                CODE_ARTIFACT,
+                "OpenQASM output limit must be greater than zero",
             ));
         }
 
-        let mut output = String::new();
+        let mut output =
+            BoundedOutput::new(max_output_bytes);
 
-        write_line(
-            &mut output,
-            &format!(
-                "OPENQASM {}.{};",
-                self.format.version().major(),
-                self.format.version().minor()
-            ),
-        )?;
+        output.line(&format!(
+            "OPENQASM {}.{};",
+            self.format.version().major(),
+            self.format.version().minor(),
+        ))?;
 
-        write_line(
-            &mut output,
-            &format!(
-                "include \"{}\";",
-                STANDARD_LIBRARY_INCLUDE
-            ),
-        )?;
+        output.line(&format!(
+            "include \"{}\";",
+            STANDARD_LIBRARY_INCLUDE,
+        ))?;
 
-        write_line(
-            &mut output,
-            &format!(
+        /*
+         * OpenQASM 3.1 permits zero-sized quantum registers.
+         *
+         * We therefore do not manufacture a dummy qubit for a zero-qubit
+         * circuit. The canonical IR remains the source of truth.
+         */
+        if circuit.num_qubits() > 0 {
+            output.line(&format!(
                 "qubit[{}] q;",
-                circuit.num_qubits()
-            ),
-        )?;
+                circuit.num_qubits(),
+            ))?;
+        }
 
         if circuit.num_classical_bits() > 0 {
-            write_line(
-                &mut output,
-                &format!(
-                    "bit[{}] c;",
-                    circuit.num_classical_bits()
-                ),
-            )?;
+            output.line(&format!(
+                "bit[{}] c;",
+                circuit.num_classical_bits(),
+            ))?;
         }
 
         for gate in circuit.operations() {
@@ -339,10 +373,10 @@ impl OpenQasmExporter {
             )?;
         }
 
-        Ok(output)
+        Ok(output.into_string())
     }
 
-    /// Performs OpenQASM-specific representability validation.
+    /// Performs all OpenQASM-specific representability checks.
     fn validate_gate_for_export(
         &self,
         gate: &Gate,
@@ -351,10 +385,9 @@ impl OpenQasmExporter {
         let kind = gate.kind();
 
         /*
-         * The canonical IR has already validated operand and parameter
-         * cardinality. We still verify them here because this function is
-         * the concrete format boundary and must never rely on assumptions
-         * about future IR construction paths.
+         * The canonical IR already validates these properties, but the
+         * concrete format boundary checks them again so future deserialization
+         * or alternate IR construction paths cannot cause invalid OpenQASM.
          */
         if !kind
             .operand_count()
@@ -364,9 +397,8 @@ impl OpenQasmExporter {
                 FrontendErrorKind::Export,
                 CODE_GATE,
                 format!(
-                    "gate {:?} has {} operands but \
-                     OpenQASM export requires {}",
-                    kind,
+                    "gate {kind:?} contains {} qubit operands, \
+                     but its canonical operand contract requires {}",
                     gate.qubits().len(),
                     kind.operand_count(),
                 ),
@@ -380,9 +412,8 @@ impl OpenQasmExporter {
                 FrontendErrorKind::Export,
                 CODE_PARAMETER,
                 format!(
-                    "gate {:?} has {} parameters but \
-                     its canonical IR definition requires {}",
-                    kind,
+                    "gate {kind:?} contains {} parameters, \
+                     but its canonical parameter contract requires {}",
                     gate.parameters().len(),
                     kind.parameter_count(),
                 ),
@@ -399,9 +430,8 @@ impl OpenQasmExporter {
                     FrontendErrorKind::Export,
                     CODE_GATE,
                     format!(
-                        "gate {:?} references logical qubit \
-                         {} outside circuit range 0..{}",
-                        kind,
+                        "gate {kind:?} references logical qubit {} \
+                         outside circuit namespace of {} qubits",
                         qubit.index(),
                         circuit.num_qubits(),
                     ),
@@ -425,10 +455,9 @@ impl OpenQasmExporter {
                     FrontendErrorKind::Unsupported,
                     CODE_GATE,
                     format!(
-                        "canonical gate {:?} has no direct \
+                        "canonical gate {kind:?} has no direct \
                          semantically equivalent OpenQASM \
-                         stdgates.inc operation",
-                        kind
+                         stdgates.inc operation"
                     ),
                 ));
             }
@@ -466,7 +495,7 @@ impl OpenQasmExporter {
         Ok(())
     }
 
-    /// Validates the additional semantics carried by an IR measurement.
+    /// Validates the canonical measurement payload.
     fn validate_measurement(
         &self,
         gate: &Gate,
@@ -490,9 +519,9 @@ impl OpenQasmExporter {
                 CODE_MEASUREMENT,
                 format!(
                     "OpenQASM direct measurement export \
-                     supports only the Z basis; IR measurement \
-                     uses {} basis",
-                    measurement.basis()
+                     supports only the Z basis; the IR \
+                     measurement uses {} basis",
+                    measurement.basis(),
                 ),
             ));
         }
@@ -518,7 +547,7 @@ impl OpenQasmExporter {
                 CODE_MEASUREMENT,
                 format!(
                     "measurement references qubit {} \
-                     outside circuit range 0..{}",
+                     outside circuit namespace of {} qubits",
                     qubit,
                     circuit.num_qubits(),
                 ),
@@ -528,15 +557,13 @@ impl OpenQasmExporter {
         let classical =
             measurement.classical_bit().index();
 
-        if classical
-            >= circuit.num_classical_bits()
-        {
+        if classical >= circuit.num_classical_bits() {
             return Err(export_error(
                 FrontendErrorKind::Export,
                 CODE_MEASUREMENT,
                 format!(
                     "measurement targets classical bit {} \
-                     outside circuit range 0..{}",
+                     outside circuit namespace of {} bits",
                     classical,
                     circuit.num_classical_bits(),
                 ),
@@ -552,10 +579,8 @@ impl OpenQasmExporter {
                     CODE_MEASUREMENT,
                     format!(
                         "measurement has inconsistent classical \
-                         destinations: gate target {} differs \
-                         from measurement target {}",
-                        target,
-                        classical,
+                         destinations: gate target {target} \
+                         differs from measurement target {classical}"
                     ),
                 ));
             }
@@ -564,8 +589,7 @@ impl OpenQasmExporter {
                 return Err(export_error(
                     FrontendErrorKind::Export,
                     CODE_MEASUREMENT,
-                    "measurement gate has no classical \
-                     destination",
+                    "measurement gate has no classical destination",
                 ));
             }
         }
@@ -573,10 +597,10 @@ impl OpenQasmExporter {
         Ok(())
     }
 
-    /// Serializes one canonical gate.
+    /// Serializes one canonical IR operation.
     fn write_gate(
         &self,
-        output: &mut String,
+        output: &mut BoundedOutput,
         gate: &Gate,
     ) -> FrontendResult<()> {
         match gate.kind() {
@@ -591,62 +615,48 @@ impl OpenQasmExporter {
                         )
                     })?;
 
-                let q =
-                    measurement.qubit().index();
-
-                let c =
-                    measurement.classical_bit().index();
-
-                write_line(
-                    output,
-                    &format!(
-                        "measure q[{}] -> c[{}];",
-                        q,
-                        c
-                    ),
-                )?;
+                output.line(&format!(
+                    "measure q[{}] -> c[{}];",
+                    measurement.qubit().index(),
+                    measurement
+                        .classical_bit()
+                        .index(),
+                ))?;
 
                 if measurement.reset_after() {
-                    write_line(
-                        output,
-                        &format!("reset q[{}];", q),
-                    )?;
+                    output.line(&format!(
+                        "reset q[{}];",
+                        measurement.qubit().index(),
+                    ))?;
                 }
 
                 Ok(())
             }
 
             GateKind::Reset => {
-                let q = gate
-                    .qubits()
-                    .first()
-                    .ok_or_else(|| {
+                let qubit =
+                    gate.qubits().first().ok_or_else(|| {
                         export_error(
                             FrontendErrorKind::Export,
                             CODE_GATE,
-                            "reset operation has no qubit \
-                             operand",
+                            "reset operation has no qubit operand",
                         )
-                    })?
-                    .index();
+                    })?;
 
-                write_line(
-                    output,
-                    &format!("reset q[{}];", q),
-                )
+                output.line(&format!(
+                    "reset q[{}];",
+                    qubit.index(),
+                ))
             }
 
             GateKind::Barrier => {
                 let operands =
                     format_qubit_operands(gate)?;
 
-                write_line(
-                    output,
-                    &format!(
-                        "barrier {};",
-                        operands
-                    ),
-                )
+                output.line(&format!(
+                    "barrier {};",
+                    operands,
+                ))
             }
 
             kind => {
@@ -656,9 +666,8 @@ impl OpenQasmExporter {
                             FrontendErrorKind::Unsupported,
                             CODE_GATE,
                             format!(
-                                "gate {:?} cannot be emitted \
-                                 as OpenQASM 3",
-                                kind
+                                "gate {kind:?} cannot be emitted \
+                                 as OpenQASM 3"
                             ),
                         )
                     })?;
@@ -671,26 +680,15 @@ impl OpenQasmExporter {
                         gate.parameters(),
                     )?;
 
-                let statement =
-                    if parameters.is_empty() {
-                        format!(
-                            "{} {};",
-                            name,
-                            operands
-                        )
-                    } else {
-                        format!(
-                            "{}({}) {};",
-                            name,
-                            parameters,
-                            operands
-                        )
-                    };
-
-                write_line(
-                    output,
-                    &statement,
-                )
+                if parameters.is_empty() {
+                    output.line(&format!(
+                        "{name} {operands};"
+                    ))
+                } else {
+                    output.line(&format!(
+                        "{name}({parameters}) {operands};"
+                    ))
+                }
             }
         }
     }
@@ -704,10 +702,12 @@ impl QuantumExporter for OpenQasmExporter {
     fn export_impl(
         &self,
         circuit: &QuantumCircuit,
-        _options: &ExportOptions,
+        options: &ExportOptions,
     ) -> FrontendResult<ExportedArtifact> {
-        let source =
-            self.serialize(circuit)?;
+        let source = self.serialize(
+            circuit,
+            options.max_output_bytes(),
+        )?;
 
         ExportedArtifact::text(
             self.format.clone(),
@@ -724,10 +724,87 @@ impl QuantumExporter for OpenQasmExporter {
     }
 }
 
-/// Constructs the OpenQASM capability declaration.
+/// Bounded UTF-8 OpenQASM output buffer.
 ///
-/// This is deliberately local to the OpenQASM implementation. Adding another
-/// frontend format never requires modifying this capability list.
+/// The important property is that output limits are enforced while data is
+/// appended. This prevents an oversized intermediate `String` from being
+/// constructed before the generic exporter can reject it.
+struct BoundedOutput {
+    value: String,
+    max_bytes: usize,
+}
+
+impl BoundedOutput {
+    fn new(max_bytes: usize) -> Self {
+        Self {
+            value: String::new(),
+            max_bytes,
+        }
+    }
+
+    fn line(
+        &mut self,
+        line: &str,
+    ) -> FrontendResult<()> {
+        if line.len() > MAX_OPERATION_LINE_BYTES {
+            return Err(export_error(
+                FrontendErrorKind::LimitExceeded,
+                CODE_ARTIFACT,
+                format!(
+                    "generated OpenQASM line exceeds \
+                     {} bytes",
+                    MAX_OPERATION_LINE_BYTES,
+                ),
+            ));
+        }
+
+        let required = line
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| {
+                export_error(
+                    FrontendErrorKind::LimitExceeded,
+                    CODE_ARTIFACT,
+                    "OpenQASM output size calculation overflowed",
+                )
+            })?;
+
+        let next = self
+            .value
+            .len()
+            .checked_add(required)
+            .ok_or_else(|| {
+                export_error(
+                    FrontendErrorKind::LimitExceeded,
+                    CODE_ARTIFACT,
+                    "OpenQASM output size calculation overflowed",
+                )
+            })?;
+
+        if next > self.max_bytes {
+            return Err(export_error(
+                FrontendErrorKind::LimitExceeded,
+                CODE_ARTIFACT,
+                format!(
+                    "OpenQASM output exceeds configured \
+                     maximum of {} bytes",
+                    self.max_bytes,
+                ),
+            ));
+        }
+
+        self.value.push_str(line);
+        self.value.push('\n');
+
+        Ok(())
+    }
+
+    fn into_string(self) -> String {
+        self.value
+    }
+}
+
+/// Constructs the OpenQASM capability declaration.
 fn openqasm_capabilities()
     -> FrontendResult<FormatCapabilities>
 {
@@ -760,10 +837,13 @@ fn openqasm_capabilities()
     Ok(capabilities)
 }
 
-/// Maps a canonical IR gate to its OpenQASM standard-library spelling.
+/// Maps canonical IR gates to OpenQASM standard-library names.
 ///
-/// Only operations with a direct semantic equivalent are included.
-fn gate_name(kind: GateKind) -> Option<&'static str> {
+/// All mappings below are direct semantic mappings. No decomposition is
+/// performed here.
+fn gate_name(
+    kind: GateKind,
+) -> Option<&'static str> {
     match kind {
         GateKind::I => Some("id"),
         GateKind::X => Some("x"),
@@ -808,7 +888,9 @@ fn gate_name(kind: GateKind) -> Option<&'static str> {
     }
 }
 
-/// Formats logical qubit operands without changing their order.
+/// Formats logical qubit operands.
+///
+/// Operand ordering is preserved exactly.
 fn format_qubit_operands(
     gate: &Gate,
 ) -> FrontendResult<String> {
@@ -817,16 +899,13 @@ fn format_qubit_operands(
             FrontendErrorKind::Export,
             CODE_GATE,
             format!(
-                "gate {:?} requires at least one qubit operand",
-                gate.kind()
+                "gate {:?} has no qubit operands",
+                gate.kind(),
             ),
         ));
     }
 
-    let mut result =
-        String::with_capacity(
-            gate.qubits().len() * 8,
-        );
+    let mut result = String::new();
 
     for (index, qubit) in
         gate.qubits().iter().enumerate()
@@ -838,7 +917,7 @@ fn format_qubit_operands(
         write!(
             &mut result,
             "q[{}]",
-            qubit.index()
+            qubit.index(),
         )
         .map_err(|_| {
             FrontendError::internal(
@@ -847,15 +926,23 @@ fn format_qubit_operands(
         })?;
     }
 
+    if result.len() > MAX_OPERATION_LINE_BYTES {
+        return Err(export_error(
+            FrontendErrorKind::LimitExceeded,
+            CODE_ARTIFACT,
+            "OpenQASM qubit operand list exceeds \
+             the per-operation line limit",
+        ));
+    }
+
     Ok(result)
 }
 
-/// Formats all gate parameters in canonical IR order.
+/// Formats all canonical parameters in deterministic order.
 fn format_parameters(
     parameters: &[Parameter],
 ) -> FrontendResult<String> {
-    let mut result =
-        String::new();
+    let mut result = String::new();
 
     for (index, parameter) in
         parameters.iter().enumerate()
@@ -866,23 +953,57 @@ fn format_parameters(
 
         validate_parameter(parameter)?;
 
-        write!(
+        append_parameter(
             &mut result,
-            "{}",
-            parameter
-        )
-        .map_err(|_| {
-            FrontendError::internal(
-                "failed to format OpenQASM parameter",
-            )
-        })?;
+            parameter,
+        )?;
+    }
+
+    if result.len() > MAX_OPERATION_LINE_BYTES {
+        return Err(export_error(
+            FrontendErrorKind::LimitExceeded,
+            CODE_ARTIFACT,
+            "OpenQASM parameter list exceeds \
+             the per-operation line limit",
+        ));
     }
 
     Ok(result)
 }
 
-/// Validates that an IR parameter can be represented without changing its
-/// meaning in OpenQASM.
+/// Appends one parameter without evaluating it.
+fn append_parameter(
+    output: &mut String,
+    parameter: &Parameter,
+) -> FrontendResult<()> {
+    let before = output.len();
+
+    write!(
+        output,
+        "{parameter}",
+    )
+    .map_err(|_| {
+        FrontendError::internal(
+            "failed to format OpenQASM parameter",
+        )
+    })?;
+
+    if output.len()
+        .saturating_sub(before)
+        > MAX_OPERATION_LINE_BYTES
+    {
+        return Err(export_error(
+            FrontendErrorKind::LimitExceeded,
+            CODE_PARAMETER,
+            "OpenQASM parameter representation \
+             exceeds the per-operation limit",
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validates that a canonical IR parameter is representable.
 fn validate_parameter(
     parameter: &Parameter,
 ) -> FrontendResult<()> {
@@ -893,7 +1014,7 @@ fn validate_parameter(
                     FrontendErrorKind::Export,
                     CODE_PARAMETER,
                     "OpenQASM cannot represent a \
-                     non-finite floating-point parameter",
+                     non-finite parameter",
                 ));
             }
         }
@@ -910,7 +1031,11 @@ fn validate_parameter(
     Ok(())
 }
 
-/// Recursively validates a canonical IR parameter expression.
+/// Recursively validates an IR parameter expression.
+///
+/// The canonical IR already enforces expression-depth limits, so this
+/// traversal is a validation of representability rather than an independent
+/// recursive resource model.
 fn validate_expression(
     expression: &ParameterExpression,
 ) -> FrontendResult<()> {
@@ -943,12 +1068,12 @@ fn validate_expression(
     Ok(())
 }
 
-/// Validates an IR symbolic identifier against the OpenQASM identifier rules
-/// relevant to the canonical IR's ASCII-only symbol representation.
+/// Validates the ASCII identifier subset emitted by this exporter.
 ///
-/// The canonical IR currently permits only ASCII letters, digits, and `_` in
-/// parameter symbols, so this validation is deliberately stricter than the
-/// complete Unicode OpenQASM identifier grammar.
+/// OpenQASM 3.1 itself permits Unicode identifiers. The canonical IR's
+/// parameter symbols are currently intended for an ASCII-compatible symbol
+/// vocabulary, so this exporter refuses characters it cannot guarantee to
+/// preserve exactly.
 fn validate_identifier(
     identifier: &str,
 ) -> FrontendResult<()> {
@@ -964,20 +1089,20 @@ fn validate_identifier(
         > MAX_IDENTIFIER_BYTES
     {
         return Err(export_error(
-            FrontendErrorKind::Export,
+            FrontendErrorKind::LimitExceeded,
             CODE_IDENTIFIER,
             format!(
                 "OpenQASM identifier exceeds {} bytes",
-                MAX_IDENTIFIER_BYTES
+                MAX_IDENTIFIER_BYTES,
             ),
         ));
     }
 
-    let mut chars =
+    let mut characters =
         identifier.chars();
 
     let first =
-        chars.next().ok_or_else(|| {
+        characters.next().ok_or_else(|| {
             export_error(
                 FrontendErrorKind::Export,
                 CODE_IDENTIFIER,
@@ -992,15 +1117,14 @@ fn validate_identifier(
             FrontendErrorKind::Unsupported,
             CODE_IDENTIFIER,
             format!(
-                "IR parameter identifier `{}` \
-                 cannot be emitted as an OpenQASM \
-                 identifier",
-                identifier
+                "IR parameter identifier `{identifier}` \
+                 cannot be emitted by the OpenQASM \
+                 ASCII identifier subset",
             ),
         ));
     }
 
-    if !chars.all(|character| {
+    if !characters.all(|character| {
         character == '_'
             || character.is_ascii_alphanumeric()
     }) {
@@ -1008,24 +1132,21 @@ fn validate_identifier(
             FrontendErrorKind::Unsupported,
             CODE_IDENTIFIER,
             format!(
-                "IR parameter identifier `{}` contains \
-                 characters outside the OpenQASM \
-                 exporter-supported identifier subset",
-                identifier
+                "IR parameter identifier `{identifier}` \
+                 contains characters outside the \
+                 OpenQASM exporter identifier subset",
             ),
         ));
     }
 
-    if is_reserved_openqasm_identifier(
-        identifier,
-    ) {
+    if is_reserved_openqasm_identifier(identifier) {
         return Err(export_error(
             FrontendErrorKind::Unsupported,
             CODE_IDENTIFIER,
             format!(
-                "IR parameter identifier `{}` conflicts \
-                 with an OpenQASM reserved/builtin identifier",
-                identifier
+                "IR parameter identifier `{identifier}` \
+                 conflicts with an OpenQASM reserved or \
+                 predefined identifier",
             ),
         ));
     }
@@ -1033,16 +1154,19 @@ fn validate_identifier(
     Ok(())
 }
 
-/// OpenQASM reserved keywords and builtin identifiers which cannot safely be
-/// emitted as symbolic parameter names.
+/// OpenQASM identifiers that cannot safely be emitted as ordinary symbolic
+/// parameters.
 ///
-/// This list is intentionally conservative. Rejecting a colliding symbol is
-/// safer than emitting a syntactically valid program with changed semantics.
+/// `switch`, `case`, and `default` are intentionally NOT included: OpenQASM
+/// 3.1 explicitly removed them from the reserved-identifier set.
 fn is_reserved_openqasm_identifier(
     identifier: &str,
 ) -> bool {
     matches!(
         identifier,
+        /*
+         * Language keywords.
+         */
         "OPENQASM"
             | "include"
             | "defcalgrammar"
@@ -1057,14 +1181,10 @@ fn is_reserved_openqasm_identifier(
             | "continue"
             | "if"
             | "else"
-            | "end"
             | "return"
             | "for"
             | "while"
             | "in"
-            | "switch"
-            | "case"
-            | "default"
             | "input"
             | "output"
             | "const"
@@ -1074,28 +1194,66 @@ fn is_reserved_openqasm_identifier(
             | "qubit"
             | "creg"
             | "bit"
+            | "bool"
             | "int"
             | "uint"
             | "float"
             | "angle"
             | "complex"
-            | "array"
             | "void"
             | "duration"
             | "stretch"
-            | "gphase"
-            | "inv"
-            | "pow"
-            | "ctrl"
-            | "negctrl"
             | "measure"
             | "reset"
             | "barrier"
             | "delay"
             | "pragma"
+
+            /*
+             * Gate modifiers.
+             */
+            | "inv"
+            | "pow"
+            | "ctrl"
+            | "negctrl"
+
+            /*
+             * Built-in mathematical constants.
+             */
             | "pi"
             | "tau"
             | "euler"
+
+            /*
+             * Built-in mathematical functions and language intrinsics.
+             *
+             * These names must not be emitted as free symbolic identifiers
+             * because they have predefined language meaning.
+             */
+            | "arccos"
+            | "arcsin"
+            | "arctan"
+            | "ceiling"
+            | "cos"
+            | "exp"
+            | "floor"
+            | "log"
+            | "mod"
+            | "popcount"
+            | "real"
+            | "imag"
+            | "rotl"
+            | "rotr"
+            | "sin"
+            | "sqrt"
+            | "tan"
+            | "sizeof"
+            | "durationof"
+
+            /*
+             * Built-in gate names emitted by this exporter.
+             */
+            | "id"
             | "x"
             | "y"
             | "z"
@@ -1109,6 +1267,9 @@ fn is_reserved_openqasm_identifier(
             | "rz"
             | "p"
             | "phase"
+            | "u1"
+            | "u2"
+            | "u3"
             | "cx"
             | "cy"
             | "cz"
@@ -1119,40 +1280,47 @@ fn is_reserved_openqasm_identifier(
             | "swap"
             | "ccx"
             | "cswap"
-            | "id"
-            | "u1"
-            | "u2"
-            | "u3"
             | "CX"
     )
 }
 
-/// Adds one bounded line to the generated program.
-fn write_line(
-    output: &mut String,
-    line: &str,
-) -> FrontendResult<()> {
-    if line.len()
-        > MAX_OPERATION_LINE_BYTES
-    {
-        return Err(export_error(
-            FrontendErrorKind::LimitExceeded,
-            CODE_ARTIFACT,
-            format!(
-                "generated OpenQASM line exceeds \
-                 {} bytes",
-                MAX_OPERATION_LINE_BYTES
-            ),
-        ));
-    }
-
-    output.push_str(line);
-    output.push('\n');
-
-    Ok(())
+/// Bounded output helper implementing `fmt::Write`.
+///
+/// This is used for future extensions that need direct formatted emission
+/// without bypassing the global output bound.
+struct BoundedFormatter<'a> {
+    output: &'a mut BoundedOutput,
 }
 
-/// Creates a frontend export error with a stable code.
+impl fmt::Write for BoundedFormatter<'_> {
+    fn write_str(
+        &mut self,
+        value: &str,
+    ) -> fmt::Result {
+        let current =
+            self.output.value.len();
+
+        let next = current
+            .checked_add(value.len())
+            .ok_or(fmt::Error)?;
+
+        if next > self.output.max_bytes {
+            return Err(fmt::Error);
+        }
+
+        if value.len()
+            > MAX_OPERATION_LINE_BYTES
+        {
+            return Err(fmt::Error);
+        }
+
+        self.output.value.push_str(value);
+
+        Ok(())
+    }
+}
+
+/// Creates a stable frontend export error.
 fn export_error(
     kind: FrontendErrorKind,
     code: &'static str,
@@ -1163,8 +1331,14 @@ fn export_error(
         FrontendErrorCode::new(code),
         message.into(),
     )
-    .context("format", OPENQASM_FORMAT_ID)
-    .context("stage", "export")
+    .context(
+        "format",
+        OPENQASM_FORMAT_ID,
+    )
+    .context(
+        "stage",
+        "export",
+    )
 }
 
 #[cfg(test)]
@@ -1181,26 +1355,82 @@ mod tests {
 
     fn exporter() -> OpenQasmExporter {
         OpenQasmExporter::production()
-            .expect("production OpenQASM exporter must construct")
+            .expect(
+                "production OpenQASM exporter \
+                 must construct",
+            )
+    }
+
+    fn circuit(
+        qubits: usize,
+        classical_bits: usize,
+        operations: Vec<Gate>,
+    ) -> QuantumCircuit {
+        QuantumCircuit::from_operations(
+            qubits,
+            classical_bits,
+            operations,
+        )
+        .expect(
+            "test circuit must satisfy \
+             canonical IR invariants",
+        )
     }
 
     #[test]
-    fn production_exporter_targets_openqasm_3_1() {
+    fn production_targets_openqasm_3_1() {
         let exporter = exporter();
 
         assert_eq!(
             exporter.configured_version(),
-            OPENQASM_3_1
+            OPENQASM_3_1,
         );
 
         assert_eq!(
             exporter.format().id().as_str(),
-            OPENQASM_FORMAT_ID
+            OPENQASM_FORMAT_ID,
         );
     }
 
     #[test]
-    fn capability_set_advertises_only_supported_features() {
+    fn explicit_openqasm_3_0_is_supported() {
+        let exporter =
+            OpenQasmExporter::new(
+                OPENQASM_3_0,
+            )
+            .expect(
+                "OpenQASM 3.0 exporter \
+                 must construct",
+            );
+
+        assert_eq!(
+            exporter.configured_version(),
+            OPENQASM_3_0,
+        );
+    }
+
+    #[test]
+    fn openqasm_2_is_rejected() {
+        assert!(
+            OpenQasmExporter::new(
+                FormatVersion::new(2, 0, 0),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn unsupported_future_minor_is_rejected() {
+        assert!(
+            OpenQasmExporter::new(
+                FormatVersion::new(3, 2, 0),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn capabilities_advertise_direct_features() {
         let exporter = exporter();
         let capabilities =
             exporter.format().capabilities();
@@ -1231,6 +1461,11 @@ mod tests {
         );
 
         assert!(
+            capabilities
+                .supports(FormatCapability::Expressions)
+        );
+
+        assert!(
             !capabilities
                 .supports(
                     FormatCapability::ClassicalControl
@@ -1246,35 +1481,70 @@ mod tests {
     }
 
     #[test]
-    fn gate_names_are_canonical_openqasm_spellings() {
+    fn gate_names_are_deterministic() {
         assert_eq!(
             gate_name(GateKind::I),
-            Some("id")
+            Some("id"),
         );
 
         assert_eq!(
             gate_name(GateKind::Phase),
-            Some("p")
+            Some("p"),
         );
 
         assert_eq!(
             gate_name(GateKind::CX),
-            Some("cx")
+            Some("cx"),
         );
 
         assert_eq!(
             gate_name(GateKind::CCX),
-            Some("ccx")
+            Some("ccx"),
         );
 
         assert_eq!(
             gate_name(GateKind::V),
-            None
+            None,
+        );
+
+        assert_eq!(
+            gate_name(GateKind::ISWAP),
+            None,
+        );
+
+        assert_eq!(
+            gate_name(GateKind::ECR),
+            None,
         );
     }
 
     #[test]
-    fn identifiers_reject_openqasm_builtins() {
+    fn qubit_order_is_preserved() {
+        let gate = Gate::new(
+            GateKind::CX,
+            vec![
+                QubitId::new(7),
+                QubitId::new(2),
+            ],
+            Vec::new(),
+            None,
+            None,
+        )
+        .expect(
+            "valid CX gate must construct",
+        );
+
+        assert_eq!(
+            format_qubit_operands(&gate)
+                .expect(
+                    "qubit operands must format",
+                ),
+            "q[7], q[2]",
+        );
+    }
+
+    #[test]
+    fn symbolic_identifier_rules_are_stable() {
         assert!(
             validate_identifier("theta")
                 .is_ok()
@@ -1286,31 +1556,15 @@ mod tests {
         );
 
         assert!(
-            validate_identifier("pi")
-                .is_err()
+            validate_identifier("_theta")
+                .is_ok()
         );
 
-        assert!(
-            validate_identifier("measure")
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn identifiers_reject_invalid_first_character() {
         assert!(
             validate_identifier("1theta")
                 .is_err()
         );
 
-        assert!(
-            validate_identifier("_theta")
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn identifiers_reject_invalid_characters() {
         assert!(
             validate_identifier("theta-value")
                 .is_err()
@@ -1323,65 +1577,93 @@ mod tests {
     }
 
     #[test]
-    fn finite_parameter_is_accepted() {
+    fn openqasm_3_1_removed_future_switch_reservation() {
+        assert!(
+            validate_identifier("switch")
+                .is_ok()
+        );
+
+        assert!(
+            validate_identifier("case")
+                .is_ok()
+        );
+
+        assert!(
+            validate_identifier("default")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn builtins_are_not_valid_symbol_names() {
+        assert!(
+            validate_identifier("pi")
+                .is_err()
+        );
+
+        assert!(
+            validate_identifier("tau")
+                .is_err()
+        );
+
+        assert!(
+            validate_identifier("euler")
+                .is_err()
+        );
+
+        assert!(
+            validate_identifier("sin")
+                .is_err()
+        );
+
+        assert!(
+            validate_identifier("measure")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn finite_parameters_are_accepted() {
         assert!(
             validate_parameter(
-                &Parameter::Constant(
-                    1.25
-                )
+                &Parameter::Constant(1.25),
             )
             .is_ok()
         );
     }
 
     #[test]
-    fn non_finite_parameter_is_rejected() {
+    fn non_finite_parameters_are_rejected() {
         assert!(
             validate_parameter(
                 &Parameter::Constant(
-                    f64::NAN
-                )
-            )
-            .is_err()
-        );
-
-        assert!(
-            validate_parameter(
-                &Parameter::Constant(
-                    f64::INFINITY
-                )
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn qubit_operands_preserve_order() {
-        let gate = Gate::new(
-            GateKind::CX,
-            vec![
-                QubitId::new(7),
-                QubitId::new(2),
-            ],
-            Vec::new(),
-            None,
-            None,
-        )
-        .expect(
-            "valid CX gate should construct",
-        );
-
-        assert_eq!(
-            format_qubit_operands(&gate)
-                .expect(
-                    "valid operands should format"
+                    f64::NAN,
                 ),
-            "q[7], q[2]"
+            )
+            .is_err()
+        );
+
+        assert!(
+            validate_parameter(
+                &Parameter::Constant(
+                    f64::INFINITY,
+                ),
+            )
+            .is_err()
+        );
+
+        assert!(
+            validate_parameter(
+                &Parameter::Constant(
+                    f64::NEG_INFINITY,
+                ),
+            )
+            .is_err()
         );
     }
 
     #[test]
-    fn measurement_does_not_invent_identity_mapping() {
+    fn measurement_preserves_explicit_mapping() {
         let measurement =
             Measurement::new(
                 QubitId::new(3),
@@ -1390,14 +1672,14 @@ mod tests {
 
         assert_eq!(
             measurement.qubit().index(),
-            3
+            3,
         );
 
         assert_eq!(
             measurement
                 .classical_bit()
                 .index(),
-            9
+            9,
         );
     }
 
@@ -1405,7 +1687,7 @@ mod tests {
     fn standard_library_include_is_stable() {
         assert_eq!(
             STANDARD_LIBRARY_INCLUDE,
-            "stdgates.inc"
+            "stdgates.inc",
         );
     }
 
@@ -1413,36 +1695,55 @@ mod tests {
     fn media_type_is_stable() {
         assert_eq!(
             OPENQASM_MEDIA_TYPE,
-            "text/x-openqasm"
+            "text/x-openqasm",
         );
     }
 
     #[test]
-    fn version_three_is_required() {
+    fn bounded_output_rejects_oversized_output() {
+        let mut output =
+            BoundedOutput::new(8);
+
         assert!(
-            OpenQasmExporter::new(
-                FormatVersion::new(
-                    2,
-                    0,
-                    0
-                )
-            )
-            .is_err()
+            output
+                .line("12345678")
+                .is_err()
         );
     }
 
     #[test]
-    fn supported_measurement_mode_is_z_non_destructive() {
-        assert_eq!(
-            MeasurementMode::NonDestructive
-                .is_non_destructive(),
-            true
+    fn bounded_output_accepts_exact_limit() {
+        let mut output =
+            BoundedOutput::new(9);
+
+        assert!(
+            output
+                .line("12345678")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn empty_quantum_namespace_is_not_fabricated() {
+        let circuit =
+            circuit(0, 1, Vec::new());
+
+        let text = exporter()
+            .export_circuit(&circuit)
+            .expect(
+                "zero-qubit circuit should export",
+            )
+            .into_text()
+            .expect(
+                "OpenQASM output must be UTF-8",
+            );
+
+        assert!(
+            !text.contains("qubit[0] q;")
         );
 
-        assert_eq!(
-            MeasurementMode::Destructive
-                .is_destructive(),
-            true
+        assert!(
+            text.contains("bit[1] c;")
         );
     }
 }
