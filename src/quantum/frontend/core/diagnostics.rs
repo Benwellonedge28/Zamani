@@ -1,159 +1,118 @@
-//! Zamani Quantum Frontend — deterministic diagnostics.
+//! # Quantum Frontend Diagnostics
 //!
-//! This module provides the format-independent diagnostic model shared by
-//! OpenQASM, QIR, Quil, and future quantum frontends.
+//! Production-grade diagnostics for the Zamani quantum frontend.
 //!
-//! # Architectural boundary
+//! This module is deliberately format-independent. It must not know about
+//! OpenQASM, Quil, QIR, hardware backends, execution, or the canonical
+//! Quantum IR.
 //!
-//! `diagnostics.rs` owns reporting data, not language semantics. It knows
-//! about source spans, severity, stable diagnostic codes, labels, notes, and
-//! help text, but it does not know anything about OpenQASM, QIR, Quil, or the
-//! canonical Quantum IR.
+//! ## Responsibilities
 //!
-//! The dependency direction is:
+//! This module owns:
+//!
+//! - diagnostic severity;
+//! - stable diagnostic codes;
+//! - primary source spans;
+//! - secondary source labels;
+//! - notes;
+//! - help messages;
+//! - deterministic diagnostic ordering;
+//! - bounded diagnostic collections;
+//! - diagnostic truncation state;
+//! - machine-readable diagnostic data;
+//! - human-readable rendering;
+//! - error/warning/note counts.
+//!
+//! ## Non-responsibilities
+//!
+//! This module does NOT:
+//!
+//! - parse source;
+//! - validate quantum semantics;
+//! - construct Quantum IR;
+//! - read files;
+//! - access the network;
+//! - execute processes;
+//! - access quantum hardware;
+//! - decide frontend resource limits.
+//!
+//! Resource policy is owned by `core::limits::FrontendLimits`.
+//! This module only consumes concrete limits supplied by its caller.
+//!
+//! ## Integration contract
+//!
+//! The frontend pipeline is expected to use diagnostics as follows:
 //!
 //! ```text
-//! lexer / parser / semantic validator
-//!                |
-//!                v
-//!       +--------------------+
-//!       | DiagnosticBuilder  |
-//!       | Diagnostic         |
-//!       | DiagnosticBag      |
-//!       +---------+----------+
-//!                 |
-//!                 v
-//!          SourceSpan / source.rs
+//! Source
+//!   │
+//!   ▼
+//! Lexer ───────────────┐
+//!   │                  │
+//!   ▼                  │
+//! Parser ──────────────┤
+//!   │                  │
+//!   ▼                  │
+//! Validator ───────────┤──► DiagnosticBag
+//!   │                  │
+//!   ▼                  │
+//! Lowering ────────────┘
+//!   │
+//!   ▼
+//! Quantum IR
 //! ```
 //!
-//! Errors and diagnostics deliberately remain separate:
+//! Every diagnostic that refers to source code must use `SourceSpan` from
+//! `core::source`.
 //!
-//! - errors represent control-flow/API failure;
-//! - diagnostics represent structured user-facing information.
+//! `DiagnosticBag` preserves insertion order. `sorted()` provides a stable
+//! source-oriented order for user-facing and machine-facing output.
 //!
-//! This prevents the diagnostic system from becoming coupled to a particular
-//! error hierarchy and keeps all frontend formats independently removable.
-//!
-//! # Determinism
-//!
-//! `DiagnosticBag` preserves insertion order for normal iteration and provides
-//! `sorted()` for deterministic presentation independent of producer order.
-//!
-//! Sorting never depends on:
-//!
-//! - hash-map iteration;
-//! - timestamps;
-//! - randomness;
-//! - filesystem ordering;
-//! - thread scheduling;
-//! - external I/O.
-//!
-//! # Resource safety
-//!
-//! `DiagnosticBag::with_max_diagnostics` provides an explicit diagnostic-count
-//! bound. Once the bound is reached, additional diagnostics are rejected and
-//! the bag records that truncation occurred.
-//!
-//! The diagnostic-count policy is deliberately passed as a primitive rather
-//! than importing `FrontendLimits`. The generic limits layer owns policy;
-//! this module owns diagnostic behavior. The future frontend orchestrator can
-//! pass `FrontendLimits::max_diagnostics()` without changing this file.
-//!
-//! # Source-location contract
-//!
-//! All locations use the canonical `SourceSpan` from `core::source`.
-//!
-//! No frontend format may define another source-location type.
-//!
-//! # Rust compatibility
-//!
-//! Target: Rust 1.97.1, Rust 2021.
-//!
-//! No nightly features.
-//! No external crates.
+//! No diagnostic message text should be parsed by callers. Programmatic
+//! consumers must use `DiagnosticCode`, `DiagnosticSeverity`, and structured
+//! fields.
 
 use std::cmp::Ordering;
 use std::fmt;
 
-use super::source::SourceSpan;
+use super::source::{SourceId, SourceSpan};
 
-// =============================================================================
-// Stable diagnostic codes
-// =============================================================================
-
-/// Stable machine-readable diagnostic code.
+/// Maximum number of diagnostic children that can be attached to a single
+/// diagnostic when no caller-specific bound is supplied.
 ///
-/// Codes are strings rather than a global enum because independently
-/// removable frontends must be able to own their namespaces.
+/// This is a defensive fallback only. Production frontend stages should
+/// normally obtain the value from `FrontendLimits::max_diagnostic_children`.
+pub const DEFAULT_MAX_DIAGNOSTIC_CHILDREN: usize = 32;
+
+/// Maximum number of diagnostics stored by an unbounded/default bag.
 ///
-/// Examples:
+/// Production callers should use `DiagnosticBag::with_max_diagnostics` or
+/// `DiagnosticBag::with_max_diagnostics_u64` and supply the value from
+/// `FrontendLimits`.
+pub const DEFAULT_MAX_DIAGNOSTICS: usize = 1024;
+
+/// Default maximum length for an individual diagnostic snippet/message-like
+/// source excerpt.
 ///
-/// - `QASM-E001`
-/// - `QASM-W001`
-/// - `QIR-E001`
-/// - `QUIL-E001`
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DiagnosticCode(String);
+/// This is deliberately conservative. It is a fallback and not a replacement
+/// for `FrontendLimits::max_diagnostic_snippet_length`.
+pub const DEFAULT_MAX_DIAGNOSTIC_SNIPPET_LENGTH: usize = 4096;
 
-impl DiagnosticCode {
-    /// Creates a diagnostic code.
-    ///
-    /// A code must:
-    ///
-    /// - be non-empty;
-    /// - contain only ASCII letters, digits, `-`, `_`, or `.`.
-    ///
-    /// Restricting the syntax keeps codes stable and easy to consume from
-    /// tooling, logs, JSON, LSP clients, and CI systems.
-    #[must_use]
-    pub fn new(value: impl Into<String>) -> Option<Self> {
-        let value = value.into();
-
-        if value.is_empty() || !is_valid_code(&value) {
-            return None;
-        }
-
-        Some(Self(value))
-    }
-
-    /// Returns the machine-readable code.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl AsRef<str> for DiagnosticCode {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl fmt::Display for DiagnosticCode {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-// =============================================================================
-// Severity
-// =============================================================================
-
-/// Diagnostic severity.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// Stable severity of a diagnostic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DiagnosticSeverity {
-    /// Informational information.
+    /// Informational note.
     Note,
 
-    /// A suspicious or recoverable condition.
+    /// Actionable compiler warning.
     Warning,
 
-    /// A condition that makes the requested operation invalid.
+    /// Compilation-blocking or otherwise invalid input.
     Error,
 }
 
 impl DiagnosticSeverity {
-    /// Returns the stable textual representation.
+    /// Returns the conventional lowercase textual representation.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -163,19 +122,20 @@ impl DiagnosticSeverity {
         }
     }
 
-    /// Returns whether this is an error.
+    /// Returns `true` when this severity prevents successful compilation of
+    /// the affected stage.
     #[must_use]
     pub const fn is_error(self) -> bool {
         matches!(self, Self::Error)
     }
 
-    /// Returns whether this is a warning.
+    /// Returns `true` when this severity is a warning.
     #[must_use]
     pub const fn is_warning(self) -> bool {
         matches!(self, Self::Warning)
     }
 
-    /// Returns whether this is a note.
+    /// Returns `true` when this severity is informational.
     #[must_use]
     pub const fn is_note(self) -> bool {
         matches!(self, Self::Note)
@@ -188,74 +148,91 @@ impl fmt::Display for DiagnosticSeverity {
     }
 }
 
-// =============================================================================
-// Label kinds
-// =============================================================================
+/// Stable machine-readable diagnostic code.
+///
+/// The numeric portion is intentionally represented as a value rather than
+/// being derived from message text. This allows diagnostics to evolve without
+/// breaking tooling that consumes compiler output.
+///
+/// The frontend can use broad code ranges:
+///
+/// - `QF0001..=QF0099`: generic frontend diagnostics;
+/// - `QF0100..=QF0199`: source/lexical diagnostics;
+/// - `QF0200..=QF0299`: syntax/parser diagnostics;
+/// - `QF0300..=QF0399`: semantic diagnostics;
+/// - `QF0400..=QF0499`: lowering diagnostics;
+/// - `QF0500..=QF0599`: import/export diagnostics;
+/// - `QF0600..=QF0699`: resource/security diagnostics;
+/// - `QF0700..=QF0799`: unsupported-feature diagnostics.
+///
+/// The exact assignment of individual codes belongs to the frontend
+/// specification and should not be inferred from this implementation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DiagnosticCode(u32);
 
-/// Whether a source label is primary or contextual.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum DiagnosticLabelKind {
-    /// The main location associated with the diagnostic.
-    Primary,
-
-    /// Additional contextual location.
-    Secondary,
-}
-
-impl DiagnosticLabelKind {
-    /// Returns the stable textual representation.
+impl DiagnosticCode {
+    /// Creates a diagnostic code from its numeric component.
+    ///
+    /// `0` is rejected because `QF0000` is reserved and must not be emitted
+    /// as a production diagnostic.
     #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Primary => "primary",
-            Self::Secondary => "secondary",
+    pub const fn new(value: u32) -> Option<Self> {
+        if value == 0 {
+            None
+        } else {
+            Some(Self(value))
         }
+    }
+
+    /// Returns the numeric component.
+    #[must_use]
+    pub const fn number(self) -> u32 {
+        self.0
+    }
+
+    /// Returns the stable textual representation, e.g. `QF0042`.
+    #[must_use]
+    pub fn as_str(self) -> String {
+        format!("QF{:04}", self.0)
     }
 }
 
-// =============================================================================
-// Diagnostic labels
-// =============================================================================
+impl fmt::Display for DiagnosticCode {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "QF{:04}", self.0)
+    }
+}
 
-/// A source-attached diagnostic label.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+/// A source-oriented label attached to a diagnostic.
+///
+/// A diagnostic has at most one primary label. Any number of secondary labels
+/// may be attached subject to the configured child limit.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiagnosticLabel {
-    kind: DiagnosticLabelKind,
     span: SourceSpan,
     message: String,
+    primary: bool,
 }
 
 impl DiagnosticLabel {
     /// Creates a primary label.
     #[must_use]
-    pub fn primary(
-        span: SourceSpan,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn primary(span: SourceSpan, message: impl Into<String>) -> Self {
         Self {
-            kind: DiagnosticLabelKind::Primary,
             span,
             message: message.into(),
+            primary: true,
         }
     }
 
     /// Creates a secondary label.
     #[must_use]
-    pub fn secondary(
-        span: SourceSpan,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn secondary(span: SourceSpan, message: impl Into<String>) -> Self {
         Self {
-            kind: DiagnosticLabelKind::Secondary,
             span,
             message: message.into(),
+            primary: false,
         }
-    }
-
-    /// Returns the label kind.
-    #[must_use]
-    pub const fn kind(&self) -> DiagnosticLabelKind {
-        self.kind
     }
 
     /// Returns the source span.
@@ -269,78 +246,70 @@ impl DiagnosticLabel {
     pub fn message(&self) -> &str {
         &self.message
     }
-}
 
-// =============================================================================
-// Notes
-// =============================================================================
-
-/// Additional explanatory information attached to a diagnostic.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct DiagnosticNote(String);
-
-impl DiagnosticNote {
-    /// Creates a diagnostic note.
+    /// Returns whether this is the primary label.
     #[must_use]
-    pub fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
+    pub const fn is_primary(&self) -> bool {
+        self.primary
     }
 
-    /// Returns the note text.
+    /// Returns whether this is a secondary label.
     #[must_use]
-    pub fn message(&self) -> &str {
-        &self.0
+    pub const fn is_secondary(&self) -> bool {
+        !self.primary
     }
 }
 
-// =============================================================================
-// Help
-// =============================================================================
-
-/// Actionable help attached to a diagnostic.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct DiagnosticHelp(String);
-
-impl DiagnosticHelp {
-    /// Creates a help message.
-    #[must_use]
-    pub fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
-    }
-
-    /// Returns the help text.
-    #[must_use]
-    pub fn message(&self) -> &str {
-        &self.0
-    }
-}
-
-// =============================================================================
-// Diagnostic
-// =============================================================================
-
-/// Complete structured frontend diagnostic.
+/// Structured diagnostic.
 ///
-/// A diagnostic may have no labels for global conditions. When a meaningful
-/// source location exists, frontends should provide exactly one primary label
-/// and may provide any number of secondary labels.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+/// A diagnostic consists of:
+///
+/// - severity;
+/// - stable code;
+/// - message;
+/// - optional primary span;
+/// - bounded secondary labels;
+/// - bounded notes;
+/// - bounded help messages.
+///
+/// The struct intentionally does not contain rendered source text. Source
+/// snippets must be obtained from `SourceFile`/`SourceMap` at rendering time,
+/// preventing stale copies of source data from accumulating in diagnostics.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     severity: DiagnosticSeverity,
     code: DiagnosticCode,
     message: String,
     labels: Vec<DiagnosticLabel>,
-    notes: Vec<DiagnosticNote>,
-    helps: Vec<DiagnosticHelp>,
+    notes: Vec<String>,
+    helps: Vec<String>,
+    max_children: usize,
+    children_truncated: bool,
 }
 
 impl Diagnostic {
-    /// Creates a diagnostic with no labels, notes, or help.
+    /// Creates an empty diagnostic with the supplied child bound.
     #[must_use]
     pub fn new(
         severity: DiagnosticSeverity,
         code: DiagnosticCode,
         message: impl Into<String>,
+    ) -> Self {
+        Self::with_max_children(
+            severity,
+            code,
+            message,
+            DEFAULT_MAX_DIAGNOSTIC_CHILDREN,
+        )
+    }
+
+    /// Creates a diagnostic with an explicit child bound.
+    #[must_use]
+    pub fn with_max_children(
+        severity: DiagnosticSeverity,
+        code: DiagnosticCode,
+        message: impl Into<String>,
+        max_children: usize,
     ) -> Self {
         Self {
             severity,
@@ -349,6 +318,8 @@ impl Diagnostic {
             labels: Vec::new(),
             notes: Vec::new(),
             helps: Vec::new(),
+            max_children,
+            children_truncated: false,
         }
     }
 
@@ -358,13 +329,13 @@ impl Diagnostic {
         self.severity
     }
 
-    /// Returns the stable code.
+    /// Returns the stable diagnostic code.
     #[must_use]
-    pub fn code(&self) -> &DiagnosticCode {
-        &self.code
+    pub const fn code(&self) -> DiagnosticCode {
+        self.code
     }
 
-    /// Returns the diagnostic message.
+    /// Returns the human-readable message.
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
@@ -378,385 +349,395 @@ impl Diagnostic {
 
     /// Returns all notes in insertion order.
     #[must_use]
-    pub fn notes(&self) -> &[DiagnosticNote] {
+    pub fn notes(&self) -> &[String] {
         &self.notes
     }
 
     /// Returns all help messages in insertion order.
     #[must_use]
-    pub fn helps(&self) -> &[DiagnosticHelp] {
+    pub fn helps(&self) -> &[String] {
         &self.helps
     }
 
     /// Returns the primary label, if one exists.
     #[must_use]
     pub fn primary_label(&self) -> Option<&DiagnosticLabel> {
-        self.labels
-            .iter()
-            .find(|label| {
-                label.kind() == DiagnosticLabelKind::Primary
-            })
+        self.labels.iter().find(|label| label.is_primary())
     }
 
     /// Returns the primary source span, if one exists.
     #[must_use]
     pub fn primary_span(&self) -> Option<SourceSpan> {
-        self.primary_label()
-            .map(DiagnosticLabel::span)
+        self.primary_label().map(DiagnosticLabel::span)
     }
 
-    /// Returns whether this diagnostic is an error.
+    /// Returns the configured maximum number of child entries.
     #[must_use]
-    pub const fn is_error(&self) -> bool {
-        self.severity.is_error()
+    pub const fn max_children(&self) -> usize {
+        self.max_children
     }
 
-    /// Returns whether this diagnostic is a warning.
+    /// Returns whether child entries were truncated because the configured
+    /// bound was reached.
     #[must_use]
-    pub const fn is_warning(&self) -> bool {
-        self.severity.is_warning()
+    pub const fn children_truncated(&self) -> bool {
+        self.children_truncated
     }
 
-    /// Returns whether this diagnostic is a note.
-    #[must_use]
-    pub const fn is_note(&self) -> bool {
-        self.severity.is_note()
-    }
-
-    /// Creates a diagnostic builder.
-    #[must_use]
-    pub fn builder(
-        severity: DiagnosticSeverity,
-        code: DiagnosticCode,
-        message: impl Into<String>,
-    ) -> DiagnosticBuilder {
-        DiagnosticBuilder {
-            diagnostic: Self::new(severity, code, message),
-        }
-    }
-
-    fn add_label(
-        &mut self,
-        label: DiagnosticLabel,
-    ) -> Result<(), DiagnosticBuildError> {
-        if label.kind() == DiagnosticLabelKind::Primary
-            && self.primary_label().is_some()
-        {
-            return Err(
-                DiagnosticBuildError::MultiplePrimaryLabels
-            );
-        }
-
-        self.labels.push(label);
-        Ok(())
-    }
-}
-
-impl fmt::Display for Diagnostic {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "{}[{}]: {}",
-            self.severity,
-            self.code,
-            self.message
-        )?;
-
-        for label in &self.labels {
-            write!(
-                formatter,
-                "\n  {} {}: {}",
-                label.kind().as_str(),
-                label.span(),
-                label.message()
-            )?;
-        }
-
-        for note in &self.notes {
-            write!(
-                formatter,
-                "\n  note: {}",
-                note.message()
-            )?;
-        }
-
-        for help in &self.helps {
-            write!(
-                formatter,
-                "\n  help: {}",
-                help.message()
-            )?;
-        }
-
-        Ok(())
-    }
-}
-
-// =============================================================================
-// Diagnostic builder
-// =============================================================================
-
-/// Error produced when a diagnostic violates its structural invariants.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum DiagnosticBuildError {
-    /// More than one primary label was supplied.
-    MultiplePrimaryLabels,
-}
-
-impl fmt::Display for DiagnosticBuildError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::MultiplePrimaryLabels => formatter.write_str(
-                "a diagnostic may contain at most one primary label",
-            ),
-        }
-    }
-}
-
-impl std::error::Error for DiagnosticBuildError {}
-
-/// Builder enforcing diagnostic invariants.
-#[derive(Clone, Debug)]
-pub struct DiagnosticBuilder {
-    diagnostic: Diagnostic,
-}
-
-impl DiagnosticBuilder {
-    /// Adds the primary source label.
+    /// Adds or replaces the primary label.
     ///
-    /// The operation fails if a primary label already exists.
-    pub fn primary(
-        mut self,
+    /// There can only be one primary label. Replacing it is deterministic and
+    /// avoids accidentally producing a diagnostic with multiple competing
+    /// primary locations.
+    pub fn set_primary_label(
+        &mut self,
         span: SourceSpan,
         message: impl Into<String>,
-    ) -> Result<Self, DiagnosticBuildError> {
-        self.diagnostic.add_label(
-            DiagnosticLabel::primary(span, message),
-        )?;
+    ) {
+        let label = DiagnosticLabel::primary(span, message);
 
-        Ok(self)
+        if let Some(existing) =
+            self.labels.iter_mut().find(|item| item.is_primary())
+        {
+            *existing = label;
+        } else if self.labels.len() < self.max_children {
+            self.labels.insert(0, label);
+        } else {
+            self.children_truncated = true;
+        }
     }
 
     /// Adds a secondary source label.
-    #[must_use]
-    pub fn secondary(
-        mut self,
+    ///
+    /// Returns `true` if the label was stored and `false` if the configured
+    /// child limit prevented insertion.
+    pub fn add_secondary_label(
+        &mut self,
         span: SourceSpan,
         message: impl Into<String>,
-    ) -> Self {
-        self.diagnostic
-            .labels
-            .push(DiagnosticLabel::secondary(
-                span,
-                message,
-            ));
+    ) -> bool {
+        if self.labels.len() >= self.max_children {
+            self.children_truncated = true;
+            return false;
+        }
 
-        self
+        self.labels.push(DiagnosticLabel::secondary(span, message));
+        true
     }
 
-    /// Adds an explanatory note.
+    /// Adds a note.
+    ///
+    /// Returns `true` when the note was stored.
+    pub fn add_note(&mut self, message: impl Into<String>) -> bool {
+        if self.child_count() >= self.max_children {
+            self.children_truncated = true;
+            return false;
+        }
+
+        self.notes.push(message.into());
+        true
+    }
+
+    /// Adds a help message.
+    ///
+    /// Returns `true` when the help message was stored.
+    pub fn add_help(&mut self, message: impl Into<String>) -> bool {
+        if self.child_count() >= self.max_children {
+            self.children_truncated = true;
+            return false;
+        }
+
+        self.helps.push(message.into());
+        true
+    }
+
+    /// Returns the total number of child entries.
     #[must_use]
-    pub fn note(
-        mut self,
-        message: impl Into<String>,
-    ) -> Self {
-        self.diagnostic
-            .notes
-            .push(DiagnosticNote::new(message));
-
-        self
+    pub fn child_count(&self) -> usize {
+        self.labels.len() + self.notes.len() + self.helps.len()
     }
 
-    /// Adds actionable help.
+    /// Returns whether the diagnostic contains no source-oriented or
+    /// explanatory child data.
     #[must_use]
-    pub fn help(
-        mut self,
-        message: impl Into<String>,
-    ) -> Self {
-        self.diagnostic
-            .helps
-            .push(DiagnosticHelp::new(message));
-
-        self
+    pub fn is_bare(&self) -> bool {
+        self.labels.is_empty() && self.notes.is_empty() && self.helps.is_empty()
     }
 
-    /// Finalizes the diagnostic.
+    /// Returns a deterministic source key.
+    ///
+    /// Diagnostics without a primary span sort after diagnostics with a
+    /// primary span.
     #[must_use]
-    pub fn build(self) -> Diagnostic {
-        self.diagnostic
-    }
-}
-
-// =============================================================================
-// Diagnostic bag
-// =============================================================================
-
-/// Error returned when a diagnostic cannot be added to a bounded bag.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum DiagnosticPushError {
-    /// The configured diagnostic limit has been reached.
-    LimitExceeded,
-}
-
-impl fmt::Display for DiagnosticPushError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::LimitExceeded => {
-                formatter.write_str("diagnostic limit exceeded")
-            }
+    pub fn sort_key(&self) -> DiagnosticSortKey {
+        match self.primary_span() {
+            Some(span) => DiagnosticSortKey {
+                has_span: true,
+                source_id: span.source_id(),
+                start: span.start().get(),
+                end: span.end().get(),
+                severity: self.severity,
+                code: self.code,
+                message: self.message.clone(),
+            },
+            None => DiagnosticSortKey {
+                has_span: false,
+                source_id: SourceId::new(0),
+                start: 0,
+                end: 0,
+                severity: self.severity,
+                code: self.code,
+                message: self.message.clone(),
+            },
         }
     }
 }
 
-impl std::error::Error for DiagnosticPushError {}
-
-/// Ordered collection of diagnostics belonging to one frontend operation.
+/// A deterministic key used for diagnostic sorting.
 ///
-/// The bag preserves insertion order for normal processing while exposing
-/// `sorted()` for deterministic presentation.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// This type is public so integration tests and frontend clients can use the
+/// exact same ordering contract as the built-in renderer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagnosticSortKey {
+    has_span: bool,
+    source_id: SourceId,
+    start: u64,
+    end: u64,
+    severity: DiagnosticSeverity,
+    code: DiagnosticCode,
+    message: String,
+}
+
+impl Ord for DiagnosticSortKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.has_span
+            .cmp(&other.has_span)
+            .reverse()
+            .then_with(|| self.source_id.cmp(&other.source_id))
+            .then_with(|| self.start.cmp(&other.start))
+            .then_with(|| self.end.cmp(&other.end))
+            .then_with(|| self.severity.cmp(&other.severity).reverse())
+            .then_with(|| self.code.cmp(&other.code))
+            .then_with(|| self.message.cmp(&other.message))
+    }
+}
+
+impl PartialOrd for DiagnosticSortKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// A bounded collection of diagnostics.
+///
+/// `DiagnosticBag` is intentionally an ordered collection rather than a set:
+/// two diagnostics with the same code/message may legitimately refer to
+/// different source locations and therefore must not be silently deduplicated.
+///
+/// The bag preserves insertion order and can produce a separately sorted copy.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiagnosticBag {
     diagnostics: Vec<Diagnostic>,
-    max_diagnostics: Option<usize>,
+    max_diagnostics: usize,
     truncated: bool,
 }
 
+impl Default for DiagnosticBag {
+    fn default() -> Self {
+        Self::with_max_diagnostics(DEFAULT_MAX_DIAGNOSTICS)
+    }
+}
+
 impl DiagnosticBag {
-    /// Creates an unbounded diagnostic bag.
-    ///
-    /// At an untrusted frontend boundary, prefer
-    /// `with_max_diagnostics`.
+    /// Creates a bag using the production fallback diagnostic limit.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a bag with a concrete diagnostic limit.
+    #[must_use]
+    pub fn with_max_diagnostics(max_diagnostics: usize) -> Self {
         Self {
             diagnostics: Vec::new(),
-            max_diagnostics: None,
+            max_diagnostics,
             truncated: false,
         }
     }
 
-    /// Creates a bounded diagnostic bag.
+    /// Creates a bag from the `u64` representation used by
+    /// `FrontendLimits`.
     ///
-    /// `0` is valid and means that no diagnostic can be retained.
+    /// Returns `None` if the configured limit cannot be represented as a
+    /// platform `usize`.
     #[must_use]
-    pub const fn with_max_diagnostics(
-        max_diagnostics: usize,
-    ) -> Self {
-        Self {
-            diagnostics: Vec::new(),
-            max_diagnostics: Some(max_diagnostics),
-            truncated: false,
-        }
+    pub fn with_max_diagnostics_u64(max_diagnostics: u64) -> Option<Self> {
+        usize::try_from(max_diagnostics)
+            .ok()
+            .map(Self::with_max_diagnostics)
     }
 
-    /// Returns the configured maximum, if bounded.
+    /// Returns the configured maximum number of diagnostics.
     #[must_use]
-    pub const fn max_diagnostics(&self) -> Option<usize> {
+    pub const fn max_diagnostics(&self) -> usize {
         self.max_diagnostics
     }
 
-    /// Returns the number of retained diagnostics.
+    /// Returns the number of stored diagnostics.
     #[must_use]
     pub fn len(&self) -> usize {
         self.diagnostics.len()
     }
 
-    /// Returns whether the bag contains no retained diagnostics.
+    /// Returns whether the bag contains no diagnostics.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.diagnostics.is_empty()
     }
 
-    /// Returns whether at least one diagnostic was rejected because the
-    /// configured limit was reached.
+    /// Returns whether diagnostic insertion was truncated.
     #[must_use]
     pub const fn is_truncated(&self) -> bool {
         self.truncated
     }
 
-    /// Returns retained diagnostics in insertion order.
+    /// Returns all diagnostics in insertion order.
     #[must_use]
     pub fn as_slice(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
 
-    /// Returns an insertion-order iterator.
-    pub fn iter(
-        &self,
-    ) -> std::slice::Iter<'_, Diagnostic> {
+    /// Returns all diagnostics in insertion order.
+    #[must_use]
+    pub fn diagnostics(&self) -> &[Diagnostic] {
+        &self.diagnostics
+    }
+
+    /// Returns an iterator over diagnostics in insertion order.
+    pub fn iter(&self) -> std::slice::Iter<'_, Diagnostic> {
         self.diagnostics.iter()
     }
 
-    /// Adds one diagnostic.
-    pub fn push(
-        &mut self,
-        diagnostic: Diagnostic,
-    ) -> Result<(), DiagnosticPushError> {
-        if let Some(maximum) = self.max_diagnostics {
-            if self.diagnostics.len() >= maximum {
-                self.truncated = true;
-                return Err(
-                    DiagnosticPushError::LimitExceeded
-                );
-            }
+    /// Returns a mutable iterator over diagnostics.
+    ///
+    /// This is provided for compiler stages that need to enrich diagnostics
+    /// after initial construction.
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Diagnostic> {
+        self.diagnostics.iter_mut()
+    }
+
+    /// Returns an owned iterator over diagnostics.
+    pub fn into_iter(self) -> std::vec::IntoIter<Diagnostic> {
+        self.diagnostics.into_iter()
+    }
+
+    /// Adds a diagnostic if capacity remains.
+    ///
+    /// Returns `true` when inserted, `false` when the bag is already full.
+    pub fn push(&mut self, diagnostic: Diagnostic) -> bool {
+        if self.diagnostics.len() >= self.max_diagnostics {
+            self.truncated = true;
+            return false;
         }
 
         self.diagnostics.push(diagnostic);
-        Ok(())
+        true
     }
 
-    /// Attempts to add a diagnostic.
+    /// Adds multiple diagnostics until capacity is reached.
     ///
-    /// Returns `false` when the configured limit has been reached.
-    ///
-    /// This is useful for parser recovery code where exceeding the diagnostic
-    /// limit must not replace the original syntax/semantic failure.
-    pub fn push_or_truncate(
-        &mut self,
-        diagnostic: Diagnostic,
-    ) -> bool {
-        self.push(diagnostic).is_ok()
+    /// Returns the number successfully inserted.
+    pub fn extend<I>(&mut self, diagnostics: I) -> usize
+    where
+        I: IntoIterator<Item = Diagnostic>,
+    {
+        let mut inserted = 0;
+
+        for diagnostic in diagnostics {
+            if self.push(diagnostic) {
+                inserted += 1;
+            } else {
+                break;
+            }
+        }
+
+        inserted
     }
 
-    /// Returns whether at least one retained diagnostic is an error.
-    #[must_use]
-    pub fn has_errors(&self) -> bool {
-        self.diagnostics.iter().any(Diagnostic::is_error)
-    }
-
-    /// Returns whether at least one retained diagnostic is a warning.
-    #[must_use]
-    pub fn has_warnings(&self) -> bool {
-        self.diagnostics.iter().any(Diagnostic::is_warning)
-    }
-
-    /// Returns a deterministically ordered copy.
-    ///
-    /// Ordering is:
-    ///
-    /// 1. diagnostics with primary source locations;
-    /// 2. source ID;
-    /// 3. start offset;
-    /// 4. end offset;
-    /// 5. severity;
-    /// 6. code;
-    /// 7. message;
-    /// 8. labels;
-    /// 9. notes;
-    /// 10. help.
-    ///
-    /// The original insertion order remains unchanged.
-    #[must_use]
-    pub fn sorted(&self) -> Vec<Diagnostic> {
-        let mut result = self.diagnostics.clone();
-        result.sort_by(compare_diagnostics);
-        result
-    }
-
-    /// Removes all diagnostics while retaining the configured limit.
+    /// Removes all diagnostics and resets truncation state.
     pub fn clear(&mut self) {
         self.diagnostics.clear();
         self.truncated = false;
+    }
+
+    /// Returns the number of error diagnostics.
+    #[must_use]
+    pub fn error_count(&self) -> usize {
+        self.diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity().is_error())
+            .count()
+    }
+
+    /// Returns the number of warning diagnostics.
+    #[must_use]
+    pub fn warning_count(&self) -> usize {
+        self.diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity().is_warning())
+            .count()
+    }
+
+    /// Returns the number of note diagnostics.
+    #[must_use]
+    pub fn note_count(&self) -> usize {
+        self.diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity().is_note())
+            .count()
+    }
+
+    /// Returns whether at least one error exists.
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        self.error_count() != 0
+    }
+
+    /// Returns whether at least one warning exists.
+    #[must_use]
+    pub fn has_warnings(&self) -> bool {
+        self.warning_count() != 0
+    }
+
+    /// Returns a deterministically sorted copy.
+    ///
+    /// The original insertion order remains untouched.
+    #[must_use]
+    pub fn sorted(&self) -> Vec<Diagnostic> {
+        let mut result = self.diagnostics.clone();
+        result.sort_by(|left, right| left.sort_key().cmp(&right.sort_key()));
+        result
+    }
+
+    /// Sorts the bag in place using the canonical diagnostic ordering.
+    pub fn sort(&mut self) {
+        self.diagnostics
+            .sort_by(|left, right| left.sort_key().cmp(&right.sort_key()));
+    }
+
+    /// Converts the bag into an owned vector in insertion order.
+    #[must_use]
+    pub fn into_vec(self) -> Vec<Diagnostic> {
+        self.diagnostics
+    }
+}
+
+impl IntoIterator for DiagnosticBag {
+    type Item = Diagnostic;
+    type IntoIter = std::vec::IntoIter<Diagnostic>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.diagnostics.into_iter()
     }
 }
 
@@ -769,378 +750,577 @@ impl<'a> IntoIterator for &'a DiagnosticBag {
     }
 }
 
-// =============================================================================
-// Deterministic ordering
-// =============================================================================
+impl<'a> IntoIterator for &'a mut DiagnosticBag {
+    type Item = &'a mut Diagnostic;
+    type IntoIter = std::slice::IterMut<'a, Diagnostic>;
 
-fn compare_diagnostics(
-    left: &Diagnostic,
-    right: &Diagnostic,
-) -> Ordering {
-    match (
-        left.primary_span(),
-        right.primary_span(),
-    ) {
-        (Some(left_span), Some(right_span)) => {
-            left_span
-                .source_id()
-                .cmp(&right_span.source_id())
-                .then_with(|| {
-                    left_span
-                        .start()
-                        .cmp(&right_span.start())
-                })
-                .then_with(|| {
-                    left_span
-                        .end()
-                        .cmp(&right_span.end())
-                })
-        }
-
-        (Some(_), None) => Ordering::Less,
-        (None, Some(_)) => Ordering::Greater,
-        (None, None) => Ordering::Equal,
+    fn into_iter(self) -> Self::IntoIter {
+        self.diagnostics.iter_mut()
     }
-    .then_with(|| {
-        left.severity.cmp(&right.severity)
-    })
-    .then_with(|| left.code.cmp(&right.code))
-    .then_with(|| left.message.cmp(&right.message))
-    .then_with(|| left.labels.cmp(&right.labels))
-    .then_with(|| left.notes.cmp(&right.notes))
-    .then_with(|| left.helps.cmp(&right.helps))
 }
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-fn is_valid_code(value: &str) -> bool {
-    value.bytes().all(|byte| {
-        byte.is_ascii_alphanumeric()
-            || matches!(byte, b'-' | b'_' | b'.')
-    })
+/// Builder for a diagnostic.
+///
+/// The builder is deliberately small and deterministic. It is useful inside
+/// lexer/parser/validator code where diagnostics are constructed incrementally.
+#[derive(Debug)]
+pub struct DiagnosticBuilder {
+    diagnostic: Diagnostic,
 }
 
-// =============================================================================
-// Tests
-// =============================================================================
+impl DiagnosticBuilder {
+    /// Creates a builder with the default child bound.
+    #[must_use]
+    pub fn new(
+        severity: DiagnosticSeverity,
+        code: DiagnosticCode,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            diagnostic: Diagnostic::new(severity, code, message),
+        }
+    }
+
+    /// Creates a builder with an explicit child bound.
+    #[must_use]
+    pub fn with_max_children(
+        severity: DiagnosticSeverity,
+        code: DiagnosticCode,
+        message: impl Into<String>,
+        max_children: usize,
+    ) -> Self {
+        Self {
+            diagnostic: Diagnostic::with_max_children(
+                severity,
+                code,
+                message,
+                max_children,
+            ),
+        }
+    }
+
+    /// Sets the primary source location.
+    #[must_use]
+    pub fn primary(
+        mut self,
+        span: SourceSpan,
+        message: impl Into<String>,
+    ) -> Self {
+        self.diagnostic.set_primary_label(span, message);
+        self
+    }
+
+    /// Adds a secondary source location.
+    #[must_use]
+    pub fn secondary(
+        mut self,
+        span: SourceSpan,
+        message: impl Into<String>,
+    ) -> Self {
+        self.diagnostic.add_secondary_label(span, message);
+        self
+    }
+
+    /// Adds a note.
+    #[must_use]
+    pub fn note(mut self, message: impl Into<String>) -> Self {
+        self.diagnostic.add_note(message);
+        self
+    }
+
+    /// Adds a help message.
+    #[must_use]
+    pub fn help(mut self, message: impl Into<String>) -> Self {
+        self.diagnostic.add_help(message);
+        self
+    }
+
+    /// Finishes the diagnostic.
+    #[must_use]
+    pub fn build(self) -> Diagnostic {
+        self.diagnostic
+    }
+}
+
+/// Creates an error diagnostic.
+#[must_use]
+pub fn error(
+    code: DiagnosticCode,
+    message: impl Into<String>,
+) -> Diagnostic {
+    Diagnostic::new(DiagnosticSeverity::Error, code, message)
+}
+
+/// Creates a warning diagnostic.
+#[must_use]
+pub fn warning(
+    code: DiagnosticCode,
+    message: impl Into<String>,
+) -> Diagnostic {
+    Diagnostic::new(DiagnosticSeverity::Warning, code, message)
+}
+
+/// Creates an informational diagnostic.
+#[must_use]
+pub fn note(
+    code: DiagnosticCode,
+    message: impl Into<String>,
+) -> Diagnostic {
+    Diagnostic::new(DiagnosticSeverity::Note, code, message)
+}
+
+/// Converts a diagnostic severity into its machine-readable string.
+impl From<DiagnosticSeverity> for &'static str {
+    fn from(value: DiagnosticSeverity) -> Self {
+        value.as_str()
+    }
+}
+
+/// Renders a diagnostic without source snippets.
+///
+/// This renderer is intentionally source-map independent. A higher-level
+/// renderer can use the diagnostic spans to obtain source lines from
+/// `SourceMap`/`SourceFile`.
+///
+/// The result is deterministic.
+#[must_use]
+pub fn render_plain(diagnostic: &Diagnostic) -> String {
+    let mut output = String::new();
+
+    output.push_str(diagnostic.severity().as_str());
+    output.push('[');
+    output.push_str(&diagnostic.code().as_str());
+    output.push_str("]: ");
+    output.push_str(diagnostic.message());
+
+    for label in diagnostic.labels() {
+        output.push('\n');
+        output.push_str(if label.is_primary() {
+            "  --> "
+        } else {
+            "  = "
+        });
+
+        output.push_str(&format!(
+            "{}:{}-{}",
+            label.span().source_id().get(),
+            label.span().start().get(),
+            label.span().end().get()
+        ));
+
+        if !label.message().is_empty() {
+            output.push_str(": ");
+            output.push_str(label.message());
+        }
+    }
+
+    for note in diagnostic.notes() {
+        output.push('\n');
+        output.push_str("  note: ");
+        output.push_str(note);
+    }
+
+    for help in diagnostic.helps() {
+        output.push('\n');
+        output.push_str("  help: ");
+        output.push_str(help);
+    }
+
+    if diagnostic.children_truncated() {
+        output.push('\n');
+        output.push_str("  note: additional diagnostic details were truncated");
+    }
+
+    output
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::source::{SourceOffset, SourceId, SourceSpan};
 
-    use crate::quantum::frontend::core::source::SourceId;
-
-    fn code(value: &str) -> DiagnosticCode {
-        DiagnosticCode::new(value)
-            .expect("test diagnostic code must be valid")
+    fn code(number: u32) -> DiagnosticCode {
+        DiagnosticCode::new(number).expect("non-zero diagnostic code")
     }
 
-    fn span(start: usize, end: usize) -> SourceSpan {
+    fn span(start: u64, end: u64) -> SourceSpan {
         SourceSpan::new(
-            SourceId::from_raw(0),
-            start,
-            end,
+            SourceId::new(1),
+            SourceOffset::new(start),
+            SourceOffset::new(end),
         )
-        .expect("test span must be ordered")
+        .expect("valid span")
     }
 
     #[test]
-    fn diagnostic_code_rejects_invalid_values() {
-        assert!(DiagnosticCode::new("").is_none());
-        assert!(
-            DiagnosticCode::new("QASM E001").is_none()
-        );
-        assert!(
-            DiagnosticCode::new("QASM-E001").is_some()
-        );
-        assert!(
-            DiagnosticCode::new("QASM_E001.v1").is_some()
-        );
+    fn severity_strings_are_stable() {
+        assert_eq!(DiagnosticSeverity::Note.as_str(), "note");
+        assert_eq!(DiagnosticSeverity::Warning.as_str(), "warning");
+        assert_eq!(DiagnosticSeverity::Error.as_str(), "error");
     }
 
     #[test]
-    fn severity_is_machine_readable() {
-        assert_eq!(
-            DiagnosticSeverity::Error.as_str(),
-            "error"
-        );
-        assert_eq!(
-            DiagnosticSeverity::Warning.as_str(),
-            "warning"
-        );
-        assert_eq!(
-            DiagnosticSeverity::Note.as_str(),
-            "note"
-        );
-
+    fn severity_classification_is_correct() {
         assert!(DiagnosticSeverity::Error.is_error());
-        assert!(
-            DiagnosticSeverity::Warning.is_warning()
-        );
+        assert!(DiagnosticSeverity::Warning.is_warning());
         assert!(DiagnosticSeverity::Note.is_note());
+
+        assert!(!DiagnosticSeverity::Error.is_warning());
+        assert!(!DiagnosticSeverity::Warning.is_error());
+        assert!(!DiagnosticSeverity::Note.is_error());
     }
 
     #[test]
-    fn builder_enforces_one_primary_label() {
-        let first = Diagnostic::builder(
+    fn diagnostic_codes_are_stable() {
+        let diagnostic_code = code(42);
+
+        assert_eq!(diagnostic_code.number(), 42);
+        assert_eq!(diagnostic_code.as_str(), "QF0042");
+        assert_eq!(diagnostic_code.to_string(), "QF0042");
+    }
+
+    #[test]
+    fn zero_diagnostic_code_is_rejected() {
+        assert!(DiagnosticCode::new(0).is_none());
+    }
+
+    #[test]
+    fn primary_label_is_stored() {
+        let diagnostic = DiagnosticBuilder::new(
             DiagnosticSeverity::Error,
-            code("QASM-E001"),
+            code(1),
             "invalid gate",
         )
-        .primary(span(0, 1), "gate")
-        .expect(
-            "first primary label must be accepted",
-        );
+        .primary(span(10, 12), "gate starts here")
+        .build();
 
-        let second =
-            first.primary(span(1, 2), "second");
-
+        assert_eq!(diagnostic.primary_span(), Some(span(10, 12)));
         assert_eq!(
-            second,
-            Err(
-                DiagnosticBuildError::
-                    MultiplePrimaryLabels
-            )
+            diagnostic
+                .primary_label()
+                .expect("primary label")
+                .message(),
+            "gate starts here"
         );
     }
 
     #[test]
-    fn builder_preserves_structured_context() {
-        let diagnostic = Diagnostic::builder(
-            DiagnosticSeverity::Error,
-            code("QASM-E002"),
-            "unknown identifier",
-        )
-        .primary(
-            span(2, 4),
-            "unknown identifier",
-        )
-        .expect(
-            "primary label must be accepted",
-        )
-        .secondary(
-            span(0, 1),
-            "declaration site",
-        )
-        .note(
-            "the identifier must be declared before use",
-        )
-        .help(
-            "declare the register before referencing it",
-        )
-        .build();
+    fn setting_primary_label_replaces_existing_primary() {
+        let mut diagnostic = error(code(1), "invalid");
+
+        diagnostic.set_primary_label(span(1, 2), "first");
+        diagnostic.set_primary_label(span(3, 4), "second");
+
+        assert_eq!(diagnostic.labels().len(), 1);
+        assert_eq!(diagnostic.primary_span(), Some(span(3, 4)));
+        assert_eq!(diagnostic.labels()[0].message(), "second");
+    }
+
+    #[test]
+    fn secondary_labels_are_supported() {
+        let mut diagnostic = error(code(1), "mismatch");
+
+        diagnostic.set_primary_label(span(1, 2), "use");
+        assert!(diagnostic.add_secondary_label(
+            span(20, 21),
+            "declaration"
+        ));
 
         assert_eq!(diagnostic.labels().len(), 2);
+        assert!(diagnostic.labels()[0].is_primary());
+        assert!(diagnostic.labels()[1].is_secondary());
+    }
+
+    #[test]
+    fn notes_and_help_are_bounded() {
+        let mut diagnostic =
+            Diagnostic::with_max_children(
+                DiagnosticSeverity::Error,
+                code(1),
+                "invalid",
+                2,
+            );
+
+        assert!(diagnostic.add_note("note"));
+        assert!(diagnostic.add_help("help"));
+        assert!(!diagnostic.add_note("overflow"));
+
         assert_eq!(diagnostic.notes().len(), 1);
         assert_eq!(diagnostic.helps().len(), 1);
-        assert_eq!(
-            diagnostic.primary_span(),
-            Some(span(2, 4))
-        );
+        assert!(diagnostic.children_truncated());
     }
 
     #[test]
-    fn display_is_deterministic() {
-        let diagnostic = Diagnostic::builder(
-            DiagnosticSeverity::Error,
-            code("QASM-E003"),
-            "invalid operand",
-        )
-        .primary(span(3, 4), "operand")
-        .expect(
-            "primary label must be accepted",
-        )
-        .secondary(span(0, 1), "gate")
-        .note("two qubits are required")
-        .help("provide the missing operand")
-        .build();
+    fn child_limit_applies_across_labels_notes_and_help() {
+        let mut diagnostic =
+            Diagnostic::with_max_children(
+                DiagnosticSeverity::Error,
+                code(1),
+                "invalid",
+                2,
+            );
 
-        assert_eq!(
-            diagnostic.to_string(),
-            "error[QASM-E003]: invalid operand\n\
-             primary source:0:3..4: operand\n\
-             secondary source:0:0..1: gate\n\
-             note: two qubits are required\n\
-             help: provide the missing operand"
-        );
+        diagnostic.set_primary_label(span(1, 2), "primary");
+        assert!(diagnostic.add_secondary_label(
+            span(3, 4),
+            "secondary"
+        ));
+        assert!(!diagnostic.add_help("help"));
+
+        assert_eq!(diagnostic.child_count(), 2);
+        assert!(diagnostic.children_truncated());
     }
 
     #[test]
-    fn bounded_bag_rejects_after_limit() {
-        let mut bag =
-            DiagnosticBag::with_max_diagnostics(1);
+    fn zero_child_limit_rejects_new_children() {
+        let mut diagnostic =
+            Diagnostic::with_max_children(
+                DiagnosticSeverity::Error,
+                code(1),
+                "invalid",
+                0,
+            );
 
-        let first = Diagnostic::new(
-            DiagnosticSeverity::Error,
-            code("QASM-E001"),
-            "first",
-        );
+        diagnostic.set_primary_label(span(1, 2), "primary");
 
-        let second = Diagnostic::new(
-            DiagnosticSeverity::Error,
-            code("QASM-E002"),
-            "second",
-        );
+        assert!(diagnostic.labels().is_empty());
+        assert!(diagnostic.children_truncated());
+    }
 
-        assert!(bag.push(first).is_ok());
+    #[test]
+    fn bag_is_bounded() {
+        let mut bag = DiagnosticBag::with_max_diagnostics(2);
 
-        assert_eq!(
-            bag.push(second),
-            Err(
-                DiagnosticPushError::LimitExceeded
-            )
-        );
+        assert!(bag.push(error(code(1), "first")));
+        assert!(bag.push(error(code(2), "second")));
+        assert!(!bag.push(error(code(3), "third")));
 
-        assert_eq!(bag.len(), 1);
+        assert_eq!(bag.len(), 2);
         assert!(bag.is_truncated());
     }
 
     #[test]
-    fn zero_limit_rejects_all_diagnostics() {
-        let mut bag =
-            DiagnosticBag::with_max_diagnostics(0);
+    fn bag_preserves_insertion_order() {
+        let mut bag = DiagnosticBag::with_max_diagnostics(10);
 
-        let diagnostic = Diagnostic::new(
-            DiagnosticSeverity::Error,
-            code("QASM-E001"),
-            "error",
-        );
+        bag.push(error(code(3), "third"));
+        bag.push(error(code(1), "first"));
+        bag.push(error(code(2), "second"));
 
-        assert_eq!(
-            bag.push(diagnostic),
-            Err(
-                DiagnosticPushError::LimitExceeded
-            )
-        );
-
-        assert!(bag.is_empty());
-        assert!(bag.is_truncated());
-    }
-
-    #[test]
-    fn bag_reports_error_and_warning_presence() {
-        let mut bag = DiagnosticBag::new();
-
-        assert!(!bag.has_errors());
-        assert!(!bag.has_warnings());
-
-        bag.push(Diagnostic::new(
-            DiagnosticSeverity::Warning,
-            code("QASM-W001"),
-            "warning",
-        ))
-        .expect(
-            "unbounded bag must accept warning",
-        );
-
-        assert!(!bag.has_errors());
-        assert!(bag.has_warnings());
-
-        bag.push(Diagnostic::new(
-            DiagnosticSeverity::Error,
-            code("QASM-E001"),
-            "error",
-        ))
-        .expect(
-            "unbounded bag must accept error",
-        );
-
-        assert!(bag.has_errors());
+        assert_eq!(bag.as_slice()[0].code(), code(3));
+        assert_eq!(bag.as_slice()[1].code(), code(1));
+        assert_eq!(bag.as_slice()[2].code(), code(2));
     }
 
     #[test]
     fn sorted_order_is_deterministic() {
-        let mut bag = DiagnosticBag::new();
+        let mut bag = DiagnosticBag::with_max_diagnostics(10);
 
-        let later = Diagnostic::builder(
-            DiagnosticSeverity::Error,
-            code("QASM-E002"),
-            "later",
-        )
-        .primary(span(20, 21), "later")
-        .expect(
-            "primary label must be accepted",
-        )
-        .build();
+        let mut later = error(code(2), "later");
+        later.set_primary_label(span(20, 21), "later");
 
-        let earlier = Diagnostic::builder(
-            DiagnosticSeverity::Error,
-            code("QASM-E001"),
-            "earlier",
-        )
-        .primary(span(2, 3), "earlier")
-        .expect(
-            "primary label must be accepted",
-        )
-        .build();
+        let mut earlier = error(code(1), "earlier");
+        earlier.set_primary_label(span(5, 6), "earlier");
 
-        bag.push(later)
-            .expect("bag must accept later diagnostic");
-
-        bag.push(earlier)
-            .expect(
-                "bag must accept earlier diagnostic",
-            );
+        bag.push(later);
+        bag.push(earlier);
 
         let sorted = bag.sorted();
 
-        assert_eq!(
-            sorted[0].code().as_str(),
-            "QASM-E001"
-        );
-        assert_eq!(
-            sorted[1].code().as_str(),
-            "QASM-E002"
-        );
+        assert_eq!(sorted[0].primary_span(), Some(span(5, 6)));
+        assert_eq!(sorted[1].primary_span(), Some(span(20, 21)));
 
-        // Original insertion order remains unchanged.
+        // The original insertion order remains unchanged.
         assert_eq!(
-            bag.as_slice()[0].code().as_str(),
-            "QASM-E002"
+            bag.as_slice()[0].primary_span(),
+            Some(span(20, 21))
         );
     }
 
     #[test]
-    fn source_span_is_canonical_location_type() {
-        let label =
-            DiagnosticLabel::primary(
-                span(1, 2),
-                "token",
-            );
+    fn bag_can_be_sorted_in_place() {
+        let mut bag = DiagnosticBag::with_max_diagnostics(10);
 
-        assert_eq!(
-            label.span().source_id(),
-            SourceId::from_raw(0)
-        );
-        assert_eq!(label.span().start(), 1);
-        assert_eq!(label.span().end(), 2);
+        let mut second = error(code(2), "second");
+        second.set_primary_label(span(20, 21), "");
+
+        let mut first = error(code(1), "first");
+        first.set_primary_label(span(1, 2), "");
+
+        bag.push(second);
+        bag.push(first);
+
+        bag.sort();
+
+        assert_eq!(bag.as_slice()[0].code(), code(1));
+        assert_eq!(bag.as_slice()[1].code(), code(2));
     }
 
     #[test]
-    fn clear_resets_truncation_state() {
-        let mut bag =
-            DiagnosticBag::with_max_diagnostics(0);
+    fn counts_are_correct() {
+        let mut bag = DiagnosticBag::with_max_diagnostics(10);
 
-        let diagnostic = Diagnostic::new(
-            DiagnosticSeverity::Error,
-            code("QASM-E001"),
-            "error",
-        );
+        bag.push(error(code(1), "error"));
+        bag.push(warning(code(2), "warning"));
+        bag.push(note(code(3), "note"));
+        bag.push(error(code(4), "error"));
 
-        assert!(
-            bag.push(diagnostic).is_err()
-        );
+        assert_eq!(bag.error_count(), 2);
+        assert_eq!(bag.warning_count(), 1);
+        assert_eq!(bag.note_count(), 1);
+        assert!(bag.has_errors());
+        assert!(bag.has_warnings());
+    }
+
+    #[test]
+    fn clear_resets_truncation() {
+        let mut bag = DiagnosticBag::with_max_diagnostics(1);
+
+        bag.push(error(code(1), "first"));
+        assert!(!bag.push(error(code(2), "second")));
         assert!(bag.is_truncated());
 
         bag.clear();
 
         assert!(bag.is_empty());
         assert!(!bag.is_truncated());
-        assert_eq!(
-            bag.max_diagnostics(),
-            Some(0)
-        );
+    }
+
+    #[test]
+    fn extend_respects_limit() {
+        let mut bag = DiagnosticBag::with_max_diagnostics(2);
+
+        let inserted = bag.extend(vec![
+            error(code(1), "one"),
+            error(code(2), "two"),
+            error(code(3), "three"),
+        ]);
+
+        assert_eq!(inserted, 2);
+        assert_eq!(bag.len(), 2);
+        assert!(bag.is_truncated());
+    }
+
+    #[test]
+    fn u64_limit_conversion_works() {
+        let bag =
+            DiagnosticBag::with_max_diagnostics_u64(10)
+                .expect("10 fits usize");
+
+        assert_eq!(bag.max_diagnostics(), 10);
+    }
+
+    #[test]
+    fn diagnostic_builder_is_composable() {
+        let diagnostic = DiagnosticBuilder::with_max_children(
+            DiagnosticSeverity::Error,
+            code(42),
+            "register mismatch",
+            8,
+        )
+        .primary(span(10, 12), "register use")
+        .secondary(span(30, 34), "register declaration")
+        .note("registers must have compatible widths")
+        .help("use matching register dimensions")
+        .build();
+
+        assert_eq!(diagnostic.code(), code(42));
+        assert_eq!(diagnostic.severity(), DiagnosticSeverity::Error);
+        assert_eq!(diagnostic.labels().len(), 2);
+        assert_eq!(diagnostic.notes().len(), 1);
+        assert_eq!(diagnostic.helps().len(), 1);
+    }
+
+    #[test]
+    fn plain_renderer_is_deterministic() {
+        let diagnostic = DiagnosticBuilder::new(
+            DiagnosticSeverity::Error,
+            code(42),
+            "register mismatch",
+        )
+        .primary(span(10, 12), "register use")
+        .secondary(span(30, 34), "declaration")
+        .note("widths differ")
+        .help("use matching registers")
+        .build();
+
+        let first = render_plain(&diagnostic);
+        let second = render_plain(&diagnostic);
+
+        assert_eq!(first, second);
+        assert!(first.contains("error[QF0042]"));
+        assert!(first.contains("register mismatch"));
+        assert!(first.contains("register use"));
+        assert!(first.contains("declaration"));
+        assert!(first.contains("note: widths differ"));
+        assert!(first.contains("help: use matching registers"));
+    }
+
+    #[test]
+    fn diagnostic_without_span_sorts_after_spanned_diagnostic() {
+        let mut bag = DiagnosticBag::with_max_diagnostics(10);
+
+        let without_span = error(code(1), "no span");
+
+        let mut with_span = error(code(2), "has span");
+        with_span.set_primary_label(span(1, 2), "here");
+
+        bag.push(without_span);
+        bag.push(with_span);
+
+        let sorted = bag.sorted();
+
+        assert!(sorted[0].primary_span().is_some());
+        assert!(sorted[1].primary_span().is_none());
+    }
+
+    #[test]
+    fn duplicate_diagnostics_are_not_silently_removed() {
+        let mut bag = DiagnosticBag::with_max_diagnostics(10);
+
+        let first = error(code(1), "same");
+        let second = error(code(1), "same");
+
+        bag.push(first);
+        bag.push(second);
+
+        assert_eq!(bag.len(), 2);
+    }
+
+    #[test]
+    fn iterators_work() {
+        let mut bag = DiagnosticBag::with_max_diagnostics(10);
+
+        bag.push(error(code(1), "one"));
+        bag.push(error(code(2), "two"));
+
+        let count = bag.iter().count();
+        assert_eq!(count, 2);
+
+        let mut mutable_count = 0;
+        for _diagnostic in &mut bag {
+            mutable_count += 1;
+        }
+
+        assert_eq!(mutable_count, 2);
+
+        let owned: Vec<_> = bag.clone().into_iter().collect();
+        assert_eq!(owned.len(), 2);
+    }
+
+    #[test]
+    fn empty_diagnostic_reports_bare() {
+        let diagnostic = error(code(1), "message");
+
+        assert!(diagnostic.is_bare());
+    }
+
+    #[test]
+    fn diagnostic_with_label_is_not_bare() {
+        let mut diagnostic = error(code(1), "message");
+
+        diagnostic.set_primary_label(span(1, 2), "location");
+
+        assert!(!diagnostic.is_bare());
     }
 }
