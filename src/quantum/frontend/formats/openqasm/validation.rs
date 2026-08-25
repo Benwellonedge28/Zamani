@@ -17,7 +17,7 @@
 //!   OpenQASM AST
 //!       |
 //!       v
-//!  THIS MODULE
+//!   THIS MODULE
 //!       |
 //!       ├── version validation
 //!       ├── declaration validation
@@ -42,72 +42,24 @@
 //!       |
 //!       v
 //!   QuantumCircuit
-//!       |
-//!       v
-//!   canonical Quantum IR validation
 //! ```
 //!
-//! # Responsibilities
+//! # Production invariants
 //!
-//! This module answers:
+//! 1. No filesystem access.
+//! 2. No network access.
+//! 3. No process execution.
+//! 4. No QPU/hardware access.
+//! 5. No calibration execution.
+//! 6. No silent deletion of unsupported syntax.
+//! 7. Every unbounded semantic operation is subject to FrontendLimits.
+//! 8. Declaration-before-use is enforced.
+//! 9. OpenQASM scope visibility is enforced.
+//! 10. The selected standard-library version is the program version.
+//! 11. Validation never constructs canonical Quantum IR.
+//! 12. Validation errors are deterministic and bounded.
 //!
-//! > Is this AST semantically valid OpenQASM under the configured
-//! > implementation policy?
-//!
-//! It deliberately does NOT:
-//!
-//! - lex source;
-//! - parse source;
-//! - resolve include files;
-//! - access the filesystem;
-//! - access the network;
-//! - construct `QuantumCircuit`;
-//! - construct canonical `Gate` values;
-//! - optimize;
-//! - route;
-//! - schedule;
-//! - map logical to physical hardware;
-//! - execute a quantum program;
-//! - silently discard unsupported constructs.
-//!
-//! Quantum IR validation remains a separate downstream responsibility.
-//!
-//! # Important semantic rules
-//!
-//! This validator intentionally enforces the OpenQASM language model rather
-//! than treating OpenQASM as a simple gate-list format.
-//!
-//! In particular:
-//!
-//! - standard-library gates become available only after `stdgates.inc` is
-//!   included;
-//! - `U` and `gphase` are language built-ins;
-//! - user-defined gates must be declared before use;
-//! - a gate may not recursively invoke itself;
-//! - gate bodies have their own restricted scope;
-//! - gate parameters behave as angle-valued symbols;
-//! - gate formal qubits cannot be indexed in the gate body;
-//! - quantum operands must resolve to quantum objects;
-//! - classical destinations of measurement must resolve to classical objects;
-//! - register broadcasting requires compatible register sizes;
-//! - indexes must be statically valid when their bounds are statically known;
-//! - unsupported physical/timing/calibration/extension features are rejected
-//!   according to configuration rather than silently lowered;
-//! - resource exhaustion is always an explicit validation error.
-//!
-//! # Rust compatibility
-//!
-//! Rust 1.97.1.
-//! Rust 2021.
-//! No nightly features.
-//! No new dependencies.
-//!
-//! # Specification baseline
-//!
-//! The implementation follows the OpenQASM 3.0/3.1 semantic model and the
-//! official grammar/reference documentation. The AST intentionally preserves
-//! constructs that cannot yet be represented by Zamani IR so that lowering can
-//! make a separate, explicit capability decision.
+//! Rust compatibility: Rust 1.97.1 / Rust 2021.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -129,6 +81,7 @@ use super::ast::{
     IndexExpression,
     IntegerRadix,
     OldStyleDeclarationKind,
+    OpenQasmVersion,
     Program,
     QuantumType,
     ReturnValue,
@@ -136,106 +89,63 @@ use super::ast::{
     Statement,
     StatementOrScope,
     SwitchCase,
-    TypeQualifier,
     TypeSpecifier,
     UnaryOperator,
 };
+
 use super::stdgates::{
     lookup as lookup_standard_gate,
     StandardGate,
     STANDARD_LIBRARY_INCLUDE,
 };
 
-// =============================================================================
+// ============================================================================
 // Configuration
-// =============================================================================
+// ============================================================================
 
-/// Configuration controlling OpenQASM semantic validation.
+/// Configuration controlling OpenQASM semantic acceptance.
 ///
-/// This policy is intentionally separate from [`FrontendLimits`].
+/// This is deliberately separate from [`FrontendLimits`].
 ///
 /// `FrontendLimits` answers:
 ///
-/// > How much input/complexity may the frontend process?
+/// > How much work may the frontend perform?
 ///
 /// `ValidationConfig` answers:
 ///
-/// > Which OpenQASM language/features does this frontend accept?
+/// > Which language features may this frontend accept?
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ValidationConfig {
-    /// Highest supported OpenQASM major version.
     pub max_major_version: u16,
-
-    /// Highest supported minor version for the supported major.
     pub max_minor_version: u16,
 
-    /// Whether the version declaration may be omitted.
     pub allow_missing_version: bool,
-
-    /// Whether legacy OpenQASM 2-style `qreg`/`creg` declarations are
-    /// accepted.
     pub allow_legacy_declarations: bool,
-
-    /// Whether include directives are accepted.
     pub allow_includes: bool,
 
-    /// Whether `extern` declarations are accepted.
-    ///
-    /// Acceptance here means semantic acceptance only. Execution is never
-    /// performed by the frontend.
     pub allow_extern: bool,
-
-    /// Whether calibration constructs are accepted.
-    ///
-    /// The current canonical IR does not represent calibration semantics.
-    /// Enabling this flag therefore means the AST may pass semantic
-    /// validation and later fail capability/lowering checks.
     pub allow_calibration: bool,
-
-    /// Whether timing constructs such as `delay` and `box` are accepted.
     pub allow_timing: bool,
-
-    /// Whether implementation-specific annotations/extensions are accepted.
     pub allow_extensions: bool,
-
-    /// Whether physical qubit references such as `$0` are accepted.
-    ///
-    /// The canonical Zamani Quantum IR is logical/hardware-independent, so
-    /// production lowering may still reject them later.
     pub allow_physical_qubits: bool,
 
-    /// Whether pragmas are accepted.
-    ///
-    /// Pragmas are retained by the AST and never executed by this validator.
     pub allow_pragmas: bool,
-
-    /// Whether annotations are accepted.
     pub allow_annotations: bool,
 
-    /// Maximum semantic expression depth.
-    pub max_expression_depth: u64,
-
-    /// Maximum semantic expression nodes.
-    pub max_expression_nodes: u64,
-
-    /// Maximum source-level register size.
-    pub max_register_size: u64,
-
-    /// Maximum number of symbols retained by the validator.
-    pub max_symbols: u64,
-
-    /// Maximum parameters in one declaration.
-    pub max_parameters: u64,
-
-    /// Maximum operands in one operation.
-    pub max_operands: u64,
-
-    /// Maximum gate-definition expansion/call depth tracked by the validator.
-    pub max_gate_call_depth: u64,
-
-    /// Maximum statements processed in one semantic operation.
+    /// Permit non-constant quantum-register indexes.
     ///
-    /// The effective value is additionally bounded by `FrontendLimits`.
+    /// OpenQASM permits implementations to impose a stricter rule here.
+    /// Zamani production mode defaults to false because the canonical
+    /// logical-quantum frontend is intended to remain statically bounded.
+    pub allow_runtime_quantum_index: bool,
+
+    pub max_expression_depth: u64,
+    pub max_expression_nodes: u64,
+    pub max_register_size: u64,
+    pub max_symbols: u64,
+    pub max_parameters: u64,
+    pub max_operands: u64,
+    pub max_gate_call_depth: u64,
     pub max_statements: u64,
 }
 
@@ -246,11 +156,6 @@ impl Default for ValidationConfig {
 }
 
 impl ValidationConfig {
-    /// Standard production policy.
-    ///
-    /// The policy accepts ordinary OpenQASM 3.0/3.1 logical programs while
-    /// refusing constructs that require uncontrolled external execution or
-    /// implementation-specific semantics.
     #[must_use]
     pub const fn production() -> Self {
         Self {
@@ -270,6 +175,8 @@ impl ValidationConfig {
             allow_pragmas: true,
             allow_annotations: true,
 
+            allow_runtime_quantum_index: false,
+
             max_expression_depth: 256,
             max_expression_nodes: 1_000_000,
             max_register_size: 1_000_000,
@@ -281,7 +188,6 @@ impl ValidationConfig {
         }
     }
 
-    /// Strict policy for hostile/untrusted source.
     #[must_use]
     pub const fn strict() -> Self {
         Self {
@@ -301,6 +207,8 @@ impl ValidationConfig {
             allow_pragmas: false,
             allow_annotations: false,
 
+            allow_runtime_quantum_index: false,
+
             max_expression_depth: 64,
             max_expression_nodes: 100_000,
             max_register_size: 100_000,
@@ -313,11 +221,10 @@ impl ValidationConfig {
     }
 }
 
-// =============================================================================
+// ============================================================================
 // Error codes
-// =============================================================================
+// ============================================================================
 
-/// Stable machine-readable semantic validation code.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ValidationErrorCode {
     UnsupportedVersion,
@@ -327,6 +234,7 @@ pub enum ValidationErrorCode {
     UndefinedIdentifier,
     InvalidIdentifierUse,
     InvalidScope,
+    InvalidGlobalDeclaration,
 
     InvalidRegisterSize,
     InvalidTypeSize,
@@ -340,6 +248,7 @@ pub enum ValidationErrorCode {
     InvalidOperand,
     OperandTypeMismatch,
     PhysicalQubitDisabled,
+    RuntimeQuantumIndexDisabled,
     RegisterBroadcastMismatch,
     DuplicateQuantumOperand,
 
@@ -406,10 +315,12 @@ pub enum ValidationErrorCode {
     InvalidGateBodyDeclaration,
     IndexedGateFormalOperand,
     GateBodyClassicalOperation,
+
+    InvalidFunctionScope,
+    InvalidGateScope,
 }
 
 impl ValidationErrorCode {
-    /// Stable diagnostic code.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -420,6 +331,7 @@ impl ValidationErrorCode {
             Self::UndefinedIdentifier => "QASM-S002",
             Self::InvalidIdentifierUse => "QASM-S003",
             Self::InvalidScope => "QASM-S004",
+            Self::InvalidGlobalDeclaration => "QASM-S005",
 
             Self::InvalidRegisterSize => "QASM-T001",
             Self::InvalidTypeSize => "QASM-T002",
@@ -433,8 +345,9 @@ impl ValidationErrorCode {
             Self::InvalidOperand => "QASM-Q001",
             Self::OperandTypeMismatch => "QASM-Q002",
             Self::PhysicalQubitDisabled => "QASM-Q003",
-            Self::RegisterBroadcastMismatch => "QASM-Q004",
-            Self::DuplicateQuantumOperand => "QASM-Q005",
+            Self::RuntimeQuantumIndexDisabled => "QASM-Q004",
+            Self::RegisterBroadcastMismatch => "QASM-Q005",
+            Self::DuplicateQuantumOperand => "QASM-Q006",
 
             Self::GateOperandCountMismatch => "QASM-G001",
             Self::GateParameterCountMismatch => "QASM-G002",
@@ -499,21 +412,23 @@ impl ValidationErrorCode {
             Self::InvalidGateBodyDeclaration => "QASM-B002",
             Self::IndexedGateFormalOperand => "QASM-B003",
             Self::GateBodyClassicalOperation => "QASM-B004",
+
+            Self::InvalidFunctionScope => "QASM-F001",
+            Self::InvalidGateScope => "QASM-F002",
         }
     }
 }
 
 impl fmt::Display for ValidationErrorCode {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
-// =============================================================================
-// Validation error/result
-// =============================================================================
+// ============================================================================
+// Result
+// ============================================================================
 
-/// One semantic validation error.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidationError {
     code: ValidationErrorCode,
@@ -522,7 +437,6 @@ pub struct ValidationError {
 }
 
 impl ValidationError {
-    /// Creates a validation error.
     #[must_use]
     pub fn new(
         code: ValidationErrorCode,
@@ -536,19 +450,16 @@ impl ValidationError {
         }
     }
 
-    /// Returns the stable diagnostic code.
     #[must_use]
     pub const fn code(&self) -> ValidationErrorCode {
         self.code
     }
 
-    /// Returns the human-readable message.
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
     }
 
-    /// Returns the source span.
     #[must_use]
     pub const fn span(&self) -> SourceSpan {
         self.span
@@ -556,26 +467,19 @@ impl ValidationError {
 }
 
 impl fmt::Display for ValidationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "{}: {}",
-            self.code,
-            self.message
-        )
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.code, self.message)
     }
 }
 
 impl std::error::Error for ValidationError {}
 
-/// Result of semantic validation.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ValidationResult {
     errors: Vec<ValidationError>,
 }
 
 impl ValidationResult {
-    /// Creates a successful validation result.
     #[must_use]
     pub fn success() -> Self {
         Self {
@@ -583,31 +487,26 @@ impl ValidationResult {
         }
     }
 
-    /// Creates a validation result from errors.
     #[must_use]
     pub fn from_errors(errors: Vec<ValidationError>) -> Self {
         Self { errors }
     }
 
-    /// Returns all retained validation errors.
     #[must_use]
     pub fn errors(&self) -> &[ValidationError] {
         &self.errors
     }
 
-    /// Returns whether the program is semantically valid.
     #[must_use]
     pub fn is_valid(&self) -> bool {
         self.errors.is_empty()
     }
 
-    /// Returns whether validation failed.
     #[must_use]
     pub fn is_invalid(&self) -> bool {
         !self.errors.is_empty()
     }
 
-    /// Converts the result to `Result`.
     pub fn into_result(self) -> Result<(), Vec<ValidationError>> {
         if self.errors.is_empty() {
             Ok(())
@@ -617,42 +516,10 @@ impl ValidationResult {
     }
 }
 
-// =============================================================================
-// Public API
-// =============================================================================
+// ============================================================================
+// Semantic type system
+// ============================================================================
 
-/// Validates an OpenQASM program using production policy.
-pub fn validate_program(
-    program: &Program,
-    limits: &FrontendLimits,
-) -> ValidationResult {
-    validate_program_with_config(
-        program,
-        limits,
-        ValidationConfig::production(),
-    )
-}
-
-/// Validates an OpenQASM program using an explicit policy.
-pub fn validate_program_with_config(
-    program: &Program,
-    limits: &FrontendLimits,
-    config: ValidationConfig,
-) -> ValidationResult {
-    let mut validator = Validator::new(limits, config);
-    validator.validate_program(program);
-    validator.finish()
-}
-
-// =============================================================================
-// Semantic types
-// =============================================================================
-
-/// Coarse semantic type used by the validator.
-///
-/// This is intentionally NOT an alternative IR. It exists only for
-/// OpenQASM-specific semantic checking and disappears at the frontend/IR
-/// boundary.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum SemanticType {
     Unknown,
@@ -705,21 +572,22 @@ impl SemanticType {
         !self.is_quantum()
             && !matches!(
                 self,
-                Self::Subroutine
+                Self::Unknown
+                    | Self::Subroutine
                     | Self::Extern
-                    | Self::Unknown
             )
     }
 
     fn quantum_size(&self) -> Option<u64> {
         match self {
-            Self::Quantum { size }
-            | Self::Alias {
-                size,
-                quantum: true,
-            } => *size,
+            Self::Quantum { size } => *size,
 
             Self::GateOperand => Some(1),
+
+            Self::Alias {
+                quantum: true,
+                size,
+            } => *size,
 
             _ => None,
         }
@@ -727,14 +595,14 @@ impl SemanticType {
 
     fn classical_width(&self) -> Option<u64> {
         match self {
+            Self::Bool => Some(1),
+
             Self::Bit(size)
             | Self::Int(size)
             | Self::UInt(size)
             | Self::Float(size)
             | Self::Angle(size)
             | Self::Complex(size) => *size,
-
-            Self::Bool => Some(1),
 
             Self::Alias {
                 quantum: false,
@@ -746,14 +614,41 @@ impl SemanticType {
     }
 }
 
-/// One semantic symbol.
+// ============================================================================
+// Scope model
+// ============================================================================
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ScopeKind {
+    Global,
+    Block,
+    Gate,
+    Subroutine,
+}
+
 #[derive(Clone, Debug)]
 struct Symbol {
     ty: SemanticType,
     span: SourceSpan,
+    constant: bool,
+    scope: ScopeKind,
 }
 
-/// One user-defined gate signature.
+#[derive(Clone, Debug)]
+struct Scope {
+    kind: ScopeKind,
+    symbols: HashMap<String, Symbol>,
+}
+
+impl Scope {
+    fn new(kind: ScopeKind) -> Self {
+        Self {
+            kind,
+            symbols: HashMap::new(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 struct GateSignature {
     parameter_count: usize,
@@ -761,9 +656,9 @@ struct GateSignature {
     span: SourceSpan,
 }
 
-// =============================================================================
+// ============================================================================
 // Validator
-// =============================================================================
+// ============================================================================
 
 struct Validator<'a> {
     limits: &'a FrontendLimits,
@@ -771,41 +666,30 @@ struct Validator<'a> {
 
     errors: Vec<ValidationError>,
 
-    scopes: Vec<HashMap<String, Symbol>>,
+    scopes: Vec<Scope>,
 
     gates: HashMap<String, GateSignature>,
+    subroutines: HashMap<String, GateSignature>,
 
-    /// Names of gates currently being semantically validated.
     gate_stack: Vec<String>,
 
-    /// Names of includes already processed in this semantic scope.
     includes: HashSet<String>,
 
-    /// Whether `stdgates.inc` has become available at the current point.
+    /// Actual source-program version.
+    ///
+    /// This MUST NOT be replaced with `config.max_minor_version`.
+    program_version: Option<OpenQasmVersion>,
+
     stdgates_available: bool,
 
-    /// Number of semantic expression nodes processed.
     expression_nodes: u64,
-
-    /// Total semantic statements processed.
     statement_count: u64,
-
-    /// Total symbols introduced.
     symbol_count: u64,
 
-    /// Current lexical nesting depth.
-    scope_depth: u64,
-
-    /// Current loop depth.
     loop_depth: u64,
-
-    /// Current subroutine depth.
     subroutine_depth: u64,
 
-    /// Whether the current scope is a gate definition body.
     in_gate_body: bool,
-
-    /// Whether the current scope is a subroutine body.
     in_subroutine_body: bool,
 }
 
@@ -819,19 +703,22 @@ impl<'a> Validator<'a> {
             config,
             errors: Vec::new(),
 
-            scopes: vec![HashMap::new()],
+            scopes: vec![Scope::new(ScopeKind::Global)],
 
             gates: HashMap::new(),
+            subroutines: HashMap::new(),
+
             gate_stack: Vec::new(),
 
             includes: HashSet::new(),
+
+            program_version: None,
             stdgates_available: false,
 
             expression_nodes: 0,
             statement_count: 0,
             symbol_count: 0,
 
-            scope_depth: 0,
             loop_depth: 0,
             subroutine_depth: 0,
 
@@ -844,11 +731,13 @@ impl<'a> Validator<'a> {
         ValidationResult::from_errors(self.errors)
     }
 
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // Program
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     fn validate_program(&mut self, program: &Program) {
+        self.program_version = program.version();
+
         self.validate_version(program);
 
         for statement in program.statements() {
@@ -863,25 +752,20 @@ impl<'a> Validator<'a> {
     fn validate_version(&mut self, program: &Program) {
         match program.version() {
             Some(version) => {
-                let supported_major =
-                    version.major() == self.config.max_major_version;
+                let supported =
+                    version.major() as u16 == self.config.max_major_version
+                        && version.minor() as u16 <= self.config.max_minor_version;
 
-                let supported_minor =
-                    supported_major
-                        && version.minor()
-                            <= self.config.max_minor_version;
-
-                if !supported_major || !supported_minor {
+                if !supported {
                     self.error(
                         ValidationErrorCode::UnsupportedVersion,
                         version.span(),
                         format!(
-                            "OpenQASM version {}.{} is not supported; \
+                            "OpenQASM version {} is not supported; \
                              maximum supported version is {}.{}",
-                            version.major(),
-                            version.minor(),
+                            version,
                             self.config.max_major_version,
-                            self.config.max_minor_version,
+                            self.config.max_minor_version
                         ),
                     );
                 }
@@ -900,14 +784,17 @@ impl<'a> Validator<'a> {
         }
     }
 
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // Statement dispatcher
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     fn validate_statement(&mut self, statement: &Statement) {
         match statement {
             Statement::Include(value) => {
-                self.validate_include(value.path(), value.span());
+                self.validate_include(
+                    value.path(),
+                    value.span(),
+                );
             }
 
             Statement::CalibrationGrammar(value) => {
@@ -926,8 +813,7 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::PragmaDisabled,
                         value.span(),
-                        "pragma statements are disabled by the current \
-                         frontend policy",
+                        "pragma statements are disabled",
                     );
                 }
             }
@@ -937,8 +823,7 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::AnnotationDisabled,
                         value.span(),
-                        "annotations are disabled by the current \
-                         frontend policy",
+                        "annotations are disabled",
                     );
                     return;
                 }
@@ -976,6 +861,7 @@ impl<'a> Validator<'a> {
 
                 if let Some(initializer) = value.initializer() {
                     self.validate_expression(initializer);
+
                     self.validate_initializer_type(
                         &ty,
                         initializer,
@@ -987,6 +873,7 @@ impl<'a> Validator<'a> {
                     value.name().as_str(),
                     ty,
                     value.name().span(),
+                    false,
                 );
             }
 
@@ -1016,10 +903,24 @@ impl<'a> Validator<'a> {
                     value.name().as_str(),
                     ty,
                     value.name().span(),
+                    true,
                 );
             }
 
             Statement::QuantumDeclaration(value) => {
+                if !matches!(
+                    self.current_scope_kind(),
+                    ScopeKind::Global
+                ) {
+                    self.error(
+                        ValidationErrorCode::InvalidGlobalDeclaration,
+                        value.span(),
+                        "qubit declarations are only permitted \
+                         in global scope",
+                    );
+                    return;
+                }
+
                 self.validate_quantum_declaration(
                     value.ty(),
                     value.name().as_str(),
@@ -1033,8 +934,7 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::UnsupportedStatement,
                         value.span(),
-                        "legacy qreg/creg declarations are disabled \
-                         by the current production policy",
+                        "legacy qreg/creg declarations are disabled",
                     );
                     return;
                 }
@@ -1048,146 +948,49 @@ impl<'a> Validator<'a> {
                     None => Some(1),
                 };
 
-                if size.is_none() {
+                let Some(size) = size else {
                     self.error(
                         ValidationErrorCode::InvalidRegisterSize,
                         value.span(),
                         "legacy register size must be a compile-time \
                          non-negative integer",
                     );
-                }
+                    return;
+                };
 
-                if let Some(size) = size {
-                    self.check_register_size(
-                        size,
-                        value.span(),
-                    );
-
-                    let ty = match value.kind() {
-                        OldStyleDeclarationKind::QReg => {
-                            SemanticType::Quantum {
-                                size: Some(size),
-                            }
-                        }
-
-                        OldStyleDeclarationKind::CReg => {
-                            SemanticType::Bit(Some(size))
-                        }
-                    };
-
-                    self.declare(
-                        value.name().as_str(),
-                        ty,
-                        value.name().span(),
-                    );
-                }
-            }
-
-            Statement::AliasDeclaration(value) => {
-                if self.in_gate_body {
+                if size == 0 {
                     self.error(
-                        ValidationErrorCode::InvalidGateBodyDeclaration,
+                        ValidationErrorCode::InvalidRegisterSize,
                         value.span(),
-                        "alias declarations are not permitted inside \
-                         a gate definition",
+                        "register size must be positive",
                     );
                     return;
                 }
 
-                let mut quantum = None;
-                let mut total_size = Some(0u64);
+                self.check_register_size(size, value.span());
 
-                for operand in value.operands() {
-                    let symbol = self.resolve(
-                        operand.name().as_str(),
-                    );
-
-                    match symbol {
-                        Some(symbol) if symbol.ty.is_quantum() => {
-                            if quantum == Some(false) {
-                                self.error(
-                                    ValidationErrorCode::OperandTypeMismatch,
-                                    operand.span(),
-                                    "an alias cannot combine classical \
-                                     and quantum operands",
-                                );
-                            }
-
-                            quantum = Some(true);
-
-                            total_size = self.add_sizes(
-                                total_size,
-                                self.designator_size(
-                                    operand,
-                                ),
-                            );
-                        }
-
-                        Some(symbol) if symbol.ty.is_classical() => {
-                            if quantum == Some(true) {
-                                self.error(
-                                    ValidationErrorCode::OperandTypeMismatch,
-                                    operand.span(),
-                                    "an alias cannot combine quantum \
-                                     and classical operands",
-                                );
-                            }
-
-                            quantum = Some(false);
-
-                            total_size = self.add_sizes(
-                                total_size,
-                                self.designator_size(
-                                    operand,
-                                ),
-                            );
-                        }
-
-                        Some(_) => {
-                            self.error(
-                                ValidationErrorCode::InvalidIdentifierUse,
-                                operand.span(),
-                                format!(
-                                    "`{}` is not an aliasable register",
-                                    operand.name().as_str(),
-                                ),
-                            );
-                        }
-
-                        None => {
-                            self.error(
-                                ValidationErrorCode::UndefinedIdentifier,
-                                operand.name().span(),
-                                format!(
-                                    "identifier `{}` is not defined",
-                                    operand.name().as_str(),
-                                ),
-                            );
+                let ty = match value.kind() {
+                    OldStyleDeclarationKind::QReg => {
+                        SemanticType::Quantum {
+                            size: Some(size),
                         }
                     }
 
-                    self.validate_designator(
-                        operand,
-                        quantum != Some(false),
-                    );
-                }
-
-                if value.operands().is_empty() {
-                    self.error(
-                        ValidationErrorCode::InvalidOperand,
-                        value.span(),
-                        "alias must contain at least one operand",
-                    );
-                }
+                    OldStyleDeclarationKind::CReg => {
+                        SemanticType::Bit(Some(size))
+                    }
+                };
 
                 self.declare(
                     value.name().as_str(),
-                    SemanticType::Alias {
-                        quantum: quantum.unwrap_or(false),
-                        size: total_size,
-                    },
+                    ty,
                     value.name().span(),
+                    false,
                 );
+            }
+
+            Statement::AliasDeclaration(value) => {
+                self.validate_alias_declaration(value);
             }
 
             Statement::IoDeclaration(value) => {
@@ -1195,8 +998,8 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::InvalidGateBodyDeclaration,
                         value.span(),
-                        "I/O declarations are not permitted inside \
-                         a gate definition",
+                        "I/O declarations are not permitted \
+                         inside a gate definition",
                     );
                     return;
                 }
@@ -1210,7 +1013,7 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::InvalidAssignment,
                         value.span(),
-                        "OpenQASM input/output declarations do not accept \
+                        "input/output declarations cannot contain \
                          an initializer in this AST form",
                     );
                 }
@@ -1219,14 +1022,34 @@ impl<'a> Validator<'a> {
                     value.name().as_str(),
                     self.semantic_scalar_type(value.ty()),
                     value.name().span(),
+                    false,
                 );
             }
 
             Statement::GateDefinition(value) => {
+                if self.current_scope_kind() != ScopeKind::Global {
+                    self.error(
+                        ValidationErrorCode::InvalidGateScope,
+                        value.span(),
+                        "gate definitions are only permitted at global scope",
+                    );
+                    return;
+                }
+
                 self.validate_gate_definition(value);
             }
 
             Statement::DefDefinition(value) => {
+                if self.current_scope_kind() != ScopeKind::Global {
+                    self.error(
+                        ValidationErrorCode::InvalidFunctionScope,
+                        value.span(),
+                        "subroutine definitions are only permitted \
+                         at global scope",
+                    );
+                    return;
+                }
+
                 self.validate_def_definition(value);
             }
 
@@ -1235,17 +1058,16 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::ExternDisabled,
                         value.span(),
-                        "extern declarations are disabled by the current \
-                         frontend policy",
+                        "extern declarations are disabled",
                     );
                 }
 
-                if self.in_gate_body {
+                if self.current_scope_kind() != ScopeKind::Global {
                     self.error(
-                        ValidationErrorCode::InvalidGateBodyDeclaration,
+                        ValidationErrorCode::InvalidScope,
                         value.span(),
-                        "extern declarations are not permitted inside \
-                         a gate definition",
+                        "extern declarations are only permitted \
+                         at global scope",
                     );
                 }
 
@@ -1267,6 +1089,7 @@ impl<'a> Validator<'a> {
                     value.name().as_str(),
                     SemanticType::Extern,
                     value.name().span(),
+                    true,
                 );
             }
 
@@ -1316,8 +1139,7 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::TimingDisabled,
                         value.span(),
-                        "delay statements are disabled by the current \
-                         frontend policy",
+                        "delay statements are disabled",
                     );
                 }
 
@@ -1336,8 +1158,7 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::TimingDisabled,
                         value.span(),
-                        "box statements are disabled by the current \
-                         frontend policy",
+                        "box statements are disabled",
                     );
                 }
 
@@ -1345,11 +1166,11 @@ impl<'a> Validator<'a> {
                     self.validate_expression(designator);
                 }
 
-                self.with_scope(|validator| {
+                self.with_block_scope(|validator| {
                     for statement in value.body() {
-                        if !validator
-                            .consume_statement_budget(statement.span())
-                        {
+                        if !validator.consume_statement_budget(
+                            statement.span(),
+                        ) {
                             break;
                         }
 
@@ -1386,13 +1207,16 @@ impl<'a> Validator<'a> {
                     value.iterable(),
                 );
 
-                self.with_scope(|validator| {
+                self.with_block_scope(|validator| {
+                    let ty = validator.semantic_scalar_type(
+                        value.variable_type(),
+                    );
+
                     validator.declare(
                         value.variable().as_str(),
-                        validator.semantic_scalar_type(
-                            value.variable_type(),
-                        ),
+                        ty,
                         value.variable().span(),
+                        false,
                     );
 
                     validator.loop_depth =
@@ -1416,7 +1240,7 @@ impl<'a> Validator<'a> {
                     value.condition(),
                 );
 
-                self.with_scope(|validator| {
+                self.with_block_scope(|validator| {
                     validator.loop_depth =
                         validator.loop_depth.saturating_add(1);
 
@@ -1444,14 +1268,10 @@ impl<'a> Validator<'a> {
                             body,
                         } => {
                             for expression in expressions {
-                                self.validate_expression(
-                                    expression,
-                                );
+                                self.validate_expression(expression);
 
                                 if let Some(key) =
-                                    self.constant_expression_key(
-                                        expression,
-                                    )
+                                    self.constant_expression_key(expression)
                                 {
                                     if !case_keys.insert(key) {
                                         self.error(
@@ -1463,7 +1283,7 @@ impl<'a> Validator<'a> {
                                 }
                             }
 
-                            self.with_scope(|validator| {
+                            self.with_block_scope(|validator| {
                                 for statement in body {
                                     if !validator
                                         .consume_statement_budget(
@@ -1473,9 +1293,7 @@ impl<'a> Validator<'a> {
                                         break;
                                     }
 
-                                    validator.validate_statement(
-                                        statement,
-                                    );
+                                    validator.validate_statement(statement);
                                 }
                             });
                         }
@@ -1485,14 +1303,13 @@ impl<'a> Validator<'a> {
                                 self.error(
                                     ValidationErrorCode::InvalidCondition,
                                     value.span(),
-                                    "switch may contain at most one \
-                                     default case",
+                                    "switch may contain at most one default case",
                                 );
                             }
 
                             default_seen = true;
 
-                            self.with_scope(|validator| {
+                            self.with_block_scope(|validator| {
                                 for statement in body {
                                     if !validator
                                         .consume_statement_budget(
@@ -1502,9 +1319,7 @@ impl<'a> Validator<'a> {
                                         break;
                                     }
 
-                                    validator.validate_statement(
-                                        statement,
-                                    );
+                                    validator.validate_statement(statement);
                                 }
                             });
                         }
@@ -1536,13 +1351,12 @@ impl<'a> Validator<'a> {
                 self.error(
                     ValidationErrorCode::UnsupportedStatement,
                     value.span(),
-                    "`end` is not supported by the current Zamani \
-                     semantic execution model",
+                    "`end` is not supported by the current logical frontend",
                 );
             }
 
             Statement::Return(value) => {
-                if self.subroutine_depth == 0 {
+                if !self.in_subroutine_body {
                     self.error(
                         ValidationErrorCode::ReturnOutsideSubroutine,
                         value.span(),
@@ -1564,9 +1378,7 @@ impl<'a> Validator<'a> {
                         }
 
                         ReturnValue::QuantumCall(call) => {
-                            self.validate_quantum_call(
-                                call,
-                            );
+                            self.validate_quantum_call(call);
                         }
                     }
                 }
@@ -1577,8 +1389,7 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::CalibrationDisabled,
                         value.span(),
-                        "inline calibration blocks are disabled by the \
-                         current frontend policy",
+                        "inline calibration blocks are disabled",
                     );
                 }
             }
@@ -1588,8 +1399,7 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::CalibrationDisabled,
                         value.span(),
-                        "defcal statements are disabled by the current \
-                         frontend policy",
+                        "defcal statements are disabled",
                     );
                 }
 
@@ -1617,8 +1427,7 @@ impl<'a> Validator<'a> {
                 self.error(
                     ValidationErrorCode::UnsupportedStatement,
                     value.span(),
-                    "`nop` is not part of the supported Zamani logical \
-                     operation subset",
+                    "`nop` is not part of the supported logical IR subset",
                 );
             }
 
@@ -1629,7 +1438,7 @@ impl<'a> Validator<'a> {
                         value.span(),
                         format!(
                             "OpenQASM extension `{}` is disabled",
-                            value.name(),
+                            value.name()
                         ),
                     );
                 }
@@ -1637,37 +1446,34 @@ impl<'a> Validator<'a> {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Includes
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Include handling
+    // ------------------------------------------------------------------------
 
     fn validate_include(
         &mut self,
         path: &str,
         span: SourceSpan,
     ) {
+        if self.current_scope_kind() != ScopeKind::Global {
+            self.error(
+                ValidationErrorCode::IncludeOutOfScope,
+                span,
+                "include directives are only valid at global scope",
+            );
+            return;
+        }
+
         if !self.config.allow_includes {
             self.error(
                 ValidationErrorCode::IncludeDisabled,
                 span,
-                "include directives are disabled by the current \
-                 frontend policy",
+                "include directives are disabled",
             );
             return;
         }
 
-        if self.scope_depth != 0 {
-            self.error(
-                ValidationErrorCode::IncludeOutOfScope,
-                span,
-                "OpenQASM include directives are only valid at global scope",
-            );
-            return;
-        }
-
-        if path.is_empty()
-            || path.as_bytes().contains(&0)
-        {
+        if path.is_empty() || path.as_bytes().contains(&0) {
             self.error(
                 ValidationErrorCode::InvalidInclude,
                 span,
@@ -1680,20 +1486,122 @@ impl<'a> Validator<'a> {
             self.error(
                 ValidationErrorCode::DuplicateInclude,
                 span,
-                format!(
-                    "include `{path}` has already been processed"
-                ),
+                format!("include `{path}` has already been processed"),
             );
+            return;
         }
 
         if path == STANDARD_LIBRARY_INCLUDE {
             self.stdgates_available = true;
         }
+
+        // Deliberately no filesystem/network operation here.
+        //
+        // Actual include resolution belongs to the importer/resolver layer.
     }
 
-    // -------------------------------------------------------------------------
-    // Declarations
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Alias
+    // ------------------------------------------------------------------------
+
+    fn validate_alias_declaration(
+        &mut self,
+        value: &super::ast::AliasDeclaration,
+    ) {
+        let mut quantum: Option<bool> = None;
+        let mut total_size: Option<u64> = Some(0);
+
+        if value.operands().is_empty() {
+            self.error(
+                ValidationErrorCode::InvalidOperand,
+                value.span(),
+                "alias must contain at least one operand",
+            );
+        }
+
+        for operand in value.operands() {
+            let symbol = self.resolve(
+                operand.name().as_str(),
+            );
+
+            match symbol {
+                Some(symbol) if symbol.ty.is_quantum() => {
+                    if quantum == Some(false) {
+                        self.error(
+                            ValidationErrorCode::OperandTypeMismatch,
+                            operand.span(),
+                            "an alias cannot combine classical and quantum operands",
+                        );
+                    }
+
+                    quantum = Some(true);
+
+                    total_size = self.add_sizes(
+                        total_size,
+                        self.designator_size(operand),
+                    );
+                }
+
+                Some(symbol) if symbol.ty.is_classical() => {
+                    if quantum == Some(true) {
+                        self.error(
+                            ValidationErrorCode::OperandTypeMismatch,
+                            operand.span(),
+                            "an alias cannot combine quantum and classical operands",
+                        );
+                    }
+
+                    quantum = Some(false);
+
+                    total_size = self.add_sizes(
+                        total_size,
+                        self.designator_size(operand),
+                    );
+                }
+
+                Some(_) => {
+                    self.error(
+                        ValidationErrorCode::InvalidIdentifierUse,
+                        operand.span(),
+                        format!(
+                            "`{}` is not aliasable",
+                            operand.name().as_str()
+                        ),
+                    );
+                }
+
+                None => {
+                    self.error(
+                        ValidationErrorCode::UndefinedIdentifier,
+                        operand.name().span(),
+                        format!(
+                            "identifier `{}` is not defined",
+                            operand.name().as_str()
+                        ),
+                    );
+                }
+            }
+
+            self.validate_designator(
+                operand,
+                quantum != Some(false),
+            );
+        }
+
+        self.declare(
+            value.name().as_str(),
+            SemanticType::Alias {
+                quantum: quantum.unwrap_or(false),
+                size: total_size,
+            },
+            value.name().span(),
+            false,
+        );
+    }
+
+    // ------------------------------------------------------------------------
+    // Declarations/types
+    // ------------------------------------------------------------------------
 
     fn validate_quantum_declaration(
         &mut self,
@@ -1704,34 +1612,35 @@ impl<'a> Validator<'a> {
     ) {
         let size = match ty {
             QuantumType::Qubit(size)
-            | QuantumType::QReg(size) => {
-                match size {
-                    Some(expression) => {
-                        self.validate_expression(expression);
-                        self.const_u64(expression)
-                    }
-
-                    None => Some(1),
+            | QuantumType::QReg(size) => match size {
+                Some(expression) => {
+                    self.validate_expression(expression);
+                    self.const_u64(expression)
                 }
-            }
+
+                None => Some(1),
+            },
         };
 
-        if size.is_none() {
+        let Some(size) = size else {
             self.error(
                 ValidationErrorCode::InvalidRegisterSize,
                 span,
-                "quantum register size must be a compile-time \
-                 non-negative integer",
+                "quantum register size must be a compile-time positive integer",
+            );
+            return;
+        };
+
+        if size == 0 {
+            self.error(
+                ValidationErrorCode::InvalidRegisterSize,
+                span,
+                "quantum register size must be positive",
             );
             return;
         }
 
-        let size = size.unwrap_or(0);
-
-        self.check_register_size(
-            size,
-            span,
-        );
+        self.check_register_size(size, span);
 
         self.declare(
             name,
@@ -1739,6 +1648,7 @@ impl<'a> Validator<'a> {
                 size: Some(size),
             },
             name_span,
+            false,
         );
     }
 
@@ -1760,15 +1670,13 @@ impl<'a> Validator<'a> {
             | ScalarType::Angle(size)
             | ScalarType::Complex(size) => {
                 if let Some(expression) = size {
-                    self.validate_expression(
-                        expression,
-                    );
+                    self.validate_expression(expression);
 
                     match self.const_u64(expression) {
                         Some(value) if value > 0 => {
                             self.check_register_size(
                                 value,
-                                span,
+                                expression.span(),
                             );
                         }
 
@@ -1776,8 +1684,7 @@ impl<'a> Validator<'a> {
                             self.error(
                                 ValidationErrorCode::InvalidTypeSize,
                                 expression.span(),
-                                "type size must be a compile-time \
-                                 positive integer",
+                                "type width must be a compile-time positive integer",
                             );
                         }
                     }
@@ -1801,10 +1708,16 @@ impl<'a> Validator<'a> {
                     );
                 }
 
-                for dimension in dimensions {
-                    self.validate_expression(
-                        dimension,
+                if dimensions.len() > 7 {
+                    self.error(
+                        ValidationErrorCode::InvalidTypeSize,
+                        span,
+                        "OpenQASM arrays may contain at most seven dimensions",
                     );
+                }
+
+                for dimension in dimensions {
+                    self.validate_expression(dimension);
 
                     match self.const_u64(dimension) {
                         Some(value) if value > 0 => {
@@ -1818,8 +1731,7 @@ impl<'a> Validator<'a> {
                             self.error(
                                 ValidationErrorCode::InvalidTypeSize,
                                 dimension.span(),
-                                "array dimensions must be compile-time \
-                                 positive integers",
+                                "array dimensions must be compile-time positive integers",
                             );
                         }
                     }
@@ -1855,31 +1767,28 @@ impl<'a> Validator<'a> {
         ty: &QuantumType,
         span: SourceSpan,
     ) {
-        let size = match ty {
+        match ty {
             QuantumType::Qubit(size)
-            | QuantumType::QReg(size) => size,
-        };
+            | QuantumType::QReg(size) => {
+                if let Some(expression) = size {
+                    self.validate_expression(expression);
 
-        if let Some(expression) = size {
-            self.validate_expression(
-                expression,
-            );
+                    match self.const_u64(expression) {
+                        Some(value) if value > 0 => {
+                            self.check_register_size(
+                                value,
+                                expression.span(),
+                            );
+                        }
 
-            match self.const_u64(expression) {
-                Some(value) if value > 0 => {
-                    self.check_register_size(
-                        value,
-                        span,
-                    );
-                }
-
-                _ => {
-                    self.error(
-                        ValidationErrorCode::InvalidRegisterSize,
-                        expression.span(),
-                        "quantum register size must be a compile-time \
-                         positive integer",
-                    );
+                        _ => {
+                            self.error(
+                                ValidationErrorCode::InvalidRegisterSize,
+                                expression.span(),
+                                "quantum register size must be a compile-time positive integer",
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -1934,42 +1843,32 @@ impl<'a> Validator<'a> {
                 )
             }
 
-            ScalarType::Duration => {
-                SemanticType::Duration
-            }
+            ScalarType::Duration => SemanticType::Duration,
 
-            ScalarType::Stretch => {
-                SemanticType::Stretch
-            }
+            ScalarType::Stretch => SemanticType::Stretch,
 
-            ScalarType::Void => {
-                SemanticType::Unknown
-            }
+            ScalarType::Void => SemanticType::Unknown,
 
             ScalarType::Array {
                 element,
                 dimensions,
-            } => {
-                let dimensions = dimensions
+            } => SemanticType::Array {
+                element: Box::new(
+                    self.semantic_scalar_type(element),
+                ),
+                dimensions: dimensions
                     .iter()
                     .filter_map(|value| {
                         self.const_u64(value)
                     })
-                    .collect();
-
-                SemanticType::Array {
-                    element: Box::new(
-                        self.semantic_scalar_type(element),
-                    ),
-                    dimensions,
-                }
-            }
+                    .collect(),
+            },
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Gate definitions
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Gates
+    // ------------------------------------------------------------------------
 
     fn validate_gate_definition(
         &mut self,
@@ -1978,6 +1877,7 @@ impl<'a> Validator<'a> {
         let name = definition.name().as_str();
 
         if self.gates.contains_key(name)
+            || self.subroutines.contains_key(name)
             || self.resolve(name).is_some()
             || self.is_language_builtin_gate(name)
             || (
@@ -1989,8 +1889,7 @@ impl<'a> Validator<'a> {
                 ValidationErrorCode::DuplicateGateDefinition,
                 definition.name().span(),
                 format!(
-                    "gate `{name}` conflicts with an existing \
-                     declaration or built-in gate"
+                    "gate `{name}` conflicts with an existing declaration or built-in"
                 ),
             );
             return;
@@ -2008,11 +1907,7 @@ impl<'a> Validator<'a> {
             self.error(
                 ValidationErrorCode::ParameterLimitExceeded,
                 definition.span(),
-                format!(
-                    "gate `{name}` declares {} parameters, \
-                     exceeding the configured limit",
-                    parameter_count,
-                ),
+                "gate parameter count exceeds configured limit",
             );
         }
 
@@ -2022,26 +1917,20 @@ impl<'a> Validator<'a> {
             self.error(
                 ValidationErrorCode::OperandLimitExceeded,
                 definition.span(),
-                format!(
-                    "gate `{name}` declares {} operands, \
-                     exceeding the configured limit",
-                    operand_count,
-                ),
+                "gate operand count exceeds configured limit",
             );
         }
 
         let mut parameters = HashSet::<&str>::new();
 
         for parameter in definition.parameters() {
-            if !parameters.insert(
-                parameter.as_str(),
-            ) {
+            if !parameters.insert(parameter.as_str()) {
                 self.error(
                     ValidationErrorCode::DuplicateGateParameter,
                     parameter.span(),
                     format!(
-                        "gate `{name}` declares parameter `{}` more than once",
-                        parameter.as_str(),
+                        "gate parameter `{}` is declared more than once",
+                        parameter.as_str()
                     ),
                 );
             }
@@ -2050,15 +1939,13 @@ impl<'a> Validator<'a> {
         let mut qubits = HashSet::<&str>::new();
 
         for qubit in definition.qubits() {
-            if !qubits.insert(
-                qubit.as_str(),
-            ) {
+            if !qubits.insert(qubit.as_str()) {
                 self.error(
                     ValidationErrorCode::DuplicateFormalOperand,
                     qubit.span(),
                     format!(
-                        "gate `{name}` declares qubit `{}` more than once",
-                        qubit.as_str(),
+                        "gate operand `{}` is declared more than once",
+                        qubit.as_str()
                     ),
                 );
             }
@@ -2070,34 +1957,38 @@ impl<'a> Validator<'a> {
             self.error(
                 ValidationErrorCode::GateExpansionDepthExceeded,
                 definition.span(),
-                "gate-definition validation depth exceeds the \
-                 configured maximum",
+                "gate-definition validation depth exceeds configured maximum",
             );
             return;
         }
 
+        // Declaration-before-use requires the signature to become available
+        // before validating the body, but only after conflict checking.
+        self.gates.insert(
+            name.to_owned(),
+            GateSignature {
+                parameter_count,
+                operand_count,
+                span: definition.span(),
+            },
+        );
+
         let previous_gate_body =
             self.in_gate_body;
 
-        let previous_gate_stack_len =
-            self.gate_stack.len();
-
         self.in_gate_body = true;
-        self.gate_stack.push(
-            name.to_owned(),
-        );
+        self.gate_stack.push(name.to_owned());
 
         self.scopes.push(
-            HashMap::new(),
+            Scope::new(ScopeKind::Gate),
         );
-        self.scope_depth =
-            self.scope_depth.saturating_add(1);
 
         for parameter in definition.parameters() {
             self.declare(
                 parameter.as_str(),
                 SemanticType::GateParameter,
                 parameter.span(),
+                true,
             );
         }
 
@@ -2106,6 +1997,7 @@ impl<'a> Validator<'a> {
                 qubit.as_str(),
                 SemanticType::GateOperand,
                 qubit.span(),
+                false,
             );
         }
 
@@ -2116,59 +2008,43 @@ impl<'a> Validator<'a> {
                 break;
             }
 
-            if !self.is_valid_gate_body_statement(
-                statement,
-            ) {
+            if !self.is_valid_gate_body_statement(statement) {
                 self.error(
                     ValidationErrorCode::InvalidGateBody,
                     statement.span(),
-                    "statement is not permitted inside an \
-                     OpenQASM gate definition",
+                    "statement is not permitted inside a gate definition",
                 );
                 continue;
             }
 
-            self.validate_statement(
-                statement,
-            );
+            self.validate_statement(statement);
         }
 
         self.scopes.pop();
-        self.scope_depth =
-            self.scope_depth.saturating_sub(1);
+        self.gate_stack.pop();
 
-        self.gate_stack.truncate(
-            previous_gate_stack_len,
-        );
-
-        self.in_gate_body =
-            previous_gate_body;
+        self.in_gate_body = previous_gate_body;
     }
 
     fn is_valid_gate_body_statement(
         &self,
         statement: &Statement,
     ) -> bool {
-        match statement {
+        matches!(
+            statement,
             Statement::GateCall(_)
-            | Statement::If(_)
-            | Statement::For(_)
-            | Statement::While(_)
-            | Statement::Box(_)
-            | Statement::Barrier(_)
-            | Statement::Delay(_)
-            | Statement::Expression(_)
-            | Statement::Annotated(_)
-            | Statement::Pragma(_)
-            | Statement::Reset(_) => true,
-
-            _ => false,
-        }
+                | Statement::If(_)
+                | Statement::For(_)
+                | Statement::While(_)
+                | Statement::Box(_)
+                | Statement::Barrier(_)
+                | Statement::Delay(_)
+                | Statement::Expression(_)
+                | Statement::Annotated(_)
+                | Statement::Pragma(_)
+                | Statement::Reset(_)
+        )
     }
-
-    // -------------------------------------------------------------------------
-    // Gate calls
-    // -------------------------------------------------------------------------
 
     fn validate_gate_call(
         &mut self,
@@ -2176,33 +2052,30 @@ impl<'a> Validator<'a> {
     ) {
         let name = call.name().as_str();
 
-        let signature = if let Some(signature) =
-            self.gates.get(name)
-        {
-            if self.gate_stack.iter().any(
-                |active| active == name,
-            ) {
-                self.error(
-                    ValidationErrorCode::RecursiveGateDefinition,
-                    call.name().span(),
-                    format!(
-                        "gate `{name}` recursively invokes itself"
-                    ),
-                );
-            }
+        let signature =
+            if let Some(signature) = self.gates.get(name) {
+                if self.gate_stack.iter().any(
+                    |active| active == name,
+                ) {
+                    self.error(
+                        ValidationErrorCode::RecursiveGateDefinition,
+                        call.name().span(),
+                        format!(
+                            "gate `{name}` recursively invokes itself"
+                        ),
+                    );
+                }
 
-            Some(signature.clone())
-        } else if self.is_language_builtin_gate(name) {
-            self.language_builtin_signature(
-                name,
-            )
-        } else if self.stdgates_available {
-            self.standard_gate_signature(
-                name,
-            )
-        } else {
-            None
-        };
+                Some(signature.clone())
+            } else if let Some(signature) =
+                self.language_builtin_signature(name)
+            {
+                Some(signature)
+            } else if self.stdgates_available {
+                self.standard_gate_signature(name)
+            } else {
+                None
+            };
 
         let Some(signature) = signature else {
             if self.is_known_standard_gate(name) {
@@ -2219,8 +2092,7 @@ impl<'a> Validator<'a> {
                     ValidationErrorCode::UndefinedGate,
                     call.name().span(),
                     format!(
-                        "gate `{name}` is not defined at this point \
-                         in the program"
+                        "gate `{name}` is not defined before this use"
                     ),
                 );
             }
@@ -2228,12 +2100,8 @@ impl<'a> Validator<'a> {
             self.validate_gate_arguments_without_signature(
                 call,
             );
-
             return;
         };
-
-        let base_operand_count =
-            call.operands().len();
 
         let control_count =
             self.control_modifier_count(
@@ -2242,21 +2110,19 @@ impl<'a> Validator<'a> {
 
         let expected_operands =
             signature.operand_count
-                .saturating_add(
-                    control_count,
-                );
+                .saturating_add(control_count);
 
-        if base_operand_count
+        if call.operands().len()
             != expected_operands
         {
             self.error(
                 ValidationErrorCode::GateOperandCountMismatch,
                 call.span(),
                 format!(
-                    "gate `{name}` expects {} quantum operands \
-                     after applying modifiers, received {}",
+                    "gate `{name}` expects {} quantum operands, \
+                     received {}",
                     expected_operands,
-                    base_operand_count,
+                    call.operands().len()
                 ),
             );
         }
@@ -2268,39 +2134,36 @@ impl<'a> Validator<'a> {
                 ValidationErrorCode::GateParameterCountMismatch,
                 call.span(),
                 format!(
-                    "gate `{name}` expects {} parameters, received {}",
+                    "gate `{name}` expects {} parameters, \
+                     received {}",
                     signature.parameter_count,
-                    call.parameters().len(),
+                    call.parameters().len()
                 ),
             );
         }
 
-        if call.operands().len()
-            as u64
+        if call.operands().len() as u64
             > self.effective_max_operands()
         {
             self.error(
                 ValidationErrorCode::OperandLimitExceeded,
                 call.span(),
-                "gate call exceeds the configured operand limit",
+                "gate call exceeds configured operand limit",
             );
         }
 
-        if call.parameters().len()
-            as u64
+        if call.parameters().len() as u64
             > self.effective_max_parameters()
         {
             self.error(
                 ValidationErrorCode::ParameterLimitExceeded,
                 call.span(),
-                "gate call exceeds the configured parameter limit",
+                "gate call exceeds configured parameter limit",
             );
         }
 
         for parameter in call.parameters() {
-            self.validate_expression(
-                parameter,
-            );
+            self.validate_expression(parameter);
         }
 
         self.validate_operands(
@@ -2324,9 +2187,7 @@ impl<'a> Validator<'a> {
         call: &GateCall,
     ) {
         for parameter in call.parameters() {
-            self.validate_expression(
-                parameter,
-            );
+            self.validate_expression(parameter);
         }
 
         self.validate_operands(
@@ -2345,40 +2206,11 @@ impl<'a> Validator<'a> {
         name: &str,
     ) -> Option<GateSignature> {
         match name {
-            // OpenQASM language-defined built-ins.
             "U" => Some(
                 GateSignature {
                     parameter_count: 3,
                     operand_count: 1,
-                    span: SourceSpan::point(
-                        SourceSpan::source_id(
-                            self
-                                .scopes
-                                .first()
-                                .and_then(
-                                    |scope| {
-                                        scope
-                                            .values()
-                                            .next()
-                                            .map(
-                                                |symbol| {
-                                                    symbol
-                                                        .span
-                                                },
-                                            )
-                                    },
-                                )
-                                .unwrap_or_else(
-                                    || {
-                                        SourceSpan::point(
-                                            crate::quantum::frontend::core::source::SourceId::from_raw(0),
-                                            0,
-                                        )
-                                    },
-                                ),
-                        ),
-                        0,
-                    ),
+                    span: dummy_span(),
                 },
             ),
 
@@ -2386,10 +2218,7 @@ impl<'a> Validator<'a> {
                 GateSignature {
                     parameter_count: 1,
                     operand_count: 0,
-                    span: SourceSpan::point(
-                        crate::quantum::frontend::core::source::SourceId::from_raw(0),
-                        0,
-                    ),
+                    span: dummy_span(),
                 },
             ),
 
@@ -2398,20 +2227,19 @@ impl<'a> Validator<'a> {
     }
 
     fn standard_gate_signature(
-        &mut self,
+        &self,
         name: &str,
     ) -> Option<GateSignature> {
-        let entry =
-            lookup_standard_gate(name)?;
+        let entry = lookup_standard_gate(name)?;
 
-        let span = SourceSpan::point(
-            crate::quantum::frontend::core::source::SourceId::from_raw(0),
-            0,
-        );
+        let version =
+            self.program_version.unwrap_or(
+                OpenQasmVersion::V3_1,
+            );
 
         if !entry.available_in(
-            self.current_major_version(),
-            self.current_minor_version(),
+            version.major(),
+            version.minor(),
         ) {
             return None;
         }
@@ -2422,22 +2250,15 @@ impl<'a> Validator<'a> {
                     entry.parameter_count(),
                 operand_count:
                     entry.qubit_count(),
-                span,
+                span: dummy_span(),
             },
         )
     }
 
-    fn current_major_version(
-        &self,
-    ) -> u8 {
-        3
-    }
-
-    fn current_minor_version(
-        &self,
-    ) -> u8 {
-        self.config.max_minor_version
-            as u8
+    fn current_version(&self) -> OpenQasmVersion {
+        self.program_version.unwrap_or(
+            OpenQasmVersion::V3_1,
+        )
     }
 
     fn is_language_builtin_gate(
@@ -2454,8 +2275,7 @@ impl<'a> Validator<'a> {
         &self,
         name: &str,
     ) -> bool {
-        lookup_standard_gate(name)
-            .is_some()
+        lookup_standard_gate(name).is_some()
     }
 
     fn validate_gate_modifiers(
@@ -2463,61 +2283,53 @@ impl<'a> Validator<'a> {
         modifiers: &[GateModifier],
         span: SourceSpan,
     ) {
-        let mut control_arguments = 0u64;
-        let mut inverse_count = 0u64;
+        let mut controls = 0u64;
+        let mut inverse = 0u64;
 
         for modifier in modifiers {
             match modifier {
                 GateModifier::Ctrl => {
-                    control_arguments =
-                        control_arguments
-                            .saturating_add(1);
+                    controls = controls.saturating_add(1);
                 }
 
                 GateModifier::NegCtrl => {
-                    control_arguments =
-                        control_arguments
-                            .saturating_add(1);
+                    controls = controls.saturating_add(1);
                 }
 
                 GateModifier::Inv => {
-                    inverse_count =
-                        inverse_count
-                            .saturating_add(1);
+                    inverse = inverse.saturating_add(1);
                 }
 
                 GateModifier::Pow(expression) => {
-                    self.validate_expression(
-                        expression,
-                    );
+                    self.validate_expression(expression);
 
-                    if self.const_u64(expression)
-                        .is_none()
-                    {
-                        self.error(
-                            ValidationErrorCode::ModifierParameterNotConstant,
-                            expression.span(),
-                            "pow modifier parameter must be \
-                             compile-time evaluable when used by \
-                             this validator",
-                        );
+                    // OpenQASM 3.1 permits a positive integer or floating-point
+                    // exponent and explicitly permits it to be non-constant.
+                    //
+                    // Therefore do NOT require const_u64().
+                    let value =
+                        self.const_f64(expression);
+
+                    if let Some(value) = value {
+                        if !value.is_finite() || value <= 0.0 {
+                            self.error(
+                                ValidationErrorCode::InvalidGateModifier,
+                                expression.span(),
+                                "pow exponent must be positive and finite",
+                            );
+                        }
                     }
                 }
 
                 GateModifier::CtrlCount {
-                    negative: _,
                     count,
+                    ..
                 } => {
                     let count_value =
                         match count {
                             Some(expression) => {
-                                self.validate_expression(
-                                    expression,
-                                );
-
-                                self.const_u64(
-                                    expression,
-                                )
+                                self.validate_expression(expression);
+                                self.const_u64(expression)
                             }
 
                             None => Some(1),
@@ -2525,19 +2337,15 @@ impl<'a> Validator<'a> {
 
                     match count_value {
                         Some(value) if value > 0 => {
-                            control_arguments =
-                                control_arguments
-                                    .saturating_add(
-                                        value,
-                                    );
+                            controls =
+                                controls.saturating_add(value);
                         }
 
                         _ => {
                             self.error(
                                 ValidationErrorCode::InvalidModifierCount,
                                 span,
-                                "control modifier count must be \
-                                 a positive compile-time integer",
+                                "control count must be a positive compile-time integer",
                             );
                         }
                     }
@@ -2545,7 +2353,7 @@ impl<'a> Validator<'a> {
             }
         }
 
-        if inverse_count > 1 {
+        if inverse > 1 {
             self.error(
                 ValidationErrorCode::InvalidGateModifier,
                 span,
@@ -2553,13 +2361,13 @@ impl<'a> Validator<'a> {
             );
         }
 
-        if control_arguments
-            > self.effective_max_operands()
+        if controls >
+            self.effective_max_operands()
         {
             self.error(
                 ValidationErrorCode::OperandLimitExceeded,
                 span,
-                "gate control modifiers exceed the operand limit",
+                "gate control modifiers exceed operand limit",
             );
         }
     }
@@ -2579,15 +2387,10 @@ impl<'a> Validator<'a> {
                     ..
                 } => count
                     .as_ref()
-                    .and_then(
-                        |expression| {
-                            self.const_u64(
-                                expression,
-                            )
-                        },
-                    )
-                    .unwrap_or(1)
-                    as usize,
+                    .and_then(|expression| {
+                        self.const_u64(expression)
+                    })
+                    .unwrap_or(1) as usize,
 
                 GateModifier::Inv
                 | GateModifier::Pow(_) => 0,
@@ -2595,43 +2398,44 @@ impl<'a> Validator<'a> {
             .sum()
     }
 
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // Operands
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     fn validate_operands(
         &mut self,
         operands: &[GateOperand],
         span: SourceSpan,
     ) {
-        let mut quantum_operands = Vec::<String>::new();
+        let mut identities =
+            HashSet::<String>::new();
 
         for operand in operands {
             match operand {
-                GateOperand::Designator(
-                    designator,
-                ) => {
-                    let symbol =
-                        self.resolve(
-                            designator
-                                .name()
-                                .as_str(),
-                        );
+                GateOperand::Designator(designator) => {
+                    let symbol = self.resolve(
+                        designator.name().as_str(),
+                    );
 
                     match symbol {
-                        Some(symbol)
-                            if symbol.ty.is_quantum() =>
-                        {
+                        Some(symbol) if symbol.ty.is_quantum() => {
                             self.validate_designator(
                                 designator,
                                 true,
                             );
 
-                            quantum_operands.push(
+                            let identity =
                                 self.designator_identity(
                                     designator,
-                                ),
-                            );
+                                );
+
+                            if !identities.insert(identity) {
+                                self.error(
+                                    ValidationErrorCode::DuplicateQuantumOperand,
+                                    designator.span(),
+                                    "the same quantum operand is used more than once",
+                                );
+                            }
                         }
 
                         Some(symbol) => {
@@ -2639,10 +2443,10 @@ impl<'a> Validator<'a> {
                                 ValidationErrorCode::OperandTypeMismatch,
                                 designator.span(),
                                 format!(
-                                    "gate operand `{}` has type {:?}, \
+                                    "operand `{}` has type {:?}, \
                                      but a quantum operand is required",
                                     designator.name().as_str(),
-                                    symbol.ty,
+                                    symbol.ty
                                 ),
                             );
                         }
@@ -2653,43 +2457,32 @@ impl<'a> Validator<'a> {
                                 designator.name().span(),
                                 format!(
                                     "quantum operand `{}` is not defined",
-                                    designator.name().as_str(),
+                                    designator.name().as_str()
                                 ),
                             );
                         }
                     }
                 }
 
-                GateOperand::Physical(
-                    physical,
-                ) => {
+                GateOperand::Physical(physical) => {
                     if !self.config.allow_physical_qubits {
                         self.error(
                             ValidationErrorCode::PhysicalQubitDisabled,
                             physical.span(),
                             format!(
-                                "physical qubit `${}` is not accepted \
-                                 by the current logical-IR frontend policy",
-                                physical.index(),
+                                "physical qubit `${}` is disabled \
+                                 by the logical frontend policy",
+                                physical.index()
                             ),
                         );
                     }
                 }
 
-                GateOperand::Alias(
-                    identifier,
-                ) => {
+                GateOperand::Alias(identifier) => {
                     match self.resolve(
                         identifier.as_str(),
                     ) {
-                        Some(symbol)
-                            if symbol.ty.is_quantum() =>
-                        {
-                            quantum_operands.push(
-                                identifier.as_str()
-                                    .to_owned(),
-                            );
-                        }
+                        Some(symbol) if symbol.ty.is_quantum() => {}
 
                         Some(_) => {
                             self.error(
@@ -2697,7 +2490,7 @@ impl<'a> Validator<'a> {
                                 identifier.span(),
                                 format!(
                                     "alias `{}` is not quantum",
-                                    identifier.as_str(),
+                                    identifier.as_str()
                                 ),
                             );
                         }
@@ -2708,7 +2501,7 @@ impl<'a> Validator<'a> {
                                 identifier.span(),
                                 format!(
                                     "alias `{}` is not defined",
-                                    identifier.as_str(),
+                                    identifier.as_str()
                                 ),
                             );
                         }
@@ -2717,17 +2510,7 @@ impl<'a> Validator<'a> {
             }
         }
 
-        let mut seen = HashSet::<String>::new();
-
-        for identity in quantum_operands {
-            if !seen.insert(identity) {
-                self.error(
-                    ValidationErrorCode::DuplicateQuantumOperand,
-                    span,
-                    "the same logical quantum operand appears more than once",
-                );
-            }
-        }
+        let _ = span;
     }
 
     fn validate_broadcasting(
@@ -2735,13 +2518,11 @@ impl<'a> Validator<'a> {
         operands: &[GateOperand],
         span: SourceSpan,
     ) {
-        let mut broadcast_size: Option<u64> = None;
+        let mut expected: Option<u64> = None;
 
         for operand in operands {
             let Some(size) =
-                self.operand_broadcast_size(
-                    operand,
-                )
+                self.operand_broadcast_size(operand)
             else {
                 continue;
             };
@@ -2750,21 +2531,18 @@ impl<'a> Validator<'a> {
                 continue;
             }
 
-            match broadcast_size {
-                None => {
-                    broadcast_size =
-                        Some(size);
-                }
+            match expected {
+                None => expected = Some(size),
 
-                Some(expected)
-                    if expected != size =>
+                Some(existing)
+                    if existing != size =>
                 {
                     self.error(
                         ValidationErrorCode::RegisterBroadcastMismatch,
                         span,
                         format!(
-                            "broadcasted quantum registers have \
-                             incompatible sizes: {expected} and {size}",
+                            "broadcasted quantum registers must have \
+                             identical sizes; found {existing} and {size}"
                         ),
                     );
                 }
@@ -2779,58 +2557,35 @@ impl<'a> Validator<'a> {
         operand: &GateOperand,
     ) -> Option<u64> {
         match operand {
-            GateOperand::Designator(
-                designator,
-            ) => {
+            GateOperand::Designator(designator) => {
                 let symbol =
                     self.resolve(
                         designator.name().as_str(),
                     )?;
 
-                match &symbol.ty {
-                    SemanticType::Quantum {
-                        size,
-                    } => {
-                        match designator.index() {
-                            None => *size,
-
-                            Some(_) => Some(1),
-                        }
-                    }
-
-                    SemanticType::Alias {
-                        quantum: true,
-                        size,
-                    } => *size,
-
-                    SemanticType::GateOperand => Some(1),
-
-                    _ => None,
+                if designator.index().is_some() {
+                    return Some(1);
                 }
+
+                symbol.ty.quantum_size()
             }
 
-            GateOperand::Alias(
-                identifier,
-            ) => {
+            GateOperand::Alias(identifier) => {
                 self.resolve(
                     identifier.as_str(),
                 )
                 .and_then(
-                    |symbol| {
-                        symbol.ty.quantum_size()
-                    },
+                    |symbol| symbol.ty.quantum_size(),
                 )
             }
 
-            GateOperand::Physical(_) => {
-                Some(1)
-            }
+            GateOperand::Physical(_) => Some(1),
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Designators/indexing
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Designators/index sets
+    // ------------------------------------------------------------------------
 
     fn validate_designator(
         &mut self,
@@ -2847,36 +2602,25 @@ impl<'a> Validator<'a> {
                 designator.name().span(),
                 format!(
                     "identifier `{}` is not defined",
-                    designator.name().as_str(),
+                    designator.name().as_str()
                 ),
             );
             return;
         };
 
-        if quantum_expected
-            && !symbol.ty.is_quantum()
-        {
+        if quantum_expected && !symbol.ty.is_quantum() {
             self.error(
                 ValidationErrorCode::OperandTypeMismatch,
                 designator.span(),
-                format!(
-                    "`{}` is not a quantum object",
-                    designator.name().as_str(),
-                ),
+                "a quantum object is required",
             );
         }
 
-        if !quantum_expected
-            && symbol.ty.is_quantum()
-        {
+        if !quantum_expected && symbol.ty.is_quantum() {
             self.error(
                 ValidationErrorCode::OperandTypeMismatch,
                 designator.span(),
-                format!(
-                    "`{}` is a quantum object but a classical object \
-                     is required",
-                    designator.name().as_str(),
-                ),
+                "a classical object is required",
             );
         }
 
@@ -2892,20 +2636,75 @@ impl<'a> Validator<'a> {
                 self.error(
                     ValidationErrorCode::IndexedGateFormalOperand,
                     index_span(index),
-                    "formal gate operands cannot be indexed inside \
-                     a gate definition",
+                    "formal gate operands cannot be indexed \
+                     inside a gate definition",
+                );
+            }
+
+            if symbol.ty.is_quantum()
+                && !self.config.allow_runtime_quantum_index
+                && !self.index_is_compile_time_constant(index)
+            {
+                self.error(
+                    ValidationErrorCode::RuntimeQuantumIndexDisabled,
+                    index_span(index),
+                    "runtime quantum-register indexing is disabled \
+                     by the production frontend policy",
                 );
             }
 
             self.validate_index_expression(
                 index,
                 symbol.ty.quantum_size()
-                    .or_else(
-                        || {
-                            symbol.ty.classical_width()
-                        },
-                    ),
+                    .or_else(|| symbol.ty.classical_width()),
+                symbol.ty.is_quantum(),
             );
+        }
+    }
+
+    fn index_is_compile_time_constant(
+        &self,
+        index: &IndexExpression,
+    ) -> bool {
+        match index {
+            IndexExpression::Index(expression) => {
+                self.const_i128(expression).is_some()
+            }
+
+            IndexExpression::Slice {
+                start,
+                stop,
+            } => start
+                .as_ref()
+                .map(|value| self.const_i128(value).is_some())
+                .unwrap_or(true)
+                && stop
+                    .as_ref()
+                    .map(|value| self.const_i128(value).is_some())
+                    .unwrap_or(true),
+
+            IndexExpression::Range {
+                start,
+                step,
+                stop,
+            } => start
+                .as_ref()
+                .map(|value| self.const_i128(value).is_some())
+                .unwrap_or(true)
+                && step
+                    .as_ref()
+                    .map(|value| self.const_i128(value).is_some())
+                    .unwrap_or(true)
+                && stop
+                    .as_ref()
+                    .map(|value| self.const_i128(value).is_some())
+                    .unwrap_or(true),
+
+            IndexExpression::Set(values) => values
+                .iter()
+                .all(|value| self.const_i128(value).is_some()),
+
+            IndexExpression::Concatenation(_) => true,
         }
     }
 
@@ -2913,45 +2712,40 @@ impl<'a> Validator<'a> {
         &mut self,
         index: &IndexExpression,
         known_size: Option<u64>,
+        quantum: bool,
     ) {
         match index {
-            IndexExpression::Index(
-                expression,
-            ) => {
-                self.validate_expression(
-                    expression,
-                );
+            IndexExpression::Index(expression) => {
+                self.validate_expression(expression);
 
-                if self.const_i128(expression)
-                    .is_none()
-                {
-                    self.error(
-                        ValidationErrorCode::IndexTypeMismatch,
-                        expression.span(),
-                        "index must be a compile-time integral \
-                         expression for this production frontend",
-                    );
+                if self.const_i128(expression).is_none() {
+                    if quantum && !self.config.allow_runtime_quantum_index {
+                        self.error(
+                            ValidationErrorCode::RuntimeQuantumIndexDisabled,
+                            expression.span(),
+                            "quantum index must be compile-time constant",
+                        );
+                    }
+
                     return;
                 }
 
-                if let (
-                    Some(index),
-                    Some(size),
-                ) = (
-                    self.const_i128(expression),
-                    known_size,
-                ) {
-                    if index < 0
-                        || index
-                            >= size as i128
-                    {
+                if let (Some(index), Some(size)) =
+                    (
+                        self.const_i128(expression),
+                        known_size,
+                    )
+                {
+                    if !self.index_in_bounds(
+                        index,
+                        size,
+                    ) {
                         self.error(
                             ValidationErrorCode::IndexOutOfBounds,
                             expression.span(),
                             format!(
                                 "index {index} is outside valid range \
-                                 0..{}",
-                                size.saturating_sub(1),
+                                 for a collection of size {size}"
                             ),
                         );
                     }
@@ -2962,24 +2756,17 @@ impl<'a> Validator<'a> {
                 start,
                 stop,
             } => {
-                if let Some(start) =
-                    start
-                {
-                    self.validate_expression(
-                        start,
-                    );
+                if let Some(start) = start {
+                    self.validate_expression(start);
                 }
 
-                if let Some(stop) =
-                    stop
-                {
-                    self.validate_expression(
-                        stop,
-                    );
+                if let Some(stop) = stop {
+                    self.validate_expression(stop);
                 }
 
                 self.validate_slice_bounds(
                     start.as_ref(),
+                    None,
                     stop.as_ref(),
                     known_size,
                 );
@@ -2990,33 +2777,13 @@ impl<'a> Validator<'a> {
                 step,
                 stop,
             } => {
-                if let Some(start) =
-                    start
-                {
-                    self.validate_expression(
-                        start,
-                    );
+                if let Some(start) = start {
+                    self.validate_expression(start);
                 }
 
-                if let Some(step) =
-                    step
-                {
-                    self.validate_expression(
-                        step,
-                    );
-                }
+                if let Some(step) = step {
+                    self.validate_expression(step);
 
-                if let Some(stop) =
-                    stop
-                {
-                    self.validate_expression(
-                        stop,
-                    );
-                }
-
-                if let Some(step) =
-                    step
-                {
                     if let Some(value) =
                         self.const_i128(step)
                     {
@@ -3030,31 +2797,33 @@ impl<'a> Validator<'a> {
                     }
                 }
 
+                if let Some(stop) = stop {
+                    self.validate_expression(stop);
+                }
+
                 self.validate_slice_bounds(
                     start.as_ref(),
+                    step.as_ref(),
                     stop.as_ref(),
                     known_size,
                 );
             }
 
-            IndexExpression::Set(
-                values,
-            ) => {
+            IndexExpression::Set(values) => {
                 if values.is_empty() {
                     self.error(
                         ValidationErrorCode::EmptyIndexSet,
                         index_span(index),
                         "index set cannot be empty",
                     );
+                    return;
                 }
 
                 let mut seen =
                     HashSet::<i128>::new();
 
                 for value in values {
-                    self.validate_expression(
-                        value,
-                    );
+                    self.validate_expression(value);
 
                     let Some(index) =
                         self.const_i128(value)
@@ -3067,8 +2836,7 @@ impl<'a> Validator<'a> {
                             ValidationErrorCode::DuplicateIndex,
                             value.span(),
                             format!(
-                                "index {index} occurs more than once \
-                                 in the index set",
+                                "index {index} occurs more than once"
                             ),
                         );
                     }
@@ -3076,17 +2844,16 @@ impl<'a> Validator<'a> {
                     if let Some(size) =
                         known_size
                     {
-                        if index < 0
-                            || index
-                                >= size as i128
-                        {
+                        if !self.index_in_bounds(
+                            index,
+                            size,
+                        ) {
                             self.error(
                                 ValidationErrorCode::IndexOutOfBounds,
                                 value.span(),
                                 format!(
                                     "index {index} is outside valid range \
-                                     0..{}",
-                                    size.saturating_sub(1),
+                                     for a collection of size {size}"
                                 ),
                             );
                         }
@@ -3103,21 +2870,51 @@ impl<'a> Validator<'a> {
                         index_span(index),
                         "register concatenation cannot be empty",
                     );
+                    return;
                 }
 
                 for designator in designators {
                     self.validate_designator(
                         designator,
-                        true,
+                        quantum,
                     );
                 }
             }
         }
     }
 
+    fn index_in_bounds(
+        &self,
+        index: i128,
+        size: u64,
+    ) -> bool {
+        if size == 0 {
+            return false;
+        }
+
+        let size_i =
+            size as i128;
+
+        // OpenQASM arrays and register slices support negative indices.
+        let normalized =
+            if index < 0 {
+                size_i.checked_add(index)
+            } else {
+                Some(index)
+            };
+
+        normalized
+            .map(|value| {
+                value >= 0
+                    && value < size_i
+            })
+            .unwrap_or(false)
+    }
+
     fn validate_slice_bounds(
         &mut self,
         start: Option<&Expression>,
+        step: Option<&Expression>,
         stop: Option<&Expression>,
         known_size: Option<u64>,
     ) {
@@ -3127,65 +2924,72 @@ impl<'a> Validator<'a> {
 
         let start_value =
             start.and_then(
-                |expression| {
-                    self.const_i128(expression)
-                },
+                |expression| self.const_i128(expression),
             );
 
         let stop_value =
             stop.and_then(
-                |expression| {
-                    self.const_i128(expression)
-                },
+                |expression| self.const_i128(expression),
             );
 
-        if let Some(value) =
-            start_value
-        {
-            if value < 0
-                || value > size as i128
+        let step_value =
+            step
+                .and_then(
+                    |expression| {
+                        self.const_i128(expression)
+                    },
+                )
+                .unwrap_or(1);
+
+        if step_value == 0 {
+            return;
+        }
+
+        let size_i =
+            size as i128;
+
+        if let Some(value) = start_value {
+            if value < -size_i
+                || value >= size_i
             {
                 self.error(
                     ValidationErrorCode::IndexOutOfBounds,
                     start.unwrap().span(),
                     format!(
-                        "slice start {value} is outside valid \
-                         range 0..{size}",
+                        "slice start {value} is outside \
+                         valid bounds for size {size}"
                     ),
                 );
             }
         }
 
-        if let Some(value) =
-            stop_value
-        {
-            if value < 0
-                || value > size as i128
+        if let Some(value) = stop_value {
+            if value < -size_i
+                || value >= size_i
             {
                 self.error(
                     ValidationErrorCode::IndexOutOfBounds,
                     stop.unwrap().span(),
                     format!(
-                        "slice stop {value} is outside valid \
-                         range 0..{size}",
+                        "slice stop {value} is outside \
+                         valid bounds for size {size}"
                     ),
                 );
             }
         }
 
-        if let (
-            Some(start),
-            Some(stop),
-        ) = (
-            start_value,
-            stop_value,
-        ) {
-            if start > stop {
-                self.error(
-                    ValidationErrorCode::InvalidSlice,
-                    start.unwrap().span(),
-                    "slice start cannot be greater than slice stop",
-                );
+        // A descending range is legal. The old validator incorrectly
+        // rejected start > stop regardless of step sign.
+        if let (Some(start), Some(stop)) =
+            (start_value, stop_value)
+        {
+            if step_value > 0 && start > stop {
+                // OpenQASM semantics make this an empty range rather than
+                // an invalid range.
+            }
+
+            if step_value < 0 && start < stop {
+                // Likewise: empty range, not a semantic error.
             }
         }
     }
@@ -3196,9 +3000,8 @@ impl<'a> Validator<'a> {
     ) -> String {
         match designator.index() {
             Some(index) => format!(
-                "{}:{:?}",
-                designator.name().as_str(),
-                index,
+                "{}:{index:?}",
+                designator.name().as_str()
             ),
 
             None => designator
@@ -3218,20 +3021,179 @@ impl<'a> Validator<'a> {
             )?;
 
         match designator.index() {
-            None => symbol.ty.quantum_size()
+            None => symbol.ty
+                .quantum_size()
                 .or_else(
-                    || {
-                        symbol.ty.classical_width()
-                    },
+                    || symbol.ty.classical_width(),
                 ),
 
-            Some(_) => Some(1),
+            Some(index) => {
+                self.index_set_cardinality(
+                    index,
+                    symbol.ty.quantum_size()
+                        .or_else(
+                            || symbol.ty.classical_width(),
+                        ),
+                )
+            }
         }
     }
 
-    // -------------------------------------------------------------------------
+    fn index_set_cardinality(
+        &self,
+        index: &IndexExpression,
+        known_size: Option<u64>,
+    ) -> Option<u64> {
+        match index {
+            IndexExpression::Index(_) => Some(1),
+
+            IndexExpression::Set(values) => {
+                Some(values.len() as u64)
+            }
+
+            IndexExpression::Concatenation(values) => {
+                let mut total = 0u64;
+
+                for designator in values {
+                    total = total.checked_add(
+                        self.designator_size(designator)?,
+                    )?;
+                }
+
+                Some(total)
+            }
+
+            IndexExpression::Slice {
+                start,
+                stop,
+            } => {
+                let size = known_size?;
+
+                let start =
+                    start.and_then(
+                        |value| self.const_i128(value),
+                    )
+                    .unwrap_or(0);
+
+                let stop =
+                    stop.and_then(
+                        |value| self.const_i128(value),
+                    )
+                    .unwrap_or(
+                        size as i128 - 1,
+                    );
+
+                self.range_cardinality(
+                    start,
+                    1,
+                    stop,
+                    size,
+                )
+            }
+
+            IndexExpression::Range {
+                start,
+                step,
+                stop,
+            } => {
+                let size = known_size?;
+
+                let start =
+                    start.and_then(
+                        |value| self.const_i128(value),
+                    )
+                    .unwrap_or(0);
+
+                let step =
+                    step.and_then(
+                        |value| self.const_i128(value),
+                    )
+                    .unwrap_or(1);
+
+                let stop =
+                    stop.and_then(
+                        |value| self.const_i128(value),
+                    )
+                    .unwrap_or(
+                        size as i128 - 1,
+                    );
+
+                self.range_cardinality(
+                    start,
+                    step,
+                    stop,
+                    size,
+                )
+            }
+        }
+    }
+
+    fn range_cardinality(
+        &self,
+        start: i128,
+        step: i128,
+        stop: i128,
+        size: u64,
+    ) -> Option<u64> {
+        if step == 0 || size == 0 {
+            return None;
+        }
+
+        let size_i =
+            size as i128;
+
+        let normalize = |value: i128| {
+            if value < 0 {
+                size_i.checked_add(value)
+            } else {
+                Some(value)
+            }
+        };
+
+        let start =
+            normalize(start)?;
+
+        let stop =
+            normalize(stop)?;
+
+        if step > 0 {
+            if start > stop {
+                return Some(0);
+            }
+
+            let distance =
+                stop.checked_sub(start)?;
+
+            let count =
+                distance.checked_div(step)?;
+
+            u64::try_from(
+                count.checked_add(1)?,
+            )
+            .ok()
+        } else {
+            if start < stop {
+                return Some(0);
+            }
+
+            let distance =
+                start.checked_sub(stop)?;
+
+            let count =
+                distance.checked_div(
+                    step.checked_neg()?,
+                )?;
+
+            u64::try_from(
+                count.checked_add(1)?,
+            )
+            .ok()
+        }
+    }
+
+    // ------------------------------------------------------------------------
     // Measurement
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     fn validate_measurement_assignment(
         &mut self,
@@ -3250,14 +3212,10 @@ impl<'a> Validator<'a> {
         );
 
         let source_size =
-            self.designator_size(
-                source,
-            );
+            self.designator_size(source);
 
         let destination_size =
-            self.designator_size(
-                destination,
-            );
+            self.designator_size(destination);
 
         if let (
             Some(source_size),
@@ -3271,9 +3229,8 @@ impl<'a> Validator<'a> {
                     ValidationErrorCode::InvalidMeasurementDestination,
                     span,
                     format!(
-                        "measurement source contains {source_size} \
-                         element(s), but destination contains \
-                         {destination_size}",
+                        "measurement produces {source_size} bit(s), \
+                         but destination contains {destination_size}"
                     ),
                 );
             }
@@ -3295,15 +3252,11 @@ impl<'a> Validator<'a> {
         operands: &[GateOperand],
         span: SourceSpan,
     ) {
-        if operands.len() != 1 {
+        if operands.is_empty() {
             self.error(
                 ValidationErrorCode::InvalidOperand,
                 span,
-                format!(
-                    "reset requires exactly one quantum operand, \
-                     received {}",
-                    operands.len(),
-                ),
+                "reset requires at least one quantum operand",
             );
         }
 
@@ -3313,9 +3266,9 @@ impl<'a> Validator<'a> {
         );
     }
 
-    // -------------------------------------------------------------------------
-    // Assignments
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Assignment
+    // ------------------------------------------------------------------------
 
     fn validate_assignment(
         &mut self,
@@ -3328,8 +3281,7 @@ impl<'a> Validator<'a> {
             self.error(
                 ValidationErrorCode::GateBodyClassicalOperation,
                 span,
-                "classical assignment is not permitted inside \
-                 a gate definition",
+                "classical assignment is not permitted inside a gate",
             );
         }
 
@@ -3339,22 +3291,14 @@ impl<'a> Validator<'a> {
         );
 
         match value {
-            AssignmentValue::Expression(
-                expression,
-            ) => {
-                self.validate_expression(
-                    expression,
-                );
+            AssignmentValue::Expression(expression) => {
+                self.validate_expression(expression);
 
                 let target_type =
-                    self.designator_type(
-                        target,
-                    );
+                    self.designator_type(target);
 
                 let value_type =
-                    self.expression_type(
-                        expression,
-                    );
+                    self.expression_type(expression);
 
                 if !self.types_compatible(
                     &target_type,
@@ -3367,44 +3311,34 @@ impl<'a> Validator<'a> {
                             "assignment type mismatch: target is {:?}, \
                              value is {:?}",
                             target_type,
-                            value_type,
+                            value_type
                         ),
                     );
                 }
             }
 
-            AssignmentValue::Measure(
-                measurement,
-            ) => {
+            AssignmentValue::Measure(measurement) => {
                 self.validate_measurement_expression(
                     measurement.operand(),
                 );
 
-                if !self.designator_is_classical(
-                    target,
-                ) {
+                if !self.designator_is_classical(target) {
                     self.error(
                         ValidationErrorCode::InvalidAssignmentTarget,
                         target.span(),
-                        "measurement assignment destination must \
-                         be classical",
+                        "measurement destination must be classical",
                     );
                 }
             }
 
-            AssignmentValue::QuantumCall(
-                call,
-            ) => {
-                self.validate_quantum_call(
-                    call,
-                );
+            AssignmentValue::QuantumCall(call) => {
+                self.validate_quantum_call(call);
 
                 self.error(
                     ValidationErrorCode::InvalidAssignment,
                     span,
-                    "quantum-call assignment requires a quantum-capable \
-                     destination, which is not represented by the current \
-                     canonical IR",
+                    "quantum-call assignment is not representable \
+                     by the current logical Quantum IR",
                 );
             }
         }
@@ -3412,13 +3346,11 @@ impl<'a> Validator<'a> {
         if !matches!(
             operator,
             AssignmentOperator::Assign
-        ) && !self.designator_is_mutable(
-            target,
-        ) {
+        ) && !self.designator_is_mutable(target) {
             self.error(
                 ValidationErrorCode::InvalidAssignmentTarget,
                 target.span(),
-                "compound assignment requires a mutable classical target",
+                "compound assignment requires a mutable target",
             );
         }
     }
@@ -3430,11 +3362,7 @@ impl<'a> Validator<'a> {
         self.resolve(
             designator.name().as_str(),
         )
-        .map(
-            |symbol| {
-                symbol.ty.is_classical()
-            },
-        )
+        .map(|symbol| symbol.ty.is_classical())
         .unwrap_or(false)
     }
 
@@ -3442,32 +3370,23 @@ impl<'a> Validator<'a> {
         &self,
         designator: &Designator,
     ) -> bool {
-        let Some(symbol) =
-            self.resolve(
-                designator.name().as_str(),
-            )
-        else {
-            return false;
-        };
-
-        !matches!(
-            symbol.ty,
-            SemanticType::GateParameter
+        self.resolve(
+            designator.name().as_str(),
         )
+        .map(|symbol| !symbol.constant)
+        .unwrap_or(false)
     }
 
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // Control flow
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     fn validate_condition(
         &mut self,
         expression: &Expression,
     ) {
         let ty =
-            self.expression_type(
-                expression,
-            );
+            self.expression_type(expression);
 
         if !matches!(
             ty,
@@ -3480,9 +3399,8 @@ impl<'a> Validator<'a> {
                 ValidationErrorCode::InvalidCondition,
                 expression.span(),
                 format!(
-                    "condition must be boolean or integral, \
-                     found {:?}",
-                    ty,
+                    "condition must be boolean or integral; found {:?}",
+                    ty
                 ),
             );
         }
@@ -3493,12 +3411,8 @@ impl<'a> Validator<'a> {
         iterable: &ForIterable,
     ) {
         match iterable {
-            ForIterable::Expression(
-                expression,
-            ) => {
-                self.validate_expression(
-                    expression,
-                );
+            ForIterable::Expression(expression) => {
+                self.validate_expression(expression);
             }
 
             ForIterable::Range {
@@ -3506,42 +3420,24 @@ impl<'a> Validator<'a> {
                 step,
                 stop,
             } => {
-                self.validate_expression(
-                    start,
-                );
+                self.validate_expression(start);
 
-                if let Some(step) =
-                    step
-                {
-                    self.validate_expression(
-                        step,
-                    );
-                }
+                if let Some(step) = step {
+                    self.validate_expression(step);
 
-                self.validate_expression(
-                    stop,
-                );
-
-                if let Some(step) =
-                    step
-                {
-                    if let Some(value) =
-                        self.const_i128(step)
-                    {
-                        if value == 0 {
-                            self.error(
-                                ValidationErrorCode::InvalidLoop,
-                                step.span(),
-                                "for-loop range step cannot be zero",
-                            );
-                        }
+                    if self.const_i128(step) == Some(0) {
+                        self.error(
+                            ValidationErrorCode::InvalidLoop,
+                            step.span(),
+                            "for-loop range step cannot be zero",
+                        );
                     }
                 }
+
+                self.validate_expression(stop);
             }
 
-            ForIterable::Set(
-                values,
-            ) => {
+            ForIterable::Set(values) => {
                 if values.is_empty() {
                     self.error(
                         ValidationErrorCode::InvalidLoop,
@@ -3551,9 +3447,7 @@ impl<'a> Validator<'a> {
                 }
 
                 for value in values {
-                    self.validate_expression(
-                        value,
-                    );
+                    self.validate_expression(value);
                 }
             }
         }
@@ -3564,39 +3458,29 @@ impl<'a> Validator<'a> {
         body: &StatementOrScope,
     ) {
         match body {
-            StatementOrScope::Statement(
-                statement,
-            ) => {
-                self.validate_statement(
-                    statement,
-                );
+            StatementOrScope::Statement(statement) => {
+                self.validate_statement(statement);
             }
 
-            StatementOrScope::Scope(
-                scope,
-            ) => {
-                self.with_scope(|validator| {
+            StatementOrScope::Scope(scope) => {
+                self.with_block_scope(|validator| {
                     for statement in scope.statements() {
-                        if !validator
-                            .consume_statement_budget(
-                                statement.span(),
-                            )
-                        {
+                        if !validator.consume_statement_budget(
+                            statement.span(),
+                        ) {
                             break;
                         }
 
-                        validator.validate_statement(
-                            statement,
-                        );
+                        validator.validate_statement(statement);
                     }
                 });
             }
         }
     }
 
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // Expressions
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     fn validate_expression(
         &mut self,
@@ -3627,8 +3511,8 @@ impl<'a> Validator<'a> {
         expression: &Expression,
         depth: u64,
     ) {
-        if depth
-            > self.effective_max_expression_depth()
+        if depth >
+            self.effective_max_expression_depth()
         {
             self.error(
                 ValidationErrorCode::ExpressionDepthExceeded,
@@ -3641,31 +3525,22 @@ impl<'a> Validator<'a> {
         match expression {
             Expression::BoolLiteral { .. } => {}
 
-            Expression::IntegerLiteral {
-                value,
-                ..
-            } => {
+            Expression::IntegerLiteral { value, .. } => {
                 if self.parse_integer_literal(
                     value.raw(),
                     value.radix(),
-                ).is_none()
-                {
+                ).is_none() {
                     self.error(
                         ValidationErrorCode::InvalidNumericLiteral,
                         expression.span(),
-                        "integer literal cannot be represented as \
-                         a signed/unsigned semantic integer",
+                        "integer literal cannot be represented",
                     );
                 }
             }
 
-            Expression::FloatLiteral {
-                value,
-                ..
-            } => {
+            Expression::FloatLiteral { value, .. } => {
                 match value.raw().parse::<f64>() {
-                    Ok(value)
-                        if value.is_finite() => {}
+                    Ok(value) if value.is_finite() => {}
 
                     _ => {
                         self.error(
@@ -3677,21 +3552,14 @@ impl<'a> Validator<'a> {
                 }
             }
 
-            Expression::DurationLiteral {
-                value,
-                ..
-            } => {
+            Expression::DurationLiteral { value, .. } => {
                 self.validate_expression(
                     value.value(),
                 );
             }
 
-            Expression::Identifier(
-                identifier,
-            ) => {
-                if identifier.as_str()
-                    != "pi"
-                {
+            Expression::Identifier(identifier) => {
+                if identifier.as_str() != "pi" {
                     self.require_symbol(
                         identifier.as_str(),
                         identifier.span(),
@@ -3699,9 +3567,7 @@ impl<'a> Validator<'a> {
                 }
             }
 
-            Expression::Designator(
-                designator,
-            ) => {
+            Expression::Designator(designator) => {
                 self.validate_designator(
                     designator,
                     false,
@@ -3748,17 +3614,14 @@ impl<'a> Validator<'a> {
                 if matches!(
                     operator,
                     BinaryOperator::Divide
+                        | BinaryOperator::Remainder
                 ) {
-                    if let Some(value) =
-                        self.const_f64(right)
-                    {
-                        if value == 0.0 {
-                            self.error(
-                                ValidationErrorCode::DivisionByZero,
-                                right.span(),
-                                "division by zero is not valid",
-                            );
-                        }
+                    if self.const_f64(right) == Some(0.0) {
+                        self.error(
+                            ValidationErrorCode::DivisionByZero,
+                            right.span(),
+                            "division by zero is not valid",
+                        );
                     }
                 }
             }
@@ -3791,34 +3654,19 @@ impl<'a> Validator<'a> {
                 );
             }
 
-            Expression::Measure(
-                measurement,
-            ) => {
+            Expression::Measure(measurement) => {
                 self.validate_measurement_expression(
                     measurement.operand(),
                 );
             }
 
-            Expression::QuantumCall(
-                call,
-            ) => {
-                self.validate_quantum_call(
-                    call,
-                );
+            Expression::QuantumCall(call) => {
+                self.validate_quantum_call(call);
             }
 
-            Expression::ArrayLiteral {
-                values,
-                ..
-            }
-            | Expression::SetLiteral {
-                values,
-                ..
-            }
-            | Expression::Concatenation {
-                values,
-                ..
-            } => {
+            Expression::ArrayLiteral { values, .. }
+            | Expression::SetLiteral { values, .. }
+            | Expression::Concatenation { values, .. } => {
                 for value in values {
                     self.validate_expression_at_depth(
                         value,
@@ -3833,27 +3681,21 @@ impl<'a> Validator<'a> {
                 stop,
                 ..
             } => {
-                if let Some(start) =
-                    start
-                {
+                if let Some(start) = start {
                     self.validate_expression_at_depth(
                         start,
                         depth.saturating_add(1),
                     );
                 }
 
-                if let Some(step) =
-                    step
-                {
+                if let Some(step) = step {
                     self.validate_expression_at_depth(
                         step,
                         depth.saturating_add(1),
                     );
                 }
 
-                if let Some(stop) =
-                    stop
-                {
+                if let Some(stop) = stop {
                     self.validate_expression_at_depth(
                         stop,
                         depth.saturating_add(1),
@@ -3889,16 +3731,19 @@ impl<'a> Validator<'a> {
                     self.error(
                         ValidationErrorCode::TimingDisabled,
                         expression.span(),
-                        "durationof is disabled by the current \
-                         frontend policy",
+                        "durationof is disabled",
                     );
                 }
 
-                self.with_scope(|validator| {
+                self.with_block_scope(|validator| {
                     for statement in body {
-                        validator.validate_statement(
-                            statement,
-                        );
+                        if !validator.consume_statement_budget(
+                            statement.span(),
+                        ) {
+                            break;
+                        }
+
+                        validator.validate_statement(statement);
                     }
                 });
             }
@@ -3914,7 +3759,7 @@ impl<'a> Validator<'a> {
                         expression.span(),
                         format!(
                             "expression extension `{}` is disabled",
-                            name.as_str(),
+                            name.as_str()
                         ),
                     );
                 }
@@ -3931,49 +3776,16 @@ impl<'a> Validator<'a> {
 
     fn validate_unary_operator(
         &mut self,
-        operator: UnaryOperator,
-        span: SourceSpan,
+        _operator: UnaryOperator,
+        _span: SourceSpan,
     ) {
-        match operator {
-            UnaryOperator::Plus
-            | UnaryOperator::Minus => {}
-
-            UnaryOperator::LogicalNot
-            | UnaryOperator::BitNot => {}
-        }
-
-        let _ = span;
     }
 
     fn validate_binary_operator(
         &mut self,
-        operator: BinaryOperator,
-        span: SourceSpan,
+        _operator: BinaryOperator,
+        _span: SourceSpan,
     ) {
-        match operator {
-            BinaryOperator::Divide
-            | BinaryOperator::Remainder => {}
-
-            BinaryOperator::Power
-            | BinaryOperator::Multiply
-            | BinaryOperator::Add
-            | BinaryOperator::Subtract
-            | BinaryOperator::Equal
-            | BinaryOperator::NotEqual
-            | BinaryOperator::Less
-            | BinaryOperator::LessEqual
-            | BinaryOperator::Greater
-            | BinaryOperator::GreaterEqual
-            | BinaryOperator::LogicalAnd
-            | BinaryOperator::LogicalOr
-            | BinaryOperator::BitAnd
-            | BinaryOperator::BitOr
-            | BinaryOperator::BitXor
-            | BinaryOperator::ShiftLeft
-            | BinaryOperator::ShiftRight => {}
-        }
-
-        let _ = span;
     }
 
     fn validate_function_call(
@@ -3983,33 +3795,31 @@ impl<'a> Validator<'a> {
         span: SourceSpan,
     ) {
         for argument in arguments {
-            self.validate_expression(
-                argument,
-            );
+            self.validate_expression(argument);
         }
 
-        // OpenQASM provides language-defined mathematical/classical
-        // functions. Unknown functions are not accepted unless an extern
-        // declaration or extension policy provides them.
-        let known = matches!(
-            name,
-            "sin"
-                | "cos"
-                | "tan"
-                | "exp"
-                | "ln"
-                | "log"
-                | "sqrt"
-                | "ceil"
-                | "floor"
-                | "arcsin"
-                | "arccos"
-                | "arctan"
-                | "pow"
-                | "popcount"
-                | "rotl"
-                | "rotr"
-        );
+        let known =
+            matches!(
+                name,
+                "arccos"
+                    | "arcsin"
+                    | "arctan"
+                    | "ceil"
+                    | "ceiling"
+                    | "cos"
+                    | "exp"
+                    | "floor"
+                    | "log"
+                    | "ln"
+                    | "mod"
+                    | "popcount"
+                    | "pow"
+                    | "rotl"
+                    | "rotr"
+                    | "sin"
+                    | "sqrt"
+                    | "tan"
+            );
 
         if !known
             && self.resolve(name).is_none()
@@ -4030,9 +3840,7 @@ impl<'a> Validator<'a> {
         call: &super::ast::QuantumCallExpression,
     ) {
         for parameter in call.parameters() {
-            self.validate_expression(
-                parameter,
-            );
+            self.validate_expression(parameter);
         }
 
         self.validate_operands(
@@ -4050,16 +3858,16 @@ impl<'a> Validator<'a> {
             call.span(),
         );
 
-        if self.gates.contains_key(
-            call.name().as_str(),
-        ) || self.is_language_builtin_gate(
-            call.name().as_str(),
-        ) || (
-            self.stdgates_available
-                && self.is_known_standard_gate(
-                    call.name().as_str(),
-                )
-        ) {
+        let name =
+            call.name().as_str();
+
+        if self.gates.contains_key(name)
+            || self.is_language_builtin_gate(name)
+            || (
+                self.stdgates_available
+                    && self.is_known_standard_gate(name)
+            )
+        {
             return;
         }
 
@@ -4067,15 +3875,14 @@ impl<'a> Validator<'a> {
             ValidationErrorCode::UndefinedGate,
             call.name().span(),
             format!(
-                "quantum call `{}` is not defined",
-                call.name().as_str(),
+                "quantum call `{name}` is not defined"
             ),
         );
     }
 
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // Expression typing
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     fn expression_type(
         &self,
@@ -4098,47 +3905,37 @@ impl<'a> Validator<'a> {
                 SemanticType::Duration
             }
 
-            Expression::Identifier(
-                identifier,
-            ) => {
-                if identifier.as_str()
-                    == "pi"
-                {
+            Expression::Identifier(identifier) => {
+                if identifier.as_str() == "pi" {
                     SemanticType::Float(None)
                 } else {
                     self.resolve(
                         identifier.as_str(),
                     )
-                    .map(
-                        |symbol| symbol.ty.clone(),
-                    )
+                    .map(|symbol| symbol.ty.clone())
                     .unwrap_or(
                         SemanticType::Unknown,
                     )
                 }
             }
 
-            Expression::Designator(
-                designator,
-            ) => {
-                self.designator_type(
-                    designator,
-                )
+            Expression::Designator(designator) => {
+                self.designator_type(designator)
             }
 
             Expression::Unary {
                 operator,
                 operand,
                 ..
-            } => match operator {
-                UnaryOperator::LogicalNot => {
-                    SemanticType::Bool
-                }
+            } => {
+                match operator {
+                    UnaryOperator::LogicalNot => {
+                        SemanticType::Bool
+                    }
 
-                _ => self.expression_type(
-                    operand,
-                ),
-            },
+                    _ => self.expression_type(operand),
+                }
+            }
 
             Expression::Binary {
                 operator,
@@ -4158,35 +3955,26 @@ impl<'a> Validator<'a> {
                         SemanticType::Bool
                     }
 
-                    _ => {
-                        let left_type =
-                            self.expression_type(
-                                left,
-                            );
-
-                        let right_type =
-                            self.expression_type(
-                                right,
-                            );
-
-                        self.promote_numeric_types(
-                            left_type,
-                            right_type,
-                        )
-                    }
+                    _ => self.promote_numeric_types(
+                        self.expression_type(left),
+                        self.expression_type(right),
+                    ),
                 }
             }
 
-            Expression::FunctionCall {
-                ..
-            } => SemanticType::Float(None),
+            Expression::FunctionCall { name, .. } => {
+                match name.as_str() {
+                    "popcount" => SemanticType::UInt(None),
 
-            Expression::Cast {
-                target,
-                ..
-            } => self.semantic_scalar_type(
-                target,
-            ),
+                    "rotl" | "rotr" => SemanticType::Unknown,
+
+                    _ => SemanticType::Float(None),
+                }
+            }
+
+            Expression::Cast { target, .. } => {
+                self.semantic_scalar_type(target)
+            }
 
             Expression::Measure(_) => {
                 SemanticType::Bit(Some(1))
@@ -4196,25 +3984,17 @@ impl<'a> Validator<'a> {
                 SemanticType::Unknown
             }
 
-            Expression::ArrayLiteral {
-                ..
+            Expression::ArrayLiteral { .. }
+            | Expression::SetLiteral { .. }
+            | Expression::Range { .. }
+            | Expression::Concatenation { .. } => {
+                SemanticType::Unknown
             }
-            | Expression::SetLiteral {
-                ..
-            }
-            | Expression::Range {
-                ..
-            }
-            | Expression::Concatenation {
-                ..
-            } => SemanticType::Unknown,
 
             Expression::Parenthesized {
                 expression,
                 ..
-            } => self.expression_type(
-                expression,
-            ),
+            } => self.expression_type(expression),
 
             Expression::SizeOf { .. } => {
                 SemanticType::UInt(None)
@@ -4242,23 +4022,41 @@ impl<'a> Validator<'a> {
             return SemanticType::Unknown;
         };
 
-        if designator.index().is_some() {
-            if symbol.ty.is_quantum() {
-                return SemanticType::Quantum {
-                    size: Some(1),
-                };
+        let Some(index) =
+            designator.index()
+        else {
+            return symbol.ty.clone();
+        };
+
+        match &symbol.ty {
+            SemanticType::Quantum { .. }
+            | SemanticType::GateOperand => {
+                SemanticType::Quantum {
+                    size: self.index_set_cardinality(
+                        index,
+                        symbol.ty.quantum_size(),
+                    ),
+                }
             }
 
-            if let Some(width) =
-                symbol.ty.classical_width()
-            {
-                return SemanticType::Bit(Some(
-                    width.min(1),
-                ));
+            SemanticType::Bit(_)
+            | SemanticType::Int(_)
+            | SemanticType::UInt(_)
+            | SemanticType::Angle(_) => {
+                SemanticType::Bit(
+                    self.index_set_cardinality(
+                        index,
+                        symbol.ty.classical_width(),
+                    ),
+                )
             }
+
+            SemanticType::Array { .. } => {
+                symbol.ty.clone()
+            }
+
+            _ => SemanticType::Unknown,
         }
-
-        symbol.ty.clone()
     }
 
     fn promote_numeric_types(
@@ -4267,14 +4065,14 @@ impl<'a> Validator<'a> {
         right: SemanticType,
     ) -> SemanticType {
         match (&left, &right) {
-            (SemanticType::Float(_), _)
-            | (_, SemanticType::Float(_)) => {
-                SemanticType::Float(None)
-            }
-
             (SemanticType::Complex(_), _)
             | (_, SemanticType::Complex(_)) => {
                 SemanticType::Complex(None)
+            }
+
+            (SemanticType::Float(_), _)
+            | (_, SemanticType::Float(_)) => {
+                SemanticType::Float(None)
             }
 
             (SemanticType::Angle(_), _)
@@ -4319,10 +4117,10 @@ impl<'a> Validator<'a> {
             (left, right),
             (
                 SemanticType::Bool,
-                SemanticType::Bit(_)
+                SemanticType::Bit(Some(1))
             )
             | (
-                SemanticType::Bit(_),
+                SemanticType::Bit(Some(1)),
                 SemanticType::Bool
             )
             | (
@@ -4359,9 +4157,7 @@ impl<'a> Validator<'a> {
         span: SourceSpan,
     ) {
         let source =
-            self.expression_type(
-                expression,
-            );
+            self.expression_type(expression);
 
         if !self.types_compatible(
             target,
@@ -4371,24 +4167,34 @@ impl<'a> Validator<'a> {
                 ValidationErrorCode::AssignmentTypeMismatch,
                 span,
                 format!(
-                    "initializer type {:?} is incompatible with \
-                     declared type {:?}",
+                    "initializer type {:?} is incompatible \
+                     with declared type {:?}",
                     source,
-                    target,
+                    target
                 ),
             );
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Symbol handling
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Symbol/scoping
+    // ------------------------------------------------------------------------
+
+    fn current_scope_kind(
+        &self,
+    ) -> ScopeKind {
+        self.scopes
+            .last()
+            .map(|scope| scope.kind)
+            .unwrap_or(ScopeKind::Global)
+    }
 
     fn declare(
         &mut self,
         name: &str,
         ty: SemanticType,
         span: SourceSpan,
+        constant: bool,
     ) {
         if self.symbol_count
             >= self.effective_max_symbols()
@@ -4401,33 +4207,55 @@ impl<'a> Validator<'a> {
             return;
         }
 
+        let scope_kind =
+            self.current_scope_kind();
+
+        if scope_kind == ScopeKind::Global {
+            // OpenQASM global declarations cannot be redeclared.
+            if self.resolve(name).is_some() {
+                self.error(
+                    ValidationErrorCode::DuplicateDeclaration,
+                    span,
+                    format!(
+                        "identifier `{name}` is already declared"
+                    ),
+                );
+                return;
+            }
+        } else if let Some(scope) =
+            self.scopes.last()
+        {
+            if scope.symbols.contains_key(name) {
+                self.error(
+                    ValidationErrorCode::DuplicateDeclaration,
+                    span,
+                    format!(
+                        "identifier `{name}` is declared more than once \
+                         in this scope"
+                    ),
+                );
+                return;
+            }
+        }
+
         let Some(scope) =
             self.scopes.last_mut()
         else {
             self.error(
                 ValidationErrorCode::InvalidScope,
                 span,
-                "validator has no active semantic scope",
+                "validator has no active scope",
             );
             return;
         };
 
-        if scope.contains_key(name) {
-            self.error(
-                ValidationErrorCode::DuplicateDeclaration,
-                span,
-                format!(
-                    "identifier `{name}` is declared more than once"
-                ),
-            );
-            return;
-        }
-
-        scope.insert(
+        scope.symbols.insert(
             name.to_owned(),
             Symbol {
                 ty,
                 span,
+                constant,
+                scope: scope_kind,
             },
         );
 
@@ -4439,12 +4267,54 @@ impl<'a> Validator<'a> {
         &self,
         name: &str,
     ) -> Option<&Symbol> {
-        self.scopes
-            .iter()
-            .rev()
-            .find_map(
-                |scope| scope.get(name),
-            )
+        let current =
+            self.current_scope_kind();
+
+        for scope in self.scopes.iter().rev() {
+            if let Some(symbol) =
+                scope.symbols.get(name)
+            {
+                match current {
+                    ScopeKind::Gate
+                    | ScopeKind::Subroutine => {
+                        if scope.kind == ScopeKind::Global {
+                            if symbol.constant
+                                || symbol.ty.is_quantum()
+                                || matches!(
+                                    symbol.ty,
+                                    SemanticType::Subroutine
+                                        | SemanticType::Extern
+                                )
+                            {
+                                return Some(symbol);
+                            }
+
+                            continue;
+                        }
+
+                        if scope.kind == ScopeKind::Gate
+                            || scope.kind == ScopeKind::Subroutine
+                        {
+                            return Some(symbol);
+                        }
+
+                        continue;
+                    }
+
+                    ScopeKind::Global
+                    | ScopeKind::Block => {
+                        return Some(symbol);
+                    }
+                }
+            }
+        }
+
+        // Built-in constant.
+        if name == "pi" {
+            return None;
+        }
+
+        None
     }
 
     fn require_symbol(
@@ -4452,6 +4322,10 @@ impl<'a> Validator<'a> {
         name: &str,
         span: SourceSpan,
     ) {
+        if name == "pi" {
+            return;
+        }
+
         if self.resolve(name).is_none() {
             self.error(
                 ValidationErrorCode::UndefinedIdentifier,
@@ -4463,7 +4337,7 @@ impl<'a> Validator<'a> {
         }
     }
 
-    fn with_scope<F>(
+    fn with_block_scope<F>(
         &mut self,
         function: F,
     )
@@ -4471,32 +4345,24 @@ impl<'a> Validator<'a> {
         F: FnOnce(&mut Self),
     {
         self.scopes.push(
-            HashMap::new(),
+            Scope::new(ScopeKind::Block),
         );
-
-        self.scope_depth =
-            self.scope_depth.saturating_add(1);
 
         function(self);
 
         self.scopes.pop();
-
-        self.scope_depth =
-            self.scope_depth.saturating_sub(1);
     }
 
-    // -------------------------------------------------------------------------
-    // Constants / numeric evaluation
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Constants
+    // ------------------------------------------------------------------------
 
     fn const_u64(
         &self,
         expression: &Expression,
     ) -> Option<u64> {
         let value =
-            self.const_i128(
-                expression,
-            )?;
+            self.const_i128(expression)?;
 
         u64::try_from(value).ok()
     }
@@ -4509,19 +4375,15 @@ impl<'a> Validator<'a> {
             Expression::IntegerLiteral {
                 value,
                 ..
-            } => {
-                self.parse_integer_literal(
-                    value.raw(),
-                    value.radix(),
-                )
-            }
+            } => self.parse_integer_literal(
+                value.raw(),
+                value.radix(),
+            ),
 
             Expression::Parenthesized {
                 expression,
                 ..
-            } => self.const_i128(
-                expression,
-            ),
+            } => self.const_i128(expression),
 
             Expression::Unary {
                 operator,
@@ -4529,18 +4391,14 @@ impl<'a> Validator<'a> {
                 ..
             } => {
                 let value =
-                    self.const_i128(
-                        operand,
-                    )?;
+                    self.const_i128(operand)?;
 
                 match operator {
-                    UnaryOperator::Plus => {
-                        Some(value)
-                    }
+                    UnaryOperator::Plus =>
+                        Some(value),
 
-                    UnaryOperator::Minus => {
-                        value.checked_neg()
-                    }
+                    UnaryOperator::Minus =>
+                        value.checked_neg(),
 
                     _ => None,
                 }
@@ -4553,27 +4411,20 @@ impl<'a> Validator<'a> {
                 ..
             } => {
                 let left =
-                    self.const_i128(
-                        left,
-                    )?;
+                    self.const_i128(left)?;
 
                 let right =
-                    self.const_i128(
-                        right,
-                    )?;
+                    self.const_i128(right)?;
 
                 match operator {
-                    BinaryOperator::Add => {
-                        left.checked_add(right)
-                    }
+                    BinaryOperator::Add =>
+                        left.checked_add(right),
 
-                    BinaryOperator::Subtract => {
-                        left.checked_sub(right)
-                    }
+                    BinaryOperator::Subtract =>
+                        left.checked_sub(right),
 
-                    BinaryOperator::Multiply => {
-                        left.checked_mul(right)
-                    }
+                    BinaryOperator::Multiply =>
+                        left.checked_mul(right),
 
                     BinaryOperator::Divide => {
                         if right == 0 {
@@ -4598,30 +4449,22 @@ impl<'a> Validator<'a> {
                             return None;
                         }
 
-                        let mut result =
-                            1i128;
-
-                        let mut count =
+                        let mut result = 1i128;
+                        let mut exponent =
                             right as u32;
+                        let mut base = left;
 
-                        let mut base =
-                            left;
-
-                        while count > 0 {
-                            if count & 1 == 1 {
+                        while exponent > 0 {
+                            if exponent & 1 == 1 {
                                 result =
-                                    result.checked_mul(
-                                        base,
-                                    )?;
+                                    result.checked_mul(base)?;
                             }
 
-                            count >>= 1;
+                            exponent >>= 1;
 
-                            if count > 0 {
+                            if exponent > 0 {
                                 base =
-                                    base.checked_mul(
-                                        base,
-                                    )?;
+                                    base.checked_mul(base)?;
                             }
                         }
 
@@ -4630,6 +4473,12 @@ impl<'a> Validator<'a> {
 
                     _ => None,
                 }
+            }
+
+            Expression::Identifier(identifier)
+                if identifier.as_str() == "pi" =>
+            {
+                None
             }
 
             _ => None,
@@ -4644,13 +4493,12 @@ impl<'a> Validator<'a> {
             Expression::IntegerLiteral {
                 value,
                 ..
-            } => {
-                self.parse_integer_literal(
+            } => self
+                .parse_integer_literal(
                     value.raw(),
                     value.radix(),
                 )
-                .map(|value| value as f64)
-            }
+                .map(|value| value as f64),
 
             Expression::FloatLiteral {
                 value,
@@ -4659,16 +4507,12 @@ impl<'a> Validator<'a> {
                 .raw()
                 .parse::<f64>()
                 .ok()
-                .filter(
-                    |value| value.is_finite(),
-                ),
+                .filter(|value| value.is_finite()),
 
             Expression::Parenthesized {
                 expression,
                 ..
-            } => self.const_f64(
-                expression,
-            ),
+            } => self.const_f64(expression),
 
             Expression::Unary {
                 operator,
@@ -4676,18 +4520,14 @@ impl<'a> Validator<'a> {
                 ..
             } => {
                 let value =
-                    self.const_f64(
-                        operand,
-                    )?;
+                    self.const_f64(operand)?;
 
                 match operator {
-                    UnaryOperator::Plus => {
-                        Some(value)
-                    }
+                    UnaryOperator::Plus =>
+                        Some(value),
 
-                    UnaryOperator::Minus => {
-                        Some(-value)
-                    }
+                    UnaryOperator::Minus =>
+                        Some(-value),
 
                     _ => None,
                 }
@@ -4700,28 +4540,21 @@ impl<'a> Validator<'a> {
                 ..
             } => {
                 let left =
-                    self.const_f64(
-                        left,
-                    )?;
+                    self.const_f64(left)?;
 
                 let right =
-                    self.const_f64(
-                        right,
-                    )?;
+                    self.const_f64(right)?;
 
-                let value =
+                let result =
                     match operator {
-                        BinaryOperator::Add => {
-                            left + right
-                        }
+                        BinaryOperator::Add =>
+                            left + right,
 
-                        BinaryOperator::Subtract => {
-                            left - right
-                        }
+                        BinaryOperator::Subtract =>
+                            left - right,
 
-                        BinaryOperator::Multiply => {
-                            left * right
-                        }
+                        BinaryOperator::Multiply =>
+                            left * right,
 
                         BinaryOperator::Divide => {
                             if right == 0.0 {
@@ -4734,8 +4567,9 @@ impl<'a> Validator<'a> {
                         _ => return None,
                     };
 
-                value.is_finite()
-                    .then_some(value)
+                result
+                    .is_finite()
+                    .then_some(result)
             }
 
             _ => None,
@@ -4753,7 +4587,10 @@ impl<'a> Validator<'a> {
         let (digits, base) =
             match radix {
                 IntegerRadix::Decimal => {
-                    (normalized.as_str(), 10)
+                    (
+                        normalized.as_str(),
+                        10,
+                    )
                 }
 
                 IntegerRadix::Binary => {
@@ -4761,10 +4598,7 @@ impl<'a> Validator<'a> {
                         normalized
                             .strip_prefix("0b")
                             .or_else(
-                                || {
-                                    normalized
-                                        .strip_prefix("0B")
-                                },
+                                || normalized.strip_prefix("0B"),
                             )?,
                         2,
                     )
@@ -4775,10 +4609,7 @@ impl<'a> Validator<'a> {
                         normalized
                             .strip_prefix("0o")
                             .or_else(
-                                || {
-                                    normalized
-                                        .strip_prefix("0O")
-                                },
+                                || normalized.strip_prefix("0O"),
                             )?,
                         8,
                     )
@@ -4789,10 +4620,7 @@ impl<'a> Validator<'a> {
                         normalized
                             .strip_prefix("0x")
                             .or_else(
-                                || {
-                                    normalized
-                                        .strip_prefix("0X")
-                                },
+                                || normalized.strip_prefix("0X"),
                             )?,
                         16,
                     )
@@ -4814,27 +4642,19 @@ impl<'a> Validator<'a> {
             self.const_i128(expression)
         {
             return Some(
-                format!(
-                    "i:{value}"
-                ),
+                format!("i:{value}"),
             );
         }
 
-        self.const_f64(
-            expression,
-        )
-        .map(
-            |value| {
-                format!(
-                    "f:{value:.17e}"
-                )
-            },
-        )
+        self.const_f64(expression)
+            .map(|value| {
+                format!("f:{value:.17e}")
+            })
     }
 
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // Limits
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     fn consume_statement_budget(
         &mut self,
@@ -4862,16 +4682,15 @@ impl<'a> Validator<'a> {
         size: u64,
         span: SourceSpan,
     ) {
-        if size
-            > self.effective_max_register_size()
+        if size >
+            self.effective_max_register_size()
         {
             self.error(
                 ValidationErrorCode::RegisterLimitExceeded,
                 span,
                 format!(
-                    "register size {size} exceeds configured \
-                     maximum {}",
-                    self.effective_max_register_size(),
+                    "register size {size} exceeds configured maximum {}",
+                    self.effective_max_register_size()
                 ),
             );
         }
@@ -4883,8 +4702,7 @@ impl<'a> Validator<'a> {
         self.config
             .max_expression_depth
             .min(
-                self.limits
-                    .max_nesting_depth(),
+                self.limits.max_expression_depth(),
             )
     }
 
@@ -4894,8 +4712,7 @@ impl<'a> Validator<'a> {
         self.config
             .max_expression_nodes
             .min(
-                self.limits
-                    .max_expression_nodes(),
+                self.limits.max_expression_nodes(),
             )
     }
 
@@ -4905,8 +4722,7 @@ impl<'a> Validator<'a> {
         self.config
             .max_register_size
             .min(
-                self.limits
-                    .max_register_size(),
+                self.limits.max_register_size(),
             )
     }
 
@@ -4916,8 +4732,7 @@ impl<'a> Validator<'a> {
         self.config
             .max_symbols
             .min(
-                self.limits
-                    .max_symbols(),
+                self.limits.max_symbols(),
             )
     }
 
@@ -4927,8 +4742,7 @@ impl<'a> Validator<'a> {
         self.config
             .max_parameters
             .min(
-                self.limits
-                    .max_parameters(),
+                self.limits.max_parameters(),
             )
     }
 
@@ -4938,8 +4752,7 @@ impl<'a> Validator<'a> {
         self.config
             .max_operands
             .min(
-                self.limits
-                    .max_operands(),
+                self.limits.max_operands(),
             )
     }
 
@@ -4949,8 +4762,7 @@ impl<'a> Validator<'a> {
         self.config
             .max_statements
             .min(
-                self.limits
-                    .max_statements(),
+                self.limits.max_statements(),
             )
     }
 
@@ -4964,8 +4776,8 @@ impl<'a> Validator<'a> {
                 let value =
                     left.checked_add(right)?;
 
-                if value
-                    > self.effective_max_register_size()
+                if value >
+                    self.effective_max_register_size()
                 {
                     None
                 } else {
@@ -4977,9 +4789,9 @@ impl<'a> Validator<'a> {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Error handling
-    // -------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Errors
+    // ------------------------------------------------------------------------
 
     fn error(
         &mut self,
@@ -5003,77 +4815,93 @@ impl<'a> Validator<'a> {
     }
 }
 
-// =============================================================================
-// Helper functions
-// =============================================================================
+// ============================================================================
+// Public API
+// ============================================================================
+
+pub fn validate_program(
+    program: &Program,
+    limits: &FrontendLimits,
+) -> ValidationResult {
+    validate_program_with_config(
+        program,
+        limits,
+        ValidationConfig::production(),
+    )
+}
+
+pub fn validate_program_with_config(
+    program: &Program,
+    limits: &FrontendLimits,
+    config: ValidationConfig,
+) -> ValidationResult {
+    let mut validator =
+        Validator::new(
+            limits,
+            config,
+        );
+
+    validator.validate_program(program);
+
+    validator.finish()
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
 
 fn index_span(
     index: &IndexExpression,
 ) -> SourceSpan {
     match index {
-        IndexExpression::Index(
-            expression,
-        ) => expression.span(),
+        IndexExpression::Index(expression) =>
+            expression.span(),
 
         IndexExpression::Slice {
             start,
             stop,
-        } => start
-            .as_ref()
-            .map(|value| value.span())
-            .or_else(
-                || {
+        } =>
+            start
+                .as_ref()
+                .map(|value| value.span())
+                .or_else(|| {
                     stop
                         .as_ref()
                         .map(|value| value.span())
-                },
-            )
-            .unwrap_or_else(
-                dummy_span,
-            ),
+                })
+                .unwrap_or_else(dummy_span),
 
         IndexExpression::Range {
             start,
             step,
             stop,
-        } => start
-            .as_ref()
-            .map(|value| value.span())
-            .or_else(
-                || {
+        } =>
+            start
+                .as_ref()
+                .map(|value| value.span())
+                .or_else(|| {
                     step
                         .as_ref()
                         .map(|value| value.span())
-                },
-            )
-            .or_else(
-                || {
+                })
+                .or_else(|| {
                     stop
                         .as_ref()
                         .map(|value| value.span())
-                },
-            )
-            .unwrap_or_else(
-                dummy_span,
-            ),
+                })
+                .unwrap_or_else(dummy_span),
 
-        IndexExpression::Set(
-            values,
-        ) => values
-            .first()
-            .map(|value| value.span())
-            .unwrap_or_else(
-                dummy_span,
-            ),
+        IndexExpression::Set(values) =>
+            values
+                .first()
+                .map(|value| value.span())
+                .unwrap_or_else(dummy_span),
 
-        IndexExpression::Concatenation(
-            values,
-        ) => values
-            .first()
-            .map(|value| value.span())
-            .unwrap_or_else(
-                dummy_span,
-            ),
+        IndexExpression::Concatenation(values) =>
+            values
+                .first()
+                .map(|value| value.span())
+                .unwrap_or_else(dummy_span),
     }
 }
 
@@ -5084,16 +4912,16 @@ fn dummy_span() -> SourceSpan {
     )
 }
 
-// =============================================================================
+// ============================================================================
 // Tests
-// =============================================================================
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn production_policy_is_openqasm_31_bounded() {
+    fn production_policy_targets_openqasm_31() {
         let config =
             ValidationConfig::production();
 
@@ -5108,23 +4936,12 @@ mod tests {
         );
 
         assert!(
-            config.max_expression_depth
-                > 0
-        );
-
-        assert!(
-            config.max_expression_nodes
-                > 0
-        );
-
-        assert!(
-            config.max_register_size
-                > 0
+            !config.allow_runtime_quantum_index
         );
     }
 
     #[test]
-    fn strict_policy_disables_external_features() {
+    fn strict_policy_has_no_external_execution_features() {
         let config =
             ValidationConfig::strict();
 
@@ -5150,7 +4967,7 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_codes_are_stable() {
+    fn stable_error_codes() {
         assert_eq!(
             ValidationErrorCode::UndefinedGate
                 .as_str(),
@@ -5171,7 +4988,7 @@ mod tests {
     }
 
     #[test]
-    fn validation_result_success_is_empty() {
+    fn empty_result_is_success() {
         let result =
             ValidationResult::success();
 
@@ -5180,16 +4997,12 @@ mod tests {
         );
 
         assert!(
-            !result.is_invalid()
-        );
-
-        assert!(
             result.errors().is_empty()
         );
     }
 
     #[test]
-    fn integer_literal_parsing_is_radix_aware() {
+    fn decimal_integer_is_parsed() {
         let validator =
             Validator::new(
                 &FrontendLimits::production(),
@@ -5203,6 +5016,15 @@ mod tests {
             ),
             Some(42)
         );
+    }
+
+    #[test]
+    fn binary_integer_is_parsed() {
+        let validator =
+            Validator::new(
+                &FrontendLimits::production(),
+                ValidationConfig::production(),
+            );
 
         assert_eq!(
             validator.parse_integer_literal(
@@ -5211,6 +5033,15 @@ mod tests {
             ),
             Some(42)
         );
+    }
+
+    #[test]
+    fn octal_integer_is_parsed() {
+        let validator =
+            Validator::new(
+                &FrontendLimits::production(),
+                ValidationConfig::production(),
+            );
 
         assert_eq!(
             validator.parse_integer_literal(
@@ -5219,6 +5050,15 @@ mod tests {
             ),
             Some(42)
         );
+    }
+
+    #[test]
+    fn hexadecimal_integer_is_parsed() {
+        let validator =
+            Validator::new(
+                &FrontendLimits::production(),
+                ValidationConfig::production(),
+            );
 
         assert_eq!(
             validator.parse_integer_literal(
@@ -5230,7 +5070,7 @@ mod tests {
     }
 
     #[test]
-    fn numeric_constants_are_overflow_checked() {
+    fn integer_overflow_is_rejected() {
         let validator =
             Validator::new(
                 &FrontendLimits::production(),
