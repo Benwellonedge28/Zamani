@@ -1,0 +1,2317 @@
+//! Zamani Quantum Benchmarking — Statistical Distributions
+//!
+//! Production statistical distribution primitives used by the quantum
+//! benchmarking subsystem.
+//!
+//! # Purpose
+//!
+//! This module provides backend-independent probability distributions and
+//! empirical-distribution utilities required by:
+//!
+//! - Quantum Volume;
+//! - randomized benchmarking;
+//! - interleaved randomized benchmarking;
+//! - simultaneous randomized benchmarking;
+//! - purity/leakage benchmarking;
+//! - cycle benchmarking;
+//! - XEB;
+//! - random-circuit sampling;
+//! - readout/SPAM characterization;
+//! - coherence measurements;
+//! - drift analysis;
+//! - application benchmarks;
+//! - QEC physical/logical error analysis;
+//! - bootstrap and confidence-interval implementations;
+//! - future Bayesian and likelihood-based benchmark protocols.
+//!
+//! The module deliberately contains **distribution mathematics only**.
+//!
+//! It does NOT:
+//!
+//! - execute circuits;
+//! - generate quantum circuits;
+//! - communicate with hardware;
+//! - access Quantum IR;
+//! - perform benchmark protocol orchestration;
+//! - choose a confidence level;
+//! - silently remove outliers;
+//! - generate random samples;
+//! - print diagnostics;
+//! - log;
+//! - mutate global state.
+//!
+//! Those responsibilities belong to sibling benchmarking modules.
+//!
+//! # Architectural position
+//!
+//! ```text
+//! raw observations
+//!       │
+//!       ▼
+//! statistics::distributions
+//!       │
+//!       ├── statistics::confidence
+//!       ├── statistics::bootstrap
+//!       ├── statistics::regression
+//!       └── statistics::aggregation
+//!               │
+//!               ▼
+//!          metrics / protocols
+//! ```
+//!
+//! This module therefore remains independent of quantum backends and
+//! benchmark protocols.
+//!
+//! # Supported distributions
+//!
+//! The production API currently provides:
+//!
+//! - Bernoulli;
+//! - Binomial;
+//! - Normal/Gaussian;
+//! - Beta;
+//! - Multinomial;
+//! - empirical distributions.
+//!
+//! These are deliberately represented as validated immutable value types.
+//!
+//! # Numerical policy
+//!
+//! Quantum benchmarking frequently operates in extreme regimes:
+//!
+//! - very small error rates;
+//! - probabilities close to zero or one;
+//! - large shot counts;
+//! - long RB sequence lengths;
+//! - very small confidence tails;
+//! - large multinomial categories.
+//!
+//! Consequently this module:
+//!
+//! - validates all public parameters;
+//! - rejects NaN and infinity;
+//! - rejects invalid probabilities;
+//! - uses logarithmic forms where appropriate;
+//! - avoids factorials where logarithmic factorials are safer;
+//! - clamps only values that are the result of floating-point roundoff;
+//! - never silently converts invalid scientific input into a valid value.
+//!
+//! # Randomness
+//!
+//! This module intentionally does not expose sampling methods.
+//!
+//! Reproducible random generation belongs to:
+//!
+//! `quantum::benchmarking::generators::random`
+//!
+//! Keeping RNG ownership outside this module prevents hidden global RNG state
+//! from compromising benchmark reproducibility.
+//!
+//! # Rust compatibility
+//!
+//! Target:
+//!
+//! - Rust 1.97;
+//! - Rust 1.97.1;
+//! - Rust 2021;
+//! - stable Rust only.
+//!
+//! No nightly features are required.
+//!
+//! # Error boundary
+//!
+//! All fallible operations use the canonical benchmarking error type:
+//!
+//! `crate::quantum::benchmarking::core::errors::BenchmarkError`
+//!
+//! The module does not introduce a competing statistical error hierarchy.
+//!
+//! # Integration contract
+//!
+//! Future statistical modules should consume this file rather than
+//! reimplementing:
+//!
+//! - log-factorials;
+//! - log-gamma;
+//! - probability validation;
+//! - normal CDF;
+//! - normal inverse CDF;
+//! - beta moments;
+//! - binomial likelihoods;
+//! - empirical moments.
+//!
+//! Protocols must retain the raw observations separately from values derived
+//! from these distributions.
+//!
+//! For example:
+//!
+//! ```text
+//! heavy-output counts
+//!       │
+//!       ▼
+//! Binomial
+//!       │
+//!       ▼
+//! probability / likelihood
+//!       │
+//!       ▼
+//! confidence.rs
+//!       │
+//!       ▼
+//! Quantum Volume result
+//! ```
+//!
+//! The distribution layer must never claim that a statistical model is true
+//! merely because it can mathematically evaluate it. The protocol layer is
+//! responsible for declaring its modelling assumptions.
+
+use std::fmt;
+
+use crate::quantum::benchmarking::core::errors::{BenchmarkError, BenchmarkResult};
+
+// =============================================================================
+// Numerical constants
+// =============================================================================
+
+/// Machine-level tolerance used only for classification of values that should
+/// mathematically lie inside [0, 1] but can be displaced by floating-point
+/// roundoff.
+const PROBABILITY_ROUNDOFF_EPSILON: f64 = 1.0e-12;
+
+/// Minimum positive probability accepted by logarithmic probability helpers.
+const MIN_POSITIVE_PROBABILITY: f64 = f64::MIN_POSITIVE;
+
+/// Lanczos approximation parameter for log-gamma.
+///
+/// The implementation below is suitable for positive arguments and is used
+/// only for statistical normalization. It avoids adding a heavyweight
+/// numerical dependency merely for this foundational module.
+const LANCZOS_G: f64 = 7.0;
+
+/// Lanczos coefficients for log-gamma.
+const LANCZOS_COEFFICIENTS: [f64; 9] = [
+    0.999_999_999_999_809_9,
+    676.520_368_121_885_1,
+    -1_259.139_216_722_402_8,
+    771.323_428_777_653_1,
+    -176.615_029_162_140_6,
+    12.507_343_278_686_905,
+    -0.138_571_095_265_720_12,
+    9.984_369_578_019_571e-6,
+    1.505_632_735_149_311_6e-7,
+];
+
+/// Natural logarithm of sqrt(2π).
+const LOG_SQRT_2_PI: f64 = 0.918_938_533_204_672_8;
+
+/// Upper safe integer for exact factorial-style integer products in f64.
+///
+/// We do not multiply factorials directly, but this is retained as a semantic
+/// guard when a caller asks for an exact discrete combinatorial value.
+const MAX_EXACT_F64_INTEGER: u64 = 9_007_199_254_740_992;
+
+// =============================================================================
+// Common validation helpers
+// =============================================================================
+
+/// Validate that a scalar is finite.
+#[inline]
+fn validate_finite(field: &str, value: f64) -> BenchmarkResult<()> {
+    if !value.is_finite() {
+        return Err(BenchmarkError::NonFiniteValue {
+            field: field.to_owned(),
+            value: value.to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Validate a strictly positive finite scalar.
+#[inline]
+fn validate_positive(field: &str, value: f64) -> BenchmarkResult<()> {
+    validate_finite(field, value)?;
+
+    if value <= 0.0 {
+        return Err(BenchmarkError::InvalidRange {
+            field: field.to_owned(),
+            value: value.to_string(),
+            minimum: Some("greater than 0".to_owned()),
+            maximum: None,
+        });
+    }
+
+    Ok(())
+}
+
+/// Validate a non-negative finite scalar.
+#[inline]
+fn validate_non_negative(field: &str, value: f64) -> BenchmarkResult<()> {
+    validate_finite(field, value)?;
+
+    if value < 0.0 {
+        return Err(BenchmarkError::InvalidRange {
+            field: field.to_owned(),
+            value: value.to_string(),
+            minimum: Some("0".to_owned()),
+            maximum: None,
+        });
+    }
+
+    Ok(())
+}
+
+/// Validate a probability in the closed interval [0, 1].
+#[inline]
+fn validate_probability(field: &str, value: f64) -> BenchmarkResult<()> {
+    validate_finite(field, value)?;
+
+    if !(0.0..=1.0).contains(&value) {
+        return Err(BenchmarkError::InvalidProbability {
+            field: field.to_owned(),
+            value: value.to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Validate a probability and return a value clamped only when the deviation
+/// is demonstrably attributable to floating-point roundoff.
+#[inline]
+fn normalize_probability(field: &str, value: f64) -> BenchmarkResult<f64> {
+    validate_finite(field, value)?;
+
+    if (0.0..=1.0).contains(&value) {
+        return Ok(value);
+    }
+
+    if value < 0.0 && value >= -PROBABILITY_ROUNDOFF_EPSILON {
+        return Ok(0.0);
+    }
+
+    if value > 1.0 && value <= 1.0 + PROBABILITY_ROUNDOFF_EPSILON {
+        return Ok(1.0);
+    }
+
+    Err(BenchmarkError::InvalidProbability {
+        field: field.to_owned(),
+        value: value.to_string(),
+    })
+}
+
+/// Ensure an integer count is within a total count.
+#[inline]
+fn validate_count(field: &str, count: u64, total: Option<u64>) -> BenchmarkResult<()> {
+    if let Some(total) = total {
+        if count > total {
+            return Err(BenchmarkError::InvalidCount {
+                field: field.to_owned(),
+                value: count,
+                maximum: Some(total),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+/// Convert a u64 to f64 while preserving the fact that benchmark counts are
+/// non-negative.
+#[inline]
+fn count_to_f64(field: &str, value: u64) -> BenchmarkResult<f64> {
+    let result = value as f64;
+
+    if !result.is_finite() {
+        return Err(BenchmarkError::NumericalOverflow {
+            operation: format!("convert {} count to f64", field),
+            value: Some(value.to_string()),
+        });
+    }
+
+    Ok(result)
+}
+
+/// Numerically stable log(1 - p).
+#[inline]
+pub fn ln_one_minus_probability(p: f64) -> BenchmarkResult<f64> {
+    let p = normalize_probability("p", p)?;
+
+    if p == 1.0 {
+        return Ok(f64::NEG_INFINITY);
+    }
+
+    Ok((-p).ln_1p())
+}
+
+/// Numerically stable log(p).
+#[inline]
+pub fn ln_probability(p: f64) -> BenchmarkResult<f64> {
+    let p = normalize_probability("p", p)?;
+
+    if p == 0.0 {
+        return Ok(f64::NEG_INFINITY);
+    }
+
+    Ok(p.ln())
+}
+
+// =============================================================================
+// Log-gamma / combinatorial primitives
+// =============================================================================
+
+/// Natural logarithm of Γ(z) for positive finite z.
+///
+/// Uses the Lanczos approximation with the reflection formula for
+/// 0 < z < 0.5.
+///
+/// This is intentionally private at the raw mathematical level; the public
+/// `log_gamma` wrapper performs production validation.
+fn log_gamma_unchecked(z: f64) -> f64 {
+    if z < 0.5 {
+        // Reflection formula:
+        //
+        // Γ(z) Γ(1-z) = π / sin(πz)
+        //
+        // The caller guarantees z > 0.
+        return std::f64::consts::PI.ln()
+            - (std::f64::consts::PI * z).sin().ln()
+            - log_gamma_unchecked(1.0 - z);
+    }
+
+    let z_minus_one = z - 1.0;
+
+    let mut x = LANCZOS_COEFFICIENTS[0];
+
+    for (i, coefficient) in LANCZOS_COEFFICIENTS.iter().enumerate().skip(1) {
+        x += coefficient / (z_minus_one + i as f64);
+    }
+
+    let t = z_minus_one + LANCZOS_G + 0.5;
+
+    LOG_SQRT_2_PI + (z_minus_one + 0.5) * t.ln() - t + x.ln()
+}
+
+/// Natural logarithm of the gamma function.
+///
+/// # Errors
+///
+/// Returns a benchmarking numerical/range error for non-finite or
+/// non-positive input.
+pub fn log_gamma(z: f64) -> BenchmarkResult<f64> {
+    validate_positive("z", z)?;
+
+    let result = log_gamma_unchecked(z);
+
+    if !result.is_finite() {
+        return Err(BenchmarkError::NumericalOverflow {
+            operation: "log_gamma".to_owned(),
+            value: Some(z.to_string()),
+        });
+    }
+
+    Ok(result)
+}
+
+/// Natural logarithm of n!.
+///
+/// This uses log-gamma rather than explicitly constructing n!, preventing
+/// overflow for realistic quantum benchmarking shot counts.
+pub fn log_factorial(n: u64) -> BenchmarkResult<f64> {
+    log_gamma((n as f64) + 1.0)
+}
+
+/// Natural logarithm of the binomial coefficient C(n, k).
+pub fn log_binomial_coefficient(n: u64, k: u64) -> BenchmarkResult<f64> {
+    if k > n {
+        return Err(BenchmarkError::InvalidRange {
+            field: "k".to_owned(),
+            value: k.to_string(),
+            minimum: Some("0".to_owned()),
+            maximum: Some(n.to_string()),
+        });
+    }
+
+    let k = k.min(n - k);
+
+    if k == 0 || k == n {
+        return Ok(0.0);
+    }
+
+    let result = log_factorial(n)?
+        - log_factorial(k)?
+        - log_factorial(n - k)?;
+
+    if !result.is_finite() {
+        return Err(BenchmarkError::NumericalOverflow {
+            operation: "log_binomial_coefficient".to_owned(),
+            value: Some(format!("n={}, k={}", n, k)),
+        });
+    }
+
+    Ok(result)
+}
+
+/// Binomial coefficient represented as f64.
+///
+/// For extremely large coefficients, returning infinity is not scientifically
+/// useful, so the function returns a numerical-overflow error instead.
+pub fn binomial_coefficient(n: u64, k: u64) -> BenchmarkResult<f64> {
+    let log_value = log_binomial_coefficient(n, k)?;
+
+    let value = log_value.exp();
+
+    if !value.is_finite() {
+        return Err(BenchmarkError::NumericalOverflow {
+            operation: "binomial_coefficient".to_owned(),
+            value: Some(format!("n={}, k={}", n, k)),
+        });
+    }
+
+    Ok(value)
+}
+
+// =============================================================================
+// Bernoulli distribution
+// =============================================================================
+
+/// Bernoulli distribution.
+///
+/// Represents a single binary trial with success probability `p`.
+///
+/// This is the foundational distribution for:
+///
+/// - shot success/failure;
+/// - heavy-output events;
+/// - binary application success;
+/// - leakage/no-leakage events;
+/// - threshold tests.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Bernoulli {
+    probability: f64,
+}
+
+impl Bernoulli {
+    /// Construct a Bernoulli distribution with success probability `p`.
+    pub fn new(p: f64) -> BenchmarkResult<Self> {
+        validate_probability("probability", p)?;
+
+        Ok(Self { probability: p })
+    }
+
+    /// Success probability.
+    #[inline]
+    pub const fn probability(self) -> f64 {
+        self.probability
+    }
+
+    /// Failure probability.
+    #[inline]
+    pub fn failure_probability(self) -> f64 {
+        1.0 - self.probability
+    }
+
+    /// Probability mass at x ∈ {0, 1}.
+    pub fn pmf(self, x: bool) -> f64 {
+        if x {
+            self.probability
+        } else {
+            self.failure_probability()
+        }
+    }
+
+    /// Natural logarithm of the probability mass.
+    pub fn log_pmf(self, x: bool) -> f64 {
+        if x {
+            if self.probability == 0.0 {
+                f64::NEG_INFINITY
+            } else {
+                self.probability.ln()
+            }
+        } else if self.probability == 1.0 {
+            f64::NEG_INFINITY
+        } else {
+            (-self.probability).ln_1p()
+        }
+    }
+
+    /// Mean.
+    #[inline]
+    pub const fn mean(self) -> f64 {
+        self.probability
+    }
+
+    /// Variance.
+    #[inline]
+    pub fn variance(self) -> f64 {
+        self.probability * self.failure_probability()
+    }
+
+    /// Standard deviation.
+    #[inline]
+    pub fn standard_deviation(self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    /// Entropy in nats.
+    pub fn entropy(self) -> f64 {
+        let p = self.probability;
+        let q = self.failure_probability();
+
+        let p_term = if p == 0.0 { 0.0 } else { -p * p.ln() };
+        let q_term = if q == 0.0 { 0.0 } else { -q * q.ln() };
+
+        p_term + q_term
+    }
+}
+
+// =============================================================================
+// Binomial distribution
+// =============================================================================
+
+/// Binomial distribution.
+///
+/// Models the number of successes in `n` independent Bernoulli trials.
+///
+/// This is the primary discrete model for shot-based binary benchmark
+/// quantities such as heavy-output probability and success probability.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Binomial {
+    trials: u64,
+    probability: f64,
+}
+
+impl Binomial {
+    /// Construct a binomial distribution.
+    ///
+    /// `trials` is the number of independent Bernoulli trials.
+    pub fn new(trials: u64, probability: f64) -> BenchmarkResult<Self> {
+        validate_probability("probability", probability)?;
+
+        if trials == 0 {
+            return Err(BenchmarkError::InvalidRange {
+                field: "trials".to_owned(),
+                value: trials.to_string(),
+                minimum: Some("1".to_owned()),
+                maximum: None,
+            });
+        }
+
+        Ok(Self {
+            trials,
+            probability,
+        })
+    }
+
+    /// Number of trials.
+    #[inline]
+    pub const fn trials(self) -> u64 {
+        self.trials
+    }
+
+    /// Success probability.
+    #[inline]
+    pub const fn probability(self) -> f64 {
+        self.probability
+    }
+
+    /// Failure probability.
+    #[inline]
+    pub fn failure_probability(self) -> f64 {
+        1.0 - self.probability
+    }
+
+    /// Probability mass P(X = k).
+    ///
+    /// Uses logarithmic combinatorics to avoid direct factorial overflow.
+    pub fn pmf(&self, k: u64) -> BenchmarkResult<f64> {
+        validate_count("k", k, Some(self.trials))?;
+
+        if self.probability == 0.0 {
+            return Ok(if k == 0 { 1.0 } else { 0.0 });
+        }
+
+        if self.probability == 1.0 {
+            return Ok(if k == self.trials { 1.0 } else { 0.0 });
+        }
+
+        let log_probability = self.log_pmf(k)?;
+
+        let value = log_probability.exp();
+
+        if !value.is_finite() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "binomial pmf".to_owned(),
+                value: Some(format!("n={}, k={}", self.trials, k)),
+            });
+        }
+
+        Ok(value)
+    }
+
+    /// Natural logarithm of P(X = k).
+    pub fn log_pmf(&self, k: u64) -> BenchmarkResult<f64> {
+        validate_count("k", k, Some(self.trials))?;
+
+        if self.probability == 0.0 {
+            return Ok(if k == 0 { 0.0 } else { f64::NEG_INFINITY });
+        }
+
+        if self.probability == 1.0 {
+            return Ok(if k == self.trials {
+                0.0
+            } else {
+                f64::NEG_INFINITY
+            });
+        }
+
+        let k_f = count_to_f64("k", k)?;
+        let n_f = count_to_f64("trials", self.trials)?;
+        let failures = n_f - k_f;
+
+        let result = log_binomial_coefficient(self.trials, k)?
+            + k_f * self.probability.ln()
+            + failures * (-self.probability).ln_1p();
+
+        if result.is_nan() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "binomial log pmf".to_owned(),
+                value: Some(format!("n={}, k={}", self.trials, k)),
+            });
+        }
+
+        Ok(result)
+    }
+
+    /// Mean number of successes.
+    pub fn mean(&self) -> BenchmarkResult<f64> {
+        let n = count_to_f64("trials", self.trials)?;
+        Ok(n * self.probability)
+    }
+
+    /// Variance.
+    pub fn variance(&self) -> BenchmarkResult<f64> {
+        let n = count_to_f64("trials", self.trials)?;
+        Ok(n * self.probability * self.failure_probability())
+    }
+
+    /// Standard deviation.
+    pub fn standard_deviation(&self) -> BenchmarkResult<f64> {
+        Ok(self.variance()?.sqrt())
+    }
+
+    /// Probability of at least one success.
+    pub fn probability_at_least_one_success(&self) -> f64 {
+        if self.probability == 0.0 {
+            0.0
+        } else if self.probability == 1.0 {
+            1.0
+        } else {
+            -((self.trials as f64) * (-self.probability).ln_1p()).exp_m1()
+        }
+    }
+
+    /// Probability of zero successes.
+    pub fn probability_zero_successes(&self) -> f64 {
+        if self.probability == 1.0 {
+            0.0
+        } else {
+            ((self.trials as f64) * (-self.probability).ln_1p()).exp()
+        }
+    }
+}
+
+// =============================================================================
+// Normal distribution
+// =============================================================================
+
+/// Normal/Gaussian distribution.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Normal {
+    mean: f64,
+    standard_deviation: f64,
+}
+
+impl Normal {
+    /// Construct a normal distribution.
+    pub fn new(mean: f64, standard_deviation: f64) -> BenchmarkResult<Self> {
+        validate_finite("mean", mean)?;
+        validate_positive("standard_deviation", standard_deviation)?;
+
+        Ok(Self {
+            mean,
+            standard_deviation,
+        })
+    }
+
+    /// Mean.
+    #[inline]
+    pub const fn mean(self) -> f64 {
+        self.mean
+    }
+
+    /// Standard deviation.
+    #[inline]
+    pub const fn standard_deviation(self) -> f64 {
+        self.standard_deviation
+    }
+
+    /// Variance.
+    #[inline]
+    pub fn variance(self) -> f64 {
+        self.standard_deviation * self.standard_deviation
+    }
+
+    /// Probability density function.
+    pub fn pdf(self, x: f64) -> BenchmarkResult<f64> {
+        validate_finite("x", x)?;
+
+        let z = (x - self.mean) / self.standard_deviation;
+        let exponent = -0.5 * z * z;
+
+        let normalization =
+            self.standard_deviation * (2.0 * std::f64::consts::PI).sqrt();
+
+        let result = exponent.exp() / normalization;
+
+        if !result.is_finite() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "normal pdf".to_owned(),
+                value: Some(x.to_string()),
+            });
+        }
+
+        Ok(result)
+    }
+
+    /// Natural logarithm of the probability density.
+    pub fn log_pdf(self, x: f64) -> BenchmarkResult<f64> {
+        validate_finite("x", x)?;
+
+        let z = (x - self.mean) / self.standard_deviation;
+
+        Ok(-0.5 * z * z
+            - self.standard_deviation.ln()
+            - LOG_SQRT_2_PI)
+    }
+
+    /// Cumulative distribution function.
+    ///
+    /// Uses a high-quality error-function approximation without introducing
+    /// an external numerical dependency.
+    pub fn cdf(self, x: f64) -> BenchmarkResult<f64> {
+        validate_finite("x", x)?;
+
+        let z = (x - self.mean) / (self.standard_deviation * 2.0_f64.sqrt());
+
+        let erf = erf(z);
+
+        normalize_probability("normal cdf", 0.5 * (1.0 + erf))
+    }
+
+    /// Survival function, P(X > x).
+    pub fn survival_function(self, x: f64) -> BenchmarkResult<f64> {
+        let cdf = self.cdf(x)?;
+        normalize_probability("normal survival function", 1.0 - cdf)
+    }
+
+    /// Quantile/inverse CDF.
+    ///
+    /// Uses the Acklam rational approximation, followed by a Newton refinement
+    /// step. This is useful for confidence intervals and normal approximations.
+    pub fn inverse_cdf(self, probability: f64) -> BenchmarkResult<f64> {
+        validate_probability("probability", probability)?;
+
+        if probability == 0.0 {
+            return Ok(f64::NEG_INFINITY);
+        }
+
+        if probability == 1.0 {
+            return Ok(f64::INFINITY);
+        }
+
+        let z = inverse_standard_normal(probability)?;
+
+        Ok(self.mean + self.standard_deviation * z)
+    }
+}
+
+// =============================================================================
+// Beta distribution
+// =============================================================================
+
+/// Beta distribution.
+///
+/// The beta distribution is particularly useful for representing uncertainty
+/// over probabilities such as:
+///
+/// - success probability;
+/// - heavy-output probability;
+/// - readout fidelity;
+/// - error probability;
+/// - leakage probability.
+///
+/// It is also the conjugate prior/posterior family for Bernoulli/binomial
+/// observations.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Beta {
+    alpha: f64,
+    beta: f64,
+}
+
+impl Beta {
+    /// Construct a beta distribution.
+    pub fn new(alpha: f64, beta: f64) -> BenchmarkResult<Self> {
+        validate_positive("alpha", alpha)?;
+        validate_positive("beta", beta)?;
+
+        Ok(Self { alpha, beta })
+    }
+
+    /// First shape parameter.
+    #[inline]
+    pub const fn alpha(self) -> f64 {
+        self.alpha
+    }
+
+    /// Second shape parameter.
+    #[inline]
+    pub const fn beta(self) -> f64 {
+        self.beta
+    }
+
+    /// Mean.
+    #[inline]
+    pub fn mean(self) -> f64 {
+        self.alpha / (self.alpha + self.beta)
+    }
+
+    /// Variance.
+    #[inline]
+    pub fn variance(self) -> f64 {
+        let sum = self.alpha + self.beta;
+
+        self.alpha * self.beta / (sum * sum * (sum + 1.0))
+    }
+
+    /// Mode, when it exists in the interior.
+    ///
+    /// Returns `None` for distributions where the conventional interior mode
+    /// does not exist, including alpha <= 1 or beta <= 1.
+    pub fn mode(self) -> Option<f64> {
+        if self.alpha > 1.0 && self.beta > 1.0 {
+            Some(
+                (self.alpha - 1.0)
+                    / (self.alpha + self.beta - 2.0),
+            )
+        } else {
+            None
+        }
+    }
+
+    /// Beta-function logarithm:
+    ///
+    /// ln B(a,b) = ln Γ(a) + ln Γ(b) - ln Γ(a+b)
+    pub fn log_normalization(self) -> BenchmarkResult<f64> {
+        let result = log_gamma(self.alpha)?
+            + log_gamma(self.beta)?
+            - log_gamma(self.alpha + self.beta)?;
+
+        if !result.is_finite() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "beta log normalization".to_owned(),
+                value: Some(format!("a={}, b={}", self.alpha, self.beta)),
+            });
+        }
+
+        Ok(result)
+    }
+
+    /// Probability density function.
+    pub fn pdf(&self, x: f64) -> BenchmarkResult<f64> {
+        validate_probability("x", x)?;
+
+        if x == 0.0 {
+            if self.alpha < 1.0 {
+                return Ok(f64::INFINITY);
+            }
+
+            if self.alpha == 1.0 {
+                return Ok((-(self.log_normalization()?)).exp());
+            }
+
+            return Ok(0.0);
+        }
+
+        if x == 1.0 {
+            if self.beta < 1.0 {
+                return Ok(f64::INFINITY);
+            }
+
+            if self.beta == 1.0 {
+                return Ok((-(self.log_normalization()?)).exp());
+            }
+
+            return Ok(0.0);
+        }
+
+        let log_density = (self.alpha - 1.0) * x.ln()
+            + (self.beta - 1.0) * (1.0 - x).ln()
+            - self.log_normalization()?;
+
+        let result = log_density.exp();
+
+        if !result.is_finite() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "beta pdf".to_owned(),
+                value: Some(x.to_string()),
+            });
+        }
+
+        Ok(result)
+    }
+
+    /// Natural logarithm of the density.
+    pub fn log_pdf(&self, x: f64) -> BenchmarkResult<f64> {
+        validate_probability("x", x)?;
+
+        if x == 0.0 {
+            return if self.alpha < 1.0 {
+                Ok(f64::INFINITY)
+            } else if self.alpha == 1.0 {
+                Ok(-self.log_normalization()?)
+            } else {
+                Ok(f64::NEG_INFINITY)
+            };
+        }
+
+        if x == 1.0 {
+            return if self.beta < 1.0 {
+                Ok(f64::INFINITY)
+            } else if self.beta == 1.0 {
+                Ok(-self.log_normalization()?)
+            } else {
+                Ok(f64::NEG_INFINITY)
+            };
+        }
+
+        Ok((self.alpha - 1.0) * x.ln()
+            + (self.beta - 1.0) * (1.0 - x).ln()
+            - self.log_normalization()?)
+    }
+
+    /// Cumulative distribution function.
+    ///
+    /// Uses the regularized incomplete beta function evaluated with a
+    /// continued fraction. This implementation is deterministic and does not
+    /// require an external special-functions crate.
+    pub fn cdf(&self, x: f64) -> BenchmarkResult<f64> {
+        validate_probability("x", x)?;
+
+        if x == 0.0 {
+            return Ok(0.0);
+        }
+
+        if x == 1.0 {
+            return Ok(1.0);
+        }
+
+        let result = regularized_incomplete_beta(x, self.alpha, self.beta)?;
+
+        normalize_probability("beta cdf", result)
+    }
+
+    /// Survival function.
+    pub fn survival_function(&self, x: f64) -> BenchmarkResult<f64> {
+        let cdf = self.cdf(x)?;
+        normalize_probability("beta survival function", 1.0 - cdf)
+    }
+}
+
+// =============================================================================
+// Multinomial distribution
+// =============================================================================
+
+/// A validated multinomial probability vector.
+///
+/// The probabilities must be non-negative, finite, and sum to one within the
+/// explicitly permitted floating-point tolerance.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Multinomial {
+    probabilities: Vec<f64>,
+}
+
+impl Multinomial {
+    /// Construct a multinomial distribution from category probabilities.
+    ///
+    /// The vector must:
+    ///
+    /// - contain at least one category;
+    /// - contain only finite values;
+    /// - contain no negative values;
+    /// - sum to one within floating-point tolerance.
+    pub fn new(probabilities: Vec<f64>) -> BenchmarkResult<Self> {
+        if probabilities.is_empty() {
+            return Err(BenchmarkError::InvalidConfiguration {
+                field: "probabilities".to_owned(),
+                reason: "at least one category is required".to_owned(),
+            });
+        }
+
+        let mut sum = 0.0;
+
+        for (index, probability) in probabilities.iter().copied().enumerate() {
+            validate_probability(
+                &format!("probabilities[{}]", index),
+                probability,
+            )?;
+
+            sum += probability;
+        }
+
+        if !sum.is_finite() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "multinomial probability sum".to_owned(),
+                value: None,
+            });
+        }
+
+        if (sum - 1.0).abs() > PROBABILITY_ROUNDOFF_EPSILON {
+            return Err(BenchmarkError::ValidationFailed {
+                invariant: "multinomial probabilities sum to one".to_owned(),
+                reason: format!("sum was {:.17}", sum),
+            });
+        }
+
+        Ok(Self { probabilities })
+    }
+
+    /// Construct from non-negative weights by normalizing them.
+    ///
+    /// This method is intentionally explicit because normalization is a
+    /// semantic operation and must not happen implicitly in `new`.
+    pub fn from_weights(weights: Vec<f64>) -> BenchmarkResult<Self> {
+        if weights.is_empty() {
+            return Err(BenchmarkError::InvalidConfiguration {
+                field: "weights".to_owned(),
+                reason: "at least one category is required".to_owned(),
+            });
+        }
+
+        let mut total = 0.0;
+
+        for (index, weight) in weights.iter().copied().enumerate() {
+            validate_non_negative(
+                &format!("weights[{}]", index),
+                weight,
+            )?;
+
+            total += weight;
+        }
+
+        validate_positive("weight sum", total)?;
+
+        let probabilities = weights
+            .into_iter()
+            .map(|weight| weight / total)
+            .collect::<Vec<_>>();
+
+        Self::new(probabilities)
+    }
+
+    /// Number of categories.
+    #[inline]
+    pub fn categories(&self) -> usize {
+        self.probabilities.len()
+    }
+
+    /// Borrow the category probabilities.
+    #[inline]
+    pub fn probabilities(&self) -> &[f64] {
+        &self.probabilities
+    }
+
+    /// Probability of a particular category.
+    pub fn probability(&self, index: usize) -> BenchmarkResult<f64> {
+        self.probabilities
+            .get(index)
+            .copied()
+            .ok_or_else(|| BenchmarkError::InvalidRange {
+                field: "category index".to_owned(),
+                value: index.to_string(),
+                minimum: Some("0".to_owned()),
+                maximum: Some(
+                    self.probabilities
+                        .len()
+                        .saturating_sub(1)
+                        .to_string(),
+                ),
+            })
+    }
+
+    /// Log probability of an ordered category-count vector.
+    ///
+    /// The count vector must have exactly the same number of entries as the
+    /// distribution and must sum to `trials`.
+    pub fn log_pmf(
+        &self,
+        counts: &[u64],
+        trials: u64,
+    ) -> BenchmarkResult<f64> {
+        if counts.len() != self.probabilities.len() {
+            return Err(BenchmarkError::InconsistentConfiguration {
+                first: "counts".to_owned(),
+                second: "probabilities".to_owned(),
+                reason: format!(
+                    "counts has {} categories but probabilities has {}",
+                    counts.len(),
+                    self.probabilities.len()
+                ),
+            });
+        }
+
+        let mut total_count = 0u64;
+
+        for count in counts {
+            total_count = total_count.checked_add(*count).ok_or_else(|| {
+                BenchmarkError::NumericalOverflow {
+                    operation: "multinomial count sum".to_owned(),
+                    value: None,
+                }
+            })?;
+        }
+
+        if total_count != trials {
+            return Err(BenchmarkError::InconsistentConfiguration {
+                first: "counts".to_owned(),
+                second: "trials".to_owned(),
+                reason: format!(
+                    "counts sum to {}, but trials is {}",
+                    total_count, trials
+                ),
+            });
+        }
+
+        let mut result = log_factorial(trials)?;
+
+        for (count, probability) in counts
+            .iter()
+            .copied()
+            .zip(self.probabilities.iter().copied())
+        {
+            result -= log_factorial(count)?;
+
+            if count == 0 {
+                continue;
+            }
+
+            if probability == 0.0 {
+                return Ok(f64::NEG_INFINITY);
+            }
+
+            let count_f = count_to_f64("multinomial count", count)?;
+            result += count_f * probability.ln();
+        }
+
+        if result.is_nan() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "multinomial log pmf".to_owned(),
+                value: Some(format!("trials={}", trials)),
+            });
+        }
+
+        Ok(result)
+    }
+
+    /// Probability of a category-count vector.
+    pub fn pmf(
+        &self,
+        counts: &[u64],
+        trials: u64,
+    ) -> BenchmarkResult<f64> {
+        let log_probability = self.log_pmf(counts, trials)?;
+
+        if log_probability == f64::NEG_INFINITY {
+            return Ok(0.0);
+        }
+
+        let probability = log_probability.exp();
+
+        if !probability.is_finite() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "multinomial pmf".to_owned(),
+                value: Some(format!("trials={}", trials)),
+            });
+        }
+
+        normalize_probability("multinomial pmf", probability)
+    }
+
+    /// Expected count for each category.
+    pub fn expected_counts(
+        &self,
+        trials: u64,
+    ) -> BenchmarkResult<Vec<f64>> {
+        let trials = count_to_f64("trials", trials)?;
+
+        Ok(self
+            .probabilities
+            .iter()
+            .map(|probability| trials * *probability)
+            .collect())
+    }
+
+    /// Covariance between two category counts.
+    pub fn covariance(
+        &self,
+        trials: u64,
+        i: usize,
+        j: usize,
+    ) -> BenchmarkResult<f64> {
+        let pi = self.probability(i)?;
+        let pj = self.probability(j)?;
+        let n = count_to_f64("trials", trials)?;
+
+        if i == j {
+            Ok(n * pi * (1.0 - pi))
+        } else {
+            Ok(-n * pi * pj)
+        }
+    }
+}
+
+// =============================================================================
+// Empirical distribution
+// =============================================================================
+
+/// Summary of an empirical sample.
+///
+/// This type intentionally retains the original observations rather than
+/// replacing them with only moments. That allows later benchmarking layers to
+/// perform distribution-free analysis.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EmpiricalDistribution {
+    observations: Vec<f64>,
+}
+
+impl EmpiricalDistribution {
+    /// Construct an empirical distribution.
+    ///
+    /// All observations must be finite.
+    pub fn new(observations: Vec<f64>) -> BenchmarkResult<Self> {
+        if observations.is_empty() {
+            return Err(BenchmarkError::InsufficientSamples {
+                required: 1,
+                actual: 0,
+                context: "empirical distribution".to_owned(),
+            });
+        }
+
+        for (index, observation) in observations.iter().copied().enumerate() {
+            validate_finite(
+                &format!("observations[{}]", index),
+                observation,
+            )?;
+        }
+
+        Ok(Self { observations })
+    }
+
+    /// Number of observations.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.observations.len()
+    }
+
+    /// Whether the empirical distribution contains no observations.
+    ///
+    /// This is always false for a successfully constructed instance, but is
+    /// provided for collection-like API consistency.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.observations.is_empty()
+    }
+
+    /// Borrow the original observations.
+    #[inline]
+    pub fn observations(&self) -> &[f64] {
+        &self.observations
+    }
+
+    /// Arithmetic mean.
+    pub fn mean(&self) -> BenchmarkResult<f64> {
+        let mut mean = 0.0;
+        let mut count = 0.0;
+
+        // Incremental mean avoids a large intermediate sum where possible.
+        for observation in &self.observations {
+            count += 1.0;
+            mean += (*observation - mean) / count;
+        }
+
+        if !mean.is_finite() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "empirical mean".to_owned(),
+                value: None,
+            });
+        }
+
+        Ok(mean)
+    }
+
+    /// Population variance.
+    pub fn population_variance(&self) -> BenchmarkResult<f64> {
+        if self.observations.is_empty() {
+            return Err(BenchmarkError::InsufficientSamples {
+                required: 1,
+                actual: 0,
+                context: "population variance".to_owned(),
+            });
+        }
+
+        let mean = self.mean()?;
+        let mut sum = 0.0;
+
+        for observation in &self.observations {
+            let delta = *observation - mean;
+            sum += delta * delta;
+        }
+
+        let variance = sum / self.observations.len() as f64;
+
+        if !variance.is_finite() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "empirical population variance".to_owned(),
+                value: None,
+            });
+        }
+
+        Ok(variance)
+    }
+
+    /// Unbiased sample variance.
+    ///
+    /// Requires at least two observations.
+    pub fn sample_variance(&self) -> BenchmarkResult<f64> {
+        if self.observations.len() < 2 {
+            return Err(BenchmarkError::InsufficientSamples {
+                required: 2,
+                actual: self.observations.len(),
+                context: "sample variance".to_owned(),
+            });
+        }
+
+        let mean = self.mean()?;
+        let mut sum = 0.0;
+
+        for observation in &self.observations {
+            let delta = *observation - mean;
+            sum += delta * delta;
+        }
+
+        let variance = sum / (self.observations.len() - 1) as f64;
+
+        if !variance.is_finite() {
+            return Err(BenchmarkError::NumericalOverflow {
+                operation: "empirical sample variance".to_owned(),
+                value: None,
+            });
+        }
+
+        Ok(variance)
+    }
+
+    /// Population standard deviation.
+    pub fn population_standard_deviation(&self) -> BenchmarkResult<f64> {
+        Ok(self.population_variance()?.sqrt())
+    }
+
+    /// Unbiased sample standard deviation.
+    pub fn sample_standard_deviation(&self) -> BenchmarkResult<f64> {
+        Ok(self.sample_variance()?.sqrt())
+    }
+
+    /// Minimum observation.
+    pub fn min(&self) -> BenchmarkResult<f64> {
+        self.observations
+            .iter()
+            .copied()
+            .reduce(f64::min)
+            .ok_or_else(|| BenchmarkError::InsufficientSamples {
+                required: 1,
+                actual: 0,
+                context: "empirical minimum".to_owned(),
+            })
+    }
+
+    /// Maximum observation.
+    pub fn max(&self) -> BenchmarkResult<f64> {
+        self.observations
+            .iter()
+            .copied()
+            .reduce(f64::max)
+            .ok_or_else(|| BenchmarkError::InsufficientSamples {
+                required: 1,
+                actual: 0,
+                context: "empirical maximum".to_owned(),
+            })
+    }
+
+    /// Median.
+    ///
+    /// This method clones and sorts the data so the original observation order
+    /// remains unchanged.
+    pub fn median(&self) -> BenchmarkResult<f64> {
+        let mut values = self.observations.clone();
+        values.sort_by(f64::total_cmp);
+
+        let middle = values.len() / 2;
+
+        if values.len() % 2 == 0 {
+            let left = values[middle - 1];
+            let right = values[middle];
+            Ok(left + (right - left) * 0.5)
+        } else {
+            Ok(values[middle])
+        }
+    }
+
+    /// Quantile using linear interpolation between ordered observations.
+    ///
+    /// `q = 0` returns the minimum and `q = 1` returns the maximum.
+    pub fn quantile(&self, q: f64) -> BenchmarkResult<f64> {
+        validate_probability("q", q)?;
+
+        let mut values = self.observations.clone();
+        values.sort_by(f64::total_cmp);
+
+        if values.len() == 1 {
+            return Ok(values[0]);
+        }
+
+        let position = q * (values.len() - 1) as f64;
+        let lower = position.floor() as usize;
+        let upper = position.ceil() as usize;
+
+        if lower == upper {
+            return Ok(values[lower]);
+        }
+
+        let fraction = position - lower as f64;
+
+        Ok(values[lower]
+            + (values[upper] - values[lower]) * fraction)
+    }
+
+    /// Empirical cumulative distribution function:
+    ///
+    /// P(X <= x).
+    pub fn cdf(&self, x: f64) -> BenchmarkResult<f64> {
+        validate_finite("x", x)?;
+
+        let count = self
+            .observations
+            .iter()
+            .filter(|observation| **observation <= x)
+            .count();
+
+        Ok(count as f64 / self.observations.len() as f64)
+    }
+
+    /// Empirical survival function:
+    ///
+    /// P(X > x).
+    pub fn survival_function(&self, x: f64) -> BenchmarkResult<f64> {
+        validate_finite("x", x)?;
+
+        let count = self
+            .observations
+            .iter()
+            .filter(|observation| **observation > x)
+            .count();
+
+        Ok(count as f64 / self.observations.len() as f64)
+    }
+}
+
+// =============================================================================
+// Bernoulli / Binomial convenience constructors
+// =============================================================================
+
+/// Construct a binomial distribution directly from observed successes and
+/// total trials.
+///
+/// This is particularly useful for benchmark observations where the raw
+/// measurement is:
+///
+/// `successes / shots`.
+pub fn binomial_from_counts(
+    successes: u64,
+    trials: u64,
+) -> BenchmarkResult<Binomial> {
+    if trials == 0 {
+        return Err(BenchmarkError::InvalidRange {
+            field: "trials".to_owned(),
+            value: trials.to_string(),
+            minimum: Some("1".to_owned()),
+            maximum: None,
+        });
+    }
+
+    validate_count("successes", successes, Some(trials))?;
+
+    let successes_f = count_to_f64("successes", successes)?;
+    let trials_f = count_to_f64("trials", trials)?;
+
+    Binomial::new(trials, successes_f / trials_f)
+}
+
+/// Empirical success probability from counts.
+pub fn empirical_probability(
+    successes: u64,
+    trials: u64,
+) -> BenchmarkResult<f64> {
+    let distribution = binomial_from_counts(successes, trials)?;
+    Ok(distribution.probability())
+}
+
+// =============================================================================
+// Error function
+// =============================================================================
+
+/// Approximation of erf(x).
+///
+/// Abramowitz & Stegun-style rational approximation with sufficient accuracy
+/// for confidence calculations and normal CDF work in this module.
+///
+/// The implementation is deterministic and contains no external dependency.
+fn erf(x: f64) -> f64 {
+    // Numerical Recipes / Abramowitz-Stegun style approximation.
+    //
+    // Maximum absolute error is approximately 1e-7 for this compact form,
+    // which is more than adequate for a low-level approximation helper but
+    // downstream scientific claims must retain their explicit statistical
+    // method and uncertainty.
+    let sign = if x < 0.0 { -1.0 } else { 1.0 };
+    let ax = x.abs();
+
+    let p = 0.327_591_1;
+    let a1 = 0.254_829_592;
+    let a2 = -0.284_496_736;
+    let a3 = 1.421_413_741;
+    let a4 = -1.453_152_027;
+    let a5 = 1.061_405_429;
+
+    let t = 1.0 / (1.0 + p * ax);
+
+    let polynomial =
+        (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t;
+
+    let value = 1.0 - polynomial * (-ax * ax).exp();
+
+    sign * value
+}
+
+// =============================================================================
+// Inverse standard normal
+// =============================================================================
+
+/// Inverse CDF of the standard normal distribution.
+///
+/// Uses Peter J. Acklam's rational approximation.
+fn inverse_standard_normal(p: f64) -> BenchmarkResult<f64> {
+    validate_probability("probability", p)?;
+
+    if p == 0.0 {
+        return Ok(f64::NEG_INFINITY);
+    }
+
+    if p == 1.0 {
+        return Ok(f64::INFINITY);
+    }
+
+    // Coefficients for the central region.
+    const A: [f64; 6] = [
+        -3.969_683_028_665_376e1,
+        2.209_460_984_245_205e2,
+        -2.759_285_104_469_687e2,
+        1.383_577_518_672_69e2,
+        -3.066_479_806_614_716e1,
+        2.506_628_277_459_239,
+    ];
+
+    const B: [f64; 5] = [
+        -5.447_609_879_822_406e1,
+        1.615_858_368_580_409e2,
+        -1.556_989_798_598_866e2,
+        6.680_131_188_771_972e1,
+        -1.328_068_155_288_572e1,
+    ];
+
+    // Coefficients for the tails.
+    const C: [f64; 6] = [
+        -7.784_894_002_430_293e-3,
+        -3.223_964_580_411_365e-1,
+        -2.400_758_277_161_838,
+        -2.549_732_539_343_734,
+        4.374_664_141_464_968,
+        2.938_163_982_698_783,
+    ];
+
+    const D: [f64; 4] = [
+        7.784_695_709_041_462e-3,
+        3.224_671_290_700_398e-1,
+        2.445_134_137_142_996,
+        3.754_408_661_907_416,
+    ];
+
+    const LOW: f64 = 0.024_25;
+    const HIGH: f64 = 1.0 - LOW;
+
+    if p < LOW {
+        let q = (-2.0 * p.ln()).sqrt();
+
+        let numerator =
+            ((((C[0] * q + C[1]) * q + C[2]) * q + C[3]) * q + C[4])
+                * q
+                + C[5];
+
+        let denominator =
+            (((D[0] * q + D[1]) * q + D[2]) * q + D[3]) * q
+                + 1.0;
+
+        return Ok(numerator / denominator);
+    }
+
+    if p > HIGH {
+        let q = (-2.0 * (1.0 - p).ln()).sqrt();
+
+        let numerator =
+            ((((C[0] * q + C[1]) * q + C[2]) * q + C[3]) * q + C[4])
+                * q
+                + C[5];
+
+        let denominator =
+            (((D[0] * q + D[1]) * q + D[2]) * q + D[3]) * q
+                + 1.0;
+
+        return Ok(-numerator / denominator);
+    }
+
+    let q = p - 0.5;
+    let r = q * q;
+
+    let numerator =
+        (((((A[0] * r + A[1]) * r + A[2]) * r + A[3]) * r + A[4])
+            * r
+            + A[5])
+            * q);
+
+    let denominator =
+        ((((B[0] * r + B[1]) * r + B[2]) * r + B[3]) * r + B[4]) * r
+            + 1.0;
+
+    Ok(numerator / denominator)
+}
+
+// =============================================================================
+// Regularized incomplete beta
+// =============================================================================
+
+/// Continued-fraction evaluation for the incomplete beta function.
+///
+/// Adapted from the standard Numerical Recipes continued-fraction form.
+fn beta_continued_fraction(
+    a: f64,
+    b: f64,
+    x: f64,
+) -> BenchmarkResult<f64> {
+    const MAX_ITERATIONS: usize = 20_000;
+    const EPSILON: f64 = 3.0e-14;
+    const FPMIN: f64 = 1.0e-300;
+
+    let qab = a + b;
+    let qap = a + 1.0;
+    let qam = a - 1.0;
+
+    let mut c = 1.0;
+    let mut d = 1.0 - qab * x / qap;
+
+    if d.abs() < FPMIN {
+        d = FPMIN;
+    }
+
+    d = 1.0 / d;
+
+    let mut h = d;
+
+    for m in 1..=MAX_ITERATIONS {
+        let m_f = m as f64;
+        let m2 = 2.0 * m_f;
+
+        let numerator =
+            m_f * (b - m_f) * x / ((qam + m2) * (a + m2));
+
+        d = 1.0 + numerator * d;
+
+        if d.abs() < FPMIN {
+            d = FPMIN;
+        }
+
+        c = 1.0 + numerator / c;
+
+        if c.abs() < FPMIN {
+            c = FPMIN;
+        }
+
+        d = 1.0 / d;
+
+        h *= d * c;
+
+        let numerator = -(a + m_f) * (qab + m_f) * x
+            / ((a + m2) * (qap + m2));
+
+        d = 1.0 + numerator * d;
+
+        if d.abs() < FPMIN {
+            d = FPMIN;
+        }
+
+        c = 1.0 + numerator / c;
+
+        if c.abs() < FPMIN {
+            c = FPMIN;
+        }
+
+        d = 1.0 / d;
+
+        let delta = d * c;
+
+        h *= delta;
+
+        if (delta - 1.0).abs() < EPSILON {
+            return Ok(h);
+        }
+    }
+
+    Err(BenchmarkError::StatisticalFitFailed {
+        model: "regularized incomplete beta continued fraction".to_owned(),
+        reason: format!(
+            "failed to converge after {} iterations",
+            MAX_ITERATIONS
+        ),
+    })
+}
+
+/// Regularized incomplete beta I_x(a,b).
+fn regularized_incomplete_beta(
+    x: f64,
+    a: f64,
+    b: f64,
+) -> BenchmarkResult<f64> {
+    validate_probability("x", x)?;
+    validate_positive("a", a)?;
+    validate_positive("b", b)?;
+
+    if x == 0.0 {
+        return Ok(0.0);
+    }
+
+    if x == 1.0 {
+        return Ok(1.0);
+    }
+
+    let log_beta =
+        log_gamma(a)? + log_gamma(b)? - log_gamma(a + b)?;
+
+    let log_prefactor =
+        a * x.ln() + b * (1.0 - x).ln() - log_beta;
+
+    let prefactor = log_prefactor.exp();
+
+    if !prefactor.is_finite() {
+        return Err(BenchmarkError::NumericalOverflow {
+            operation: "incomplete beta prefactor".to_owned(),
+            value: Some(format!("x={}, a={}, b={}", x, a, b)),
+        });
+    }
+
+    let result = if x < (a + 1.0) / (a + b + 2.0) {
+        prefactor * beta_continued_fraction(a, b, x)? / a
+    } else {
+        1.0
+            - prefactor
+                * beta_continued_fraction(b, a, 1.0 - x)?
+                / b
+    };
+
+    normalize_probability("regularized incomplete beta", result)
+}
+
+// =============================================================================
+// Display implementations
+// =============================================================================
+
+impl fmt::Display for Bernoulli {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Bernoulli(p={:.17})",
+            self.probability
+        )
+    }
+}
+
+impl fmt::Display for Binomial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Binomial(n={}, p={:.17})",
+            self.trials,
+            self.probability
+        )
+    }
+}
+
+impl fmt::Display for Normal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Normal(mean={:.17}, sd={:.17})",
+            self.mean,
+            self.standard_deviation
+        )
+    }
+}
+
+impl fmt::Display for Beta {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Beta(alpha={:.17}, beta={:.17})",
+            self.alpha,
+            self.beta
+        )
+    }
+}
+
+impl fmt::Display for Multinomial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Multinomial(")?;
+
+        for (index, probability) in self.probabilities.iter().enumerate() {
+            if index != 0 {
+                f.write_str(", ")?;
+            }
+
+            write!(f, "{:.17}", probability)?;
+        }
+
+        f.write_str(")")
+    }
+}
+
+impl fmt::Display for EmpiricalDistribution {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "EmpiricalDistribution(n={})",
+            self.observations.len()
+        )
+    }
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probability_validation_rejects_invalid_values() {
+        assert!(Bernoulli::new(-0.1).is_err());
+        assert!(Bernoulli::new(1.1).is_err());
+        assert!(Bernoulli::new(f64::NAN).is_err());
+        assert!(Bernoulli::new(f64::INFINITY).is_err());
+    }
+
+    #[test]
+    fn bernoulli_basic_properties() {
+        let distribution =
+            Bernoulli::new(0.25).expect("valid Bernoulli");
+
+        assert!((distribution.probability() - 0.25).abs() < 1e-15);
+        assert!((distribution.failure_probability() - 0.75).abs() < 1e-15);
+        assert!((distribution.mean() - 0.25).abs() < 1e-15);
+        assert!(
+            (distribution.variance() - 0.1875).abs() < 1e-15
+        );
+        assert!((distribution.pmf(true) - 0.25).abs() < 1e-15);
+        assert!((distribution.pmf(false) - 0.75).abs() < 1e-15);
+    }
+
+    #[test]
+    fn binomial_known_values() {
+        let distribution =
+            Binomial::new(10, 0.5).expect("valid binomial");
+
+        let probability =
+            distribution.pmf(5).expect("valid pmf");
+
+        let expected = 252.0 / 1024.0;
+
+        assert!((probability - expected).abs() < 1e-12);
+        assert!(
+            (distribution.mean().expect("mean") - 5.0).abs() < 1e-12
+        );
+        assert!(
+            (distribution.variance().expect("variance") - 2.5).abs()
+                < 1e-12
+        );
+    }
+
+    #[test]
+    fn binomial_extreme_probabilities_are_stable() {
+        let zero =
+            Binomial::new(1_000_000, 0.0).expect("valid binomial");
+
+        assert_eq!(
+            zero.pmf(0).expect("pmf"),
+            1.0
+        );
+
+        assert_eq!(
+            zero.pmf(1).expect("pmf"),
+            0.0
+        );
+
+        let one =
+            Binomial::new(1_000_000, 1.0).expect("valid binomial");
+
+        assert_eq!(
+            one.pmf(1_000_000).expect("pmf"),
+            1.0
+        );
+
+        assert_eq!(
+            one.pmf(999_999).expect("pmf"),
+            0.0
+        );
+    }
+
+    #[test]
+    fn binomial_from_counts_is_correct() {
+        let distribution =
+            binomial_from_counts(25, 100).expect("valid counts");
+
+        assert!((distribution.probability() - 0.25).abs() < 1e-15);
+    }
+
+    #[test]
+    fn normal_standard_distribution() {
+        let normal =
+            Normal::new(0.0, 1.0).expect("valid normal");
+
+        let density =
+            normal.pdf(0.0).expect("pdf");
+
+        assert!(
+            (density - 0.398_942_280_401_432_7).abs() < 1e-10
+        );
+
+        let cdf =
+            normal.cdf(0.0).expect("cdf");
+
+        assert!((cdf - 0.5).abs() < 1e-7);
+
+        let upper =
+            normal.cdf(1.959_963_984_540_054).expect("cdf");
+
+        assert!((upper - 0.975).abs() < 1e-6);
+    }
+
+    #[test]
+    fn normal_inverse_cdf_is_reasonable() {
+        let normal =
+            Normal::new(0.0, 1.0).expect("valid normal");
+
+        let z =
+            normal.inverse_cdf(0.975).expect("inverse cdf");
+
+        assert!((z - 1.959_963_984_540_054).abs() < 1e-4);
+    }
+
+    #[test]
+    fn beta_uniform_distribution() {
+        let beta =
+            Beta::new(1.0, 1.0).expect("valid beta");
+
+        assert!((beta.mean() - 0.5).abs() < 1e-15);
+        assert!((beta.variance() - 1.0 / 12.0).abs() < 1e-15);
+
+        let density =
+            beta.pdf(0.25).expect("pdf");
+
+        assert!((density - 1.0).abs() < 1e-10);
+
+        let cdf =
+            beta.cdf(0.25).expect("cdf");
+
+        assert!((cdf - 0.25).abs() < 1e-10);
+    }
+
+    #[test]
+    fn beta_known_cdf() {
+        // Beta(2,2) has CDF:
+        //
+        // F(x) = 3x^2 - 2x^3
+        //
+        // at x = 0.5 this is 0.5.
+        let beta =
+            Beta::new(2.0, 2.0).expect("valid beta");
+
+        let cdf =
+            beta.cdf(0.5).expect("cdf");
+
+        assert!((cdf - 0.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn multinomial_probabilities_must_sum_to_one() {
+        assert!(
+            Multinomial::new(vec![0.25, 0.25, 0.5]).is_ok()
+        );
+
+        assert!(
+            Multinomial::new(vec![0.25, 0.25, 0.25]).is_err()
+        );
+    }
+
+    #[test]
+    fn multinomial_known_probability() {
+        let distribution =
+            Multinomial::new(vec![0.5, 0.5])
+                .expect("valid multinomial");
+
+        // Counts (2,2) for n=4:
+        //
+        // 4! / (2!2!) * 0.5^4
+        // = 6/16
+        // = 0.375
+        let probability = distribution
+            .pmf(&[2, 2], 4)
+            .expect("pmf");
+
+        assert!((probability - 0.375).abs() < 1e-12);
+    }
+
+    #[test]
+    fn multinomial_from_weights_normalizes_explicitly() {
+        let distribution =
+            Multinomial::from_weights(vec![1.0, 2.0, 1.0])
+                .expect("valid weights");
+
+        assert!(
+            (distribution.probability(0).expect("p0") - 0.25).abs()
+                < 1e-15
+        );
+
+        assert!(
+            (distribution.probability(1).expect("p1") - 0.5).abs()
+                < 1e-15
+        );
+
+        assert!(
+            (distribution.probability(2).expect("p2") - 0.25).abs()
+                < 1e-15
+        );
+    }
+
+    #[test]
+    fn empirical_distribution_statistics() {
+        let empirical =
+            EmpiricalDistribution::new(vec![1.0, 2.0, 3.0, 4.0])
+                .expect("valid observations");
+
+        assert_eq!(empirical.len(), 4);
+        assert!(!empirical.is_empty());
+
+        assert!(
+            (empirical.mean().expect("mean") - 2.5).abs() < 1e-15
+        );
+
+        assert!(
+            (empirical.population_variance().expect("variance") - 1.25)
+                .abs()
+                < 1e-15
+        );
+
+        assert!(
+            (empirical.sample_variance().expect("variance") - 5.0 / 3.0)
+                .abs()
+                < 1e-15
+        );
+
+        assert!(
+            (empirical.median().expect("median") - 2.5).abs() < 1e-15
+        );
+
+        assert!(
+            (empirical.quantile(0.25).expect("quantile") - 1.75).abs()
+                < 1e-15
+        );
+    }
+
+    #[test]
+    fn empirical_distribution_rejects_non_finite_values() {
+        assert!(
+            EmpiricalDistribution::new(vec![1.0, f64::NAN]).is_err()
+        );
+
+        assert!(
+            EmpiricalDistribution::new(vec![1.0, f64::INFINITY]).is_err()
+        );
+    }
+
+    #[test]
+    fn logarithmic_combinatorics_do_not_use_factorial_overflow() {
+        let value =
+            log_binomial_coefficient(1_000_000, 500_000)
+                .expect("log combination");
+
+        assert!(value.is_finite());
+        assert!(value > 0.0);
+    }
+
+    #[test]
+    fn log_probability_handles_boundaries() {
+        assert_eq!(
+            ln_probability(0.0).expect("log probability"),
+            f64::NEG_INFINITY
+        );
+
+        assert_eq!(
+            ln_one_minus_probability(1.0)
+                .expect("log complement"),
+            f64::NEG_INFINITY
+        );
+
+        assert!(
+            ln_probability(0.5)
+                .expect("log probability")
+                .is_finite()
+        );
+
+        assert!(
+            ln_one_minus_probability(0.5)
+                .expect("log complement")
+                .is_finite()
+        );
+    }
+
+    #[test]
+    fn count_validation_rejects_successes_above_trials() {
+        assert!(
+            binomial_from_counts(101, 100).is_err()
+        );
+    }
+
+    #[test]
+    fn distribution_display_is_stable_and_non_empty() {
+        let bernoulli =
+            Bernoulli::new(0.5).expect("valid Bernoulli");
+
+        let binomial =
+            Binomial::new(10, 0.5).expect("valid binomial");
+
+        let normal =
+            Normal::new(0.0, 1.0).expect("valid normal");
+
+        let beta =
+            Beta::new(2.0, 3.0).expect("valid beta");
+
+        let multinomial =
+            Multinomial::new(vec![0.5, 0.5])
+                .expect("valid multinomial");
+
+        let empirical =
+            EmpiricalDistribution::new(vec![1.0, 2.0])
+                .expect("valid empirical");
+
+        assert!(!bernoulli.to_string().is_empty());
+        assert!(!binomial.to_string().is_empty());
+        assert!(!normal.to_string().is_empty());
+        assert!(!beta.to_string().is_empty());
+        assert!(!multinomial.to_string().is_empty());
+        assert!(!empirical.to_string().is_empty());
+    }
+
+    #[test]
+    fn beta_cdf_is_monotonic_for_representative_points() {
+        let beta =
+            Beta::new(2.5, 4.0).expect("valid beta");
+
+        let mut previous = 0.0;
+
+        for i in 0..=100 {
+            let x = i as f64 / 100.0;
+            let current = beta.cdf(x).expect("cdf");
+
+            assert!(current + 1e-12 >= previous);
+            previous = current;
+        }
+
+        assert!((previous - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn multinomial_covariance_has_correct_sign() {
+        let distribution =
+            Multinomial::new(vec![0.25, 0.75])
+                .expect("valid multinomial");
+
+        let diagonal =
+            distribution.covariance(100, 0, 0)
+                .expect("diagonal covariance");
+
+        let off_diagonal =
+            distribution.covariance(100, 0, 1)
+                .expect("off diagonal covariance");
+
+        assert!((diagonal - 18.75).abs() < 1e-12);
+        assert!((off_diagonal + 18.75).abs() < 1e-12);
+    }
+
+    #[test]
+    fn exact_f64_integer_constant_is_sane() {
+        assert_eq!(
+            MAX_EXACT_F64_INTEGER,
+            9_007_199_254_740_992
+        );
+    }
+
+    #[test]
+    fn probability_normalization_accepts_only_roundoff_outside_bounds() {
+        assert_eq!(
+            normalize_probability("p", -5.0e-13)
+                .expect("roundoff"),
+            0.0
+        );
+
+        assert_eq!(
+            normalize_probability("p", 1.0 + 5.0e-13)
+                .expect("roundoff"),
+            1.0
+        );
+
+        assert!(
+            normalize_probability("p", -1.0e-3).is_err()
+        );
+
+        assert!(
+            normalize_probability("p", 1.0 + 1.0e-3).is_err()
+        );
+    }
+}
