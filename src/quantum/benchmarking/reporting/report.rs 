@@ -1,0 +1,2398 @@
+//! Zamani Quantum Benchmarking — Canonical Report Model
+//!
+//! Production-grade reporting boundary for all Zamani quantum benchmarks.
+//!
+//! # Architectural role
+//!
+//! This module owns the canonical, format-independent representation of a
+//! benchmark report.
+//!
+//! It deliberately does NOT:
+//!
+//! - execute quantum circuits;
+//! - generate workloads;
+//! - calculate benchmark metrics;
+//! - perform statistical fitting;
+//! - compare hardware;
+//! - perform regression analysis;
+//! - mutate benchmark results;
+//! - select a backend;
+//! - depend on a hardware provider;
+//! - depend on a simulator;
+//! - depend on a concrete benchmark protocol.
+//!
+//! Its responsibility is:
+//!
+//! ```text
+//! BenchmarkResult
+//!       │
+//!       ▼
+//! reporting::report
+//!       │
+//!       ├────────► canonical report model
+//!       │
+//!       ├────────► deterministic JSON representation
+//!       │
+//!       ├────────► human-readable text
+//!       │
+//!       └────────► downstream Markdown / CSV / table renderers
+//! ```
+//!
+//! # Why this is a separate model
+//!
+//! `BenchmarkResult` is the scientific/result interchange contract.
+//!
+//! `BenchmarkReport` is the presentation contract.
+//!
+//! Keeping these separate is essential:
+//!
+//! ```text
+//! protocol
+//!    │
+//!    ▼
+//! BenchmarkResult
+//!    │
+//!    ├──► analysis
+//!    ├──► registry
+//!    ├──► CI
+//!    ├──► persistence
+//!    │
+//!    └──► BenchmarkReport
+//!              │
+//!              ├── JSON
+//!              ├── Markdown
+//!              ├── text
+//!              ├── table
+//!              └── future formats
+//! ```
+//!
+//! A report therefore never becomes the authoritative scientific data model.
+//!
+//! # Production properties
+//!
+//! This implementation provides:
+//!
+//! - deterministic report construction;
+//! - bounded report size;
+//! - bounded title/description/section sizes;
+//! - deterministic section ordering;
+//! - deterministic key ordering through `BTreeMap`;
+//! - JSON-safe output;
+//! - no floating-point formatting surprises in the canonical JSON payload;
+//! - explicit report schema version;
+//! - explicit source-result identity;
+//! - explicit generation metadata;
+//! - structured sections;
+//! - structured findings;
+//! - structured warnings;
+//! - structured errors;
+//! - stable machine-readable field names;
+//! - human-readable rendering;
+//! - JSON rendering;
+//! - report validation;
+//! - protection against pathological serialized results;
+//! - no process-global state;
+//! - no timestamps generated implicitly;
+//! - no hostname/environment leakage;
+//! - no logging/printing from the library;
+//! - Rust 1.97 / 1.97.1 compatibility;
+//! - Rust 2021 compatibility;
+//! - no unsafe code.
+//!
+//! # Important privacy/reproducibility rule
+//!
+//! This module never automatically adds:
+//!
+//! - hostname;
+//! - username;
+//! - IP address;
+//! - filesystem paths;
+//! - environment variables;
+//! - process ID;
+//! - machine serial numbers;
+//! - cloud credentials;
+//! - access tokens;
+//! - API keys;
+//! - arbitrary environment metadata.
+//!
+//! Such information must already be intentionally represented by the
+//! authoritative benchmark provenance layer.
+//!
+//! This prevents a seemingly harmless report operation from leaking local
+//! environment information.
+//!
+//! # Determinism
+//!
+//! The report model is deterministic when its input `BenchmarkResult` is
+//! deterministic.
+//!
+//! In particular:
+//!
+//! - sections are kept in insertion order only when explicitly supplied;
+//! - arbitrary maps are normalized into sorted `BTreeMap`s;
+//! - JSON object serialization is based on `BTreeMap` ordering;
+//! - no current time is inserted automatically;
+//! - no random identifier is generated.
+//!
+//! # Integration contract
+//!
+//! This module consumes:
+//!
+//! ```text
+//! quantum::benchmarking::core::Result::BenchmarkResult
+//! ```
+//!
+//! The current repository uses a capitalized `Result.rs` filename. This module
+//! therefore intentionally imports `super::super::core::Result` rather than
+//! assuming a lowercase `result.rs` that does not currently exist.
+//!
+//! Future modules integrate downstream:
+//!
+//! ```text
+//! core::Result
+//!       │
+//!       ▼
+//! reporting::report
+//!       │
+//!       ├── reporting::summary
+//!       ├── reporting::table
+//!       ├── reporting::json
+//!       ├── reporting::csv
+//!       └── reporting::markdown
+//! ```
+//!
+//! None of those future modules need to change this report model merely
+//! because they are introduced.
+//!
+//! # Rust compatibility
+//!
+//! Target:
+//!
+//! - Rust 1.97
+//! - Rust 1.97.1
+//! - Rust 2021
+//!
+//! No nightly features.
+//! No unsafe code.
+//!
+//! ---------------------------------------------------------------------------
+
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write as FmtWrite;
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+
+use super::super::core::Result::{
+    BenchmarkResult,
+    BENCHMARK_RESULT_SCHEMA_ID,
+    BENCHMARK_RESULT_SCHEMA_VERSION,
+};
+
+// =============================================================================
+// Schema
+// =============================================================================
+
+/// Stable identifier for the canonical benchmark-report schema.
+pub const BENCHMARK_REPORT_SCHEMA_ID: &str =
+    "zamani.quantum.benchmark.report";
+
+/// Current canonical benchmark-report schema version.
+///
+/// Increment this when the serialized meaning of `BenchmarkReport` changes
+/// incompatibly.
+pub const BENCHMARK_REPORT_SCHEMA_VERSION: u16 = 1;
+
+/// Maximum report title length in bytes.
+pub const MAX_REPORT_TITLE_LENGTH: usize = 512;
+
+/// Maximum report description length in bytes.
+pub const MAX_REPORT_DESCRIPTION_LENGTH: usize = 32 * 1024;
+
+/// Maximum number of sections in a report.
+pub const MAX_REPORT_SECTIONS: usize = 4_096;
+
+/// Maximum section identifier length.
+pub const MAX_SECTION_ID_LENGTH: usize = 256;
+
+/// Maximum section title length.
+pub const MAX_SECTION_TITLE_LENGTH: usize = 512;
+
+/// Maximum section body length.
+pub const MAX_SECTION_BODY_LENGTH: usize = 1 * 1024 * 1024;
+
+/// Maximum number of findings in a report.
+pub const MAX_REPORT_FINDINGS: usize = 4_096;
+
+/// Maximum finding code length.
+pub const MAX_FINDING_CODE_LENGTH: usize = 256;
+
+/// Maximum finding message length.
+pub const MAX_FINDING_MESSAGE_LENGTH: usize = 16 * 1024;
+
+/// Maximum number of report warnings.
+pub const MAX_REPORT_WARNINGS: usize = 4_096;
+
+/// Maximum number of report errors.
+pub const MAX_REPORT_ERRORS: usize = 4_096;
+
+/// Maximum message length.
+pub const MAX_REPORT_MESSAGE_LENGTH: usize = 16 * 1024;
+
+/// Maximum number of report metadata fields.
+pub const MAX_REPORT_METADATA_FIELDS: usize = 512;
+
+/// Maximum metadata key length.
+pub const MAX_REPORT_METADATA_KEY_LENGTH: usize = 256;
+
+/// Maximum metadata value length when represented as a string.
+pub const MAX_REPORT_METADATA_VALUE_LENGTH: usize = 16 * 1024;
+
+/// Maximum generated report output size.
+pub const MAX_RENDERED_REPORT_SIZE: usize = 8 * 1024 * 1024;
+
+// =============================================================================
+// Report severity
+// =============================================================================
+
+/// Severity of a report finding.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportSeverity {
+    /// Informational observation.
+    Info,
+
+    /// Something noteworthy that does not invalidate the report.
+    Warning,
+
+    /// A serious issue affecting interpretation.
+    Error,
+}
+
+impl ReportSeverity {
+    /// Returns the stable machine-readable representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Info => "info",
+            Self::Warning => "warning",
+            Self::Error => "error",
+        }
+    }
+}
+
+// =============================================================================
+// Report format
+// =============================================================================
+
+/// Output format supported directly by this canonical report module.
+///
+/// Specialized renderer modules may support additional formats later, but
+/// these formats are deliberately represented here because they are universal
+/// report contracts rather than protocol-specific concepts.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportFormat {
+    /// Canonical structured JSON.
+    Json,
+
+    /// Human-readable plain text.
+    Text,
+
+    /// Markdown-compatible human-readable output.
+    Markdown,
+}
+
+impl ReportFormat {
+    /// Returns the stable machine-readable representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Text => "text",
+            Self::Markdown => "markdown",
+        }
+    }
+}
+
+// =============================================================================
+// Report finding
+// =============================================================================
+
+/// A structured report finding.
+///
+/// Findings are presentation/interpretation metadata. They do not replace
+/// authoritative benchmark errors or metrics.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportFinding {
+    /// Finding severity.
+    pub severity: ReportSeverity,
+
+    /// Stable machine-readable finding code.
+    pub code: String,
+
+    /// Human-readable finding message.
+    pub message: String,
+
+    /// Optional section to which the finding belongs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section_id: Option<String>,
+}
+
+impl ReportFinding {
+    /// Creates a validated finding.
+    pub fn new(
+        severity: ReportSeverity,
+        code: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Result<Self, ReportError> {
+        let finding = Self {
+            severity,
+            code: code.into(),
+            message: message.into(),
+            section_id: None,
+        };
+
+        finding.validate()?;
+        Ok(finding)
+    }
+
+    /// Associates the finding with a report section.
+    pub fn with_section(
+        mut self,
+        section_id: impl Into<String>,
+    ) -> Result<Self, ReportError> {
+        let section_id = section_id.into();
+
+        validate_identifier(
+            "finding.section_id",
+            &section_id,
+            MAX_SECTION_ID_LENGTH,
+        )?;
+
+        self.section_id = Some(section_id);
+        self.validate()?;
+
+        Ok(self)
+    }
+
+    /// Validates the finding.
+    pub fn validate(&self) -> Result<(), ReportError> {
+        validate_identifier(
+            "finding.code",
+            &self.code,
+            MAX_FINDING_CODE_LENGTH,
+        )?;
+
+        validate_non_empty_bounded(
+            "finding.message",
+            &self.message,
+            MAX_FINDING_MESSAGE_LENGTH,
+        )?;
+
+        if let Some(section_id) = &self.section_id {
+            validate_identifier(
+                "finding.section_id",
+                section_id,
+                MAX_SECTION_ID_LENGTH,
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+// =============================================================================
+// Report section
+// =============================================================================
+
+/// A deterministic report section.
+///
+/// Sections intentionally contain a textual body plus optional structured
+/// data. This lets future table/JSON/Markdown renderers reuse the same report
+/// without forcing protocol-specific presentation logic into this file.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReportSection {
+    /// Stable section identifier.
+    pub id: String,
+
+    /// Human-readable section title.
+    pub title: String,
+
+    /// Optional textual body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+
+    /// Structured section data.
+    ///
+    /// `BTreeMap` is used deliberately so serialization remains deterministic.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub data: BTreeMap<String, Value>,
+}
+
+impl ReportSection {
+    /// Creates an empty validated section.
+    pub fn new(
+        id: impl Into<String>,
+        title: impl Into<String>,
+    ) -> Result<Self, ReportError> {
+        let section = Self {
+            id: id.into(),
+            title: title.into(),
+            body: None,
+            data: BTreeMap::new(),
+        };
+
+        section.validate()?;
+        Ok(section)
+    }
+
+    /// Adds a textual body.
+    pub fn with_body(
+        mut self,
+        body: impl Into<String>,
+    ) -> Result<Self, ReportError> {
+        let body = body.into();
+
+        if body.len() > MAX_SECTION_BODY_LENGTH {
+            return Err(ReportError::LengthExceeded {
+                field: "section.body",
+                maximum: MAX_SECTION_BODY_LENGTH,
+                actual: body.len(),
+            });
+        }
+
+        self.body = Some(body);
+        self.validate()?;
+        Ok(self)
+    }
+
+    /// Inserts one structured data field.
+    pub fn insert(
+        &mut self,
+        key: impl Into<String>,
+        value: Value,
+    ) -> Result<(), ReportError> {
+        let key = key.into();
+
+        validate_identifier(
+            "section.data.key",
+            &key,
+            MAX_REPORT_METADATA_KEY_LENGTH,
+        )?;
+
+        if self.data.len() >= MAX_REPORT_METADATA_FIELDS
+            && !self.data.contains_key(&key)
+        {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "section.data",
+                maximum: MAX_REPORT_METADATA_FIELDS,
+            });
+        }
+
+        validate_json_value_size(
+            "section.data.value",
+            &value,
+            MAX_REPORT_METADATA_VALUE_LENGTH,
+        )?;
+
+        self.data.insert(key, value);
+        Ok(())
+    }
+
+    /// Validates the section.
+    pub fn validate(&self) -> Result<(), ReportError> {
+        validate_identifier(
+            "section.id",
+            &self.id,
+            MAX_SECTION_ID_LENGTH,
+        )?;
+
+        validate_non_empty_bounded(
+            "section.title",
+            &self.title,
+            MAX_SECTION_TITLE_LENGTH,
+        )?;
+
+        if let Some(body) = &self.body {
+            if body.len() > MAX_SECTION_BODY_LENGTH {
+                return Err(ReportError::LengthExceeded {
+                    field: "section.body",
+                    maximum: MAX_SECTION_BODY_LENGTH,
+                    actual: body.len(),
+                });
+            }
+        }
+
+        if self.data.len() > MAX_REPORT_METADATA_FIELDS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "section.data",
+                maximum: MAX_REPORT_METADATA_FIELDS,
+            });
+        }
+
+        for (key, value) in &self.data {
+            validate_identifier(
+                "section.data.key",
+                key,
+                MAX_REPORT_METADATA_KEY_LENGTH,
+            )?;
+
+            validate_json_value_size(
+                "section.data.value",
+                value,
+                MAX_REPORT_METADATA_VALUE_LENGTH,
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+// =============================================================================
+// Report error
+// =============================================================================
+
+/// Errors produced by report construction or rendering.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReportError {
+    /// A required string was empty.
+    EmptyField {
+        field: &'static str,
+    },
+
+    /// A bounded field exceeded its permitted size.
+    LengthExceeded {
+        field: &'static str,
+        maximum: usize,
+        actual: usize,
+    },
+
+    /// A collection exceeded its production safety bound.
+    CollectionLimitExceeded {
+        field: &'static str,
+        maximum: usize,
+    },
+
+    /// An identifier contained invalid characters.
+    InvalidIdentifier {
+        field: &'static str,
+        reason: &'static str,
+    },
+
+    /// A JSON value was too large.
+    JsonValueTooLarge {
+        field: &'static str,
+        maximum: usize,
+    },
+
+    /// The supplied benchmark result serialized incorrectly.
+    ResultSerialization {
+        message: String,
+    },
+
+    /// The serialized benchmark result was not an object.
+    ResultNotObject,
+
+    /// The rendered report would exceed the maximum permitted output size.
+    RenderedReportTooLarge {
+        maximum: usize,
+        actual: usize,
+    },
+
+    /// A report invariant was violated.
+    InvalidReport {
+        reason: &'static str,
+    },
+}
+
+impl fmt::Display for ReportError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyField { field } => {
+                write!(formatter, "{} must not be empty", field)
+            }
+
+            Self::LengthExceeded {
+                field,
+                maximum,
+                actual,
+            } => {
+                write!(
+                    formatter,
+                    "{} exceeds maximum length {} bytes; actual {} bytes",
+                    field, maximum, actual
+                )
+            }
+
+            Self::CollectionLimitExceeded { field, maximum } => {
+                write!(
+                    formatter,
+                    "{} exceeds maximum collection size {}",
+                    field, maximum
+                )
+            }
+
+            Self::InvalidIdentifier { field, reason } => {
+                write!(
+                    formatter,
+                    "{} contains an invalid identifier: {}",
+                    field, reason
+                )
+            }
+
+            Self::JsonValueTooLarge { field, maximum } => {
+                write!(
+                    formatter,
+                    "{} exceeds maximum JSON value size {} bytes",
+                    field, maximum
+                )
+            }
+
+            Self::ResultSerialization { message } => {
+                write!(
+                    formatter,
+                    "benchmark result serialization failed: {}",
+                    message
+                )
+            }
+
+            Self::ResultNotObject => {
+                write!(
+                    formatter,
+                    "benchmark result serialization did not produce a JSON object"
+                )
+            }
+
+            Self::RenderedReportTooLarge { maximum, actual } => {
+                write!(
+                    formatter,
+                    "rendered report exceeds maximum size {} bytes; actual {} bytes",
+                    maximum, actual
+                )
+            }
+
+            Self::InvalidReport { reason } => {
+                write!(formatter, "invalid benchmark report: {}", reason)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ReportError {}
+
+// =============================================================================
+// Canonical report
+// =============================================================================
+
+/// Canonical format-independent benchmark report.
+///
+/// This is the object consumed by:
+///
+/// - JSON exporters;
+/// - Markdown exporters;
+/// - text exporters;
+/// - CSV/table exporters;
+/// - CI integrations;
+/// - future dashboard integrations;
+/// - Zamani standard-library bindings.
+///
+/// It contains a normalized snapshot of the source `BenchmarkResult`, rather
+/// than holding a reference to it. This makes the report independently
+/// serializable and prevents lifetime coupling to the result object.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BenchmarkReport {
+    /// Report schema identifier.
+    pub schema_id: String,
+
+    /// Report schema version.
+    pub schema_version: u16,
+
+    /// Source benchmark-result schema identifier.
+    pub source_result_schema_id: String,
+
+    /// Source benchmark-result schema version.
+    pub source_result_schema_version: u16,
+
+    /// Source result identifier, represented as a string to keep this module
+    /// independent from the internals of the result identity wrapper.
+    pub result_id: String,
+
+    /// Benchmark identifier.
+    pub benchmark_id: String,
+
+    /// Benchmark protocol version.
+    pub benchmark_version: String,
+
+    /// Human-readable report title.
+    pub title: String,
+
+    /// Optional report description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Format-neutral report metadata.
+    ///
+    /// Sorted ordering guarantees deterministic serialization.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub metadata: BTreeMap<String, Value>,
+
+    /// Report sections in explicitly chosen presentation order.
+    #[serde(default)]
+    pub sections: Vec<ReportSection>,
+
+    /// Structured findings.
+    #[serde(default)]
+    pub findings: Vec<ReportFinding>,
+
+    /// Warnings preserved from or generated for the report.
+    #[serde(default)]
+    pub warnings: Vec<String>,
+
+    /// Errors preserved from or generated for the report.
+    #[serde(default)]
+    pub errors: Vec<String>,
+
+    /// Complete normalized source result.
+    ///
+    /// Keeping the source snapshot here is intentional: a report must remain
+    /// independently useful and auditable even when rendered without access to
+    /// the original in-memory result object.
+    pub source_result: Value,
+}
+
+impl BenchmarkReport {
+    /// Creates the canonical report from an authoritative benchmark result.
+    ///
+    /// The source result is serialized into a bounded JSON representation.
+    /// No scientific values are recalculated here.
+    pub fn from_result(
+        result: &BenchmarkResult,
+    ) -> Result<Self, ReportError> {
+        let source_result = serde_json::to_value(result).map_err(|error| {
+            ReportError::ResultSerialization {
+                message: error.to_string(),
+            }
+        })?;
+
+        Self::from_serialized_result(source_result)
+    }
+
+    /// Creates a report from an already serialized result.
+    ///
+    /// This is useful for:
+    ///
+    /// - persisted benchmark results;
+    /// - CI;
+    /// - external result stores;
+    /// - independent re-reporting;
+    /// - future Zamani tooling.
+    ///
+    /// The caller is expected to have validated the result using the canonical
+    /// result validator before treating the result as scientifically trusted.
+    pub fn from_serialized_result(
+        source_result: Value,
+    ) -> Result<Self, ReportError> {
+        validate_json_value_size(
+            "source_result",
+            &source_result,
+            MAX_SECTION_BODY_LENGTH * 8,
+        )?;
+
+        let object = source_result
+            .as_object()
+            .ok_or(ReportError::ResultNotObject)?;
+
+        let result_id = required_string(
+            object,
+            &[
+                "result_id",
+                "id",
+                "result_identity",
+            ],
+            "result_id",
+        )?;
+
+        let benchmark_id = extract_nested_string(
+            object,
+            &[
+                &["benchmark_identity", "benchmark_id"],
+                &["benchmark", "benchmark_id"],
+                &["benchmark_id"],
+            ],
+            "benchmark_id",
+        )?;
+
+        let benchmark_version = extract_nested_string(
+            object,
+            &[
+                &["benchmark_identity", "benchmark_version"],
+                &["benchmark", "benchmark_version"],
+                &["benchmark_version"],
+            ],
+            "benchmark_version",
+        )?;
+
+        let title = build_default_title(
+            &benchmark_id,
+            &benchmark_version,
+        );
+
+        let mut report = Self {
+            schema_id: BENCHMARK_REPORT_SCHEMA_ID.to_owned(),
+            schema_version: BENCHMARK_REPORT_SCHEMA_VERSION,
+            source_result_schema_id: BENCHMARK_RESULT_SCHEMA_ID.to_owned(),
+            source_result_schema_version: BENCHMARK_RESULT_SCHEMA_VERSION,
+            result_id,
+            benchmark_id,
+            benchmark_version,
+            title,
+            description: None,
+            metadata: BTreeMap::new(),
+            sections: Vec::new(),
+            findings: Vec::new(),
+            warnings: Vec::new(),
+            errors: Vec::new(),
+            source_result,
+        };
+
+        report.populate_standard_sections(object)?;
+        report.populate_status_findings(object)?;
+        report.validate()?;
+
+        Ok(report)
+    }
+
+    /// Creates a report builder from an authoritative benchmark result.
+    ///
+    /// This method is useful when callers want to customize title,
+    /// description, sections or findings without reconstructing the source
+    /// result.
+    pub fn builder(
+        result: &BenchmarkResult,
+    ) -> Result<BenchmarkReportBuilder, ReportError> {
+        Ok(BenchmarkReportBuilder {
+            report: Self::from_result(result)?,
+        })
+    }
+
+    /// Sets the report title.
+    pub fn set_title(
+        &mut self,
+        title: impl Into<String>,
+    ) -> Result<(), ReportError> {
+        let title = title.into();
+
+        validate_non_empty_bounded(
+            "report.title",
+            &title,
+            MAX_REPORT_TITLE_LENGTH,
+        )?;
+
+        self.title = title;
+        Ok(())
+    }
+
+    /// Sets the report description.
+    pub fn set_description(
+        &mut self,
+        description: impl Into<String>,
+    ) -> Result<(), ReportError> {
+        let description = description.into();
+
+        if description.len() > MAX_REPORT_DESCRIPTION_LENGTH {
+            return Err(ReportError::LengthExceeded {
+                field: "report.description",
+                maximum: MAX_REPORT_DESCRIPTION_LENGTH,
+                actual: description.len(),
+            });
+        }
+
+        self.description = Some(description);
+        Ok(())
+    }
+
+    /// Inserts report metadata.
+    ///
+    /// Metadata keys are sorted automatically.
+    pub fn insert_metadata(
+        &mut self,
+        key: impl Into<String>,
+        value: Value,
+    ) -> Result<(), ReportError> {
+        let key = key.into();
+
+        validate_identifier(
+            "report.metadata.key",
+            &key,
+            MAX_REPORT_METADATA_KEY_LENGTH,
+        )?;
+
+        if self.metadata.len() >= MAX_REPORT_METADATA_FIELDS
+            && !self.metadata.contains_key(&key)
+        {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.metadata",
+                maximum: MAX_REPORT_METADATA_FIELDS,
+            });
+        }
+
+        validate_json_value_size(
+            "report.metadata.value",
+            &value,
+            MAX_REPORT_METADATA_VALUE_LENGTH,
+        )?;
+
+        self.metadata.insert(key, value);
+        Ok(())
+    }
+
+    /// Adds a section while preserving explicit caller ordering.
+    pub fn add_section(
+        &mut self,
+        section: ReportSection,
+    ) -> Result<(), ReportError> {
+        section.validate()?;
+
+        if self.sections.len() >= MAX_REPORT_SECTIONS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.sections",
+                maximum: MAX_REPORT_SECTIONS,
+            });
+        }
+
+        if self.sections.iter().any(|existing| existing.id == section.id) {
+            return Err(ReportError::InvalidReport {
+                reason: "duplicate section identifier",
+            });
+        }
+
+        self.sections.push(section);
+        Ok(())
+    }
+
+    /// Adds a structured finding.
+    pub fn add_finding(
+        &mut self,
+        finding: ReportFinding,
+    ) -> Result<(), ReportError> {
+        finding.validate()?;
+
+        if self.findings.len() >= MAX_REPORT_FINDINGS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.findings",
+                maximum: MAX_REPORT_FINDINGS,
+            });
+        }
+
+        self.findings.push(finding);
+        Ok(())
+    }
+
+    /// Adds a warning.
+    pub fn add_warning(
+        &mut self,
+        warning: impl Into<String>,
+    ) -> Result<(), ReportError> {
+        let warning = warning.into();
+
+        validate_non_empty_bounded(
+            "report.warning",
+            &warning,
+            MAX_REPORT_MESSAGE_LENGTH,
+        )?;
+
+        if self.warnings.len() >= MAX_REPORT_WARNINGS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.warnings",
+                maximum: MAX_REPORT_WARNINGS,
+            });
+        }
+
+        self.warnings.push(warning);
+        Ok(())
+    }
+
+    /// Adds an error.
+    pub fn add_error(
+        &mut self,
+        error: impl Into<String>,
+    ) -> Result<(), ReportError> {
+        let error = error.into();
+
+        validate_non_empty_bounded(
+            "report.error",
+            &error,
+            MAX_REPORT_MESSAGE_LENGTH,
+        )?;
+
+        if self.errors.len() >= MAX_REPORT_ERRORS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.errors",
+                maximum: MAX_REPORT_ERRORS,
+            });
+        }
+
+        self.errors.push(error);
+        Ok(())
+    }
+
+    /// Returns the number of report sections.
+    #[must_use]
+    pub fn section_count(&self) -> usize {
+        self.sections.len()
+    }
+
+    /// Returns the number of report findings.
+    #[must_use]
+    pub fn finding_count(&self) -> usize {
+        self.findings.len()
+    }
+
+    /// Returns whether the report contains errors.
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+            || self
+                .findings
+                .iter()
+                .any(|finding| finding.severity == ReportSeverity::Error)
+    }
+
+    /// Returns whether the report contains warnings.
+    #[must_use]
+    pub fn has_warnings(&self) -> bool {
+        !self.warnings.is_empty()
+            || self
+                .findings
+                .iter()
+                .any(|finding| finding.severity == ReportSeverity::Warning)
+    }
+
+    /// Validates all report invariants.
+    pub fn validate(&self) -> Result<(), ReportError> {
+        if self.schema_id != BENCHMARK_REPORT_SCHEMA_ID {
+            return Err(ReportError::InvalidReport {
+                reason: "unsupported report schema identifier",
+            });
+        }
+
+        if self.schema_version != BENCHMARK_REPORT_SCHEMA_VERSION {
+            return Err(ReportError::InvalidReport {
+                reason: "unsupported report schema version",
+            });
+        }
+
+        if self.source_result_schema_id != BENCHMARK_RESULT_SCHEMA_ID {
+            return Err(ReportError::InvalidReport {
+                reason: "unsupported source result schema identifier",
+            });
+        }
+
+        if self.source_result_schema_version
+            != BENCHMARK_RESULT_SCHEMA_VERSION
+        {
+            return Err(ReportError::InvalidReport {
+                reason: "unsupported source result schema version",
+            });
+        }
+
+        validate_non_empty_bounded(
+            "report.result_id",
+            &self.result_id,
+            MAX_REPORT_TITLE_LENGTH,
+        )?;
+
+        validate_identifier(
+            "report.benchmark_id",
+            &self.benchmark_id,
+            MAX_SECTION_ID_LENGTH,
+        )?;
+
+        validate_non_empty_bounded(
+            "report.benchmark_version",
+            &self.benchmark_version,
+            MAX_BENCHMARK_VERSION_LENGTH,
+        )?;
+
+        validate_non_empty_bounded(
+            "report.title",
+            &self.title,
+            MAX_REPORT_TITLE_LENGTH,
+        )?;
+
+        if let Some(description) = &self.description {
+            if description.len() > MAX_REPORT_DESCRIPTION_LENGTH {
+                return Err(ReportError::LengthExceeded {
+                    field: "report.description",
+                    maximum: MAX_REPORT_DESCRIPTION_LENGTH,
+                    actual: description.len(),
+                });
+            }
+        }
+
+        if self.metadata.len() > MAX_REPORT_METADATA_FIELDS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.metadata",
+                maximum: MAX_REPORT_METADATA_FIELDS,
+            });
+        }
+
+        for (key, value) in &self.metadata {
+            validate_identifier(
+                "report.metadata.key",
+                key,
+                MAX_REPORT_METADATA_KEY_LENGTH,
+            )?;
+
+            validate_json_value_size(
+                "report.metadata.value",
+                value,
+                MAX_REPORT_METADATA_VALUE_LENGTH,
+            )?;
+        }
+
+        if self.sections.len() > MAX_REPORT_SECTIONS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.sections",
+                maximum: MAX_REPORT_SECTIONS,
+            });
+        }
+
+        let mut section_ids = std::collections::BTreeSet::new();
+
+        for section in &self.sections {
+            section.validate()?;
+
+            if !section_ids.insert(section.id.clone()) {
+                return Err(ReportError::InvalidReport {
+                    reason: "duplicate section identifier",
+                });
+            }
+        }
+
+        if self.findings.len() > MAX_REPORT_FINDINGS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.findings",
+                maximum: MAX_REPORT_FINDINGS,
+            });
+        }
+
+        for finding in &self.findings {
+            finding.validate()?;
+        }
+
+        if self.warnings.len() > MAX_REPORT_WARNINGS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.warnings",
+                maximum: MAX_REPORT_WARNINGS,
+            });
+        }
+
+        for warning in &self.warnings {
+            validate_non_empty_bounded(
+                "report.warning",
+                warning,
+                MAX_REPORT_MESSAGE_LENGTH,
+            )?;
+        }
+
+        if self.errors.len() > MAX_REPORT_ERRORS {
+            return Err(ReportError::CollectionLimitExceeded {
+                field: "report.errors",
+                maximum: MAX_REPORT_ERRORS,
+            })?;
+        }
+
+        for error in &self.errors {
+            validate_non_empty_bounded(
+                "report.error",
+                error,
+                MAX_REPORT_MESSAGE_LENGTH,
+            )?;
+        }
+
+        validate_json_value_size(
+            "report.source_result",
+            &self.source_result,
+            MAX_SECTION_BODY_LENGTH * 8,
+        )?;
+
+        Ok(())
+    }
+
+    /// Returns the canonical JSON representation of this report.
+    ///
+    /// `serde_json` is intentionally used here rather than a hand-written JSON
+    /// serializer so escaping and JSON correctness remain delegated to the
+    /// serialization library.
+    pub fn to_json(&self) -> Result<String, ReportError> {
+        self.validate()?;
+
+        let value = serde_json::to_value(self).map_err(|error| {
+            ReportError::ResultSerialization {
+                message: error.to_string(),
+            }
+        })?;
+
+        render_json_value(&value)
+    }
+
+    /// Returns pretty-printed canonical JSON.
+    pub fn to_json_pretty(&self) -> Result<String, ReportError> {
+        self.validate()?;
+
+        let output =
+            serde_json::to_string_pretty(self).map_err(|error| {
+                ReportError::ResultSerialization {
+                    message: error.to_string(),
+                }
+            })?;
+
+        validate_rendered_size(&output)?;
+        Ok(output)
+    }
+
+    /// Returns deterministic human-readable text.
+    pub fn to_text(&self) -> Result<String, ReportError> {
+        self.validate()?;
+
+        let mut output = String::new();
+
+        write_report_header(&mut output, self)?;
+
+        for section in &self.sections {
+            write_section_text(&mut output, section)?;
+        }
+
+        write_findings_text(&mut output, &self.findings)?;
+        write_messages_text(
+            &mut output,
+            "Warnings",
+            &self.warnings,
+        )?;
+        write_messages_text(
+            &mut output,
+            "Errors",
+            &self.errors,
+        )?;
+
+        validate_rendered_size(&output)?;
+        Ok(output)
+    }
+
+    /// Returns deterministic Markdown.
+    ///
+    /// This intentionally lives here as a minimal canonical renderer. A future
+    /// `reporting::markdown` module can build richer presentation without
+    /// changing the report data model.
+    pub fn to_markdown(&self) -> Result<String, ReportError> {
+        self.validate()?;
+
+        let mut output = String::new();
+
+        writeln!(&mut output, "# {}", markdown_escape(&self.title))
+            .expect("writing to String cannot fail");
+
+        writeln!(
+            &mut output,
+            "\n- **Benchmark:** `{}`",
+            markdown_escape(&self.benchmark_id)
+        )
+        .expect("writing to String cannot fail");
+
+        writeln!(
+            &mut output,
+            "- **Benchmark version:** `{}`",
+            markdown_escape(&self.benchmark_version)
+        )
+        .expect("writing to String cannot fail");
+
+        writeln!(
+            &mut output,
+            "- **Result ID:** `{}`",
+            markdown_escape(&self.result_id)
+        )
+        .expect("writing to String cannot fail");
+
+        if let Some(description) = &self.description {
+            writeln!(
+                &mut output,
+                "\n{}",
+                markdown_escape(description)
+            )
+            .expect("writing to String cannot fail");
+        }
+
+        for section in &self.sections {
+            writeln!(
+                &mut output,
+                "\n## {}",
+                markdown_escape(&section.title)
+            )
+            .expect("writing to String cannot fail");
+
+            if let Some(body) = &section.body {
+                writeln!(
+                    &mut output,
+                    "\n{}",
+                    markdown_escape(body)
+                )
+                .expect("writing to String cannot fail");
+            }
+
+            if !section.data.is_empty() {
+                output.push_str("\n| Field | Value |\n");
+                output.push_str("| --- | --- |\n");
+
+                for (key, value) in &section.data {
+                    writeln!(
+                        &mut output,
+                        "| `{}` | `{}` |",
+                        markdown_escape(key),
+                        markdown_escape(
+                            &compact_json_value(value)
+                        )
+                    )
+                    .expect("writing to String cannot fail");
+                }
+            }
+        }
+
+        if !self.findings.is_empty() {
+            output.push_str("\n## Findings\n");
+
+            for finding in &self.findings {
+                writeln!(
+                    &mut output,
+                    "- **{}** `{}` — {}",
+                    finding.severity.as_str(),
+                    markdown_escape(&finding.code),
+                    markdown_escape(&finding.message)
+                )
+                .expect("writing to String cannot fail");
+            }
+        }
+
+        if !self.warnings.is_empty() {
+            output.push_str("\n## Warnings\n");
+
+            for warning in &self.warnings {
+                writeln!(
+                    &mut output,
+                    "- {}",
+                    markdown_escape(warning)
+                )
+                .expect("writing to String cannot fail");
+            }
+        }
+
+        if !self.errors.is_empty() {
+            output.push_str("\n## Errors\n");
+
+            for error in &self.errors {
+                writeln!(
+                    &mut output,
+                    "- {}",
+                    markdown_escape(error)
+                )
+                .expect("writing to String cannot fail");
+            }
+        }
+
+        validate_rendered_size(&output)?;
+        Ok(output)
+    }
+
+    /// Returns a format-selected representation.
+    pub fn render(
+        &self,
+        format: ReportFormat,
+    ) -> Result<String, ReportError> {
+        match format {
+            ReportFormat::Json => self.to_json_pretty(),
+            ReportFormat::Text => self.to_text(),
+            ReportFormat::Markdown => self.to_markdown(),
+        }
+    }
+
+    /// Returns the stable schema identifier.
+    #[must_use]
+    pub const fn schema_id() -> &'static str {
+        BENCHMARK_REPORT_SCHEMA_ID
+    }
+
+    /// Returns the schema version.
+    #[must_use]
+    pub const fn schema_version() -> u16 {
+        BENCHMARK_REPORT_SCHEMA_VERSION
+    }
+
+    // -------------------------------------------------------------------------
+    // Internal standard sections
+    // -------------------------------------------------------------------------
+
+    fn populate_standard_sections(
+        &mut self,
+        source: &Map<String, Value>,
+    ) -> Result<(), ReportError> {
+        self.add_identity_section(source)?;
+        self.add_execution_section(source)?;
+        self.add_metrics_section(source)?;
+        self.add_observations_section(source)?;
+        self.add_provenance_section(source)?;
+        Ok(())
+    }
+
+    fn add_identity_section(
+        &mut self,
+        source: &Map<String, Value>,
+    ) -> Result<(), ReportError> {
+        let mut section =
+            ReportSection::new("identity", "Benchmark Identity")?;
+
+        section.insert(
+            "result_id",
+            Value::String(self.result_id.clone()),
+        )?;
+
+        section.insert(
+            "benchmark_id",
+            Value::String(self.benchmark_id.clone()),
+        )?;
+
+        section.insert(
+            "benchmark_version",
+            Value::String(self.benchmark_version.clone()),
+        )?;
+
+        if let Some(value) = source.get("schema_version") {
+            section.insert(
+                "result_schema_version",
+                value.clone(),
+            )?;
+        }
+
+        self.add_section(section)
+    }
+
+    fn add_execution_section(
+        &mut self,
+        source: &Map<String, Value>,
+    ) -> Result<(), ReportError> {
+        let mut section =
+            ReportSection::new("execution", "Execution")?;
+
+        copy_if_present(
+            source,
+            &mut section,
+            &[
+                "execution_status",
+                "benchmark_status",
+                "validation_state",
+                "started_at",
+                "completed_at",
+                "duration",
+                "elapsed",
+                "timeout",
+                "cancelled",
+            ],
+        )?;
+
+        self.add_section(section)
+    }
+
+    fn add_metrics_section(
+        &mut self,
+        source: &Map<String, Value>,
+    ) -> Result<(), ReportError> {
+        let mut section =
+            ReportSection::new("metrics", "Metrics")?;
+
+        if let Some(metrics) = source.get("metrics") {
+            section.insert("metrics", metrics.clone())?;
+        }
+
+        if let Some(statistics) = source.get("statistics") {
+            section.insert(
+                "statistics",
+                statistics.clone(),
+            )?;
+        }
+
+        self.add_section(section)
+    }
+
+    fn add_observations_section(
+        &mut self,
+        source: &Map<String, Value>,
+    ) -> Result<(), ReportError> {
+        let mut section =
+            ReportSection::new(
+                "observations",
+                "Observations",
+            )?;
+
+        if let Some(observations) = source.get("observations") {
+            section.insert(
+                "observations",
+                observations.clone(),
+            )?;
+        }
+
+        self.add_section(section)
+    }
+
+    fn add_provenance_section(
+        &mut self,
+        source: &Map<String, Value>,
+    ) -> Result<(), ReportError> {
+        let mut section =
+            ReportSection::new(
+                "provenance",
+                "Provenance",
+            )?;
+
+        for key in [
+            "provenance",
+            "reproducibility",
+            "backend",
+            "compiler",
+            "calibration",
+            "configuration",
+        ] {
+            if let Some(value) = source.get(key) {
+                section.insert(key, value.clone())?;
+            }
+        }
+
+        self.add_section(section)
+    }
+
+    fn populate_status_findings(
+        &mut self,
+        source: &Map<String, Value>,
+    ) -> Result<(), ReportError> {
+        if let Some(status) = source
+            .get("execution_status")
+            .and_then(Value::as_str)
+        {
+            match status {
+                "failed" | "cancelled" => {
+                    self.add_finding(
+                        ReportFinding::new(
+                            ReportSeverity::Error,
+                            "execution_not_successful",
+                            format!(
+                                "Benchmark execution status is `{}`.",
+                                status
+                            ),
+                        )?,
+                    )?;
+                }
+
+                "partially_completed" => {
+                    self.add_finding(
+                        ReportFinding::new(
+                            ReportSeverity::Warning,
+                            "execution_partial",
+                            "Benchmark execution completed only partially.",
+                        )?,
+                    )?;
+                }
+
+                "running" => {
+                    self.add_finding(
+                        ReportFinding::new(
+                            ReportSeverity::Warning,
+                            "execution_incomplete",
+                            "Benchmark execution is represented as running or intermediate.",
+                        )?,
+                    )?;
+                }
+
+                _ => {}
+            }
+        }
+
+        if let Some(status) = source
+            .get("benchmark_status")
+            .and_then(Value::as_str)
+        {
+            match status {
+                "failed" => {
+                    self.add_finding(
+                        ReportFinding::new(
+                            ReportSeverity::Warning,
+                            "benchmark_acceptance_failed",
+                            "The benchmark executed but did not satisfy its scientific acceptance criterion.",
+                        )?,
+                    )?;
+                }
+
+                "inconclusive" => {
+                    self.add_finding(
+                        ReportFinding::new(
+                            ReportSeverity::Warning,
+                            "benchmark_inconclusive",
+                            "The benchmark does not contain a decisive scientific conclusion.",
+                        )?,
+                    )?;
+                }
+
+                "not_applicable" => {
+                    self.add_finding(
+                        ReportFinding::new(
+                            ReportSeverity::Info,
+                            "benchmark_not_applicable",
+                            "The benchmark is explicitly marked not applicable.",
+                        )?,
+                    )?;
+                }
+
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+}
+
+// =============================================================================
+// Builder
+// =============================================================================
+
+/// Builder for customized benchmark reports.
+///
+/// The builder is deliberately thin. The canonical report remains the
+/// authoritative model.
+#[derive(Debug)]
+pub struct BenchmarkReportBuilder {
+    report: BenchmarkReport,
+}
+
+impl BenchmarkReportBuilder {
+    /// Sets the title.
+    pub fn title(
+        mut self,
+        title: impl Into<String>,
+    ) -> Result<Self, ReportError> {
+        self.report.set_title(title)?;
+        Ok(self)
+    }
+
+    /// Sets the description.
+    pub fn description(
+        mut self,
+        description: impl Into<String>,
+    ) -> Result<Self, ReportError> {
+        self.report.set_description(description)?;
+        Ok(self)
+    }
+
+    /// Adds metadata.
+    pub fn metadata(
+        mut self,
+        key: impl Into<String>,
+        value: Value,
+    ) -> Result<Self, ReportError> {
+        self.report.insert_metadata(key, value)?;
+        Ok(self)
+    }
+
+    /// Adds a section.
+    pub fn section(
+        mut self,
+        section: ReportSection,
+    ) -> Result<Self, ReportError> {
+        self.report.add_section(section)?;
+        Ok(self)
+    }
+
+    /// Adds a finding.
+    pub fn finding(
+        mut self,
+        finding: ReportFinding,
+    ) -> Result<Self, ReportError> {
+        self.report.add_finding(finding)?;
+        Ok(self)
+    }
+
+    /// Adds a warning.
+    pub fn warning(
+        mut self,
+        warning: impl Into<String>,
+    ) -> Result<Self, ReportError> {
+        self.report.add_warning(warning)?;
+        Ok(self)
+    }
+
+    /// Adds an error.
+    pub fn error(
+        mut self,
+        error: impl Into<String>,
+    ) -> Result<Self, ReportError> {
+        self.report.add_error(error)?;
+        Ok(self)
+    }
+
+    /// Finishes and validates the report.
+    pub fn build(self) -> Result<BenchmarkReport, ReportError> {
+        self.report.validate()?;
+        Ok(self.report)
+    }
+}
+
+// =============================================================================
+// Helper functions
+// =============================================================================
+
+fn validate_non_empty_bounded(
+    field: &'static str,
+    value: &str,
+    maximum: usize,
+) -> Result<(), ReportError> {
+    if value.trim().is_empty() {
+        return Err(ReportError::EmptyField { field });
+    }
+
+    if value.len() > maximum {
+        return Err(ReportError::LengthExceeded {
+            field,
+            maximum,
+            actual: value.len(),
+        });
+    }
+
+    Ok(())
+}
+
+fn validate_identifier(
+    field: &'static str,
+    value: &str,
+    maximum: usize,
+) -> Result<(), ReportError> {
+    validate_non_empty_bounded(field, value, maximum)?;
+
+    if value.chars().any(|character| {
+        character.is_control()
+    }) {
+        return Err(ReportError::InvalidIdentifier {
+            field,
+            reason: "control characters are not allowed",
+        });
+    }
+
+    Ok(())
+}
+
+fn validate_json_value_size(
+    field: &'static str,
+    value: &Value,
+    maximum: usize,
+) -> Result<(), ReportError> {
+    let serialized = serde_json::to_vec(value).map_err(|error| {
+        ReportError::ResultSerialization {
+            message: error.to_string(),
+        }
+    })?;
+
+    if serialized.len() > maximum {
+        return Err(ReportError::JsonValueTooLarge {
+            field,
+            maximum,
+        });
+    }
+
+    Ok(())
+}
+
+fn validate_rendered_size(
+    output: &str,
+) -> Result<(), ReportError> {
+    if output.len() > MAX_RENDERED_REPORT_SIZE {
+        return Err(ReportError::RenderedReportTooLarge {
+            maximum: MAX_RENDERED_REPORT_SIZE,
+            actual: output.len(),
+        });
+    }
+
+    Ok(())
+}
+
+fn required_string(
+    object: &Map<String, Value>,
+    names: &[&str],
+    field: &'static str,
+) -> Result<String, ReportError> {
+    for name in names {
+        if let Some(value) = object.get(*name) {
+            if let Some(value) = value.as_str() {
+                if !value.trim().is_empty() {
+                    return Ok(value.to_owned());
+                }
+            }
+        }
+    }
+
+    Err(ReportError::EmptyField { field })
+}
+
+fn extract_nested_string(
+    object: &Map<String, Value>,
+    paths: &[&[&str]],
+    field: &'static str,
+) -> Result<String, ReportError> {
+    for path in paths {
+        if let Some(value) = lookup_path(object, path) {
+            if let Some(value) = value.as_str() {
+                if !value.trim().is_empty() {
+                    return Ok(value.to_owned());
+                }
+            }
+        }
+    }
+
+    Err(ReportError::EmptyField { field })
+}
+
+fn lookup_path<'a>(
+    object: &'a Map<String, Value>,
+    path: &[&str],
+) -> Option<&'a Value> {
+    if path.is_empty() {
+        return None;
+    }
+
+    let mut current = object.get(path[0])?;
+
+    for component in &path[1..] {
+        current = current.as_object()?.get(*component)?;
+    }
+
+    Some(current)
+}
+
+fn build_default_title(
+    benchmark_id: &str,
+    benchmark_version: &str,
+) -> String {
+    format!(
+        "Zamani Quantum Benchmark — {} v{}",
+        benchmark_id,
+        benchmark_version
+    )
+}
+
+fn copy_if_present(
+    source: &Map<String, Value>,
+    section: &mut ReportSection,
+    keys: &[&str],
+) -> Result<(), ReportError> {
+    for key in keys {
+        if let Some(value) = source.get(*key) {
+            section.insert((*key).to_owned(), value.clone())?;
+        }
+    }
+
+    Ok(())
+}
+
+fn render_json_value(
+    value: &Value,
+) -> Result<String, ReportError> {
+    let output =
+        serde_json::to_string(value).map_err(|error| {
+            ReportError::ResultSerialization {
+                message: error.to_string(),
+            }
+        })?;
+
+    validate_rendered_size(&output)?;
+    Ok(output)
+}
+
+fn compact_json_value(value: &Value) -> String {
+    serde_json::to_string(value)
+        .unwrap_or_else(|_| "<invalid-json>".to_owned())
+}
+
+fn write_report_header(
+    output: &mut String,
+    report: &BenchmarkReport,
+) -> Result<(), ReportError> {
+    writeln!(
+        output,
+        "{}",
+        report.title
+    )
+    .expect("writing to String cannot fail");
+
+    writeln!(
+        output,
+        "{}",
+        "=".repeat(report.title.chars().count())
+    )
+    .expect("writing to String cannot fail");
+
+    writeln!(
+        output,
+        "Benchmark: {}",
+        report.benchmark_id
+    )
+    .expect("writing to String cannot fail");
+
+    writeln!(
+        output,
+        "Benchmark version: {}",
+        report.benchmark_version
+    )
+    .expect("writing to String cannot fail");
+
+    writeln!(
+        output,
+        "Result ID: {}",
+        report.result_id
+    )
+    .expect("writing to String cannot fail");
+
+    writeln!(
+        output,
+        "Report schema: {} v{}",
+        report.schema_id,
+        report.schema_version
+    )
+    .expect("writing to String cannot fail");
+
+    if let Some(description) = &report.description {
+        writeln!(output, "\n{}", description)
+            .expect("writing to String cannot fail");
+    }
+
+    Ok(())
+}
+
+fn write_section_text(
+    output: &mut String,
+    section: &ReportSection,
+) -> Result<(), ReportError> {
+    writeln!(
+        output,
+        "\n{}",
+        section.title
+    )
+    .expect("writing to String cannot fail");
+
+    writeln!(
+        output,
+        "{}",
+        "-".repeat(section.title.chars().count())
+    )
+    .expect("writing to String cannot fail");
+
+    if let Some(body) = &section.body {
+        writeln!(output, "{}", body)
+            .expect("writing to String cannot fail");
+    }
+
+    for (key, value) in &section.data {
+        writeln!(
+            output,
+            "{}: {}",
+            key,
+            compact_json_value(value)
+        )
+        .expect("writing to String cannot fail");
+    }
+
+    Ok(())
+}
+
+fn write_findings_text(
+    output: &mut String,
+    findings: &[ReportFinding],
+) -> Result<(), ReportError> {
+    if findings.is_empty() {
+        return Ok(());
+    }
+
+    output.push_str("\nFindings\n--------\n");
+
+    for finding in findings {
+        writeln!(
+            output,
+            "[{}] {}: {}",
+            finding.severity.as_str(),
+            finding.code,
+            finding.message
+        )
+        .expect("writing to String cannot fail");
+    }
+
+    Ok(())
+}
+
+fn write_messages_text(
+    output: &mut String,
+    heading: &str,
+    messages: &[String],
+) -> Result<(), ReportError> {
+    if messages.is_empty() {
+        return Ok(());
+    }
+
+    writeln!(output, "\n{}\n{}", heading, "-".repeat(heading.len()))
+        .expect("writing to String cannot fail");
+
+    for message in messages {
+        writeln!(output, "- {}", message)
+            .expect("writing to String cannot fail");
+    }
+
+    Ok(())
+}
+
+fn markdown_escape(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('|', "\\|")
+        .replace('`', "\\`")
+        .replace('\r', "")
+        .replace('\n', " ")
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn synthetic_result_json() -> Value {
+        serde_json::json!({
+            "schema_version": 1,
+            "result_id": "test-result-001",
+            "benchmark_identity": {
+                "benchmark_id": "quantum_volume",
+                "benchmark_version": "1.0"
+            },
+            "execution_status": "completed",
+            "benchmark_status": "passed",
+            "validation_state": "valid",
+            "metrics": [
+                {
+                    "kind": "fidelity",
+                    "value": 0.99
+                }
+            ],
+            "observations": [],
+            "provenance": {
+                "seed": 42
+            },
+            "reproducibility": {
+                "deterministic": true
+            }
+        })
+    }
+
+    #[test]
+    fn report_schema_is_stable() {
+        assert_eq!(
+            BenchmarkReport::schema_id(),
+            BENCHMARK_REPORT_SCHEMA_ID
+        );
+
+        assert_eq!(
+            BenchmarkReport::schema_version(),
+            BENCHMARK_REPORT_SCHEMA_VERSION
+        );
+    }
+
+    #[test]
+    fn section_rejects_empty_identifier() {
+        let result = ReportSection::new("", "Metrics");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn section_rejects_empty_title() {
+        let result = ReportSection::new("metrics", "");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn report_from_serialized_result_is_deterministic() {
+        let first =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        let second =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn report_contains_standard_sections() {
+        let report =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        assert_eq!(report.section_count(), 5);
+
+        assert!(
+            report
+                .sections
+                .iter()
+                .any(|section| section.id == "identity")
+        );
+
+        assert!(
+            report
+                .sections
+                .iter()
+                .any(|section| section.id == "execution")
+        );
+
+        assert!(
+            report
+                .sections
+                .iter()
+                .any(|section| section.id == "metrics")
+        );
+
+        assert!(
+            report
+                .sections
+                .iter()
+                .any(|section| section.id == "observations")
+        );
+
+        assert!(
+            report
+                .sections
+                .iter()
+                .any(|section| section.id == "provenance")
+        );
+    }
+
+    #[test]
+    fn json_output_is_valid_json() {
+        let report =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        let json = report
+            .to_json()
+            .expect("report should serialize");
+
+        let parsed: Value =
+            serde_json::from_str(&json)
+                .expect("report JSON must be valid");
+
+        assert!(parsed.is_object());
+    }
+
+    #[test]
+    fn pretty_json_output_is_valid_json() {
+        let report =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        let json = report
+            .to_json_pretty()
+            .expect("report should serialize");
+
+        let parsed: Value =
+            serde_json::from_str(&json)
+                .expect("report JSON must be valid");
+
+        assert!(parsed.is_object());
+    }
+
+    #[test]
+    fn text_output_contains_identity() {
+        let report =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        let text =
+            report.to_text().expect("text rendering must succeed");
+
+        assert!(text.contains("quantum_volume"));
+        assert!(text.contains("test-result-001"));
+    }
+
+    #[test]
+    fn markdown_output_contains_identity() {
+        let report =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        let markdown = report
+            .to_markdown()
+            .expect("markdown rendering must succeed");
+
+        assert!(markdown.contains("# Zamani Quantum Benchmark"));
+        assert!(markdown.contains("quantum_volume"));
+    }
+
+    #[test]
+    fn failed_benchmark_is_reported_without_being_execution_failure() {
+        let mut value = synthetic_result_json();
+
+        value["benchmark_status"] =
+            Value::String("failed".to_owned());
+
+        value["execution_status"] =
+            Value::String("completed".to_owned());
+
+        let report =
+            BenchmarkReport::from_serialized_result(value)
+                .expect("failed benchmark remains reportable");
+
+        assert!(
+            report.findings.iter().any(|finding| {
+                finding.code == "benchmark_acceptance_failed"
+            })
+        );
+
+        assert!(!report.has_errors());
+    }
+
+    #[test]
+    fn partial_execution_is_reported_as_warning() {
+        let mut value = synthetic_result_json();
+
+        value["execution_status"] =
+            Value::String("partially_completed".to_owned());
+
+        let report =
+            BenchmarkReport::from_serialized_result(value)
+                .expect("partial result remains reportable");
+
+        assert!(
+            report.findings.iter().any(|finding| {
+                finding.code == "execution_partial"
+            })
+        );
+
+        assert!(report.has_warnings());
+    }
+
+    #[test]
+    fn markdown_escapes_table_sensitive_characters() {
+        let escaped = markdown_escape("a|b`c");
+
+        assert_eq!(escaped, "a\\|b\\`c");
+    }
+
+    #[test]
+    fn duplicate_sections_are_rejected() {
+        let mut report =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        let section =
+            ReportSection::new("identity", "Duplicate")
+                .expect("section itself is valid");
+
+        assert!(report.add_section(section).is_err());
+    }
+
+    #[test]
+    fn oversized_metadata_is_rejected() {
+        let mut report =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        let huge =
+            "x".repeat(MAX_REPORT_METADATA_VALUE_LENGTH + 1);
+
+        assert!(
+            report
+                .insert_metadata(
+                    "huge",
+                    Value::String(huge)
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn builder_produces_valid_report() {
+        let report =
+            BenchmarkReport::from_serialized_result(
+                synthetic_result_json(),
+            )
+            .expect("synthetic result should produce report");
+
+        let report = BenchmarkReportBuilder {
+            report,
+        }
+        .title("Custom Quantum Report")
+        .expect("title should work")
+        .description("Production benchmark report")
+        .expect("description should work")
+        .metadata(
+            "environment",
+            Value::String("test".to_owned()),
+        )
+        .expect("metadata should work")
+        .build()
+        .expect("builder should produce valid report");
+
+        assert_eq!(report.title, "Custom Quantum Report");
+        assert_eq!(
+            report.metadata.get("environment"),
+            Some(&Value::String("test".to_owned()))
+        );
+    }
+}
