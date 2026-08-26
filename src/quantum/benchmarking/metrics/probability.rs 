@@ -1,0 +1,2293 @@
+//! Zamani Quantum Benchmarking — Probability Metrics
+//!
+//! Production-grade probability primitives used by the quantum benchmarking
+//! subsystem.
+//!
+//! # Responsibility
+//!
+//! This module owns probability mathematics and probability-domain validation.
+//! It deliberately does NOT own:
+//!
+//! - quantum circuit generation,
+//! - circuit execution,
+//! - backend selection,
+//! - Quantum IR,
+//! - benchmark protocols,
+//! - confidence intervals,
+//! - statistical hypothesis testing,
+//! - reporting,
+//! - hardware interaction.
+//!
+//! Those responsibilities belong to higher-level benchmarking modules.
+//!
+//! # Architectural position
+//!
+//! ```text
+//! quantum::ir
+//!      │
+//!      ▼
+//! benchmark workload / execution
+//!      │
+//!      ▼
+//! raw counts / probabilities
+//!      │
+//!      ▼
+//! benchmarking::metrics::probability
+//!      │
+//!      ├── validation
+//!      ├── counts ↔ probabilities
+//!      ├── normalization
+//!      ├── empirical distributions
+//!      └── probability-domain arithmetic
+//!      │
+//!      ▼
+//! protocol-specific metrics
+//! ```
+//!
+//! # Design principles
+//!
+//! 1. No hidden global state.
+//! 2. No floating-point panics.
+//! 3. No silent NaN or infinity propagation.
+//! 4. No silent normalization.
+//! 5. No unchecked integer overflow.
+//! 6. Raw counts are represented independently from floating-point
+//!    probabilities.
+//! 7. Probability values are validated at API boundaries.
+//! 8. Probability distributions explicitly distinguish normalized and
+//!    unnormalized data.
+//! 9. Conversions from probabilities to counts are explicit and documented as
+//!    approximate reconstruction.
+//! 10. The module has no dependency on future benchmarking modules, making it
+//!     safe to complete before the rest of the benchmarking tree exists.
+//!
+//! # Rust compatibility
+//!
+//! Target: Rust 1.97.1, Rust 2021.
+//!
+//! No nightly features are required.
+//!
+//! # Numerical policy
+//!
+//! A probability is valid iff it is finite and lies in `[0, 1]`.
+//!
+//! A probability distribution is valid iff:
+//!
+//! - every probability is finite,
+//! - every probability is in `[0, 1]`,
+//! - the sum is finite,
+//! - the sum is within the configured normalization tolerance of `1` when
+//!   normalization is required.
+//!
+//! Floating-point equality is never used for distribution normalization.
+//!
+//! # Integration contract
+//!
+//! Future modules may depend on this module without requiring changes here:
+//!
+//! - `metrics/fidelity.rs`
+//! - `metrics/gate_error.rs`
+//! - `metrics/readout.rs`
+//! - `protocols/quantum_volume.rs`
+//! - `protocols/xeb.rs`
+//! - `protocols/random_circuit_sampling.rs`
+//! - `protocols/spam.rs`
+//! - `protocols/cycle_benchmarking.rs`
+//! - `statistics/*`
+//! - `reporting/*`
+//!
+//! `core/errors.rs` may wrap [`ProbabilityError`] later, but this module does
+//! not depend on `core/errors.rs`. This intentionally allows this file to be
+//! completed independently without a future circular dependency.
+//!
+//! # Scientific boundary
+//!
+//! This module does not infer physical meaning from a probability. In
+//! particular, it does not claim that a probability is a fidelity, success
+//! probability, heavy-output probability, or XEB fidelity. Those meanings
+//! belong to the protocol or metric that produced the probability.
+//!
+//! A raw probability is only a probability.
+
+use std::fmt;
+
+/// Default absolute tolerance for probability/distribution normalization.
+///
+/// This value is intentionally conservative for ordinary `f64` numerical
+/// accumulation while still allowing harmless floating-point round-off.
+pub const DEFAULT_NORMALIZATION_TOLERANCE: f64 = 1.0e-12;
+
+/// Minimum allowed normalization tolerance.
+///
+/// A tolerance smaller than this is generally not useful with `f64` arithmetic
+/// and can cause valid calculations to fail because of unavoidable rounding.
+pub const MIN_NORMALIZATION_TOLERANCE: f64 = f64::EPSILON;
+
+/// Maximum allowed normalization tolerance.
+///
+/// A normalization tolerance greater than this would permit materially
+/// malformed probability distributions to pass validation.
+pub const MAX_NORMALIZATION_TOLERANCE: f64 = 1.0e-6;
+
+/// Maximum finite probability value.
+pub const PROBABILITY_ONE: f64 = 1.0;
+
+/// Minimum finite probability value.
+pub const PROBABILITY_ZERO: f64 = 0.0;
+
+/// Probability-related errors.
+///
+/// This error type is deliberately local to this independent foundation
+/// module. The future `benchmarking::core::errors` layer can wrap it without
+/// forcing this module to depend on the broader benchmarking error hierarchy.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProbabilityError {
+    /// A probability was NaN or infinite.
+    NonFinite {
+        /// Value supplied by the caller.
+        value: f64,
+    },
+
+    /// A probability was outside `[0, 1]`.
+    OutOfRange {
+        /// Value supplied by the caller.
+        value: f64,
+    },
+
+    /// A sample count was zero where a probability could not be defined.
+    ZeroSamples,
+
+    /// Heavy/success/event count exceeded the total sample count.
+    CountExceedsSamples {
+        /// Number of events.
+        events: u64,
+
+        /// Total number of observations.
+        samples: u64,
+    },
+
+    /// An integer operation overflowed.
+    IntegerOverflow,
+
+    /// The supplied normalization tolerance was invalid.
+    InvalidTolerance {
+        /// Invalid tolerance.
+        tolerance: f64,
+    },
+
+    /// The supplied distribution was not normalized.
+    NotNormalized {
+        /// Calculated sum.
+        sum: f64,
+
+        /// Permitted absolute error.
+        tolerance: f64,
+    },
+
+    /// A distribution contained an invalid element.
+    InvalidDistributionElement {
+        /// Index of the invalid probability.
+        index: usize,
+
+        /// Invalid value.
+        value: f64,
+    },
+
+    /// The distribution contained no elements.
+    EmptyDistribution,
+
+    /// The distribution's total count was zero.
+    EmptyCounts,
+
+    /// A count map contained an impossible total.
+    CountTotalOverflow,
+
+    /// A reconstructed count was outside the representable range.
+    CountConversionOverflow,
+
+    /// A probability could not be converted to a count while respecting the
+    /// requested constraints.
+    InvalidCountConversion,
+
+    /// A weighted probability operation received an invalid total weight.
+    InvalidWeight {
+        /// Weight supplied by the caller.
+        weight: f64,
+    },
+
+    /// A weighted probability operation had no positive total weight.
+    ZeroTotalWeight,
+
+    /// A probability interval was invalid.
+    InvalidInterval {
+        /// Lower bound.
+        lower: f64,
+
+        /// Upper bound.
+        upper: f64,
+    },
+}
+
+impl fmt::Display for ProbabilityError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonFinite { value } => {
+                write!(f, "probability must be finite, received {value}")
+            }
+
+            Self::OutOfRange { value } => {
+                write!(
+                    f,
+                    "probability must be in [0, 1], received {value}"
+                )
+            }
+
+            Self::ZeroSamples => {
+                write!(f, "probability is undefined for zero samples")
+            }
+
+            Self::CountExceedsSamples { events, samples } => {
+                write!(
+                    f,
+                    "event count {events} cannot exceed sample count {samples}"
+                )
+            }
+
+            Self::IntegerOverflow => {
+                write!(f, "integer overflow while processing probability data")
+            }
+
+            Self::InvalidTolerance { tolerance } => {
+                write!(
+                    f,
+                    "normalization tolerance must be finite and in [{}, {}], \
+                     received {tolerance}",
+                    MIN_NORMALIZATION_TOLERANCE,
+                    MAX_NORMALIZATION_TOLERANCE
+                )
+            }
+
+            Self::NotNormalized { sum, tolerance } => {
+                write!(
+                    f,
+                    "probability distribution is not normalized: \
+                     sum={sum}, tolerance={tolerance}"
+                )
+            }
+
+            Self::InvalidDistributionElement { index, value } => {
+                write!(
+                    f,
+                    "invalid probability at distribution index {index}: {value}"
+                )
+            }
+
+            Self::EmptyDistribution => {
+                write!(f, "probability distribution cannot be empty")
+            }
+
+            Self::EmptyCounts => {
+                write!(f, "count distribution cannot be empty")
+            }
+
+            Self::CountTotalOverflow => {
+                write!(f, "count distribution total overflowed u64")
+            }
+
+            Self::CountConversionOverflow => {
+                write!(f, "probability-to-count conversion overflowed")
+            }
+
+            Self::InvalidCountConversion => {
+                write!(
+                    f,
+                    "probability-to-count conversion cannot satisfy the \
+                     requested constraints"
+                )
+            }
+
+            Self::InvalidWeight { weight } => {
+                write!(
+                    f,
+                    "weight must be finite and non-negative, received {weight}"
+                )
+            }
+
+            Self::ZeroTotalWeight => {
+                write!(f, "weighted probability has zero total weight")
+            }
+
+            Self::InvalidInterval { lower, upper } => {
+                write!(
+                    f,
+                    "invalid probability interval [{lower}, {upper}]"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProbabilityError {}
+
+/// A validated probability.
+///
+/// This newtype prevents higher-level benchmark code from accidentally
+/// treating arbitrary `f64` values as probabilities.
+///
+/// Construction is fallible by design.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Probability(f64);
+
+impl Probability {
+    /// Creates a validated probability.
+    ///
+    /// Accepts the closed interval `[0, 1]`.
+    pub fn new(value: f64) -> Result<Self, ProbabilityError> {
+        validate_probability(value)?;
+        Ok(Self(value))
+    }
+
+    /// Returns the underlying floating-point value.
+    #[inline]
+    pub fn value(self) -> f64 {
+        self.0
+    }
+
+    /// Returns `true` when the probability is exactly zero.
+    #[inline]
+    pub fn is_zero(self) -> bool {
+        self.0 == PROBABILITY_ZERO
+    }
+
+    /// Returns `true` when the probability is exactly one.
+    #[inline]
+    pub fn is_one(self) -> bool {
+        self.0 == PROBABILITY_ONE
+    }
+
+    /// Returns the complementary probability `1 - p`.
+    ///
+    /// Because `p` has already been validated, the result is guaranteed to
+    /// remain in `[0, 1]` subject only to IEEE-754 arithmetic.
+    #[inline]
+    pub fn complement(self) -> Self {
+        Self(1.0 - self.0)
+    }
+
+    /// Clamps a numerically-near boundary value into `[0, 1]`.
+    ///
+    /// This method is intentionally separate from [`Probability::new`]:
+    /// callers must explicitly opt into boundary correction rather than having
+    /// invalid data silently changed.
+    pub fn clamped(value: f64) -> Result<Self, ProbabilityError> {
+        if !value.is_finite() {
+            return Err(ProbabilityError::NonFinite { value });
+        }
+
+        let corrected = if value < 0.0 && value >= -DEFAULT_NORMALIZATION_TOLERANCE
+        {
+            0.0
+        } else if value > 1.0
+            && value <= 1.0 + DEFAULT_NORMALIZATION_TOLERANCE
+        {
+            1.0
+        } else {
+            value
+        };
+
+        Self::new(corrected)
+    }
+}
+
+impl From<Probability> for f64 {
+    #[inline]
+    fn from(probability: Probability) -> Self {
+        probability.value()
+    }
+}
+
+/// Validates one probability value.
+///
+/// A probability is valid iff it is finite and lies in `[0, 1]`.
+pub fn validate_probability(value: f64) -> Result<(), ProbabilityError> {
+    if !value.is_finite() {
+        return Err(ProbabilityError::NonFinite { value });
+    }
+
+    if !(0.0..=1.0).contains(&value) {
+        return Err(ProbabilityError::OutOfRange { value });
+    }
+
+    Ok(())
+}
+
+/// Returns whether a value is a valid probability.
+///
+/// This is the non-panicking predicate form of [`validate_probability`].
+#[inline]
+pub fn is_valid_probability(value: f64) -> bool {
+    value.is_finite() && (0.0..=1.0).contains(&value)
+}
+
+/// Validates a normalization tolerance.
+///
+/// The tolerance is absolute and symmetric around one.
+pub fn validate_normalization_tolerance(
+    tolerance: f64,
+) -> Result<(), ProbabilityError> {
+    if !tolerance.is_finite()
+        || tolerance < MIN_NORMALIZATION_TOLERANCE
+        || tolerance > MAX_NORMALIZATION_TOLERANCE
+    {
+        return Err(ProbabilityError::InvalidTolerance { tolerance });
+    }
+
+    Ok(())
+}
+
+/// Validates an interval of probability values.
+pub fn validate_probability_interval(
+    lower: f64,
+    upper: f64,
+) -> Result<(), ProbabilityError> {
+    validate_probability(lower)?;
+    validate_probability(upper)?;
+
+    if lower > upper {
+        return Err(ProbabilityError::InvalidInterval { lower, upper });
+    }
+
+    Ok(())
+}
+
+/// Calculates the empirical probability of an event.
+///
+/// ```text
+/// p = events / samples
+/// ```
+pub fn empirical_probability(
+    events: u64,
+    samples: u64,
+) -> Result<Probability, ProbabilityError> {
+    if samples == 0 {
+        return Err(ProbabilityError::ZeroSamples);
+    }
+
+    if events > samples {
+        return Err(ProbabilityError::CountExceedsSamples {
+            events,
+            samples,
+        });
+    }
+
+    let probability = events as f64 / samples as f64;
+
+    Probability::new(probability)
+}
+
+/// Converts a probability into an expected count.
+///
+/// This does NOT round the result. It returns the mathematical expected count
+/// as `f64`.
+///
+/// Use [`probability_to_count`] when an integer count is required.
+pub fn expected_count(
+    probability: f64,
+    samples: u64,
+) -> Result<f64, ProbabilityError> {
+    validate_probability(probability)?;
+
+    let result = probability * samples as f64;
+
+    if !result.is_finite() {
+        return Err(ProbabilityError::CountConversionOverflow);
+    }
+
+    Ok(result)
+}
+
+/// Converts a probability into an integer count using nearest-integer
+/// rounding.
+///
+/// This function is intended for metadata reconstruction when a backend
+/// supplied a probability but not the original count.
+///
+/// It must NOT be interpreted as recovering the original count exactly.
+///
+/// The returned count is guaranteed to be no greater than `samples`.
+pub fn probability_to_count(
+    probability: f64,
+    samples: u64,
+) -> Result<u64, ProbabilityError> {
+    validate_probability(probability)?;
+
+    if samples == 0 {
+        return Err(ProbabilityError::ZeroSamples);
+    }
+
+    let expected = expected_count(probability, samples)?;
+
+    if expected > u64::MAX as f64 {
+        return Err(ProbabilityError::CountConversionOverflow);
+    }
+
+    let rounded = expected.round();
+
+    if rounded < 0.0 || rounded > samples as f64 {
+        return Err(ProbabilityError::InvalidCountConversion);
+    }
+
+    Ok(rounded as u64)
+}
+
+/// Converts an event count and sample count into a probability.
+///
+/// This is the preferred operation when raw experimental counts are
+/// available, because it preserves the original observation model.
+pub fn counts_to_probability(
+    events: u64,
+    samples: u64,
+) -> Result<Probability, ProbabilityError> {
+    empirical_probability(events, samples)
+}
+
+/// Computes the complement of a probability.
+///
+/// Equivalent to:
+///
+/// ```text
+/// 1 - p
+/// ```
+pub fn complement_probability(
+    probability: f64,
+) -> Result<Probability, ProbabilityError> {
+    Probability::new(probability)?.into_complement()
+}
+
+impl Probability {
+    fn into_complement(self) -> Result<Probability, ProbabilityError> {
+        Probability::new(1.0 - self.0)
+    }
+}
+
+/// Computes the arithmetic mean of validated probability values.
+///
+/// The result is itself validated as a probability.
+pub fn mean_probability(
+    probabilities: &[f64],
+) -> Result<Probability, ProbabilityError> {
+    if probabilities.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    /*
+     * Kahan-style compensated summation reduces accumulation error for large
+     * benchmark result sets.
+     */
+    let mut sum = 0.0;
+    let mut compensation = 0.0;
+
+    for (index, &value) in probabilities.iter().enumerate() {
+        if let Err(_) = validate_probability(value) {
+            return Err(ProbabilityError::InvalidDistributionElement {
+                index,
+                value,
+            });
+        }
+
+        let adjusted = value - compensation;
+        let next = sum + adjusted;
+        compensation = (next - sum) - adjusted;
+        sum = next;
+    }
+
+    let mean = sum / probabilities.len() as f64;
+
+    Probability::new(mean)
+}
+
+/// Computes a weighted mean of probabilities.
+///
+/// Weights must be finite and non-negative. At least one weight must be
+/// positive.
+pub fn weighted_mean_probability(
+    probabilities: &[f64],
+    weights: &[f64],
+) -> Result<Probability, ProbabilityError> {
+    if probabilities.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    if probabilities.len() != weights.len() {
+        return Err(ProbabilityError::InvalidCountConversion);
+    }
+
+    let mut weighted_sum = 0.0;
+    let mut total_weight = 0.0;
+
+    let mut weighted_compensation = 0.0;
+    let mut weight_compensation = 0.0;
+
+    for index in 0..probabilities.len() {
+        let probability = probabilities[index];
+        let weight = weights[index];
+
+        if let Err(_) = validate_probability(probability) {
+            return Err(ProbabilityError::InvalidDistributionElement {
+                index,
+                value: probability,
+            });
+        }
+
+        if !weight.is_finite() || weight < 0.0 {
+            return Err(ProbabilityError::InvalidWeight { weight });
+        }
+
+        let weighted = probability * weight;
+
+        if !weighted.is_finite() {
+            return Err(ProbabilityError::NonFinite { value: weighted });
+        }
+
+        let adjusted_weighted = weighted - weighted_compensation;
+        let next_weighted = weighted_sum + adjusted_weighted;
+        weighted_compensation =
+            (next_weighted - weighted_sum) - adjusted_weighted;
+        weighted_sum = next_weighted;
+
+        let adjusted_weight = weight - weight_compensation;
+        let next_weight = total_weight + adjusted_weight;
+        weight_compensation =
+            (next_weight - total_weight) - adjusted_weight;
+        total_weight = next_weight;
+    }
+
+    if !total_weight.is_finite() {
+        return Err(ProbabilityError::NonFinite {
+            value: total_weight,
+        });
+    }
+
+    if total_weight <= 0.0 {
+        return Err(ProbabilityError::ZeroTotalWeight);
+    }
+
+    Probability::new(weighted_sum / total_weight)
+}
+
+/// Returns the sum of a probability slice using compensated summation.
+///
+/// Unlike [`validate_distribution`], this function does not require the sum to
+/// be one. It is useful for unnormalized probability weights.
+pub fn sum_probabilities(
+    probabilities: &[f64],
+) -> Result<f64, ProbabilityError> {
+    if probabilities.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    let mut sum = 0.0;
+    let mut compensation = 0.0;
+
+    for (index, &value) in probabilities.iter().enumerate() {
+        if let Err(_) = validate_probability(value) {
+            return Err(ProbabilityError::InvalidDistributionElement {
+                index,
+                value,
+            });
+        }
+
+        let adjusted = value - compensation;
+        let next = sum + adjusted;
+        compensation = (next - sum) - adjusted;
+        sum = next;
+    }
+
+    if !sum.is_finite() {
+        return Err(ProbabilityError::NonFinite { value: sum });
+    }
+
+    Ok(sum)
+}
+
+/// Validates that a probability vector is normalized.
+///
+/// The values must each be valid probabilities and their sum must be within
+/// `tolerance` of one.
+pub fn validate_distribution(
+    probabilities: &[f64],
+    tolerance: f64,
+) -> Result<(), ProbabilityError> {
+    validate_normalization_tolerance(tolerance)?;
+
+    if probabilities.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    let sum = sum_probabilities(probabilities)?;
+
+    if (sum - 1.0).abs() > tolerance {
+        return Err(ProbabilityError::NotNormalized {
+            sum,
+            tolerance,
+        });
+    }
+
+    Ok(())
+}
+
+/// Returns whether a probability vector is normalized.
+///
+/// Invalid input returns `false` rather than panicking.
+pub fn is_normalized(
+    probabilities: &[f64],
+    tolerance: f64,
+) -> bool {
+    validate_distribution(probabilities, tolerance).is_ok()
+}
+
+/// Normalizes non-negative probability weights into a probability
+/// distribution.
+///
+/// This function accepts values in `[0, 1]` because the source is still
+/// interpreted as probability-domain data. It does not accept arbitrary
+/// negative or non-finite weights.
+pub fn normalize(
+    probabilities: &[f64],
+) -> Result<Vec<f64>, ProbabilityError> {
+    if probabilities.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    let sum = sum_probabilities(probabilities)?;
+
+    if sum <= 0.0 {
+        return Err(ProbabilityError::ZeroTotalWeight);
+    }
+
+    let mut normalized = Vec::with_capacity(probabilities.len());
+
+    for &value in probabilities {
+        let normalized_value = value / sum;
+
+        if !normalized_value.is_finite() {
+            return Err(ProbabilityError::NonFinite {
+                value: normalized_value,
+            });
+        }
+
+        normalized.push(normalized_value);
+    }
+
+    /*
+     * Re-normalize once after division to reduce accumulated floating-point
+     * drift. The result is still validated rather than blindly trusted.
+     */
+    let normalized_sum = sum_probabilities(&normalized)?;
+
+    if normalized_sum <= 0.0 || !normalized_sum.is_finite() {
+        return Err(ProbabilityError::ZeroTotalWeight);
+    }
+
+    for value in &mut normalized {
+        *value /= normalized_sum;
+    }
+
+    validate_distribution(
+        &normalized,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    Ok(normalized)
+}
+
+/// A validated empirical probability distribution.
+///
+/// This representation is appropriate for measurement results, sampling
+/// distributions, readout distributions, RCS distributions, and XEB inputs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProbabilityDistribution {
+    probabilities: Vec<Probability>,
+}
+
+impl ProbabilityDistribution {
+    /// Constructs a distribution from already-normalized probabilities.
+    pub fn new(
+        probabilities: Vec<f64>,
+    ) -> Result<Self, ProbabilityError> {
+        Self::with_tolerance(
+            probabilities,
+            DEFAULT_NORMALIZATION_TOLERANCE,
+        )
+    }
+
+    /// Constructs a distribution with an explicit normalization tolerance.
+    pub fn with_tolerance(
+        probabilities: Vec<f64>,
+        tolerance: f64,
+    ) -> Result<Self, ProbabilityError> {
+        validate_distribution(&probabilities, tolerance)?;
+
+        let mut validated = Vec::with_capacity(probabilities.len());
+
+        for value in probabilities {
+            validated.push(Probability::new(value)?);
+        }
+
+        Ok(Self {
+            probabilities: validated,
+        })
+    }
+
+    /// Constructs a normalized distribution from probability weights.
+    pub fn from_weights(
+        probabilities: &[f64],
+    ) -> Result<Self, ProbabilityError> {
+        let normalized = normalize(probabilities)?;
+        Self::new(normalized)
+    }
+
+    /// Returns the number of outcomes represented.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.probabilities.len()
+    }
+
+    /// Returns whether the distribution has no outcomes.
+    ///
+    /// A valid `ProbabilityDistribution` is never empty, so this method is
+    /// mainly provided for ergonomic generic code.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.probabilities.is_empty()
+    }
+
+    /// Returns the probability at an index.
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<Probability> {
+        self.probabilities.get(index).copied()
+    }
+
+    /// Returns the probability at an index as `f64`.
+    #[inline]
+    pub fn value(&self, index: usize) -> Option<f64> {
+        self.get(index).map(Probability::value)
+    }
+
+    /// Returns the distribution as a slice of validated probabilities.
+    #[inline]
+    pub fn as_probabilities(&self) -> &[Probability] {
+        &self.probabilities
+    }
+
+    /// Returns a newly allocated `Vec<f64>`.
+    pub fn to_vec(&self) -> Vec<f64> {
+        self.probabilities
+            .iter()
+            .map(|probability| probability.value())
+            .collect()
+    }
+
+    /// Returns the sum of all probabilities.
+    ///
+    /// A valid distribution should return a value extremely close to one.
+    pub fn sum(&self) -> f64 {
+        /*
+         * Construction has already validated every element and the
+         * normalization invariant, therefore this cannot fail.
+         */
+        let mut sum = 0.0;
+        let mut compensation = 0.0;
+
+        for probability in &self.probabilities {
+            let value = probability.value();
+            let adjusted = value - compensation;
+            let next = sum + adjusted;
+            compensation = (next - sum) - adjusted;
+            sum = next;
+        }
+
+        sum
+    }
+
+    /// Returns the probability of the specified outcome.
+    pub fn probability_of(&self, index: usize) -> Option<Probability> {
+        self.get(index)
+    }
+
+    /// Returns the largest probability in the distribution.
+    pub fn maximum(&self) -> Probability {
+        /*
+         * A valid distribution is guaranteed non-empty by construction.
+         */
+        let mut maximum = self.probabilities[0];
+
+        for probability in &self.probabilities[1..] {
+            if probability.value() > maximum.value() {
+                maximum = *probability;
+            }
+        }
+
+        maximum
+    }
+
+    /// Returns the smallest probability in the distribution.
+    pub fn minimum(&self) -> Probability {
+        /*
+         * A valid distribution is guaranteed non-empty by construction.
+         */
+        let mut minimum = self.probabilities[0];
+
+        for probability in &self.probabilities[1..] {
+            if probability.value() < minimum.value() {
+                minimum = *probability;
+            }
+        }
+
+        minimum
+    }
+}
+
+/// Converts non-negative integer counts into a normalized probability
+/// distribution.
+///
+/// The vector index represents the outcome identifier. For bitstrings or
+/// arbitrary outcome identifiers, callers should maintain their own mapping
+/// at the observation layer.
+pub fn counts_to_distribution(
+    counts: &[u64],
+) -> Result<ProbabilityDistribution, ProbabilityError> {
+    if counts.is_empty() {
+        return Err(ProbabilityError::EmptyCounts);
+    }
+
+    let mut total = 0u64;
+
+    for &count in counts {
+        total = total
+            .checked_add(count)
+            .ok_or(ProbabilityError::CountTotalOverflow)?;
+    }
+
+    if total == 0 {
+        return Err(ProbabilityError::EmptyCounts);
+    }
+
+    let total_f64 = total as f64;
+
+    let probabilities = counts
+        .iter()
+        .map(|&count| count as f64 / total_f64)
+        .collect::<Vec<_>>();
+
+    ProbabilityDistribution::new(probabilities)
+}
+
+/// Converts a normalized probability distribution into approximate integer
+/// counts for a requested number of samples.
+///
+/// The largest-remainder method is used so that:
+///
+/// * every returned count is non-negative,
+/// * the total returned count is exactly `samples`,
+/// * the allocation minimizes the ordinary rounding discrepancy subject to
+///   the integer constraint.
+///
+/// This is a reconstruction operation. It cannot recover the original raw
+/// counts when only probabilities are available.
+pub fn distribution_to_counts(
+    distribution: &ProbabilityDistribution,
+    samples: u64,
+) -> Result<Vec<u64>, ProbabilityError> {
+    if samples == 0 {
+        return Err(ProbabilityError::ZeroSamples);
+    }
+
+    if distribution.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    /*
+     * Each ideal count is p_i * N.
+     *
+     * We initially assign floor(ideal_count). The remaining samples are then
+     * allocated according to the largest fractional remainders.
+     */
+    let mut counts = Vec::with_capacity(distribution.len());
+    let mut remainders = Vec::with_capacity(distribution.len());
+
+    let mut assigned = 0u64;
+
+    for (index, probability) in distribution.as_probabilities().iter().enumerate()
+    {
+        let ideal = probability.value() * samples as f64;
+
+        if !ideal.is_finite() {
+            return Err(ProbabilityError::CountConversionOverflow);
+        }
+
+        if ideal < 0.0 || ideal > samples as f64 {
+            return Err(ProbabilityError::InvalidCountConversion);
+        }
+
+        let floor_value = ideal.floor();
+
+        if floor_value > u64::MAX as f64 {
+            return Err(ProbabilityError::CountConversionOverflow);
+        }
+
+        let base = floor_value as u64;
+
+        assigned = assigned
+            .checked_add(base)
+            .ok_or(ProbabilityError::IntegerOverflow)?;
+
+        counts.push(base);
+
+        remainders.push((ideal - floor_value, index));
+    }
+
+    if assigned > samples {
+        return Err(ProbabilityError::InvalidCountConversion);
+    }
+
+    let mut remaining = samples - assigned;
+
+    /*
+     * Number of outcomes is normally small for quantum measurements, but the
+     * sort is intentionally deterministic: equal fractional parts are broken
+     * by lower outcome index.
+     */
+    remainders.sort_by(|left, right| {
+        right
+            .0
+            .partial_cmp(&left.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.1.cmp(&right.1))
+    });
+
+    let mut position = 0usize;
+
+    while remaining > 0 {
+        if position >= remainders.len() {
+            return Err(ProbabilityError::InvalidCountConversion);
+        }
+
+        let index = remainders[position].1;
+
+        counts[index] = counts[index]
+            .checked_add(1)
+            .ok_or(ProbabilityError::IntegerOverflow)?;
+
+        remaining -= 1;
+        position += 1;
+    }
+
+    /*
+     * The largest-remainder allocation guarantees exact total preservation.
+     * Keep an explicit check because this is a scientific data boundary.
+     */
+    let reconstructed_total = counts.iter().try_fold(
+        0u64,
+        |accumulator, &count| {
+            accumulator
+                .checked_add(count)
+                .ok_or(ProbabilityError::CountTotalOverflow)
+        },
+    )?;
+
+    if reconstructed_total != samples {
+        return Err(ProbabilityError::InvalidCountConversion);
+    }
+
+    Ok(counts)
+}
+
+/// Computes the total variation distance between two probability
+/// distributions.
+///
+/// ```text
+/// TV(P, Q) = 1/2 * Σ |P_i - Q_i|
+/// ```
+///
+/// Both distributions must have the same number of outcomes.
+pub fn total_variation_distance(
+    left: &[f64],
+    right: &[f64],
+) -> Result<Probability, ProbabilityError> {
+    if left.is_empty() || right.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    if left.len() != right.len() {
+        return Err(ProbabilityError::InvalidCountConversion);
+    }
+
+    validate_distribution(
+        left,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    validate_distribution(
+        right,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    let mut distance = 0.0;
+    let mut compensation = 0.0;
+
+    for index in 0..left.len() {
+        let difference = (left[index] - right[index]).abs();
+
+        let adjusted = difference - compensation;
+        let next = distance + adjusted;
+        compensation = (next - distance) - adjusted;
+        distance = next;
+    }
+
+    Probability::new(0.5 * distance)
+}
+
+/// Computes the classical fidelity between two probability distributions.
+///
+/// ```text
+/// F(P,Q) = Σ sqrt(P_i Q_i)
+/// ```
+///
+/// This is the classical Bhattacharyya coefficient. It lies in `[0, 1]`.
+pub fn classical_fidelity(
+    left: &[f64],
+    right: &[f64],
+) -> Result<Probability, ProbabilityError> {
+    if left.is_empty() || right.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    if left.len() != right.len() {
+        return Err(ProbabilityError::InvalidCountConversion);
+    }
+
+    validate_distribution(
+        left,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    validate_distribution(
+        right,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    let mut fidelity = 0.0;
+    let mut compensation = 0.0;
+
+    for index in 0..left.len() {
+        let term = (left[index] * right[index]).sqrt();
+
+        if !term.is_finite() {
+            return Err(ProbabilityError::NonFinite { value: term });
+        }
+
+        let adjusted = term - compensation;
+        let next = fidelity + adjusted;
+        compensation = (next - fidelity) - adjusted;
+        fidelity = next;
+    }
+
+    /*
+     * Round-off can produce values microscopically outside the mathematical
+     * interval. Use the explicit boundary-aware constructor.
+     */
+    Probability::clamped(fidelity)
+}
+
+/// Computes the squared Hellinger distance between two probability
+/// distributions.
+///
+/// ```text
+/// H²(P,Q) = 1 - Σ sqrt(P_i Q_i)
+/// ```
+pub fn squared_hellinger_distance(
+    left: &[f64],
+    right: &[f64],
+) -> Result<Probability, ProbabilityError> {
+    let fidelity = classical_fidelity(left, right)?;
+    Probability::clamped(1.0 - fidelity.value())
+}
+
+/// Computes the Hellinger distance between two probability distributions.
+///
+/// ```text
+/// H(P,Q) = sqrt(1 - Σ sqrt(P_i Q_i))
+/// ```
+pub fn hellinger_distance(
+    left: &[f64],
+    right: &[f64],
+) -> Result<f64, ProbabilityError> {
+    let squared = squared_hellinger_distance(left, right)?;
+    Ok(squared.value().sqrt())
+}
+
+/// Computes the cross-entropy contribution of sampled outcomes against an
+/// ideal probability distribution.
+///
+/// The `sampled_probabilities` slice represents the empirical probability of
+/// each observed outcome and `ideal_probabilities` represents the ideal
+/// probability distribution.
+///
+/// ```text
+/// H(P, Q) = -Σ P_i log(Q_i)
+/// ```
+///
+/// Zero empirical probability contributes zero, even when the corresponding
+/// ideal probability is zero. A positive empirical probability paired with a
+/// zero ideal probability yields positive infinity mathematically and is
+/// rejected as `NonFinite`.
+///
+/// The natural logarithm is used.
+pub fn cross_entropy(
+    sampled_probabilities: &[f64],
+    ideal_probabilities: &[f64],
+) -> Result<f64, ProbabilityError> {
+    if sampled_probabilities.is_empty()
+        || ideal_probabilities.is_empty()
+    {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    if sampled_probabilities.len() != ideal_probabilities.len() {
+        return Err(ProbabilityError::InvalidCountConversion);
+    }
+
+    validate_distribution(
+        sampled_probabilities,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    validate_distribution(
+        ideal_probabilities,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    let mut entropy = 0.0;
+    let mut compensation = 0.0;
+
+    for index in 0..sampled_probabilities.len() {
+        let sampled = sampled_probabilities[index];
+        let ideal = ideal_probabilities[index];
+
+        if sampled == 0.0 {
+            continue;
+        }
+
+        if ideal == 0.0 {
+            /*
+             * Cross entropy is mathematically +∞ here. Returning a finite
+             * sentinel would silently corrupt downstream XEB analysis, so
+             * reject it.
+             */
+            return Err(ProbabilityError::NonFinite {
+                value: f64::INFINITY,
+            });
+        }
+
+        let contribution = -sampled * ideal.ln();
+
+        if !contribution.is_finite() {
+            return Err(ProbabilityError::NonFinite {
+                value: contribution,
+            });
+        }
+
+        let adjusted = contribution - compensation;
+        let next = entropy + adjusted;
+        compensation = (next - entropy) - adjusted;
+        entropy = next;
+    }
+
+    Ok(entropy)
+}
+
+/// Computes the Shannon entropy of a probability distribution.
+///
+/// ```text
+/// H(P) = -Σ P_i log(P_i)
+/// ```
+///
+/// Natural logarithms are used, so the result is measured in nats.
+pub fn shannon_entropy(
+    probabilities: &[f64],
+) -> Result<f64, ProbabilityError> {
+    validate_distribution(
+        probabilities,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    let mut entropy = 0.0;
+    let mut compensation = 0.0;
+
+    for &probability in probabilities {
+        if probability == 0.0 {
+            continue;
+        }
+
+        let contribution = -probability * probability.ln();
+
+        if !contribution.is_finite() {
+            return Err(ProbabilityError::NonFinite {
+                value: contribution,
+            });
+        }
+
+        let adjusted = contribution - compensation;
+        let next = entropy + adjusted;
+        compensation = (next - entropy) - adjusted;
+        entropy = next;
+    }
+
+    Ok(entropy)
+}
+
+/// Computes the perplexity of a probability distribution.
+///
+/// ```text
+/// perplexity = exp(H(P))
+/// ```
+pub fn perplexity(
+    probabilities: &[f64],
+) -> Result<f64, ProbabilityError> {
+    let entropy = shannon_entropy(probabilities)?;
+    let result = entropy.exp();
+
+    if !result.is_finite() {
+        return Err(ProbabilityError::NonFinite { value: result });
+    }
+
+    Ok(result)
+}
+
+/// Calculates the probability mass contained in a set of outcome indices.
+///
+/// Duplicate indices are allowed and are counted only once. This makes the
+/// function safe for callers constructing heavy-output or success-output sets
+/// from external data.
+pub fn probability_mass(
+    probabilities: &[f64],
+    indices: &[usize],
+) -> Result<Probability, ProbabilityError> {
+    validate_distribution(
+        probabilities,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    if indices.is_empty() {
+        return Probability::new(0.0);
+    }
+
+    let mut sorted_indices = indices.to_vec();
+
+    sorted_indices.sort_unstable();
+    sorted_indices.dedup();
+
+    let mut mass = 0.0;
+    let mut compensation = 0.0;
+
+    for index in sorted_indices {
+        let value = probabilities
+            .get(index)
+            .copied()
+            .ok_or(ProbabilityError::InvalidCountConversion)?;
+
+        let adjusted = value - compensation;
+        let next = mass + adjusted;
+        compensation = (next - mass) - adjusted;
+        mass = next;
+    }
+
+    Probability::clamped(mass)
+}
+
+/// Calculates the probability mass of all outcomes satisfying a predicate.
+///
+/// This is useful for protocol-specific definitions such as heavy-output
+/// sets, successful computational states, accepted solutions, or syndrome
+/// classes.
+pub fn probability_mass_where<F>(
+    probabilities: &[f64],
+    mut predicate: F,
+) -> Result<Probability, ProbabilityError>
+where
+    F: FnMut(usize, Probability) -> bool,
+{
+    validate_distribution(
+        probabilities,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    let mut mass = 0.0;
+    let mut compensation = 0.0;
+
+    for (index, &value) in probabilities.iter().enumerate() {
+        let probability = Probability::new(value)?;
+
+        if predicate(index, probability) {
+            let adjusted = value - compensation;
+            let next = mass + adjusted;
+            compensation = (next - mass) - adjusted;
+            mass = next;
+        }
+    }
+
+    Probability::clamped(mass)
+}
+
+/// Calculates the probability of an event from a weighted collection of
+/// Bernoulli observations.
+///
+/// This is equivalent to:
+///
+/// ```text
+/// Σ weights_i * event_i / Σ weights_i
+/// ```
+///
+/// The event values must be exactly `0` or `1`.
+pub fn weighted_event_probability(
+    events: &[bool],
+    weights: &[f64],
+) -> Result<Probability, ProbabilityError> {
+    if events.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    if events.len() != weights.len() {
+        return Err(ProbabilityError::InvalidCountConversion);
+    }
+
+    let mut event_weight = 0.0;
+    let mut total_weight = 0.0;
+
+    for &weight in weights {
+        if !weight.is_finite() || weight < 0.0 {
+            return Err(ProbabilityError::InvalidWeight { weight });
+        }
+
+        total_weight += weight;
+
+        if !total_weight.is_finite() {
+            return Err(ProbabilityError::NonFinite {
+                value: total_weight,
+            });
+        }
+    }
+
+    if total_weight <= 0.0 {
+        return Err(ProbabilityError::ZeroTotalWeight);
+    }
+
+    for index in 0..events.len() {
+        if events[index] {
+            event_weight += weights[index];
+
+            if !event_weight.is_finite() {
+                return Err(ProbabilityError::NonFinite {
+                    value: event_weight,
+                });
+            }
+        }
+    }
+
+    Probability::new(event_weight / total_weight)
+}
+
+/// Converts a boolean observation vector into an empirical probability.
+///
+/// `true` is interpreted as an event and `false` as a non-event.
+pub fn boolean_event_probability(
+    observations: &[bool],
+) -> Result<Probability, ProbabilityError> {
+    if observations.is_empty() {
+        return Err(ProbabilityError::ZeroSamples);
+    }
+
+    let events = observations.iter().filter(|&&event| event).count();
+
+    empirical_probability(events as u64, observations.len() as u64)
+}
+
+/// Converts a sequence of integer outcomes into a count distribution.
+///
+/// The caller supplies the number of possible outcomes. Every outcome must be
+/// less than `outcome_count`.
+///
+/// This is useful for compact measurement/sample buffers.
+pub fn outcomes_to_counts(
+    outcomes: &[usize],
+    outcome_count: usize,
+) -> Result<Vec<u64>, ProbabilityError> {
+    if outcome_count == 0 {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    if outcomes.is_empty() {
+        return Err(ProbabilityError::ZeroSamples);
+    }
+
+    let mut counts = vec![0u64; outcome_count];
+
+    for &outcome in outcomes {
+        let count = counts
+            .get_mut(outcome)
+            .ok_or(ProbabilityError::InvalidCountConversion)?;
+
+        *count = count
+            .checked_add(1)
+            .ok_or(ProbabilityError::IntegerOverflow)?;
+    }
+
+    Ok(counts)
+}
+
+/// Returns the probability of a particular outcome from raw counts.
+///
+/// This avoids forcing callers to construct a complete distribution when only
+/// one outcome is required.
+pub fn outcome_probability(
+    counts: &[u64],
+    outcome: usize,
+) -> Result<Probability, ProbabilityError> {
+    if counts.is_empty() {
+        return Err(ProbabilityError::EmptyCounts);
+    }
+
+    let selected = counts
+        .get(outcome)
+        .copied()
+        .ok_or(ProbabilityError::InvalidCountConversion)?;
+
+    let total = counts.iter().try_fold(0u64, |accumulator, &count| {
+        accumulator
+            .checked_add(count)
+            .ok_or(ProbabilityError::CountTotalOverflow)
+    })?;
+
+    empirical_probability(selected, total)
+}
+
+/// Returns the probability of a collection of outcomes from raw counts.
+///
+/// Duplicate outcome indices are counted once.
+pub fn outcome_set_probability(
+    counts: &[u64],
+    outcomes: &[usize],
+) -> Result<Probability, ProbabilityError> {
+    if counts.is_empty() {
+        return Err(ProbabilityError::EmptyCounts);
+    }
+
+    let total = counts.iter().try_fold(0u64, |accumulator, &count| {
+        accumulator
+            .checked_add(count)
+            .ok_or(ProbabilityError::CountTotalOverflow)
+    })?;
+
+    if total == 0 {
+        return Err(ProbabilityError::EmptyCounts);
+    }
+
+    if outcomes.is_empty() {
+        return Probability::new(0.0);
+    }
+
+    let mut unique = outcomes.to_vec();
+    unique.sort_unstable();
+    unique.dedup();
+
+    let mut selected = 0u64;
+
+    for outcome in unique {
+        let count = counts
+            .get(outcome)
+            .copied()
+            .ok_or(ProbabilityError::InvalidCountConversion)?;
+
+        selected = selected
+            .checked_add(count)
+            .ok_or(ProbabilityError::CountTotalOverflow)?;
+    }
+
+    empirical_probability(selected, total)
+}
+
+/// Computes the L1 distance between two normalized probability
+/// distributions.
+///
+/// This is useful as a lower-level primitive for metrics such as total
+/// variation distance.
+pub fn l1_distance(
+    left: &[f64],
+    right: &[f64],
+) -> Result<f64, ProbabilityError> {
+    if left.is_empty() || right.is_empty() {
+        return Err(ProbabilityError::EmptyDistribution);
+    }
+
+    if left.len() != right.len() {
+        return Err(ProbabilityError::InvalidCountConversion);
+    }
+
+    validate_distribution(
+        left,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    validate_distribution(
+        right,
+        DEFAULT_NORMALIZATION_TOLERANCE,
+    )?;
+
+    let mut distance = 0.0;
+    let mut compensation = 0.0;
+
+    for index in 0..left.len() {
+        let difference = (left[index] - right[index]).abs();
+
+        let adjusted = difference - compensation;
+        let next = distance + adjusted;
+        compensation = (next - distance) - adjusted;
+        distance = next;
+    }
+
+    if !distance.is_finite() {
+        return Err(ProbabilityError::NonFinite {
+            value: distance,
+        });
+    }
+
+    Ok(distance)
+}
+
+/// Computes the total probability mass of a distribution.
+///
+/// This is primarily a convenience wrapper around [`sum_probabilities`].
+pub fn total_probability_mass(
+    probabilities: &[f64],
+) -> Result<f64, ProbabilityError> {
+    sum_probabilities(probabilities)
+}
+
+/// Returns the probability mass not contained in a supplied outcome set.
+pub fn complement_probability_mass(
+    probabilities: &[f64],
+    indices: &[usize],
+) -> Result<Probability, ProbabilityError> {
+    let selected = probability_mass(probabilities, indices)?;
+    selected.into_complement()
+}
+
+/// Returns whether a probability is effectively zero within the supplied
+/// tolerance.
+///
+/// This is deliberately not named `is_zero` because it represents an
+/// application-defined numerical tolerance rather than exact mathematical
+/// equality.
+pub fn is_effectively_zero(
+    probability: f64,
+    tolerance: f64,
+) -> Result<bool, ProbabilityError> {
+    validate_probability(probability)?;
+
+    if !tolerance.is_finite() || tolerance < 0.0 {
+        return Err(ProbabilityError::InvalidTolerance { tolerance });
+    }
+
+    Ok(probability <= tolerance)
+}
+
+/// Returns whether a probability is effectively one within the supplied
+/// tolerance.
+pub fn is_effectively_one(
+    probability: f64,
+    tolerance: f64,
+) -> Result<bool, ProbabilityError> {
+    validate_probability(probability)?;
+
+    if !tolerance.is_finite() || tolerance < 0.0 {
+        return Err(ProbabilityError::InvalidTolerance { tolerance });
+    }
+
+    Ok((1.0 - probability) <= tolerance)
+}
+
+/// Tests whether two probability values are approximately equal within an
+/// absolute tolerance.
+pub fn approximately_equal(
+    left: f64,
+    right: f64,
+    tolerance: f64,
+) -> Result<bool, ProbabilityError> {
+    validate_probability(left)?;
+    validate_probability(right)?;
+
+    if !tolerance.is_finite() || tolerance < 0.0 {
+        return Err(ProbabilityError::InvalidTolerance { tolerance });
+    }
+
+    Ok((left - right).abs() <= tolerance)
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probability_accepts_closed_unit_interval() {
+        assert_eq!(
+            Probability::new(0.0)
+                .expect("zero is valid")
+                .value(),
+            0.0
+        );
+
+        assert_eq!(
+            Probability::new(1.0)
+                .expect("one is valid")
+                .value(),
+            1.0
+        );
+    }
+
+    #[test]
+    fn probability_rejects_negative_values() {
+        assert!(matches!(
+            Probability::new(-0.000_001),
+            Err(ProbabilityError::OutOfRange { .. })
+        ));
+    }
+
+    #[test]
+    fn probability_rejects_values_above_one() {
+        assert!(matches!(
+            Probability::new(1.000_001),
+            Err(ProbabilityError::OutOfRange { .. })
+        ));
+    }
+
+    #[test]
+    fn probability_rejects_nan() {
+        assert!(matches!(
+            Probability::new(f64::NAN),
+            Err(ProbabilityError::NonFinite { .. })
+        ));
+    }
+
+    #[test]
+    fn probability_rejects_positive_infinity() {
+        assert!(matches!(
+            Probability::new(f64::INFINITY),
+            Err(ProbabilityError::NonFinite { .. })
+        ));
+    }
+
+    #[test]
+    fn probability_rejects_negative_infinity() {
+        assert!(matches!(
+            Probability::new(f64::NEG_INFINITY),
+            Err(ProbabilityError::NonFinite { .. })
+        ));
+    }
+
+    #[test]
+    fn empirical_probability_is_exact_for_simple_ratio() {
+        let probability =
+            empirical_probability(25, 100).expect("valid sample");
+
+        assert_eq!(probability.value(), 0.25);
+    }
+
+    #[test]
+    fn empirical_probability_rejects_zero_samples() {
+        assert!(matches!(
+            empirical_probability(0, 0),
+            Err(ProbabilityError::ZeroSamples)
+        ));
+    }
+
+    #[test]
+    fn empirical_probability_rejects_event_count_above_total() {
+        assert!(matches!(
+            empirical_probability(101, 100),
+            Err(ProbabilityError::CountExceedsSamples {
+                events: 101,
+                samples: 100
+            })
+        ));
+    }
+
+    #[test]
+    fn probability_to_count_rounds_to_nearest_integer() {
+        let count =
+            probability_to_count(0.25, 100).expect("valid conversion");
+
+        assert_eq!(count, 25);
+    }
+
+    #[test]
+    fn probability_to_count_preserves_zero() {
+        assert_eq!(
+            probability_to_count(0.0, 100)
+                .expect("valid conversion"),
+            0
+        );
+    }
+
+    #[test]
+    fn probability_to_count_preserves_one() {
+        assert_eq!(
+            probability_to_count(1.0, 100)
+                .expect("valid conversion"),
+            100
+        );
+    }
+
+    #[test]
+    fn probability_to_count_rejects_zero_samples() {
+        assert!(matches!(
+            probability_to_count(0.5, 0),
+            Err(ProbabilityError::ZeroSamples)
+        ));
+    }
+
+    #[test]
+    fn mean_probability_is_correct() {
+        let probabilities = [0.1, 0.2, 0.3, 0.4];
+
+        let mean =
+            mean_probability(&probabilities).expect("valid mean");
+
+        assert!((mean.value() - 0.25).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn weighted_mean_probability_is_correct() {
+        let probabilities = [0.1, 0.9];
+        let weights = [1.0, 3.0];
+
+        let mean = weighted_mean_probability(
+            &probabilities,
+            &weights,
+        )
+        .expect("valid weighted mean");
+
+        assert!((mean.value() - 0.7).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn weighted_mean_rejects_negative_weight() {
+        let probabilities = [0.5];
+        let weights = [-1.0];
+
+        assert!(matches!(
+            weighted_mean_probability(
+                &probabilities,
+                &weights
+            ),
+            Err(ProbabilityError::InvalidWeight { .. })
+        ));
+    }
+
+    #[test]
+    fn distribution_accepts_normalized_values() {
+        let distribution =
+            ProbabilityDistribution::new(vec![0.25, 0.75])
+                .expect("valid distribution");
+
+        assert_eq!(distribution.len(), 2);
+        assert!((distribution.sum() - 1.0).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn distribution_rejects_unnormalized_values() {
+        assert!(matches!(
+            ProbabilityDistribution::new(vec![0.25, 0.25]),
+            Err(ProbabilityError::NotNormalized { .. })
+        ));
+    }
+
+    #[test]
+    fn distribution_rejects_empty_input() {
+        assert!(matches!(
+            ProbabilityDistribution::new(Vec::new()),
+            Err(ProbabilityError::EmptyDistribution)
+        ));
+    }
+
+    #[test]
+    fn normalization_produces_unit_sum() {
+        let normalized =
+            normalize(&[1.0, 2.0, 3.0]).expect("valid weights");
+
+        let sum =
+            sum_probabilities(&normalized).expect("valid sum");
+
+        assert!((sum - 1.0).abs() <= DEFAULT_NORMALIZATION_TOLERANCE);
+    }
+
+    #[test]
+    fn normalization_rejects_all_zero_weights() {
+        assert!(matches!(
+            normalize(&[0.0, 0.0, 0.0]),
+            Err(ProbabilityError::ZeroTotalWeight)
+        ));
+    }
+
+    #[test]
+    fn counts_to_distribution_is_correct() {
+        let distribution =
+            counts_to_distribution(&[1, 1, 2])
+                .expect("valid counts");
+
+        assert!((distribution.value(0).unwrap() - 0.25).abs() < 1.0e-15);
+        assert!((distribution.value(1).unwrap() - 0.25).abs() < 1.0e-15);
+        assert!((distribution.value(2).unwrap() - 0.50).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn counts_to_distribution_rejects_empty_counts() {
+        assert!(matches!(
+            counts_to_distribution(&[]),
+            Err(ProbabilityError::EmptyCounts)
+        ));
+    }
+
+    #[test]
+    fn counts_to_distribution_rejects_all_zero_counts() {
+        assert!(matches!(
+            counts_to_distribution(&[0, 0, 0]),
+            Err(ProbabilityError::EmptyCounts)
+        ));
+    }
+
+    #[test]
+    fn distribution_to_counts_preserves_requested_total() {
+        let distribution =
+            ProbabilityDistribution::new(vec![0.1, 0.2, 0.7])
+                .expect("valid distribution");
+
+        let counts =
+            distribution_to_counts(&distribution, 100)
+                .expect("valid reconstruction");
+
+        assert_eq!(counts, vec![10, 20, 70]);
+        assert_eq!(counts.iter().sum::<u64>(), 100);
+    }
+
+    #[test]
+    fn distribution_to_counts_handles_fractional_remainders() {
+        let distribution =
+            ProbabilityDistribution::new(vec![
+                1.0 / 3.0,
+                1.0 / 3.0,
+                1.0 / 3.0,
+            ])
+            .expect("valid distribution");
+
+        let counts =
+            distribution_to_counts(&distribution, 10)
+                .expect("valid reconstruction");
+
+        assert_eq!(counts.iter().sum::<u64>(), 10);
+
+        /*
+         * The largest-remainder method gives the extra sample to the first
+         * outcome when all fractional remainders are tied.
+         */
+        assert_eq!(counts, vec![4, 3, 3]);
+    }
+
+    #[test]
+    fn total_variation_distance_is_zero_for_identical_distributions() {
+        let left = [0.25, 0.75];
+        let right = [0.25, 0.75];
+
+        let distance =
+            total_variation_distance(&left, &right)
+                .expect("valid distributions");
+
+        assert!(distance.is_zero());
+    }
+
+    #[test]
+    fn total_variation_distance_reaches_one_for_disjoint_distributions() {
+        let left = [1.0, 0.0];
+        let right = [0.0, 1.0];
+
+        let distance =
+            total_variation_distance(&left, &right)
+                .expect("valid distributions");
+
+        assert_eq!(distance.value(), 1.0);
+    }
+
+    #[test]
+    fn classical_fidelity_is_one_for_identical_distributions() {
+        let left = [0.25, 0.75];
+        let right = [0.25, 0.75];
+
+        let fidelity =
+            classical_fidelity(&left, &right)
+                .expect("valid distributions");
+
+        assert!((fidelity.value() - 1.0).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn classical_fidelity_is_zero_for_disjoint_distributions() {
+        let left = [1.0, 0.0];
+        let right = [0.0, 1.0];
+
+        let fidelity =
+            classical_fidelity(&left, &right)
+                .expect("valid distributions");
+
+        assert_eq!(fidelity.value(), 0.0);
+    }
+
+    #[test]
+    fn squared_hellinger_distance_is_zero_for_identical_distributions() {
+        let left = [0.5, 0.5];
+        let right = [0.5, 0.5];
+
+        let distance =
+            squared_hellinger_distance(&left, &right)
+                .expect("valid distributions");
+
+        assert!(distance.is_zero());
+    }
+
+    #[test]
+    fn hellinger_distance_is_one_for_disjoint_distributions() {
+        let left = [1.0, 0.0];
+        let right = [0.0, 1.0];
+
+        let distance =
+            hellinger_distance(&left, &right)
+                .expect("valid distributions");
+
+        assert!((distance - 1.0).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn shannon_entropy_of_deterministic_distribution_is_zero() {
+        let entropy =
+            shannon_entropy(&[1.0, 0.0])
+                .expect("valid distribution");
+
+        assert!(entropy.abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn shannon_entropy_of_uniform_binary_distribution_is_ln_two() {
+        let entropy =
+            shannon_entropy(&[0.5, 0.5])
+                .expect("valid distribution");
+
+        assert!((entropy - 2.0_f64.ln()).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn cross_entropy_of_identical_binary_distribution_is_entropy() {
+        let distribution = [0.5, 0.5];
+
+        let cross =
+            cross_entropy(&distribution, &distribution)
+                .expect("valid distributions");
+
+        let entropy =
+            shannon_entropy(&distribution)
+                .expect("valid distribution");
+
+        assert!((cross - entropy).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn cross_entropy_rejects_positive_mass_against_zero_ideal_probability() {
+        let sampled = [1.0, 0.0];
+        let ideal = [0.0, 1.0];
+
+        assert!(matches!(
+            cross_entropy(&sampled, &ideal),
+            Err(ProbabilityError::NonFinite { .. })
+        ));
+    }
+
+    #[test]
+    fn probability_mass_selects_unique_indices() {
+        let probabilities = [0.2, 0.3, 0.5];
+
+        let mass =
+            probability_mass(&probabilities, &[0, 0, 2])
+                .expect("valid selection");
+
+        assert!((mass.value() - 0.7).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn probability_mass_where_selects_expected_outcomes() {
+        let probabilities = [0.1, 0.2, 0.3, 0.4];
+
+        let mass =
+            probability_mass_where(
+                &probabilities,
+                |index, _| index >= 2,
+            )
+            .expect("valid predicate");
+
+        assert!((mass.value() - 0.7).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn boolean_event_probability_is_correct() {
+        let observations = [
+            true, false, true, true, false,
+        ];
+
+        let probability =
+            boolean_event_probability(&observations)
+                .expect("valid observations");
+
+        assert!((probability.value() - 0.6).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn outcomes_to_counts_is_correct() {
+        let outcomes = [0, 2, 2, 1, 2, 0];
+
+        let counts =
+            outcomes_to_counts(&outcomes, 3)
+                .expect("valid outcomes");
+
+        assert_eq!(counts, vec![2, 1, 3]);
+    }
+
+    #[test]
+    fn outcomes_to_counts_rejects_unknown_outcome() {
+        let outcomes = [0, 3];
+
+        assert!(matches!(
+            outcomes_to_counts(&outcomes, 3),
+            Err(ProbabilityError::InvalidCountConversion)
+        ));
+    }
+
+    #[test]
+    fn outcome_probability_is_correct() {
+        let counts = [10, 20, 70];
+
+        let probability =
+            outcome_probability(&counts, 2)
+                .expect("valid outcome");
+
+        assert!((probability.value() - 0.7).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn outcome_set_probability_is_correct() {
+        let counts = [10, 20, 70];
+
+        let probability =
+            outcome_set_probability(&counts, &[0, 2])
+                .expect("valid outcome set");
+
+        assert!((probability.value() - 0.8).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn complement_probability_is_correct() {
+        let probability =
+            complement_probability(0.25)
+                .expect("valid probability");
+
+        assert!((probability.value() - 0.75).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn complement_mass_is_correct() {
+        let probabilities = [0.2, 0.3, 0.5];
+
+        let mass =
+            complement_probability_mass(
+                &probabilities,
+                &[2],
+            )
+            .expect("valid complement");
+
+        assert!((mass.value() - 0.5).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn approximately_equal_accepts_close_values() {
+        assert!(
+            approximately_equal(
+                0.5,
+                0.5000000000001,
+                1.0e-12
+            )
+            .expect("valid comparison")
+        );
+    }
+
+    #[test]
+    fn approximately_equal_rejects_far_values() {
+        assert!(
+            !approximately_equal(
+                0.5,
+                0.51,
+                1.0e-12
+            )
+            .expect("valid comparison")
+        );
+    }
+
+    #[test]
+    fn effective_zero_and_one_work() {
+        assert!(
+            is_effectively_zero(1.0e-10, 1.0e-9)
+                .expect("valid comparison")
+        );
+
+        assert!(
+            is_effectively_one(1.0 - 1.0e-10, 1.0e-9)
+                .expect("valid comparison")
+        );
+    }
+
+    #[test]
+    fn normalization_tolerance_is_validated() {
+        assert!(
+            validate_normalization_tolerance(
+                DEFAULT_NORMALIZATION_TOLERANCE
+            )
+            .is_ok()
+        );
+
+        assert!(
+            validate_normalization_tolerance(0.1).is_err()
+        );
+    }
+
+    #[test]
+    fn probability_interval_validation_works() {
+        assert!(
+            validate_probability_interval(0.2, 0.8)
+                .is_ok()
+        );
+
+        assert!(
+            validate_probability_interval(0.8, 0.2)
+                .is_err()
+        );
+    }
+}
