@@ -1,58 +1,51 @@
 //! Zamani Quantum — Canonical Hardware Backend
 //!
-//! Production-grade, provider-independent hardware backend contract.
+//! Production-grade, provider-independent quantum hardware boundary.
 //!
 //! # Responsibility
 //!
-//! This module owns the backend aggregate and the provider-neutral contract
-//! describing a quantum execution target.
+//! This module defines the canonical backend descriptor and the stable
+//! provider-neutral contracts required by the rest of Zamani Quantum.
 //!
-//! It is responsible for:
+//! It owns:
 //!
-//! - stable backend identity;
-//! - backend kind and operational status;
-//! - hardware capability declaration;
-//! - resource limits;
+//! - backend identity and metadata;
+//! - backend kind;
+//! - backend operational status;
+//! - backend capabilities;
+//! - backend resource limits;
 //! - workload requirements;
-//! - backend metadata;
-//! - deterministic capability matching;
-//! - hardware-topology validation;
-//! - pre-execution validation;
-//! - execution request/result data contracts;
-//! - backend-independent execution abstraction;
-//! - compatibility with simulators, emulators, QPUs and future quantum
-//!   execution technologies;
-//! - deterministic public behaviour;
-//! - provider-independent error classification.
+//! - execution-request requirements;
+//! - normalized execution results;
+//! - deterministic validation;
+//! - topology-aware validation;
+//! - capability negotiation primitives;
+//! - provider-neutral backend errors;
+//! - immutable backend descriptors;
+//! - security validation for backend metadata;
+//! - compatibility contracts consumed by compatibility, validation,
+//!   routing, scheduling, benchmarking, registries, Danga and adapters.
 //!
-//! # Explicit non-responsibilities
+//! It deliberately does NOT own:
 //!
-//! This module does NOT:
+//! - provider HTTP/network communication;
+//! - provider authentication;
+//! - credentials;
+//! - API tokens;
+//! - provider SDKs;
+//! - transpilation;
+//! - routing algorithms;
+//! - scheduling algorithms;
+//! - calibration acquisition;
+//! - calibration storage;
+//! - benchmarking mathematics;
+//! - QEC algorithms;
+//! - OpenQASM parsing;
+//! - QIR generation;
+//! - simulation;
+//! - emulation.
 //!
-//! - communicate with IBM;
-//! - communicate with IonQ;
-//! - communicate with AWS Braket;
-//! - communicate with Rigetti;
-//! - communicate with IQM;
-//! - communicate with Quantinuum;
-//! - communicate with QuEra;
-//! - own provider credentials;
-//! - perform authentication;
-//! - perform HTTP/network I/O;
-//! - perform transpilation;
-//! - perform routing;
-//! - perform scheduling;
-//! - perform calibration experiments;
-//! - own calibration state;
-//! - perform benchmarking mathematics;
-//! - implement QEC algorithms;
-//! - implement OpenQASM parsing;
-//! - implement QIR;
-//! - implement a quantum simulator;
-//! - implement a hardware emulator.
-//!
-//! Provider adapters, execution engines and higher-level subsystems consume
-//! this contract.
+//! Those responsibilities belong to their respective subsystems.
 //!
 //! # Architectural position
 //!
@@ -60,57 +53,61 @@
 //! Zamani source
 //!      |
 //!      v
-//! Quantum IR
+//! Quantum Frontend
 //!      |
-//!      +------------------------------+
-//!      |                              |
-//!      v                              v
-//! optimization                   error correction
-//!      |                              |
-//!      +---------------+--------------+
-//!                      |
-//!                      v
-//!             compatibility analysis
-//!                      |
-//!             +--------+---------+
-//!             |                  |
-//!             v                  v
-//!          routing           scheduling
-//!             |                  |
-//!             +--------+---------+
-//!                      |
-//!                      v
-//!               Quantum Workload
-//!                      |
-//!                      v
-//!              Hardware Backend
-//!                      |
-//!          +-----------+-----------+
-//!          |           |           |
-//!          v           v           v
-//!        local       provider    simulator
-//!       adapter      adapter     adapter
-//!          |           |           |
-//!          +-----------+-----------+
-//!                      |
-//!                      v
-//!                  execution
+//!      v
+//! Zamani Quantum IR
+//!      |
+//!      +-------------------+
+//!      |                   |
+//!      v                   v
+//! optimization       error correction
+//!      |                   |
+//!      +---------+---------+
+//!                |
+//!                v
+//!       compatibility analysis
+//!                |
+//!          +-----+-----+
+//!          |           |
+//!          v           v
+//!       routing     scheduling
+//!          |           |
+//!          +-----+-----+
+//!                |
+//!                v
+//!       Workload Requirements
+//!                |
+//!                v
+//!        QuantumBackend
+//!                |
+//!        +-------+-------+
+//!        |       |       |
+//!        v       v       v
+//!      local  provider  simulator
+//!     adapter adapter   adapter
+//!        |       |       |
+//!        +-------+-------+
+//!                |
+//!                v
+//!           execution.rs
+//!                |
+//!                v
+//!              Job
+//!                |
+//!                v
+//!             Result
 //!
 //! benchmarking consumes this boundary.
-//! hardware does not depend on benchmarking.
+//! hardware never depends on benchmarking.
 //! ```
 //!
 //! # Integration contract
 //!
-//! This file is deliberately usable before the later hardware files are
-//! introduced.
+//! This file intentionally depends only on the Rust standard library and the
+//! authoritative `hardware::topology` module.
 //!
-//! It depends only on:
-//!
-//! - the Rust standard library;
-//! - `hardware::topology`.
-//!
-//! Later modules may consume this file without changing its public contract:
+//! Future hardware modules consume this contract:
 //!
 //! - `backend_trait.rs`
 //! - `backend_config.rs`
@@ -120,50 +117,72 @@
 //! - `validation.rs`
 //! - `execution.rs`
 //! - `job.rs`
+//! - `queue.rs`
+//! - `result.rs`
 //! - `provider.rs`
 //! - `provider_registry.rs`
+//! - `device_registry.rs`
+//! - `discovery.rs`
 //! - provider adapters;
-//! - benchmarking.
+//! - benchmarking;
+//! - Danga.
 //!
-//! Those modules must adapt to this contract rather than requiring this file
-//! to know provider-specific details.
+//! Those modules must consume this stable provider-neutral contract instead of
+//! making this module provider-specific.
 //!
 //! # Stability rule
 //!
-//! Public types in this file form the backend compatibility surface.
+//! The following types form the compatibility surface currently consumed by
+//! other Zamani Quantum modules:
 //!
-//! New hardware technologies should normally extend:
-//!
-//! - `QuantumWorkloadKind`;
+//! - `BackendKind`;
+//! - `BackendStatus`;
 //! - `BackendCapabilities`;
 //! - `BackendLimits`;
 //! - `BackendMetadata`;
-//! - provider adapters;
+//! - `QuantumWorkloadKind`;
+//! - `CircuitRequirements`;
+//! - `WorkloadRequirements`;
+//! - `ExecutionRequest`;
+//! - `ExecutionResult`;
+//! - `BackendError`;
+//! - `QuantumBackend`;
+//! - `BackendDescriptor`.
 //!
-//! rather than changing the semantics of existing fields.
+//! New provider-specific behaviour must be implemented through adapters.
 //!
 //! # Security
 //!
-//! Backend metadata MUST NOT contain:
+//! This module never stores credentials.
+//!
+//! Backend metadata rejects fields that appear to contain:
 //!
 //! - API keys;
 //! - access tokens;
+//! - authorization headers;
 //! - passwords;
 //! - private keys;
-//! - authentication headers;
-//! - session cookies;
-//! - credentials.
+//! - secrets;
+//! - session cookies.
 //!
-//! Credentials belong to the credentials/authentication subsystem.
+//! This is a defence-in-depth measure, not a credential-management system.
 //!
 //! # Determinism
 //!
-//! Deterministic collections are used wherever externally observable ordering
-//! matters. Native gates and metadata use `BTree*` collections.
+//! All externally observable collections use deterministic ordering:
+//!
+//! - `BTreeMap`;
+//! - `BTreeSet`;
+//! - sorted diagnostics;
+//! - normalized instruction identifiers;
+//! - canonical capability identifiers.
+//!
+//! No system clock, random source, network state or provider state is read by
+//! validation.
 //!
 //! # Rust compatibility
 //!
-//! Target:
+//! Supported:
 //!
 //! - Rust 1.97;
 //! - Rust 1.97.1;
@@ -171,42 +190,51 @@
 //!
 //! No nightly features are required.
 //!
-//! # Topology integration
+//! # Safety
 //!
-//! `HardwareTopology` is authoritative for physical connectivity. This file
-//! never accesses topology implementation fields directly.
+//! Unsafe Rust is forbidden.
 //!
-//! In particular, topology connectivity MUST be queried through:
+//! ```text
+//! #![deny(unsafe_code)]
+//! ```
+//!
+//! # Topology boundary
+//!
+//! `HardwareTopology` is authoritative for physical connectivity.
+//!
+//! This file never accesses topology internals directly. It uses the public
+//! topology API:
 //!
 //! - `qubit_count()`;
+//! - `coupling_count()`;
 //! - `is_connected()`;
-//! - `is_physically_adjacent()`;
-//! - `couplings()`;
-//! - `contains()`.
+//! - `validate()`.
 //!
-//! This preserves the topology module's encapsulation and allows topology
-//! implementation changes without rewriting backend semantics.
+//! Directional topology semantics therefore remain owned by `topology.rs`.
 //!
-//! # External interoperability
+//! # Important semantic distinction
 //!
-//! The model intentionally accommodates concepts exposed by current quantum
-//! hardware ecosystems:
+//! `BackendKind` answers:
 //!
-//! - dynamic circuits;
-//! - classical feed-forward;
-//! - measurement/reset;
-//! - instruction duration and error;
-//! - calibration snapshots;
-//! - queues;
-//! - QPU/simulator distinction;
-//! - pulse-level workloads;
-//! - analog workloads;
-//! - annealing workloads;
-//! - logical/fault-tolerant workloads;
-//! - heterogeneous future quantum resources.
+//! > What type of execution target is this?
 //!
-//! OpenQASM and QIR remain interoperability/compilation layers outside this
-//! module.
+//! `QuantumWorkloadKind` answers:
+//!
+//! > What kind of quantum workload is being requested?
+//!
+//! `BackendCapabilities` answers:
+//!
+//! > What can this backend do?
+//!
+//! `BackendLimits` answers:
+//!
+//! > What is the maximum resource envelope?
+//!
+//! `HardwareTopology` answers:
+//!
+//! > What physical connectivity exists?
+//!
+//! These concepts must not be collapsed into one enum or structure.
 
 #![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -224,22 +252,35 @@ use super::topology::{HardwareTopology, TopologyError};
 /// Stable backend schema identifier.
 pub const BACKEND_SCHEMA_ID: &str = "zamani.quantum.hardware.backend";
 
-/// Backend semantic schema version.
+/// Semantic version of the backend schema.
 ///
-/// Increment when serialized/public semantics change incompatibly.
-pub const BACKEND_SCHEMA_VERSION: u16 = 2;
+/// Increment this value only when the meaning of the public serialized/backend
+/// contract changes incompatibly.
+pub const BACKEND_SCHEMA_VERSION: u16 = 3;
 
-/// Maximum backend identifier length in bytes.
+/// Maximum backend identifier length.
 pub const MAX_BACKEND_ID_LENGTH: usize = 512;
 
-/// Maximum backend name length in bytes.
+/// Maximum backend name length.
 pub const MAX_BACKEND_NAME_LENGTH: usize = 512;
 
-/// Maximum provider identifier length in bytes.
+/// Maximum provider identifier length.
 pub const MAX_PROVIDER_ID_LENGTH: usize = 512;
 
-/// Maximum backend version length in bytes.
+/// Maximum backend version length.
 pub const MAX_BACKEND_VERSION_LENGTH: usize = 128;
+
+/// Maximum hardware revision length.
+pub const MAX_HARDWARE_REVISION_LENGTH: usize = 128;
+
+/// Maximum firmware version length.
+pub const MAX_FIRMWARE_VERSION_LENGTH: usize = 128;
+
+/// Maximum API version length.
+pub const MAX_API_VERSION_LENGTH: usize = 128;
+
+/// Maximum region identifier length.
+pub const MAX_REGION_LENGTH: usize = 256;
 
 /// Maximum metadata key length.
 pub const MAX_METADATA_KEY_LENGTH: usize = 256;
@@ -247,58 +288,64 @@ pub const MAX_METADATA_KEY_LENGTH: usize = 256;
 /// Maximum metadata value length.
 pub const MAX_METADATA_VALUE_LENGTH: usize = 4096;
 
-/// Maximum number of metadata properties.
+/// Maximum metadata property count.
 pub const MAX_METADATA_PROPERTIES: usize = 4096;
 
-/// Maximum number of native instructions.
+/// Maximum stable native instruction count.
 pub const MAX_NATIVE_INSTRUCTIONS: usize = 1_000_000;
 
-/// Maximum number of gates/instructions in one workload requirement set.
+/// Maximum required instruction count.
 pub const MAX_REQUIRED_INSTRUCTIONS: usize = 1_000_000;
 
-/// Maximum number of topology edges in one workload requirement set.
-pub const MAX_REQUIRED_EDGES: usize = 10_000_000;
+/// Maximum required topology edge count.
+pub const MAX_REQUIRED_TOPOLOGY_EDGES: usize = 10_000_000;
+
+/// Maximum request metadata properties.
+pub const MAX_REQUEST_METADATA_PROPERTIES: usize = 4096;
+
+/// Maximum request identifier length.
+pub const MAX_REQUEST_ID_LENGTH: usize = 512;
 
 // =============================================================================
 // Backend kind
 // =============================================================================
 
-/// High-level kind of execution target.
+/// High-level execution-target category.
 ///
-/// This is deliberately distinct from physical technology.
+/// This is intentionally separate from physical quantum technology.
 ///
 /// For example:
 ///
 /// ```text
 /// technology = superconducting
-/// kind       = Qpu
-/// workload   = GateCircuit
+/// backend_kind = Qpu
+/// workload = GateCircuit
 /// ```
 ///
 /// or:
 ///
 /// ```text
 /// technology = neutral_atom
-/// kind       = Qpu
-/// workload   = Analog
+/// backend_kind = Qpu
+/// workload = AnalogProgram
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BackendKind {
-    /// Classical software simulator implementing an abstract quantum model.
+    /// Classical software simulator.
     Simulator,
 
-    /// Software emulator approximating a particular hardware architecture.
+    /// Software model approximating a particular hardware architecture.
     Emulator,
 
     /// Physical quantum processing unit.
     Qpu,
 
-    /// Application- or repository-specific execution implementation.
+    /// Repository/provider-specific execution implementation.
     Custom,
 }
 
 impl BackendKind {
-    /// Stable machine-readable representation.
+    /// Stable machine-readable identifier.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Simulator => "simulator",
@@ -308,12 +355,12 @@ impl BackendKind {
         }
     }
 
-    /// Returns whether this kind represents physical quantum hardware.
+    /// Returns true for physical QPUs.
     pub const fn is_physical(self) -> bool {
         matches!(self, Self::Qpu)
     }
 
-    /// Returns whether this kind is software-only.
+    /// Returns true for software execution targets.
     pub const fn is_software(self) -> bool {
         matches!(self, Self::Simulator | Self::Emulator)
     }
@@ -329,16 +376,15 @@ impl fmt::Display for BackendKind {
 // Backend status
 // =============================================================================
 
-/// Operational state of a backend.
+/// Current operational state of a backend.
 ///
-/// `Busy` is intentionally distinct from `Available`: a backend may be
-/// operational while temporarily unable to accept another execution request.
+/// Status is intentionally independent from backend identity and capabilities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BackendStatus {
-    /// State has not yet been established.
+    /// No authoritative status has been established.
     Unknown,
 
-    /// Backend is operational and may accept work.
+    /// Backend is operational and can normally accept work.
     Available,
 
     /// Backend is operational but currently occupied.
@@ -347,37 +393,37 @@ pub enum BackendStatus {
     /// Backend is undergoing maintenance.
     Maintenance,
 
-    /// Backend is degraded but may still accept restricted work.
+    /// Backend is operational but degraded.
     Degraded,
 
-    /// Backend cannot currently be reached or used.
+    /// Backend is unreachable/offline.
     Offline,
 
-    /// Backend has been explicitly retired.
+    /// Backend has permanently retired.
     Retired,
 
-    /// Backend is unavailable for an unspecified reason.
+    /// Backend is temporarily unavailable.
     Unavailable,
 }
 
 impl BackendStatus {
-    /// Returns true if a normal execution request may be submitted.
+    /// Returns true if normal submission is permitted by status alone.
     pub const fn is_usable(self) -> bool {
         matches!(self, Self::Available | Self::Degraded)
     }
 
-    /// Returns true if the backend is known to be operational.
+    /// Returns true if the device is known to be operational.
     pub const fn is_operational(self) -> bool {
         matches!(
             self,
             Self::Available
                 | Self::Busy
-                | Self::Degraded
                 | Self::Maintenance
+                | Self::Degraded
         )
     }
 
-    /// Stable machine-readable representation.
+    /// Stable machine-readable identifier.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
@@ -402,115 +448,111 @@ impl fmt::Display for BackendStatus {
 // Capability model
 // =============================================================================
 
-/// Capabilities advertised by a backend.
+/// Provider-neutral capabilities advertised by a backend.
 ///
-/// This is intentionally broader than gate-model circuits. It provides the
-/// stable compatibility surface for future pulse, analog, annealing and
-/// logical/fault-tolerant workloads.
+/// The structure intentionally covers more than conventional gate-model QPUs.
 ///
-/// Capability state belongs to the backend descriptor. Capability evidence such
-/// as calibration values belongs to `calibration.rs`.
+/// Stable and experimental capabilities are kept separate. An experimental
+/// capability MUST NOT silently satisfy a stable capability requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackendCapabilities {
-    /// Backend can perform terminal measurement.
+    /// Terminal measurement.
     pub measurement: bool,
 
-    /// Backend can reset quantum resources.
+    /// Quantum reset.
     pub reset: bool,
 
-    /// Backend can measure before program termination.
+    /// Mid-circuit measurement.
     pub mid_circuit_measurement: bool,
 
-    /// Backend can perform classical feed-forward after measurement.
+    /// Measurement-dependent classical feed-forward.
     pub classical_control: bool,
 
-    /// Backend can execute dynamic circuits/control flow.
+    /// Dynamic circuit execution.
     pub dynamic_circuits: bool,
 
-    /// Backend supports arbitrary parameterized one-resource rotations.
+    /// Arbitrary one-qubit rotations.
     pub arbitrary_single_qubit_rotations: bool,
 
-    /// Backend accepts unbound parameterized gates.
+    /// Unbound/parameterized gates.
     pub parameterized_gates: bool,
 
-    /// Backend supports three-resource operations.
+    /// Three-qubit native operations.
     pub three_qubit_operations: bool,
 
-    /// Backend supports operations with more than three quantum operands.
+    /// Operations with more than three quantum operands.
     pub multi_qubit_operations: bool,
 
-    /// Backend supports concurrent/parallel operations.
+    /// Parallel execution.
     pub parallel_operations: bool,
 
-    /// Backend supports batched submissions.
+    /// Batched execution.
     pub batch_execution: bool,
 
-    /// Backend exposes streaming results.
+    /// Streaming result support.
     pub streaming_results: bool,
 
-    /// Backend supports cancellation.
+    /// Provider-side job cancellation.
     pub cancellation: bool,
 
-    /// Backend exposes queue information.
+    /// Queue information.
     pub queue_information: bool,
 
-    /// Backend supports pulse-level execution.
+    /// Pulse-level execution.
     pub pulse_control: bool,
 
-    /// Backend supports analog Hamiltonian/control workloads.
+    /// Analog Hamiltonian/control execution.
     pub analog_control: bool,
 
-    /// Backend supports annealing/Ising/QUBO workloads.
+    /// Quantum annealing/Ising/QUBO execution.
     pub annealing: bool,
 
-    /// Backend exposes logical qubits.
+    /// Logical-qubit execution.
     pub logical_qubits: bool,
 
-    /// Backend supports fault-tolerant/logical operations.
+    /// Fault-tolerant execution.
     pub fault_tolerance: bool,
 
-    /// Backend supports syndrome extraction.
+    /// Syndrome measurement.
     pub syndrome_measurement: bool,
 
-    /// Backend supports decoder execution as part of its execution model.
+    /// Provider-side decoder execution.
     pub decoder_execution: bool,
 
-    /// Backend supports deterministic seeded execution.
+    /// Deterministic seeded execution.
     pub deterministic_seeding: bool,
 
-    /// Backend supports state-vector results.
+    /// State-vector result access.
     pub state_vector_results: bool,
 
-    /// Backend supports density-matrix results.
+    /// Density-matrix result access.
     pub density_matrix_results: bool,
 
-    /// Backend supports expectation-value results.
+    /// Expectation-value result access.
     pub expectation_value_results: bool,
 
-    /// Backend supports readout mitigation.
+    /// Readout-error mitigation.
     pub readout_mitigation: bool,
 
-    /// Backend supports error mitigation.
+    /// General error mitigation.
     pub error_mitigation: bool,
 
-    /// Backend exposes calibration information.
+    /// Calibration information is exposed.
     pub calibration_data: bool,
 
-    /// Backend exposes instruction timing.
+    /// Timing information is exposed.
     pub timing_information: bool,
 
-    /// Backend exposes topology information.
+    /// Physical topology is exposed.
     pub topology_information: bool,
 
-    /// Backend exposes native instructions.
+    /// Native instruction set is exposed.
     pub native_instruction_set: bool,
 
     /// Stable native instruction identifiers.
     pub native_gates: BTreeSet<String>,
 
-    /// Experimental capabilities are kept separate from stable capabilities.
-    ///
-    /// A capability appearing here MUST NOT be treated as stable support.
+    /// Experimental provider capabilities.
     pub experimental_capabilities: BTreeSet<String>,
 }
 
@@ -560,7 +602,7 @@ impl BackendCapabilities {
         Self::default()
     }
 
-    /// Adds a stable native instruction.
+    /// Adds one stable native instruction.
     pub fn with_gate(mut self, gate: impl Into<String>) -> Self {
         let gate = normalize_instruction_name(&gate.into());
 
@@ -610,50 +652,102 @@ impl BackendCapabilities {
             .contains(&normalize_instruction_name(gate))
     }
 
-    /// Returns whether a stable capability exists by identifier.
+    /// Returns whether a named stable capability is supported.
     pub fn supports_capability(&self, capability: &str) -> bool {
         let capability = normalize_capability_name(capability);
 
-        self.experimental_capabilities
-            .contains(&capability)
-            || match capability.as_str() {
-                "measurement" => self.measurement,
-                "reset" => self.reset,
-                "mid_circuit_measurement" => self.mid_circuit_measurement,
-                "classical_control" => self.classical_control,
-                "dynamic_circuits" => self.dynamic_circuits,
-                "arbitrary_single_qubit_rotations" => {
-                    self.arbitrary_single_qubit_rotations
-                }
-                "parameterized_gates" => self.parameterized_gates,
-                "three_qubit_operations" => self.three_qubit_operations,
-                "multi_qubit_operations" => self.multi_qubit_operations,
-                "parallel_operations" => self.parallel_operations,
-                "batch_execution" => self.batch_execution,
-                "streaming_results" => self.streaming_results,
-                "cancellation" => self.cancellation,
-                "queue_information" => self.queue_information,
-                "pulse_control" => self.pulse_control,
-                "analog_control" => self.analog_control,
-                "annealing" => self.annealing,
-                "logical_qubits" => self.logical_qubits,
-                "fault_tolerance" => self.fault_tolerance,
-                "syndrome_measurement" => self.syndrome_measurement,
-                "decoder_execution" => self.decoder_execution,
-                "deterministic_seeding" => self.deterministic_seeding,
-                "state_vector_results" => self.state_vector_results,
-                "density_matrix_results" => self.density_matrix_results,
-                "expectation_value_results" => {
-                    self.expectation_value_results
-                }
-                "readout_mitigation" => self.readout_mitigation,
-                "error_mitigation" => self.error_mitigation,
-                "calibration_data" => self.calibration_data,
-                "timing_information" => self.timing_information,
-                "topology_information" => self.topology_information,
-                "native_instruction_set" => self.native_instruction_set,
-                _ => false,
+        match capability.as_str() {
+            "measurement" => self.measurement,
+            "reset" => self.reset,
+            "mid_circuit_measurement" => self.mid_circuit_measurement,
+            "classical_control" => self.classical_control,
+            "dynamic_circuits" => self.dynamic_circuits,
+            "arbitrary_single_qubit_rotations" => {
+                self.arbitrary_single_qubit_rotations
             }
+            "parameterized_gates" => self.parameterized_gates,
+            "three_qubit_operations" => self.three_qubit_operations,
+            "multi_qubit_operations" => self.multi_qubit_operations,
+            "parallel_operations" => self.parallel_operations,
+            "batch_execution" => self.batch_execution,
+            "streaming_results" => self.streaming_results,
+            "cancellation" => self.cancellation,
+            "queue_information" => self.queue_information,
+            "pulse_control" => self.pulse_control,
+            "analog_control" => self.analog_control,
+            "annealing" => self.annealing,
+            "logical_qubits" => self.logical_qubits,
+            "fault_tolerance" => self.fault_tolerance,
+            "syndrome_measurement" => self.syndrome_measurement,
+            "decoder_execution" => self.decoder_execution,
+            "deterministic_seeding" => self.deterministic_seeding,
+            "state_vector_results" => self.state_vector_results,
+            "density_matrix_results" => self.density_matrix_results,
+            "expectation_value_results" => self.expectation_value_results,
+            "readout_mitigation" => self.readout_mitigation,
+            "error_mitigation" => self.error_mitigation,
+            "calibration_data" => self.calibration_data,
+            "timing_information" => self.timing_information,
+            "topology_information" => self.topology_information,
+            "native_instruction_set" => self.native_instruction_set,
+            _ => false,
+        }
+    }
+
+    /// Returns true if the named capability is explicitly marked experimental.
+    pub fn is_experimental(&self, capability: &str) -> bool {
+        self.experimental_capabilities
+            .contains(&normalize_capability_name(capability))
+    }
+
+    /// Returns all stable capability identifiers in deterministic order.
+    pub fn stable_names(&self) -> Vec<String> {
+        let mut names = BTreeSet::new();
+
+        macro_rules! add {
+            ($field:ident, $name:literal) => {
+                if self.$field {
+                    names.insert($name.to_string());
+                }
+            };
+        }
+
+        add!(measurement, "measurement");
+        add!(reset, "reset");
+        add!(mid_circuit_measurement, "mid_circuit_measurement");
+        add!(classical_control, "classical_control");
+        add!(dynamic_circuits, "dynamic_circuits");
+        add!(
+            arbitrary_single_qubit_rotations,
+            "arbitrary_single_qubit_rotations"
+        );
+        add!(parameterized_gates, "parameterized_gates");
+        add!(three_qubit_operations, "three_qubit_operations");
+        add!(multi_qubit_operations, "multi_qubit_operations");
+        add!(parallel_operations, "parallel_operations");
+        add!(batch_execution, "batch_execution");
+        add!(streaming_results, "streaming_results");
+        add!(cancellation, "cancellation");
+        add!(queue_information, "queue_information");
+        add!(pulse_control, "pulse_control");
+        add!(analog_control, "analog_control");
+        add!(annealing, "annealing");
+        add!(logical_qubits, "logical_qubits");
+        add!(fault_tolerance, "fault_tolerance");
+        add!(syndrome_measurement, "syndrome_measurement");
+        add!(decoder_execution, "decoder_execution");
+        add!(deterministic_seeding, "deterministic_seeding");
+        add!(state_vector_results, "state_vector_results");
+        add!(density_matrix_results, "density_matrix_results");
+        add!(expectation_value_results, "expectation_value_results");
+        add!(readout_mitigation, "readout_mitigation");
+        add!(error_mitigation, "error_mitigation");
+        add!(calibration_data, "calibration_data");
+        add!(timing_information, "timing_information");
+        add!(topology_information, "topology_information");
+        add!(native_instruction_set, "native_instruction_set");
+
+        names.into_iter().collect()
     }
 }
 
@@ -665,13 +759,13 @@ impl BackendCapabilities {
 ///
 /// A value of `0` means that the provider has not supplied a finite limit.
 ///
-/// A zero limit is therefore NOT interpreted as "zero resources".
+/// Therefore `0` means "unspecified/unbounded" rather than "zero".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackendLimits {
-    /// Maximum physical resources usable by one workload.
+    /// Maximum physical quantum resources.
     pub max_qubits: usize,
 
-    /// Maximum logical qubits usable by one workload.
+    /// Maximum logical qubits.
     pub max_logical_qubits: usize,
 
     /// Maximum circuit depth.
@@ -680,36 +774,27 @@ pub struct BackendLimits {
     /// Maximum operation count.
     pub max_operations: usize,
 
-    /// Maximum number of shots.
+    /// Maximum shots.
     pub max_shots: usize,
 
-    /// Maximum number of classical bits/register elements.
+    /// Maximum classical bits/register elements.
     pub max_classical_bits: usize,
 
-    /// Maximum number of concurrent programs.
+    /// Maximum concurrent jobs.
     pub max_concurrent_jobs: usize,
 
-    /// Maximum submission batch size.
+    /// Maximum provider submission batch size.
     pub max_batch_size: usize,
 }
 
 impl Default for BackendLimits {
     fn default() -> Self {
-        Self {
-            max_qubits: 0,
-            max_logical_qubits: 0,
-            max_circuit_depth: 0,
-            max_operations: 0,
-            max_shots: 0,
-            max_classical_bits: 0,
-            max_concurrent_jobs: 0,
-            max_batch_size: 0,
-        }
+        Self::unlimited()
     }
 }
 
 impl BackendLimits {
-    /// Creates an unspecified/unlimited limit profile.
+    /// Creates an unspecified/unbounded limit profile.
     pub const fn unlimited() -> Self {
         Self {
             max_qubits: 0,
@@ -800,9 +885,9 @@ impl BackendLimits {
 // Backend metadata
 // =============================================================================
 
-/// Stable provider-neutral backend metadata.
+/// Provider-neutral backend metadata.
 ///
-/// This structure deliberately contains no secrets.
+/// No credential material is permitted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackendMetadata {
     /// Stable canonical backend identifier.
@@ -814,33 +899,35 @@ pub struct BackendMetadata {
     /// Stable provider identifier.
     pub provider: String,
 
-    /// Backend/API semantic version.
+    /// Backend semantic/API version.
     pub version: String,
 
-    /// Kind of execution target.
+    /// Execution-target kind.
     pub kind: BackendKind,
 
-    /// Current operational state.
+    /// Current operational status.
     pub status: BackendStatus,
 
-    /// Optional stable hardware revision.
+    /// Physical hardware revision.
     pub hardware_revision: Option<String>,
 
-    /// Optional firmware version.
+    /// Firmware version.
     pub firmware_version: Option<String>,
 
-    /// Optional provider API version.
+    /// Provider API version.
     pub api_version: Option<String>,
 
-    /// Optional region/location.
+    /// Provider region/location.
     pub region: Option<String>,
 
-    /// Arbitrary non-secret metadata.
+    /// Non-secret provider metadata.
     pub properties: BTreeMap<String, String>,
 }
 
 impl BackendMetadata {
-    /// Creates validated-by-`QuantumBackend::new` metadata.
+    /// Creates metadata.
+    ///
+    /// Validation is performed by `QuantumBackend::new`.
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -863,10 +950,12 @@ impl BackendMetadata {
         }
     }
 
+    /// Changes only operational status.
     pub fn set_status(&mut self, status: BackendStatus) {
         self.status = status;
     }
 
+    /// Adds hardware revision metadata.
     pub fn with_hardware_revision(
         mut self,
         revision: impl Into<String>,
@@ -875,6 +964,7 @@ impl BackendMetadata {
         self
     }
 
+    /// Adds firmware version metadata.
     pub fn with_firmware_version(
         mut self,
         version: impl Into<String>,
@@ -883,17 +973,19 @@ impl BackendMetadata {
         self
     }
 
+    /// Adds provider API version metadata.
     pub fn with_api_version(mut self, version: impl Into<String>) -> Self {
         self.api_version = Some(version.into());
         self
     }
 
+    /// Adds provider region metadata.
     pub fn with_region(mut self, region: impl Into<String>) -> Self {
         self.region = Some(region.into());
         self
     }
 
-    /// Inserts non-secret metadata.
+    /// Inserts non-secret metadata with security and size validation.
     pub fn insert_property(
         &mut self,
         key: impl Into<String>,
@@ -904,17 +996,15 @@ impl BackendMetadata {
 
         validate_metadata_field(&key, &value)?;
 
+        if looks_like_secret_key(&key) {
+            return Err(BackendError::SecretLikeMetadata { key });
+        }
+
         if self.properties.len() >= MAX_METADATA_PROPERTIES
             && !self.properties.contains_key(&key)
         {
             return Err(BackendError::MetadataLimitExceeded {
                 maximum: MAX_METADATA_PROPERTIES,
-            });
-        }
-
-        if looks_like_secret_key(&key) {
-            return Err(BackendError::SecretLikeMetadata {
-                key,
             });
         }
 
@@ -924,19 +1014,16 @@ impl BackendMetadata {
 }
 
 // =============================================================================
-// Workload model
+// Quantum workload kinds
 // =============================================================================
 
-/// Kind of quantum workload submitted to a backend.
-///
-/// This prevents the backend layer from assuming every quantum processor is a
-/// conventional gate-model QPU.
+/// Canonical provider-neutral quantum workload category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum QuantumWorkloadKind {
-    /// Ordinary gate-model circuit.
+    /// Conventional gate-model circuit.
     GateCircuit,
 
-    /// Circuit with measurement-dependent classical control.
+    /// Measurement/classical-control dependent circuit.
     DynamicCircuit,
 
     /// Direct pulse/control program.
@@ -945,16 +1032,16 @@ pub enum QuantumWorkloadKind {
     /// Analog Hamiltonian/control program.
     AnalogProgram,
 
-    /// Ising/QUBO/annealing workload.
+    /// Quantum annealing/Ising/QUBO workload.
     AnnealingProblem,
 
-    /// Logical/fault-tolerant quantum workload.
+    /// Logical/fault-tolerant workload.
     LogicalProgram,
 
-    /// Generic sampling workload.
+    /// Sampling workload.
     Sampling,
 
-    /// Provider-specific/custom workload.
+    /// Provider-specific workload.
     Custom,
 }
 
@@ -983,15 +1070,16 @@ impl fmt::Display for QuantumWorkloadKind {
 // Circuit requirements
 // =============================================================================
 
-/// Hardware requirements for a gate-model workload.
+/// Hardware requirements extracted from a gate-model workload.
 ///
-/// This is deliberately a requirement description rather than the canonical
-/// Zamani Quantum IR.
+/// This is NOT the canonical Quantum IR.
 ///
-/// The actual circuit remains owned by `quantum::ir`.
+/// The canonical program remains owned by `quantum::ir`.
+///
+/// This structure is a compact hardware-compatibility view.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CircuitRequirements {
-    /// Number of physical qubits/resources required.
+    /// Number of physical resources required.
     pub qubit_count: usize,
 
     /// Number of logical qubits required.
@@ -1003,58 +1091,58 @@ pub struct CircuitRequirements {
     /// Number of quantum operations.
     pub operation_count: usize,
 
-    /// Number of classical bits required.
+    /// Number of classical bits/register elements.
     pub classical_bit_count: usize,
 
-    /// Number of execution shots.
+    /// Number of requested execution shots.
     pub shots: usize,
 
     /// Instructions used by the workload.
     pub gates: Vec<String>,
 
-    /// Physical/native two-resource interactions required.
+    /// Required physical/native two-resource interactions.
     pub two_qubit_edges: Vec<(usize, usize)>,
 
-    /// Workload requires terminal measurement.
+    /// Terminal measurement is required.
     pub requires_measurement: bool,
 
-    /// Workload requires reset.
+    /// Reset is required.
     pub requires_reset: bool,
 
-    /// Workload requires mid-circuit measurement.
+    /// Mid-circuit measurement is required.
     pub requires_mid_circuit_measurement: bool,
 
-    /// Workload requires measurement-based classical feed-forward.
+    /// Classical feed-forward is required.
     pub requires_classical_control: bool,
 
-    /// Workload is explicitly dynamic.
+    /// Dynamic circuit support is required.
     pub requires_dynamic_circuits: bool,
 
-    /// Workload requires pulse-level control.
+    /// Pulse control is required.
     pub requires_pulse_control: bool,
 
-    /// Workload requires analog control.
+    /// Analog control is required.
     pub requires_analog_control: bool,
 
-    /// Workload requires annealing.
+    /// Annealing support is required.
     pub requires_annealing: bool,
 
-    /// Workload requires logical/fault-tolerant resources.
+    /// Logical qubits are required.
     pub requires_logical_qubits: bool,
 
-    /// Workload requires fault-tolerant operations.
+    /// Fault-tolerant execution is required.
     pub requires_fault_tolerance: bool,
 
-    /// Workload requires deterministic seeded execution.
+    /// Deterministic seeded execution is required.
     pub requires_deterministic_seed: bool,
 
-    /// Workload requires state-vector output.
+    /// State-vector output is required.
     pub requires_state_vector: bool,
 
-    /// Workload requires density-matrix output.
+    /// Density-matrix output is required.
     pub requires_density_matrix: bool,
 
-    /// Workload requires expectation values.
+    /// Expectation-value output is required.
     pub requires_expectation_values: bool,
 }
 
@@ -1088,7 +1176,7 @@ impl Default for CircuitRequirements {
 }
 
 impl CircuitRequirements {
-    /// Returns the workload kind implied by the requirements.
+    /// Infers the workload category from the declared requirements.
     pub fn inferred_kind(&self) -> QuantumWorkloadKind {
         if self.requires_annealing {
             QuantumWorkloadKind::AnnealingProblem
@@ -1107,36 +1195,39 @@ impl CircuitRequirements {
             QuantumWorkloadKind::GateCircuit
         }
     }
+
+    /// Returns true if any advanced workload feature is requested.
+    pub fn is_advanced(&self) -> bool {
+        !matches!(self.inferred_kind(), QuantumWorkloadKind::GateCircuit)
+    }
 }
 
 // =============================================================================
 // General workload requirements
 // =============================================================================
 
-/// Provider-neutral execution requirements.
-///
-/// This is the abstraction future `execution.rs` and `compatibility.rs` use.
+/// Provider-neutral workload compatibility requirements.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkloadRequirements {
-    /// Kind of quantum workload.
+    /// Explicit workload category.
     pub kind: QuantumWorkloadKind,
 
-    /// Gate/circuit-specific requirements.
+    /// Gate/circuit compatibility requirements.
     pub circuit: CircuitRequirements,
 
-    /// Required stable backend capability identifiers.
+    /// Required stable capability identifiers.
     pub required_capabilities: BTreeSet<String>,
 
     /// Required native instructions.
     pub required_instructions: BTreeSet<String>,
 
-    /// Whether topology must be available.
+    /// Physical topology information is required.
     pub requires_topology: bool,
 
-    /// Whether calibration evidence must be available.
+    /// Calibration information is required.
     pub requires_calibration: bool,
 
-    /// Whether fresh calibration is mandatory.
+    /// Fresh calibration is mandatory.
     pub requires_fresh_calibration: bool,
 }
 
@@ -1155,16 +1246,18 @@ impl Default for WorkloadRequirements {
 }
 
 impl WorkloadRequirements {
-    /// Creates requirements from a circuit requirement object.
+    /// Creates workload requirements from circuit requirements.
     pub fn from_circuit(circuit: CircuitRequirements) -> Self {
+        let kind = circuit.inferred_kind();
+
         Self {
-            kind: circuit.inferred_kind(),
+            kind,
             circuit,
             ..Self::default()
         }
     }
 
-    /// Adds a required capability.
+    /// Adds one required capability.
     pub fn require_capability(
         mut self,
         capability: impl Into<String>,
@@ -1178,7 +1271,7 @@ impl WorkloadRequirements {
         self
     }
 
-    /// Adds a required instruction.
+    /// Adds one required native instruction.
     pub fn require_instruction(
         mut self,
         instruction: impl Into<String>,
@@ -1192,23 +1285,40 @@ impl WorkloadRequirements {
         self
     }
 
+    /// Sets topology requirement.
     pub fn with_topology_requirement(mut self, required: bool) -> Self {
         self.requires_topology = required;
         self
     }
 
+    /// Sets calibration requirement.
     pub fn with_calibration_requirement(mut self, required: bool) -> Self {
         self.requires_calibration = required;
+
+        if !required {
+            self.requires_fresh_calibration = false;
+        }
+
         self
     }
 
+    /// Sets fresh-calibration requirement.
     pub fn with_fresh_calibration_requirement(
         mut self,
         required: bool,
     ) -> Self {
         self.requires_fresh_calibration = required;
-        self.requires_calibration |= required;
+
+        if required {
+            self.requires_calibration = true;
+        }
+
         self
+    }
+
+    /// Validates internal requirement-set invariants.
+    pub fn validate(&self) -> Result<(), BackendError> {
+        validate_workload_requirements(self)
     }
 }
 
@@ -1218,28 +1328,27 @@ impl WorkloadRequirements {
 
 /// Provider-neutral execution request.
 ///
-/// It contains workload requirements but intentionally does not contain
-/// provider credentials or provider-specific transport state.
+/// The actual executable Quantum IR/program payload remains outside this
+/// structure. This object contains the hardware-facing execution policy and
+/// compatibility requirements.
+///
+/// Provider adapters must perform `QuantumBackend::preflight()` before provider
+/// submission.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionRequest {
-    /// Backend-independent workload requirements.
+    /// Hardware compatibility requirements.
     pub workload: WorkloadRequirements,
 
     /// Optional deterministic execution seed.
     pub seed: Option<u64>,
 
-    /// Requested priority.
-    ///
-    /// `0` is normal priority. Larger values are higher priority. Providers
-    /// may map this into their own scheduling model.
+    /// Caller/provider scheduling priority.
     pub priority: u32,
 
-    /// Whether provider-side asynchronous execution is acceptable.
+    /// Whether asynchronous provider execution is permitted.
     pub asynchronous: bool,
 
-    /// Optional caller-defined request identifier.
-    ///
-    /// This must not contain secrets.
+    /// Optional caller request identifier.
     pub request_id: Option<String>,
 
     /// Non-secret execution metadata.
@@ -1247,6 +1356,7 @@ pub struct ExecutionRequest {
 }
 
 impl ExecutionRequest {
+    /// Creates a request from circuit requirements.
     pub fn new(circuit: CircuitRequirements) -> Self {
         Self {
             workload: WorkloadRequirements::from_circuit(circuit),
@@ -1258,6 +1368,7 @@ impl ExecutionRequest {
         }
     }
 
+    /// Creates a request from general workload requirements.
     pub fn from_workload(workload: WorkloadRequirements) -> Self {
         Self {
             workload,
@@ -1269,21 +1380,25 @@ impl ExecutionRequest {
         }
     }
 
+    /// Requests deterministic execution with the supplied seed.
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
     }
 
+    /// Sets execution priority.
     pub fn with_priority(mut self, priority: u32) -> Self {
         self.priority = priority;
         self
     }
 
+    /// Requests synchronous provider behaviour.
     pub fn synchronous(mut self) -> Self {
         self.asynchronous = false;
         self
     }
 
+    /// Sets a validated request identifier.
     pub fn with_request_id(
         mut self,
         request_id: impl Into<String>,
@@ -1293,19 +1408,14 @@ impl ExecutionRequest {
         validate_identifier(
             "request_id",
             &request_id,
-            MAX_BACKEND_ID_LENGTH,
+            MAX_REQUEST_ID_LENGTH,
         )?;
-
-        if looks_like_secret_value(&request_id) {
-            return Err(BackendError::SecretLikeMetadata {
-                key: "request_id".to_string(),
-            });
-        }
 
         self.request_id = Some(request_id);
         Ok(self)
     }
 
+    /// Adds validated non-secret metadata.
     pub fn insert_metadata(
         &mut self,
         key: impl Into<String>,
@@ -1317,12 +1427,49 @@ impl ExecutionRequest {
         validate_metadata_field(&key, &value)?;
 
         if looks_like_secret_key(&key) {
-            return Err(BackendError::SecretLikeMetadata {
-                key,
+            return Err(BackendError::SecretLikeMetadata { key });
+        }
+
+        if self.metadata.len() >= MAX_REQUEST_METADATA_PROPERTIES
+            && !self.metadata.contains_key(&key)
+        {
+            return Err(BackendError::MetadataLimitExceeded {
+                maximum: MAX_REQUEST_METADATA_PROPERTIES,
             });
         }
 
         self.metadata.insert(key, value);
+        Ok(())
+    }
+
+    /// Validates request-local invariants without requiring a backend.
+    pub fn validate_structure(&self) -> Result<(), BackendError> {
+        self.workload.validate()?;
+
+        if let Some(request_id) = &self.request_id {
+            validate_identifier(
+                "request_id",
+                request_id,
+                MAX_REQUEST_ID_LENGTH,
+            )?;
+        }
+
+        if self.metadata.len() > MAX_REQUEST_METADATA_PROPERTIES {
+            return Err(BackendError::MetadataLimitExceeded {
+                maximum: MAX_REQUEST_METADATA_PROPERTIES,
+            });
+        }
+
+        for (key, value) in &self.metadata {
+            validate_metadata_field(key, value)?;
+
+            if looks_like_secret_key(key) {
+                return Err(BackendError::SecretLikeMetadata {
+                    key: key.clone(),
+                });
+            }
+        }
+
         Ok(())
     }
 }
@@ -1331,29 +1478,37 @@ impl ExecutionRequest {
 // Execution result
 // =============================================================================
 
-/// Generic normalized execution result.
+/// Normalized provider-neutral execution result.
 ///
-/// Provider-specific information must be stored in metadata, never in the
-/// core result semantics.
+/// Providers may expose richer results. Those are normalized here where a
+/// stable representation exists and may otherwise remain in metadata.
+///
+/// `counts` may be partial while a provider streams/constructs a result.
+/// `counts_match_shots()` is therefore the completeness check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionResult {
     /// Backend that produced the result.
     pub backend_id: String,
 
-    /// Number of shots represented by the result.
+    /// Number of requested/represented shots.
     pub shots: usize,
 
     /// Normalized classical bitstring counts.
     pub counts: BTreeMap<String, usize>,
 
-    /// Optional normalized expectation values.
+    /// Normalized expectation values.
+    ///
+    /// Values remain strings because the backend boundary deliberately avoids
+    /// prescribing one floating-point representation for every provider and
+    /// future observable type.
     pub expectation_values: BTreeMap<String, String>,
 
-    /// Provider-neutral metadata.
+    /// Non-secret provider-neutral metadata.
     pub metadata: BTreeMap<String, String>,
 }
 
 impl ExecutionResult {
+    /// Creates an empty normalized result.
     pub fn empty(
         backend_id: impl Into<String>,
         shots: usize,
@@ -1379,20 +1534,31 @@ impl ExecutionResult {
         })
     }
 
-    /// Returns the number of recorded samples in `counts`.
+    /// Returns the number of samples represented by normalized counts.
     pub fn counted_shots(&self) -> usize {
         self.counts
             .values()
             .copied()
-            .fold(0usize, |total, count| total.saturating_add(count))
+            .fold(0usize, |total, count| {
+                total.saturating_add(count)
+            })
     }
 
-    /// Returns whether normalized counts account for exactly all shots.
+    /// Returns true if counts exactly represent all requested shots.
     pub fn counts_match_shots(&self) -> bool {
         self.counted_shots() == self.shots
     }
 
-    /// Inserts a normalized bitstring count.
+    /// Returns true if no count currently exceeds the requested shot budget.
+    pub fn counts_within_shots(&self) -> bool {
+        self.counted_shots() <= self.shots
+    }
+
+    /// Inserts/replaces a normalized bitstring count.
+    ///
+    /// Replacing an existing key correctly subtracts the previous count before
+    /// applying the new count. This fixes the common accounting bug where
+    /// replacing a result entry falsely appears to exceed the shot count.
     pub fn insert_count(
         &mut self,
         bitstring: impl Into<String>,
@@ -1400,17 +1566,16 @@ impl ExecutionResult {
     ) -> Result<(), BackendError> {
         let bitstring = bitstring.into();
 
-        if bitstring.is_empty()
-            || !bitstring.bytes().all(|byte| byte == b'0' || byte == b'1')
-        {
-            return Err(BackendError::InvalidBitstring {
-                bitstring,
-            });
-        }
+        validate_bitstring(&bitstring)?;
 
+        let previous = self.counts.get(&bitstring).copied().unwrap_or(0);
         let current = self.counted_shots();
 
-        let new_total = current
+        let without_previous = current
+            .checked_sub(previous)
+            .ok_or(BackendError::ResultCountOverflow)?;
+
+        let new_total = without_previous
             .checked_add(count)
             .ok_or(BackendError::ResultCountOverflow)?;
 
@@ -1424,50 +1589,175 @@ impl ExecutionResult {
         self.counts.insert(bitstring, count);
         Ok(())
     }
+
+    /// Inserts an expectation value after validating its identifier.
+    pub fn insert_expectation_value(
+        &mut self,
+        observable: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Result<(), BackendError> {
+        let observable = observable.into();
+        let value = value.into();
+
+        validate_identifier(
+            "observable",
+            &observable,
+            MAX_METADATA_KEY_LENGTH,
+        )?;
+
+        if value.trim().is_empty()
+            || value.len() > MAX_METADATA_VALUE_LENGTH
+            || value.chars().any(char::is_control)
+        {
+            return Err(BackendError::InvalidMetadata {
+                key: observable,
+            });
+        }
+
+        self.expectation_values.insert(observable, value);
+        Ok(())
+    }
+
+    /// Validates the normalized result.
+    pub fn validate(&self) -> Result<(), BackendError> {
+        validate_identifier(
+            "backend_id",
+            &self.backend_id,
+            MAX_BACKEND_ID_LENGTH,
+        )?;
+
+        if self.shots == 0 {
+            return Err(BackendError::InvalidShots);
+        }
+
+        for bitstring in self.counts.keys() {
+            validate_bitstring(bitstring)?;
+        }
+
+        if !self.counts_within_shots() {
+            return Err(BackendError::ResultShotsExceeded {
+                represented: self.counted_shots(),
+                shots: self.shots,
+            });
+        }
+
+        for (key, value) in &self.expectation_values {
+            validate_identifier(
+                "observable",
+                key,
+                MAX_METADATA_KEY_LENGTH,
+            )?;
+
+            if value.trim().is_empty()
+                || value.len() > MAX_METADATA_VALUE_LENGTH
+                || value.chars().any(char::is_control)
+            {
+                return Err(BackendError::InvalidMetadata {
+                    key: key.clone(),
+                });
+            }
+        }
+
+        for (key, value) in &self.metadata {
+            validate_metadata_field(key, value)?;
+
+            if looks_like_secret_key(key) {
+                return Err(BackendError::SecretLikeMetadata {
+                    key: key.clone(),
+                });
+            }
+        }
+
+        Ok(())
+    }
 }
 
 // =============================================================================
-// Validation outcome
+// Validation
 // =============================================================================
 
 /// Severity of a backend validation diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ValidationSeverity {
-    /// Informational observation.
+    /// Informational diagnostic.
     Info,
 
-    /// Workload is valid but the caller should be aware of a limitation.
+    /// Non-blocking warning.
     Warning,
 
-    /// Workload cannot be submitted to this backend.
+    /// Blocking validation error.
     Error,
 }
 
 impl ValidationSeverity {
+    /// Returns true for blocking errors.
     pub const fn is_blocking(self) -> bool {
         matches!(self, Self::Error)
     }
+
+    const fn rank(self) -> u8 {
+        match self {
+            Self::Error => 0,
+            Self::Warning => 1,
+            Self::Info => 2,
+        }
+    }
 }
 
-/// Structured validation diagnostic.
-///
-/// The diagnostic is intentionally machine-readable so Danga, benchmarking,
-/// IDE/LSP integrations and provider adapters can consume it without parsing
-/// human-readable strings.
+/// Machine-readable backend validation diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationDiagnostic {
+    /// Stable diagnostic code.
     pub code: &'static str,
+
+    /// Severity.
     pub severity: ValidationSeverity,
+
+    /// Human-readable diagnostic.
     pub message: String,
+
+    /// Machine-readable requirement description.
     pub requirement: String,
+
+    /// Backend identifier.
     pub backend_id: String,
+
+    /// Original provider-neutral error, when applicable.
+    ///
+    /// Kept private so consumers do not depend on the internal diagnostic
+    /// construction format. `BackendValidationReport::first_error()` exposes
+    /// it safely.
+    source_error: Option<BackendError>,
 }
 
-/// Complete validation report.
+impl ValidationDiagnostic {
+    fn sort_key(&self) -> (
+        u8,
+        &'static str,
+        &str,
+        &str,
+        &str,
+    ) {
+        (
+            self.severity.rank(),
+            self.code,
+            self.requirement.as_str(),
+            self.message.as_str(),
+            self.backend_id.as_str(),
+        )
+    }
+}
+
+/// Complete deterministic backend validation report.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackendValidationReport {
+    /// Backend identifier.
     pub backend_id: String,
+
+    /// True when no blocking diagnostic exists.
     pub valid: bool,
+
+    /// Deterministically ordered diagnostics.
     pub diagnostics: Vec<ValidationDiagnostic>,
 }
 
@@ -1480,21 +1770,42 @@ impl BackendValidationReport {
         }
     }
 
+    fn push(
+        &mut self,
+        code: &'static str,
+        severity: ValidationSeverity,
+        message: String,
+        requirement: String,
+        source_error: Option<BackendError>,
+    ) {
+        if severity.is_blocking() {
+            self.valid = false;
+        }
+
+        self.diagnostics.push(ValidationDiagnostic {
+            code,
+            severity,
+            message,
+            requirement,
+            backend_id: self.backend_id.clone(),
+            source_error,
+        });
+    }
+
     fn error(
         &mut self,
         code: &'static str,
         message: String,
         requirement: String,
+        source_error: BackendError,
     ) {
-        self.valid = false;
-
-        self.diagnostics.push(ValidationDiagnostic {
+        self.push(
             code,
-            severity: ValidationSeverity::Error,
+            ValidationSeverity::Error,
             message,
             requirement,
-            backend_id: self.backend_id.clone(),
-        });
+            Some(source_error),
+        );
     }
 
     fn warning(
@@ -1503,29 +1814,43 @@ impl BackendValidationReport {
         message: String,
         requirement: String,
     ) {
-        self.diagnostics.push(ValidationDiagnostic {
+        self.push(
             code,
-            severity: ValidationSeverity::Warning,
+            ValidationSeverity::Warning,
             message,
             requirement,
-            backend_id: self.backend_id.clone(),
-        });
+            None,
+        );
     }
 
+    fn finalize(&mut self) {
+        self.diagnostics
+            .sort_by(|left, right| left.sort_key().cmp(&right.sort_key()));
+    }
+
+    /// Returns true when blocking diagnostics exist.
     pub fn has_errors(&self) -> bool {
         !self.valid
     }
 
+    /// Returns blocking diagnostics.
     pub fn errors(&self) -> impl Iterator<Item = &ValidationDiagnostic> {
         self.diagnostics
             .iter()
             .filter(|diagnostic| diagnostic.severity.is_blocking())
     }
 
+    /// Returns warnings.
     pub fn warnings(&self) -> impl Iterator<Item = &ValidationDiagnostic> {
         self.diagnostics.iter().filter(|diagnostic| {
             diagnostic.severity == ValidationSeverity::Warning
         })
+    }
+
+    /// Returns the first deterministic underlying backend error.
+    pub fn first_error(&self) -> Option<BackendError> {
+        self.errors()
+            .find_map(|diagnostic| diagnostic.source_error.clone())
     }
 }
 
@@ -1602,7 +1927,16 @@ pub enum BackendError {
         workload: QuantumWorkloadKind,
     },
 
+    InconsistentWorkloadKind {
+        declared: QuantumWorkloadKind,
+        inferred: QuantumWorkloadKind,
+    },
+
     UnsupportedCapability {
+        capability: String,
+    },
+
+    ExperimentalCapabilityNotAccepted {
         capability: String,
     },
 
@@ -1666,6 +2000,8 @@ pub enum BackendError {
 
     FreshCalibrationRequired,
 
+    InvalidWorkload(String),
+
     ExecutionUnavailable(String),
 
     ExecutionRejected(String),
@@ -1685,10 +2021,7 @@ pub enum BackendError {
 }
 
 impl fmt::Display for BackendError {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BackendUnavailable {
                 backend_id,
@@ -1707,10 +2040,7 @@ impl fmt::Display for BackendError {
                 write!(formatter, "invalid {field} identifier")
             }
 
-            Self::IdentifierTooLong {
-                field,
-                maximum,
-            } => {
+            Self::IdentifierTooLong { field, maximum } => {
                 write!(
                     formatter,
                     "{field} identifier exceeds maximum length {maximum}"
@@ -1731,7 +2061,7 @@ impl fmt::Display for BackendError {
             Self::SecretLikeMetadata { key } => {
                 write!(
                     formatter,
-                    "metadata field '{key}' appears to contain secret material"
+                    "metadata field '{key}' appears to contain secret material",
                 )
             }
 
@@ -1741,7 +2071,7 @@ impl fmt::Display for BackendError {
 
             Self::ZeroQubits => {
                 formatter.write_str(
-                    "circuit workload must contain at least one qubit",
+                    "gate-model workload must contain at least one qubit",
                 )
             }
 
@@ -1794,13 +2124,30 @@ impl fmt::Display for BackendError {
             ),
 
             Self::UnsupportedWorkload { workload } => {
-                write!(formatter, "backend does not support workload '{workload}'")
+                write!(
+                    formatter,
+                    "backend does not support workload '{workload}'"
+                )
+            }
+
+            Self::InconsistentWorkloadKind { declared, inferred } => {
+                write!(
+                    formatter,
+                    "workload declares kind '{declared}' but its requirements infer '{inferred}'"
+                )
             }
 
             Self::UnsupportedCapability { capability } => {
                 write!(
                     formatter,
                     "backend does not support required capability '{capability}'"
+                )
+            }
+
+            Self::ExperimentalCapabilityNotAccepted { capability } => {
+                write!(
+                    formatter,
+                    "required capability '{capability}' is experimental and cannot satisfy a stable requirement"
                 )
             }
 
@@ -1829,7 +2176,9 @@ impl fmt::Display for BackendError {
             }
 
             Self::DynamicCircuitUnsupported => {
-                formatter.write_str("backend does not support dynamic circuits")
+                formatter.write_str(
+                    "backend does not support dynamic circuits",
+                )
             }
 
             Self::PulseControlUnsupported => {
@@ -1841,11 +2190,15 @@ impl fmt::Display for BackendError {
             }
 
             Self::AnnealingUnsupported => {
-                formatter.write_str("backend does not support annealing workloads")
+                formatter.write_str(
+                    "backend does not support annealing workloads",
+                )
             }
 
             Self::LogicalQubitsUnsupported => {
-                formatter.write_str("backend does not expose logical qubits")
+                formatter.write_str(
+                    "backend does not expose logical qubits",
+                )
             }
 
             Self::FaultToleranceUnsupported => {
@@ -1861,7 +2214,9 @@ impl fmt::Display for BackendError {
             }
 
             Self::StateVectorUnsupported => {
-                formatter.write_str("backend does not support state-vector results")
+                formatter.write_str(
+                    "backend does not support state-vector results",
+                )
             }
 
             Self::DensityMatrixUnsupported => {
@@ -1885,16 +2240,15 @@ impl fmt::Display for BackendError {
                 qubit_count.saturating_sub(1)
             ),
 
-            Self::UnsupportedConnection {
-                control,
-                target,
-            } => write!(
+            Self::UnsupportedConnection { control, target } => write!(
                 formatter,
                 "backend topology does not support native connection {control} -> {target}"
             ),
 
             Self::TopologyUnavailable => {
-                formatter.write_str("backend topology information is unavailable")
+                formatter.write_str(
+                    "backend topology information is unavailable",
+                )
             }
 
             Self::InvalidTopology(message) => {
@@ -1933,6 +2287,10 @@ impl fmt::Display for BackendError {
                 )
             }
 
+            Self::InvalidWorkload(message) => {
+                write!(formatter, "invalid workload: {message}")
+            }
+
             Self::ExecutionUnavailable(message) => {
                 write!(formatter, "execution unavailable: {message}")
             }
@@ -1942,7 +2300,9 @@ impl fmt::Display for BackendError {
             }
 
             Self::ResultCountOverflow => {
-                formatter.write_str("execution result shot count overflowed")
+                formatter.write_str(
+                    "execution result shot count overflowed",
+                )
             }
 
             Self::ResultShotsExceeded {
@@ -1974,25 +2334,26 @@ impl From<TopologyError> for BackendError {
 }
 
 // =============================================================================
-// Quantum backend
+// Quantum backend aggregate
 // =============================================================================
 
-/// Canonical provider-neutral quantum backend.
+/// Canonical provider-neutral quantum backend descriptor.
 ///
-/// This is a backend descriptor and validation boundary.
+/// `QuantumBackend` is intentionally a descriptor/validation aggregate.
 ///
-/// Actual provider execution is supplied by adapters implementing the later
-/// backend/provider execution traits. `QuantumBackend` itself deliberately does
-/// not perform network/device I/O.
+/// It is NOT itself a network executor.
+///
+/// A provider adapter receives a validated backend and execution request and
+/// performs the actual provider operation.
 #[derive(Debug, Clone)]
 pub struct QuantumBackend {
     /// Stable backend metadata.
     pub metadata: BackendMetadata,
 
-    /// Advertised capabilities.
+    /// Backend capabilities.
     pub capabilities: BackendCapabilities,
 
-    /// Hard resource limits.
+    /// Backend resource limits.
     pub limits: BackendLimits,
 
     /// Authoritative physical topology.
@@ -2000,7 +2361,7 @@ pub struct QuantumBackend {
 }
 
 impl QuantumBackend {
-    /// Creates a validated backend descriptor.
+    /// Constructs and fully validates a backend descriptor.
     pub fn new(
         metadata: BackendMetadata,
         capabilities: BackendCapabilities,
@@ -2028,7 +2389,7 @@ impl QuantumBackend {
         &self.metadata.id
     }
 
-    /// Provider identifier.
+    /// Stable provider identifier.
     pub fn provider(&self) -> &str {
         &self.metadata.provider
     }
@@ -2038,66 +2399,88 @@ impl QuantumBackend {
         self.metadata.kind
     }
 
-    /// Backend operational status.
+    /// Backend status.
     pub const fn status(&self) -> BackendStatus {
         self.metadata.status
     }
 
-    /// Returns true if ordinary execution is currently permitted.
+    /// Returns true when status permits ordinary execution.
     pub const fn is_available(&self) -> bool {
         self.metadata.status.is_usable()
     }
 
-    /// Updates the operational status.
-    ///
-    /// Status mutation does not modify topology, capabilities or limits.
+    /// Changes only operational status.
     pub fn set_status(&mut self, status: BackendStatus) {
         self.metadata.status = status;
     }
 
-    /// Number of physical resources represented by topology.
+    /// Physical resource count represented by the topology.
     pub const fn qubit_count(&self) -> usize {
         self.topology.qubit_count()
     }
 
-    /// Number of topology couplings.
+    /// Number of physical couplings.
     pub const fn coupling_count(&self) -> usize {
         self.topology.coupling_count()
     }
 
-    /// Returns the deterministic native instruction list.
+    /// Returns native instructions in deterministic order.
     pub fn native_gates(&self) -> Vec<String> {
-        self.capabilities.native_gates.iter().cloned().collect()
+        self.capabilities
+            .native_gates
+            .iter()
+            .cloned()
+            .collect()
     }
 
-    /// Returns a reference to the authoritative topology.
+    /// Returns the authoritative topology.
     pub fn topology(&self) -> &HardwareTopology {
         &self.topology
     }
 
-    /// Returns the complete backend descriptor as a cheap borrowed view.
+    /// Returns a borrowed immutable descriptor.
     pub fn descriptor(&self) -> BackendDescriptor<'_> {
         BackendDescriptor { backend: self }
     }
 
-    /// Performs a complete compatibility/validation analysis.
+    /// Returns all stable capability identifiers.
+    pub fn capability_names(&self) -> Vec<String> {
+        self.capabilities.stable_names()
+    }
+
+    /// Produces a complete deterministic validation report.
     pub fn validation_report(
         &self,
         requirements: &WorkloadRequirements,
     ) -> BackendValidationReport {
         let mut report = BackendValidationReport::new(self.id());
 
+        if let Err(error) = requirements.validate() {
+            report.error(
+                "INVALID_WORKLOAD",
+                error.to_string(),
+                "workload_invariants=true".to_string(),
+                error,
+            );
+
+            report.finalize();
+            return report;
+        }
+
         self.validate_status_report(&mut report);
+        self.validate_workload_kind_report(requirements, &mut report);
         self.validate_resource_report(requirements, &mut report);
-        self.validate_workload_report(requirements, &mut report);
         self.validate_capability_report(requirements, &mut report);
         self.validate_instruction_report(requirements, &mut report);
         self.validate_topology_report(requirements, &mut report);
 
+        report.finalize();
         report
     }
 
-    /// Validates a workload and returns a structured error on failure.
+    /// Validates a workload.
+    ///
+    /// The returned error preserves the exact requested and maximum values.
     pub fn validate(
         &self,
         requirements: &WorkloadRequirements,
@@ -2107,25 +2490,32 @@ impl QuantumBackend {
         if report.valid {
             Ok(())
         } else {
-            first_validation_error(&report)
+            Err(report.first_error().unwrap_or_else(|| {
+                BackendError::ExecutionRejected(
+                    "backend validation failed without a structured error"
+                        .to_string(),
+                )
+            }))
         }
     }
 
-    /// Backwards-compatible circuit validation entry point.
+    /// Backwards-compatible gate-model validation entry point.
     pub fn validate_circuit(
         &self,
         requirements: &CircuitRequirements,
     ) -> Result<(), BackendError> {
-        let workload = WorkloadRequirements::from_circuit(requirements.clone());
+        let workload =
+            WorkloadRequirements::from_circuit(requirements.clone());
 
         self.validate(&workload)
     }
 
-    /// Validates an execution request before it reaches an adapter.
+    /// Validates a complete execution request before provider submission.
     pub fn validate_request(
         &self,
         request: &ExecutionRequest,
     ) -> Result<(), BackendError> {
+        request.validate_structure()?;
         self.validate(&request.workload)?;
 
         if request.seed.is_some()
@@ -2137,23 +2527,9 @@ impl QuantumBackend {
         Ok(())
     }
 
-    /// Performs provider-independent preflight validation.
+    /// Provider-independent preflight boundary.
     ///
-    /// This is the correct execution boundary for provider adapters:
-    ///
-    /// ```text
-    /// adapter
-    ///   |
-    ///   v
-    /// backend.validate_request()
-    ///   |
-    ///   +--> rejected before provider I/O
-    ///   |
-    ///   v
-    /// provider submission
-    /// ```
-    ///
-    /// This method intentionally does NOT submit work.
+    /// Provider adapters MUST call this before provider I/O.
     pub fn preflight(
         &self,
         request: &ExecutionRequest,
@@ -2161,86 +2537,19 @@ impl QuantumBackend {
         self.validate_request(request)
     }
 
-    /// Returns a deterministic summary of backend capabilities.
-    pub fn capability_names(&self) -> Vec<String> {
-        let mut capabilities = BTreeSet::new();
-
-        macro_rules! add {
-            ($field:ident, $name:literal) => {
-                if self.capabilities.$field {
-                    capabilities.insert($name.to_string());
-                }
-            };
-        }
-
-        add!(measurement, "measurement");
-        add!(reset, "reset");
-        add!(
-            mid_circuit_measurement,
-            "mid_circuit_measurement"
-        );
-        add!(classical_control, "classical_control");
-        add!(dynamic_circuits, "dynamic_circuits");
-        add!(
-            arbitrary_single_qubit_rotations,
-            "arbitrary_single_qubit_rotations"
-        );
-        add!(parameterized_gates, "parameterized_gates");
-        add!(three_qubit_operations, "three_qubit_operations");
-        add!(
-            multi_qubit_operations,
-            "multi_qubit_operations"
-        );
-        add!(parallel_operations, "parallel_operations");
-        add!(batch_execution, "batch_execution");
-        add!(streaming_results, "streaming_results");
-        add!(cancellation, "cancellation");
-        add!(queue_information, "queue_information");
-        add!(pulse_control, "pulse_control");
-        add!(analog_control, "analog_control");
-        add!(annealing, "annealing");
-        add!(logical_qubits, "logical_qubits");
-        add!(fault_tolerance, "fault_tolerance");
-        add!(syndrome_measurement, "syndrome_measurement");
-        add!(decoder_execution, "decoder_execution");
-        add!(deterministic_seeding, "deterministic_seeding");
-        add!(state_vector_results, "state_vector_results");
-        add!(density_matrix_results, "density_matrix_results");
-        add!(
-            expectation_value_results,
-            "expectation_value_results"
-        );
-        add!(readout_mitigation, "readout_mitigation");
-        add!(error_mitigation, "error_mitigation");
-        add!(calibration_data, "calibration_data");
-        add!(timing_information, "timing_information");
-        add!(topology_information, "topology_information");
-        add!(
-            native_instruction_set,
-            "native_instruction_set"
-        );
-
-        capabilities
-            .into_iter()
-            .collect()
-    }
-
     fn validate_internal_consistency(&self) -> Result<(), BackendError> {
-        if self.limits.max_qubits != 0
-            && self.limits.max_qubits > self.qubit_count()
-        {
-            // This is not an error. A provider may advertise a topology
-            // snapshot smaller than its theoretical maximum. Therefore no
-            // rejection is performed here.
-        }
-
-        if self.capabilities.native_instruction_set
-            && self.capabilities.native_gates.len()
-                > MAX_NATIVE_INSTRUCTIONS
+        if self.capabilities.native_gates.len()
+            > MAX_NATIVE_INSTRUCTIONS
         {
             return Err(BackendError::RequiredInstructionLimitExceeded {
                 maximum: MAX_NATIVE_INSTRUCTIONS,
             });
+        }
+
+        if self.capabilities.native_instruction_set
+            && self.capabilities.native_gates.is_empty()
+        {
+            return Err(BackendError::NativeInstructionSetUnavailable);
         }
 
         Ok(())
@@ -2255,7 +2564,8 @@ impl QuantumBackend {
 
             BackendStatus::Degraded => report.warning(
                 "BACKEND_DEGRADED",
-                "backend is operational but currently degraded".to_string(),
+                "backend is operational but currently degraded"
+                    .to_string(),
                 "backend_status=degraded".to_string(),
             ),
 
@@ -2263,37 +2573,86 @@ impl QuantumBackend {
                 "BACKEND_BUSY",
                 "backend is currently busy".to_string(),
                 "backend_status=available".to_string(),
+                BackendError::BackendUnavailable {
+                    backend_id: self.id().to_string(),
+                    status: BackendStatus::Busy,
+                },
             ),
 
             BackendStatus::Unknown => report.error(
                 "BACKEND_STATUS_UNKNOWN",
                 "backend operational status is unknown".to_string(),
                 "backend_status=known".to_string(),
+                BackendError::BackendUnavailable {
+                    backend_id: self.id().to_string(),
+                    status: BackendStatus::Unknown,
+                },
             ),
 
             BackendStatus::Maintenance => report.error(
                 "BACKEND_MAINTENANCE",
                 "backend is under maintenance".to_string(),
                 "backend_status=available".to_string(),
+                BackendError::BackendUnavailable {
+                    backend_id: self.id().to_string(),
+                    status: BackendStatus::Maintenance,
+                },
             ),
 
             BackendStatus::Offline => report.error(
                 "BACKEND_OFFLINE",
                 "backend is offline".to_string(),
                 "backend_status=available".to_string(),
+                BackendError::BackendUnavailable {
+                    backend_id: self.id().to_string(),
+                    status: BackendStatus::Offline,
+                },
             ),
 
             BackendStatus::Retired => report.error(
                 "BACKEND_RETIRED",
                 "backend has been retired".to_string(),
                 "backend_status=available".to_string(),
+                BackendError::BackendUnavailable {
+                    backend_id: self.id().to_string(),
+                    status: BackendStatus::Retired,
+                },
             ),
 
             BackendStatus::Unavailable => report.error(
                 "BACKEND_UNAVAILABLE",
                 "backend is unavailable".to_string(),
                 "backend_status=available".to_string(),
+                BackendError::BackendUnavailable {
+                    backend_id: self.id().to_string(),
+                    status: BackendStatus::Unavailable,
+                },
             ),
+        }
+    }
+
+    fn validate_workload_kind_report(
+        &self,
+        requirements: &WorkloadRequirements,
+        report: &mut BackendValidationReport,
+    ) {
+        let inferred = requirements.circuit.inferred_kind();
+
+        if requirements.kind != QuantumWorkloadKind::Custom
+            && requirements.kind != inferred
+        {
+            report.error(
+                "WORKLOAD_KIND_MISMATCH",
+                format!(
+                    "declared workload kind '{}' does not match inferred kind '{}'",
+                    requirements.kind, inferred
+                ),
+                format!("kind={}", requirements.kind),
+                BackendError::InconsistentWorkloadKind {
+                    declared: requirements.kind,
+                    inferred,
+                },
+            );
         }
     }
 
@@ -2304,11 +2663,23 @@ impl QuantumBackend {
     ) {
         let circuit = &requirements.circuit;
 
-        if circuit.qubit_count == 0 {
+        let requires_qubits = matches!(
+            requirements.kind,
+            QuantumWorkloadKind::GateCircuit
+                | QuantumWorkloadKind::DynamicCircuit
+                | QuantumWorkloadKind::PulseProgram
+                | QuantumWorkloadKind::LogicalProgram
+                | QuantumWorkloadKind::Sampling
+                | QuantumWorkloadKind::Custom
+        );
+
+        if requires_qubits && circuit.qubit_count == 0 {
             report.error(
                 "ZERO_QUBITS",
-                "gate workload contains zero qubits".to_string(),
+                "workload requires at least one quantum resource"
+                    .to_string(),
                 "qubit_count>0".to_string(),
+                BackendError::ZeroQubits,
             );
         }
 
@@ -2320,7 +2691,14 @@ impl QuantumBackend {
                     circuit.qubit_count,
                     self.limits.max_qubits
                 ),
-                format!("qubit_count<={}", self.limits.max_qubits),
+                format!(
+                    "qubit_count<={}",
+                    self.limits.max_qubits
+                ),
+                BackendError::QubitLimitExceeded {
+                    requested: circuit.qubit_count,
+                    maximum: self.limits.max_qubits,
+                },
             );
         }
 
@@ -2339,6 +2717,10 @@ impl QuantumBackend {
                     "logical_qubit_count<={}",
                     self.limits.max_logical_qubits
                 ),
+                BackendError::LogicalQubitLimitExceeded {
+                    requested: circuit.logical_qubit_count,
+                    maximum: self.limits.max_logical_qubits,
+                },
             );
         }
 
@@ -2350,7 +2732,14 @@ impl QuantumBackend {
                     circuit.circuit_depth,
                     self.limits.max_circuit_depth
                 ),
-                format!("circuit_depth<={}", self.limits.max_circuit_depth),
+                format!(
+                    "circuit_depth<={}",
+                    self.limits.max_circuit_depth
+                ),
+                BackendError::CircuitDepthExceeded {
+                    requested: circuit.circuit_depth,
+                    maximum: self.limits.max_circuit_depth,
+                },
             );
         }
 
@@ -2369,6 +2758,10 @@ impl QuantumBackend {
                     "operation_count<={}",
                     self.limits.max_operations
                 ),
+                BackendError::OperationLimitExceeded {
+                    requested: circuit.operation_count,
+                    maximum: self.limits.max_operations,
+                },
             );
         }
 
@@ -2377,6 +2770,7 @@ impl QuantumBackend {
                 "INVALID_SHOTS",
                 "shot count must be greater than zero".to_string(),
                 "shots>0".to_string(),
+                BackendError::InvalidShots,
             );
         } else if !self.limits.allows_shots(circuit.shots) {
             report.error(
@@ -2387,6 +2781,10 @@ impl QuantumBackend {
                     self.limits.max_shots
                 ),
                 format!("shots<={}", self.limits.max_shots),
+                BackendError::ShotLimitExceeded {
+                    requested: circuit.shots,
+                    maximum: self.limits.max_shots,
+                },
             );
         }
 
@@ -2405,50 +2803,10 @@ impl QuantumBackend {
                     "classical_bit_count<={}",
                     self.limits.max_classical_bits
                 ),
-            );
-        }
-    }
-
-    fn validate_workload_report(
-        &self,
-        requirements: &WorkloadRequirements,
-        report: &mut BackendValidationReport,
-    ) {
-        let supported = match requirements.kind {
-            QuantumWorkloadKind::GateCircuit
-            | QuantumWorkloadKind::Sampling => true,
-
-            QuantumWorkloadKind::DynamicCircuit => {
-                self.capabilities.dynamic_circuits
-            }
-
-            QuantumWorkloadKind::PulseProgram => {
-                self.capabilities.pulse_control
-            }
-
-            QuantumWorkloadKind::AnalogProgram => {
-                self.capabilities.analog_control
-            }
-
-            QuantumWorkloadKind::AnnealingProblem => {
-                self.capabilities.annealing
-            }
-
-            QuantumWorkloadKind::LogicalProgram => {
-                self.capabilities.logical_qubits
-            }
-
-            QuantumWorkloadKind::Custom => true,
-        };
-
-        if !supported {
-            report.error(
-                "UNSUPPORTED_WORKLOAD",
-                format!(
-                    "backend does not support workload '{}'",
-                    requirements.kind
-                ),
-                format!("workload={}", requirements.kind),
+                BackendError::ClassicalBitLimitExceeded {
+                    requested: circuit.classical_bit_count,
+                    maximum: self.limits.max_classical_bits,
+                },
             );
         }
     }
@@ -2461,11 +2819,53 @@ impl QuantumBackend {
         let circuit = &requirements.circuit;
         let capabilities = &self.capabilities;
 
+        let workload_supported = match requirements.kind {
+            QuantumWorkloadKind::GateCircuit
+            | QuantumWorkloadKind::Sampling => true,
+
+            QuantumWorkloadKind::DynamicCircuit => {
+                capabilities.dynamic_circuits
+            }
+
+            QuantumWorkloadKind::PulseProgram => {
+                capabilities.pulse_control
+            }
+
+            QuantumWorkloadKind::AnalogProgram => {
+                capabilities.analog_control
+            }
+
+            QuantumWorkloadKind::AnnealingProblem => {
+                capabilities.annealing
+            }
+
+            QuantumWorkloadKind::LogicalProgram => {
+                capabilities.logical_qubits
+            }
+
+            QuantumWorkloadKind::Custom => true,
+        };
+
+        if !workload_supported {
+            report.error(
+                "UNSUPPORTED_WORKLOAD",
+                format!(
+                    "backend does not support workload '{}'",
+                    requirements.kind
+                ),
+                format!("workload={}", requirements.kind),
+                BackendError::UnsupportedWorkload {
+                    workload: requirements.kind,
+                },
+            );
+        }
+
         if circuit.requires_measurement && !capabilities.measurement {
             report.error(
                 "MEASUREMENT_UNSUPPORTED",
                 "measurement is required but unsupported".to_string(),
                 "measurement=true".to_string(),
+                BackendError::MeasurementUnsupported,
             );
         }
 
@@ -2474,6 +2874,7 @@ impl QuantumBackend {
                 "RESET_UNSUPPORTED",
                 "reset is required but unsupported".to_string(),
                 "reset=true".to_string(),
+                BackendError::ResetUnsupported,
             );
         }
 
@@ -2485,6 +2886,7 @@ impl QuantumBackend {
                 "mid-circuit measurement is required but unsupported"
                     .to_string(),
                 "mid_circuit_measurement=true".to_string(),
+                BackendError::MidCircuitMeasurementUnsupported,
             );
         }
 
@@ -2496,6 +2898,7 @@ impl QuantumBackend {
                 "classical feed-forward is required but unsupported"
                     .to_string(),
                 "classical_control=true".to_string(),
+                BackendError::ClassicalControlUnsupported,
             );
         }
 
@@ -2506,6 +2909,7 @@ impl QuantumBackend {
                 "DYNAMIC_CIRCUIT_UNSUPPORTED",
                 "dynamic circuits are required but unsupported".to_string(),
                 "dynamic_circuits=true".to_string(),
+                BackendError::DynamicCircuitUnsupported,
             );
         }
 
@@ -2514,6 +2918,7 @@ impl QuantumBackend {
                 "PULSE_CONTROL_UNSUPPORTED",
                 "pulse-level control is required but unsupported".to_string(),
                 "pulse_control=true".to_string(),
+                BackendError::PulseControlUnsupported,
             );
         }
 
@@ -2522,6 +2927,7 @@ impl QuantumBackend {
                 "ANALOG_CONTROL_UNSUPPORTED",
                 "analog control is required but unsupported".to_string(),
                 "analog_control=true".to_string(),
+                BackendError::AnalogControlUnsupported,
             );
         }
 
@@ -2530,14 +2936,18 @@ impl QuantumBackend {
                 "ANNEALING_UNSUPPORTED",
                 "annealing is required but unsupported".to_string(),
                 "annealing=true".to_string(),
+                BackendError::AnnealingUnsupported,
             );
         }
 
-        if circuit.requires_logical_qubits && !capabilities.logical_qubits {
+        if circuit.requires_logical_qubits
+            && !capabilities.logical_qubits
+        {
             report.error(
                 "LOGICAL_QUBITS_UNSUPPORTED",
                 "logical qubits are required but unavailable".to_string(),
                 "logical_qubits=true".to_string(),
+                BackendError::LogicalQubitsUnsupported,
             );
         }
 
@@ -2549,6 +2959,7 @@ impl QuantumBackend {
                 "fault-tolerant execution is required but unsupported"
                     .to_string(),
                 "fault_tolerance=true".to_string(),
+                BackendError::FaultToleranceUnsupported,
             );
         }
 
@@ -2560,6 +2971,7 @@ impl QuantumBackend {
                 "deterministic seeded execution is required but unsupported"
                     .to_string(),
                 "deterministic_seeding=true".to_string(),
+                BackendError::DeterministicSeedingUnsupported,
             );
         }
 
@@ -2571,6 +2983,7 @@ impl QuantumBackend {
                 "state-vector results are required but unsupported"
                     .to_string(),
                 "state_vector_results=true".to_string(),
+                BackendError::StateVectorUnsupported,
             );
         }
 
@@ -2582,6 +2995,7 @@ impl QuantumBackend {
                 "density-matrix results are required but unsupported"
                     .to_string(),
                 "density_matrix_results=true".to_string(),
+                BackendError::DensityMatrixUnsupported,
             );
         }
 
@@ -2593,11 +3007,28 @@ impl QuantumBackend {
                 "expectation-value results are required but unsupported"
                     .to_string(),
                 "expectation_value_results=true".to_string(),
+                BackendError::ExpectationValuesUnsupported,
             );
         }
 
         for capability in &requirements.required_capabilities {
-            if !capabilities.supports_capability(capability) {
+            if capabilities.supports_capability(capability) {
+                continue;
+            }
+
+            if capabilities.is_experimental(capability) {
+                report.error(
+                    "EXPERIMENTAL_CAPABILITY",
+                    format!(
+                        "required capability '{}' is experimental and cannot satisfy a stable requirement",
+                        capability
+                    ),
+                    format!("stable_capability={capability}"),
+                    BackendError::ExperimentalCapabilityNotAccepted {
+                        capability: capability.clone(),
+                    },
+                );
+            } else {
                 report.error(
                     "REQUIRED_CAPABILITY_UNSUPPORTED",
                     format!(
@@ -2605,6 +3036,9 @@ impl QuantumBackend {
                         capability
                     ),
                     format!("capability={capability}"),
+                    BackendError::UnsupportedCapability {
+                        capability: capability.clone(),
+                    },
                 );
             }
         }
@@ -2616,6 +3050,7 @@ impl QuantumBackend {
                 "TOPOLOGY_INFORMATION_UNAVAILABLE",
                 "workload requires topology information".to_string(),
                 "topology_information=true".to_string(),
+                BackendError::TopologyUnavailable,
             );
         }
 
@@ -2626,6 +3061,7 @@ impl QuantumBackend {
                 "CALIBRATION_UNAVAILABLE",
                 "workload requires calibration information".to_string(),
                 "calibration_data=true".to_string(),
+                BackendError::CalibrationUnavailable,
             );
         }
 
@@ -2636,11 +3072,15 @@ impl QuantumBackend {
                     "fresh calibration is required but calibration data is unavailable"
                         .to_string(),
                     "calibration_data=true".to_string(),
+                    BackendError::CalibrationUnavailable,
                 );
             } else {
+                // The backend layer cannot determine freshness without the
+                // calibration subsystem. It deliberately emits a warning
+                // rather than pretending freshness has been verified.
                 report.warning(
                     "CALIBRATION_FRESHNESS_DEFERRED",
-                    "calibration freshness must be checked against the selected calibration snapshot before submission"
+                    "calibration freshness must be verified against the selected calibration snapshot before provider submission"
                         .to_string(),
                     "fresh_calibration=true".to_string(),
                 );
@@ -2653,8 +3093,6 @@ impl QuantumBackend {
         requirements: &WorkloadRequirements,
         report: &mut BackendValidationReport,
     ) {
-        let circuit = &requirements.circuit;
-
         if requirements.required_instructions.len()
             > MAX_REQUIRED_INSTRUCTIONS
         {
@@ -2668,20 +3106,28 @@ impl QuantumBackend {
                     "required_instruction_count<={}",
                     MAX_REQUIRED_INSTRUCTIONS
                 ),
+                BackendError::RequiredInstructionLimitExceeded {
+                    maximum: MAX_REQUIRED_INSTRUCTIONS,
+                },
             );
 
             return;
         }
 
+        if !requirements.required_instructions.is_empty()
+            && !self.capabilities.native_instruction_set
+        {
+            report.error(
+                "NATIVE_INSTRUCTION_SET_UNAVAILABLE",
+                "workload requires native instruction matching but backend does not expose its native instruction set"
+                    .to_string(),
+                "native_instruction_set=true".to_string(),
+                BackendError::NativeInstructionSetUnavailable,
+            );
+        }
+
         for instruction in &requirements.required_instructions {
             if !self.capabilities.native_instruction_set {
-                report.error(
-                    "NATIVE_INSTRUCTION_SET_UNAVAILABLE",
-                    "workload requires native instruction matching but backend does not expose its native instruction set"
-                        .to_string(),
-                    format!("native_instruction={instruction}"),
-                );
-
                 continue;
             }
 
@@ -2692,12 +3138,17 @@ impl QuantumBackend {
                         "backend does not expose required native instruction '{}'",
                         instruction
                     ),
-                    format!("native_instruction={instruction}"),
+                    format!(
+                        "native_instruction={instruction}"
+                    ),
+                    BackendError::UnsupportedGate {
+                        gate: instruction.clone(),
+                    },
                 );
             }
         }
 
-        for gate in &circuit.gates {
+        for gate in &requirements.circuit.gates {
             let normalized = normalize_instruction_name(gate);
 
             if normalized.is_empty() {
@@ -2706,6 +3157,9 @@ impl QuantumBackend {
                     "workload contains an empty instruction identifier"
                         .to_string(),
                     "instruction_name!=empty".to_string(),
+                    BackendError::InvalidIdentifier {
+                        field: "instruction",
+                    },
                 );
 
                 continue;
@@ -2733,7 +3187,12 @@ impl QuantumBackend {
                     "backend does not support instruction '{}'",
                     gate
                 ),
-                format!("native_instruction={normalized}"),
+                format!(
+                    "native_instruction={normalized}"
+                ),
+                BackendError::UnsupportedGate {
+                    gate: normalized,
+                },
             );
         }
     }
@@ -2745,10 +3204,6 @@ impl QuantumBackend {
     ) {
         let circuit = &requirements.circuit;
 
-        if circuit.qubit_count == 0 {
-            return;
-        }
-
         if !self.capabilities.topology_information {
             if !circuit.two_qubit_edges.is_empty()
                 || requirements.requires_topology
@@ -2758,9 +3213,14 @@ impl QuantumBackend {
                     "workload requires topology information but backend does not expose it"
                         .to_string(),
                     "topology_information=true".to_string(),
+                    BackendError::TopologyUnavailable,
                 );
             }
 
+            return;
+        }
+
+        if circuit.qubit_count == 0 {
             return;
         }
 
@@ -2769,6 +3229,7 @@ impl QuantumBackend {
                 "EMPTY_TOPOLOGY",
                 "backend topology contains zero resources".to_string(),
                 "topology.qubit_count>0".to_string(),
+                BackendError::TopologyUnavailable,
             );
 
             return;
@@ -2786,6 +3247,10 @@ impl QuantumBackend {
                     "qubit_count<={}",
                     self.topology.qubit_count()
                 ),
+                BackendError::QubitLimitExceeded {
+                    requested: circuit.qubit_count,
+                    maximum: self.topology.qubit_count(),
+                },
             );
         }
 
@@ -2802,6 +3267,9 @@ impl QuantumBackend {
                     "topology_edge_count<={}",
                     MAX_REQUIRED_TOPOLOGY_EDGES
                 ),
+                BackendError::RequiredTopologyEdgeLimitExceeded {
+                    maximum: MAX_REQUIRED_TOPOLOGY_EDGES,
+                },
             );
 
             return;
@@ -2819,6 +3287,10 @@ impl QuantumBackend {
                         "control_qubit<{}",
                         circuit.qubit_count
                     ),
+                    BackendError::InvalidQubit {
+                        qubit: control,
+                        qubit_count: circuit.qubit_count,
+                    },
                 );
 
                 continue;
@@ -2835,6 +3307,10 @@ impl QuantumBackend {
                         "target_qubit<{}",
                         circuit.qubit_count
                     ),
+                    BackendError::InvalidQubit {
+                        qubit: target,
+                        qubit_count: circuit.qubit_count,
+                    },
                 );
 
                 continue;
@@ -2844,10 +3320,14 @@ impl QuantumBackend {
                 report.error(
                     "SELF_INTERACTION",
                     format!(
-                        "two-qubit operation cannot target the same qubit {} twice",
+                        "two-qubit operation cannot target the same resource {} twice",
                         control
                     ),
                     "control!=target".to_string(),
+                    BackendError::UnsupportedConnection {
+                        control,
+                        target,
+                    },
                 );
 
                 continue;
@@ -2859,17 +3339,25 @@ impl QuantumBackend {
                 Ok(false) => report.error(
                     "UNSUPPORTED_CONNECTION",
                     format!(
-                        "backend has no native connection from {} to {}",
-                        control,
-                        target
+                        "backend topology does not support native connection {} -> {}",
+                        control, target
                     ),
-                    format!("native_connection={control}->{target}"),
+                    format!(
+                        "native_connection={control}->{target}"
+                    ),
+                    BackendError::UnsupportedConnection {
+                        control,
+                        target,
+                    },
                 ),
 
                 Err(error) => report.error(
                     "TOPOLOGY_QUERY_FAILED",
                     error.to_string(),
-                    format!("native_connection={control}->{target}"),
+                    format!(
+                        "native_connection={control}->{target}"
+                    ),
+                    BackendError::Topology(error),
                 ),
             }
         }
@@ -2882,46 +3370,55 @@ impl QuantumBackend {
 
 /// Immutable borrowed backend descriptor.
 ///
-/// This is useful for registries and discovery without cloning the entire
-/// backend.
+/// This allows registries and discovery systems to inspect a backend without
+/// cloning its complete topology/capability structures.
 #[derive(Debug, Clone, Copy)]
 pub struct BackendDescriptor<'a> {
     backend: &'a QuantumBackend,
 }
 
 impl<'a> BackendDescriptor<'a> {
+    /// Backend ID.
     pub fn id(self) -> &'a str {
         self.backend.id()
     }
 
+    /// Provider ID.
     pub fn provider(self) -> &'a str {
         self.backend.provider()
     }
 
+    /// Backend kind.
     pub const fn kind(self) -> BackendKind {
         self.backend.kind()
     }
 
+    /// Backend status.
     pub const fn status(self) -> BackendStatus {
         self.backend.status()
     }
 
+    /// Physical resource count.
     pub const fn qubit_count(self) -> usize {
         self.backend.qubit_count()
     }
 
+    /// Coupling count.
     pub const fn coupling_count(self) -> usize {
         self.backend.coupling_count()
     }
 
+    /// Backend capabilities.
     pub fn capabilities(self) -> &'a BackendCapabilities {
         &self.backend.capabilities
     }
 
-    pub fn limits(self) -> BackendLimits {
+    /// Backend limits.
+    pub const fn limits(self) -> BackendLimits {
         self.backend.limits
     }
 
+    /// Backend topology.
     pub fn topology(self) -> &'a HardwareTopology {
         &self.backend.topology
     }
@@ -2958,6 +3455,44 @@ fn validate_backend_metadata(
         MAX_BACKEND_VERSION_LENGTH,
     )?;
 
+    if let Some(value) = &metadata.hardware_revision {
+        validate_identifier(
+            "hardware_revision",
+            value,
+            MAX_HARDWARE_REVISION_LENGTH,
+        )?;
+    }
+
+    if let Some(value) = &metadata.firmware_version {
+        validate_identifier(
+            "firmware_version",
+            value,
+            MAX_FIRMWARE_VERSION_LENGTH,
+        )?;
+    }
+
+    if let Some(value) = &metadata.api_version {
+        validate_identifier(
+            "api_version",
+            value,
+            MAX_API_VERSION_LENGTH,
+        )?;
+    }
+
+    if let Some(value) = &metadata.region {
+        validate_identifier(
+            "region",
+            value,
+            MAX_REGION_LENGTH,
+        )?;
+    }
+
+    if metadata.properties.len() > MAX_METADATA_PROPERTIES {
+        return Err(BackendError::MetadataLimitExceeded {
+            maximum: MAX_METADATA_PROPERTIES,
+        });
+    }
+
     for (key, value) in &metadata.properties {
         validate_metadata_field(key, value)?;
 
@@ -2968,30 +3503,44 @@ fn validate_backend_metadata(
         }
     }
 
-    if metadata.properties.len() > MAX_METADATA_PROPERTIES {
-        return Err(BackendError::MetadataLimitExceeded {
-            maximum: MAX_METADATA_PROPERTIES,
-        });
-    }
-
     Ok(())
 }
 
 fn validate_capabilities(
     capabilities: &BackendCapabilities,
 ) -> Result<(), BackendError> {
-    if capabilities.native_gates.len() > MAX_NATIVE_INSTRUCTIONS {
+    if capabilities.native_gates.len()
+        > MAX_NATIVE_INSTRUCTIONS
+    {
         return Err(BackendError::RequiredInstructionLimitExceeded {
             maximum: MAX_NATIVE_INSTRUCTIONS,
         });
     }
 
     for gate in &capabilities.native_gates {
-        if gate.trim().is_empty() {
+        if gate.trim().is_empty()
+            || gate.chars().any(char::is_control)
+        {
             return Err(BackendError::InvalidIdentifier {
                 field: "native_instruction",
             });
         }
+    }
+
+    for capability in &capabilities.experimental_capabilities {
+        if capability.trim().is_empty()
+            || capability.chars().any(char::is_control)
+        {
+            return Err(BackendError::InvalidIdentifier {
+                field: "experimental_capability",
+            });
+        }
+    }
+
+    if capabilities.native_instruction_set
+        && capabilities.native_gates.is_empty()
+    {
+        return Err(BackendError::NativeInstructionSetUnavailable);
     }
 
     Ok(())
@@ -3004,9 +3553,82 @@ fn validate_topology(
         return Err(BackendError::TopologyUnavailable);
     }
 
-    topology
-        .validate()
-        .map_err(BackendError::Topology)?;
+    topology.validate().map_err(BackendError::Topology)?;
+
+    Ok(())
+}
+
+fn validate_workload_requirements(
+    requirements: &WorkloadRequirements,
+) -> Result<(), BackendError> {
+    if requirements.required_capabilities.len()
+        > MAX_REQUIRED_INSTRUCTIONS
+    {
+        return Err(BackendError::RequiredInstructionLimitExceeded {
+            maximum: MAX_REQUIRED_INSTRUCTIONS,
+        });
+    }
+
+    if requirements.required_instructions.len()
+        > MAX_REQUIRED_INSTRUCTIONS
+    {
+        return Err(BackendError::RequiredInstructionLimitExceeded {
+            maximum: MAX_REQUIRED_INSTRUCTIONS,
+        });
+    }
+
+    if requirements.circuit.two_qubit_edges.len()
+        > MAX_REQUIRED_TOPOLOGY_EDGES
+    {
+        return Err(
+            BackendError::RequiredTopologyEdgeLimitExceeded {
+                maximum: MAX_REQUIRED_TOPOLOGY_EDGES,
+            },
+        );
+    }
+
+    if requirements.circuit.shots == 0 {
+        return Err(BackendError::InvalidShots);
+    }
+
+    for capability in &requirements.required_capabilities {
+        if capability.trim().is_empty()
+            || capability.chars().any(char::is_control)
+        {
+            return Err(BackendError::InvalidIdentifier {
+                field: "required_capability",
+            });
+        }
+    }
+
+    for instruction in &requirements.required_instructions {
+        if instruction.trim().is_empty()
+            || instruction.chars().any(char::is_control)
+        {
+            return Err(BackendError::InvalidIdentifier {
+                field: "required_instruction",
+            });
+        }
+    }
+
+    for gate in &requirements.circuit.gates {
+        if gate.trim().is_empty()
+            || gate.chars().any(char::is_control)
+        {
+            return Err(BackendError::InvalidIdentifier {
+                field: "instruction",
+            });
+        }
+    }
+
+    for &(control, target) in &requirements.circuit.two_qubit_edges {
+        if control == target {
+            return Err(BackendError::UnsupportedConnection {
+                control,
+                target,
+            });
+        }
+    }
 
     Ok(())
 }
@@ -3019,13 +3641,11 @@ fn validate_identifier(
     let trimmed = value.trim();
 
     if trimmed.is_empty() {
-        return Err(if field == "backend_id" {
-            BackendError::InvalidBackendId
-        } else {
-            BackendError::InvalidIdentifier {
-                field,
-            }
-        });
+        if field == "backend_id" {
+            return Err(BackendError::InvalidBackendId);
+        }
+
+        return Err(BackendError::InvalidIdentifier { field });
     }
 
     if trimmed.len() > maximum {
@@ -3036,9 +3656,7 @@ fn validate_identifier(
     }
 
     if trimmed.chars().any(char::is_control) {
-        return Err(BackendError::InvalidIdentifier {
-            field,
-        });
+        return Err(BackendError::InvalidIdentifier { field });
     }
 
     Ok(())
@@ -3068,10 +3686,10 @@ fn validate_metadata_field(
     Ok(())
 }
 
-/// Conservative secret-key detection.
+/// Conservative secret-key detector.
 ///
-/// This is deliberately only a safety guard. It is not a replacement for a
-/// dedicated credential system.
+/// This is deliberately a defence-in-depth mechanism and must not be treated
+/// as a substitute for a real credential manager.
 fn looks_like_secret_key(key: &str) -> bool {
     let key = key.to_ascii_lowercase();
 
@@ -3084,27 +3702,16 @@ fn looks_like_secret_key(key: &str) -> bool {
         "password",
         "passwd",
         "private_key",
-        "secret",
+        "privatekey",
         "client_secret",
         "session_cookie",
         "cookie",
+        "secret",
     ];
 
-    SECRET_MARKERS.iter().any(|marker| key.contains(marker))
-}
-
-/// Conservative secret-value detection for caller-defined identifiers.
-fn looks_like_secret_value(value: &str) -> bool {
-    let value = value.trim();
-
-    value.len() > 256
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric()
-                || matches!(
-                    byte,
-                    b'-' | b'_' | b'.' | b'/' | b'+' | b'='
-                )
-        })
+    SECRET_MARKERS
+        .iter()
+        .any(|marker| key.contains(marker))
 }
 
 fn normalize_instruction_name(name: &str) -> String {
@@ -3112,7 +3719,25 @@ fn normalize_instruction_name(name: &str) -> String {
 }
 
 fn normalize_capability_name(name: &str) -> String {
-    name.trim().to_ascii_lowercase().replace('-', "_")
+    name.trim()
+        .to_ascii_lowercase()
+        .replace('-', "_")
+}
+
+fn validate_bitstring(
+    bitstring: &str,
+) -> Result<(), BackendError> {
+    if bitstring.is_empty()
+        || !bitstring
+            .bytes()
+            .all(|byte| byte == b'0' || byte == b'1')
+    {
+        return Err(BackendError::InvalidBitstring {
+            bitstring: bitstring.to_string(),
+        });
+    }
+
+    Ok(())
 }
 
 fn is_single_qubit_rotation(gate: &str) -> bool {
@@ -3145,173 +3770,6 @@ fn is_parameterized_gate(gate: &str) -> bool {
     )
 }
 
-fn first_validation_error(
-    report: &BackendValidationReport,
-) -> Result<(), BackendError> {
-    let diagnostic = match report.errors().next() {
-        Some(diagnostic) => diagnostic,
-        None => return Ok(()),
-    };
-
-    match diagnostic.code {
-        "BACKEND_BUSY" => Err(BackendError::BackendUnavailable {
-            backend_id: report.backend_id.clone(),
-            status: BackendStatus::Busy,
-        }),
-
-        "BACKEND_STATUS_UNKNOWN" => Err(BackendError::BackendUnavailable {
-            backend_id: report.backend_id.clone(),
-            status: BackendStatus::Unknown,
-        }),
-
-        "BACKEND_MAINTENANCE" => Err(BackendError::BackendUnavailable {
-            backend_id: report.backend_id.clone(),
-            status: BackendStatus::Maintenance,
-        }),
-
-        "BACKEND_OFFLINE" => Err(BackendError::BackendUnavailable {
-            backend_id: report.backend_id.clone(),
-            status: BackendStatus::Offline,
-        }),
-
-        "BACKEND_RETIRED" => Err(BackendError::BackendUnavailable {
-            backend_id: report.backend_id.clone(),
-            status: BackendStatus::Retired,
-        }),
-
-        "BACKEND_UNAVAILABLE" => Err(BackendError::BackendUnavailable {
-            backend_id: report.backend_id.clone(),
-            status: BackendStatus::Unavailable,
-        }),
-
-        "ZERO_QUBITS" => Err(BackendError::ZeroQubits),
-
-        "QUBIT_LIMIT" | "TOPOLOGY_QUBIT_LIMIT" => {
-            Err(BackendError::QubitLimitExceeded {
-                requested: 0,
-                maximum: 0,
-            })
-        }
-
-        "LOGICAL_QUBIT_LIMIT" => {
-            Err(BackendError::LogicalQubitLimitExceeded {
-                requested: 0,
-                maximum: 0,
-            })
-        }
-
-        "CIRCUIT_DEPTH_LIMIT" => {
-            Err(BackendError::CircuitDepthExceeded {
-                requested: 0,
-                maximum: 0,
-            })
-        }
-
-        "OPERATION_LIMIT" => {
-            Err(BackendError::OperationLimitExceeded {
-                requested: 0,
-                maximum: 0,
-            })
-        }
-
-        "SHOT_LIMIT" => Err(BackendError::ShotLimitExceeded {
-            requested: 0,
-            maximum: 0,
-        }),
-
-        "CLASSICAL_BIT_LIMIT" => {
-            Err(BackendError::ClassicalBitLimitExceeded {
-                requested: 0,
-                maximum: 0,
-            })
-        }
-
-        "MEASUREMENT_UNSUPPORTED" => {
-            Err(BackendError::MeasurementUnsupported)
-        }
-
-        "RESET_UNSUPPORTED" => {
-            Err(BackendError::ResetUnsupported)
-        }
-
-        "MID_CIRCUIT_MEASUREMENT_UNSUPPORTED" => {
-            Err(BackendError::MidCircuitMeasurementUnsupported)
-        }
-
-        "CLASSICAL_CONTROL_UNSUPPORTED" => {
-            Err(BackendError::ClassicalControlUnsupported)
-        }
-
-        "DYNAMIC_CIRCUIT_UNSUPPORTED" => {
-            Err(BackendError::DynamicCircuitUnsupported)
-        }
-
-        "PULSE_CONTROL_UNSUPPORTED" => {
-            Err(BackendError::PulseControlUnsupported)
-        }
-
-        "ANALOG_CONTROL_UNSUPPORTED" => {
-            Err(BackendError::AnalogControlUnsupported)
-        }
-
-        "ANNEALING_UNSUPPORTED" => {
-            Err(BackendError::AnnealingUnsupported)
-        }
-
-        "LOGICAL_QUBITS_UNSUPPORTED" => {
-            Err(BackendError::LogicalQubitsUnsupported)
-        }
-
-        "FAULT_TOLERANCE_UNSUPPORTED" => {
-            Err(BackendError::FaultToleranceUnsupported)
-        }
-
-        "DETERMINISTIC_SEED_UNSUPPORTED" => {
-            Err(BackendError::DeterministicSeedingUnsupported)
-        }
-
-        "STATE_VECTOR_UNSUPPORTED" => {
-            Err(BackendError::StateVectorUnsupported)
-        }
-
-        "DENSITY_MATRIX_UNSUPPORTED" => {
-            Err(BackendError::DensityMatrixUnsupported)
-        }
-
-        "EXPECTATION_VALUES_UNSUPPORTED" => {
-            Err(BackendError::ExpectationValuesUnsupported)
-        }
-
-        "UNSUPPORTED_GATE"
-        | "REQUIRED_INSTRUCTION_UNSUPPORTED" => {
-            Err(BackendError::UnsupportedGate {
-                gate: diagnostic.requirement.clone(),
-            })
-        }
-
-        "TOPOLOGY_INFORMATION_UNAVAILABLE"
-        | "TOPOLOGY_REQUIRED" => {
-            Err(BackendError::TopologyUnavailable)
-        }
-
-        "UNSUPPORTED_CONNECTION" => {
-            Err(BackendError::UnsupportedConnection {
-                control: 0,
-                target: 0,
-            })
-        }
-
-        "CALIBRATION_UNAVAILABLE"
-        | "FRESH_CALIBRATION_UNAVAILABLE" => {
-            Err(BackendError::CalibrationUnavailable)
-        }
-
-        _ => Err(BackendError::ExecutionRejected(
-            diagnostic.message.clone(),
-        )),
-    }
-}
-
 // =============================================================================
 // Tests
 // =============================================================================
@@ -3334,19 +3792,18 @@ mod tests {
             BackendKind::Simulator,
         );
 
-        let capabilities = BackendCapabilities::new()
-            .with_gates([
-                "H",
-                "X",
-                "Y",
-                "Z",
-                "S",
-                "T",
-                "CX",
-                "CZ",
-                "SWAP",
-                "MEASURE",
-            ]);
+        let capabilities = BackendCapabilities::new().with_gates([
+            "H",
+            "X",
+            "Y",
+            "Z",
+            "S",
+            "T",
+            "CX",
+            "CZ",
+            "SWAP",
+            "MEASURE",
+        ]);
 
         QuantumBackend::new(
             metadata,
@@ -3444,7 +3901,7 @@ mod tests {
     }
 
     #[test]
-    fn backend_rejects_excessive_qubits() {
+    fn backend_rejects_excessive_qubits_with_exact_values() {
         let backend = QuantumBackend::new(
             BackendMetadata::new(
                 "limited",
@@ -3466,7 +3923,10 @@ mod tests {
 
         assert!(matches!(
             backend.validate_circuit(&requirements),
-            Err(BackendError::QubitLimitExceeded { .. })
+            Err(BackendError::QubitLimitExceeded {
+                requested: 3,
+                maximum: 2
+            })
         ));
     }
 
@@ -3501,10 +3961,8 @@ mod tests {
             ..Default::default()
         };
 
-        let result = backend.validate_circuit(&requirements);
-
         assert!(matches!(
-            result,
+            backend.validate_circuit(&requirements),
             Err(BackendError::UnsupportedConnection {
                 control: 0,
                 target: 3
@@ -3563,21 +4021,19 @@ mod tests {
 
     #[test]
     fn arbitrary_rotations_are_supported_when_enabled() {
-        let metadata = BackendMetadata::new(
-            "rotation-backend",
-            "Rotation Backend",
-            "Zamani",
-            "1.0",
-            BackendKind::Simulator,
-        );
-
         let capabilities = BackendCapabilities {
             arbitrary_single_qubit_rotations: true,
             ..BackendCapabilities::default()
         };
 
         let backend = QuantumBackend::new(
-            metadata,
+            BackendMetadata::new(
+                "rotation-backend",
+                "Rotation Backend",
+                "Zamani",
+                "1.0",
+                BackendKind::Simulator,
+            ),
             capabilities,
             BackendLimits::unlimited(),
             topology(),
@@ -3611,14 +4067,6 @@ mod tests {
 
     #[test]
     fn dynamic_circuit_is_accepted_when_supported() {
-        let metadata = BackendMetadata::new(
-            "dynamic",
-            "Dynamic",
-            "Zamani",
-            "1.0",
-            BackendKind::Qpu,
-        );
-
         let capabilities = BackendCapabilities {
             dynamic_circuits: true,
             mid_circuit_measurement: true,
@@ -3627,7 +4075,13 @@ mod tests {
         };
 
         let backend = QuantumBackend::new(
-            metadata,
+            BackendMetadata::new(
+                "dynamic",
+                "Dynamic",
+                "Zamani",
+                "1.0",
+                BackendKind::Qpu,
+            ),
             capabilities,
             BackendLimits::unlimited(),
             topology(),
@@ -3662,9 +4116,8 @@ mod tests {
 
         assert!(matches!(
             backend.validate(&requirements),
-            Err(BackendError::UnsupportedWorkload {
-                workload: QuantumWorkloadKind::AnalogProgram
-            })
+            Err(BackendError::InconsistentWorkloadKind { .. })
+                | Err(BackendError::UnsupportedWorkload { .. })
         ));
     }
 
@@ -3684,9 +4137,7 @@ mod tests {
 
         assert!(matches!(
             backend.validate(&requirements),
-            Err(BackendError::UnsupportedWorkload {
-                workload: QuantumWorkloadKind::PulseProgram
-            })
+            Err(BackendError::UnsupportedWorkload { .. })
         ));
     }
 
@@ -3707,9 +4158,7 @@ mod tests {
 
         assert!(matches!(
             backend.validate(&requirements),
-            Err(BackendError::UnsupportedWorkload {
-                workload: QuantumWorkloadKind::LogicalProgram
-            })
+            Err(BackendError::UnsupportedWorkload { .. })
         ));
     }
 
@@ -3735,7 +4184,8 @@ mod tests {
     #[test]
     fn result_counts_are_bounded_by_shots() {
         let mut result =
-            ExecutionResult::empty("local", 10).expect("valid result");
+            ExecutionResult::empty("local", 10)
+                .expect("valid result");
 
         result
             .insert_count("000", 7)
@@ -3750,28 +4200,53 @@ mod tests {
     }
 
     #[test]
-    fn result_counts_cannot_exceed_shots() {
+    fn replacing_result_count_does_not_double_count() {
         let mut result =
-            ExecutionResult::empty("local", 10).expect("valid result");
+            ExecutionResult::empty("local", 10)
+                .expect("valid result");
 
         result
-            .insert_count("000", 11)
-            .expect_err("count must not exceed shots");
+            .insert_count("000", 7)
+            .expect("initial count valid");
+
+        result
+            .insert_count("000", 3)
+            .expect("replacement valid");
+
+        assert_eq!(result.counted_shots(), 3);
+        assert!(!result.counts_match_shots());
+    }
+
+    #[test]
+    fn result_counts_cannot_exceed_shots() {
+        let mut result =
+            ExecutionResult::empty("local", 10)
+                .expect("valid result");
+
+        assert!(matches!(
+            result.insert_count("000", 11),
+            Err(BackendError::ResultShotsExceeded {
+                represented: 11,
+                shots: 10
+            })
+        ));
     }
 
     #[test]
     fn request_validation_uses_backend_contract() {
         let backend = backend();
 
-        let request = ExecutionRequest::new(CircuitRequirements {
-            qubit_count: 2,
-            gates: vec!["H", "CX"]
-                .into_iter()
-                .map(str::to_string)
-                .collect(),
-            two_qubit_edges: vec![(0, 1)],
-            ..Default::default()
-        });
+        let request = ExecutionRequest::new(
+            CircuitRequirements {
+                qubit_count: 2,
+                gates: vec!["H", "CX"]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+                two_qubit_edges: vec![(0, 1)],
+                ..Default::default()
+            },
+        );
 
         assert!(backend.validate_request(&request).is_ok());
     }
@@ -3780,10 +4255,12 @@ mod tests {
     fn deterministic_seed_requires_capability() {
         let backend = backend();
 
-        let request = ExecutionRequest::new(CircuitRequirements {
-            qubit_count: 1,
-            ..Default::default()
-        })
+        let request = ExecutionRequest::new(
+            CircuitRequirements {
+                qubit_count: 1,
+                ..Default::default()
+            },
+        )
         .with_seed(42);
 
         assert!(matches!(
@@ -3813,22 +4290,35 @@ mod tests {
         )
         .expect("backend should be valid");
 
-        let request = ExecutionRequest::new(CircuitRequirements {
-            qubit_count: 1,
-            ..Default::default()
-        })
+        let request = ExecutionRequest::new(
+            CircuitRequirements {
+                qubit_count: 1,
+                ..Default::default()
+            },
+        )
         .with_seed(42);
 
         assert!(backend.validate_request(&request).is_ok());
     }
 
     #[test]
-    fn validation_report_is_machine_readable() {
-        let backend = backend();
+    fn validation_report_preserves_exact_error() {
+        let backend = QuantumBackend::new(
+            BackendMetadata::new(
+                "limited",
+                "Limited",
+                "Zamani",
+                "1.0",
+                BackendKind::Simulator,
+            ),
+            BackendCapabilities::default(),
+            BackendLimits::unlimited().with_max_qubits(2),
+            topology(),
+        )
+        .expect("backend should be valid");
 
         let requirements = CircuitRequirements {
-            qubit_count: 2,
-            gates: vec!["UNKNOWN_GATE".into()],
+            qubit_count: 9,
             ..Default::default()
         };
 
@@ -3836,11 +4326,13 @@ mod tests {
             &WorkloadRequirements::from_circuit(requirements),
         );
 
-        assert!(!report.valid);
-        assert!(report
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "UNSUPPORTED_GATE"));
+        assert!(matches!(
+            report.first_error(),
+            Some(BackendError::QubitLimitExceeded {
+                requested: 9,
+                maximum: 2
+            })
+        ));
     }
 
     #[test]
@@ -3850,7 +4342,10 @@ mod tests {
 
         assert_eq!(descriptor.id(), "test-simulator");
         assert_eq!(descriptor.provider(), "Zamani");
-        assert_eq!(descriptor.kind(), BackendKind::Simulator);
+        assert_eq!(
+            descriptor.kind(),
+            BackendKind::Simulator
+        );
         assert_eq!(descriptor.qubit_count(), 4);
         assert_eq!(descriptor.coupling_count(), 3);
     }
@@ -3870,27 +4365,64 @@ mod tests {
         );
 
         assert!(report.valid);
-        assert!(report
-            .warnings()
-            .any(|warning| warning.code == "BACKEND_DEGRADED"));
+        assert!(
+            report
+                .warnings()
+                .any(|warning| {
+                    warning.code == "BACKEND_DEGRADED"
+                })
+        );
     }
 
     #[test]
-    fn topology_api_is_used_without_private_field_access() {
+    fn experimental_capability_does_not_satisfy_stable_requirement() {
+        let capabilities = BackendCapabilities::default()
+            .with_experimental_capability("future_feature");
+
+        let backend = QuantumBackend::new(
+            BackendMetadata::new(
+                "experimental",
+                "Experimental",
+                "Zamani",
+                "1.0",
+                BackendKind::Qpu,
+            ),
+            capabilities,
+            BackendLimits::unlimited(),
+            topology(),
+        )
+        .expect("backend should be valid");
+
+        let requirements = WorkloadRequirements::default()
+            .require_capability("future_feature");
+
+        assert!(matches!(
+            backend.validate(&requirements),
+            Err(BackendError::ExperimentalCapabilityNotAccepted {
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn topology_api_remains_encapsulated() {
         let topology =
-            HardwareTopology::linear(3).expect("valid topology");
+            HardwareTopology::linear(3)
+                .expect("valid topology");
 
         assert_eq!(topology.qubit_count(), 3);
         assert_eq!(topology.coupling_count(), 2);
+
         assert!(
             topology
                 .is_connected(0, 1)
-                .expect("valid qubits")
+                .expect("valid resources")
         );
+
         assert!(
             topology
                 .is_connected(1, 0)
-                .expect("valid qubits")
+                .expect("valid resources")
         );
     }
 }
