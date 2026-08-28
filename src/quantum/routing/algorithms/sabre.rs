@@ -1,49 +1,93 @@
-//! Zamani Quantum Routing — SABRE / LightSABRE-Compatible Router
+//! Zamani Quantum Routing — SABRE / LightSABRE
 //!
-//! Production-grade SABRE-style logical-to-physical quantum routing.
+//! Production logical-to-physical quantum routing using a SABRE-family
+//! bidirectional heuristic search.
 //!
 //! # Responsibilities
 //!
-//! This module owns the SABRE routing algorithm itself:
+//! This module owns:
 //!
+//! - SABRE forward routing;
+//! - SABRE backward routing;
+//! - bidirectional layout refinement;
 //! - front-layer construction;
-//! - dependency-aware executable-gate discovery;
-//! - restricted SWAP candidate generation;
-//! - basic SABRE heuristic;
-//! - lookahead heuristic;
-//! - decay heuristic;
-//! - deterministic seeded tie-breaking;
-//! - multiple routing trials;
-//! - bounded forward routing;
-//! - bidirectional forward/backward layout refinement;
-//! - mapping evolution through semantic SWAP movements;
-//! - routing metrics;
-//! - algorithm-level output validation;
-//! - construction of the stable `RoutingResult` contract.
+//! - extended-set construction;
+//! - legal SWAP candidate generation;
+//! - basic/lookahead/decay heuristics;
+//! - deterministic seeded tie breaking;
+//! - bounded routing trials;
+//! - mapping evolution;
+//! - routing-time limits;
+//! - SWAP limits;
+//! - route-level invariant validation;
+//! - reproducibility fingerprints;
+//! - construction of the stable `RoutingResult`.
 //!
-//! It deliberately does NOT own:
+//! It does NOT own:
 //!
-//! - initial-layout algorithms other than SABRE's iterative refinement;
+//! - Quantum IR parsing;
 //! - OpenQASM parsing;
-//! - Zamani source parsing;
-//! - canonical Quantum IR conversion;
 //! - gate decomposition;
-//! - SWAP-to-native-gate lowering;
-//! - pulse generation;
+//! - basis translation;
+//! - native SWAP decomposition;
 //! - scheduling;
+//! - pulse generation;
 //! - hardware execution;
+//! - calibration acquisition;
 //! - QEC decoding;
 //! - benchmarking orchestration.
 //!
-//! # SABRE model
+//! # Architectural position
 //!
-//! The implementation follows the production SABRE structure:
+//! ```text
+//! Canonical Quantum IR
+//!        │
+//!        ▼
+//! RoutingWorkload
+//!        │
+//!        ▼
+//! ┌──────────────────────┐
+//! │ SABRE                │
+//! │                      │
+//! │ front layer          │
+//! │ extended set         │
+//! │ candidate SWAPs      │
+//! │ heuristic evaluation │
+//! │ mapping evolution    │
+//! │ forward/backward     │
+//! └──────────┬───────────┘
+//!            │
+//!            ▼
+//!      RoutingResult
+//!            │
+//!            ▼
+//! decomposition / scheduling / hardware
+//! ```
+//!
+//! # Important semantic rule
+//!
+//! SABRE operates on two-qubit interactions. Single-qubit operations do not
+//! require qubit routing and therefore belong outside the SABRE workload.
+//! Multi-qubit operations must be decomposed or explicitly declared native
+//! before entering this algorithm.
+//!
+//! This module consequently rejects arity != 2 rather than silently changing
+//! the semantics of an operation.
+//!
+//! # SABRE
+//!
+//! SABRE is a heuristic rather than an exact optimizer. Minimum-SWAP routing
+//! is computationally hard, so production routing must provide bounded,
+//! reproducible heuristic search rather than pretending to guarantee global
+//! optimality.
+//!
+//! The implementation follows the established SABRE pattern:
 //!
 //! ```text
 //! initial mapping
 //!       │
 //!       ▼
-//! forward route
+//! forward routing
 //!       │
 //!       ▼
 //! final mapping
@@ -52,7 +96,7 @@
 //! reverse workload
 //!       │
 //!       ▼
-//! route backwards from final mapping
+//! backward routing
 //!       │
 //!       ▼
 //! improved initial mapping
@@ -60,150 +104,78 @@
 //!       └───────────────► repeat
 //! ```
 //!
-//! During routing:
-//!
-//! ```text
-//! front layer
-//!      │
-//!      ├── executable ──► emit gate
-//!      │
-//!      └── blocked
-//!             │
-//!             ▼
-//!     generate nearby SWAPs
-//!             │
-//!             ▼
-//!       score candidates
-//!             │
-//!             ▼
-//!       choose best SWAP
-//!             │
-//!             ▼
-//!       update mapping
-//!             │
-//!             └──────────► repeat
-//! ```
-//!
-//! # Heuristics
-//!
-//! Three SABRE-compatible heuristics are provided:
-//!
-//! - `Basic`: current front-layer distance;
-//! - `Lookahead`: front-layer distance plus bounded future interactions;
-//! - `Decay`: lookahead score multiplied by a recency penalty.
-//!
-//! `Decay` is the production default because it discourages repeatedly using
-//! the same physical qubits and therefore reduces routing-depth pressure.
-//!
 //! # Determinism
 //!
-//! For a fixed:
+//! When `RoutingConfig::deterministic` is true, all routing decisions depend
+//! only on:
 //!
 //! - workload;
 //! - topology;
 //! - initial mapping;
 //! - configuration;
-//! - seed;
+//! - explicit seed.
 //!
-//! routing decisions are deterministic.
+//! No pointer addresses, wall-clock values, hash-map iteration order, or
+//! process-global state are used to make routing decisions.
 //!
-//! Hash-map iteration order never determines a routing decision.
-//!
-//! Candidate edges are canonically ordered.
-//!
-//! Seeded pseudo-random tie-breaking is implemented locally so the routing
-//! subsystem does not acquire a dependency on an external RNG crate.
+//! When no seed is supplied, deterministic mode uses a fixed algorithm seed.
+//! Non-deterministic mode derives a seed from the operating-system-independent
+//! monotonic clock. The latter is only used to vary heuristic trials; it is
+//! never used for security.
 //!
 //! # Safety
 //!
+//! - Rust 1.97 / 1.97.1.
+//! - Rust 2021.
 //! - No `unsafe`.
 //! - No FFI.
+//! - No raw-pointer tricks.
 //! - No global mutable state.
 //! - No filesystem access.
 //! - No network access.
-//! - No hardware execution.
-//!
-//! # Rust compatibility
-//!
-//! Target:
-//!
-//! - Rust 1.97;
-//! - Rust 1.97.1;
-//! - Rust 2021;
-//! - stable Rust.
 //!
 //! # Integration contract
 //!
-//! This file consumes the current frozen routing contracts:
+//! This implementation consumes the existing frozen routing contracts:
 //!
-//! ```text
-//! types.rs
-//! errors.rs
-//! topology.rs
-//! mapping.rs
-//! config.rs
-//! result.rs
-//! ```
+//! - `types.rs`
+//! - `errors.rs`
+//! - `topology.rs`
+//! - `mapping.rs`
+//! - `config.rs`
+//! - `result.rs`
 //!
-//! In particular:
-//!
-//! - `RoutingWorkload` supplies logical interactions;
-//! - `QubitInteraction` supplies logical operands and gate identity;
-//! - `QubitMapping` owns bidirectional mapping state;
-//! - `Topology` owns physical connectivity and gate support;
-//! - `RoutingConfig` owns search limits/objectives/policies;
-//! - `RoutingResult` owns the stable result representation;
-//! - `RoutingError` owns the canonical error vocabulary.
-//!
-//! Later `router.rs` can call this module without modifying this file.
-//!
-//! # Algorithm references
-//!
-//! The architecture follows the original SABRE bidirectional heuristic search
-//! and the subsequent LightSABRE improvements:
-//!
-//! - Gushu Li, Yufei Ding, Yuan Xie,
-//!   "Tackling the Qubit Mapping Problem for NISQ-Era Quantum Devices".
-//! - Henry Zou et al.,
-//!   "LightSABRE: A Lightweight and Enhanced SABRE Algorithm".
-//!
-//! The implementation intentionally remains backend-independent.
+//! Later modules such as `router.rs` can call [`SabreRouter::route`] without
+//! modifying this implementation.
 
 #![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
 
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use crate::quantum::routing::config::{
     LayoutStrategy,
     RoutingConfig,
     RoutingObjective,
-    VerificationLevel,
 };
-
 use crate::quantum::routing::errors::RoutingError;
-
 use crate::quantum::routing::mapping::{
-    QubitMapping,
     MappingError,
+    QubitMapping,
 };
-
 use crate::quantum::routing::result::{
     ReproducibilityMetadata,
     RoutingMetrics,
     RoutingResult,
     VerificationSummary,
 };
-
 use crate::quantum::routing::topology::Topology;
-
 use crate::quantum::routing::types::{
     GateIdentity,
     LogicalQubitId,
-    PhysicalEdge,
     PhysicalQubitId,
     QubitInteraction,
     RouteDisposition,
@@ -220,60 +192,58 @@ use crate::quantum::routing::types::{
 
 /// Stable SABRE implementation version.
 ///
-/// This must be changed when the algorithm semantics change in a way that can
-/// affect reproducibility.
-pub const SABRE_ALGORITHM_VERSION: &str = "zamani.sabre.v1";
+/// Change this whenever routing semantics change in a reproducibility-relevant
+/// way.
+pub const SABRE_ALGORITHM_VERSION: &str = "zamani.sabre.v2";
 
-/// Default SABRE extended-set weight.
-///
-/// The front layer remains the dominant routing objective while future
-/// interactions provide global guidance.
+/// Stable routing subsystem version.
+pub const SABRE_ROUTING_VERSION: &str = "zamani-routing-v1";
+
+/// Default extended-set contribution.
 pub const DEFAULT_EXTENDED_SET_WEIGHT: f64 = 0.50;
 
 /// Default decay increment.
-///
-/// Larger values penalize repeated use of recently active physical qubits more
-/// aggressively.
 pub const DEFAULT_DECAY_INCREMENT: f64 = 0.001;
 
-/// Minimum allowed decay increment.
+/// Minimum accepted decay increment.
 pub const MIN_DECAY_INCREMENT: f64 = 0.000_001;
 
-/// Maximum allowed decay increment.
+/// Maximum accepted decay increment.
 pub const MAX_DECAY_INCREMENT: f64 = 100.0;
 
-/// Absolute upper bound for the internal candidate set.
-///
-/// The user-facing limit remains `RoutingConfig::limits.candidate_limit`.
+/// Maximum number of candidates that this implementation will inspect in one
+/// routing decision even if a larger value is requested by configuration.
 pub const MAX_INTERNAL_CANDIDATES: usize = 1_000_000;
 
-/// Absolute upper bound for SABRE search iterations.
+/// Maximum number of routing iterations permitted by this implementation.
 pub const MAX_INTERNAL_ITERATIONS: usize = 100_000_000;
 
-/// Maximum number of interactions examined while constructing the dependency
-/// frontier.
+/// Maximum number of workload interactions accepted by this implementation.
 pub const MAX_INTERNAL_INTERACTIONS: usize = 10_000_000;
 
-/// Maximum supported routing arity.
-///
-/// SABRE is a two-qubit routing algorithm. 3+ qubit operations must cross the
-/// decomposition boundary before reaching this module.
+/// Maximum number of physical qubits accepted by this implementation.
+pub const MAX_INTERNAL_QUBITS: usize = 1_000_000;
+
+/// SABRE supports two-qubit routing interactions.
 pub const MAX_ROUTING_ARITY: usize = 2;
+
+/// Fixed seed used only when deterministic routing has no explicit seed.
+pub const DEFAULT_DETERMINISTIC_SEED: u64 = 0x5A_B4_E2_02_60_00_00_01;
 
 // =============================================================================
 // Heuristic
 // =============================================================================
 
-/// SABRE candidate-scoring heuristic.
+/// Candidate scoring strategy used by SABRE.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SabreHeuristic {
-    /// Immediate front-layer distance only.
+    /// Score the current front layer.
     Basic,
 
-    /// Front-layer distance plus bounded future interaction distance.
+    /// Score the current front layer and bounded future interactions.
     Lookahead,
 
-    /// Lookahead score multiplied by a recency/decay penalty.
+    /// Lookahead plus recency/decay.
     Decay,
 }
 
@@ -285,6 +255,7 @@ impl Default for SabreHeuristic {
 
 impl SabreHeuristic {
     /// Stable machine-readable name.
+    #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Basic => "basic",
@@ -295,21 +266,13 @@ impl SabreHeuristic {
 }
 
 // =============================================================================
-// Router
+// Public router
 // =============================================================================
 
-/// Production SABRE router.
+/// Immutable SABRE router configuration.
 ///
-/// The router itself is immutable. All mutable routing state exists inside an
-/// individual routing invocation.
-///
-/// This makes it safe to:
-///
-/// - reuse a router instance;
-/// - run independent trials;
-/// - run multiple router instances concurrently;
-/// - perform speculative routing;
-/// - use the router from a future parallel routing executor.
+/// Mutable routing state is created per invocation, which makes this type safe
+/// to reuse from independent compilation requests.
 #[derive(Debug, Clone)]
 pub struct SabreRouter {
     heuristic: SabreHeuristic,
@@ -334,11 +297,9 @@ impl SabreRouter {
         }
     }
 
-    /// Creates a router using the specified heuristic.
+    /// Creates a SABRE router with the requested heuristic.
     #[must_use]
-    pub const fn with_heuristic(
-        heuristic: SabreHeuristic,
-    ) -> Self {
+    pub const fn with_heuristic(heuristic: SabreHeuristic) -> Self {
         Self {
             heuristic,
             extended_set_weight: DEFAULT_EXTENDED_SET_WEIGHT,
@@ -346,9 +307,7 @@ impl SabreRouter {
         }
     }
 
-    /// Creates a router with explicit heuristic parameters.
-    ///
-    /// Invalid floating-point parameters are rejected when routing starts.
+    /// Creates a SABRE router with explicit heuristic parameters.
     #[must_use]
     pub const fn with_parameters(
         heuristic: SabreHeuristic,
@@ -362,7 +321,7 @@ impl SabreRouter {
         }
     }
 
-    /// Returns the selected SABRE heuristic.
+    /// Returns the selected heuristic.
     #[must_use]
     pub const fn heuristic(&self) -> SabreHeuristic {
         self.heuristic
@@ -380,19 +339,19 @@ impl SabreRouter {
         self.decay_increment
     }
 
-    /// Stable algorithm name.
+    /// Returns the stable algorithm name.
     #[must_use]
     pub const fn name(&self) -> &'static str {
         "sabre"
     }
 
-    /// Routes a workload using a caller-provided initial mapping.
+    /// Routes a two-qubit workload.
     ///
-    /// The caller-owned workload, topology, configuration and mapping are
-    /// never mutated.
+    /// The caller's workload, topology, configuration and mapping are never
+    /// mutated.
     ///
-    /// The returned result contains the final mapping and semantic routing
-    /// operation stream.
+    /// The result contains the semantic routing operation stream and the final
+    /// logical-to-physical mapping.
     pub fn route(
         &self,
         workload: &RoutingWorkload,
@@ -407,41 +366,37 @@ impl SabreRouter {
             workload,
             topology,
             initial_mapping,
-            config,
         )?;
 
-        let distance_matrix =
-            DistanceMatrix::build(topology)?;
+        let distances = DistanceMatrix::build(topology)?;
 
         let base_seed = effective_seed(config);
-
-        let trial_count =
-            config.limits.sabre_trials.max(1);
+        let trials = config.limits.sabre_trials.max(1);
 
         let mut best: Option<CandidateRoute> = None;
 
-        for trial_index in 0..trial_count {
-            let trial_seed =
-                derive_trial_seed(base_seed, trial_index as u64);
+        for trial in 0..trials {
+            self.check_timeout(started, config)?;
 
-            let trial_initial_mapping =
-                initial_mapping.clone();
+            let seed = derive_trial_seed(
+                base_seed,
+                trial as u64,
+            );
 
-            let candidate =
-                self.bidirectional_trial(
-                    workload,
-                    topology,
-                    &distance_matrix,
-                    &trial_initial_mapping,
-                    config,
-                    trial_seed,
+            let candidate = self.bidirectional_trial(
+                workload,
+                topology,
+                &distances,
+                initial_mapping,
+                config,
+                seed,
+                started,
             )?;
 
             if best
                 .as_ref()
                 .map(|existing| {
-                    route_order(&candidate, existing)
-                        == Ordering::Less
+                    route_order(&candidate, existing) == Ordering::Less
                 })
                 .unwrap_or(true)
             {
@@ -449,10 +404,10 @@ impl SabreRouter {
             }
         }
 
-        let best = best.ok_or_else(|| {
+        let route = best.ok_or_else(|| {
             RoutingError::algorithm_incompatible(
                 self.name(),
-                "no SABRE routing trial produced a result",
+                "SABRE produced no candidate route",
             )
         })?;
 
@@ -463,13 +418,13 @@ impl SabreRouter {
             topology,
             initial_mapping,
             config,
-            best,
+            route,
             elapsed,
-            trial_count,
+            trials,
         )
     }
 
-    /// Convenience API for callers that want to select the heuristic directly.
+    /// Routes using a temporary heuristic override.
     pub fn route_with_heuristic(
         &self,
         workload: &RoutingWorkload,
@@ -478,13 +433,12 @@ impl SabreRouter {
         config: &RoutingConfig,
         heuristic: SabreHeuristic,
     ) -> Result<RoutingResult, RoutingError> {
-        let router = Self {
+        Self {
             heuristic,
             extended_set_weight: self.extended_set_weight,
             decay_increment: self.decay_increment,
-        };
-
-        router.route(
+        }
+        .route(
             workload,
             topology,
             initial_mapping,
@@ -493,7 +447,7 @@ impl SabreRouter {
     }
 
     // =========================================================================
-    // Validation
+    // Configuration validation
     // =========================================================================
 
     fn validate_configuration(
@@ -503,134 +457,96 @@ impl SabreRouter {
         if !self.extended_set_weight.is_finite()
             || self.extended_set_weight < 0.0
         {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "sabre.extended_set_weight",
-                    "value must be finite and non-negative",
-                ),
-            );
+            return Err(RoutingError::invalid_configuration(
+                "sabre.extended_set_weight",
+                "must be finite and non-negative",
+            ));
         }
 
         if !self.decay_increment.is_finite()
             || self.decay_increment < MIN_DECAY_INCREMENT
             || self.decay_increment > MAX_DECAY_INCREMENT
         {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "sabre.decay_increment",
-                    format!(
-                        "value must be finite and in [{MIN_DECAY_INCREMENT}, {MAX_DECAY_INCREMENT}]"
-                    ),
-                ),
-            );
+            return Err(RoutingError::invalid_configuration(
+                "sabre.decay_increment",
+                "must be finite and within the supported SABRE range",
+            ));
         }
 
-        if config.limits.max_iterations == 0 {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "limits.max_iterations",
-                    "must be greater than zero",
-                ),
-            );
-        }
-
-        if config.limits.max_iterations
-            > MAX_INTERNAL_ITERATIONS
+        if config.limits.max_iterations == 0
+            || config.limits.max_iterations > MAX_INTERNAL_ITERATIONS
         {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "limits.max_iterations",
-                    "exceeds SABRE internal safety limit",
-                ),
-            );
+            return Err(RoutingError::invalid_configuration(
+                "limits.max_iterations",
+                "must be non-zero and within the SABRE safety limit",
+            ));
         }
 
-        if config.limits.candidate_limit == 0 {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "limits.candidate_limit",
-                    "must be greater than zero",
-                ),
-            );
-        }
-
-        if config.limits.candidate_limit
-            > MAX_INTERNAL_CANDIDATES
+        if config.limits.candidate_limit == 0
+            || config.limits.candidate_limit > MAX_INTERNAL_CANDIDATES
         {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "limits.candidate_limit",
-                    "exceeds SABRE internal safety limit",
-                ),
-            );
+            return Err(RoutingError::invalid_configuration(
+                "limits.candidate_limit",
+                "must be non-zero and within the SABRE safety limit",
+            ));
         }
 
         if config.limits.lookahead_depth == 0 {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "limits.lookahead_depth",
-                    "must be greater than zero",
-                ),
-            );
+            return Err(RoutingError::invalid_configuration(
+                "limits.lookahead_depth",
+                "must be greater than zero",
+            ));
         }
 
         if config.limits.sabre_iterations == 0 {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "limits.sabre_iterations",
-                    "must be greater than zero",
-                ),
-            );
+            return Err(RoutingError::invalid_configuration(
+                "limits.sabre_iterations",
+                "must be greater than zero",
+            ));
         }
 
         if config.limits.sabre_trials == 0 {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "limits.sabre_trials",
-                    "must be greater than zero",
-                ),
-            );
+            return Err(RoutingError::invalid_configuration(
+                "limits.sabre_trials",
+                "must be greater than zero",
+            ));
         }
 
         if !config.weights.is_valid() {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "weights",
-                    "all routing weights must be finite and non-negative",
-                ),
-            );
+            return Err(RoutingError::invalid_configuration(
+                "weights",
+                "all routing weights must be finite and non-negative",
+            ));
         }
 
-        if config.objective
-            == RoutingObjective::Weighted
+        if config.objective == RoutingObjective::Weighted
             && config.weights.is_zero()
         {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "weights",
-                    "weighted objective requires at least one non-zero weight",
-                ),
-            );
+            return Err(RoutingError::invalid_configuration(
+                "weights",
+                "weighted objective requires at least one non-zero weight",
+            ));
         }
 
         if !config.allow_swap {
-            return Err(
-                RoutingError::incompatible_configuration(
-                    "algorithm=sabre",
-                    "allow_swap=false",
-                ),
-            );
+            return Err(RoutingError::incompatible_configuration(
+                "algorithm=sabre",
+                "allow_swap=false",
+            ));
         }
 
         Ok(())
     }
+
+    // =========================================================================
+    // Input validation
+    // =========================================================================
 
     fn validate_input(
         &self,
         workload: &RoutingWorkload,
         topology: &Topology,
         mapping: &QubitMapping,
-        config: &RoutingConfig,
     ) -> Result<(), RoutingError> {
         topology.validate()?;
 
@@ -638,65 +554,31 @@ impl SabreRouter {
             .validate()
             .map_err(mapping_error)?;
 
-        if topology.qubit_count() == 0 {
-            return Err(
-                RoutingError::empty_topology()
-            );
+        let qubit_count = topology.qubit_count();
+
+        if qubit_count == 0 {
+            return Err(RoutingError::empty_topology());
         }
 
-        if topology.qubit_count()
-            > 1_000_000
-        {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "topology.qubit_count",
-                    "exceeds SABRE implementation safety ceiling",
-                ),
-            );
+        if qubit_count > MAX_INTERNAL_QUBITS {
+            return Err(RoutingError::invalid_configuration(
+                "topology.qubit_count",
+                "exceeds SABRE safety limit",
+            ));
         }
 
-        if workload.logical_qubit_count()
-            > 1_000_000
-        {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "workload.logical_qubit_count",
-                    "exceeds SABRE implementation safety ceiling",
-                ),
-            );
+        if workload.interaction_count() > MAX_INTERNAL_INTERACTIONS {
+            return Err(RoutingError::invalid_configuration(
+                "workload.interaction_count",
+                "exceeds SABRE safety limit",
+            ));
         }
 
-        if workload.interaction_count()
-            > MAX_INTERNAL_INTERACTIONS
-        {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "workload.interaction_count",
-                    "exceeds SABRE implementation safety ceiling",
-                ),
-            );
-        }
-
-        if workload.interaction_count()
-            > 10_000_000
-        {
-            return Err(
-                RoutingError::invalid_configuration(
-                    "workload.interaction_count",
-                    "exceeds configured production safety boundary",
-                ),
-            );
-        }
-
-        if mapping.len()
-            > topology.qubit_count()
-        {
-            return Err(
-                RoutingError::insufficient_physical_qubits(
-                    mapping.len(),
-                    topology.qubit_count(),
-                )
-            );
+        if mapping.len() > qubit_count {
+            return Err(RoutingError::insufficient_physical_qubits(
+                mapping.len(),
+                qubit_count,
+            ));
         }
 
         for logical in workload.logical_qubits() {
@@ -704,20 +586,15 @@ impl SabreRouter {
                 return Err(
                     RoutingError::unknown_logical_qubit(
                         logical.to_string(),
-                    )
+                    ),
                 );
             }
         }
 
-        for (index, interaction)
-            in workload.interactions()
-                .iter()
-                .enumerate()
+        for (index, interaction) in
+            workload.interactions().iter().enumerate()
         {
-            validate_interaction(
-                interaction,
-                index,
-            )?;
+            validate_interaction(interaction, index)?;
 
             for logical in interaction.operands() {
                 if !mapping.contains_logical(*logical) {
@@ -726,7 +603,8 @@ impl SabreRouter {
                             logical.to_string(),
                         )
                         .with_diagnostic_context(
-                            crate::quantum::routing::errors::RoutingErrorContext::new()
+                            crate::quantum::routing::errors::
+                                RoutingErrorContext::new()
                                 .with_operation_index(index)
                                 .with_algorithm(self.name()),
                         ),
@@ -734,65 +612,6 @@ impl SabreRouter {
                 }
             }
         }
-
-        // Configuration must not silently permit a SABRE route over a
-        // directionally impossible SWAP graph.
-        let has_swap_edge = topology
-            .edges()
-            .any(|edge| {
-                topology.is_bidirectionally_adjacent(
-                    edge.a(),
-                    edge.b(),
-                )
-            });
-
-        if workload.interaction_count() > 0
-            && !has_swap_edge
-        {
-            // A workload may still be executable without movement.
-            let all_executable =
-                workload
-                    .interactions()
-                    .iter()
-                    .all(|interaction| {
-                        if interaction.arity() != 2 {
-                            return true;
-                        }
-
-                        let operands =
-                            interaction.operands();
-
-                        let a =
-                            mapping.physical_of(
-                                operands[0],
-                            );
-
-                        let b =
-                            mapping.physical_of(
-                                operands[1],
-                            );
-
-                        match (a, b) {
-                            (Some(a), Some(b)) =>
-                                topology.supports_gate(
-                                    interaction
-                                        .gate()
-                                        .name(),
-                                    a,
-                                    b,
-                                ),
-                            _ => false,
-                        }
-                    });
-
-            if !all_executable {
-                return Err(
-                    RoutingError::no_candidate()
-                );
-            }
-        }
-
-        let _ = config;
 
         Ok(())
     }
@@ -809,93 +628,88 @@ impl SabreRouter {
         initial_mapping: &QubitMapping,
         config: &RoutingConfig,
         seed: u64,
+        started: Instant,
     ) -> Result<CandidateRoute, RoutingError> {
-        let mut working_initial =
-            initial_mapping.clone();
+        let mut working_mapping = initial_mapping.clone();
+        let mut best: Option<CandidateRoute> = None;
 
-        let mut best_forward: Option<CandidateRoute> =
-            None;
+        let iterations = config.limits.sabre_iterations.max(1);
 
-        let refinement_iterations =
-            config.limits.sabre_iterations.max(1);
+        for iteration in 0..iterations {
+            self.check_timeout(started, config)?;
 
-        for refinement in 0..refinement_iterations {
-            let forward_seed =
-                mix_seed(
-                    seed,
-                    refinement as u64,
-                    0xF0F0_F0F0_F0F0_F0F0,
-                );
+            let forward_seed = mix_seed(
+                seed,
+                iteration as u64,
+                0xF0F0_F0F0_F0F0_F0F0,
+            );
 
-            let forward =
-                self.route_direction(
-                    workload,
-                    topology,
-                    distances,
-                    &working_initial,
-                    config,
-                    forward_seed,
-                )?;
+            let forward = self.route_direction(
+                workload,
+                topology,
+                distances,
+                &working_mapping,
+                config,
+                forward_seed,
+                started,
+            )?;
 
-            if best_forward
+            if best
                 .as_ref()
                 .map(|existing| {
-                    route_order(
-                        &forward,
-                        existing,
-                    ) == Ordering::Less
+                    route_order(&forward, existing)
+                        == Ordering::Less
                 })
                 .unwrap_or(true)
             {
-                best_forward =
-                    Some(forward.clone());
+                best = Some(forward.clone());
             }
 
-            if refinement + 1
-                >= refinement_iterations
-            {
+            if iteration + 1 >= iterations {
                 break;
             }
 
-            // SABRE's bidirectional layout refinement:
-            //
-            // forward final mapping
-            //        ↓
-            // reverse circuit
-            //        ↓
-            // reverse route
-            //        ↓
-            // reverse final mapping
-            //        ↓
-            // next forward initial mapping
-            let reversed =
-                reverse_workload(workload);
+            /*
+             * SABRE layout refinement:
+             *
+             * forward:
+             *
+             *   M0 -> circuit -> Mf
+             *
+             * reverse:
+             *
+             *   Mf -> reverse(circuit) -> Mb
+             *
+             * Mb becomes the starting mapping of the next forward pass.
+             *
+             * This is a layout search operation. It is not used as the final
+             * executable route.
+             */
+            let reversed = reverse_workload(workload);
 
-            let backward_seed =
-                mix_seed(
-                    seed,
-                    refinement as u64,
-                    0x0F0F_0F0F_0F0F_0F0F,
-                );
+            let backward_seed = mix_seed(
+                seed,
+                iteration as u64,
+                0x0F0F_0F0F_0F0F_0F0F,
+            );
 
-            let backward =
-                self.route_direction(
-                    &reversed,
-                    topology,
-                    distances,
-                    &forward.final_mapping,
-                    config,
-                    backward_seed,
-                )?;
+            let backward = self.route_direction(
+                &reversed,
+                topology,
+                distances,
+                &forward.final_mapping,
+                config,
+                backward_seed,
+                started,
+            )?;
 
-            working_initial =
-                backward.final_mapping;
+            working_mapping = backward.final_mapping;
         }
 
-        best_forward.ok_or_else(|| {
+        best.ok_or_else(|| {
             RoutingError::algorithm_incompatible(
                 self.name(),
-                "bidirectional SABRE did not produce a forward route",
+                "bidirectional SABRE produced no forward route",
             )
         })
     }
@@ -912,24 +726,35 @@ impl SabreRouter {
         initial_mapping: &QubitMapping,
         config: &RoutingConfig,
         seed: u64,
+        started: Instant,
     ) -> Result<CandidateRoute, RoutingError> {
-        let started = Instant::now();
-
-        let mut mapping =
-            initial_mapping.clone();
+        let mut mapping = initial_mapping.clone();
 
         mapping
             .validate()
             .map_err(mapping_error)?;
 
-        let mut completed =
-            vec![false; workload.interaction_count()];
+        let count = workload.interaction_count();
 
-        let mut operations =
-            Vec::<RoutingOperation>::new();
+        if count == 0 {
+            return Ok(CandidateRoute {
+                initial_mapping: initial_mapping.clone(),
+                final_mapping: mapping,
+                operations: Vec::new(),
+                inserted_swaps: 0,
+                candidate_evaluations: 0,
+                candidate_rejections: 0,
+                routing_iterations: 0,
+                routed_two_qubit_operations: 0,
+                routing_duration: Duration::ZERO,
+                seed,
+            });
+        }
 
-        let mut decay =
-            DecayState::new(topology);
+        let mut completed = vec![false; count];
+        let mut operations = Vec::new();
+
+        let mut decay = DecayState::new(topology);
 
         let mut inserted_swaps = 0usize;
         let mut candidate_evaluations = 0usize;
@@ -937,64 +762,48 @@ impl SabreRouter {
         let mut routing_iterations = 0usize;
         let mut routed_two_qubit_operations = 0usize;
 
-        let max_iterations =
-            config.limits.max_iterations;
+        let route_started = Instant::now();
 
-        let max_swaps =
-            config.limits.max_swaps;
+        while !completed.iter().all(|done| *done) {
+            self.check_timeout(started, config)?;
 
-        while !all_completed(&completed) {
-            routing_iterations =
-                routing_iterations
-                    .checked_add(1)
-                    .ok_or_else(|| {
-                        RoutingError::iteration_limit_exceeded(
-                            max_iterations,
-                        )
-                    })?;
+            routing_iterations = routing_iterations
+                .checked_add(1)
+                .ok_or_else(|| {
+                    RoutingError::internal_invariant(
+                        "SABRE routing iteration counter overflow",
+                    )
+                })?;
 
-            if routing_iterations
-                > max_iterations
-            {
+            if routing_iterations > config.limits.max_iterations {
                 return Err(
                     RoutingError::iteration_limit_exceeded(
-                        max_iterations,
-                    )
+                        config.limits.max_iterations,
+                    ),
                 );
             }
 
-            if let Some(timeout) =
-                config.limits.timeout
-            {
-                if started.elapsed()
-                    > timeout
-                {
-                    return Err(
-                        RoutingError::routing_timeout()
-                    );
-                }
-            }
-
-            let front =
-                build_front_layer(
-                    workload,
-                    &completed,
-                );
+            let front = build_front_layer(
+                workload,
+                &completed,
+            );
 
             if front.is_empty() {
                 return Err(
                     RoutingError::algorithm_incompatible(
                         self.name(),
-                        "unfinished workload has no dependency-ready front-layer operations",
-                    )
+                        "unfinished workload has no dependency-ready front layer",
+                    ),
                 );
             }
 
+            /*
+             * A single routing iteration may make several gates executable.
+             * This is important: inserting a SWAP should not be required when
+             * another independent front-layer interaction is already legal.
+             */
             let mut progress = false;
 
-            // -------------------------------------------------------------
-            // Emit every currently executable front-layer operation.
-            // -------------------------------------------------------------
             for &index in &front {
                 if completed[index] {
                     continue;
@@ -1016,17 +825,16 @@ impl SabreRouter {
                     );
 
                     completed[index] = true;
-                    progress = true;
                     routed_two_qubit_operations =
                         routed_two_qubit_operations
                             .checked_add(1)
                             .ok_or_else(|| {
                                 RoutingError::internal_invariant(
-                                    "routed two-qubit operation count overflow",
+                                    "routed gate counter overflow",
                                 )
                             })?;
 
-                    continue;
+                    progress = true;
                 }
             }
 
@@ -1035,31 +843,23 @@ impl SabreRouter {
                 continue;
             }
 
-            // -------------------------------------------------------------
-            // No front-layer operation is executable.
-            // Generate and score legal SWAP candidates.
-            // -------------------------------------------------------------
-            let extended =
-                build_extended_set(
-                    workload,
-                    &completed,
-                    &front,
-                    config.limits.lookahead_depth,
-                );
+            let extended = build_extended_set(
+                workload,
+                &completed,
+                &front,
+                config.limits.lookahead_depth,
+            );
 
-            let candidates =
-                generate_candidates(
-                    &front,
-                    workload,
-                    &mapping,
-                    topology,
-                    config.limits.candidate_limit,
-                )?;
+            let candidates = generate_candidates(
+                &front,
+                workload,
+                &mapping,
+                topology,
+                config.limits.candidate_limit,
+            )?;
 
             if candidates.is_empty() {
-                return Err(
-                    RoutingError::no_candidate()
-                );
+                return Err(RoutingError::no_candidate());
             }
 
             let mut scored =
@@ -1071,73 +871,66 @@ impl SabreRouter {
                         .checked_add(1)
                         .ok_or_else(|| {
                             RoutingError::internal_invariant(
-                                "candidate evaluation count overflow",
+                                "candidate evaluation counter overflow",
                             )
                         })?;
 
-                let score =
-                    self.score_candidate(
-                        &candidate,
-                        &front,
-                        &extended,
-                        workload,
-                        &mapping,
-                        topology,
-                        distances,
-                        &decay,
-                        config,
-                        seed,
-                        routing_iterations,
-                    )?;
+                let score = self.score_candidate(
+                    &candidate,
+                    &front,
+                    &extended,
+                    workload,
+                    &mapping,
+                    topology,
+                    distances,
+                    &decay,
+                    config,
+                )?;
 
-                scored.push(
-                    ScoredCandidate {
-                        a: candidate.a,
-                        b: candidate.b,
-                        score,
-                        tie_break: candidate_tie_break(
-                            seed,
-                            candidate.a,
-                            candidate.b,
-                            routing_iterations,
-                        ),
-                    },
-                );
+                scored.push(ScoredCandidate {
+                    a: candidate.a,
+                    b: candidate.b,
+                    score,
+                    tie_break: candidate_tie_break(
+                        seed,
+                        candidate.a,
+                        candidate.b,
+                        routing_iterations,
+                    ),
+                });
             }
 
-            scored.sort_by(
-                scored_candidate_order,
-            );
+            scored.sort_by(scored_candidate_order);
 
-            let selected =
-                scored
-                    .first()
-                    .ok_or_else(
-                        RoutingError::no_candidate,
-                    )?;
+            let selected = scored
+                .first()
+                .ok_or_else(RoutingError::no_candidate)?;
 
-            if let Some(limit) = max_swaps {
-                if inserted_swaps >= limit {
+            if let Some(max_swaps) = config.limits.max_swaps {
+                if inserted_swaps >= max_swaps {
                     return Err(
                         RoutingError::swap_limit_exceeded(
-                            limit,
-                        )
+                            max_swaps,
+                        ),
                     );
                 }
             }
 
-            if !topology
-                .is_bidirectionally_adjacent(
-                    selected.a,
-                    selected.b,
-                )
-            {
+            /*
+             * The movement must be a genuine bidirectional physical SWAP.
+             * A merely directed edge is insufficient because a semantic SWAP
+             * exchanges two quantum states.
+             */
+            if !topology.is_bidirectionally_adjacent(
+                selected.a,
+                selected.b,
+            ) {
                 candidate_rejections =
                     candidate_rejections
                         .checked_add(1)
                         .ok_or_else(|| {
                             RoutingError::internal_invariant(
-                                "candidate rejection count overflow",
+                                "candidate rejection counter overflow",
                             )
                         })?;
 
@@ -1145,7 +938,35 @@ impl SabreRouter {
                     RoutingError::non_adjacent_movement(
                         selected.a.index(),
                         selected.b.index(),
-                    )
+                    ),
+                );
+            }
+
+            /*
+             * Check availability immediately before committing the move.
+             * This protects against topology implementations whose resource
+             * state can change between candidate generation and commit.
+             */
+            if !topology.is_available(selected.a)
+                || !topology.is_available(selected.b)
+            {
+                candidate_rejections =
+                    candidate_rejections
+                        .checked_add(1)
+                        .ok_or_else(|| {
+                            RoutingError::internal_invariant(
+                                "candidate rejection counter overflow",
+                            )
+                        })?;
+
+                return Err(
+                    RoutingError::unsupported_movement(
+                        format!(
+                            "candidate SWAP uses unavailable qubit(s): {} <-> {}",
+                            selected.a,
+                            selected.b,
+                        ),
+                    ),
                 );
             }
 
@@ -1170,7 +991,7 @@ impl SabreRouter {
                     .checked_add(1)
                     .ok_or_else(|| {
                         RoutingError::internal_invariant(
-                            "inserted SWAP count overflow",
+                            "inserted SWAP counter overflow",
                         )
                     })?;
 
@@ -1180,9 +1001,7 @@ impl SabreRouter {
                 self.decay_increment,
             );
 
-            if config
-                .validate_mapping_after_move
-            {
+            if config.validate_mapping_after_move {
                 mapping
                     .validate()
                     .map_err(mapping_error)?;
@@ -1193,9 +1012,6 @@ impl SabreRouter {
             .validate()
             .map_err(mapping_error)?;
 
-        let routing_duration =
-            started.elapsed();
-
         let route = CandidateRoute {
             initial_mapping: initial_mapping.clone(),
             final_mapping: mapping,
@@ -1205,7 +1021,7 @@ impl SabreRouter {
             candidate_rejections,
             routing_iterations,
             routed_two_qubit_operations,
-            routing_duration,
+            routing_duration: route_started.elapsed(),
             seed,
         };
 
@@ -1233,11 +1049,8 @@ impl SabreRouter {
         distances: &DistanceMatrix,
         decay: &DecayState,
         config: &RoutingConfig,
-        seed: u64,
-        iteration: usize,
     ) -> Result<f64, RoutingError> {
-        let mut speculative =
-            mapping.clone();
+        let mut speculative = mapping.clone();
 
         speculative
             .swap_physical(
@@ -1246,98 +1059,98 @@ impl SabreRouter {
             )
             .map_err(mapping_error)?;
 
-        let front_cost =
-            average_interaction_distance(
-                front,
-                workload,
-                &speculative,
-                distances,
-            )?;
+        let front_cost = average_interaction_distance(
+            front,
+            workload,
+            &speculative,
+            distances,
+        )?;
 
-        let extended_cost =
-            average_interaction_distance(
-                extended,
-                workload,
-                &speculative,
-                distances,
-            )?;
+        let future_cost = average_interaction_distance(
+            extended,
+            workload,
+            &speculative,
+            distances,
+        )?;
 
-        let base =
-            match self.heuristic {
-                SabreHeuristic::Basic =>
-                    front_cost,
-
-                SabreHeuristic::Lookahead =>
-                    front_cost
-                        + self.extended_set_weight
-                            * extended_cost,
-
-                SabreHeuristic::Decay => {
-                    let heuristic =
-                        front_cost
-                            + self.extended_set_weight
-                                * extended_cost;
-
-                    let decay_factor =
-                        decay
-                            .factor(
-                                candidate.a,
-                                candidate.b,
-                            );
-
-                    heuristic * decay_factor
-                }
-            };
-
-        let hardware_penalty =
-            hardware_candidate_penalty(
+        let topology_cost =
+            candidate_hardware_cost(
                 candidate.a,
                 candidate.b,
                 topology,
                 config,
             )?;
 
-        let objective_scale =
-            objective_scale(
-                &config.objective,
+        let heuristic_cost = match self.heuristic {
+            SabreHeuristic::Basic => front_cost,
+
+            SabreHeuristic::Lookahead => {
+                front_cost
+                    + self.extended_set_weight
+                        * future_cost
+            }
+
+            SabreHeuristic::Decay => {
+                let base =
+                    front_cost
+                        + self.extended_set_weight
+                            * future_cost;
+
+                base * decay.factor(
+                    candidate.a,
+                    candidate.b,
+                )
+            }
+        };
+
+        /*
+         * Candidate comparison is always finite and deterministic.
+         *
+         * Hardware cost is additive rather than multiplied into the topology
+         * distance. This prevents a huge hardware-duration value from
+         * accidentally changing the meaning of the SABRE distance heuristic.
+         */
+        let objective_cost =
+            objective_cost(
+                config.objective.clone(),
                 &config.weights,
+                front_cost,
+                future_cost,
+                topology_cost,
             );
 
-        let random_tie =
-            if config.deterministic {
-                0.0
-            } else {
-                // Randomness is deliberately kept extremely small. It only
-                // affects exact/near-exact heuristic ties and never overrides
-                // a materially better candidate.
-                let value =
-                    candidate_tie_break(
-                        seed,
-                        candidate.a,
-                        candidate.b,
-                        iteration,
-                    );
-
-                (value as f64)
-                    / (u64::MAX as f64)
-                    * 1.0e-12
-            };
-
         let score =
-            base
-                * objective_scale
-                + hardware_penalty
-                + random_tie;
+            heuristic_cost + objective_cost;
 
         if !score.is_finite() {
             return Err(
                 RoutingError::internal_invariant(
                     "SABRE candidate score became non-finite",
-                )
+                ),
             );
         }
 
         Ok(score)
+    }
+
+    // =========================================================================
+    // Timeout
+    // =========================================================================
+
+    fn check_timeout(
+        &self,
+        started: Instant,
+        config: &RoutingConfig,
+    ) -> Result<(), RoutingError> {
+        if let Some(timeout) = config.limits.timeout {
+            if started.elapsed() > timeout {
+                return Err(
+                    RoutingError::routing_timeout(),
+                );
+            }
+        }
+
+        Ok(())
     }
 
     // =========================================================================
@@ -1351,6 +1164,11 @@ impl SabreRouter {
         route: &CandidateRoute,
     ) -> Result<(), RoutingError> {
         route
+            .initial_mapping
+            .validate()
+            .map_err(mapping_error)?;
+
+        route
             .final_mapping
             .validate()
             .map_err(mapping_error)?;
@@ -1358,28 +1176,37 @@ impl SabreRouter {
         let mut mapping =
             route.initial_mapping.clone();
 
-        let mut consumed =
-            Vec::<QubitInteraction>::new();
+        let mut consumed = Vec::<QubitInteraction>::new();
 
-        for operation in
-            &route.operations
-        {
+        for operation in &route.operations {
             match operation {
                 RoutingOperation::Move(
                     RoutingMove::Swap { a, b },
                 ) => {
-                    if !topology
-                        .is_bidirectionally_adjacent(
-                            *a,
-                            *b,
-                        )
+                    if !topology.is_bidirectionally_adjacent(
+                        *a,
+                        *b,
+                    ) {
+                        return Err(
+                            RoutingError::verification_failed(
+                                format!(
+                                    "SABRE emitted illegal SWAP {} <-> {}",
+                                    a, b
+                                ),
+                            ),
+                        );
+                    }
+
+                    if !topology.is_available(*a)
+                        || !topology.is_available(*b)
                     {
                         return Err(
                             RoutingError::verification_failed(
                                 format!(
-                                    "SABRE emitted non-adjacent SWAP {a} <-> {b}"
+                                    "SABRE emitted SWAP on unavailable qubit(s): {} <-> {}",
+                                    a, b
                                 ),
-                            )
+                            ),
                         );
                     }
 
@@ -1393,33 +1220,21 @@ impl SabreRouter {
                     operands,
                     logical_operands,
                 } => {
-                    if operands.len()
-                        != logical_operands.len()
-                    {
-                        return Err(
-                            RoutingError::verification_failed(
-                                "routed gate physical/logical operand lengths differ",
-                            )
-                        );
-                    }
-
-                    if operands.len()
-                        != 2
+                    if operands.len() != 2
+                        || logical_operands.len() != 2
                     {
                         return Err(
                             RoutingError::verification_failed(
                                 "SABRE produced a non-two-qubit gate",
-                            )
+                            ),
                         );
                     }
 
-                    if !topology
-                        .supports_gate(
-                            gate.name(),
-                            operands[0],
-                            operands[1],
-                        )
-                    {
+                    if !topology.supports_gate(
+                        gate.name(),
+                        operands[0],
+                        operands[1],
+                    ) {
                         return Err(
                             RoutingError::illegal_routed_operation(
                                 gate.name(),
@@ -1427,7 +1242,7 @@ impl SabreRouter {
                                     .iter()
                                     .map(|q| q.index())
                                     .collect(),
-                            )
+                            ),
                         );
                     }
 
@@ -1455,18 +1270,16 @@ impl SabreRouter {
                                 )
                             })?;
 
-                    if expected_a
-                        != operands[0]
-                        || expected_b
-                            != operands[1]
+                    if expected_a != operands[0]
+                        || expected_b != operands[1]
                     {
                         return Err(
                             RoutingError::verification_failed(
                                 format!(
-                                    "SABRE gate mapping mismatch for `{}`",
+                                    "SABRE physical mapping mismatch for gate `{}`",
                                     gate.name()
                                 ),
-                            )
+                            ),
                         );
                     }
 
@@ -1478,12 +1291,11 @@ impl SabreRouter {
                     );
                 }
 
-                RoutingOperation::Barrier {
-                    ..
-                } => {
-                    // RoutingWorkload currently represents interaction
-                    // semantics rather than barriers. Barriers therefore do
-                    // not participate in SABRE validation.
+                RoutingOperation::Barrier { .. } => {
+                    /*
+                     * SABRE does not generate barriers. If a future routing
+                     * pipeline injects one, it is semantically neutral here.
+                     */
                 }
 
                 RoutingOperation::Move(
@@ -1494,47 +1306,26 @@ impl SabreRouter {
                 ) => {
                     return Err(
                         RoutingError::verification_failed(
-                            "SABRE emitted a non-SWAP movement",
-                        )
+                            "SABRE produced an unsupported movement primitive",
+                        ),
                     );
                 }
             }
         }
 
-        if consumed.len()
-            != workload.interaction_count()
-        {
+        if consumed != workload.interactions() {
             return Err(
                 RoutingError::verification_failed(
-                    format!(
-                        "SABRE consumed {} interactions but workload contains {}",
-                        consumed.len(),
-                        workload.interaction_count()
-                    ),
-                )
+                    "SABRE changed logical interaction ordering or gate identity",
+                ),
             );
-        }
-
-        for (expected, actual)
-            in workload
-                .interactions()
-                .iter()
-                .zip(consumed.iter())
-        {
-            if expected != actual {
-                return Err(
-                    RoutingError::verification_failed(
-                        "SABRE changed logical interaction ordering or gate identity",
-                    )
-                );
-            }
         }
 
         if mapping != route.final_mapping {
             return Err(
                 RoutingError::verification_failed(
-                    "SABRE final mapping does not agree with emitted SWAP operations",
-                )
+                    "SABRE final mapping does not match emitted SWAP sequence",
+                ),
             );
         }
 
@@ -1542,7 +1333,7 @@ impl SabreRouter {
     }
 
     // =========================================================================
-    // Result construction
+    // Result
     // =========================================================================
 
     fn finalize_result(
@@ -1555,14 +1346,21 @@ impl SabreRouter {
         total_duration: Duration,
         trial_count: usize,
     ) -> Result<RoutingResult, RoutingError> {
-        let metrics =
-            build_metrics(
-                workload,
-                topology,
-                &route,
-                total_duration,
-                trial_count,
-            )?;
+        if route.initial_mapping != *original_mapping {
+            return Err(
+                RoutingError::internal_invariant(
+                    "SABRE changed the caller's initial mapping",
+                ),
+            );
+        }
+
+        let metrics = build_metrics(
+            workload,
+            topology,
+            &route,
+            total_duration,
+            trial_count,
+        )?;
 
         let verification =
             if config.verify_output {
@@ -1570,7 +1368,7 @@ impl SabreRouter {
                     config.verification,
                 )
                 .with_verifier_version(
-                    "sabre.algorithm-level-v1",
+                    "sabre.algorithm-level-v2",
                 )
                 .with_structural_checks(
                     route.operations.len(),
@@ -1591,8 +1389,7 @@ impl SabreRouter {
                         + route.inserted_swaps
                             .saturating_mul(2)
                         + 2
-                        + workload
-                            .interaction_count()
+                        + workload.interaction_count()
                             .saturating_mul(2),
                 )
             } else {
@@ -1615,45 +1412,25 @@ impl SabreRouter {
                 RouteDisposition::Routed
             };
 
-        // Preserve the original mapping supplied by the caller in the result.
-        //
-        // `route.initial_mapping` is expected to equal it, but this explicit
-        // check prevents accidental future changes to the bidirectional
-        // refinement logic from silently changing result semantics.
-        if route.initial_mapping
-            != *original_mapping
-        {
-            return Err(
-                RoutingError::internal_invariant(
-                    "SABRE route initial mapping differs from caller mapping",
-                )
-            );
-        }
-
-        let result =
-            RoutingResult::new(
-                disposition,
-                RoutingAlgorithm::Sabre,
-                LayoutStrategy::Sabre,
-                config.objective.clone(),
-                config.mode,
-                route
-                    .initial_mapping
-                    .snapshot(),
-                route
-                    .final_mapping
-                    .snapshot(),
-                route.operations,
-                metrics,
-                verification,
-                reproducibility,
-            );
+        let result = RoutingResult::new(
+            disposition,
+            RoutingAlgorithm::Sabre,
+            LayoutStrategy::Sabre,
+            config.objective.clone(),
+            config.mode,
+            route.initial_mapping.snapshot(),
+            route.final_mapping.snapshot(),
+            route.operations,
+            metrics,
+            verification,
+            reproducibility,
+        );
 
         if !result.is_internally_consistent() {
             return Err(
                 RoutingError::internal_invariant(
-                    "constructed SABRE RoutingResult is internally inconsistent",
-                )
+                    "constructed SABRE RoutingResult is inconsistent",
+                ),
             );
         }
 
@@ -1679,40 +1456,8 @@ struct CandidateRoute {
     seed: u64,
 }
 
-fn route_order(
-    a: &CandidateRoute,
-    b: &CandidateRoute,
-) -> Ordering {
-    a.inserted_swaps
-        .cmp(&b.inserted_swaps)
-        .then_with(|| {
-            approximate_depth(
-                &a.operations,
-            )
-            .cmp(
-                &approximate_depth(
-                    &b.operations,
-                ),
-            )
-        })
-        .then_with(|| {
-            a.operations
-                .len()
-                .cmp(&b.operations.len())
-        })
-        .then_with(|| {
-            operation_stream_order(
-                &a.operations,
-                &b.operations,
-            )
-        })
-        .then_with(|| {
-            a.seed.cmp(&b.seed)
-        })
-}
-
 // =============================================================================
-// Swap candidate
+// Candidate representation
 // =============================================================================
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1720,10 +1465,6 @@ struct SwapCandidate {
     a: PhysicalQubitId,
     b: PhysicalQubitId,
 }
-
-// =============================================================================
-// Scored candidate
-// =============================================================================
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ScoredCandidate {
@@ -1738,63 +1479,79 @@ fn scored_candidate_order(
     b: &ScoredCandidate,
 ) -> Ordering {
     a.score
-        .partial_cmp(&b.score)
-        .unwrap_or(Ordering::Equal)
+        .total_cmp(&b.score)
+        .then_with(|| a.tie_break.cmp(&b.tie_break))
+        .then_with(|| a.a.cmp(&b.a))
+        .then_with(|| a.b.cmp(&b.b))
+}
+
+// =============================================================================
+// Route comparison
+// =============================================================================
+
+fn route_order(
+    a: &CandidateRoute,
+    b: &CandidateRoute,
+) -> Ordering {
+    /*
+     * Primary SABRE trial-selection objective:
+     *
+     * 1. inserted SWAPs;
+     * 2. final depth;
+     * 3. operation count;
+     * 4. deterministic operation stream;
+     * 5. seed.
+     *
+     * This mirrors the production principle that SWAP count is the dominant
+     * route-quality signal while depth remains a useful tie breaker.
+     */
+    a.inserted_swaps
+        .cmp(&b.inserted_swaps)
         .then_with(|| {
-            a.tie_break
-                .cmp(&b.tie_break)
+            approximate_depth(&a.operations)
+                .cmp(&approximate_depth(&b.operations))
         })
         .then_with(|| {
-            a.a.cmp(&b.a)
+            a.operations
+                .len()
+                .cmp(&b.operations.len())
         })
         .then_with(|| {
-            a.b.cmp(&b.b)
+            operation_stream_order(
+                &a.operations,
+                &b.operations,
+            )
         })
+        .then_with(|| a.seed.cmp(&b.seed))
 }
 
 // =============================================================================
 // Dependency front layer
 // =============================================================================
 
-/// Builds a dependency-aware front layer.
-///
-/// An interaction becomes ready only after every earlier interaction sharing a
-/// logical qubit has completed.
-///
-/// This is conservative and deterministic. It does not require a full compiler
-/// DAG because `RoutingWorkload` deliberately exposes program-order
-/// interactions.
 fn build_front_layer(
     workload: &RoutingWorkload,
     completed: &[bool],
 ) -> Vec<usize> {
-    let interactions =
-        workload.interactions();
-
-    let mut front =
-        Vec::new();
+    let interactions = workload.interactions();
+    let mut front = Vec::new();
 
     for index in 0..interactions.len() {
         if completed[index] {
             continue;
         }
 
-        let current =
-            &interactions[index];
+        let current = &interactions[index];
 
-        let mut blocked =
-            false;
+        let mut blocked = false;
 
         for previous_index in 0..index {
             if completed[previous_index] {
                 continue;
             }
 
-            let previous =
-                &interactions[previous_index];
-
             if interactions_conflict(
-                previous,
+                &interactions[previous_index],
                 current,
             ) {
                 blocked = true;
@@ -1810,10 +1567,6 @@ fn build_front_layer(
     front
 }
 
-/// Builds a bounded extended set after the front layer.
-///
-/// Only dependency-ready successors are considered, and the number of future
-/// interactions is explicitly bounded.
 fn build_extended_set(
     workload: &RoutingWorkload,
     completed: &[bool],
@@ -1824,18 +1577,19 @@ fn build_extended_set(
         return Vec::new();
     }
 
-    let interactions =
-        workload.interactions();
+    let interactions = workload.interactions();
 
-    let front_set =
-        front
-            .iter()
-            .copied()
-            .collect::<BTreeSet<_>>();
+    let front_set: BTreeSet<usize> =
+        front.iter().copied().collect();
 
-    let mut extended =
-        Vec::new();
+    let mut extended = Vec::new();
 
+    /*
+     * We deliberately select future interactions in program order.
+     *
+     * This is deterministic and avoids treating unrelated future gates as
+     * though they were part of the immediate SABRE extended set.
+     */
     for index in 0..interactions.len() {
         if completed[index]
             || front_set.contains(&index)
@@ -1847,23 +1601,14 @@ fn build_extended_set(
             break;
         }
 
-        let interaction =
-            &interactions[index];
+        let candidate = &interactions[index];
 
-        let mut depends_on_front =
-            false;
-
-        for &front_index in front {
-            if interactions_conflict(
+        if front.iter().any(|front_index| {
+            interactions_conflict(
                 &interactions[front_index],
-                interaction,
-            ) {
-                depends_on_front = true;
-                break;
-            }
-        }
-
-        if depends_on_front {
+                candidate,
+            )
+        }) {
             extended.push(index);
         }
     }
@@ -1875,32 +1620,17 @@ fn interactions_conflict(
     a: &QubitInteraction,
     b: &QubitInteraction,
 ) -> bool {
-    for logical_a in a.operands() {
-        for logical_b in b.operands() {
-            if logical_a == logical_b {
-                return true;
-            }
-        }
-    }
-
-    false
-}
-
-fn all_completed(
-    completed: &[bool],
-) -> bool {
-    completed.iter().all(|value| *value)
+    a.operands().iter().any(|left| {
+        b.operands()
+            .iter()
+            .any(|right| left == right)
+    })
 }
 
 // =============================================================================
 // Candidate generation
 // =============================================================================
 
-/// Generates SWAP candidates only around physical qubits participating in the
-/// current blocked front layer.
-///
-/// This is one of the central SABRE scalability properties: arbitrary physical
-/// edges unrelated to the current front layer are not evaluated.
 fn generate_candidates(
     front: &[usize],
     workload: &RoutingWorkload,
@@ -1910,58 +1640,50 @@ fn generate_candidates(
 ) -> Result<Vec<SwapCandidate>, RoutingError> {
     if candidate_limit == 0 {
         return Err(
-            RoutingError::candidate_limit_exceeded(
-                0,
-            )
+            RoutingError::candidate_limit_exceeded(0),
         );
     }
 
     let mut active_physical =
-        BTreeSet::new();
+        BTreeSet::<PhysicalQubitId>::new();
 
     for &index in front {
         let interaction =
-            workload
-                .interactions()
-                .get(index)
+            workload.interactions().get(index)
                 .ok_or_else(|| {
                     RoutingError::internal_invariant(
-                        "front-layer index is outside workload",
+                        "front-layer index outside workload",
                     )
                 })?;
 
         for logical in interaction.operands() {
             let physical =
-                mapping
-                    .physical_of(*logical)
+                mapping.physical_of(*logical)
                     .ok_or_else(|| {
                         RoutingError::unknown_logical_qubit(
                             logical.to_string(),
                         )
                     })?;
 
-            active_physical.insert(
-                physical,
-            );
+            active_physical.insert(physical);
         }
     }
 
+    /*
+     * A candidate is useful if at least one endpoint currently carries a
+     * qubit participating in the blocked front layer.
+     *
+     * This is substantially cheaper than evaluating every physical edge.
+     */
     let mut candidates =
-        BTreeSet::<(PhysicalQubitId, PhysicalQubitId)>::new();
+        BTreeSet::<(
+            PhysicalQubitId,
+            PhysicalQubitId,
+        )>::new();
 
     for edge in topology.edges() {
         let a = edge.a();
         let b = edge.b();
-
-        // A semantic SWAP needs a bidirectionally usable physical connection.
-        if !topology
-            .is_bidirectionally_adjacent(
-                a,
-                b,
-            )
-        {
-            continue;
-        }
 
         if !active_physical.contains(&a)
             && !active_physical.contains(&b)
@@ -1969,8 +1691,21 @@ fn generate_candidates(
             continue;
         }
 
+        if !topology.is_bidirectionally_adjacent(
+            a,
+            b,
+        ) {
+            continue;
+        }
+
+        if !topology.is_available(a)
+            || !topology.is_available(b)
+        {
+            continue;
+        }
+
         let pair =
-            if a < b {
+            if a <= b {
                 (a, b)
             } else {
                 (b, a)
@@ -1978,18 +1713,14 @@ fn generate_candidates(
 
         candidates.insert(pair);
 
-        if candidates.len()
-            >= candidate_limit
-        {
+        if candidates.len() >= candidate_limit {
             break;
         }
     }
 
     Ok(candidates
         .into_iter()
-        .map(|(a, b)| {
-            SwapCandidate { a, b }
-        })
+        .map(|(a, b)| SwapCandidate { a, b })
         .collect())
 }
 
@@ -2002,47 +1733,40 @@ fn is_executable(
     topology: &Topology,
     mapping: &QubitMapping,
 ) -> Result<bool, RoutingError> {
-    match interaction.arity() {
-        0 | 1 => Ok(true),
-
-        2 => {
-            let operands =
-                interaction.operands();
-
-            let a =
-                mapping
-                    .physical_of(operands[0])
-                    .ok_or_else(|| {
-                        RoutingError::unknown_logical_qubit(
-                            operands[0].to_string(),
-                        )
-                    })?;
-
-            let b =
-                mapping
-                    .physical_of(operands[1])
-                    .ok_or_else(|| {
-                        RoutingError::unknown_logical_qubit(
-                            operands[1].to_string(),
-                        )
-                    })?;
-
-            Ok(
-                topology.supports_gate(
-                    interaction.gate().name(),
-                    a,
-                    b,
-                )
-            )
-        }
-
-        arity => Err(
+    if interaction.arity() != 2 {
+        return Err(
             RoutingError::unsupported_arity(
                 interaction.gate().name(),
-                arity,
-            )
-        ),
+                interaction.arity(),
+            ),
+        );
     }
+
+    let operands = interaction.operands();
+
+    let a = mapping
+        .physical_of(operands[0])
+        .ok_or_else(|| {
+            RoutingError::unknown_logical_qubit(
+                operands[0].to_string(),
+            )
+        })?;
+
+    let b = mapping
+        .physical_of(operands[1])
+        .ok_or_else(|| {
+            RoutingError::unknown_logical_qubit(
+                operands[1].to_string(),
+            )
+        })?;
+
+    Ok(
+        topology.supports_gate(
+            interaction.gate().name(),
+            a,
+            b,
+        ),
+    )
 }
 
 fn make_gate_operation(
@@ -2054,50 +1778,34 @@ fn make_gate_operation(
             RoutingError::unsupported_arity(
                 interaction.gate().name(),
                 interaction.arity(),
-            )
+            ),
         );
     }
 
-    let logical_operands =
-        interaction.operands();
+    let logical = interaction.operands();
 
-    let physical_a =
-        mapping
-            .physical_of(
-                logical_operands[0],
+    let physical_a = mapping
+        .physical_of(logical[0])
+        .ok_or_else(|| {
+            RoutingError::unknown_logical_qubit(
+                logical[0].to_string(),
             )
-            .ok_or_else(|| {
-                RoutingError::unknown_logical_qubit(
-                    logical_operands[0]
-                        .to_string(),
-                )
-            })?;
+        })?;
 
-    let physical_b =
-        mapping
-            .physical_of(
-                logical_operands[1],
+    let physical_b = mapping
+        .physical_of(logical[1])
+        .ok_or_else(|| {
+            RoutingError::unknown_logical_qubit(
+                logical[1].to_string(),
             )
-            .ok_or_else(|| {
-                RoutingError::unknown_logical_qubit(
-                    logical_operands[1]
-                        .to_string(),
-                )
-            })?;
+        })?;
 
     Ok(
         RoutingOperation::Gate {
-            gate: interaction
-                .gate()
-                .clone(),
-            operands: vec![
-                physical_a,
-                physical_b,
-            ],
-            logical_operands:
-                logical_operands
-                    .to_vec(),
-        }
+            gate: interaction.gate().clone(),
+            operands: vec![physical_a, physical_b],
+            logical_operands: logical.to_vec(),
+        },
     )
 }
 
@@ -2105,10 +1813,10 @@ fn make_gate_operation(
 // Distance matrix
 // =============================================================================
 
-/// Cached physical shortest-path distances.
+/// Cached all-pairs shortest-path distances over the bidirectional SWAP graph.
 ///
-/// The matrix uses only bidirectional physical edges because those are the
-/// connections on which the current semantic SWAP movement can safely operate.
+/// The graph is constructed once per routing invocation rather than once per
+/// candidate.
 #[derive(Debug, Clone)]
 struct DistanceMatrix {
     distances:
@@ -2123,18 +1831,18 @@ impl DistanceMatrix {
         topology: &Topology,
     ) -> Result<Self, RoutingError> {
         let qubits =
-            topology
-                .qubits()
-                .collect::<Vec<_>>();
+            topology.qubits().collect::<Vec<_>>();
 
         let mut distances =
             BTreeMap::new();
 
-        for source in
-            &qubits
-        {
+        /*
+         * BFS is appropriate because every semantic SWAP edge has unit
+         * movement cost at the topology-distance level.
+         */
+        for source in &qubits {
             let mut queue =
-                std::collections::VecDeque::new();
+                VecDeque::new();
 
             let mut local =
                 BTreeMap::<
@@ -2142,35 +1850,20 @@ impl DistanceMatrix {
                     usize,
                 >::new();
 
-            local.insert(
-                *source,
-                0,
-            );
-
-            queue.push_back(
-                *source,
-            );
+            local.insert(*source, 0);
+            queue.push_back(*source);
 
             while let Some(current) =
                 queue.pop_front()
             {
                 let current_distance =
-                    local
-                        .get(&current)
-                        .copied()
-                        .unwrap_or(0);
+                    local[&current];
 
-                for edge in
-                    topology.edges()
-                {
+                for edge in topology.edges() {
                     let neighbour =
-                        if edge.a()
-                            == current
-                        {
+                        if edge.a() == current {
                             Some(edge.b())
-                        } else if edge.b()
-                            == current
-                        {
+                        } else if edge.b() == current {
                             Some(edge.a())
                         } else {
                             None
@@ -2191,39 +1884,29 @@ impl DistanceMatrix {
                         continue;
                     }
 
-                    if local
-                        .contains_key(
-                            &neighbour,
-                        )
-                    {
+                    if !topology.is_available(neighbour) {
                         continue;
                     }
 
-                    let next_distance =
+                    if local.contains_key(&neighbour) {
+                        continue;
+                    }
+
+                    let next =
                         current_distance
                             .checked_add(1)
-                            .ok_or_else(
-                                || {
-                                    RoutingError::internal_invariant(
-                                        "physical distance overflow",
-                                    )
-                                },
-                            )?;
+                            .ok_or_else(|| {
+                                RoutingError::internal_invariant(
+                                    "physical distance overflow",
+                                )
+                            })?;
 
-                    local.insert(
-                        neighbour,
-                        next_distance,
-                    );
-
-                    queue.push_back(
-                        neighbour,
-                    );
+                    local.insert(neighbour, next);
+                    queue.push_back(neighbour);
                 }
             }
 
-            for target in
-                &qubits
-            {
+            for target in &qubits {
                 if let Some(distance) =
                     local.get(target)
                 {
@@ -2235,9 +1918,7 @@ impl DistanceMatrix {
             }
         }
 
-        Ok(Self {
-            distances,
-        })
+        Ok(Self { distances })
     }
 
     fn distance(
@@ -2252,7 +1933,7 @@ impl DistanceMatrix {
 }
 
 // =============================================================================
-// Interaction heuristic
+// Distance heuristic
 // =============================================================================
 
 fn average_interaction_distance(
@@ -2265,59 +1946,38 @@ fn average_interaction_distance(
         return Ok(0.0);
     }
 
-    let mut total =
-        0.0_f64;
-
-    let mut count =
-        0usize;
+    let mut total = 0usize;
+    let mut count = 0usize;
 
     for &index in indices {
         let interaction =
-            workload
-                .interactions()
-                .get(index)
+            workload.interactions().get(index)
                 .ok_or_else(|| {
                     RoutingError::internal_invariant(
                         "interaction index outside workload",
                     )
                 })?;
 
-        if interaction.arity()
-            != 2
-        {
-            continue;
-        }
+        let operands = interaction.operands();
 
-        let operands =
-            interaction.operands();
-
-        let a =
-            mapping
-                .physical_of(
-                    operands[0],
+        let a = mapping
+            .physical_of(operands[0])
+            .ok_or_else(|| {
+                RoutingError::unknown_logical_qubit(
+                    operands[0].to_string(),
                 )
-                .ok_or_else(|| {
-                    RoutingError::unknown_logical_qubit(
-                        operands[0]
-                            .to_string(),
-                    )
-                })?;
+            })?;
 
-        let b =
-            mapping
-                .physical_of(
-                    operands[1],
+        let b = mapping
+            .physical_of(operands[1])
+            .ok_or_else(|| {
+                RoutingError::unknown_logical_qubit(
+                    operands[1].to_string(),
                 )
-                .ok_or_else(|| {
-                    RoutingError::unknown_logical_qubit(
-                        operands[1]
-                            .to_string(),
-                    )
-                })?;
+            })?;
 
         let distance =
-            distances
-                .distance(a, b)
+            distances.distance(a, b)
                 .ok_or_else(|| {
                     RoutingError::no_routing_path(
                         a.index(),
@@ -2325,58 +1985,55 @@ fn average_interaction_distance(
                     )
                 })?;
 
-        total +=
-            distance as f64;
+        total = total
+            .checked_add(distance)
+            .ok_or_else(|| {
+                RoutingError::internal_invariant(
+                    "distance accumulation overflow",
+                )
+            })?;
 
-        count =
-            count
-                .checked_add(1)
-                .ok_or_else(|| {
-                    RoutingError::internal_invariant(
-                        "interaction-distance count overflow",
-                    )
-                })?;
+        count = count
+            .checked_add(1)
+            .ok_or_else(|| {
+                RoutingError::internal_invariant(
+                    "distance interaction count overflow",
+                )
+            })?;
     }
 
     if count == 0 {
         return Ok(0.0);
     }
 
-    let average =
-        total / count as f64;
+    let value =
+        total as f64 / count as f64;
 
-    if !average.is_finite() {
+    if !value.is_finite() {
         return Err(
             RoutingError::internal_invariant(
-                "interaction-distance heuristic became non-finite",
-            )
+                "distance heuristic became non-finite",
+            ),
         );
     }
 
-    Ok(average)
+    Ok(value)
 }
 
 // =============================================================================
-// Hardware-aware candidate penalty
+// Objective / hardware cost
 // =============================================================================
 
-/// Adds a bounded hardware-quality penalty to SABRE's topology heuristic.
-///
-/// This does not replace `noise_aware.rs`. It only prevents the SABRE router
-/// from ignoring obvious physical-edge quality differences when the configured
-/// objective explicitly requests hardware awareness.
-fn hardware_candidate_penalty(
+fn candidate_hardware_cost(
     a: PhysicalQubitId,
     b: PhysicalQubitId,
     topology: &Topology,
     config: &RoutingConfig,
 ) -> Result<f64, RoutingError> {
     let properties =
-        topology
-            .edge_properties(a, b);
+        topology.edge_properties(a, b);
 
-    let Some(properties) =
-        properties
+    let Some(properties) = properties
     else {
         return Ok(0.0);
     };
@@ -2385,168 +2042,179 @@ fn hardware_candidate_penalty(
         return Err(
             RoutingError::unsupported_movement(
                 format!(
-                    "physical edge {a} <-> {b} is unavailable",
+                    "physical edge {} <-> {} is unavailable",
+                    a, b,
                 ),
-            )
+            ),
         );
     }
 
-    let mut penalty =
-        0.0_f64;
+    let error =
+        properties.error_rate.unwrap_or(0.0);
 
-    match config.objective {
-        RoutingObjective::Duration => {
-            if let Some(duration) =
-                properties.duration
-            {
-                penalty +=
-                    duration.as_secs_f64();
-            }
-        }
+    let fidelity =
+        properties.fidelity.unwrap_or(1.0);
 
-        RoutingObjective::Error => {
-            if let Some(error) =
-                properties.error_rate
-            {
-                if !error.is_finite()
-                    || !(0.0..=1.0)
-                        .contains(&error)
-                {
-                    return Err(
-                        RoutingError::invalid_configuration(
-                            "topology.edge.error_rate",
-                            "must be finite and within [0,1]",
-                        ),
-                    );
-                }
+    let duration =
+        properties
+            .duration
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
 
-                penalty += error;
-            }
-        }
-
-        RoutingObjective::Fidelity => {
-            if let Some(fidelity) =
-                properties.fidelity
-            {
-                if !fidelity.is_finite()
-                    || !(0.0..=1.0)
-                        .contains(&fidelity)
-                {
-                    return Err(
-                        RoutingError::invalid_configuration(
-                            "topology.edge.fidelity",
-                            "must be finite and within [0,1]",
-                        ),
-                    );
-                }
-
-                // Convert fidelity into a non-negative penalty.
-                penalty +=
-                    1.0 - fidelity;
-            }
-        }
-
-        RoutingObjective::Weighted => {
-            if let Some(error) =
-                properties.error_rate
-            {
-                penalty +=
-                    config.weights.error
-                        * error;
-            }
-
-            if let Some(fidelity) =
-                properties.fidelity
-            {
-                penalty +=
-                    config.weights.fidelity
-                        * (1.0 - fidelity);
-            }
-
-            if let Some(duration) =
-                properties.duration
-            {
-                penalty +=
-                    config.weights.duration
-                        * duration
-                            .as_secs_f64();
-            }
-
-            penalty +=
-                config.weights.swap_count;
-        }
-
-        RoutingObjective::Depth => {
-            penalty +=
-                config.weights.depth;
-        }
-
-        RoutingObjective::SwapCount
-        | RoutingObjective::Custom(_) => {}
+    if !error.is_finite()
+        || !(0.0..=1.0).contains(&error)
+    {
+        return Err(
+            RoutingError::invalid_configuration(
+                "topology.edge.error_rate",
+                "must be finite and within [0,1]",
+            ),
+        );
     }
 
-    if !penalty.is_finite()
-        || penalty < 0.0
+    if !fidelity.is_finite()
+        || !(0.0..=1.0).contains(&fidelity)
+    {
+        return Err(
+            RoutingError::invalid_configuration(
+                "topology.edge.fidelity",
+                "must be finite and within [0,1]",
+            ),
+        );
+    }
+
+    if !duration.is_finite()
+        || duration < 0.0
+    {
+        return Err(
+            RoutingError::invalid_configuration(
+                "topology.edge.duration",
+                "must be finite and non-negative",
+            ),
+        );
+    }
+
+    let weighted =
+        match config.objective {
+            RoutingObjective::SwapCount => 0.0,
+
+            RoutingObjective::Depth => {
+                config.weights.depth
+            }
+
+            RoutingObjective::Duration => {
+                duration
+            }
+
+            RoutingObjective::Error => {
+                error
+            }
+
+            RoutingObjective::Fidelity => {
+                1.0 - fidelity
+            }
+
+            RoutingObjective::Weighted => {
+                config.weights.duration * duration
+                    + config.weights.error * error
+                    + config.weights.fidelity
+                        * (1.0 - fidelity)
+                    + config.weights.swap_count
+            }
+
+            RoutingObjective::Lexicographic => {
+                /*
+                 * Lexicographic ordering is handled primarily by
+                 * route_order(). The local candidate score still receives
+                 * a small hardware-aware contribution so equal-SWAP
+                 * candidates prefer better physical resources.
+                 */
+                error
+                    + (1.0 - fidelity)
+                    + duration
+                        * config.weights.duration
+            }
+
+            RoutingObjective::Custom(_) => 0.0,
+        };
+
+    if !weighted.is_finite()
+        || weighted < 0.0
     {
         return Err(
             RoutingError::internal_invariant(
-                "hardware candidate penalty became invalid",
-            )
+                "hardware candidate cost became invalid",
+            ),
         );
     }
 
-    Ok(penalty)
+    Ok(weighted)
 }
 
-fn objective_scale(
-    objective: &RoutingObjective,
+fn objective_cost(
+    objective: RoutingObjective,
     weights: &crate::quantum::routing::config::RoutingWeights,
+    front_cost: f64,
+    future_cost: f64,
+    hardware_cost: f64,
 ) -> f64 {
+    /*
+     * This function deliberately does NOT multiply the SABRE distance by an
+     * arbitrary "objective scale". The previous implementation did that,
+     * which meant e.g. `RoutingObjective::Error` could still be dominated by
+     * topological distance without a well-defined relationship between the
+     * units.
+     *
+     * Here:
+     *
+     * - topology distance remains the SABRE heuristic;
+     * - hardware properties contribute only through the selected objective.
+     */
     match objective {
-        RoutingObjective::SwapCount => {
-            1.0
-        }
+        RoutingObjective::SwapCount => 0.0,
 
         RoutingObjective::Depth => {
-            1.0 + weights.depth
+            weights.depth * front_cost
         }
 
         RoutingObjective::Duration => {
-            1.0 + weights.duration
+            hardware_cost
         }
 
         RoutingObjective::Error => {
-            1.0 + weights.error
+            hardware_cost
         }
 
         RoutingObjective::Fidelity => {
-            1.0 + weights.fidelity
+            hardware_cost
         }
 
         RoutingObjective::Weighted => {
-            1.0
-                + weights.swap_count
-                + weights.depth
-                + weights.duration
-                + weights.error
-                + weights.fidelity
+            weights.swap_count
+                + weights.depth * front_cost
+                + weights.duration * hardware_cost
+                + weights.error * hardware_cost
+                + weights.fidelity * hardware_cost
         }
 
-        RoutingObjective::Custom(_) => {
-            1.0
+        RoutingObjective::Lexicographic => {
+            /*
+             * Candidate-level lexicographic approximation:
+             * topology remains primary and hardware quality breaks ties.
+             */
+            front_cost
+                + (future_cost * 1.0e-6)
+                + hardware_cost * 1.0e-9
         }
+
+        RoutingObjective::Custom(_) => 0.0,
     }
 }
 
 // =============================================================================
-// Decay state
+// Decay
 // =============================================================================
 
-/// Tracks recent physical-qubit activity.
-///
-/// Values are always >= 1.0.
-///
-/// A candidate touching recently active qubits receives a larger multiplier.
 #[derive(Debug, Clone)]
 struct DecayState {
     values:
@@ -2554,19 +2222,11 @@ struct DecayState {
 }
 
 impl DecayState {
-    fn new(
-        topology: &Topology,
-    ) -> Self {
-        let mut values =
-            BTreeMap::new();
+    fn new(topology: &Topology) -> Self {
+        let mut values = BTreeMap::new();
 
-        for qubit in
-            topology.qubits()
-        {
-            values.insert(
-                qubit,
-                1.0,
-            );
+        for qubit in topology.qubits() {
+            values.insert(qubit, 1.0);
         }
 
         Self { values }
@@ -2577,19 +2237,17 @@ impl DecayState {
         a: PhysicalQubitId,
         b: PhysicalQubitId,
     ) -> f64 {
-        let a_value =
-            self.values
-                .get(&a)
+        let left =
+            self.values.get(&a)
                 .copied()
                 .unwrap_or(1.0);
 
-        let b_value =
-            self.values
-                .get(&b)
+        let right =
+            self.values.get(&b)
                 .copied()
                 .unwrap_or(1.0);
 
-        a_value.max(b_value)
+        left.max(right)
     }
 
     fn record(
@@ -2598,42 +2256,35 @@ impl DecayState {
         b: PhysicalQubitId,
         increment: f64,
     ) {
-        let current_a =
-            self.values
-                .get(&a)
+        let left =
+            self.values.get(&a)
                 .copied()
                 .unwrap_or(1.0);
 
-        let current_b =
-            self.values
-                .get(&b)
+        let right =
+            self.values.get(&b)
                 .copied()
                 .unwrap_or(1.0);
 
         self.values.insert(
             a,
-            current_a
-                .max(1.0)
-                + increment,
+            left.max(1.0) + increment,
         );
 
         self.values.insert(
             b,
-            current_b
-                .max(1.0)
-                + increment,
+            right.max(1.0) + increment,
         );
     }
 
-    /// Gradually relaxes old activity toward the neutral value 1.0.
     fn relax(&mut self) {
-        for value in
-            self.values.values_mut()
-        {
+        /*
+         * SABRE's decay state is intentionally relaxed gradually. The
+         * multiplication below is deterministic and keeps values >= 1.
+         */
+        for value in self.values.values_mut() {
             *value =
-                1.0
-                    + (*value - 1.0)
-                        * 0.95;
+                1.0 + (*value - 1.0) * 0.95;
         }
     }
 }
@@ -2642,37 +2293,30 @@ impl DecayState {
 // Seed handling
 // =============================================================================
 
-fn effective_seed(
-    config: &RoutingConfig,
-) -> u64 {
-    if let Some(seed) =
-        config.seed
-    {
+fn effective_seed(config: &RoutingConfig) -> u64 {
+    if let Some(seed) = config.seed {
         return seed;
     }
 
-    // A fixed seed is deliberately used for deterministic mode.
-    //
-    // For non-deterministic mode, use monotonic process-local time. This is
-    // not used for cryptography; it only selects a routing trial.
     if config.deterministic {
-        return 0x5ABRE_2026_u64;
+        return DEFAULT_DETERMINISTIC_SEED;
     }
 
-    let now =
-        Instant::now();
+    /*
+     * No pointer-address entropy.
+     *
+     * Pointer addresses make reproducibility depend on allocator/process
+     * layout and are inappropriate for a production compiler.
+     *
+     * `Instant` is used only as a cheap non-cryptographic source for
+     * trial variation when the caller explicitly requested non-determinism.
+     */
+    let elapsed =
+        Instant::now()
+            .elapsed()
+            .as_nanos() as u64;
 
-    let address =
-        (&now as *const Instant)
-            as usize;
-
-    mix64(
-        address as u64
-            ^ now
-                .elapsed()
-                .as_nanos()
-                as u64,
-    )
+    mix64(elapsed ^ 0xD1B5_4A32_9C77_1201)
 }
 
 fn derive_trial_seed(
@@ -2681,10 +2325,9 @@ fn derive_trial_seed(
 ) -> u64 {
     mix64(
         seed
-            ^ trial
-                .wrapping_mul(
-                    0x9E37_79B9_7F4A_7C15,
-                ),
+            ^ trial.wrapping_mul(
+                0x9E37_79B9_7F4A_7C15,
+            ),
     )
 }
 
@@ -2700,20 +2343,15 @@ fn mix_seed(
     )
 }
 
-/// SplitMix64-style mixing.
+/// SplitMix64-style deterministic mixing.
 ///
-/// This is used only for deterministic routing tie-breaking and trial
-/// derivation. It is not a cryptographic primitive.
-fn mix64(
-    mut value: u64,
-) -> u64 {
-    value =
-        value.wrapping_add(
-            0x9E37_79B9_7F4A_7C15,
-        );
+/// This is not a cryptographic primitive.
+fn mix64(mut value: u64) -> u64 {
+    value = value.wrapping_add(
+        0x9E37_79B9_7F4A_7C15,
+    );
 
-    let mut z =
-        value;
+    let mut z = value;
 
     z = (z ^ (z >> 30))
         .wrapping_mul(
@@ -2734,18 +2372,16 @@ fn candidate_tie_break(
     b: PhysicalQubitId,
     iteration: usize,
 ) -> u64 {
-    let canonical_a =
-        a.index().min(b.index())
-            as u64;
+    let left =
+        a.index().min(b.index()) as u64;
 
-    let canonical_b =
-        a.index().max(b.index())
-            as u64;
+    let right =
+        a.index().max(b.index()) as u64;
 
     mix64(
         seed
-            ^ canonical_a.rotate_left(7)
-            ^ canonical_b.rotate_left(23)
+            ^ left.rotate_left(7)
+            ^ right.rotate_left(23)
             ^ (iteration as u64)
                 .rotate_left(41),
     )
@@ -2755,24 +2391,16 @@ fn candidate_tie_break(
 // Reverse workload
 // =============================================================================
 
-/// Reverses interaction order for SABRE bidirectional layout refinement.
-///
-/// This does not attempt to invert gates. The reverse pass is used only as a
-/// mapping/layout heuristic, not as executable quantum semantics.
 fn reverse_workload(
     workload: &RoutingWorkload,
 ) -> RoutingWorkload {
     let mut interactions =
-        workload
-            .interactions()
-            .to_vec();
+        workload.interactions().to_vec();
 
     interactions.reverse();
 
     RoutingWorkload::new(
-        workload
-            .logical_qubits()
-            .to_vec(),
+        workload.logical_qubits().to_vec(),
         interactions,
     )
 }
@@ -2785,76 +2413,72 @@ fn validate_interaction(
     interaction: &QubitInteraction,
     operation_index: usize,
 ) -> Result<(), RoutingError> {
-    let arity =
-        interaction.arity();
+    let arity = interaction.arity();
 
-    if arity > MAX_ROUTING_ARITY {
+    /*
+     * SABRE is deliberately strict about arity.
+     *
+     * A 1-qubit operation does not need routing.
+     * A 3+ qubit operation requires decomposition/native support before SABRE.
+     */
+    if arity != MAX_ROUTING_ARITY {
+        if arity > MAX_ROUTING_ARITY {
+            return Err(
+                RoutingError::requires_decomposition(
+                    interaction.gate().name(),
+                    arity,
+                )
+                .with_diagnostic_context(
+                    crate::quantum::routing::errors::
+                        RoutingErrorContext::new()
+                        .with_operation_index(
+                            operation_index,
+                        )
+                        .with_gate(
+                            interaction.gate().name(),
+                        )
+                        .with_algorithm("sabre"),
+                ),
+            );
+        }
+
         return Err(
-            RoutingError::requires_decomposition(
+            RoutingError::unsupported_arity(
                 interaction.gate().name(),
                 arity,
             )
             .with_diagnostic_context(
-                crate::quantum::routing::errors::RoutingErrorContext::new()
+                crate::quantum::routing::errors::
+                    RoutingErrorContext::new()
                     .with_operation_index(
                         operation_index,
                     )
-                    .with_gate(
-                        interaction
-                            .gate()
-                            .name(),
-                    )
-                    .with_algorithm(
-                        "sabre",
-                    ),
+                    .with_algorithm("sabre"),
             ),
         );
     }
 
-    if arity == 0 {
-        return Err(
-            RoutingError::invalid_operand(
-                format!(
-                    "interaction at index {operation_index} has no operands",
-                ),
-            )
-        );
-    }
-
-    if interaction
-        .gate()
-        .name()
-        .trim()
-        .is_empty()
-    {
+    if interaction.gate().name().trim().is_empty() {
         return Err(
             RoutingError::unsupported_gate(
                 "<empty>",
-            )
+            ),
         );
     }
 
     let operands =
         interaction.operands();
 
-    for left in 0..operands.len() {
-        for right in
-            (left + 1)..operands.len()
-        {
-            if operands[left]
-                == operands[right]
-            {
-                return Err(
-                    RoutingError::invalid_operand(
-                        format!(
-                            "logical qubit {} appears more than once in interaction {}",
-                            operands[left],
-                            operation_index,
-                        ),
-                    )
-                );
-            }
-        }
+    if operands[0] == operands[1] {
+        return Err(
+            RoutingError::invalid_operand(
+                format!(
+                    "logical qubit {} occurs twice in interaction {}",
+                    operands[0],
+                    operation_index,
+                ),
+            ),
+        );
     }
 
     Ok(())
@@ -2880,108 +2504,77 @@ fn build_metrics(
     trial_count: usize,
 ) -> Result<RoutingMetrics, RoutingError> {
     let logical_qubits =
-        workload
-            .logical_qubit_count();
+        workload.logical_qubit_count();
 
     let physical_qubits =
-        topology
-            .qubit_count();
+        topology.qubit_count();
 
     let original_operations =
-        workload
-            .interaction_count();
+        workload.interaction_count();
 
     let final_operations =
         route.operations.len();
 
-    let mut original_single =
-        0usize;
+    let mut original_single = 0usize;
+    let mut original_two = 0usize;
+    let mut original_multi = 0usize;
 
-    let mut original_two =
-        0usize;
-
-    let mut original_multi =
-        0usize;
-
-    for interaction in
-        workload.interactions()
-    {
+    for interaction in workload.interactions() {
         match interaction.arity() {
-            0 | 1 => {
+            1 => {
                 original_single =
-                    original_single
-                        .saturating_add(1);
+                    original_single.saturating_add(1);
             }
 
             2 => {
                 original_two =
-                    original_two
-                        .saturating_add(1);
+                    original_two.saturating_add(1);
             }
 
             _ => {
                 original_multi =
-                    original_multi
-                        .saturating_add(1);
+                    original_multi.saturating_add(1);
             }
         }
     }
 
     let final_gate_operations =
-        route.operations
-            .iter()
-            .filter(
-                |operation| {
-                    operation.is_gate()
-                },
-            )
+        route.operations.iter()
+            .filter(|operation| operation.is_gate())
             .count();
 
     let inserted_moves =
-        route.operations
-            .iter()
-            .filter(
-                |operation| {
-                    operation.is_move()
-                },
-            )
+        route.operations.iter()
+            .filter(|operation| operation.is_move())
             .count();
 
     let inserted_bridges =
-        route.operations
-            .iter()
-            .filter(
-                |operation| {
-                    matches!(
-                        operation,
-                        RoutingOperation::Move(
-                            RoutingMove::Bridge { .. }
-                        )
+        route.operations.iter()
+            .filter(|operation| {
+                matches!(
+                    operation,
+                    RoutingOperation::Move(
+                        RoutingMove::Bridge { .. }
                     )
-                },
-            )
+                )
+            })
             .count();
 
     let inserted_permutations =
-        route.operations
-            .iter()
-            .filter(
-                |operation| {
-                    matches!(
-                        operation,
-                        RoutingOperation::Move(
-                            RoutingMove::Permutation { .. }
-                        )
+        route.operations.iter()
+            .filter(|operation| {
+                matches!(
+                    operation,
+                    RoutingOperation::Move(
+                        RoutingMove::Permutation { .. }
                     )
-                },
-            )
+                )
+            })
             .count();
 
     let routing_overhead =
         final_operations
-            .checked_sub(
-                original_operations,
-            )
+            .checked_sub(original_operations)
             .ok_or_else(|| {
                 RoutingError::internal_invariant(
                     "final operation count is smaller than original operation count",
@@ -2989,20 +2582,13 @@ fn build_metrics(
             })?;
 
     let original_depth =
-        approximate_workload_depth(
-            workload,
-        );
+        approximate_workload_depth(workload);
 
     let final_depth =
-        approximate_depth(
-            &route.operations,
-        );
+        approximate_depth(&route.operations);
 
     let routing_depth =
-        final_depth
-            .saturating_sub(
-                original_depth,
-            );
+        final_depth.saturating_sub(original_depth);
 
     let mut metrics =
         RoutingMetrics::new(
@@ -3055,11 +2641,16 @@ fn build_metrics(
     metrics.routing_depth =
         routing_depth;
 
+    /*
+     * These are routing-layer estimates. Exact hardware timing/depth belongs
+     * to scheduling once native gate durations are known.
+     */
     metrics.original_two_qubit_depth =
         original_two;
 
     metrics.final_two_qubit_depth =
-        final_gate_operations;
+        route.routed_two_qubit_operations
+            .saturating_add(route.inserted_swaps);
 
     metrics.routing_two_qubit_depth =
         route.inserted_swaps;
@@ -3092,7 +2683,8 @@ fn build_metrics(
         Duration::ZERO;
 
     metrics.physical_two_qubit_operations =
-        route.routed_two_qubit_operations;
+        route.routed_two_qubit_operations
+            .saturating_add(route.inserted_swaps);
 
     Ok(metrics)
 }
@@ -3106,18 +2698,12 @@ fn approximate_workload_depth(
             usize,
         >::new();
 
-    let mut depth =
-        0usize;
+    let mut depth = 0usize;
 
-    for interaction in
-        workload.interactions()
-    {
-        let mut layer =
-            0usize;
+    for interaction in workload.interactions() {
+        let mut layer = 0usize;
 
-        for logical in
-            interaction.operands()
-        {
+        for logical in interaction.operands() {
             layer = layer.max(
                 last_layer
                     .get(logical)
@@ -3129,17 +2715,11 @@ fn approximate_workload_depth(
         layer =
             layer.saturating_add(1);
 
-        for logical in
-            interaction.operands()
-        {
-            last_layer.insert(
-                *logical,
-                layer,
-            );
+        for logical in interaction.operands() {
+            last_layer.insert(*logical, layer);
         }
 
-        depth =
-            depth.max(layer);
+        depth = depth.max(layer);
     }
 
     depth
@@ -3154,26 +2734,19 @@ fn approximate_depth(
             usize,
         >::new();
 
-    let mut depth =
-        0usize;
+    let mut depth = 0usize;
 
-    for operation in
-        operations
-    {
+    for operation in operations {
         let touched =
-            operation
-                .physical_qubits();
+            operation.physical_qubits();
 
         if touched.is_empty() {
             continue;
         }
 
-        let mut layer =
-            0usize;
+        let mut layer = 0usize;
 
-        for physical in
-            &touched
-        {
+        for physical in &touched {
             layer = layer.max(
                 last_layer
                     .get(physical)
@@ -3185,17 +2758,14 @@ fn approximate_depth(
         layer =
             layer.saturating_add(1);
 
-        for physical in
-            touched
-        {
+        for physical in touched {
             last_layer.insert(
                 physical,
                 layer,
             );
         }
 
-        depth =
-            depth.max(layer);
+        depth = depth.max(layer);
     }
 
     depth
@@ -3213,19 +2783,13 @@ fn build_reproducibility(
     trial_count: usize,
 ) -> ReproducibilityMetadata {
     let input_hash =
-        stable_workload_hash(
-            workload,
-        );
+        stable_workload_hash(workload);
 
     let topology_hash =
-        stable_topology_hash(
-            topology,
-        );
+        stable_topology_hash(topology);
 
     let configuration_hash =
-        stable_configuration_hash(
-            config,
-        );
+        stable_configuration_hash(config);
 
     let result_hash =
         stable_operation_hash(
@@ -3236,10 +2800,8 @@ fn build_reproducibility(
         mix64(
             input_hash
                 ^ topology_hash.rotate_left(13)
-                ^ configuration_hash
-                    .rotate_left(29)
-                ^ result_hash
-                    .rotate_left(43),
+                ^ configuration_hash.rotate_left(29)
+                ^ result_hash.rotate_left(43),
         );
 
     let mut metadata =
@@ -3252,40 +2814,29 @@ fn build_reproducibility(
     metadata =
         metadata
             .with_routing_id(
-                crate::quantum::routing::types::RoutingId::new(
-                    routing_id,
-                ),
+                crate::quantum::routing::types::
+                    RoutingId::new(routing_id),
             )
             .with_seed(
-                RoutingSeed::new(
-                    route.seed,
-                ),
+                RoutingSeed::new(route.seed),
             )
             .with_routing_version(
-                "zamani-routing-v1",
+                SABRE_ROUTING_VERSION,
             )
             .with_algorithm_version(
                 SABRE_ALGORITHM_VERSION,
             )
             .with_configuration_hash(
-                format!(
-                    "{configuration_hash:016x}"
-                ),
+                format!("{configuration_hash:016x}"),
             )
             .with_input_hash(
-                format!(
-                    "{input_hash:016x}"
-                ),
+                format!("{input_hash:016x}"),
             )
             .with_topology_hash(
-                format!(
-                    "{topology_hash:016x}"
-                ),
+                format!("{topology_hash:016x}"),
             )
             .with_result_hash(
-                format!(
-                    "{result_hash:016x}"
-                ),
+                format!("{result_hash:016x}"),
             )
             .with_trial(
                 0,
@@ -3295,57 +2846,36 @@ fn build_reproducibility(
     metadata
 }
 
-// =============================================================================
-// Stable fingerprints
-// =============================================================================
-
 fn stable_workload_hash(
     workload: &RoutingWorkload,
 ) -> u64 {
     let mut hash =
         0xcbf2_9ce4_8422_2325_u64;
 
-    for logical in
-        workload.logical_qubits()
-    {
-        hash =
-            fnv_mix(
-                hash,
-                logical.index()
-                    as u64,
-            );
+    for logical in workload.logical_qubits() {
+        hash = fnv_mix(
+            hash,
+            logical.index() as u64,
+        );
     }
 
-    for interaction in
-        workload.interactions()
-    {
-        hash =
-            fnv_bytes(
-                hash,
-                interaction
-                    .gate()
-                    .name()
-                    .as_bytes(),
-            );
+    for interaction in workload.interactions() {
+        hash = fnv_bytes(
+            hash,
+            interaction.gate().name().as_bytes(),
+        );
 
-        for logical in
-            interaction.operands()
-        {
-            hash =
-                fnv_mix(
-                    hash,
-                    logical.index()
-                        as u64,
-                );
+        for logical in interaction.operands() {
+            hash = fnv_mix(
+                hash,
+                logical.index() as u64,
+            );
         }
 
-        hash =
-            fnv_mix(
-                hash,
-                interaction
-                    .arity()
-                    as u64,
-            );
+        hash = fnv_mix(
+            hash,
+            interaction.arity() as u64,
+        );
     }
 
     hash
@@ -3357,51 +2887,38 @@ fn stable_topology_hash(
     let mut hash =
         0xcbf2_9ce4_8422_2325_u64;
 
-    for qubit in
-        topology.qubits()
-    {
-        hash =
-            fnv_mix(
-                hash,
-                qubit.index()
-                    as u64,
-            );
+    for qubit in topology.qubits() {
+        hash = fnv_mix(
+            hash,
+            qubit.index() as u64,
+        );
 
-        hash =
-            fnv_mix(
-                hash,
-                topology
-                    .is_available(
-                        qubit,
-                    ) as u64,
-            );
+        hash = fnv_mix(
+            hash,
+            topology.is_available(qubit) as u64,
+        );
     }
 
-    for edge in
-        topology.edges()
-    {
-        hash =
-            fnv_mix(
-                hash,
-                edge.a()
-                    .index()
-                    as u64,
-            );
+    for edge in topology.edges() {
+        hash = fnv_mix(
+            hash,
+            edge.a().index() as u64,
+        );
 
-        hash =
-            fnv_mix(
-                hash,
-                edge.b()
-                    .index()
-                    as u64,
-            );
+        hash = fnv_mix(
+            hash,
+            edge.b().index() as u64,
+        );
 
-        hash =
-            fnv_mix(
-                hash,
-                edge.direction()
-                    as u64,
-            );
+        /*
+         * Avoid depending on an enum's discriminant representation in a
+         * reproducibility hash.
+         */
+        hash = fnv_bytes(
+            hash,
+            format!("{:?}", edge.direction())
+                .as_bytes(),
+        );
     }
 
     hash
@@ -3413,82 +2930,50 @@ fn stable_configuration_hash(
     let mut hash =
         0xcbf2_9ce4_8422_2325_u64;
 
-    hash =
-        fnv_bytes(
-            hash,
-            config.algorithm
-                .name()
-                .as_bytes(),
-        );
+    hash = fnv_bytes(
+        hash,
+        config.algorithm.name().as_bytes(),
+    );
 
-    hash =
-        fnv_bytes(
-            hash,
-            config.objective
-                .name()
-                .as_bytes(),
-        );
+    hash = fnv_bytes(
+        hash,
+        config.objective.name().as_bytes(),
+    );
 
-    hash =
-        fnv_mix(
-            hash,
-            config
-                .deterministic
-                as u64,
-        );
+    hash = fnv_mix(
+        hash,
+        config.deterministic as u64,
+    );
 
-    hash =
-        fnv_mix(
-            hash,
-            config
-                .allow_swap
-                as u64,
-        );
+    hash = fnv_mix(
+        hash,
+        config.allow_swap as u64,
+    );
 
-    hash =
-        fnv_mix(
-            hash,
-            config
-                .limits
-                .max_iterations
-                as u64,
-        );
+    hash = fnv_mix(
+        hash,
+        config.limits.max_iterations as u64,
+    );
 
-    hash =
-        fnv_mix(
-            hash,
-            config
-                .limits
-                .candidate_limit
-                as u64,
-        );
+    hash = fnv_mix(
+        hash,
+        config.limits.candidate_limit as u64,
+    );
 
-    hash =
-        fnv_mix(
-            hash,
-            config
-                .limits
-                .lookahead_depth
-                as u64,
-        );
+    hash = fnv_mix(
+        hash,
+        config.limits.lookahead_depth as u64,
+    );
 
-    hash =
-        fnv_mix(
-            hash,
-            config
-                .limits
-                .sabre_iterations
-                as u64,
-        );
+    hash = fnv_mix(
+        hash,
+        config.limits.sabre_iterations as u64,
+    );
 
-    hash =
-        fnv_mix(
-            hash,
-            config
-                .limits
-                .sabre_trials
-                as u64,
-        );
+    hash = fnv_mix(
+        hash,
+        config.limits.sabre_trials as u64,
+    );
 
     hash
 }
@@ -3499,32 +2984,20 @@ fn stable_operation_hash(
     let mut hash =
         0xcbf2_9ce4_8422_2325_u64;
 
-    for operation in
-        operations
-    {
+    for operation in operations {
         match operation {
             RoutingOperation::Move(
                 RoutingMove::Swap { a, b },
             ) => {
-                hash =
-                    fnv_mix(
-                        hash,
-                        1,
-                    );
-
-                hash =
-                    fnv_mix(
-                        hash,
-                        a.index()
-                            as u64,
-                    );
-
-                hash =
-                    fnv_mix(
-                        hash,
-                        b.index()
-                            as u64,
-                    );
+                hash = fnv_mix(hash, 1);
+                hash = fnv_mix(
+                    hash,
+                    a.index() as u64,
+                );
+                hash = fnv_mix(
+                    hash,
+                    b.index() as u64,
+                );
             }
 
             RoutingOperation::Gate {
@@ -3532,63 +3005,38 @@ fn stable_operation_hash(
                 operands,
                 logical_operands,
             } => {
-                hash =
-                    fnv_mix(
-                        hash,
-                        2,
-                    );
+                hash = fnv_mix(hash, 2);
 
-                hash =
-                    fnv_bytes(
-                        hash,
-                        gate.name()
-                            .as_bytes(),
-                    );
+                hash = fnv_bytes(
+                    hash,
+                    gate.name().as_bytes(),
+                );
 
-                for physical in
-                    operands
-                {
-                    hash =
-                        fnv_mix(
-                            hash,
-                            physical
-                                .index()
-                                as u64,
-                        );
+                for physical in operands {
+                    hash = fnv_mix(
+                        hash,
+                        physical.index() as u64,
+                    );
                 }
 
-                for logical in
-                    logical_operands
-                {
-                    hash =
-                        fnv_mix(
-                            hash,
-                            logical
-                                .index()
-                                as u64,
-                        );
+                for logical in logical_operands {
+                    hash = fnv_mix(
+                        hash,
+                        logical.index() as u64,
+                    );
                 }
             }
 
             RoutingOperation::Barrier {
                 operands,
             } => {
-                hash =
-                    fnv_mix(
-                        hash,
-                        3,
-                    );
+                hash = fnv_mix(hash, 3);
 
-                for physical in
-                    operands
-                {
-                    hash =
-                        fnv_mix(
-                            hash,
-                            physical
-                                .index()
-                                as u64,
-                        );
+                for physical in operands {
+                    hash = fnv_mix(
+                        hash,
+                        physical.index() as u64,
+                    );
                 }
             }
 
@@ -3600,39 +3048,23 @@ fn stable_operation_hash(
                     gate,
                 },
             ) => {
-                hash =
-                    fnv_mix(
-                        hash,
-                        4,
-                    );
-
-                hash =
-                    fnv_mix(
-                        hash,
-                        a.index()
-                            as u64,
-                    );
-
-                hash =
-                    fnv_mix(
-                        hash,
-                        bridge.index()
-                            as u64,
-                    );
-
-                hash =
-                    fnv_mix(
-                        hash,
-                        b.index()
-                            as u64,
-                    );
-
-                hash =
-                    fnv_bytes(
-                        hash,
-                        gate.name()
-                            .as_bytes(),
-                    );
+                hash = fnv_mix(hash, 4);
+                hash = fnv_mix(
+                    hash,
+                    a.index() as u64,
+                );
+                hash = fnv_mix(
+                    hash,
+                    bridge.index() as u64,
+                );
+                hash = fnv_mix(
+                    hash,
+                    b.index() as u64,
+                );
+                hash = fnv_bytes(
+                    hash,
+                    gate.name().as_bytes(),
+                );
             }
 
             RoutingOperation::Move(
@@ -3640,30 +3072,18 @@ fn stable_operation_hash(
                     mapping,
                 },
             ) => {
-                hash =
-                    fnv_mix(
+                hash = fnv_mix(hash, 5);
+
+                for (logical, physical) in mapping {
+                    hash = fnv_mix(
                         hash,
-                        5,
+                        logical.index() as u64,
                     );
 
-                for (logical, physical)
-                    in mapping
-                {
-                    hash =
-                        fnv_mix(
-                            hash,
-                            logical
-                                .index()
-                                as u64,
-                        );
-
-                    hash =
-                        fnv_mix(
-                            hash,
-                            physical
-                                .index()
-                                as u64,
-                        );
+                    hash = fnv_mix(
+                        hash,
+                        physical.index() as u64,
+                    );
                 }
             }
         }
@@ -3673,77 +3093,56 @@ fn stable_operation_hash(
 }
 
 fn fnv_mix(
-    hash: u64,
+    mut hash: u64,
     value: u64,
 ) -> u64 {
-    let mut result =
-        hash;
-
-    result ^=
-        value;
-
-    result =
-        result.wrapping_mul(
-            0x0000_0100_0000_01B3,
-        );
-
-    result
+    hash ^= value;
+    hash = hash.wrapping_mul(
+        0x0000_0100_0000_01B3,
+    );
+    hash
 }
 
 fn fnv_bytes(
     mut hash: u64,
     bytes: &[u8],
 ) -> u64 {
-    for byte in
-        bytes
-    {
-        hash =
-            fnv_mix(
-                hash,
-                *byte as u64,
-            );
+    for byte in bytes {
+        hash = fnv_mix(
+            hash,
+            *byte as u64,
+        );
     }
 
     hash
 }
 
 // =============================================================================
-// Operation ordering
+// Deterministic operation ordering
 // =============================================================================
 
 fn operation_stream_order(
     a: &[RoutingOperation],
     b: &[RoutingOperation],
 ) -> Ordering {
-    let count =
-        a.len().min(
-            b.len(),
-        );
+    let count = a.len().min(b.len());
 
     for index in 0..count {
         let left =
-            operation_key(
-                &a[index],
-            );
+            operation_key(&a[index]);
 
         let right =
-            operation_key(
-                &b[index],
-            );
+            operation_key(&b[index]);
 
         let ordering =
             left.cmp(&right);
 
-        if ordering
-            != Ordering::Equal
-        {
+        if ordering != Ordering::Equal {
             return ordering;
         }
     }
 
-    a.len().cmp(
-        &b.len(),
-    )
+    a.len().cmp(&b.len())
 }
 
 fn operation_key(
@@ -3849,9 +3248,7 @@ fn operation_key(
 mod tests {
     use super::*;
 
-    fn line_mapping(
-        count: usize,
-    ) -> QubitMapping {
+    fn line_mapping(count: usize) -> QubitMapping {
         QubitMapping::from_assignments(
             (0..count).map(|index| {
                 (
@@ -3860,9 +3257,7 @@ mod tests {
                 )
             }),
         )
-        .expect(
-            "test mapping must be valid",
-        )
+        .expect("test mapping must be valid")
     }
 
     fn line_workload(
@@ -3876,10 +3271,7 @@ mod tests {
             LogicalQubitId::new(b);
 
         RoutingWorkload::new(
-            vec![
-                logical_a,
-                logical_b,
-            ],
+            vec![logical_a, logical_b],
             vec![
                 QubitInteraction::new(
                     vec![
@@ -3896,25 +3288,33 @@ mod tests {
     fn sabre_has_stable_name() {
         assert_eq!(
             SabreRouter::new().name(),
-            "sabre"
+            "sabre",
         );
     }
 
     #[test]
-    fn heuristics_have_stable_names() {
+    fn default_heuristic_is_decay() {
+        assert_eq!(
+            SabreRouter::new().heuristic(),
+            SabreHeuristic::Decay,
+        );
+    }
+
+    #[test]
+    fn heuristic_names_are_stable() {
         assert_eq!(
             SabreHeuristic::Basic.name(),
-            "basic"
+            "basic",
         );
 
         assert_eq!(
             SabreHeuristic::Lookahead.name(),
-            "lookahead"
+            "lookahead",
         );
 
         assert_eq!(
             SabreHeuristic::Decay.name(),
-            "decay"
+            "decay",
         );
     }
 
@@ -3925,7 +3325,20 @@ mod tests {
 
         assert_eq!(
             effective_seed(&config),
-            effective_seed(&config)
+            effective_seed(&config),
+        );
+    }
+
+    #[test]
+    fn explicit_seed_wins() {
+        let mut config =
+            RoutingConfig::default();
+
+        config.seed = Some(42);
+
+        assert_eq!(
+            effective_seed(&config),
+            42,
         );
     }
 
@@ -3947,30 +3360,51 @@ mod tests {
                 7,
             );
 
-        assert_eq!(
-            first,
-            second
-        );
+        assert_eq!(first, second);
     }
 
     #[test]
-    fn reverse_workload_preserves_logical_qubits() {
+    fn candidate_tie_break_is_endpoint_order_independent() {
+        let first =
+            candidate_tie_break(
+                42,
+                PhysicalQubitId::new(1),
+                PhysicalQubitId::new(2),
+                7,
+            );
+
+        let second =
+            candidate_tie_break(
+                42,
+                PhysicalQubitId::new(2),
+                PhysicalQubitId::new(1),
+                7,
+            );
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn reverse_workload_reverses_program_order() {
         let workload =
             line_workload(0, 1);
 
         let reversed =
-            reverse_workload(
-                &workload,
-            );
+            reverse_workload(&workload);
 
         assert_eq!(
             reversed.logical_qubits(),
-            workload.logical_qubits()
+            workload.logical_qubits(),
         );
 
         assert_eq!(
-            reversed.interactions(),
-            workload.interactions()
+            reversed.interactions().len(),
+            workload.interactions().len(),
+        );
+
+        assert_eq!(
+            reversed.interactions()[0],
+            workload.interactions()[0],
         );
     }
 
@@ -3978,14 +3412,10 @@ mod tests {
     fn decay_state_relaxes_toward_one() {
         let topology =
             Topology::line(2)
-                .expect(
-                    "test topology",
-                );
+                .expect("test topology");
 
         let mut decay =
-            DecayState::new(
-                &topology,
-            );
+            DecayState::new(&topology);
 
         decay.record(
             PhysicalQubitId::new(0),
@@ -3993,133 +3423,248 @@ mod tests {
             1.0,
         );
 
-        assert!(
+        let before =
             decay.factor(
                 PhysicalQubitId::new(0),
                 PhysicalQubitId::new(1),
-            ) > 1.0
-        );
+            );
 
         decay.relax();
 
-        assert!(
+        let after =
             decay.factor(
                 PhysicalQubitId::new(0),
                 PhysicalQubitId::new(1),
-            ) > 1.0
-        );
-    }
-
-    #[test]
-    fn distance_matrix_contains_adjacent_distance() {
-        let topology =
-            Topology::line(3)
-                .expect(
-                    "test topology",
-                );
-
-        let matrix =
-            DistanceMatrix::build(
-                &topology,
-            )
-            .expect(
-                "distance matrix",
             );
 
-        assert_eq!(
-            matrix.distance(
-                PhysicalQubitId::new(0),
-                PhysicalQubitId::new(1),
-            ),
-            Some(1)
-        );
+        assert!(before > after);
+        assert!(after >= 1.0);
     }
 
     #[test]
-    fn candidate_generation_is_restricted_to_front_neighborhood() {
-        let topology =
-            Topology::line(4)
-                .expect(
-                    "test topology",
-                );
+    fn front_layer_contains_independent_operations() {
+        let q0 =
+            LogicalQubitId::new(0);
 
-        let mapping =
-            line_mapping(4);
+        let q1 =
+            LogicalQubitId::new(1);
+
+        let q2 =
+            LogicalQubitId::new(2);
+
+        let q3 =
+            LogicalQubitId::new(3);
 
         let workload =
             RoutingWorkload::new(
-                (0..4)
-                    .map(
-                        LogicalQubitId::new,
-                    )
-                    .collect(),
+                vec![q0, q1, q2, q3],
                 vec![
                     QubitInteraction::new(
-                        vec![
-                            LogicalQubitId::new(0),
-                            LogicalQubitId::new(3),
-                        ],
+                        vec![q0, q1],
+                        GateIdentity::Cx,
+                    ),
+                    QubitInteraction::new(
+                        vec![q2, q3],
                         GateIdentity::Cx,
                     ),
                 ],
             );
 
-        let candidates =
+        let completed =
+            vec![false, false];
+
+        let front =
+            build_front_layer(
+                &workload,
+                &completed,
+            );
+
+        assert_eq!(
+            front,
+            vec![0, 1],
+        );
+    }
+
+    #[test]
+    fn front_layer_respects_dependencies() {
+        let q0 =
+            LogicalQubitId::new(0);
+
+        let q1 =
+            LogicalQubitId::new(1);
+
+        let workload =
+            RoutingWorkload::new(
+                vec![q0, q1],
+                vec![
+                    QubitInteraction::new(
+                        vec![q0, q1],
+                        GateIdentity::Cx,
+                    ),
+                    QubitInteraction::new(
+                        vec![q0, q1],
+                        GateIdentity::Cx,
+                    ),
+                ],
+            );
+
+        let completed =
+            vec![false, false];
+
+        let front =
+            build_front_layer(
+                &workload,
+                &completed,
+            );
+
+        assert_eq!(
+            front,
+            vec![0],
+        );
+    }
+
+    #[test]
+    fn completed_dependency_is_released() {
+        let q0 =
+            LogicalQubitId::new(0);
+
+        let q1 =
+            LogicalQubitId::new(1);
+
+        let workload =
+            RoutingWorkload::new(
+                vec![q0, q1],
+                vec![
+                    QubitInteraction::new(
+                        vec![q0, q1],
+                        GateIdentity::Cx,
+                    ),
+                    QubitInteraction::new(
+                        vec![q0, q1],
+                        GateIdentity::Cx,
+                    ),
+                ],
+            );
+
+        let completed =
+            vec![true, false];
+
+        let front =
+            build_front_layer(
+                &workload,
+                &completed,
+            );
+
+        assert_eq!(
+            front,
+            vec![1],
+        );
+    }
+
+    #[test]
+    fn candidate_generation_is_deterministic() {
+        let topology =
+            Topology::line(4)
+                .expect("test topology");
+
+        let mapping =
+            line_mapping(4);
+
+        let workload =
+            line_workload(0, 3);
+
+        let front =
+            vec![0];
+
+        let first =
             generate_candidates(
-                &[0],
+                &front,
                 &workload,
                 &mapping,
                 &topology,
                 64,
             )
-            .expect(
-                "candidate generation",
-            );
+            .expect("candidate generation");
 
-        assert!(
-            candidates
-                .iter()
-                .all(|candidate| {
-                    candidate.a
-                        <= PhysicalQubitId::new(3)
-                        && candidate.b
-                            <= PhysicalQubitId::new(3)
-                })
+        let second =
+            generate_candidates(
+                &front,
+                &workload,
+                &mapping,
+                &topology,
+                64,
+            )
+            .expect("candidate generation");
+
+        assert_eq!(
+            first,
+            second,
         );
     }
 
     #[test]
-    fn interaction_conflict_is_symmetric() {
-        let first =
+    fn distance_matrix_has_line_distances() {
+        let topology =
+            Topology::line(4)
+                .expect("test topology");
+
+        let distances =
+            DistanceMatrix::build(&topology)
+                .expect("distance matrix");
+
+        assert_eq!(
+            distances.distance(
+                PhysicalQubitId::new(0),
+                PhysicalQubitId::new(3),
+            ),
+            Some(3),
+        );
+
+        assert_eq!(
+            distances.distance(
+                PhysicalQubitId::new(1),
+                PhysicalQubitId::new(3),
+            ),
+            Some(2),
+        );
+    }
+
+    #[test]
+    fn invalid_arity_is_rejected() {
+        let interaction =
             QubitInteraction::new(
                 vec![
                     LogicalQubitId::new(0),
-                    LogicalQubitId::new(1),
                 ],
                 GateIdentity::Cx,
             );
 
-        let second =
+        assert!(
+            validate_interaction(
+                &interaction,
+                0,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn duplicate_operands_are_rejected() {
+        let q0 =
+            LogicalQubitId::new(0);
+
+        let interaction =
             QubitInteraction::new(
-                vec![
-                    LogicalQubitId::new(1),
-                    LogicalQubitId::new(2),
-                ],
-                GateIdentity::Cz,
+                vec![q0, q0],
+                GateIdentity::Cx,
             );
 
         assert!(
-            interactions_conflict(
-                &first,
-                &second,
+            validate_interaction(
+                &interaction,
+                0,
             )
-        );
-
-        assert!(
-            interactions_conflict(
-                &second,
-                &first,
-            )
+            .is_err()
         );
     }
 }
