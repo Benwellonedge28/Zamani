@@ -1,0 +1,964 @@
+//! Zamani Quantum Routing — Movement Primitives
+//!
+//! Production routing movement namespace.
+//!
+//! # Responsibility
+//!
+//! This module defines and exports the movement layer used by the Zamani
+//! quantum routing subsystem.
+//!
+//! Movement is deliberately separated from:
+//!
+//! - topology construction;
+//! - logical/physical mapping ownership;
+//! - routing algorithms;
+//! - layout selection;
+//! - cost calculation;
+//! - hardware provider APIs;
+//! - gate decomposition;
+//! - scheduling;
+//! - pulse generation;
+//! - execution;
+//! - simulation;
+//! - QEC decoding.
+//!
+//! The movement layer answers one specific question:
+//!
+//! > "What physical movement/permutation operation does a routing algorithm
+//! > want to apply to the current logical-to-physical placement?"
+//!
+//! # Architecture
+//!
+//! ```text
+//!                         Quantum IR
+//!                             │
+//!                             ▼
+//!                         Layout
+//!                             │
+//!                             ▼
+//!                    Routing Algorithm
+//!                             │
+//!                             ▼
+//!                     Routing Candidate
+//!                             │
+//!                             ▼
+//!                    ┌─────────────────┐
+//!                    │  routing::moves │
+//!                    └────────┬────────┘
+//!                             │
+//!              ┌──────────────┼──────────────┐
+//!              ▼              ▼              ▼
+//!            Swap          Bridge       Permutation
+//!              │              │              │
+//!              └──────────────┼──────────────┘
+//!                             ▼
+//!                     Mapping Transition
+//!                             │
+//!                             ▼
+//!                    Routing Verification
+//!                             │
+//!                             ▼
+//!                    Hardware Lowering
+//! ```
+//!
+//! # Important semantic boundary
+//!
+//! A movement operation is NOT necessarily a hardware instruction.
+//!
+//! For example:
+//!
+//! ```text
+//! RoutingMove::Swap(p0, p1)
+//! ```
+//!
+//! means:
+//!
+//!     "exchange the logical states occupying physical locations p0 and p1"
+//!
+//! It does not mean that the target device necessarily has a native `SWAP`
+//! instruction.
+//!
+//! A later hardware-lowering stage may implement that movement as:
+//!
+//! ```text
+//! SWAP
+//!     │
+//!     ├── native SWAP
+//!     ├── 3 × CX
+//!     ├── provider-specific decomposition
+//!     └── another supported equivalent
+//! ```
+//!
+//! This separation is essential for keeping routing backend-independent.
+//!
+//! # Movement categories
+//!
+//! The production movement namespace contains three primary primitives:
+//!
+//! - [`swap`] — exchange two adjacent physical locations;
+//! - [`bridge`] — represent a mediated/bridge-style interaction when the
+//!   target capability explicitly permits it;
+//! - [`permutation`] — represent a composed logical-state permutation.
+//!
+//! # Stable public API
+//!
+//! Algorithms should normally depend on the re-exported types from this
+//! module rather than reaching into implementation files:
+//!
+//! ```text
+//! crate::quantum::routing::moves::SwapMove
+//! crate::quantum::routing::moves::BridgeMove
+//! crate::quantum::routing::moves::QubitPermutation
+//! ```
+//!
+//! This allows the implementation of an individual movement primitive to
+//! evolve without requiring routing algorithms to change their imports.
+//!
+//! # Integration with foundational routing types
+//!
+//! The foundational routing vocabulary lives in:
+//!
+//! ```text
+//! crate::quantum::routing::types
+//! ```
+//!
+//! In particular, movement implementations must use:
+//!
+//! - `PhysicalQubitId`;
+//! - `LogicalQubitId`;
+//! - `RoutingOperation`;
+//! - `QubitPermutation`-compatible semantics;
+//! - gate identity and routing-level identifiers.
+//!
+//! Movement implementations must NOT introduce another physical-qubit ID
+//! representation.
+//!
+//! # Integration with topology
+//!
+//! Movement legality is ultimately determined by:
+//!
+//! ```text
+//! crate::quantum::routing::topology
+//! ```
+//!
+//! A movement implementation must never assume that every pair of physical
+//! qubits is connected.
+//!
+//! In particular, a `SwapMove` must be validated against the target topology
+//! before being committed.
+//!
+//! # Integration with mapping
+//!
+//! Mapping state is owned by:
+//!
+//! ```text
+//! crate::quantum::routing::mapping
+//! ```
+//!
+//! Movement primitives must not maintain a second authoritative mapping.
+//!
+//! Their responsibility is to describe a transition.
+//!
+//! The mapping subsystem is responsible for applying that transition to the
+//! authoritative logical-to-physical and physical-to-logical state.
+//!
+//! This prevents the following class of bugs:
+//!
+//! ```text
+//! routing algorithm mapping
+//!          ≠
+//! hardware mapping
+//!          ≠
+//! result mapping
+//! ```
+//!
+//! There must be one authoritative mapping.
+//!
+//! # Integration with routing algorithms
+//!
+//! Algorithms such as:
+//!
+//! - basic routing;
+//! - shortest-path routing;
+//! - lookahead;
+//! - SABRE;
+//! - LightSABRE-style heuristics;
+//! - noise-aware routing;
+//! - dynamic routing;
+//! - future custom/plugin algorithms
+//!
+//! produce movement candidates.
+//!
+//! They should use this namespace for movement validation and representation.
+//!
+//! The movement layer must remain algorithm-neutral.
+//!
+//! # Integration with cost models
+//!
+//! Movement primitives expose enough information for:
+//!
+//! ```text
+//! crate::quantum::routing::cost
+//! ```
+//!
+//! to calculate:
+//!
+//! - movement count;
+//! - depth contribution;
+//! - duration;
+//! - estimated error;
+//! - fidelity impact;
+//! - weighted objective contribution.
+//!
+//! The movement layer must NOT implement a routing objective itself.
+//!
+//! # Integration with verification
+//!
+//! The verification subsystem must be able to inspect every movement through
+//! the stable movement interfaces exported here.
+//!
+//! Verification must be able to establish:
+//!
+//! 1. every referenced physical qubit exists;
+//! 2. every required physical connection exists;
+//! 3. every movement is legal for the selected routing target;
+//! 4. every permutation is bijective;
+//! 5. mapping transitions are consistent;
+//! 6. movement sequences do not contain impossible state transitions.
+//!
+//! # Transactionality
+//!
+//! A movement object should be treated as an immutable description of a
+//! proposed state transition.
+//!
+//! The preferred routing flow is:
+//!
+//! ```text
+//! candidate movement
+//!        │
+//!        ▼
+//! validate
+//!        │
+//!        ▼
+//! speculative mapping transition
+//!        │
+//!        ▼
+//! verify
+//!        │
+//!    ┌───┴───┐
+//!    │       │
+//! commit   rollback
+//! ```
+//!
+//! Movement primitives must not perform hidden global mutations.
+//!
+//! # Directed hardware
+//!
+//! Physical adjacency and gate direction are separate concepts.
+//!
+//! A physical edge may be usable for a SWAP while a directional two-qubit
+//! gate is legal in only one direction.
+//!
+//! Therefore `SwapMove` must represent physical state movement and must not
+//! inherit the directional semantics of the gate being routed.
+//!
+//! Direction-sensitive gate legality belongs to the topology/hardware layer.
+//!
+//! # Multi-qubit operations
+//!
+//! Movement primitives must not silently decompose arbitrary multi-qubit
+//! gates.
+//!
+//! For example:
+//!
+//! ```text
+//! CCX
+//! ```
+//!
+//! is a gate-synthesis/decomposition concern unless the target hardware
+//! explicitly exposes a native operation.
+//!
+//! Routing may move the participating logical qubits, but gate decomposition
+//! belongs to the appropriate synthesis/lowering stage.
+//!
+//! # Distributed quantum computing
+//!
+//! The movement API deliberately uses the abstract concept of a physical
+//! location rather than assuming that all physical qubits belong to one chip.
+//!
+//! Future distributed routing can therefore introduce movement semantics such
+//! as:
+//!
+//! - inter-module movement;
+//! - teleportation;
+//! - entanglement-assisted movement;
+//! - network-mediated routing;
+//! - remote-state permutation.
+//!
+//! Those mechanisms must be introduced as explicit movement types rather than
+//! changing the meaning of `SwapMove`.
+//!
+//! # No unsafe
+//!
+//! This module contains no `unsafe` code and must remain safe Rust.
+//!
+//! # Rust compatibility
+//!
+//! Target:
+//!
+//! - Rust 1.97;
+//! - Rust 1.97.1;
+//! - Rust 2021 edition.
+//!
+//! No nightly features are required.
+//!
+//! # Dependency policy
+//!
+//! This module should contain only module declarations, stable re-exports,
+//! documentation, and namespace-level compile-time tests.
+//!
+//! It must not depend on:
+//!
+//! - provider SDKs;
+//! - network I/O;
+//! - operating-system APIs;
+//! - compiler parser internals;
+//! - OpenQASM;
+//! - simulation engines;
+//! - benchmarking implementations;
+//! - random-number generators.
+//!
+//! Concrete dependencies belong to the corresponding movement implementation.
+//!
+//! # File-completion contract
+//!
+//! Once this file is established, the following files must conform to its
+//! public namespace:
+//!
+//! ```text
+//! moves/swap.rs
+//! moves/bridge.rs
+//! moves/permutation.rs
+//! ```
+//!
+//! Later implementation work must not require changing this namespace merely
+//! because an algorithm is added.
+//!
+//! The intended dependency direction is:
+//!
+//! ```text
+//! types.rs
+//!    │
+//!    ├──────────────┐
+//!    ▼              ▼
+//! topology.rs    mapping.rs
+//!    │              │
+//!    └──────┬───────┘
+//!           ▼
+//!      moves/mod.rs
+//!       │    │    │
+//!       ▼    ▼    ▼
+//!     swap bridge permutation
+//!       │    │    │
+//!       └────┼────┘
+//!            ▼
+//!       routing algorithms
+//!            │
+//!            ▼
+//!          router
+//!            │
+//!            ▼
+//!       verification
+//! ```
+//!
+//! `moves/mod.rs` is therefore a namespace boundary, not another routing
+//! algorithm.
+
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+
+/// Physical SWAP movement primitive.
+///
+/// `SwapMove` represents exchange of the logical states occupying two
+/// physical locations. It is deliberately independent of whether the target
+/// backend has a native SWAP gate.
+pub mod swap;
+
+/// Mediated/bridge-style movement or interaction primitive.
+///
+/// Bridge operations are capability-dependent. The implementation must never
+/// assume that a bridge is universally supported by quantum hardware.
+pub mod bridge;
+
+/// Logical-state permutation produced by one or more movement operations.
+///
+/// This module provides the algebra needed to compose, invert, validate, and
+/// apply movement-induced permutations.
+pub mod permutation;
+
+// =============================================================================
+// Stable public re-exports
+// =============================================================================
+
+/// Stable SWAP movement API.
+///
+/// New routing code should prefer:
+///
+/// ```text
+/// crate::quantum::routing::moves::SwapMove
+/// ```
+pub use swap::SwapMove;
+
+/// Stable bridge movement API.
+///
+/// New routing code should prefer:
+///
+/// ```text
+/// crate::quantum::routing::moves::BridgeMove
+/// ```
+pub use bridge::BridgeMove;
+
+/// Stable permutation API.
+///
+/// New routing code should prefer:
+///
+/// ```text
+/// crate::quantum::routing::moves::QubitPermutation
+/// ```
+pub use permutation::QubitPermutation;
+
+// =============================================================================
+// Movement namespace
+// =============================================================================
+
+/// Stable movement abstraction used by routing algorithms and verification.
+///
+/// This trait is intentionally small. Concrete movement primitives remain
+/// responsible for their own strongly typed data and validation.
+///
+/// The trait describes operations that every routable movement must provide:
+///
+/// - the physical qubits it touches;
+/// - a stable operation name;
+/// - the induced physical permutation;
+/// - whether the operation is a pure state movement.
+///
+/// The trait does not expose mutable mapping access. Mapping mutation remains
+/// owned by `routing::mapping`.
+pub trait RoutingMove {
+    /// Returns the physical qubits directly touched by this movement.
+    ///
+    /// The returned slice/order must be deterministic for a given movement.
+    fn physical_qubits(&self) -> &[crate::quantum::routing::types::PhysicalQubitId];
+
+    /// Returns the stable routing-level operation name.
+    fn operation_name(&self) -> &'static str;
+
+    /// Returns the logical-state permutation induced by this movement.
+    ///
+    /// A movement that does not permute logical states may return the identity
+    /// permutation once the permutation implementation supports that
+    /// representation.
+    fn permutation(&self) -> &QubitPermutation;
+
+    /// Returns whether this movement is purely a state-movement operation.
+    ///
+    /// SWAP-like movement returns `true`.
+    ///
+    /// A future network-mediated operation may return `false` if it also
+    /// performs communication/entanglement work.
+    fn is_state_movement(&self) -> bool;
+}
+
+// =============================================================================
+// Movement classification
+// =============================================================================
+
+/// Stable classification of routing movement primitives.
+///
+/// This enum is intentionally independent of concrete implementation details
+/// and is suitable for result reporting, diagnostics, and metrics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum MoveKind {
+    /// Exchange two adjacent physical locations.
+    Swap,
+
+    /// Mediated/bridge-style movement or interaction.
+    Bridge,
+
+    /// General logical-state permutation.
+    Permutation,
+}
+
+impl MoveKind {
+    /// Returns the stable lowercase identifier used in diagnostics and
+    /// machine-readable reporting.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Swap => "swap",
+            Self::Bridge => "bridge",
+            Self::Permutation => "permutation",
+        }
+    }
+}
+
+impl std::fmt::Display for MoveKind {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+// =============================================================================
+// Movement sequence
+// =============================================================================
+
+/// Ordered collection of routing movements.
+///
+/// This is intentionally a lightweight container rather than a replacement
+/// for `RoutingResult`.
+///
+/// `MoveSequence` is useful for:
+///
+/// - algorithm candidates;
+/// - speculative routing;
+/// - transaction preparation;
+/// - verification;
+/// - diagnostics;
+/// - cost evaluation.
+///
+/// The authoritative circuit result remains owned by `RoutingResult`.
+#[derive(Debug, Clone, Default)]
+pub struct MoveSequence {
+    moves: Vec<MoveKind>,
+}
+
+impl MoveSequence {
+    /// Creates an empty movement sequence.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self { moves: Vec::new() }
+    }
+
+    /// Creates a movement sequence with reserved capacity.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            moves: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// Returns the number of movement records.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.moves.len()
+    }
+
+    /// Returns whether the sequence is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.moves.is_empty()
+    }
+
+    /// Returns the movement classifications in execution order.
+    #[must_use]
+    pub fn as_slice(&self) -> &[MoveKind] {
+        &self.moves
+    }
+
+    /// Appends a movement classification.
+    ///
+    /// Concrete movement objects remain owned by the algorithm/result layer;
+    /// this sequence is intentionally only a compact classification record.
+    pub fn push(&mut self, kind: MoveKind) {
+        self.moves.push(kind);
+    }
+
+    /// Removes all movement records.
+    pub fn clear(&mut self) {
+        self.moves.clear();
+    }
+
+    /// Counts movements of a particular kind.
+    #[must_use]
+    pub fn count(&self, kind: MoveKind) -> usize {
+        self.moves.iter().filter(|candidate| **candidate == kind).count()
+    }
+
+    /// Returns the number of SWAP movements.
+    #[must_use]
+    pub fn swap_count(&self) -> usize {
+        self.count(MoveKind::Swap)
+    }
+
+    /// Returns the number of bridge movements.
+    #[must_use]
+    pub fn bridge_count(&self) -> usize {
+        self.count(MoveKind::Bridge)
+    }
+
+    /// Returns the number of general permutation records.
+    #[must_use]
+    pub fn permutation_count(&self) -> usize {
+        self.count(MoveKind::Permutation)
+    }
+}
+
+impl IntoIterator for MoveSequence {
+    type Item = MoveKind;
+    type IntoIter = std::vec::IntoIter<MoveKind>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.moves.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a MoveSequence {
+    type Item = &'a MoveKind;
+    type IntoIter = std::slice::Iter<'a, MoveKind>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.moves.iter()
+    }
+}
+
+// =============================================================================
+// Movement validation contract
+// =============================================================================
+
+/// Context supplied to movement validation.
+///
+/// The concrete topology implementation remains authoritative for physical
+/// connectivity. This trait avoids making `moves/mod.rs` depend directly on a
+/// particular topology representation.
+///
+/// Implementations of `MovementValidator` belong at the routing/topology
+/// integration boundary.
+pub trait MovementValidator {
+    /// Error returned when a movement is invalid.
+    type Error;
+
+    /// Validates one routing movement against the target hardware/topology.
+    fn validate_move<M: RoutingMove>(&self, movement: &M) -> Result<(), Self::Error>;
+}
+
+// =============================================================================
+// Movement transition contract
+// =============================================================================
+
+/// Abstract application of a routing movement to a mapping.
+///
+/// This trait deliberately does not own mapping state. It defines the
+/// integration contract that the mapping subsystem can implement or adapt.
+///
+/// A movement must be applied transactionally by callers when speculative
+/// routing is being performed.
+pub trait MovementTransition {
+    /// Error returned by the mapping transition.
+    type Error;
+
+    /// Applies one routing movement to the mapping.
+    ///
+    /// Implementations must preserve the mapping bijection invariant.
+    fn apply_move<M: RoutingMove>(&mut self, movement: &M) -> Result<(), Self::Error>;
+}
+
+// =============================================================================
+// Movement identity and diagnostics
+// =============================================================================
+
+/// Stable metadata describing one movement operation.
+///
+/// This type is intentionally independent of concrete movement storage.
+///
+/// It can be used by:
+///
+/// - diagnostics;
+/// - routing metrics;
+/// - benchmark reports;
+/// - verification errors;
+/// - deterministic execution traces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MoveDescriptor {
+    /// Movement classification.
+    pub kind: MoveKind,
+
+    /// Number of physical locations directly touched.
+    pub arity: usize,
+}
+
+impl MoveDescriptor {
+    /// Creates a movement descriptor.
+    #[must_use]
+    pub const fn new(kind: MoveKind, arity: usize) -> Self {
+        Self { kind, arity }
+    }
+
+    /// Creates the descriptor for a binary SWAP.
+    #[must_use]
+    pub const fn swap() -> Self {
+        Self::new(MoveKind::Swap, 2)
+    }
+
+    /// Creates the descriptor for a bridge movement.
+    #[must_use]
+    pub const fn bridge(arity: usize) -> Self {
+        Self::new(MoveKind::Bridge, arity)
+    }
+
+    /// Creates the descriptor for a permutation over `arity` locations.
+    #[must_use]
+    pub const fn permutation(arity: usize) -> Self {
+        Self::new(MoveKind::Permutation, arity)
+    }
+
+    /// Returns whether the descriptor represents a binary movement.
+    #[must_use]
+    pub const fn is_binary(self) -> bool {
+        self.arity == 2
+    }
+}
+
+// =============================================================================
+// Namespace-level invariants
+// =============================================================================
+
+/// Validates namespace-level movement invariants.
+///
+/// This helper intentionally does not inspect hardware topology. Hardware
+/// validation belongs to `Topology`/`MovementValidator`.
+///
+/// It validates only generic movement metadata that can be checked without a
+/// target device.
+pub fn validate_descriptor(descriptor: MoveDescriptor) -> Result<(), MoveValidationError> {
+    if descriptor.arity == 0 {
+        return Err(MoveValidationError::ZeroArity {
+            kind: descriptor.kind,
+        });
+    }
+
+    match descriptor.kind {
+        MoveKind::Swap if descriptor.arity != 2 => {
+            Err(MoveValidationError::InvalidArity {
+                kind: descriptor.kind,
+                expected: 2,
+                actual: descriptor.arity,
+            })
+        }
+
+        MoveKind::Bridge if descriptor.arity < 2 => {
+            Err(MoveValidationError::InvalidArity {
+                kind: descriptor.kind,
+                expected: 2,
+                actual: descriptor.arity,
+            })
+        }
+
+        MoveKind::Permutation if descriptor.arity < 2 => {
+            Err(MoveValidationError::InvalidArity {
+                kind: descriptor.kind,
+                expected: 2,
+                actual: descriptor.arity,
+            })
+        }
+
+        _ => Ok(()),
+    }
+}
+
+/// Errors produced by namespace-level movement validation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MoveValidationError {
+    /// A movement cannot have zero physical operands.
+    ZeroArity {
+        /// Movement kind being validated.
+        kind: MoveKind,
+    },
+
+    /// The movement has an invalid number of physical operands.
+    InvalidArity {
+        /// Movement kind being validated.
+        kind: MoveKind,
+
+        /// Required minimum/exact arity.
+        expected: usize,
+
+        /// Actual arity.
+        actual: usize,
+    },
+}
+
+impl std::fmt::Display for MoveValidationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ZeroArity { kind } => {
+                write!(
+                    formatter,
+                    "routing movement '{kind}' cannot have zero physical operands"
+                )
+            }
+
+            Self::InvalidArity {
+                kind,
+                expected,
+                actual,
+            } => {
+                write!(
+                    formatter,
+                    "routing movement '{kind}' has invalid arity: expected {expected}, got {actual}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for MoveValidationError {}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn move_kinds_have_stable_names() {
+        assert_eq!(MoveKind::Swap.as_str(), "swap");
+        assert_eq!(MoveKind::Bridge.as_str(), "bridge");
+        assert_eq!(MoveKind::Permutation.as_str(), "permutation");
+    }
+
+    #[test]
+    fn swap_descriptor_is_binary() {
+        let descriptor = MoveDescriptor::swap();
+
+        assert_eq!(descriptor.kind, MoveKind::Swap);
+        assert_eq!(descriptor.arity, 2);
+        assert!(descriptor.is_binary());
+        assert!(validate_descriptor(descriptor).is_ok());
+    }
+
+    #[test]
+    fn bridge_requires_at_least_two_locations() {
+        assert!(validate_descriptor(MoveDescriptor::bridge(2)).is_ok());
+        assert!(validate_descriptor(MoveDescriptor::bridge(3)).is_ok());
+
+        assert_eq!(
+            validate_descriptor(MoveDescriptor::bridge(1)),
+            Err(MoveValidationError::InvalidArity {
+                kind: MoveKind::Bridge,
+                expected: 2,
+                actual: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn permutation_requires_at_least_two_locations() {
+        assert!(validate_descriptor(MoveDescriptor::permutation(2)).is_ok());
+        assert!(validate_descriptor(MoveDescriptor::permutation(8)).is_ok());
+
+        assert_eq!(
+            validate_descriptor(MoveDescriptor::permutation(1)),
+            Err(MoveValidationError::InvalidArity {
+                kind: MoveKind::Permutation,
+                expected: 2,
+                actual: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn zero_arity_is_rejected() {
+        assert_eq!(
+            validate_descriptor(MoveDescriptor::new(MoveKind::Swap, 0)),
+            Err(MoveValidationError::ZeroArity {
+                kind: MoveKind::Swap,
+            })
+        );
+    }
+
+    #[test]
+    fn invalid_swap_arity_is_rejected() {
+        assert_eq!(
+            validate_descriptor(MoveDescriptor::new(MoveKind::Swap, 3)),
+            Err(MoveValidationError::InvalidArity {
+                kind: MoveKind::Swap,
+                expected: 2,
+                actual: 3,
+            })
+        );
+    }
+
+    #[test]
+    fn move_sequence_is_deterministic_and_countable() {
+        let mut sequence = MoveSequence::with_capacity(4);
+
+        sequence.push(MoveKind::Swap);
+        sequence.push(MoveKind::Swap);
+        sequence.push(MoveKind::Bridge);
+        sequence.push(MoveKind::Permutation);
+
+        assert_eq!(sequence.len(), 4);
+        assert!(!sequence.is_empty());
+        assert_eq!(sequence.swap_count(), 2);
+        assert_eq!(sequence.bridge_count(), 1);
+        assert_eq!(sequence.permutation_count(), 1);
+    }
+
+    #[test]
+    fn empty_move_sequence_is_empty() {
+        let sequence = MoveSequence::new();
+
+        assert!(sequence.is_empty());
+        assert_eq!(sequence.len(), 0);
+        assert_eq!(sequence.swap_count(), 0);
+        assert_eq!(sequence.bridge_count(), 0);
+        assert_eq!(sequence.permutation_count(), 0);
+    }
+
+    #[test]
+    fn move_sequence_can_be_cleared() {
+        let mut sequence = MoveSequence::new();
+
+        sequence.push(MoveKind::Swap);
+        sequence.push(MoveKind::Bridge);
+
+        sequence.clear();
+
+        assert!(sequence.is_empty());
+    }
+
+    #[test]
+    fn move_sequence_supports_owned_iteration() {
+        let mut sequence = MoveSequence::new();
+
+        sequence.push(MoveKind::Swap);
+        sequence.push(MoveKind::Bridge);
+
+        let collected: Vec<MoveKind> = sequence.into_iter().collect();
+
+        assert_eq!(
+            collected,
+            vec![MoveKind::Swap, MoveKind::Bridge]
+        );
+    }
+
+    #[test]
+    fn move_sequence_supports_borrowed_iteration() {
+        let mut sequence = MoveSequence::new();
+
+        sequence.push(MoveKind::Swap);
+        sequence.push(MoveKind::Permutation);
+
+        let collected: Vec<MoveKind> =
+            (&sequence).into_iter().copied().collect();
+
+        assert_eq!(
+            collected,
+            vec![MoveKind::Swap, MoveKind::Permutation]
+        );
+    }
+}
