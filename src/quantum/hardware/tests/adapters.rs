@@ -1,763 +1,497 @@
-//! Zamani Quantum — Hardware Adapter Boundary
+//! Zamani Quantum — Hardware Adapter Integration Tests
 //!
-//! Production-grade composition boundary for:
+//! Production-grade integration tests for:
 //!
 //! `crate::quantum::hardware::adapters`
 //!
 //! # Responsibility
 //!
-//! This module is the authoritative namespace and composition boundary for
-//! quantum-hardware adapters in Zamani.
+//! This module verifies that the adapter namespace is correctly composed and
+//! that executable adapters integrate with the provider-neutral
+//! `QuantumBackendAdapter` contract.
 //!
-//! It owns:
+//! This file is intentionally a TEST-ONLY consumer of the hardware adapter
+//! layer.
 //!
-//! - adapter module composition;
-//! - stable adapter namespace organization;
-//! - provider-neutral adapter exports;
-//! - interoperability adapter organization;
-//! - provider adapter organization;
-//! - adapter-family documentation;
-//! - compile-time visibility boundaries;
-//! - the public adapter prelude;
-//! - adapter inventory and architecture invariants.
+//! It does NOT:
 //!
-//! It does NOT own:
-//!
-//! - backend semantics;
-//! - backend identity;
-//! - provider registries;
-//! - device registries;
-//! - job orchestration;
-//! - execution orchestration;
-//! - credentials;
-//! - authentication;
-//! - HTTP/TLS implementation;
-//! - provider SDK clients;
-//! - routing;
-//! - scheduling;
-//! - calibration storage;
-//! - topology algorithms;
-//! - benchmarking;
-//! - Quantum IR semantics;
-//! - frontend parsing;
-//! - optimization;
-//! - error-correction algorithms;
-//! - simulator implementation;
-//! - emulator implementation.
-//!
-//! Those responsibilities belong to the surrounding hardware and quantum
-//! subsystems.
+//! - implement an adapter;
+//! - define backend semantics;
+//! - define provider semantics;
+//! - define the canonical Quantum IR;
+//! - implement routing;
+//! - implement scheduling;
+//! - implement benchmarking;
+//! - implement credentials;
+//! - authenticate;
+//! - perform real-provider network calls;
+//! - own provider registries;
+//! - modify adapter behavior to make tests pass.
 //!
 //! # Architectural position
 //!
 //! ```text
-//!                         Zamani Quantum IR
-//!                                |
-//!                                v
-//!                       compatibility
-//!                                |
-//!                    +-----------+-----------+
-//!                    |                       |
-//!                    v                       v
-//!                 routing                 scheduling
-//!                    |                       |
-//!                    +-----------+-----------+
-//!                                |
-//!                                v
-//!                         executable workload
-//!                                |
-//!                                v
-//!                    QuantumBackendAdapter
-//!                                |
-//!                                v
-//!                       adapters::generic
-//!                                |
-//!             +------------------+------------------+
-//!             |                  |                  |
-//!             v                  v                  v
-//!       interoperability     providers            local
-//!             |                  |                  |
-//!        +----+----+       +-----+-----+            |
-//!        |         |       |     |     |            |
-//!        v         v       v     v     v            v
-//!     OpenQASM    QIR     IBM   IonQ  Braket     simulator
-//!                         |     |      |          emulator
-//!                         +-----+------+
-//!                                |
-//!                                v
-//!                               QPU
-//! ```
-//!
-//! # Adapter families
-//!
-//! The adapter namespace has four families:
-//!
-//! 1. Generic provider-neutral adapter foundation.
-//! 2. Interoperability adapters.
-//! 3. Local execution adapters.
-//! 4. Provider-specific adapters.
-//!
-//! The families are intentionally separated so that adding a provider does
-//! not alter canonical hardware semantics.
-//!
-//! # Dependency direction
-//!
-//! ```text
-//! hardware core
-//!      |
-//!      v
-//! backend_trait
-//!      |
-//!      v
-//! adapters::generic
-//!      |
-//!      +-----------------------+
-//!      |                       |
-//!      v                       v
-//! interoperability        concrete adapters
-//!      |                       |
-//!      v             +---------+---------+
-//!   OpenQASM         |         |         |
-//!      QIR          IBM      IonQ     Braket...
-//! ```
-//!
-//! The forbidden direction is:
-//!
-//! ```text
-//! backend.rs -> adapters::ibm
-//! ```
-//!
-//! The valid direction is:
-//!
-//! ```text
-//! adapters::ibm -> backend.rs
-//! ```
-//!
-//! # Provider-independence invariant
-//!
-//! Adding a provider MUST NOT require modification of the canonical hardware
-//! contracts.
-//!
-//! In particular, adding a provider must not require changing:
-//!
-//! - `backend.rs`;
-//! - `backend_trait.rs`;
-//! - `capabilities.rs`;
-//! - `technology.rs`;
-//! - `execution.rs`;
-//! - `job.rs`;
-//! - `result.rs`;
-//! - `topology.rs`;
-//! - `calibration.rs`;
-//! - the canonical Quantum IR.
-//!
-//! A built-in provider requires only:
-//!
-//! ```text
-//! adapters/<provider>.rs
-//! ```
-//!
-//! plus its module declaration here and registry integration where required.
-//!
-//! # Execution invariant
-//!
-//! All executable adapters implement the provider-neutral:
-//!
-//! ```text
-//! QuantumBackendAdapter
-//! ```
-//!
-//! lifecycle:
-//!
-//! ```text
-//! preflight
-//!    |
-//!    v
-//! submit
-//!    |
-//!    v
-//! BackendJobId
-//!    |
-//!    +----> status
-//!    |
-//!    +----> queue
-//!    |
-//!    +----> cancel
-//!    |
-//!    +----> result
-//! ```
-//!
-//! Provider-specific lifecycle states must be normalized by the adapter.
-//!
-//! An adapter must never report `Completed` while the normalized result is
-//! unavailable.
-//!
-//! # Program formats
-//!
-//! Adapters may operate on:
-//!
-//! - `zamani-ir`;
-//! - `openqasm-3.x`;
-//! - `qir`;
-//! - `pulse`;
-//! - `analog`;
-//! - `annealing`;
-//! - `logical`;
-//! - provider-native formats.
-//!
-//! These formats are executable representations, not replacements for the
-//! canonical Zamani Quantum IR.
-//!
-//! # Interoperability
-//!
-//! OpenQASM and QIR are deliberately separate adapters:
-//!
-//! ```text
 //! Zamani Quantum IR
-//!       |
-//!       +----------> OpenQASM 3.x
-//!       |
-//!       +----------> QIR
+//!        |
+//!        v
+//! compatibility
+//!        |
+//!        v
+//! BackendProgram
+//!        |
+//!        v
+//! QuantumBackendAdapter
+//!        |
+//!        v
+//! adapters
+//!        |
+//!   +----+-------------------------------+
+//!   |    |       |       |       |       |
+//!   v    v       v       v       v       v
+//! local IBM     IonQ   Braket  Rigetti  others
+//!   |
+//!   v
+//! conformance / adapter integration tests
 //! ```
 //!
-//! OpenQASM is a hardware/interoperability representation.
-//!
-//! QIR is an LLVM-based compiler/interoperability representation.
-//!
-//! Neither becomes the canonical Zamani Quantum IR.
-//!
-//! # Security invariant
-//!
-//! This module contains no credentials and performs no authentication.
-//!
-//! It must never contain:
-//!
-//! - API keys;
-//! - access tokens;
-//! - refresh tokens;
-//! - passwords;
-//! - private keys;
-//! - authorization headers;
-//! - cookies;
-//! - secret environment values.
-//!
-//! Credential references belong to:
+//! The test dependency direction is therefore:
 //!
 //! ```text
-//! hardware::credentials
+//! hardware implementation
+//!        |
+//!        v
+//! tests/adapters.rs
 //! ```
 //!
-//! Authentication belongs to:
+//! Never:
 //!
 //! ```text
-//! hardware::authentication
+//! adapter implementation
+//!        |
+//!        v
+//! tests/adapters.rs
 //! ```
 //!
-//! Provider adapters may consume authenticated transport abstractions, but
-//! must not become credential stores.
+//! # Why the local adapter is the reference
 //!
-//! # Transport invariant
+//! Remote providers require credentials, network access, provider availability
+//! and external service state. They therefore MUST NOT be required by the
+//! ordinary unit/integration test suite.
 //!
-//! `generic` owns the provider-neutral transport boundary.
+//! The local adapter is the deterministic reference adapter for this file.
 //!
-//! Concrete adapters translate provider semantics into generic transport
-//! requests and responses.
+//! Provider-specific live tests belong in a separate integration-test layer
+//! and must be explicitly enabled by the test environment.
 //!
-//! This module itself performs no network I/O.
+//! # Relationship with conformance.rs
 //!
-//! # Error invariant
+//! `tests/conformance.rs` owns the reusable behavioral conformance suite for
+//! `QuantumBackendAdapter`.
 //!
-//! Provider-specific errors must be normalized before crossing the adapter
-//! boundary.
+//! This file owns:
+//!
+//! - adapter namespace integrity;
+//! - built-in adapter availability;
+//! - local reference adapter integration;
+//! - invocation of the reusable conformance suite;
+//! - provider isolation checks;
+//! - interoperability adapter presence;
+//! - construction-side-effect checks;
+//! - adapter metadata sanity;
+//! - cross-adapter API-boundary checks.
+//!
+//! The reusable behavioral rules MUST NOT be duplicated here.
+//!
+//! Instead:
 //!
 //! ```text
-//! provider error
-//!       |
-//!       v
-//! provider adapter
-//!       |
-//!       v
-//! BackendError
+//! tests/adapters.rs
+//!        |
+//!        +----> tests/conformance.rs
+//!        |
+//!        +----> adapters::local
+//!        |
+//!        +----> adapters namespace
 //! ```
 //!
-//! Provider SDK error types must not leak through the canonical hardware API.
+//! # Provider independence
 //!
-//! # Result invariant
+//! The tests intentionally avoid requiring:
 //!
-//! Provider-specific results must be normalized into the canonical execution
-//! result model.
+//! - IBM credentials;
+//! - IonQ credentials;
+//! - AWS credentials;
+//! - Rigetti credentials;
+//! - IQM credentials;
+//! - Quantinuum credentials;
+//! - QuEra credentials;
+//! - network connectivity.
 //!
-//! ```text
-//! provider result
-//!       |
-//!       v
-//! adapter normalization
-//!       |
-//!       v
-//! ExecutionResult
-//! ```
+//! Their modules are checked for composition where possible, while actual live
+//! provider execution remains an explicitly separate concern.
 //!
-//! Normalization should preserve, when available:
+//! # Security
 //!
-//! - backend identity;
-//! - provider job identity;
-//! - requested shots;
-//! - executable format;
-//! - adapter version;
-//! - provider API version;
-//! - calibration provenance;
-//! - execution metadata.
+//! No credentials, tokens, passwords, API keys or private keys may appear in
+//! this file.
 //!
-//! # Capability invariant
+//! The tests must never read secret environment variables.
 //!
-//! Provider capabilities must be mapped to the canonical hardware capability
-//! model.
+//! # Determinism
 //!
-//! Unknown provider capabilities must never silently become supported Zamani
-//! capabilities.
+//! All ordinary tests must be deterministic.
 //!
-//! Stable and experimental capabilities must remain distinguishable.
-//!
-//! # Topology invariant
-//!
-//! Provider topology information may be translated into
-//! `HardwareTopology`, but topology semantics remain owned by the topology
-//! subsystem.
-//!
-//! Provider adapters must not implement competing topology models.
-//!
-//! # Calibration invariant
-//!
-//! Provider calibration information may be translated into the canonical
-//! calibration model.
-//!
-//! Providers must not redefine calibration semantics.
-//!
-//! Calibration freshness and validity remain governed by the calibration
-//! subsystem.
-//!
-//! # Local adapter invariant
-//!
-//! The local adapter must work without:
-//!
-//! - provider credentials;
-//! - provider accounts;
-//! - cloud access;
-//! - provider SDKs;
-//! - physical QPU access.
-//!
-//! This makes it suitable for CI, deterministic testing, emulation,
-//! simulation, failure injection and adapter conformance testing.
-//!
-//! # Registry integration
-//!
-//! This module does not own provider registration.
-//!
-//! Registration belongs to:
-//!
-//! ```text
-//! hardware::provider_registry
-//! ```
-//!
-//! Device indexing belongs to:
-//!
-//! ```text
-//! hardware::device_registry
-//! ```
-//!
-//! Discovery belongs to:
-//!
-//! ```text
-//! hardware::discovery
-//! ```
-//!
-//! Importing this module has no side effects.
-//!
-//! # Benchmarking integration
-//!
-//! The dependency direction is:
-//!
-//! ```text
-//! quantum::benchmarking
-//!          |
-//!          v
-//! quantum::hardware
-//!          |
-//!          v
-//! quantum::hardware::adapters
-//! ```
-//!
-//! Adapters must never depend on benchmarking.
-//!
-//! Benchmarking consumes the normalized hardware execution boundary.
-//!
-//! # Danga integration
-//!
-//! Danga may eventually expose:
-//!
-//! ```text
-//! danga quantum devices
-//! danga quantum backends
-//! danga quantum discover
-//! danga quantum check
-//! danga quantum compile
-//! danga quantum run
-//! danga quantum jobs
-//! danga quantum cancel
-//! danga quantum results
-//! danga quantum benchmark
-//! ```
-//!
-//! Danga must consume the canonical hardware APIs rather than implementing
-//! provider protocols itself.
-//!
-//! # No-global-state invariant
-//!
-//! Importing this module must not:
-//!
-//! - create network clients;
-//! - authenticate;
-//! - discover hardware;
-//! - submit jobs;
-//! - spawn worker threads;
-//! - modify global registries;
-//! - read credentials;
-//! - read execution environment variables.
+//! The local adapter must not require wall-clock timing, network state or
+//! external service availability.
 //!
 //! # Rust compatibility
 //!
-//! This module targets:
+//! Target:
 //!
 //! - Rust 1.97;
 //! - Rust 1.97.1;
 //! - Rust 2021;
 //! - stable Rust;
 //! - no nightly features;
-//! - no unsafe Rust.
+//! - no unsafe code.
 //!
-//! # Public API policy
+//! # Completion contract
 //!
-//! The preferred application-facing execution abstraction is:
+//! This file is complete when:
 //!
-//! ```text
-//! hardware::backend_trait::QuantumBackendAdapter
-//! ```
+//! 1. the adapter namespace is present;
+//! 2. the local adapter can be constructed;
+//! 3. the local adapter implements `QuantumBackendAdapter`;
+//! 4. the reusable conformance suite can execute against it;
+//! 5. adapter metadata is exposed;
+//! 6. the local adapter does not require credentials;
+//! 7. construction does not require network access;
+//! 8. provider modules remain isolated;
+//! 9. interoperability adapters remain distinct from provider adapters;
+//! 10. the tests contain no provider secrets;
+//! 11. no provider-specific SDK is required merely to compile these tests;
+//! 12. Rust 1.97/1.97.1 remains supported.
 //!
-//! Provider modules remain available for advanced integrations, provider
-//! configuration and conformance testing.
+//! # Important repository integration rule
 //!
-//! # Module inventory
+//! This file must be declared from the hardware test module under `cfg(test)`.
 //!
-//! ## Generic foundation
+//! It must NOT be exposed as a production runtime API.
 //!
-//! `generic`
-//!
-//! Provider-neutral transport, request, response, error, pagination,
-//! idempotency, capability and format primitives.
-//!
-//! ## Interoperability
-//!
-//! `openqasm`
-//!
-//! Zamani Quantum IR ↔ OpenQASM interoperability.
-//!
-//! `qir`
-//!
-//! Zamani Quantum IR ↔ QIR interoperability.
-//!
-//! ## Local
-//!
-//! `local`
-//!
-//! Credential-free local/simulator/emulator execution and deterministic test
-//! infrastructure.
-//!
-//! ## Built-in providers
-//!
-//! `ibm`
-//!
-//! IBM Quantum integration.
-//!
-//! `ionq`
-//!
-//! IonQ integration.
-//!
-//! `aws_braket`
-//!
-//! Amazon Braket integration.
-//!
-//! `rigetti`
-//!
-//! Rigetti integration.
-//!
-//! `iqm`
-//!
-//! IQM integration.
-//!
-//! `quantinuum`
-//!
-//! Quantinuum integration.
-//!
-//! `quera`
-//!
-//! QuEra integration.
-//!
-//! # Provider adapter isolation
-//!
-//! Provider modules must not depend on one another.
-//!
-//! For example:
-//!
-//! ```text
-//! ibm.rs -> ionq.rs
-//! ```
-//!
-//! is forbidden.
-//!
-//! Shared provider-neutral behavior belongs in `generic` or another
-//! provider-independent hardware module.
-//!
-//! # Adapter implementation requirements
-//!
-//! Every executable adapter must:
-//!
-//! 1. expose immutable adapter identity;
-//! 2. expose backend identity;
-//! 3. expose capabilities;
-//! 4. perform deterministic preflight;
-//! 5. reject unsupported workloads before submission;
-//! 6. use the generic transport boundary;
-//! 7. normalize provider errors;
-//! 8. normalize provider job states;
-//! 9. normalize provider results;
-//! 10. preserve provenance;
-//! 11. support cancellation where the provider supports it;
-//! 12. accurately report unsupported cancellation;
-//! 13. preserve provider API version;
-//! 14. preserve adapter version;
-//! 15. avoid secret leakage;
-//! 16. avoid network side effects during construction;
-//! 17. be safe for concurrent use where its trait contract requires `Sync`;
-//! 18. pass the common adapter conformance suite.
-//!
-//! # Provider additions
-//!
-//! Adding a new provider follows:
-//!
-//! ```text
-//! 1. create adapters/new_provider.rs
-//! 2. implement QuantumBackendAdapter
-//! 3. use adapters::generic
-//! 4. normalize provider capabilities
-//! 5. normalize provider errors
-//! 6. normalize provider job lifecycle
-//! 7. normalize provider results
-//! 8. preserve provenance
-//! 9. add provider tests
-//! 10. register provider
-//! 11. declare module here
-//! ```
-//!
-//! No existing provider adapter should require modification.
-//!
-//! # Stability
-//!
-//! This file is a namespace/composition boundary, not an implementation
-//! container.
-//!
-//! Provider-specific implementation belongs in the individual adapter files.
-//!
-//! Changes to provider implementations must not require changing this file
-//! unless the provider is being added, removed, or intentionally hidden from
-//! the built-in adapter set.
+//! -----------------------------------------------------------------------------
+//! Test implementation
+//! -----------------------------------------------------------------------------
 
+#![cfg(test)]
 #![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
 
-/// Provider-neutral generic adapter foundation.
+use std::any::TypeId;
+
+use super::adapters;
+use super::adapters::local::LocalBackendAdapter;
+use super::backend_trait::QuantumBackendAdapter;
+
+/// Stable adapter namespace identifier expected by the adapter composition
+/// boundary.
+const EXPECTED_ADAPTER_NAMESPACE: &str = "zamani.quantum.hardware.adapters";
+
+/// Stable local adapter family identifier.
 ///
-/// This module must remain independent from all concrete providers.
-pub mod generic;
+/// This value is intentionally a test invariant rather than a runtime
+/// configuration value.
+const EXPECTED_LOCAL_ADAPTER_FAMILY: &str = "local";
 
-/// OpenQASM interoperability adapter.
+/// Executes the complete adapter integration suite.
 ///
-/// This is not a provider implementation.
-pub mod openqasm;
-
-/// QIR interoperability adapter.
-///
-/// This is not a provider implementation.
-pub mod qir;
-
-/// Local execution adapter.
-///
-/// Provides credential-free local execution/testing infrastructure.
-pub mod local;
-
-/// IBM Quantum adapter.
-pub mod ibm;
-
-/// IonQ adapter.
-pub mod ionq;
-
-/// Amazon Braket adapter.
-pub mod aws_braket;
-
-/// Rigetti adapter.
-pub mod rigetti;
-
-/// IQM adapter.
-pub mod iqm;
-
-/// Quantinuum adapter.
-pub mod quantinuum;
-
-/// QuEra adapter.
-pub mod quera;
-
-/// Stable provider-neutral adapter prelude.
-///
-/// This prelude intentionally exposes contracts rather than provider-specific
-/// implementation details.
-pub mod prelude {
-    pub use super::generic::{
-        AdapterIdentity,
-        AdapterMetadata,
-        GenericAdapterError,
-        ProviderOperation,
-        ProviderTransport,
-        TransportMethod,
-    };
-
-    pub use super::super::backend_trait::{
-        BackendHealth,
-        BackendJob,
-        BackendJobId,
-        BackendJobState,
-        BackendJobStatus,
-        BackendProgram,
-        BackendQueueInfo,
-        QuantumBackendAdapter,
-    };
+/// This is the preferred single entry point for running all adapter tests
+/// against the repository's local reference implementation.
+pub fn run_all() {
+    adapter_namespace_is_present();
+    adapter_schema_is_stable();
+    local_adapter_is_constructible();
+    local_adapter_is_object_safe();
+    local_adapter_has_valid_identity();
+    local_adapter_has_valid_backend();
+    local_adapter_has_no_provider_dependency();
+    local_adapter_is_reference_conformance_target();
+    local_adapter_conformance_passes();
+    interoperability_adapters_are_distinct();
+    provider_modules_are_distinct();
 }
 
-/// Returns the stable adapter subsystem schema identifier.
-pub const ADAPTERS_SCHEMA_ID: &str = "zamani.quantum.hardware.adapters";
-
-/// Stable semantic schema version for this composition boundary.
-///
-/// This changes only when the public adapter namespace or its composition
-/// contract changes incompatibly.
-pub const ADAPTERS_SCHEMA_VERSION: u16 = 1;
-
-/// Returns the canonical adapter subsystem identifier.
-#[inline]
-pub const fn subsystem_id() -> &'static str {
-    ADAPTERS_SCHEMA_ID
+/// Verifies the namespace identifier exposed by `adapters`.
+#[test]
+fn adapter_namespace_is_present() {
+    assert_eq!(
+        adapters::subsystem_id(),
+        EXPECTED_ADAPTER_NAMESPACE,
+        "adapter namespace identifier changed unexpectedly"
+    );
 }
 
-/// Returns the current adapter subsystem schema version.
-#[inline]
-pub const fn schema_version() -> u16 {
-    ADAPTERS_SCHEMA_VERSION
+/// Verifies that the adapter composition schema is available and valid.
+#[test]
+fn adapter_schema_is_stable() {
+    let version = adapters::schema_version();
+
+    assert!(
+        version > 0,
+        "adapter schema version must be greater than zero"
+    );
+
+    assert_eq!(
+        adapters::ADAPTERS_SCHEMA_ID,
+        EXPECTED_ADAPTER_NAMESPACE,
+        "adapter schema ID must remain canonical"
+    );
 }
 
-/// Returns whether a built-in adapter family is known to this release.
-///
-/// This function is deliberately pure and performs no discovery or I/O.
-///
-/// Provider-specific availability still depends on compilation, configuration,
-/// credentials and the provider's current service state.
-pub fn is_builtin_adapter(adapter_id: &str) -> bool {
-    matches!(
-        adapter_id,
-        "generic"
-            | "openqasm"
-            | "qir"
-            | "local"
-            | "ibm"
-            | "ionq"
-            | "aws_braket"
-            | "rigetti"
-            | "iqm"
-            | "quantinuum"
-            | "quera"
-    )
+/// Constructs the local adapter without credentials or network access.
+#[test]
+fn local_adapter_is_constructible() {
+    let adapter = LocalBackendAdapter::default();
+
+    let info = adapter.adapter_info();
+
+    assert!(
+        !info.adapter_id.trim().is_empty(),
+        "local adapter must expose a non-empty adapter ID"
+    );
+
+    assert!(
+        !info.adapter_version.trim().is_empty(),
+        "local adapter must expose a non-empty adapter version"
+    );
 }
 
-/// Returns the deterministic list of built-in adapter identifiers.
+/// Verifies that the local adapter satisfies the object-safe execution
+/// boundary.
 ///
-/// The order is stable and must not be changed casually because consumers may
-/// use it for deterministic diagnostics and documentation generation.
-pub fn builtin_adapter_ids() -> &'static [&'static str] {
-    &[
-        "generic",
-        "openqasm",
-        "qir",
-        "local",
-        "ibm",
-        "ionq",
-        "aws_braket",
-        "rigetti",
-        "iqm",
-        "quantinuum",
-        "quera",
-    ]
+/// The test intentionally stores the adapter behind the canonical trait
+/// object. This catches accidental loss of object safety in the adapter
+/// contract.
+#[test]
+fn local_adapter_is_object_safe() {
+    let adapter = LocalBackendAdapter::default();
+
+    let adapter_ref: &dyn QuantumBackendAdapter = &adapter;
+
+    assert!(
+        !adapter_ref.adapter_info().adapter_id.trim().is_empty(),
+        "QuantumBackendAdapter object must expose adapter identity"
+    );
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// Verifies local adapter identity invariants.
+#[test]
+fn local_adapter_has_valid_identity() {
+    let adapter = LocalBackendAdapter::default();
+    let info = adapter.adapter_info();
 
-    #[test]
-    fn schema_identity_is_stable() {
-        assert_eq!(
-            subsystem_id(),
-            "zamani.quantum.hardware.adapters"
-        );
-        assert_eq!(schema_version(), 1);
-    }
+    assert!(
+        !info.adapter_id.is_empty(),
+        "local adapter ID must not be empty"
+    );
 
-    #[test]
-    fn built_in_inventory_is_deterministic() {
-        assert_eq!(
-            builtin_adapter_ids(),
-            &[
-                "generic",
-                "openqasm",
-                "qir",
-                "local",
-                "ibm",
-                "ionq",
-                "aws_braket",
-                "rigetti",
-                "iqm",
-                "quantinuum",
-                "quera",
-            ]
-        );
-    }
+    assert_eq!(
+        info.adapter_id.trim(),
+        info.adapter_id,
+        "local adapter ID must not contain leading/trailing whitespace"
+    );
 
-    #[test]
-    fn built_in_inventory_contains_only_known_adapters() {
-        for adapter in builtin_adapter_ids() {
-            assert!(is_builtin_adapter(adapter));
+    assert!(
+        !info.adapter_version.is_empty(),
+        "local adapter version must not be empty"
+    );
+
+    assert_eq!(
+        info.adapter_version.trim(),
+        info.adapter_version,
+        "local adapter version must not contain leading/trailing whitespace"
+    );
+}
+
+/// Verifies that the local adapter exposes a valid backend descriptor.
+#[test]
+fn local_adapter_has_valid_backend() {
+    let adapter = LocalBackendAdapter::default();
+    let backend = adapter.backend();
+
+    let backend_id = backend.id();
+
+    assert!(
+        !backend_id.trim().is_empty(),
+        "local adapter backend ID must not be empty"
+    );
+
+    assert_eq!(
+        backend_id.trim(),
+        backend_id,
+        "local adapter backend ID must not contain surrounding whitespace"
+    );
+}
+
+/// The local adapter is deliberately provider-neutral.
+///
+/// This test prevents accidental coupling of the local reference
+/// implementation to a remote-provider identity.
+#[test]
+fn local_adapter_has_no_provider_dependency() {
+    let adapter = LocalBackendAdapter::default();
+    let info = adapter.adapter_info();
+
+    let adapter_id = info.adapter_id.to_ascii_lowercase();
+
+    assert!(
+        adapter_id.contains(EXPECTED_LOCAL_ADAPTER_FAMILY)
+            || adapter_id.contains("local"),
+        "local adapter identity must identify itself as a local adapter"
+    );
+
+    assert!(
+        !adapter_id.contains("ibm"),
+        "local adapter must not masquerade as IBM"
+    );
+
+    assert!(
+        !adapter_id.contains("ionq"),
+        "local adapter must not masquerade as IonQ"
+    );
+
+    assert!(
+        !adapter_id.contains("braket"),
+        "local adapter must not masquerade as Amazon Braket"
+    );
+
+    assert!(
+        !adapter_id.contains("rigetti"),
+        "local adapter must not masquerade as Rigetti"
+    );
+
+    assert!(
+        !adapter_id.contains("iqm"),
+        "local adapter must not masquerade as IQM"
+    );
+
+    assert!(
+        !adapter_id.contains("quantinuum"),
+        "local adapter must not masquerade as Quantinuum"
+    );
+
+    assert!(
+        !adapter_id.contains("quera"),
+        "local adapter must not masquerade as QuEra"
+    );
+}
+
+/// Verifies that the local adapter is usable as the canonical conformance
+/// target.
+///
+/// This test deliberately checks the trait boundary rather than concrete
+/// methods unique to the local implementation.
+#[test]
+fn local_adapter_is_reference_conformance_target() {
+    let adapter = LocalBackendAdapter::default();
+
+    let adapter_ref: &dyn QuantumBackendAdapter = &adapter;
+
+    assert!(
+        !adapter_ref.adapter_info().adapter_id.is_empty(),
+        "reference adapter must expose adapter identity"
+    );
+
+    assert!(
+        !adapter_ref.backend().id().is_empty(),
+        "reference adapter must expose backend identity"
+    );
+}
+
+/// Executes the repository-wide reusable adapter conformance suite against
+/// the local reference adapter.
+///
+/// `conformance.rs` owns the behavioral assertions. Keeping this delegation
+/// here prevents this file from developing a second, divergent conformance
+/// contract.
+#[test]
+fn local_adapter_conformance_passes() {
+    let adapter = LocalBackendAdapter::default();
+
+    super::conformance::run_all(&adapter);
+}
+
+/// OpenQASM and QIR are interoperability boundaries, not provider adapters.
+///
+/// This test verifies that the adapter namespace keeps those concerns
+/// conceptually separate from concrete provider modules.
+///
+/// The actual translation semantics are tested by their respective modules.
+#[test]
+fn interoperability_adapters_are_distinct() {
+    let openqasm_type = TypeId::of::<adapters::openqasm::OpenQasmAdapter>();
+    let qir_type = TypeId::of::<adapters::qir::QirAdapter>();
+
+    assert_ne!(
+        openqasm_type, qir_type,
+        "OpenQASM and QIR adapters must remain distinct adapter types"
+    );
+}
+
+/// Provider adapter modules must remain separate implementations.
+///
+/// This test intentionally uses type identity rather than provider-specific
+/// execution because provider execution requires external credentials and
+/// service availability.
+///
+/// The provider adapters must not collapse into a single provider-specific
+/// implementation.
+#[test]
+fn provider_modules_are_distinct() {
+    let ibm_type = TypeId::of::<adapters::ibm::IbmBackendAdapter>();
+    let ionq_type = TypeId::of::<adapters::ionq::IonqBackendAdapter>();
+    let braket_type = TypeId::of::<adapters::aws_braket::AwsBraketBackendAdapter>();
+    let rigetti_type = TypeId::of::<adapters::rigetti::RigettiBackendAdapter>();
+    let iqm_type = TypeId::of::<adapters::iqm::IqmBackendAdapter>();
+    let quantinuum_type = TypeId::of::<adapters::quantinuum::QuantinuumBackendAdapter>();
+    let quera_type = TypeId::of::<adapters::quera::QueraBackendAdapter>();
+
+    let provider_types = [
+        ibm_type,
+        ionq_type,
+        braket_type,
+        rigetti_type,
+        iqm_type,
+        quantinuum_type,
+        quera_type,
+    ];
+
+    for (index, left) in provider_types.iter().enumerate() {
+        for (other_index, right) in provider_types.iter().enumerate() {
+            if index != other_index {
+                assert_ne!(
+                    left, right,
+                    "provider adapters must remain distinct implementations"
+                );
+            }
         }
     }
+}
 
-    #[test]
-    fn unknown_adapter_is_not_reported_as_built_in() {
-        assert!(!is_builtin_adapter("unknown-provider"));
-        assert!(!is_builtin_adapter(""));
-        assert!(!is_builtin_adapter("IBM"));
-    }
+/// Compile-time trait-bound assertion for the local reference adapter.
+///
+/// This is intentionally a generic helper instead of a runtime assertion.
+/// If the adapter stops implementing `QuantumBackendAdapter`, compilation
+/// fails immediately.
+fn assert_adapter_contract<T>()
+where
+    T: QuantumBackendAdapter,
+{
+}
 
-    #[test]
-    fn adapter_namespace_has_no_runtime_side_effect_contract() {
-        // This test intentionally performs no construction, I/O, discovery,
-        // authentication or registry mutation. The module is composition
-        // only.
-        assert!(is_builtin_adapter("local"));
-    }
+/// Compile-time validation that the local adapter implements the canonical
+/// execution contract.
+#[test]
+fn local_adapter_implements_canonical_contract() {
+    assert_adapter_contract::<LocalBackendAdapter>();
 }
