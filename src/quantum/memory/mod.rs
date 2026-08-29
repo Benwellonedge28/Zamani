@@ -3,54 +3,53 @@
 //! Production module boundary for quantum and hybrid quantum-classical memory
 //! in Zamani.
 //!
-//! # Purpose
+//! # Scope
 //!
-//! `quantum::memory` provides the representation-independent memory substrate
+//! `quantum::memory` is the representation-neutral memory/resource substrate
 //! used by Zamani's quantum execution stack.
 //!
-//! It is responsible for:
+//! It provides module boundaries for:
 //!
-//! - logical quantum-memory ownership;
+//! - logical quantum-memory resources;
 //! - classical companion memory;
-//! - quantum-state storage;
-//! - state-representation abstraction;
-//! - memory allocation and resource budgeting;
-//! - memory limits and admission control;
-//! - memory layouts and indexing;
-//! - state views and transformations;
-//! - measurement, collapse and reset support;
-//! - snapshots and checkpoints;
-//! - serialization;
-//! - host/device coherence;
-//! - synchronization;
-//! - CPU/SIMD/GPU memory facilities;
-//! - distributed quantum-state memory;
-//! - QPU/quantum-hardware memory/resource contracts;
-//! - state migration;
-//! - compaction;
-//! - diagnostics;
-//! - telemetry;
-//! - cache infrastructure.
+//! - quantum-state representations;
+//! - memory allocation and budgeting;
+//! - resource admission and limits;
+//! - numerical and complex-value policy;
+//! - memory layouts and safe indexing;
+//! - state views, slicing and permutations;
+//! - measurement, collapse and reset;
+//! - snapshots, checkpoints and serialization;
+//! - host/device/distributed coherence;
+//! - CPU, SIMD and GPU memory abstractions;
+//! - distributed quantum-state resources;
+//! - provider-neutral QPU resource contracts;
+//! - backend-native state handles;
+//! - state migration and compaction;
+//! - diagnostics, telemetry and cache infrastructure.
 //!
-//! It does **not** own:
+//! # Architectural ownership
 //!
-//! - Zamani source-language syntax;
+//! This module is deliberately NOT the owner of:
+//!
+//! - Zamani source syntax;
 //! - OpenQASM parsing;
 //! - canonical quantum IR semantics;
+//! - gate definitions;
 //! - circuit optimization;
 //! - routing algorithms;
 //! - scheduling algorithms;
 //! - QEC algorithms;
-//! - vendor-specific hardware implementations;
+//! - QEC decoding;
+//! - vendor SDKs;
+//! - provider authentication;
 //! - benchmark protocols;
 //! - benchmark statistics;
 //! - application-level quantum algorithms.
 //!
-//! Those responsibilities remain in their owning quantum subsystems.
+//! Those responsibilities belong to their respective quantum subsystems.
 //!
-//! # Architectural position
-//!
-//! The intended dependency direction is:
+//! The intended high-level flow is:
 //!
 //! ```text
 //! Zamani source
@@ -61,759 +60,616 @@
 //!      v
 //! quantum::ir
 //!      |
-//!      +--------------------------------------------------+
-//!      |             canonical quantum semantics          |
-//!      +--------------------------------------------------+
-//!                         |
-//!          +--------------+---------------+
-//!          |              |               |
-//!          v              v               v
-//!      algorithms    optimization      error_correction
-//!          |              |               |
-//!          +--------------+---------------+
-//!                         |
-//!                         v
-//!                routing / scheduling
-//!                         |
-//!              +----------+----------+
-//!              |                     |
-//!              v                     v
-//!         quantum::memory       quantum::hardware
-//!              |                     |
-//!              +----------+----------+
-//!                         |
-//!                         v
-//!                     runtime
-//!
-//! quantum::benchmarking consumes the above layers and must not become a
-//! dependency of the memory subsystem.
+//!      +-------------------------------+
+//!      | canonical quantum semantics   |
+//!      +-------------------------------+
+//!          |       |       |       |
+//!          v       v       v       v
+//!     algorithms routing scheduling QEC
+//!          |       |       |       |
+//!          +-------+-------+-------+
+//!                  |
+//!                  v
+//!             execution layer
+//!                  |
+//!          +-------+--------+
+//!          |                |
+//!          v                v
+//! quantum::memory    quantum::hardware
+//!          |                |
+//!          +-------+--------+
+//!                  |
+//!                  v
+//!               runtime
 //! ```
 //!
-//! # Canonical ownership rules
-//!
-//! ## Quantum IR
-//!
-//! `quantum::ir` remains authoritative for program-level quantum identity and
-//! semantics.
-//!
-//! In particular, memory must not create competing semantic definitions of:
-//!
-//! - `QubitId`;
-//! - `PhysicalQubitId`;
-//! - `ClassicalBitId`;
-//! - circuit identities;
-//! - operation identities;
-//! - gate semantics;
-//! - measurement semantics at the IR level.
-//!
-//! Memory-specific resource identities belong to `types.rs`.
-//!
-//! ## Hardware
-//!
-//! `quantum::hardware` owns:
-//!
-//! - backend implementations;
-//! - hardware capabilities;
-//! - calibration;
-//! - physical topology;
-//! - provider-specific execution contracts.
-//!
-//! `memory::qpu` provides the provider-neutral memory/resource contract needed
-//! to connect those hardware implementations to the memory subsystem.
-//!
-//! ## Routing
-//!
-//! `quantum::routing` owns logical-to-physical placement and routing.
-//!
-//! `memory::layout` and `memory::permutation` provide the storage-side
-//! representation of the mapping without taking ownership of the routing
-//! algorithm.
-//!
-//! ## Scheduling
-//!
-//! `quantum::scheduling` owns execution ordering and timing constraints.
-//!
-//! Memory exposes allocation, availability, coherence and synchronization
-//! information needed by schedulers without implementing scheduling itself.
-//!
-//! ## Error correction
-//!
-//! `quantum::error_correction` owns QEC algorithms and mechanisms.
-//!
-//! Memory provides the substrate required by QEC for:
-//!
-//! - physical/logical qubit resources;
-//! - stabilizer state storage;
-//! - syndrome/classical memory;
-//! - Pauli-frame-related state;
-//! - measurement results;
-//! - checkpoints.
-//!
-//! ## Benchmarking
-//!
-//! `quantum::benchmarking` consumes memory telemetry and execution data.
-//!
-//! Memory must never depend on benchmark implementations, benchmark protocols,
-//! Quantum Volume, randomized benchmarking, XEB, or benchmark reporting.
+//! `quantum::benchmarking` consumes execution and memory telemetry. The memory
+//! subsystem must never depend on benchmarking implementations.
 //!
 //! # Representation neutrality
 //!
-//! Memory is intentionally not synonymous with a dense state vector.
+//! Memory is not synonymous with a dense CPU state vector.
 //!
-//! The subsystem supports independent representations for workloads including:
+//! The current subsystem provides separate module boundaries for:
 //!
-//! ```text
-//! StateVector
-//! DensityMatrix
-//! Stabilizer
-//! SparseState
-//! TensorNetwork
-//! BackendNative / QPU resource state
-//! ```
-//!
-//! The individual representation implementations are owned by their respective
-//! modules.
-//!
-//! This allows the same Zamani program to execute against:
-//!
-//! - CPU state-vector simulation;
+//! - state-vector simulation;
 //! - density-matrix simulation;
-//! - stabilizer simulation;
-//! - sparse simulation;
+//! - stabilizer/tableau simulation;
+//! - sparse-state simulation;
 //! - tensor-network simulation;
-//! - GPU simulation;
-//! - distributed simulation;
-//! - real QPUs;
-//! - quantum annealers;
-//! - photonic hardware;
-//! - trapped-ion hardware;
-//! - neutral-atom hardware;
-//! - superconducting hardware;
-//! - spin/qubit hardware;
-//! - other provider-native quantum execution systems.
+//! - backend-native state;
+//! - QPU resource state;
+//! - CPU memory;
+//! - SIMD facilities;
+//! - GPU/device memory;
+//! - distributed memory.
 //!
-//! The memory layer does not assume that every quantum device exposes
-//! byte-addressable quantum RAM. `qpu.rs` explicitly models quantum hardware
-//! resources instead of forcing every device into a classical-memory model.
+//! This permits Zamani to support both classical simulation and real quantum
+//! hardware without forcing hardware execution into a simulator-only model.
+//!
+//! In particular, a real QPU generally does not expose a byte-addressable
+//! quantum state vector to the host. `qpu` and `backend_state` therefore model
+//! provider-neutral resource and opaque-state contracts rather than pretending
+//! that every device is conventional RAM.
+//!
+//! # Hardware neutrality
+//!
+//! Hardware-specific implementations remain outside this module.
+//!
+//! The memory boundary is intentionally compatible with:
+//!
+//! - superconducting QPUs;
+//! - trapped-ion QPUs;
+//! - neutral-atom systems;
+//! - photonic systems;
+//! - spin-based systems;
+//! - semiconductor qubits;
+//! - annealing/adiabatic systems;
+//! - qudit and oscillator systems;
+//! - hybrid quantum-classical systems;
+//! - local simulators;
+//! - remote simulators;
+//! - cloud QPUs;
+//! - on-premises QPUs;
+//! - custom/future quantum architectures.
+//!
+//! No provider SDK, credential type, vendor-specific topology type, or vendor
+//! execution protocol belongs in this module boundary.
+//!
+//! Provider-specific adapters are owned by `quantum::hardware` and connect to
+//! the provider-neutral contracts exposed here.
 //!
 //! # Resource safety
 //!
-//! Quantum memory can scale exponentially.
+//! Quantum state storage can grow exponentially:
 //!
-//! A dense state vector for `n` qubits requires `2^n` amplitudes, while a dense
-//! density matrix requires `4^n` complex matrix elements.
+//! ```text
+//! dense state vector:
+//!     amplitudes = 2^n
 //!
-//! Consequently, production memory operations must follow:
+//! dense density matrix:
+//!     complex elements = 4^n
+//! ```
+//!
+//! Consequently, potentially large operations must conceptually follow:
 //!
 //! ```text
 //! estimate
-//!     |
-//!     v
+//!    |
+//!    v
 //! validate limits
-//!     |
-//!     v
+//!    |
+//!    v
 //! reserve budget
-//!     |
-//!     v
+//!    |
+//!    v
 //! allocate
-//!     |
-//!     v
+//!    |
+//!    v
 //! initialize
-//!     |
-//!     v
+//!    |
+//!    v
 //! commit
 //! ```
 //!
-//! The following modules own the corresponding stages:
+//! The individual stages are owned by:
 //!
-//! - `limits` — resource admissibility;
-//! - `budget` — resource accounting;
-//! - `reservation` — transactional reservation;
-//! - `allocator` — allocation abstraction;
-//! - `pool` — reusable allocation management.
+//! - `limits`;
+//! - `budget`;
+//! - `reservation`;
+//! - `allocator`;
+//! - `pool`.
 //!
-//! No representation module should bypass those contracts for managed
+//! Representation implementations must not bypass these contracts for managed
 //! allocations.
 //!
 //! # Safety policy
 //!
-//! This subsystem is explicitly safe Rust.
+//! This entire subsystem is safe Rust.
 //!
-//! The entire memory module forbids `unsafe` code so that a later contributor
-//! cannot accidentally introduce an unsafe implementation into one of the
-//! memory providers without the module boundary rejecting it.
+//! `unsafe` is denied at the module boundary. This is intentional: memory
+//! management is security- and correctness-critical, so an implementation
+//! cannot silently introduce unsafe code into this subsystem.
 //!
-//! Raw pointers must not appear in public memory APIs.
+//! Raw pointers must not form part of the public API.
 //!
-//! Hardware and accelerator implementations must expose safe abstractions such
-//! as handles, buffers, allocations, streams and events.
+//! Accelerator and hardware integrations must instead expose safe abstractions
+//! such as handles, buffers, allocations, streams, events and opaque provider
+//! resources.
 //!
-//! # Rust compatibility
+//! # Numerical correctness
 //!
-//! This module targets:
+//! `numeric` and `complex` provide the numerical boundary used by quantum-state
+//! implementations.
 //!
-//! - Rust 1.97;
-//! - Rust 1.97.1;
-//! - Rust 2021.
+//! Numerical policy must not be duplicated in individual representations.
+//! In particular, tolerance values, finite-value validation and checked
+//! numerical operations belong at the shared numerical boundary.
 //!
-//! No nightly-only language feature is required by this module boundary.
+//! # Identity ownership
 //!
-//! # Module organization
+//! Program-level quantum identity remains owned by `quantum::ir`.
 //!
-//! The declarations are grouped according to dependency responsibility rather
-//! than alphabetical order. Rust's module resolution does not require the
-//! implementation files to be declared in dependency order, but this ordering
-//! documents the intended architecture.
+//! Memory must not create a second semantic definition of a circuit, operation,
+//! gate or program-level qubit.
 //!
-//! ```text
-//! foundational contracts
-//!         |
-//!         v
-//! allocation/resource management
-//!         |
-//!         v
-//! logical memory
-//!         |
-//!         v
-//! state representations
-//!         |
-//!         v
-//! state views/transforms
-//!         |
-//!         v
-//! measurement/reset
-//!         |
-//!         v
-//! persistence
-//!         |
-//!         v
-//! coherence/synchronization/cache
-//!         |
-//!         v
-//! CPU/SIMD/GPU/distributed/QPU
-//!         |
-//!         v
-//! migration/compaction/observability
-//! ```
+//! Memory-specific allocation/resource identities belong in `types`.
 //!
-//! # Public API stability
+//! Where another subsystem already provides the canonical semantic identity,
+//! memory integrations must adapt to that identity rather than inventing a
+//! competing one.
 //!
-//! The module names below are the stable subsystem boundaries.
+//! # Layout and routing
 //!
-//! Callers should prefer:
+//! `quantum::routing` owns the routing algorithm and logical-to-physical
+//! placement policy.
 //!
-//! ```text
-//! quantum::memory::<subsystem>
-//! ```
+//! `layout` and `permutation` provide the storage-side representation needed
+//! to execute that placement.
 //!
-//! rather than depending on implementation details inside another memory
-//! module.
-//!
-//! Individual modules are public because the quantum runtime, simulator,
-//! hardware adapters, QEC subsystem, compiler integration and tooling may need
-//! specialized capabilities. Each module remains responsible for its own API
-//! invariants.
-//!
-//! # Integration contract
-//!
-//! Every child module must obey these subsystem-wide rules:
-//!
-//! 1. Use canonical quantum identities from `quantum::ir` where program-level
-//!    quantum identity is required.
-//! 2. Use `memory::types` for memory-resource quantities and identities.
-//! 3. Use `memory::errors` for memory-domain failures.
-//! 4. Validate potentially unbounded resource requests through `limits`.
-//! 5. Respect `budget` and `reservation` contracts before large allocations.
-//! 6. Never silently convert a resource-intensive operation into an
-//!    unbounded allocation.
-//! 7. Never silently change state representation when doing so can alter
-//!    numerical or semantic guarantees.
-//! 8. Preserve logical qubit identity across physical-memory transformations.
-//! 9. Preserve declared layout and endianness semantics.
-//! 10. Never expose provider-specific types through provider-neutral APIs.
-//! 11. Never depend on benchmarking for core memory functionality.
-//! 12. Never perform backend I/O from the memory core.
-//! 13. Never store credentials or authentication material in memory state.
-//! 14. Never use global mutable quantum state.
-//! 15. Never use `unsafe`.
-//! 16. Never print diagnostic information directly to stdout/stderr from the
-//!     memory core.
-//! 17. Use explicit RNG ownership/injection where stochastic measurement is
-//!     required.
-//! 18. Make deterministic operations deterministic for identical inputs and
-//!     configuration.
-//! 19. Make serialization/versioning explicit at persistence boundaries.
-//! 20. Preserve transactional semantics for allocation, migration and
-//!     checkpoint restoration.
-//!
-//! # Integration with `quantum::ir`
-//!
-//! The canonical flow is:
-//!
-//! ```text
-//! quantum::ir
-//!     |
-//!     | QubitId / PhysicalQubitId / ClassicalBitId
-//!     v
-//! quantum::memory
-//!     |
-//!     +--> logical ownership
-//!     +--> storage layout
-//!     +--> state representation
-//!     +--> measurement storage
-//!     +--> execution resources
-//! ```
-//!
-//! Memory does not replace the IR.
-//!
-//! # Integration with routing
-//!
-//! Routing owns the algorithm that computes a logical-to-physical mapping.
-//! Memory owns the representation required to execute that mapping efficiently:
+//! The intended boundary is:
 //!
 //! ```text
 //! routing
-//!     |
-//!     v
+//!    |
+//!    v
 //! logical -> physical mapping
-//!     |
-//!     v
+//!    |
+//!    v
 //! memory::permutation
-//!     |
-//!     v
+//!    |
+//!    v
 //! memory::layout
-//!     |
-//!     v
+//!    |
+//!    v
 //! state representation
 //! ```
 //!
-//! This permits routing algorithms to change without forcing changes to state
-//! storage.
+//! Memory therefore does not implement SABRE, search, routing heuristics,
+//! topology optimization or placement algorithms.
 //!
-//! # Integration with hardware and QPUs
+//! # Scheduling
 //!
-//! Hardware-specific implementations must remain outside the generic memory
-//! namespace.
+//! `quantum::scheduling` owns execution ordering and timing.
 //!
-//! The intended flow is:
+//! Memory exposes resource information needed by scheduling, including memory
+//! availability, allocation requirements, coherence state and synchronization
+//! dependencies.
 //!
-//! ```text
-//! quantum::hardware
-//!        |
-//!        | capabilities/topology/calibration/backend
-//!        v
-//! quantum::memory::qpu
-//!        |
-//!        | provider-neutral resource contract
-//!        v
-//! quantum::memory
-//!        |
-//!        +--> allocation
-//!        +--> buffers
-//!        +--> classical results
-//!        +--> synchronization
-//!        +--> snapshots/checkpoints
-//! ```
+//! Memory does not own scheduling policy.
 //!
-//! A provider may be:
+//! # QEC
 //!
-//! - superconducting;
-//! - trapped-ion;
-//! - neutral-atom;
-//! - photonic;
-//! - spin-based;
-//! - annealing/adiabatic;
-//! - qudit-based;
-//! - oscillator-based;
-//! - hybrid quantum-classical;
-//! - simulator-backed;
-//! - remote/cloud;
-//! - local/on-premises.
+//! `quantum::error_correction` owns QEC algorithms and decoders.
 //!
-//! The memory subsystem must not require a provider SDK to compile.
+//! Memory provides the substrate those algorithms may consume:
 //!
-//! # Integration with simulators
+//! - physical-qubit resources;
+//! - logical-qubit resources;
+//! - stabilizer state;
+//! - syndrome/classical memory;
+//! - measurement results;
+//! - Pauli-frame-related state;
+//! - checkpoints.
 //!
-//! Simulator implementations consume the state abstractions:
+//! This separation permits QEC implementations to use an efficient stabilizer
+//! representation rather than forcing an exponentially large dense state.
 //!
-//! ```text
-//! Quantum IR
-//!     |
-//!     v
-//! execution
-//!     |
-//!     v
-//! QuantumState
-//!     |
-//!     +--> StateVector
-//!     +--> DensityMatrix
-//!     +--> Stabilizer
-//!     +--> SparseState
-//!     +--> TensorNetwork
-//!     +--> BackendNative
-//! ```
+//! # Runtime
 //!
-//! The memory module does not choose a simulator algorithm merely by virtue of
-//! being imported.
-//!
-//! # Integration with QEC
-//!
-//! QEC may use different memory representations depending on the code and
-//! execution mode:
-//!
-//! ```text
-//! QEC
-//!  |
-//!  +--> stabilizer state
-//!  +--> syndrome/classical memory
-//!  +--> physical qubit resources
-//!  +--> logical state metadata
-//!  +--> measurement results
-//!  +--> checkpoint state
-//! ```
-//!
-//! Memory therefore cannot assume that every workload is a dense state vector.
-//!
-//! # Integration with runtime
-//!
-//! The runtime may compose memory operations such as:
+//! The runtime may compose operations exposed by this subsystem in a lifecycle
+//! such as:
 //!
 //! ```text
 //! allocate
-//!     -> initialize
-//!     -> apply execution operation
-//!     -> measure
-//!     -> collapse/reset where required
-//!     -> checkpoint/snapshot where requested
-//!     -> release
+//!    -> initialize
+//!    -> execute
+//!    -> measure
+//!    -> collapse/reset when required
+//!    -> snapshot/checkpoint when requested
+//!    -> synchronize/migrate when required
+//!    -> release
 //! ```
 //!
-//! Runtime policy remains outside this module.
+//! Runtime policy remains outside the memory subsystem.
 //!
-//! # Integration with benchmarking and telemetry
+//! # Persistence
 //!
-//! Memory exposes measurement points through `diagnostics` and `telemetry`.
+//! `snapshot`, `checkpoint` and `serialization` form the persistence boundary.
 //!
-//! Benchmarking may consume values such as:
+//! Persisted state must retain enough information to prevent accidental
+//! interpretation under incompatible:
+//!
+//! - representation;
+//! - precision;
+//! - layout;
+//! - qubit ordering;
+//! - serialization version;
+//! - storage format;
+//! - execution/resource assumptions.
+//!
+//! Restoration must validate the persisted metadata before committing restored
+//! state to live memory.
+//!
+//! # Coherence and concurrency
+//!
+//! `coherence` and `synchronization` define consistency across:
+//!
+//! - host memory;
+//! - pinned host memory;
+//! - accelerator memory;
+//! - unified memory;
+//! - distributed partitions;
+//! - remote resources;
+//! - provider-managed resources.
+//!
+//! `cache` may optimize access but must never become an independent source of
+//! quantum-state truth.
+//!
+//! # Telemetry
+//!
+//! `diagnostics` and `telemetry` expose memory observations to higher layers.
+//!
+//! Typical measurements include:
 //!
 //! - allocated bytes;
 //! - reserved bytes;
 //! - peak bytes;
-//! - allocation count;
+//! - allocation counts;
 //! - allocation failures;
-//! - state representation;
+//! - representation;
 //! - state size;
-//! - migration count;
+//! - migration counts;
 //! - migration bytes;
-//! - cache activity;
 //! - synchronization activity;
-//! - GPU/device memory;
-//! - distributed-memory usage;
+//! - cache activity;
+//! - device memory;
+//! - distributed memory;
 //! - checkpoint size.
 //!
-//! The dependency remains one-way:
+//! The dependency direction remains:
 //!
 //! ```text
 //! memory --telemetry--> benchmarking
 //! ```
 //!
-//! never:
+//! and never:
 //!
 //! ```text
 //! memory --> benchmarking implementation
 //! ```
 //!
-//! # Persistence boundary
+//! # Stable module boundary
 //!
-//! `snapshot`, `checkpoint` and `serialization` form the persistence boundary.
+//! The module declarations below intentionally correspond to the files that
+//! currently exist under `src/quantum/memory/`.
 //!
-//! A persisted state must retain enough metadata to prevent accidental
-//! interpretation under an incompatible:
+//! Do not add declarations for speculative future files here. A new subsystem
+//! file must first exist with its own completed API contract and tests before it
+//! becomes part of this composition boundary.
 //!
-//! - representation;
-//! - scalar precision;
-//! - layout;
-//! - qubit ordering;
-//! - schema version;
-//! - memory format.
+//! # Module dependency layers
 //!
-//! Restoration must be validated before state ownership is committed.
-//!
-//! # Concurrency boundary
-//!
-//! `coherence` and `synchronization` define consistency across:
-//!
-//! - host memory;
-//! - accelerator/device memory;
-//! - distributed partitions;
-//! - backend-native resources.
-//!
-//! `cache` may optimize repeated access but must never become a source of
-//! semantic state divergence.
-//!
-//! # Accelerator boundary
-//!
-//! `cpu` provides CPU-side memory facilities.
-//!
-//! `simd` provides safe vectorized execution abstractions.
-//!
-//! `gpu` provides provider-neutral device-memory abstractions.
-//!
-//! `distributed` provides provider-neutral distributed-memory abstractions.
-//!
-//! None of these modules should force Zamani to one vendor or instruction-set
-//! implementation.
-//!
-//! # Why `qpu.rs` is part of memory
-//!
-//! A QPU does not generally expose a conventional addressable quantum-memory
-//! array. The appropriate abstraction is therefore a resource contract rather
-//! than a fake RAM abstraction.
-//!
-//! `qpu.rs` is consequently part of this namespace alongside
-//! `backend_state.rs`:
-//!
-//! - `backend_state` represents opaque externally owned execution state;
-//! - `qpu` represents provider-neutral physical quantum resource/memory
-//!   contracts.
-//!
-//! Provider-specific adapters remain owned by `quantum::hardware`.
-//!
-//! # Deliberate omissions
-//!
-//! The repository currently does not contain `numeric.rs` or
-//! `representation.rs` under this directory. They are therefore intentionally
-//! not declared here.
-//!
-//! Numerical policy and representation concepts must use the existing module
-//! contracts until those concerns receive dedicated, independently completed
-//! files.
-//!
-//! Adding a `pub mod numeric;` or `pub mod representation;` declaration here
-//! before those files exist would make the crate fail to compile.
-//!
-//! # Test boundary
-//!
-//! The production test coordinator lives under:
+//! The declarations are grouped by architectural responsibility:
 //!
 //! ```text
-//! quantum::memory::tests
+//!  1. foundational contracts
+//!       types / errors / numeric / complex / representation
+//!
+//!  2. indexing and resource admission
+//!       limits / layout / indexing
+//!
+//!  3. allocation
+//!       address / allocator / budget / reservation / pool
+//!
+//!  4. logical memory
+//!       qubit / register / classical / lifetime
+//!
+//!  5. state
+//!       state / state_vector / density_matrix / stabilizer / sparse
+//!       tensor_network / backend_state
+//!
+//!  6. transformations
+//!       view / permutation / slice / tensor / copy_on_write
+//!
+//!  7. quantum state operations
+//!       measurement / collapse / reset
+//!
+//!  8. persistence
+//!       serialization / snapshot / checkpoint
+//!
+//!  9. coherence
+//!       coherence / synchronization / cache
+//!
+//! 10. execution resources
+//!       cpu / simd / gpu / distributed / qpu
+//!
+//! 11. lifecycle and observability
+//!       migration / compaction / diagnostics / telemetry
 //! ```
 //!
-//! It is compiled only for tests and is intentionally not part of the runtime
-//! public API.
+//! Rust does not require declarations to appear in dependency order, but this
+//! ordering makes the intended architecture explicit for maintainers.
 //!
-//! The test coordinator validates cross-module invariants without becoming a
-//! production dependency.
+//! # Child-module contract
 //!
-//! # Definition of done for this module
+//! Every child module in this namespace must obey the following rules:
 //!
-//! This file is complete when:
+//! 1. Remain safe Rust.
+//! 2. Do not introduce `unsafe`.
+//! 3. Do not expose raw pointers.
+//! 4. Use canonical quantum identities from `quantum::ir` where applicable.
+//! 5. Use `memory::types` for memory-resource quantities and identities.
+//! 6. Use `memory::errors` for memory-domain failures.
+//! 7. Validate untrusted or potentially unbounded resource requests.
+//! 8. Use checked arithmetic for allocation-size calculations.
+//! 9. Respect `limits`, `budget` and `reservation` policies.
+//! 10. Never silently perform an unbounded exponential allocation.
+//! 11. Never silently truncate quantum-state data.
+//! 12. Never silently change state representation when semantic guarantees
+//!     could change.
+//! 13. Preserve logical qubit identity across storage transformations.
+//! 14. Preserve declared layout and qubit-order semantics.
+//! 15. Keep provider-specific implementations outside provider-neutral APIs.
+//! 16. Do not perform provider I/O from the generic memory core.
+//! 17. Do not store credentials or authentication material in memory state.
+//! 18. Do not introduce global mutable quantum state.
+//! 19. Do not print diagnostics directly to stdout or stderr.
+//! 20. Use explicit RNG ownership/injection for stochastic operations.
+//! 21. Keep deterministic operations deterministic for identical inputs and
+//!     configuration.
+//! 22. Make persistence versions explicit.
+//! 23. Validate persisted data before committing it to live state.
+//! 24. Preserve transactional semantics for allocation and migration.
+//! 25. Keep benchmarking as a consumer of telemetry, never as a dependency.
 //!
-//! - every existing production memory module is declared exactly once;
-//! - no nonexistent memory module is declared;
-//! - the test coordinator is connected only under `cfg(test)`;
-//! - no implementation logic is duplicated here;
-//! - no provider-specific hardware dependency is introduced;
-//! - no benchmark dependency is introduced;
-//! - no unsafe code is permitted;
-//! - the dependency boundaries are documented;
-//! - the module remains compatible with Rust 1.97/1.97.1.
+//! # Testing boundary
 //!
-//! Implementation correctness belongs to the individual child modules and
-//! their tests; this file is the authoritative composition boundary.
+//! The `tests` module is compiled only for tests and is responsible for
+//! subsystem-level contract verification.
+//!
+//! Representation-specific behavior should remain tested in its corresponding
+//! test module or implementation tests.
+//!
+//! The production module boundary must not depend on test-only infrastructure.
+//!
+//! # Rust compatibility
+//!
+//! This subsystem targets:
+//!
+//! - Rust 1.97;
+//! - Rust 1.97.1;
+//! - Rust 2021.
+//!
+//! No nightly-only feature is required by this module boundary.
+//!
+//! # Public API policy
+//!
+//! The module namespaces are public because the runtime, simulator, hardware
+//! adapters, QEC subsystem, compiler integration and tooling may need
+//! specialized capabilities.
+//!
+//! However, callers should prefer stable public types/contracts exposed by the
+//! individual modules instead of reaching into implementation-private details.
+//!
+//! This file intentionally does not perform broad `pub use *` re-exports.
+//! Wildcard re-exports make future additions prone to name collisions and make
+//! the root namespace unstable. Consumers should use explicit paths such as:
+//!
+//! ```text
+//! quantum::memory::state::QuantumState
+//! quantum::memory::state_vector::StateVector
+//! quantum::memory::limits::MemoryLimits
+//! quantum::memory::qpu::...
+//! ```
+//!
+//! This keeps ownership and API provenance unambiguous.
+//!
+//! # Future extension
+//!
+//! New state representations, accelerator providers and hardware resource
+//! models should implement existing provider-neutral contracts wherever
+//! possible.
+//!
+//! Adding a new provider must not require adding a vendor-specific enum to the
+//! generic memory layer merely to make that provider compile.
+//!
+//! The preferred extension model is:
+//!
+//! ```text
+//! new provider
+//!      |
+//!      v
+//! quantum::hardware adapter
+//!      |
+//!      v
+//! memory provider-neutral contract
+//!      |
+//!      +--> allocator/resource handle
+//!      +--> state/backend handle
+//!      +--> synchronization/coherence
+//!      +--> classical results
+//! ```
+//!
+//! This permits Zamani to add future QPUs and quantum architectures without
+//! redesigning the memory core.
+//!
+//! # Security and failure model
+//!
+//! Memory exhaustion, malformed serialized state, invalid dimensions,
+//! unsupported representations, unavailable hardware resources and failed
+//! synchronization are expected runtime failures, not reasons for undefined
+//! behavior.
+//!
+//! They must be represented through the subsystem's error contracts.
+//!
+//! A production caller must therefore be able to distinguish at least:
+//!
+//! ```text
+//! invalid request
+//! resource unavailable
+//! resource limit exceeded
+//! budget exceeded
+//! unsupported capability
+//! invalid state
+//! persistence failure
+//! synchronization failure
+//! backend/provider failure
+//! ```
+//!
+//! No memory implementation may convert such conditions into silent corruption
+//! or unchecked allocation behavior.
+//!
+//! # Final composition boundary
+//!
+//! This file is deliberately a composition root, not a second implementation
+//! of quantum memory.
+//!
+//! It defines:
+//!
+//! - what belongs to `quantum::memory`;
+//! - which modules are part of the stable subsystem;
+//! - the safety policy;
+//! - integration boundaries;
+//! - dependency direction;
+//! - provider-neutrality requirements;
+//! - test isolation.
+//!
+//! The actual algorithms and data structures remain in their dedicated modules.
 
-// -----------------------------------------------------------------------------
-// Safety policy
-// -----------------------------------------------------------------------------
-
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
 
 // -----------------------------------------------------------------------------
-// Foundational memory contracts
+// Foundational contracts
 // -----------------------------------------------------------------------------
 
-/// Strongly typed memory-domain quantities and resource identities.
 pub mod types;
-
-/// Unified memory-domain error taxonomy.
 pub mod errors;
+pub mod numeric;
+pub mod complex;
+pub mod representation;
 
-/// Memory layout, qubit ordering and storage mapping.
+// -----------------------------------------------------------------------------
+// Resource sizing, layout and safe indexing
+// -----------------------------------------------------------------------------
+
+pub mod limits;
 pub mod layout;
-
-/// Checked index and basis-state calculations.
 pub mod indexing;
 
-/// Complex/scalar representation primitives used by state storage.
-pub mod complex;
-
-/// Resource limits and memory-requirement validation.
-pub mod limits;
-
 // -----------------------------------------------------------------------------
-// Memory addressing and allocation
+// Allocation and resource management
 // -----------------------------------------------------------------------------
 
-/// Provider-neutral memory-address abstractions.
 pub mod address;
-
-/// General memory-allocation contract.
 pub mod allocator;
-
-/// Memory budget and hierarchical resource accounting.
 pub mod budget;
-
-/// Transactional memory reservation.
 pub mod reservation;
-
-/// Reusable allocation pools.
-// Keep this after allocator/budget/reservation at the namespace level so the
-/// architectural dependency is immediately visible.
 pub mod pool;
 
 // -----------------------------------------------------------------------------
-// Logical quantum and classical memory
+// Logical quantum/classical memory
 // -----------------------------------------------------------------------------
 
-/// Logical qubit resource ownership.
 pub mod qubit;
-
-/// Quantum-register ownership and register operations.
 pub mod register;
-
-/// Classical companion memory.
 pub mod classical;
-
-/// Quantum-resource lifecycle and ownership state.
 pub mod lifetime;
 
 // -----------------------------------------------------------------------------
-// Quantum-state representations
+// Quantum-state contract and representations
 // -----------------------------------------------------------------------------
 
-/// Representation-independent quantum-state contract.
 pub mod state;
-
-/// Dense pure-state/state-vector representation.
 pub mod state_vector;
-
-/// Mixed-state/density-matrix representation.
 pub mod density_matrix;
-
-/// Stabilizer/tableau-oriented state representation.
 pub mod stabilizer;
-
-/// Sparse quantum-state representation.
 pub mod sparse;
-
-/// Tensor-network state representation.
 pub mod tensor_network;
-
-/// Opaque state/resource handles for externally owned execution backends.
 pub mod backend_state;
-
-/// Provider-neutral QPU and physical quantum-resource memory contract.
-pub mod qpu;
 
 // -----------------------------------------------------------------------------
 // Views and state transformations
 // -----------------------------------------------------------------------------
 
-/// Borrowed/non-owning memory and state views.
 pub mod view;
-
-/// Logical/physical qubit permutation support.
 pub mod permutation;
-
-/// Safe register/state slicing and projection boundaries.
 pub mod slice;
-
-/// Generic tensor storage and tensor operations.
 pub mod tensor;
-
-/// Copy-on-write state/storage support.
 pub mod copy_on_write;
 
 // -----------------------------------------------------------------------------
-// Measurement and state transitions
+// Measurement and state lifecycle operations
 // -----------------------------------------------------------------------------
 
-/// Measurement result and measurement-memory infrastructure.
 pub mod measurement;
-
-/// Quantum measurement-collapse machinery.
 pub mod collapse;
-
-/// Quantum reset semantics and reset-memory support.
 pub mod reset;
 
 // -----------------------------------------------------------------------------
 // Persistence
 // -----------------------------------------------------------------------------
 
-/// Immutable quantum-memory snapshots.
+pub mod serialization;
 pub mod snapshot;
-
-/// Restartable execution checkpoints.
 pub mod checkpoint;
 
-/// Versioned serialization/deserialization boundary.
-pub mod serialization;
-
 // -----------------------------------------------------------------------------
-// Coherence and synchronization
+// Coherence, synchronization and caching
 // -----------------------------------------------------------------------------
 
-/// Host/device/distributed state-coherence model.
 pub mod coherence;
-
-/// Explicit memory synchronization and fencing.
 pub mod synchronization;
-
-/// Bounded memory/state cache infrastructure.
 pub mod cache;
 
 // -----------------------------------------------------------------------------
-// Execution-memory providers
+// Execution-resource and accelerator boundaries
 // -----------------------------------------------------------------------------
 
-/// CPU-side memory provider and host-memory facilities.
 pub mod cpu;
-
-/// Safe SIMD/vectorized memory execution layer.
 pub mod simd;
-
-/// Provider-neutral GPU/device-memory abstraction.
 pub mod gpu;
-
-/// Provider-neutral distributed quantum-memory abstraction.
 pub mod distributed;
+pub mod qpu;
 
 // -----------------------------------------------------------------------------
-// Memory lifecycle and observability
+// Lifecycle, optimization and observability
 // -----------------------------------------------------------------------------
 
-/// Transactional movement between memory locations/representations.
 pub mod migration;
-
-/// Safe compaction of managed memory resources.
 pub mod compaction;
-
-/// Diagnostics and human/machine-readable memory inspection.
 pub mod diagnostics;
-
-/// Memory telemetry and metrics emission.
 pub mod telemetry;
 
 // -----------------------------------------------------------------------------
-// Test composition
+// Integration tests
 // -----------------------------------------------------------------------------
+//
+// Test-only code is deliberately excluded from normal library builds.
+// `tests/mod.rs` owns the subsystem-level test coordinator and must remain
+// independent from production implementation details.
 
-/// Cross-module production test coordinator.
-///
-/// This is deliberately not exported as part of the runtime API.
 #[cfg(test)]
 mod tests;
