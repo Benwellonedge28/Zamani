@@ -2,7 +2,7 @@
 name = "zamani"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.97.1"
+rust-version = "1.97.1" or "1.97"
 authors = ["Samuel Mukandara <samuelmukandara@gmail.com>"]
 description = "Zamani: The Omniversal AGI Language & Operating Intelligence"
 repository = "https://github.com/Benwellonedge28/Zamani"
