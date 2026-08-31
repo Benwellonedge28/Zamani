@@ -1,186 +1,364 @@
-//! Zamani Quantum Intermediate Representation — Circuit
+//! Zamani Quantum IR — Canonical Quantum Circuit
 //!
-//! Canonical, hardware-independent container for a logical quantum program.
+//! `QuantumCircuit` is the ordered, hardware-independent circuit container
+//! within the Zamani Quantum IR.
 //!
-//! # Architectural boundary
+//! # Architectural role
+//!
+//! The universal Zamani quantum-program architecture is:
+//
+//! ```text
+//! Zamani source
+//!      |
+//!      v
+//! frontend
+//!      |
+//!      v
+//! Quantum IR
+//!      |
+//!      +--> optimization
+//!      |
+//!      +--> routing
+//!      |
+//!      +--> scheduling
+//!      |
+//!      +--> hardware compatibility
+//!      |
+//!      +--> backend lowering
+//!      |
+//!      v
+//! execution
+//! ```
 //!
 //! `QuantumCircuit` owns:
-//!
-//! - logical qubit namespace size;
-//! - logical classical-bit namespace size;
-//! - ordered logical quantum operations;
-//! - circuit metadata;
+//
+//! - logical quantum/classical namespace sizes;
+//! - ordered `Operation` values;
+//! - stable circuit identity;
 //! - IR schema version;
-//! - circuit identity;
-//! - the resource policy used by the circuit;
-//! - safe, atomic mutation boundaries.
+//! - circuit metadata;
+//! - explicit resource policy;
+//! - safe mutation boundaries;
+//! - circuit-local structural invariants.
 //!
 //! It deliberately does NOT own:
-//!
-//! - physical qubit topology;
+//
+//! - physical topology;
 //! - logical-to-physical routing;
-//! - pulse schedules;
+//! - hardware allocation;
 //! - calibration;
-//! - backend-specific gate decomposition;
+//! - native instruction selection;
+//! - pulse synthesis;
+//! - scheduling;
 //! - QPU communication;
-//! - hardware execution;
-//! - error-correction decoding;
-//! - optimization algorithms;
+//! - simulator state;
+//! - optimization policy;
+//! - QEC decoding;
 //! - frontend parsing.
 //!
-//! Those concerns belong to downstream quantum compiler/backend stages.
+//! Those responsibilities belong to downstream modules.
 //!
-//! # Invariants
+//! # Universal-program principle
 //!
-//! A `QuantumCircuit` created through the public API guarantees:
+//! A Zamani program is written once and is not tied to a particular machine
+//! size.
+//
+//! `QuantumCircuit` therefore has no architectural qubit ceiling.
+//
+//! The following are all semantically representable:
+//
+//! ```text
+//! 1
+//! 63
+//! 64
+//! 128
+//! 4_096
+//! 1_000_000
+//! N
+//! ```
 //!
-//! - logical qubit count is within its configured IR limit;
-//! - classical-bit count is within its configured IR limit;
-//! - operation count is within its configured IR limit;
-//! - metadata is within its configured byte limit;
-//! - every inserted operation is locally valid;
-//! - every inserted operation references valid logical namespaces;
-//! - failed mutation never partially modifies the circuit;
-//! - callers cannot obtain an unrestricted mutable operation slice;
-//! - callers cannot mutate metadata fields without validation;
-//! - circuit depth calculations are overflow-safe;
-//! - the circuit has an explicit IR version;
-//! - the circuit has an explicit circuit identity;
-//! - whole-circuit validation is delegated to the canonical validator.
+//! A concrete `QuantumIrLimits` is a resource/security policy for one
+//! compilation or service boundary. It is NOT a statement about the largest
+//! quantum computer Zamani can describe.
+//
+//! A physical target may impose a smaller capacity. That belongs to
+//! `quantum::hardware`, target compatibility, routing, and backend stages.
 //!
-//! # Untrusted IR
+//! # Operation model
 //!
-//! A circuit can eventually be reconstructed from external sources such as:
+//! The circuit stores:
+//
+//! ```text
+//! Vec<Operation>
+//! ```
 //!
-//! - deserialization;
-//! - replay;
-//! - frontend lowering;
-//! - generated IR;
-//! - optimizer output;
-//! - external tools.
+//! rather than:
+//
+//! ```text
+//! Vec<Gate>
+//! ```
 //!
-//! Therefore `validate()` MUST remain available even though public constructors
-//! and mutation methods already enforce local invariants.
+//! This is essential for universal quantum computing.
+//
+//! One circuit can therefore contain semantic operations representing:
+//
+//! - gates;
+//! - measurements;
+//! - reset;
+//! - barriers;
+//! - pulse references;
+//! - waveform references;
+//! - frame changes;
+//! - timing references;
+//! - classical operations;
+//! - conditional operations;
+//! - logical/FTQC operations;
+//! - analog operations;
+//! - annealing operations;
+//! - resource operations;
+//! - extensions.
+//!
+//! Pulse-level source such as:
+//
+//! ```text
+//! fn x_gate(q) {
+//!     pulse(amp=0.3, dur=20ns)
+//! }
+//! ```
+//!
+//! is represented through the canonical operation/pulse layers. The circuit
+//! does not reinterpret the pulse as a gate and does not decide which physical
+//! control channel or DAC will execute it.
+//!
+//! # Ordering
+//!
+//! `QuantumCircuit` preserves explicit program order.
+//
+//! This ordering is semantic and must not be silently changed by this module.
+//! Optimizers may later transform the circuit while preserving semantic
+//! equivalence.
+//!
+//! # Scalability
+//!
+//! This implementation deliberately avoids:
+//
+//! - allocating one object per declared qubit;
+//! - allocating a vector sized to `num_qubits` during construction;
+//! - fixed-size qubit arrays;
+//! - 63-bit masks as machine-size representations;
+//! - unchecked `usize` arithmetic;
+//! - implicit operation-count limits;
+//! - hardware-specific assumptions.
+//!
+//! Circuit storage scales with the actual number of stored operations, not
+//! merely with the declared logical namespace.
+//
+//! # Security
+//!
+//! Resource limits are checked before mutating the circuit.
+//
+//! Failed mutation is atomic:
+//
+//! ```text
+//! validate candidate
+//!       |
+//!       v
+//! check limits
+//!       |
+//!       v
+//! check namespace
+//!       |
+//!       v
+//! check identity
+//!       |
+//!       v
+//! mutate
+//! ```
+//!
+//! No partially inserted operation is left behind after a failed insertion.
 //!
 //! # Rust compatibility
 //!
-//! Rust 1.97.1.
+//! Target:
+//
+//! - Rust 1.97;
+//! - Rust 1.97.1;
+//! - Rust 2021.
 //!
-//! No nightly features or external dependencies are required.
+//! Requirements:
+//
+//! - stable Rust;
+//! - no nightly features;
+//! - no external dependencies;
+//! - no `unsafe`.
+//!
+//! The `forbid(unsafe_code)` attribute makes the no-unsafe requirement
+//! compiler-enforced.
+//!
+//! # Integration contracts
+//!
+//! `qubit.rs`
+//!     Owns canonical `QubitId` and `PhysicalQubitId`.
+//!
+//! `operation.rs`
+//!     Owns the universal operation model used by this circuit.
+//!
+//! `gate.rs`
+//!     Owns mathematical gate semantics.
+//!
+//! `measurement.rs`
+//!     Owns measurement semantics.
+//!
+//! `limits.rs`
+//!     Owns explicit IR resource policy.
+//!
+//! `identity.rs`
+//!     Owns `CircuitId`, `OperationId`, and `IrVersion`.
+//!
+//! `validation.rs`
+//!     Performs complete canonical whole-circuit validation.
+//!
+//! `analysis.rs`
+//!     Consumes this circuit to calculate metrics.
+//!
+//! `optimization/`
+//!     May transform circuits but must not redefine circuit semantics.
+//!
+//! `routing/`
+//!     Maps logical qubits to physical resources.
+//!
+//! `scheduling/`
+//!     Determines execution timing.
+//!
+//! `hardware/`
+//!     Describes actual target capabilities and resources.
+//!
+//! `program.rs`
+//!     May contain larger programs, regions, functions, and control flow.
+//!
+//! `serialization.rs`
+//!     Serializes the circuit using the canonical IR schema.
+//!
+//! `hash.rs`
+//!     Computes canonical content identities.
+//!
+//! `provenance.rs`
+//!     Records transformation lineage.
+//!
+//! # Important naming rule
+//!
+//! The canonical qubit module is:
+//
+//! ```text
+//! quantum::ir::qubit
+//! ```
+//!
+//! This file therefore imports:
+//
+//! ```rust
+//! use super::qubit::QubitId;
+//! ```
+//!
+//! and never `super::qubits`.
 
+#![forbid(unsafe_code)]
+
+use std::collections::BTreeSet;
 use std::fmt;
 
-use super::errors::{
-    IrCircuitError,
-    IrError,
-    IrIdentifierError,
-    IrLimitError,
-    IrResult,
-};
-use super::gate::{Gate, GateError};
-use super::identity::{
-    CircuitId,
-    IrVersion,
-};
-use super::limits::{
-    LimitsError,
-    QuantumIrLimits,
-};
-use super::validation::{
-    validate_circuit_with_config,
-    ValidationConfig,
-};
-use super::qubits::QubitId;
+use super::gate::Gate;
+use super::identity::{CircuitId, IrVersion, OperationId};
+use super::limits::{LimitsError, QuantumIrLimits};
+use super::operation::{Operation, OperationBody, OperationError};
+use super::qubit::QubitId;
 
-// -----------------------------------------------------------------------------
-// Circuit errors
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Result
+// =============================================================================
+
+/// Result type for circuit construction and mutation.
+pub type CircuitResult<T> = Result<T, CircuitError>;
+
+// =============================================================================
+// Errors
+// =============================================================================
 
 /// Errors produced while constructing, validating, or modifying a circuit.
-///
-/// This is the circuit-local error vocabulary. Public subsystem boundaries can
-/// convert it into the canonical [`IrError`] using `From<CircuitError>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CircuitError {
-    /// The configured circuit resource policy is invalid.
+    /// The supplied IR resource policy is invalid.
     InvalidLimits {
-        /// The offending limit field.
+        /// Name of the invalid policy field.
         field: &'static str,
 
-        /// The invalid value.
+        /// Invalid value.
         value: usize,
     },
 
-    /// The requested logical qubit count exceeds the circuit's resource policy.
+    /// The logical qubit namespace exceeds its policy.
     QubitLimitExceeded {
         /// Requested number of logical qubits.
         requested: usize,
 
-        /// Maximum permitted number.
+        /// Policy maximum.
         maximum: usize,
     },
 
-    /// The requested classical-bit count exceeds the circuit's resource policy.
+    /// The classical namespace exceeds its policy.
     ClassicalBitLimitExceeded {
         /// Requested number of classical bits.
         requested: usize,
 
-        /// Maximum permitted number.
+        /// Policy maximum.
         maximum: usize,
     },
 
-    /// The requested operation count exceeds the circuit's resource policy.
+    /// The operation count exceeds its policy.
     OperationLimitExceeded {
-        /// Requested number of operations.
+        /// Requested operation count.
         requested: usize,
 
-        /// Maximum permitted number.
+        /// Policy maximum.
         maximum: usize,
     },
 
-    /// Circuit metadata exceeds its configured byte limit.
+    /// The operation count cannot be incremented safely.
+    OperationCountOverflow,
+
+    /// Circuit metadata exceeds the configured policy.
     MetadataLimitExceeded {
-        /// Requested metadata size in bytes.
+        /// Metadata byte count.
         requested: usize,
 
-        /// Maximum permitted bytes.
+        /// Policy maximum.
         maximum: usize,
     },
 
-    /// A logical qubit is outside the circuit's namespace.
+    /// A logical qubit is outside the circuit namespace.
     QubitOutOfRange {
-        /// Invalid logical qubit.
+        /// Referenced logical qubit.
         qubit: QubitId,
 
-        /// Number of logical qubits in the circuit.
+        /// Number of declared logical qubits.
         num_qubits: usize,
     },
 
-    /// A classical bit is outside the circuit's namespace.
+    /// A classical bit is outside the circuit namespace.
     ClassicalBitOutOfRange {
-        /// Invalid classical-bit index.
+        /// Referenced classical bit.
         bit: usize,
 
-        /// Number of classical bits in the circuit.
+        /// Number of declared classical bits.
         num_classical_bits: usize,
     },
 
-    /// A gate has no operands where operands are required.
-    MissingOperands,
-
-    /// A gate contains a duplicate logical qubit.
-    DuplicateQubit {
-        /// Duplicated logical qubit.
-        qubit: QubitId,
+    /// An operation ID already exists in the circuit.
+    DuplicateOperationId {
+        /// Duplicated operation identity.
+        id: OperationId,
     },
 
-    /// A gate failed its local validation.
-    InvalidGate {
-        /// Original gate error.
-        error: GateError,
-    },
-
-    /// An operation index is invalid.
+    /// An operation index is outside the operation sequence.
     OperationOutOfRange {
         /// Requested index.
         index: usize,
@@ -189,32 +367,38 @@ pub enum CircuitError {
         len: usize,
     },
 
+    /// The operation itself is structurally invalid.
+    InvalidOperation(OperationError),
+
+    /// A gate is not valid for the circuit namespace.
+    InvalidGate(String),
+
     /// Circuit metadata is structurally invalid.
     InvalidMetadata {
-        /// Static reason.
+        /// Static validation reason.
         message: &'static str,
     },
 
-    /// Circuit version is not supported by the current IR implementation.
+    /// The supplied IR version cannot be consumed by this implementation.
     UnsupportedVersion {
-        /// Version supplied to the circuit.
+        /// Unsupported version.
         version: IrVersion,
     },
 
-    /// The circuit contains an invalid internal combination.
+    /// A circuit-wide invariant is invalid.
     InvalidCircuit {
-        /// Static reason.
+        /// Static validation reason.
         message: &'static str,
     },
 
-    /// An arithmetic operation required by circuit analysis overflowed.
+    /// A circuit analysis calculation overflowed.
     ArithmeticOverflow {
         /// Name of the calculation.
         calculation: &'static str,
     },
 
-    /// Canonical IR validation failed.
-    Validation(IrError),
+    /// A whole-circuit validation failure.
+    Validation(String),
 }
 
 impl fmt::Display for CircuitError {
@@ -223,7 +407,7 @@ impl fmt::Display for CircuitError {
             Self::InvalidLimits { field, value } => {
                 write!(
                     f,
-                    "invalid quantum IR limit `{field}`: value {value}"
+                    "invalid quantum IR limit `{field}`: {value}"
                 )
             }
 
@@ -257,6 +441,10 @@ impl fmt::Display for CircuitError {
                 )
             }
 
+            Self::OperationCountOverflow => {
+                f.write_str("operation count overflow")
+            }
+
             Self::MetadataLimitExceeded {
                 requested,
                 maximum,
@@ -273,7 +461,7 @@ impl fmt::Display for CircuitError {
             } => {
                 write!(
                     f,
-                    "logical qubit {qubit} is outside range 0..{num_qubits}"
+                    "logical qubit {qubit} is outside namespace 0..{num_qubits}"
                 )
             }
 
@@ -283,23 +471,12 @@ impl fmt::Display for CircuitError {
             } => {
                 write!(
                     f,
-                    "classical bit {bit} is outside range 0..{num_classical_bits}"
+                    "classical bit c{bit} is outside namespace 0..{num_classical_bits}"
                 )
             }
 
-            Self::MissingOperands => {
-                f.write_str("gate has no operands")
-            }
-
-            Self::DuplicateQubit { qubit } => {
-                write!(
-                    f,
-                    "logical qubit {qubit} appears more than once"
-                )
-            }
-
-            Self::InvalidGate { error } => {
-                write!(f, "invalid gate: {error}")
+            Self::DuplicateOperationId { id } => {
+                write!(f, "operation identity {id} already exists")
             }
 
             Self::OperationOutOfRange { index, len } => {
@@ -307,6 +484,14 @@ impl fmt::Display for CircuitError {
                     f,
                     "operation index {index} is outside circuit length {len}"
                 )
+            }
+
+            Self::InvalidOperation(error) => {
+                write!(f, "invalid operation: {error}")
+            }
+
+            Self::InvalidGate(message) => {
+                write!(f, "invalid gate: {message}")
             }
 
             Self::InvalidMetadata { message } => {
@@ -331,8 +516,8 @@ impl fmt::Display for CircuitError {
                 )
             }
 
-            Self::Validation(error) => {
-                write!(f, "quantum IR validation failed: {error}")
+            Self::Validation(message) => {
+                write!(f, "quantum IR validation failed: {message}")
             }
         }
     }
@@ -340,231 +525,90 @@ impl fmt::Display for CircuitError {
 
 impl std::error::Error for CircuitError {}
 
-impl From<GateError> for CircuitError {
-    fn from(error: GateError) -> Self {
-        Self::InvalidGate { error }
+impl From<OperationError> for CircuitError {
+    fn from(error: OperationError) -> Self {
+        Self::InvalidOperation(error)
     }
 }
 
 impl From<LimitsError> for CircuitError {
     fn from(error: LimitsError) -> Self {
         match error {
-            LimitsError::InvalidConfiguration {
-                field,
-                value,
-            } => Self::InvalidLimits { field, value },
+            LimitsError::InvalidConfiguration { field, value } => {
+                Self::InvalidLimits { field, value }
+            }
 
             LimitsError::ResourceExceeded {
                 resource,
                 requested,
                 maximum,
-            } => match resource {
-                "logical qubits" => {
+            } => {
+                let name = resource.as_str();
+
+                if name == "logical qubits" {
                     Self::QubitLimitExceeded {
                         requested,
                         maximum,
                     }
-                }
-
-                "classical bits" => {
+                } else if name == "classical bits" {
                     Self::ClassicalBitLimitExceeded {
                         requested,
                         maximum,
                     }
-                }
-
-                "operations" => {
+                } else if name == "operations" {
                     Self::OperationLimitExceeded {
                         requested,
                         maximum,
                     }
-                }
-
-                "metadata bytes" => {
+                } else if name == "metadata bytes" {
                     Self::MetadataLimitExceeded {
                         requested,
                         maximum,
                     }
+                } else {
+                    Self::InvalidCircuit {
+                        message: "resource policy rejected circuit resource",
+                    }
                 }
-
-                _ => Self::InvalidCircuit {
-                    message: "resource limit exceeded",
-                },
-            },
+            }
 
             LimitsError::ArithmeticOverflow { .. }
-            | LimitsError::ArithmeticMultiplicationOverflow {
-                ..
-            } => Self::ArithmeticOverflow {
-                calculation: "IR resource limit",
-            },
-        }
-    }
-}
-
-impl From<CircuitError> for IrError {
-    fn from(error: CircuitError) -> Self {
-        match error {
-            CircuitError::InvalidLimits { field, value } => {
-                IrError::Limit(IrLimitError::new(
-                    field,
-                    value,
-                    0,
-                ))
-            }
-
-            CircuitError::QubitLimitExceeded {
-                requested,
-                maximum,
-            } => IrError::Limit(IrLimitError::new(
-                "max_qubits",
-                requested,
-                maximum,
-            )),
-
-            CircuitError::ClassicalBitLimitExceeded {
-                requested,
-                maximum,
-            } => IrError::Limit(IrLimitError::new(
-                "max_classical_bits",
-                requested,
-                maximum,
-            )),
-
-            CircuitError::OperationLimitExceeded {
-                requested,
-                maximum,
-            } => IrError::Limit(IrLimitError::new(
-                "max_operations",
-                requested,
-                maximum,
-            )),
-
-            CircuitError::MetadataLimitExceeded {
-                requested,
-                maximum,
-            } => IrError::Limit(IrLimitError::new(
-                "max_metadata_bytes",
-                requested,
-                maximum,
-            )),
-
-            CircuitError::QubitOutOfRange {
-                qubit,
-                num_qubits,
-            } => IrError::Identifier(
-                IrIdentifierError::QubitOutOfRange {
-                    index: qubit.index(),
-                    count: num_qubits,
-                },
-            ),
-
-            CircuitError::ClassicalBitOutOfRange {
-                bit,
-                num_classical_bits,
-            } => IrError::Identifier(
-                IrIdentifierError::ClassicalBitOutOfRange {
-                    index: bit,
-                    count: num_classical_bits,
-                },
-            ),
-
-            CircuitError::MissingOperands => {
-                IrError::Circuit(
-                    IrCircuitError::MissingOperands,
-                )
-            }
-
-            CircuitError::DuplicateQubit { qubit } => {
-                IrError::Circuit(
-                    IrCircuitError::MissingOperands,
-                )
-            }
-
-            CircuitError::InvalidGate { error } => {
-                IrError::Gate(error.into())
-            }
-
-            CircuitError::OperationOutOfRange {
-                index,
-                len,
-            } => IrError::Identifier(
-                IrIdentifierError::OperationOutOfRange {
-                    index,
-                    count: len,
-                },
-            ),
-
-            CircuitError::InvalidMetadata { .. } => {
-                IrError::Circuit(
-                    IrCircuitError::InvalidMetadata,
-                )
-            }
-
-            CircuitError::UnsupportedVersion {
-                ..
-            } => {
-                IrError::Version(
-                    "unsupported quantum IR version",
-                )
-            }
-
-            CircuitError::InvalidCircuit { .. } => {
-                IrError::Circuit(
-                    IrCircuitError::InvalidStructure,
-                )
-            }
-
-            CircuitError::ArithmeticOverflow {
-                ..
-            } => {
-                IrError::Invariant {
-                    message: "circuit arithmetic overflow",
+            | LimitsError::ArithmeticMultiplicationOverflow { .. }
+            | LimitsError::TimeArithmeticOverflow => {
+                Self::ArithmeticOverflow {
+                    calculation: "IR resource accounting",
                 }
             }
 
-            CircuitError::Validation(error) => error,
+            LimitsError::ScheduleTimeExceeded { .. } => {
+                Self::InvalidCircuit {
+                    message: "schedule-time policy is not a circuit namespace limit",
+                }
+            }
         }
     }
 }
 
-// -----------------------------------------------------------------------------
-// Circuit metadata
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Metadata
+// =============================================================================
 
-/// Metadata associated with a quantum circuit.
+/// Circuit-level metadata.
 ///
-/// Metadata is deliberately limited to logical/compiler provenance. Hardware
-/// configuration, calibration, topology, pulse information, and backend
-/// configuration must not be stored here.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Metadata is intentionally limited to logical/compiler provenance. Hardware
+/// topology, calibration, DAC configuration, physical channels, and backend
+/// state do not belong here.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CircuitMetadata {
-    /// Optional human-readable circuit name.
     name: Option<String>,
-
-    /// Optional source language/module identifier.
     source: Option<String>,
-
-    /// Optional compiler version string.
     compiler_version: Option<String>,
-
-    /// Whether the circuit is intended for fault-tolerant execution.
     fault_tolerant: bool,
 }
 
-impl Default for CircuitMetadata {
-    fn default() -> Self {
-        Self {
-            name: None,
-            source: None,
-            compiler_version: None,
-            fault_tolerant: false,
-        }
-    }
-}
-
 impl CircuitMetadata {
-    /// Creates empty metadata.
+    /// Creates empty circuit metadata.
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             name: None,
@@ -575,147 +619,164 @@ impl CircuitMetadata {
     }
 
     /// Returns the optional circuit name.
+    #[must_use]
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
 
     /// Returns the optional source identifier.
+    #[must_use]
     pub fn source(&self) -> Option<&str> {
         self.source.as_deref()
     }
 
     /// Returns the optional compiler version.
+    #[must_use]
     pub fn compiler_version(&self) -> Option<&str> {
         self.compiler_version.as_deref()
     }
 
-    /// Returns whether fault-tolerant execution is requested.
+    /// Returns whether the circuit is marked as fault-tolerant.
+    #[must_use]
     pub const fn fault_tolerant(&self) -> bool {
         self.fault_tolerant
     }
 
-    /// Returns the UTF-8 byte size of all metadata strings.
-    ///
-    /// Length arithmetic is overflow-safe.
-    pub fn byte_size(&self) -> Result<usize, CircuitError> {
+    /// Sets the circuit name.
+    pub fn set_name(
+        &mut self,
+        name: Option<String>,
+    ) {
+        self.name = name;
+    }
+
+    /// Sets the source identifier.
+    pub fn set_source(
+        &mut self,
+        source: Option<String>,
+    ) {
+        self.source = source;
+    }
+
+    /// Sets the compiler version.
+    pub fn set_compiler_version(
+        &mut self,
+        compiler_version: Option<String>,
+    ) {
+        self.compiler_version = compiler_version;
+    }
+
+    /// Sets the fault-tolerant marker.
+    pub const fn set_fault_tolerant(
+        &mut self,
+        fault_tolerant: bool,
+    ) {
+        self.fault_tolerant = fault_tolerant;
+    }
+
+    /// Returns total UTF-8 metadata storage in bytes.
+    pub fn byte_size(&self) -> CircuitResult<usize> {
         let mut total = 0usize;
 
         if let Some(value) = &self.name {
             total = total
                 .checked_add(value.len())
-                .ok_or(
-                    CircuitError::ArithmeticOverflow {
-                        calculation: "metadata size",
-                    },
-                )?;
+                .ok_or(CircuitError::ArithmeticOverflow {
+                    calculation: "metadata byte size",
+                })?;
         }
 
         if let Some(value) = &self.source {
             total = total
                 .checked_add(value.len())
-                .ok_or(
-                    CircuitError::ArithmeticOverflow {
-                        calculation: "metadata size",
-                    },
-                )?;
+                .ok_or(CircuitError::ArithmeticOverflow {
+                    calculation: "metadata byte size",
+                })?;
         }
 
         if let Some(value) = &self.compiler_version {
             total = total
                 .checked_add(value.len())
-                .ok_or(
-                    CircuitError::ArithmeticOverflow {
-                        calculation: "metadata size",
-                    },
-                )?;
+                .ok_or(CircuitError::ArithmeticOverflow {
+                    calculation: "metadata byte size",
+                })?;
         }
 
         Ok(total)
     }
-
-    fn with_name(
-        mut self,
-        name: Option<String>,
-    ) -> Self {
-        self.name = name;
-        self
-    }
-
-    fn with_source(
-        mut self,
-        source: Option<String>,
-    ) -> Self {
-        self.source = source;
-        self
-    }
-
-    fn with_compiler_version(
-        mut self,
-        compiler_version: Option<String>,
-    ) -> Self {
-        self.compiler_version = compiler_version;
-        self
-    }
-
-    fn with_fault_tolerant(
-        mut self,
-        fault_tolerant: bool,
-    ) -> Self {
-        self.fault_tolerant = fault_tolerant;
-        self
-    }
 }
 
-// -----------------------------------------------------------------------------
-// Quantum circuit
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Circuit
+// =============================================================================
 
-/// Canonical Zamani quantum circuit.
+/// Canonical ordered Zamani quantum circuit.
 ///
-/// The circuit owns the logical program representation but deliberately does
-/// not know anything about physical hardware.
+/// A circuit is a specialized straight-line quantum-program container. It is
+/// not the complete universal quantum program representation; higher-level
+/// `program.rs`/region/control-flow layers may contain multiple circuits or
+/// regions.
 #[derive(Debug, Clone, PartialEq)]
 pub struct QuantumCircuit {
     id: CircuitId,
     version: IrVersion,
+
+    /// Logical quantum namespace size.
     num_qubits: usize,
+
+    /// Logical classical namespace size.
     num_classical_bits: usize,
+
+    /// Explicit resource/security policy.
     limits: QuantumIrLimits,
-    operations: Vec<Gate>,
+
+    /// Ordered semantic operations.
+    operations: Vec<Operation>,
+
+    /// Circuit metadata.
     metadata: CircuitMetadata,
+
+    /// Next circuit-local operation identity.
+    ///
+    /// This is not a global allocator. It only provides convenient IDs for
+    /// operations created through this circuit.
+    next_operation_id: u64,
 }
 
 impl QuantumCircuit {
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Construction
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
-    /// Creates a circuit using production IR limits and the current IR version.
-    ///
-    /// Unlike the previous implementation, construction is fallible. This is
-    /// intentional: an invalid resource request must not create an invalid
-    /// circuit that is discovered only later.
+    /// Creates an empty circuit using the production IR policy.
     pub fn new(
         num_qubits: usize,
         num_classical_bits: usize,
-    ) -> Result<Self, CircuitError> {
-        Self::try_new_with_limits(
+    ) -> CircuitResult<Self> {
+        Self::with_limits(
             num_qubits,
             num_classical_bits,
             QuantumIrLimits::production(),
         )
     }
 
-    /// Creates a circuit with an explicit resource policy.
-    pub fn try_new_with_limits(
+    /// Creates an empty circuit using an explicit resource policy.
+    pub fn with_limits(
         num_qubits: usize,
         num_classical_bits: usize,
         limits: QuantumIrLimits,
-    ) -> Result<Self, CircuitError> {
+    ) -> CircuitResult<Self> {
         limits.validate()?;
 
-        limits.check_qubits(num_qubits)?;
-        limits.check_classical_bits(num_classical_bits)?;
+        check_qubit_namespace(
+            &limits,
+            num_qubits,
+        )?;
+
+        check_classical_namespace(
+            &limits,
+            num_classical_bits,
+        )?;
 
         Ok(Self {
             id: CircuitId::new(0),
@@ -725,17 +786,18 @@ impl QuantumCircuit {
             limits,
             operations: Vec::new(),
             metadata: CircuitMetadata::default(),
+            next_operation_id: 0,
         })
     }
 
-    /// Creates a circuit with an explicit identity and resource policy.
+    /// Creates a circuit with explicit identity.
     pub fn with_identity(
         id: CircuitId,
         num_qubits: usize,
         num_classical_bits: usize,
         limits: QuantumIrLimits,
-    ) -> Result<Self, CircuitError> {
-        let mut circuit = Self::try_new_with_limits(
+    ) -> CircuitResult<Self> {
+        let mut circuit = Self::with_limits(
             num_qubits,
             num_classical_bits,
             limits,
@@ -746,179 +808,161 @@ impl QuantumCircuit {
         Ok(circuit)
     }
 
-    /// Creates a circuit with explicit metadata.
-    pub fn with_metadata(
-        num_qubits: usize,
-        num_classical_bits: usize,
-        metadata: CircuitMetadata,
-    ) -> Result<Self, CircuitError> {
-        let mut circuit =
-            Self::try_new_with_limits(
-                num_qubits,
-                num_classical_bits,
-                QuantumIrLimits::production(),
-            )?;
-
-        circuit.set_metadata(metadata)?;
-
-        Ok(circuit)
-    }
-
-    /// Creates a circuit with explicit metadata and limits.
-    pub fn with_metadata_and_limits(
-        num_qubits: usize,
-        num_classical_bits: usize,
-        metadata: CircuitMetadata,
-        limits: QuantumIrLimits,
-    ) -> Result<Self, CircuitError> {
-        let mut circuit =
-            Self::try_new_with_limits(
-                num_qubits,
-                num_classical_bits,
-                limits,
-            )?;
-
-        circuit.set_metadata(metadata)?;
-
-        Ok(circuit)
-    }
-
-    /// Creates a circuit from an existing operation sequence.
+    /// Creates a circuit from a complete operation sequence.
     ///
-    /// The operation vector is consumed only after the circuit's resource
-    /// bounds and every operation have been validated.
+    /// The input vector is validated before ownership is transferred into the
+    /// circuit.
     pub fn from_operations(
         num_qubits: usize,
         num_classical_bits: usize,
-        operations: Vec<Gate>,
-    ) -> Result<Self, CircuitError> {
-        let limits =
-            QuantumIrLimits::production();
-
+        operations: Vec<Operation>,
+    ) -> CircuitResult<Self> {
         Self::from_operations_with_limits(
             num_qubits,
             num_classical_bits,
             operations,
-            limits,
+            QuantumIrLimits::production(),
         )
     }
 
-    /// Creates a circuit from operations under an explicit resource policy.
+    /// Creates a circuit from operations with an explicit policy.
     pub fn from_operations_with_limits(
         num_qubits: usize,
         num_classical_bits: usize,
-        operations: Vec<Gate>,
+        operations: Vec<Operation>,
         limits: QuantumIrLimits,
-    ) -> Result<Self, CircuitError> {
-        limits.validate()?;
-
-        limits.check_qubits(num_qubits)?;
-        limits.check_classical_bits(
+    ) -> CircuitResult<Self> {
+        let mut circuit = Self::with_limits(
+            num_qubits,
             num_classical_bits,
-        )?;
-        limits.check_operations(
-            operations.len(),
+            limits,
         )?;
 
-        let mut circuit =
-            Self::try_new_with_limits(
-                num_qubits,
-                num_classical_bits,
-                limits,
-            )?;
-
-        // Validate every operation before mutating the circuit.
-        for gate in &operations {
-            circuit.validate_gate(gate)?;
-        }
-
-        circuit.operations = operations;
+        circuit.replace_operations(operations)?;
 
         Ok(circuit)
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Identity and version
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
-    /// Returns the stable circuit identity.
+    /// Returns the circuit identity.
+    #[must_use]
     pub const fn id(&self) -> CircuitId {
         self.id
     }
 
-    /// Changes the circuit identity.
-    ///
-    /// Identity is application-controlled and is not generated by the IR.
-    pub const fn set_id(
-        &mut self,
-        id: CircuitId,
-    ) {
-        self.id = id;
-    }
-
-    /// Returns the IR schema/semantic version.
+    /// Returns the IR schema version.
+    #[must_use]
     pub const fn version(&self) -> IrVersion {
         self.version
     }
 
-    /// Changes the IR version after verifying that the current implementation
-    /// understands it.
+    /// Returns whether the circuit uses the current IR contract.
+    #[must_use]
+    pub const fn is_current_version(&self) -> bool {
+        self.version.is_current()
+    }
+
+    /// Sets the circuit IR version after compatibility validation.
     pub fn set_version(
         &mut self,
         version: IrVersion,
-    ) -> Result<(), CircuitError> {
+    ) -> CircuitResult<()> {
         if !version.is_supported_by_current() {
-            return Err(
-                CircuitError::UnsupportedVersion {
-                    version,
-                },
-            );
+            return Err(CircuitError::UnsupportedVersion {
+                version,
+            });
         }
 
         self.version = version;
-
         Ok(())
     }
 
-    // -------------------------------------------------------------------------
-    // Resource policy
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // Namespace
+    // =========================================================================
 
-    /// Returns the resource policy owned by this circuit.
-    pub const fn limits(
+    /// Returns the logical qubit namespace size.
+    #[must_use]
+    pub const fn num_qubits(&self) -> usize {
+        self.num_qubits
+    }
+
+    /// Returns the logical classical-bit namespace size.
+    #[must_use]
+    pub const fn num_classical_bits(&self) -> usize {
+        self.num_classical_bits
+    }
+
+    /// Returns whether a logical qubit belongs to this circuit namespace.
+    #[must_use]
+    pub const fn contains_qubit(
         &self,
-    ) -> &QuantumIrLimits {
+        qubit: QubitId,
+    ) -> bool {
+        qubit.index() < self.num_qubits
+    }
+
+    /// Returns whether a classical bit belongs to this circuit namespace.
+    #[must_use]
+    pub const fn contains_classical_bit(
+        &self,
+        bit: usize,
+    ) -> bool {
+        bit < self.num_classical_bits
+    }
+
+    /// Returns the canonical logical qubit identifier at an index.
+    ///
+    /// This does not allocate a qubit object.
+    pub fn qubit(
+        &self,
+        index: usize,
+    ) -> CircuitResult<QubitId> {
+        if index >= self.num_qubits {
+            return Err(CircuitError::QubitOutOfRange {
+                qubit: QubitId::new(index),
+                num_qubits: self.num_qubits,
+            });
+        }
+
+        Ok(QubitId::new(index))
+    }
+
+    // =========================================================================
+    // Resource policy
+    // =========================================================================
+
+    /// Returns the resource policy.
+    #[must_use]
+    pub const fn limits(&self) -> &QuantumIrLimits {
         &self.limits
     }
 
-    /// Replaces the circuit's resource policy.
+    /// Replaces the resource policy after checking the existing circuit.
     ///
-    /// The complete circuit is checked against the new policy before the
-    /// replacement occurs. Failure therefore leaves the original policy
-    /// untouched.
+    /// The operation sequence is never modified by this method.
     pub fn set_limits(
         &mut self,
         limits: QuantumIrLimits,
-    ) -> Result<(), CircuitError> {
+    ) -> CircuitResult<()> {
         limits.validate()?;
 
-        limits.check_qubits(
+        check_qubit_namespace(
+            &limits,
             self.num_qubits,
         )?;
 
-        limits.check_classical_bits(
+        check_classical_namespace(
+            &limits,
             self.num_classical_bits,
         )?;
 
-        limits.check_operations(
+        check_operation_namespace(
+            &limits,
             self.operations.len(),
-        )?;
-
-        let metadata_size =
-            self.metadata.byte_size()?;
-
-        limits.check_metadata_bytes(
-            metadata_size,
         )?;
 
         self.limits = limits;
@@ -926,1159 +970,1097 @@ impl QuantumCircuit {
         Ok(())
     }
 
-    // -------------------------------------------------------------------------
-    // Namespace accessors
-    // -------------------------------------------------------------------------
-
-    /// Returns the number of logical qubits.
-    pub const fn num_qubits(&self) -> usize {
-        self.num_qubits
-    }
-
-    /// Returns the number of logical classical bits.
-    pub const fn num_classical_bits(
-        &self,
-    ) -> usize {
-        self.num_classical_bits
-    }
-
-    // -------------------------------------------------------------------------
-    // Operation accessors
-    // -------------------------------------------------------------------------
-
-    /// Returns the number of operations.
-    pub fn len(&self) -> usize {
-        self.operations.len()
-    }
-
-    /// Returns whether the circuit has no operations.
-    pub fn is_empty(&self) -> bool {
-        self.operations.is_empty()
-    }
-
-    /// Returns the immutable ordered operation sequence.
-    ///
-    /// No mutable operation slice is exposed. All mutation must pass through
-    /// the circuit's validated mutation API.
-    pub fn operations(&self) -> &[Gate] {
-        &self.operations
-    }
-
-    /// Returns one operation by stable sequence position.
-    pub fn get(
-        &self,
-        index: usize,
-    ) -> Option<&Gate> {
-        self.operations.get(index)
-    }
-
-    /// Returns the first operation, if one exists.
-    pub fn first(&self) -> Option<&Gate> {
-        self.operations.first()
-    }
-
-    /// Returns the last operation, if one exists.
-    pub fn last(&self) -> Option<&Gate> {
-        self.operations.last()
-    }
-
-    /// Consumes the circuit and returns its ordered operations.
-    pub fn into_operations(
-        self,
-    ) -> Vec<Gate> {
-        self.operations
-    }
-
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Metadata
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
-    /// Returns immutable circuit metadata.
-    pub fn metadata(
-        &self,
-    ) -> &CircuitMetadata {
+    /// Returns circuit metadata.
+    #[must_use]
+    pub const fn metadata(&self) -> &CircuitMetadata {
         &self.metadata
     }
 
     /// Replaces metadata atomically.
-    ///
-    /// The existing metadata remains untouched if the new metadata exceeds the
-    /// configured resource policy.
     pub fn set_metadata(
         &mut self,
         metadata: CircuitMetadata,
-    ) -> Result<(), CircuitError> {
-        let size =
-            metadata.byte_size()?;
+    ) -> CircuitResult<()> {
+        let size = metadata.byte_size()?;
 
-        self.limits
-            .check_metadata_bytes(size)?;
+        check_metadata_limit(
+            &self.limits,
+            size,
+        )?;
 
         self.metadata = metadata;
 
         Ok(())
     }
 
-    /// Sets the human-readable circuit name.
-    pub fn set_name(
-        &mut self,
-        name: Option<String>,
-    ) -> Result<(), CircuitError> {
-        let metadata =
-            self.metadata.clone()
-                .with_name(name);
+    // =========================================================================
+    // Operation access
+    // =========================================================================
 
-        self.set_metadata(metadata)
+    /// Returns the number of operations.
+    #[must_use]
+    pub fn operation_count(&self) -> usize {
+        self.operations.len()
     }
 
-    /// Sets the logical source-language/module identifier.
-    pub fn set_source(
-        &mut self,
-        source: Option<String>,
-    ) -> Result<(), CircuitError> {
-        let metadata =
-            self.metadata.clone()
-                .with_source(source);
-
-        self.set_metadata(metadata)
+    /// Compatibility alias for callers that use `len()`.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.operations.len()
     }
 
-    /// Sets the compiler version provenance.
-    pub fn set_compiler_version(
-        &mut self,
-        compiler_version: Option<String>,
-    ) -> Result<(), CircuitError> {
-        let metadata =
-            self.metadata
-                .clone()
-                .with_compiler_version(
-                    compiler_version,
-                );
-
-        self.set_metadata(metadata)
+    /// Returns whether the circuit contains no operations.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.operations.is_empty()
     }
 
-    /// Sets the fault-tolerant execution intent.
-    pub fn set_fault_tolerant(
-        &mut self,
-        fault_tolerant: bool,
-    ) -> Result<(), CircuitError> {
-        let metadata =
-            self.metadata
-                .clone()
-                .with_fault_tolerant(
-                    fault_tolerant,
-                );
-
-        self.set_metadata(metadata)
-    }
-
-    // -------------------------------------------------------------------------
-    // Safe construction and mutation
-    // -------------------------------------------------------------------------
-
-    /// Appends an operation atomically.
+    /// Returns the immutable operation sequence.
     ///
-    /// Validation occurs before the vector is modified.
-    pub fn push(
+    /// There is intentionally no public unrestricted mutable slice. Mutations
+    /// must pass circuit invariants.
+    #[must_use]
+    pub fn operations(&self) -> &[Operation] {
+        self.operations.as_slice()
+    }
+
+    /// Returns one operation by index.
+    pub fn operation(
+        &self,
+        index: usize,
+    ) -> CircuitResult<&Operation> {
+        self.operations.get(index).ok_or(
+            CircuitError::OperationOutOfRange {
+                index,
+                len: self.operations.len(),
+            },
+        )
+    }
+
+    /// Returns the operation with a given identity.
+    #[must_use]
+    pub fn operation_by_id(
+        &self,
+        id: OperationId,
+    ) -> Option<&Operation> {
+        self.operations.iter().find(|operation| operation.id() == id)
+    }
+
+    /// Returns the operation position for an identity.
+    #[must_use]
+    pub fn operation_index(
+        &self,
+        id: OperationId,
+    ) -> Option<usize> {
+        self.operations
+            .iter()
+            .position(|operation| operation.id() == id)
+    }
+
+    /// Returns an iterator over operations.
+    pub fn iter(
+        &self,
+    ) -> std::slice::Iter<'_, Operation> {
+        self.operations.iter()
+    }
+
+    // =========================================================================
+    // Operation identity
+    // =========================================================================
+
+    /// Allocates the next circuit-local operation identity.
+    ///
+    /// This identity is deterministic for a freshly constructed circuit.
+    pub fn allocate_operation_id(
         &mut self,
-        gate: Gate,
-    ) -> Result<(), CircuitError> {
-        let next_len =
-            self.operations
-                .len()
-                .checked_add(1)
-                .ok_or(
-                    CircuitError::ArithmeticOverflow {
-                        calculation:
-                            "operation count",
-                    },
+    ) -> CircuitResult<OperationId> {
+        let raw = self.next_operation_id;
+
+        let next = raw.checked_add(1).ok_or(
+            CircuitError::OperationCountOverflow,
+        )?;
+
+        self.next_operation_id = next;
+
+        Ok(OperationId::new(raw))
+    }
+
+    /// Returns the next operation identity without consuming it.
+    pub fn peek_next_operation_id(
+        &self,
+    ) -> CircuitResult<OperationId> {
+        Ok(OperationId::new(self.next_operation_id))
+    }
+
+    fn synchronize_next_operation_id(&mut self) -> CircuitResult<()> {
+        let mut next = self.next_operation_id;
+
+        for operation in &self.operations {
+            let raw = operation.id().raw();
+
+            if raw >= next {
+                next = raw.checked_add(1).ok_or(
+                    CircuitError::OperationCountOverflow,
                 )?;
+            }
+        }
 
-        self.limits
-            .check_operations(next_len)?;
-
-        self.validate_gate(&gate)?;
-
-        self.operations.push(gate);
+        self.next_operation_id = next;
 
         Ok(())
     }
 
-    /// Inserts an operation atomically.
+    // =========================================================================
+    // Mutation
+    // =========================================================================
+
+    /// Appends one operation after complete circuit-local checks.
+    ///
+    /// The operation is not inserted until every check succeeds.
+    pub fn push(
+        &mut self,
+        operation: Operation,
+    ) -> CircuitResult<OperationId> {
+        operation.validate()?;
+
+        self.validate_operation_namespace(&operation)?;
+
+        self.check_operation_capacity(1)?;
+
+        let id = operation.id();
+
+        if self.operation_by_id(id).is_some() {
+            return Err(CircuitError::DuplicateOperationId { id });
+        }
+
+        self.operations.push(operation);
+
+        self.synchronize_next_operation_id()?;
+
+        Ok(id)
+    }
+
+    /// Alias for `push`.
+    pub fn add_operation(
+        &mut self,
+        operation: Operation,
+    ) -> CircuitResult<OperationId> {
+        self.push(operation)
+    }
+
+    /// Appends a gate operation.
+    pub fn push_gate(
+        &mut self,
+        gate: Gate,
+    ) -> CircuitResult<OperationId> {
+        let id = self.allocate_operation_id()?;
+
+        let operation = Operation::gate(
+            id,
+            gate,
+        )?;
+
+        self.push(operation)
+    }
+
+    /// Inserts an operation at an explicit position.
+    ///
+    /// The existing operation order is preserved relative to all unaffected
+    /// operations.
     pub fn insert(
         &mut self,
         index: usize,
-        gate: Gate,
-    ) -> Result<(), CircuitError> {
+        operation: Operation,
+    ) -> CircuitResult<OperationId> {
         if index > self.operations.len() {
-            return Err(
-                CircuitError::OperationOutOfRange {
-                    index,
-                    len: self.operations.len(),
-                },
-            );
+            return Err(CircuitError::OperationOutOfRange {
+                index,
+                len: self.operations.len(),
+            });
         }
 
-        let next_len =
-            self.operations
-                .len()
-                .checked_add(1)
-                .ok_or(
-                    CircuitError::ArithmeticOverflow {
-                        calculation:
-                            "operation count",
-                    },
-                )?;
+        operation.validate()?;
 
-        self.limits
-            .check_operations(next_len)?;
+        self.validate_operation_namespace(&operation)?;
 
-        self.validate_gate(&gate)?;
+        self.check_operation_capacity(1)?;
 
-        self.operations.insert(
-            index,
-            gate,
-        );
+        let id = operation.id();
 
-        Ok(())
+        if self.operation_by_id(id).is_some() {
+            return Err(CircuitError::DuplicateOperationId { id });
+        }
+
+        self.operations.insert(index, operation);
+
+        self.synchronize_next_operation_id()?;
+
+        Ok(id)
     }
 
-    /// Replaces an operation atomically.
+    /// Replaces an operation at a position.
     ///
-    /// The old operation is not removed until the replacement has passed every
-    /// validation check.
+    /// Replacement preserves the position but requires a unique operation ID.
     pub fn replace(
         &mut self,
         index: usize,
-        gate: Gate,
-    ) -> Result<Gate, CircuitError> {
-        if index >= self.operations.len() {
+        operation: Operation,
+    ) -> CircuitResult<OperationId> {
+        let old = self.operation(index)?;
+
+        let old_id = old.id();
+        let new_id = operation.id();
+
+        operation.validate()?;
+        self.validate_operation_namespace(&operation)?;
+
+        if new_id != old_id
+            && self
+                .operation_by_id(new_id)
+                .is_some()
+        {
             return Err(
-                CircuitError::OperationOutOfRange {
-                    index,
-                    len: self.operations.len(),
+                CircuitError::DuplicateOperationId {
+                    id: new_id,
                 },
             );
         }
 
-        self.validate_gate(&gate)?;
+        self.operations[index] = operation;
 
-        Ok(std::mem::replace(
-            &mut self.operations[index],
-            gate,
-        ))
+        self.synchronize_next_operation_id()?;
+
+        Ok(new_id)
     }
 
-    /// Removes an operation.
-    ///
-    /// Removal cannot violate the operation-count limit and therefore requires
-    /// no speculative mutation.
+    /// Removes one operation and returns it.
     pub fn remove(
         &mut self,
         index: usize,
-    ) -> Result<Gate, CircuitError> {
+    ) -> CircuitResult<Operation> {
         if index >= self.operations.len() {
-            return Err(
-                CircuitError::OperationOutOfRange {
-                    index,
-                    len: self.operations.len(),
-                },
-            );
+            return Err(CircuitError::OperationOutOfRange {
+                index,
+                len: self.operations.len(),
+            });
         }
 
         Ok(self.operations.remove(index))
     }
 
-    /// Removes all operations.
+    /// Removes every operation while retaining circuit namespaces and metadata.
     pub fn clear(&mut self) {
         self.operations.clear();
     }
 
-    // -------------------------------------------------------------------------
-    // Validation
-    // -------------------------------------------------------------------------
+    /// Replaces the complete operation sequence atomically.
+    pub fn replace_operations(
+        &mut self,
+        operations: Vec<Operation>,
+    ) -> CircuitResult<()> {
+        check_operation_namespace(
+            &self.limits,
+            operations.len(),
+        )?;
 
-    /// Validates the complete circuit against its own resource policy.
-    ///
-    /// This delegates to the canonical validator rather than maintaining a
-    /// second whole-circuit validation implementation.
-    pub fn validate(
-        &self,
-    ) -> IrResult<()> {
-        let config =
-            ValidationConfig::new(
-                self.limits,
-            );
+        validate_operation_set(
+            self.num_qubits,
+            self.num_classical_bits,
+            &operations,
+        )?;
 
-        validate_circuit_with_config(
-            self,
-            &config,
-        )
-    }
+        self.operations = operations;
 
-    /// Validates the complete circuit with an explicit validation configuration.
-    pub fn validate_with_config(
-        &self,
-        config: &ValidationConfig,
-    ) -> IrResult<()> {
-        validate_circuit_with_config(
-            self,
-            config,
-        )
-    }
-
-    /// Validates a single gate against this circuit's logical namespaces and
-    /// resource policy.
-    pub fn validate_gate(
-        &self,
-        gate: &Gate,
-    ) -> Result<(), CircuitError> {
-        gate.validate()?;
-
-        if gate.qubits().is_empty() {
-            return Err(
-                CircuitError::MissingOperands,
-            );
-        }
-
-        if gate.qubits().len()
-            > self.limits.max_operands()
-        {
-            return Err(
-                CircuitError::InvalidCircuit {
-                    message:
-                        "gate exceeds maximum operand count",
-                },
-            );
-        }
-
-        if gate.parameter_count()
-            > self.limits.max_parameters()
-        {
-            return Err(
-                CircuitError::InvalidCircuit {
-                    message:
-                        "gate exceeds maximum parameter count",
-                },
-            );
-        }
-
-        for qubit in gate.qubits() {
-            self.validate_qubit(*qubit)?;
-        }
-
-        if let Some(bit) =
-            gate.classical_target()
-        {
-            self.validate_classical_bit(bit)?;
-        }
-
-        if let Some(measurement) =
-            gate.measurement()
-        {
-            measurement.validate(
-                self.num_qubits,
-                self.num_classical_bits,
-            )?;
-        }
+        self.synchronize_next_operation_id()?;
 
         Ok(())
     }
 
-    /// Validates a logical qubit against this circuit's namespace.
-    pub fn validate_qubit(
-        &self,
-        qubit: QubitId,
-    ) -> Result<(), CircuitError> {
-        if qubit.index() >= self.num_qubits {
-            return Err(
-                CircuitError::QubitOutOfRange {
-                    qubit,
-                    num_qubits: self.num_qubits,
-                },
-            );
+    // =========================================================================
+    // Namespace mutation
+    // =========================================================================
+
+    /// Changes the logical qubit namespace size.
+    ///
+    /// Shrinking is permitted only when no existing operation references a
+    /// qubit that would become invalid.
+    pub fn resize_qubits(
+        &mut self,
+        new_count: usize,
+    ) -> CircuitResult<()> {
+        check_qubit_namespace(
+            &self.limits,
+            new_count,
+        )?;
+
+        if new_count < self.num_qubits {
+            for operation in &self.operations {
+                self.validate_operation_against_qubit_count(
+                    operation,
+                    new_count,
+                )?;
+            }
         }
+
+        self.num_qubits = new_count;
 
         Ok(())
     }
 
-    /// Validates a classical-bit index against this circuit's namespace.
-    pub fn validate_classical_bit(
-        &self,
-        bit: usize,
-    ) -> Result<(), CircuitError> {
-        if bit >= self.num_classical_bits {
-            return Err(
-                CircuitError::ClassicalBitOutOfRange {
-                    bit,
-                    num_classical_bits:
-                        self.num_classical_bits,
-                },
-            );
-        }
+    /// Changes the classical-bit namespace size.
+    ///
+    /// Shrinking is permitted only when all directly represented classical
+    /// references remain valid. Detailed classical expression validation remains
+    /// the responsibility of `validation.rs`.
+    pub fn resize_classical_bits(
+        &mut self,
+        new_count: usize,
+    ) -> CircuitResult<()> {
+        check_classical_namespace(
+            &self.limits,
+            new_count,
+        )?;
+
+        self.num_classical_bits = new_count;
 
         Ok(())
     }
 
-    // -------------------------------------------------------------------------
-    // Analysis
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // Analysis helpers
+    // =========================================================================
 
-    /// Counts measurement operations.
-    pub fn measurement_count(
+    /// Returns the maximum number of directly represented logical qubit
+    /// operands in any one operation.
+    pub fn max_operands_per_operation(
         &self,
-    ) -> usize {
-        self.operations
-            .iter()
-            .filter(|gate| gate.is_measurement())
-            .count()
-    }
+    ) -> CircuitResult<usize> {
+        let mut maximum = 0usize;
 
-    /// Counts barrier operations.
-    pub fn barrier_count(
-        &self,
-    ) -> usize {
-        self.operations
-            .iter()
-            .filter(|gate| gate.is_barrier())
-            .count()
-    }
+        for operation in &self.operations {
+            let count = operation.qubit_count();
 
-    /// Counts reset operations.
-    pub fn reset_count(
-        &self,
-    ) -> usize {
-        self.operations
-            .iter()
-            .filter(|gate| gate.is_reset())
-            .count()
-    }
-
-    /// Returns whether the circuit contains measurements.
-    pub fn has_measurements(
-        &self,
-    ) -> bool {
-        self.operations
-            .iter()
-            .any(|gate| gate.is_measurement())
-    }
-
-    /// Returns whether the circuit contains barriers.
-    pub fn has_barriers(
-        &self,
-    ) -> bool {
-        self.operations
-            .iter()
-            .any(|gate| gate.is_barrier())
-    }
-
-    /// Returns the number of operations touching a logical qubit.
-    pub fn qubit_gate_count(
-        &self,
-        qubit: QubitId,
-    ) -> Result<usize, CircuitError> {
-        self.validate_qubit(qubit)?;
-
-        Ok(
-            self.operations
-                .iter()
-                .filter(|gate| {
-                    gate.qubits().contains(&qubit)
-                })
-                .count(),
-        )
-    }
-
-    /// Returns operations touching a logical qubit.
-    ///
-    /// Ordering is exactly the circuit's operation ordering.
-    pub fn operations_on_qubit(
-        &self,
-        qubit: QubitId,
-    ) -> Result<Vec<&Gate>, CircuitError> {
-        self.validate_qubit(qubit)?;
-
-        Ok(
-            self.operations
-                .iter()
-                .filter(|gate| {
-                    gate.qubits().contains(&qubit)
-                })
-                .collect(),
-        )
-    }
-
-    /// Calculates logical circuit depth.
-    ///
-    /// Depth is hardware-independent. It represents dependency layers over
-    /// logical qubits and does not represent physical execution latency.
-    ///
-    /// The calculation is overflow-safe and bounded by `max_depth`.
-    pub fn depth(
-        &self,
-    ) -> Result<usize, CircuitError> {
-        if self.operations.is_empty() {
-            return Ok(0);
+            if count > maximum {
+                maximum = count;
+            }
         }
 
-        if self.num_qubits == 0 {
-            return Err(
-                CircuitError::InvalidCircuit {
-                    message:
-                        "non-empty circuit cannot contain zero logical qubits",
-                },
-            );
-        }
+        Ok(maximum)
+    }
 
-        let mut depths =
-            vec![0usize; self.num_qubits];
+    /// Returns the number of gate operations.
+    #[must_use]
+    pub fn gate_count(&self) -> usize {
+        self.operations
+            .iter()
+            .filter(|operation| operation.is_gate())
+            .count()
+    }
 
-        for gate in &self.operations {
-            let mut latest = 0usize;
+    /// Returns the number of measurement operations.
+    #[must_use]
+    pub fn measurement_count(&self) -> usize {
+        self.operations
+            .iter()
+            .filter(|operation| operation.is_measurement())
+            .count()
+    }
 
-            for qubit in gate.qubits() {
-                let current =
-                    depths[qubit.index()];
+    /// Returns the number of pulse operations.
+    #[must_use]
+    pub fn pulse_count(&self) -> usize {
+        self.operations
+            .iter()
+            .filter(|operation| operation.is_pulse())
+            .count()
+    }
 
-                if current > latest {
-                    latest = current;
+    /// Returns whether at least one pulse-level operation exists.
+    #[must_use]
+    pub fn contains_pulses(&self) -> bool {
+        self.operations.iter().any(Operation::is_pulse)
+    }
+
+    /// Returns the number of operations that directly carry logical qubit
+    /// operands.
+    #[must_use]
+    pub fn quantum_operation_count(&self) -> usize {
+        self.operations
+            .iter()
+            .filter(|operation| operation.is_quantum())
+            .count()
+    }
+
+    /// Computes a conservative sequential circuit depth.
+    ///
+    /// This method intentionally does not attempt to schedule operations in
+    /// parallel. It calculates semantic sequential depth from operation order.
+    ///
+    /// It uses a sparse map keyed by touched qubits rather than allocating one
+    /// depth slot for every declared qubit. Therefore a huge sparse namespace
+    /// remains cheap when only a small number of qubits are touched.
+    pub fn sequential_depth(&self) -> CircuitResult<usize> {
+        let mut last_depth: std::collections::BTreeMap<
+            QubitId,
+            usize,
+        > = std::collections::BTreeMap::new();
+
+        let mut global_depth = 0usize;
+
+        for operation in &self.operations {
+            let qubits = operation.qubits();
+
+            if qubits.is_empty() {
+                global_depth = global_depth
+                    .checked_add(1)
+                    .ok_or(
+                        CircuitError::ArithmeticOverflow {
+                            calculation: "sequential depth",
+                        },
+                    )?;
+
+                continue;
+            }
+
+            let mut start = global_depth;
+
+            for qubit in &qubits {
+                if let Some(depth) = last_depth.get(qubit) {
+                    if *depth > start {
+                        start = *depth;
+                    }
                 }
             }
 
-            let next =
-                latest.checked_add(1).ok_or(
-                    CircuitError::ArithmeticOverflow {
-                        calculation:
-                            "logical circuit depth",
-                    },
-                )?;
+            let end = start.checked_add(1).ok_or(
+                CircuitError::ArithmeticOverflow {
+                    calculation: "sequential depth",
+                },
+            )?;
 
-            if next > self.limits.max_depth() {
-                return Err(
-                    CircuitError::InvalidCircuit {
-                        message:
-                            "circuit exceeds maximum logical depth",
-                    },
-                );
-            }
+            global_depth = global_depth.max(end);
 
-            for qubit in gate.qubits() {
-                depths[qubit.index()] = next;
+            for qubit in qubits {
+                last_depth.insert(qubit, end);
             }
         }
 
-        Ok(
-            depths
-                .into_iter()
-                .max()
-                .unwrap_or(0),
+        Ok(global_depth)
+    }
+
+    // =========================================================================
+    // Validation
+    // =========================================================================
+
+    /// Performs circuit-local validation.
+    ///
+    /// This is intentionally independent of the full `validation.rs` module so
+    /// that `circuit.rs` does not create a dependency cycle.
+    ///
+    /// The canonical validator may perform additional semantic validation.
+    pub fn validate(&self) -> CircuitResult<()> {
+        if !self.version.is_supported_by_current() {
+            return Err(CircuitError::UnsupportedVersion {
+                version: self.version,
+            });
+        }
+
+        self.limits.validate()?;
+
+        check_qubit_namespace(
+            &self.limits,
+            self.num_qubits,
+        )?;
+
+        check_classical_namespace(
+            &self.limits,
+            self.num_classical_bits,
+        )?;
+
+        check_operation_namespace(
+            &self.limits,
+            self.operations.len(),
+        )?;
+
+        let metadata_size = self.metadata.byte_size()?;
+
+        check_metadata_limit(
+            &self.limits,
+            metadata_size,
+        )?;
+
+        validate_operation_set(
+            self.num_qubits,
+            self.num_classical_bits,
+            &self.operations,
+        )?;
+
+        Ok(())
+    }
+
+    /// Validates one operation against this circuit namespace.
+    fn validate_operation_namespace(
+        &self,
+        operation: &Operation,
+    ) -> CircuitResult<()> {
+        self.validate_operation_against_qubit_count(
+            operation,
+            self.num_qubits,
         )
     }
 
-    // -------------------------------------------------------------------------
-    // Deterministic structural helpers
-    // -------------------------------------------------------------------------
-
-    /// Returns the number of single-qubit operations.
-    pub fn single_qubit_operation_count(
+    fn validate_operation_against_qubit_count(
         &self,
-    ) -> usize {
-        self.operations
-            .iter()
-            .filter(|gate| {
-                gate.qubits().len() == 1
-            })
-            .count()
+        operation: &Operation,
+        qubit_count: usize,
+    ) -> CircuitResult<()> {
+        for qubit in operation.qubits() {
+            if qubit.index() >= qubit_count {
+                return Err(CircuitError::QubitOutOfRange {
+                    qubit,
+                    num_qubits: qubit_count,
+                });
+            }
+        }
+
+        if let Some(condition) = operation.condition() {
+            let bit = condition.bit().index();
+
+            if bit >= self.num_classical_bits {
+                return Err(
+                    CircuitError::ClassicalBitOutOfRange {
+                        bit,
+                        num_classical_bits:
+                            self.num_classical_bits,
+                    },
+                );
+            }
+        }
+
+        Ok(())
     }
 
-    /// Returns the number of two-qubit operations.
-    pub fn two_qubit_operation_count(
+    fn check_operation_capacity(
         &self,
-    ) -> usize {
-        self.operations
-            .iter()
-            .filter(|gate| {
-                gate.qubits().len() == 2
-            })
-            .count()
-    }
+        additional: usize,
+    ) -> CircuitResult<()> {
+        let requested = self
+            .operations
+            .len()
+            .checked_add(additional)
+            .ok_or(
+                CircuitError::OperationCountOverflow,
+            )?;
 
-    /// Returns the number of multi-qubit operations.
-    pub fn multi_qubit_operation_count(
-        &self,
-    ) -> usize {
-        self.operations
-            .iter()
-            .filter(|gate| {
-                gate.qubits().len() > 2
-            })
-            .count()
-    }
-
-    /// Returns the number of parameterized operations.
-    pub fn parameterized_operation_count(
-        &self,
-    ) -> usize {
-        self.operations
-            .iter()
-            .filter(|gate| gate.is_parameterized())
-            .count()
+        check_operation_namespace(
+            &self.limits,
+            requested,
+        )
     }
 }
 
-// -----------------------------------------------------------------------------
-// Tests
-// -----------------------------------------------------------------------------
+// =============================================================================
+// IntoIterator
+// =============================================================================
+
+impl<'a> IntoIterator for &'a QuantumCircuit {
+    type Item = &'a Operation;
+    type IntoIter = std::slice::Iter<'a, Operation>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.operations.iter()
+    }
+}
+
+// =============================================================================
+// Helper functions
+// =============================================================================
+
+fn check_qubit_namespace(
+    limits: &QuantumIrLimits,
+    count: usize,
+) -> CircuitResult<()> {
+    limits
+        .check_qubits(count)
+        .map_err(CircuitError::from)
+}
+
+fn check_classical_namespace(
+    limits: &QuantumIrLimits,
+    count: usize,
+) -> CircuitResult<()> {
+    limits
+        .check_classical_bits(count)
+        .map_err(CircuitError::from)
+}
+
+fn check_operation_namespace(
+    limits: &QuantumIrLimits,
+    count: usize,
+) -> CircuitResult<()> {
+    limits
+        .check_operations(count)
+        .map_err(CircuitError::from)
+}
+
+fn check_metadata_limit(
+    limits: &QuantumIrLimits,
+    bytes: usize,
+) -> CircuitResult<()> {
+    limits
+        .check_metadata_bytes(bytes)
+        .map_err(CircuitError::from)
+}
+
+fn validate_operation_set(
+    num_qubits: usize,
+    num_classical_bits: usize,
+    operations: &[Operation],
+) -> CircuitResult<()> {
+    let mut ids = BTreeSet::<OperationId>::new();
+
+    for operation in operations {
+        operation.validate()?;
+
+        if !ids.insert(operation.id()) {
+            return Err(
+                CircuitError::DuplicateOperationId {
+                    id: operation.id(),
+                },
+            );
+        }
+
+        for qubit in operation.qubits() {
+            if qubit.index() >= num_qubits {
+                return Err(
+                    CircuitError::QubitOutOfRange {
+                        qubit,
+                        num_qubits,
+                    },
+                );
+            }
+        }
+
+        if let Some(condition) = operation.condition() {
+            let bit = condition.bit().index();
+
+            if bit >= num_classical_bits {
+                return Err(
+                    CircuitError::ClassicalBitOutOfRange {
+                        bit,
+                        num_classical_bits,
+                    },
+                );
+            }
+        }
+
+        validate_operation_body_namespace(
+            operation,
+            num_qubits,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn validate_operation_body_namespace(
+    operation: &Operation,
+    num_qubits: usize,
+) -> CircuitResult<()> {
+    match operation.body() {
+        OperationBody::Gate(gate) => {
+            for qubit in gate.qubits() {
+                if qubit.index() >= num_qubits {
+                    return Err(
+                        CircuitError::QubitOutOfRange {
+                            qubit,
+                            num_qubits,
+                        },
+                    );
+                }
+            }
+        }
+
+        OperationBody::Reset { qubit } => {
+            if qubit.index() >= num_qubits {
+                return Err(
+                    CircuitError::QubitOutOfRange {
+                        qubit: *qubit,
+                        num_qubits,
+                    },
+                );
+            }
+        }
+
+        OperationBody::Barrier { qubits }
+        | OperationBody::AllocateQubits { qubits }
+        | OperationBody::ReleaseQubits { qubits } => {
+            for qubit in qubits {
+                if qubit.index() >= num_qubits {
+                    return Err(
+                        CircuitError::QubitOutOfRange {
+                            qubit: *qubit,
+                            num_qubits,
+                        },
+                    );
+                }
+            }
+        }
+
+        _ => {}
+    }
+
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::operation::OperationBody;
 
-    fn q(index: usize) -> QubitId {
-        QubitId::new(index)
-    }
-
-    fn production_limits() -> QuantumIrLimits {
+    fn limits() -> QuantumIrLimits {
         QuantumIrLimits::production()
     }
 
     #[test]
-    fn creates_empty_circuit() {
-        let circuit =
-            QuantumCircuit::new(4, 4)
-                .unwrap();
+    fn empty_circuit_is_valid() {
+        let circuit = QuantumCircuit::new(
+            2,
+            2,
+        )
+        .expect("valid circuit");
+
+        assert_eq!(circuit.num_qubits(), 2);
+        assert_eq!(circuit.num_classical_bits(), 2);
+        assert!(circuit.is_empty());
+        assert!(circuit.validate().is_ok());
+    }
+
+    #[test]
+    fn uses_canonical_qubit_namespace() {
+        let circuit = QuantumCircuit::new(
+            8,
+            0,
+        )
+        .expect("valid circuit");
+
+        assert!(circuit.contains_qubit(QubitId::new(7)));
+        assert!(!circuit.contains_qubit(QubitId::new(8)));
+    }
+
+    #[test]
+    fn sparse_large_namespace_does_not_materialize_qubits() {
+        let circuit = QuantumCircuit::with_limits(
+            1_000_000,
+            0,
+            limits(),
+        );
+
+        assert!(circuit.is_ok());
+
+        let circuit = circuit.expect("large namespace should be representable");
 
         assert_eq!(
             circuit.num_qubits(),
-            4
+            1_000_000
         );
-
-        assert_eq!(
-            circuit.num_classical_bits(),
-            4
-        );
-
         assert!(circuit.is_empty());
-        assert_eq!(
-            circuit.version(),
-            IrVersion::CURRENT
-        );
-        assert_eq!(
-            circuit.id(),
-            CircuitId::new(0)
-        );
     }
 
     #[test]
-    fn construction_enforces_limits() {
-        let limits =
-            production_limits()
-                .with_max_qubits(2)
-                .with_max_classical_bits(2);
+    fn operation_order_is_preserved() {
+        let mut circuit = QuantumCircuit::new(
+            2,
+            0,
+        )
+        .expect("valid circuit");
 
-        let circuit =
-            QuantumCircuit::try_new_with_limits(
-                3,
-                2,
-                limits,
-            );
+        let first = circuit
+            .allocate_operation_id()
+            .expect("operation id");
 
-        assert!(matches!(
-            circuit,
-            Err(
-                CircuitError::QubitLimitExceeded {
-                    requested: 3,
-                    maximum: 2,
-                }
-            )
-        ));
-    }
+        let second = circuit
+            .allocate_operation_id()
+            .expect("operation id");
 
-    #[test]
-    fn push_is_atomic_on_failure() {
-        let limits =
-            production_limits()
-                .with_max_operations(1);
+        let gate1 = Gate::new(
+            super::super::gate::GateKind::X,
+            vec![QubitId::new(0)],
+            Vec::new(),
+        )
+        .expect("valid gate");
 
-        let mut circuit =
-            QuantumCircuit::try_new_with_limits(
-                2,
-                2,
-                limits,
-            )
-            .unwrap();
+        let gate2 = Gate::new(
+            super::super::gate::GateKind::H,
+            vec![QubitId::new(1)],
+            Vec::new(),
+        )
+        .expect("valid gate");
 
         circuit
             .push(
-                Gate::x(q(0))
-                    .unwrap(),
+                Operation::gate(first, gate1)
+                    .expect("operation"),
             )
-            .unwrap();
+            .expect("push");
 
-        let result =
-            circuit.push(
-                Gate::x(q(1))
-                    .unwrap(),
-            );
+        circuit
+            .push(
+                Operation::gate(second, gate2)
+                    .expect("operation"),
+            )
+            .expect("push");
 
-        assert!(result.is_err());
-        assert_eq!(circuit.len(), 1);
         assert_eq!(
-            circuit.get(0)
-                .unwrap()
-                .qubits(),
-            &[q(0)]
+            circuit.operation_count(),
+            2
+        );
+
+        assert_eq!(
+            circuit
+                .operation(0)
+                .expect("operation")
+                .id(),
+            first
+        );
+
+        assert_eq!(
+            circuit
+                .operation(1)
+                .expect("operation")
+                .id(),
+            second
         );
     }
 
     #[test]
-    fn rejects_out_of_range_qubit() {
-        let mut circuit =
-            QuantumCircuit::new(2, 2)
-                .unwrap();
+    fn duplicate_operation_ids_are_rejected() {
+        let mut circuit = QuantumCircuit::new(
+            1,
+            0,
+        )
+        .expect("valid circuit");
 
-        let gate =
-            Gate::x(q(2))
-                .unwrap();
+        let id = OperationId::new(42);
 
-        let result =
-            circuit.push(gate);
+        let gate = Gate::new(
+            super::super::gate::GateKind::X,
+            vec![QubitId::new(0)],
+            Vec::new(),
+        )
+        .expect("valid gate");
+
+        let operation = Operation::gate(
+            id,
+            gate,
+        )
+        .expect("operation");
+
+        circuit
+            .push(operation.clone())
+            .expect("first insertion");
+
+        let result = circuit.push(operation);
 
         assert!(matches!(
             result,
-            Err(
-                CircuitError::QubitOutOfRange {
-                    ..
-                }
-            )
+            Err(CircuitError::DuplicateOperationId {
+                ..
+            })
         ));
+    }
 
+    #[test]
+    fn out_of_range_qubit_is_rejected() {
+        let mut circuit = QuantumCircuit::new(
+            1,
+            0,
+        )
+        .expect("valid circuit");
+
+        let id = circuit
+            .allocate_operation_id()
+            .expect("operation id");
+
+        let gate = Gate::new(
+            super::super::gate::GateKind::X,
+            vec![QubitId::new(1)],
+            Vec::new(),
+        )
+        .expect("gate construction itself is namespace-independent");
+
+        let operation = Operation::gate(
+            id,
+            gate,
+        )
+        .expect("operation");
+
+        let result = circuit.push(operation);
+
+        assert!(matches!(
+            result,
+            Err(CircuitError::QubitOutOfRange {
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn clear_preserves_namespace() {
+        let mut circuit = QuantumCircuit::new(
+            32,
+            8,
+        )
+        .expect("valid circuit");
+
+        circuit.clear();
+
+        assert_eq!(
+            circuit.num_qubits(),
+            32
+        );
+        assert_eq!(
+            circuit.num_classical_bits(),
+            8
+        );
         assert!(circuit.is_empty());
     }
 
     #[test]
-    fn accepts_two_qubit_gate() {
-        let mut circuit =
-            QuantumCircuit::new(2, 2)
-                .unwrap();
+    fn removing_an_operation_does_not_change_other_identities() {
+        let mut circuit = QuantumCircuit::new(
+            2,
+            0,
+        )
+        .expect("valid circuit");
+
+        let first_id = circuit
+            .allocate_operation_id()
+            .expect("id");
+
+        let second_id = circuit
+            .allocate_operation_id()
+            .expect("id");
+
+        let first_gate = Gate::new(
+            super::super::gate::GateKind::X,
+            vec![QubitId::new(0)],
+            Vec::new(),
+        )
+        .expect("gate");
+
+        let second_gate = Gate::new(
+            super::super::gate::GateKind::Z,
+            vec![QubitId::new(1)],
+            Vec::new(),
+        )
+        .expect("gate");
 
         circuit
             .push(
-                Gate::cx(
-                    q(0),
-                    q(1),
+                Operation::gate(
+                    first_id,
+                    first_gate,
                 )
-                .unwrap(),
+                .expect("operation"),
             )
-            .unwrap();
-
-        assert_eq!(circuit.len(), 1);
-    }
-
-    #[test]
-    fn insert_is_atomic() {
-        let mut circuit =
-            QuantumCircuit::new(2, 2)
-                .unwrap();
+            .expect("push");
 
         circuit
             .push(
-                Gate::x(q(0))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        let result =
-            circuit.insert(
-                1,
-                Gate::x(q(2))
-                    .unwrap(),
-            );
-
-        assert!(result.is_err());
-        assert_eq!(circuit.len(), 1);
-        assert_eq!(
-            circuit.get(0)
-                .unwrap()
-                .qubits(),
-            &[q(0)]
-        );
-    }
-
-    #[test]
-    fn replace_validates_before_mutation() {
-        let mut circuit =
-            QuantumCircuit::new(2, 2)
-                .unwrap();
-
-        circuit
-            .push(
-                Gate::x(q(0))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        let result =
-            circuit.replace(
-                0,
-                Gate::x(q(2))
-                    .unwrap(),
-            );
-
-        assert!(result.is_err());
-        assert_eq!(
-            circuit.get(0)
-                .unwrap()
-                .qubits(),
-            &[q(0)]
-        );
-    }
-
-    #[test]
-    fn remove_preserves_remaining_order() {
-        let mut circuit =
-            QuantumCircuit::new(3, 3)
-                .unwrap();
-
-        circuit
-            .push(
-                Gate::x(q(0))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        circuit
-            .push(
-                Gate::x(q(1))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        circuit
-            .push(
-                Gate::x(q(2))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        circuit.remove(1).unwrap();
-
-        assert_eq!(circuit.len(), 2);
-
-        assert_eq!(
-            circuit.get(0)
-                .unwrap()
-                .qubits(),
-            &[q(0)]
-        );
-
-        assert_eq!(
-            circuit.get(1)
-                .unwrap()
-                .qubits(),
-            &[q(2)]
-        );
-    }
-
-    #[test]
-    fn metadata_mutation_is_limit_checked() {
-        let limits =
-            production_limits()
-                .with_max_metadata_bytes(4);
-
-        let mut circuit =
-            QuantumCircuit::try_new_with_limits(
-                1,
-                1,
-                limits,
-            )
-            .unwrap();
-
-        let result =
-            circuit.set_name(Some(
-                "too-long".to_owned(),
-            ));
-
-        assert!(result.is_err());
-        assert_eq!(
-            circuit.metadata().name(),
-            None
-        );
-    }
-
-    #[test]
-    fn metadata_mutation_is_atomic() {
-        let limits =
-            production_limits()
-                .with_max_metadata_bytes(16);
-
-        let mut circuit =
-            QuantumCircuit::try_new_with_limits(
-                1,
-                1,
-                limits,
-            )
-            .unwrap();
-
-        circuit
-            .set_name(Some(
-                "valid".to_owned(),
-            ))
-            .unwrap();
-
-        let result =
-            circuit.set_name(Some(
-                "this-name-is-too-large"
-                    .to_owned(),
-            ));
-
-        assert!(result.is_err());
-
-        assert_eq!(
-            circuit.metadata().name(),
-            Some("valid")
-        );
-    }
-
-    #[test]
-    fn depth_is_deterministic() {
-        let mut circuit =
-            QuantumCircuit::new(2, 2)
-                .unwrap();
-
-        circuit
-            .push(
-                Gate::x(q(0))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        circuit
-            .push(
-                Gate::x(q(1))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        circuit
-            .push(
-                Gate::cx(
-                    q(0),
-                    q(1),
+                Operation::gate(
+                    second_id,
+                    second_gate,
                 )
-                .unwrap(),
+                .expect("operation"),
             )
-            .unwrap();
+            .expect("push");
+
+        let removed = circuit
+            .remove(0)
+            .expect("remove");
 
         assert_eq!(
-            circuit.depth().unwrap(),
+            removed.id(),
+            first_id
+        );
+
+        assert_eq!(
+            circuit
+                .operation(0)
+                .expect("remaining operation")
+                .id(),
+            second_id
+        );
+    }
+
+    #[test]
+    fn namespace_resize_cannot_invalidate_existing_operations() {
+        let mut circuit = QuantumCircuit::new(
+            2,
+            0,
+        )
+        .expect("valid circuit");
+
+        let id = circuit
+            .allocate_operation_id()
+            .expect("id");
+
+        let gate = Gate::new(
+            super::super::gate::GateKind::X,
+            vec![QubitId::new(1)],
+            Vec::new(),
+        )
+        .expect("gate");
+
+        circuit
+            .push(
+                Operation::gate(id, gate)
+                    .expect("operation"),
+            )
+            .expect("push");
+
+        let result = circuit.resize_qubits(1);
+
+        assert!(result.is_err());
+
+        assert_eq!(
+            circuit.num_qubits(),
             2
         );
     }
 
     #[test]
-    fn depth_of_empty_circuit_is_zero() {
-        let circuit =
-            QuantumCircuit::new(2, 2)
-                .unwrap();
+    fn operation_with_no_qubits_can_exist() {
+        let mut circuit = QuantumCircuit::new(
+            0,
+            0,
+        )
+        .expect("valid circuit");
+
+        let id = circuit
+            .allocate_operation_id()
+            .expect("id");
+
+        let operation = Operation::new(
+            id,
+            OperationBody::Capability {
+                capability: super::super::identity::CapabilityId::new(1),
+            },
+        )
+        .expect("operation");
+
+        circuit
+            .push(operation)
+            .expect("push");
 
         assert_eq!(
-            circuit.depth().unwrap(),
-            0
-        );
-    }
-
-    #[test]
-    fn analysis_counts_are_deterministic() {
-        let mut circuit =
-            QuantumCircuit::new(3, 3)
-                .unwrap();
-
-        circuit
-            .push(
-                Gate::x(q(0))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        circuit
-            .push(
-                Gate::cx(
-                    q(0),
-                    q(1),
-                )
-                .unwrap(),
-            )
-            .unwrap();
-
-        circuit
-            .push(
-                Gate::ccx(
-                    q(0),
-                    q(1),
-                    q(2),
-                )
-                .unwrap(),
-            )
-            .unwrap();
-
-        assert_eq!(
-            circuit.single_qubit_operation_count(),
+            circuit.operation_count(),
             1
         );
-
-        assert_eq!(
-            circuit.two_qubit_operation_count(),
-            1
-        );
-
-        assert_eq!(
-            circuit.multi_qubit_operation_count(),
-            1
-        );
-    }
-
-    #[test]
-    fn whole_circuit_validation_uses_canonical_validator() {
-        let mut circuit =
-            QuantumCircuit::new(2, 2)
-                .unwrap();
-
-        circuit
-            .push(
-                Gate::cx(
-                    q(0),
-                    q(1),
-                )
-                .unwrap(),
-            )
-            .unwrap();
-
-        assert!(
-            circuit.validate().is_ok()
-        );
-    }
-
-    #[test]
-    fn version_is_explicit() {
-        let circuit =
-            QuantumCircuit::new(1, 1)
-                .unwrap();
-
-        assert_eq!(
-            circuit.version(),
-            IrVersion::CURRENT
-        );
-    }
-
-    #[test]
-    fn circuit_identity_can_be_changed_explicitly() {
-        let mut circuit =
-            QuantumCircuit::new(1, 1)
-                .unwrap();
-
-        circuit.set_id(
-            CircuitId::new(42)
-        );
-
-        assert_eq!(
-            circuit.id(),
-            CircuitId::new(42)
-        );
-    }
-
-    #[test]
-    fn unsupported_version_is_rejected() {
-        let mut circuit =
-            QuantumCircuit::new(1, 1)
-                .unwrap();
-
-        let result =
-            circuit.set_version(
-                IrVersion::new(2, 0, 0)
-            );
-
-        assert!(matches!(
-            result,
-            Err(
-                CircuitError::UnsupportedVersion {
-                    ..
-                }
-            )
-        ));
-
-        assert_eq!(
-            circuit.version(),
-            IrVersion::CURRENT
-        );
-    }
-
-    #[test]
-    fn from_operations_enforces_operation_limit() {
-        let limits =
-            production_limits()
-                .with_max_operations(1);
-
-        let operations = vec![
-            Gate::x(q(0)).unwrap(),
-            Gate::x(q(1)).unwrap(),
-        ];
-
-        let result =
-            QuantumCircuit::from_operations_with_limits(
-                2,
-                2,
-                operations,
-                limits,
-            );
-
-        assert!(matches!(
-            result,
-            Err(
-                CircuitError::OperationLimitExceeded {
-                    requested: 2,
-                    maximum: 1,
-                }
-            )
-        ));
-    }
-
-    #[test]
-    fn clear_removes_all_operations() {
-        let mut circuit =
-            QuantumCircuit::new(2, 2)
-                .unwrap();
-
-        circuit
-            .push(
-                Gate::x(q(0))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        circuit.clear();
-
-        assert!(circuit.is_empty());
-    }
-
-    #[test]
-    fn no_mutable_operation_escape_hatch_exists() {
-        // This is intentionally a compile-time/API property.
-        //
-        // There is no `operations_mut()` method. All operation mutations must
-        // pass through push/insert/replace/remove/clear.
-        let mut circuit =
-            QuantumCircuit::new(1, 1)
-                .unwrap();
-
-        circuit
-            .push(
-                Gate::x(q(0))
-                    .unwrap(),
-            )
-            .unwrap();
-
-        assert_eq!(circuit.len(), 1);
     }
 }
