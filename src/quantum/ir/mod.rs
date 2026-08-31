@@ -1,154 +1,565 @@
 //! Zamani Quantum Intermediate Representation.
 //!
-//! Canonical, hardware-independent representation of logical quantum
-//! programs.
+//! Canonical, hardware-independent representation of quantum computation.
 //!
-//! # Architectural boundary
+//! # Architectural role
 //!
-//! The Quantum IR represents the logical program itself. It deliberately does
-//! not contain:
+//! `quantum::ir` is the semantic contract between the Zamani language/frontend
+//! and all downstream quantum compilation and execution infrastructure.
 //!
-//! - physical hardware topology;
-//! - logical-to-physical routing;
-//! - pulse schedules;
-//! - calibration;
-//! - backend-specific gate decomposition;
-//! - QPU communication;
-//! - hardware execution;
-//! - error-correction decoding;
-//! - hardware-specific error-correction geometry;
-//! - optimization algorithms;
-//! - frontend parsing.
+//! The IR answers:
 //!
-//! Those responsibilities belong to downstream quantum compiler/backend
-//! subsystems.
+//! > What does this quantum program mean?
 //!
-//! # Public API
+//! It does NOT decide:
 //!
-//! This module is the stable public boundary for the Quantum IR. Individual
-//! implementation modules own their internal algorithms and local types, while
-//! this module controls what the rest of Zamani is expected to consume.
+//! - which physical machine executes the program;
+//! - which physical qubits are selected;
+//! - how logical qubits are routed;
+//! - which hardware-native instruction is selected;
+//! - which calibration is applied;
+//! - how operations are scheduled;
+//! - how pulses are synthesized for a particular device;
+//! - how a QPU is contacted;
+//! - how quantum state is simulated;
+//! - how quantum error correction is decoded;
+//! - which optimization algorithm is used;
+//! - how source syntax is parsed.
 //!
-//! The intended dependency direction is:
+//! Those responsibilities belong to downstream subsystems.
+//!
+//! # Universal-program principle
+//!
+//! A Zamani quantum program is written once at the semantic level and may be
+//! lowered to any compatible target for which sufficient resources and
+//! capabilities exist.
+//!
+//! The IR therefore has no architectural fixed quantum-machine size.
+//!
+//! These are all semantically the same kind of resource declaration:
 //!
 //! ```text
-//! limits
-//!    │
-//!    ├──────────────┐
-//!    │              │
-//! errors       identity / parameter / qubit
-//!    │              │
-//!    └──────┬───────┘
-//!           │
-//!      measurement
-//!           │
-//!         gate
-//!           │
-//!      validation
-//!           │
-//!        circuit
-//!           │
-//!        analysis
-//!           │
-//!       integration
+//! 1 qubit
+//! 2 qubits
+//! 63 qubits
+//! 64 qubits
+//! 128 qubits
+//! 4_096 qubits
+//! 1_000_000 qubits
+//! N qubits
 //! ```
 //!
-//! Frontends consume this module's public API when lowering validated
-//! source-language representations into canonical Quantum IR.
+//! The actual finite size of a compilation or execution is constrained by:
+//!
+//! 1. explicit IR resource/security policies;
+//! 2. host memory and integer/address-space limits;
+//! 3. compiler/runtime limits;
+//! 4. target hardware capacity;
+//! 5. target topology and capabilities;
+//! 6. backend/execution constraints.
+//!
+//! None of those concrete constraints are the semantic maximum of Zamani.
+//!
+//! In particular, values such as `63` or `4096` must never silently become
+//! architectural qubit-count limits.
+//!
+//! # Three layers of quantum truth
 //!
 //! ```text
-//! external format
+//! SEMANTIC TRUTH
 //!       │
-//!       ▼
-//! quantum::frontend
-//!       │
-//!       │ validated lowering
 //!       ▼
 //! quantum::ir
 //!       │
+//!       │ What does the program mean?
 //!       ▼
-//! compiler / algorithms
+//! TARGET TRUTH
 //!       │
 //!       ▼
-//! backend / hardware
+//! quantum::hardware
+//!       │
+//!       │ What physical resources exist?
+//!       ▼
+//! EXECUTION TRUTH
+//!       │
+//!       ▼
+//! backend / runtime
+//!
+//!       How is this particular target executed?
 //! ```
 //!
-//! `mod.rs` itself contains no domain logic. Its responsibility is:
+//! # Dependency boundary
 //!
-//! 1. declare the canonical IR modules;
-//! 2. expose the stable public types;
-//! 3. expose canonical validation and analysis entry points;
-//! 4. provide a controlled prelude;
-//! 5. keep implementation-only details out of the public boundary.
-//!
-//! # Module/file naming
-//!
-//! The canonical qubit implementation is `qubit.rs`, therefore the Rust
-//! module is `qubit`, not `qubits`.
-//!
-//! This distinction is intentional. Rust module declarations must correspond
-//! to the actual source file layout:
+//! The canonical dependency direction is:
 //!
 //! ```text
-//! src/quantum/ir/qubit.rs
-//!             │
-//!             └── pub mod qubit;
+//!                    Zamani source
+//!                         │
+//!                         ▼
+//!                    frontend
+//!                         │
+//!                         ▼
+//!                 ┌───────────────┐
+//!                 │ quantum::ir   │
+//!                 │               │
+//!                 │ semantic WHAT │
+//!                 └───────┬───────┘
+//!                         │
+//!        ┌────────────────┼────────────────┐
+//!        │                │                │
+//!        ▼                ▼                ▼
+//! optimization       routing         scheduling
+//!        │                │                │
+//!        └────────────────┼────────────────┘
+//!                         ▼
+//!                    hardware
+//!                         │
+//!                         ▼
+//!                     backend
+//!                         │
+//!                         ▼
+//!                    execution
+//! ```
+//!
+//! The IR MUST NOT depend on:
+//!
+//! - `quantum::frontend`;
+//! - `quantum::optimization`;
+//! - `quantum::routing`;
+//! - `quantum::scheduling`;
+//! - `quantum::hardware`;
+//! - `quantum::simulator`;
+//! - `quantum::qec`;
+//! - backend execution implementations.
+//!
+//! Those systems may depend on the IR.
+//!
+//! # Universal quantum-program model
+//!
+//! `QuantumCircuit` remains an important gate-oriented representation, but it
+//! is not the complete definition of a quantum program.
+//!
+//! The broader IR supports:
+//!
+//! ```text
+//! Quantum program
+//! │
+//! ├── declarations
+//! ├── logical qubits
+//! ├── classical resources
+//! ├── parameters
+//! ├── operations
+//! ├── regions / blocks
+//! ├── control flow
+//! ├── measurements
+//! ├── timing
+//! ├── pulse semantics
+//! ├── waveform semantics
+//! ├── channel references
+//! ├── frame semantics
+//! ├── resource requirements
+//! ├── capability requirements
+//! ├── logical/physical mapping records
+//! ├── provenance
+//! ├── canonical serialization
+//! ├── canonical hashing
+//! └── extensions
+//! ```
+//!
+//! This allows the same semantic representation to cover:
+//!
+//! - gate-based quantum computing;
+//! - dynamic circuits;
+//! - mid-circuit measurement;
+//! - classical feedback;
+//! - pulse-level control;
+//! - analog quantum computation;
+//! - annealing / Ising / QUBO workloads;
+//! - logical and fault-tolerant quantum operations;
+//! - hybrid quantum/classical programs;
+//! - distributed quantum workloads;
+//! - simulator targets;
+//! - future quantum architectures.
+//!
+//! # Pulse-level control
+//!
+//! Zamani source such as:
+//!
+//! ```text
+//! fn x_gate(q) {
+//!     pulse(amp=0.3, dur=20ns)
+//! }
+//! ```
+//!
+//! is represented semantically through the pulse/operation/timing portions of
+//! the IR.
+//!
+//! The IR can express:
+//!
+//! ```text
+//! amplitude = 0.3
+//! duration  = 20ns
+//! target    = logical q
+//! ```
+//!
+//! but it does not decide:
+//!
+//! - which DAC is used;
+//! - which physical drive channel is selected;
+//! - which carrier frequency is used;
+//! - which calibration is applied;
+//! - which native instruction is emitted;
+//! - how the device-specific waveform is generated.
+//!
+//! Those decisions belong downstream.
+//!
+//! # Logical and physical qubits
+//!
+//! The canonical logical and physical identity types are owned by
+//! `quantum::ir::qubit`:
+//!
+//! ```text
+//! quantum::ir::qubit::QubitId
+//! quantum::ir::qubit::PhysicalQubitId
+//! ```
+//!
+//! `qubit.rs` is therefore the authoritative module.
+//!
+//! `qubits` is retained below only as a compatibility alias for older
+//! repository code. New code MUST use `quantum::ir::qubit`.
+//!
+//! # Resource policy versus architectural capability
+//!
+//! `QuantumIrLimits` is an explicit resource/security policy.
+//!
+//! It MUST NOT be interpreted as the maximum quantum computer Zamani supports.
+//!
+//! For example:
+//!
+//! ```text
+//! QuantumIrLimits
+//!     = "how much work this compiler/service invocation permits"
+//!
+//! quantum::hardware
+//!     = "what the selected target physically provides"
+//! ```
+//!
+//! This distinction is essential for scaling from tiny systems to very large
+//! systems.
+//!
+//! # Stable API boundary
+//!
+//! This module is intentionally thin.
+//!
+//! It owns:
+//!
+//! 1. canonical module declarations;
+//! 2. public API exposure;
+//! 3. compatibility aliases;
+//! 4. controlled prelude exports;
+//! 5. integration-test registration.
+//!
+//! It does NOT contain quantum-domain algorithms.
+//!
+//! # Module ownership
+//!
+//! ```text
+//! analysis.rs
+//!     Read-only circuit/program analysis.
+//!
+//! attribute.rs
+//!     Typed extensible metadata.
+//!
+//! capability.rs
+//!     Hardware-independent capability requirements.
+//!
+//! channel.rs
+//!     Abstract control-channel semantics.
+//!
+//! circuit.rs
+//!     Ordered gate-oriented quantum circuit container.
+//!
+//! classical.rs
+//!     Classical values, bits, expressions and predicates.
+//!
+//! control_flow.rs
+//!     Dynamic quantum/classical control flow.
+//!
+//! errors.rs
+//!     Canonical IR error vocabulary.
+//!
+//! extension.rs
+//!     Forward-compatible IR extensions.
+//!
+//! frame.rs
+//!     Abstract frame and phase/frequency semantics.
+//!
+//! gate.rs
+//!     Mathematical/logical gate semantics.
+//!
+//! hash.rs
+//!     Canonical content hashing.
+//!
+//! identity.rs
+//!     Stable IR object identities and IR version.
+//!
+//! limits.rs
+//!     Explicit resource/security limits.
+//!
+//! mapping.rs
+//!     Logical-to-physical mapping records.
+//!
+//! measurement.rs
+//!     Hardware-independent measurement semantics.
+//!
+//! operation.rs
+//!     Universal operation model.
+//!
+//! parameter.rs
+//!     Typed and symbolic parameters.
+//!
+//! program.rs
+//!     Top-level quantum-program representation.
+//!
+//! provenance.rs
+//!     Transformation and compilation lineage.
+//!
+//! pulse.rs
+//!     Hardware-independent pulse semantics.
+//!
+//! qubit.rs
+//!     Canonical logical/physical qubit identity.
+//!
+//! region.rs
+//!     Structured program regions and blocks.
+//!
+//! resource.rs
+//!     Abstract resource requirements.
+//!
+//! schedule.rs
+//!     Semantic scheduled-operation representation.
+//!
+//! serialization.rs
+//!     Canonical IR persistence/encoding.
+//!
+//! timing.rs
+//!     Time and duration semantics.
+//!
+//! types.rs
+//!     Canonical IR type vocabulary.
+//!
+//! validation.rs
+//!     Structural and semantic IR validation.
+//!
+//! value.rs
+//!     Canonical typed IR values.
+//!
+//! waveform.rs
+//!     Hardware-independent waveform semantics.
+//!
+//! tests.rs
+//!     Cross-module integration contracts.
 //! ```
 //!
 //! # Rust compatibility
 //!
-//! This module targets Rust 1.97.1.
+//! Target:
 //!
-//! No nightly features are required.
-//! No external dependencies are required.
+//! - Rust 1.97;
+//! - Rust 1.97.1;
+//! - Rust 2021 edition;
+//! - stable Rust;
+//! - no nightly features;
+//! - no `unsafe`.
+//!
+//! The module explicitly forbids unsafe code.
+//!
+//! # Integration policy
+//!
+//! Every downstream subsystem should consume the canonical module paths:
+//!
+//! ```text
+//! quantum::ir::qubit
+//! quantum::ir::gate
+//! quantum::ir::operation
+//! quantum::ir::program
+//! quantum::ir::pulse
+//! quantum::ir::measurement
+//! quantum::ir::classical
+//! ```
+//!
+//! Do not create duplicate quantum IR type definitions in downstream modules.
+//!
+//! If a downstream subsystem needs a specialized representation, it must
+//! explicitly convert to/from the canonical IR boundary.
+//!
+//! # Versioning
+//!
+//! `identity::IrVersion` is the canonical schema/semantic version.
+//!
+//! `mod.rs` does not create a second versioning system.
+//!
+//! Future breaking semantic changes MUST be represented through the canonical
+//! IR version contract rather than silently changing the meaning of existing
+//! structures.
+//!
+//! # Serialization boundary
+//!
+//! `serialization.rs` owns persistence and canonical encoding.
+//!
+//! `mod.rs` deliberately does not define a second serialization format.
+//!
+//! # Hashing boundary
+//!
+//! `hash.rs` owns canonical content identity.
+//!
+//! `mod.rs` deliberately does not calculate hashes.
+//!
+//! # Testing boundary
+//!
+//! Module-local tests belong inside the corresponding implementation file.
+//!
+//! `tests.rs` is registered here only for cross-module integration contracts.
+//!
+//! # Important compatibility guarantee
+//!
+//! Existing users of:
+//!
+//! ```text
+//! quantum::ir::QubitId
+//! quantum::ir::Gate
+//! quantum::ir::QuantumCircuit
+//! ```
+//!
+//! remain supported through curated root re-exports.
+//!
+//! New code should prefer explicit canonical module paths where ambiguity
+//! could exist.
+//!
+//! -----------------------------------------------------------------------------
+//! No domain logic belongs below this point.
+//! -----------------------------------------------------------------------------
+
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 // =============================================================================
-// Canonical IR modules
+// Canonical foundation modules
 // =============================================================================
 
-/// Deterministic, read-only circuit analysis.
+/// Deterministic read-only IR and circuit analysis.
 pub mod analysis;
 
-/// Canonical logical circuit container.
+/// Typed extensible IR metadata and attributes.
+pub mod attribute;
+
+/// Hardware-independent capability requirements.
+pub mod capability;
+
+/// Abstract hardware-independent control-channel semantics.
+pub mod channel;
+
+/// Ordered gate-oriented quantum circuit representation.
 pub mod circuit;
+
+/// Classical bits, values, expressions, assignments and predicates.
+pub mod classical;
+
+/// Dynamic quantum/classical control flow.
+pub mod control_flow;
 
 /// Canonical Quantum IR error vocabulary.
 pub mod errors;
 
-/// Quantum gate definitions and gate-level semantics.
+/// Forward-compatible extensibility mechanisms.
+pub mod extension;
+
+/// Hardware-independent frame semantics.
+pub mod frame;
+
+/// Mathematical and logical gate semantics.
 pub mod gate;
 
-/// Strongly typed IR, circuit, and operation identities.
+/// Canonical IR content hashing.
+pub mod hash;
+
+/// Stable IR object identities and IR schema versioning.
 pub mod identity;
 
-/// Resource limits and overflow-safe resource accounting.
+/// Explicit resource and security policy.
 pub mod limits;
+
+/// Logical-to-physical mapping records.
+pub mod mapping;
 
 /// Hardware-independent measurement semantics.
 pub mod measurement;
 
-/// Typed quantum gate parameters.
+/// Universal canonical operation model.
+pub mod operation;
+
+/// Typed and symbolic parameter semantics.
 pub mod parameter;
 
-/// Logical and physical qubit identity and registration types.
+/// Top-level universal quantum-program representation.
+pub mod program;
+
+/// Compilation and transformation provenance.
+pub mod provenance;
+
+/// Hardware-independent pulse semantics.
+pub mod pulse;
+
+/// Canonical logical and physical qubit identity.
 ///
-/// The implementation is located in `qubit.rs`.
+/// The authoritative module path is:
+///
+/// `quantum::ir::qubit`
 pub mod qubit;
 
-/// Canonical whole-IR validation.
+/// Structured program regions and blocks.
+pub mod region;
+
+/// Abstract quantum/classical resource requirements.
+pub mod resource;
+
+/// Semantic scheduled-operation representation.
+pub mod schedule;
+
+/// Canonical IR serialization and persistence.
+pub mod serialization;
+
+/// Time, duration and temporal semantics.
+pub mod timing;
+
+/// Canonical IR type vocabulary.
+pub mod types;
+
+/// Whole-IR structural and semantic validation.
 pub mod validation;
 
+/// Canonical typed IR values.
+pub mod value;
+
+/// Hardware-independent waveform semantics.
+pub mod waveform;
+
 // =============================================================================
-// Integration tests
+// Compatibility aliases
 // =============================================================================
 
-/// Cross-module Quantum IR integration tests.
+/// Compatibility alias for legacy code that still refers to the old
+/// `qubits` module name.
 ///
-/// Unit tests that belong exclusively to one implementation module should
-/// remain next to that implementation. This test module is reserved for
-/// contracts spanning multiple IR components.
-#[cfg(test)]
-mod tests;
+/// # Canonical path
+///
+/// New code MUST use:
+///
+/// `quantum::ir::qubit`
+///
+/// This alias exists so that older repository code can transition without
+/// duplicating or redefining `QubitId` and `PhysicalQubitId`.
+pub use qubit as qubits;
 
 // =============================================================================
 // Canonical circuit API
@@ -163,10 +574,6 @@ pub use circuit::{
 // =============================================================================
 // Canonical error API
 // =============================================================================
-//
-// `errors.rs` is intentionally independent of the implementation modules.
-// These are the errors that compiler-wide code should prefer when crossing
-// the Quantum IR boundary.
 
 pub use errors::{
     IrError,
@@ -230,18 +637,15 @@ pub use measurement::{
 // =============================================================================
 // Parameter API
 // =============================================================================
-//
-// `Parameter` is the canonical parameter abstraction for the upgraded IR.
-//
-// `GateParameter` remains exported because gate.rs currently exposes it as
-// part of its public construction API. New compiler code should prefer the
-// canonical `Parameter` abstraction where applicable.
 
 pub use parameter::Parameter;
 
 // =============================================================================
 // Qubit API
 // =============================================================================
+//
+// IMPORTANT:
+// `QubitId` and `PhysicalQubitId` come from `qubit.rs`, never `qubits.rs`.
 
 pub use qubit::{
     validate_qubits,
@@ -287,19 +691,23 @@ pub use analysis::{
 // Controlled prelude
 // =============================================================================
 
-/// Stable collection of the primary Quantum IR types.
+/// Stable common-import surface for downstream quantum compiler stages.
 ///
-/// Downstream compiler stages should normally import from this prelude rather
-/// than reaching into individual IR implementation modules.
+/// The prelude intentionally contains the most commonly consumed semantic
+/// types and entry points. Specialized modules remain available through their
+/// canonical paths.
 ///
-/// The prelude intentionally excludes:
+/// Example:
 ///
-/// - specialized internal errors that are only useful for implementation
-///   details;
-/// - analysis helper implementation types that are not part of the common
-///   compiler contract;
-/// - limits internals;
-/// - validation internals.
+/// ```rust
+/// use crate::quantum::ir::prelude::{
+///     Gate,
+///     GateKind,
+///     Parameter,
+///     QubitId,
+///     QuantumCircuit,
+/// };
+/// ```
 pub mod prelude {
     pub use super::{
         analyze,
@@ -346,3 +754,16 @@ pub mod prelude {
         ValidationConfig,
     };
 }
+
+// =============================================================================
+// Integration-test registration
+// =============================================================================
+//
+// Tests spanning multiple IR modules belong here. Individual modules retain
+// their own unit tests.
+//
+// This is intentionally the final declaration so that the complete public
+// module graph is available to the integration suite.
+
+#[cfg(test)]
+mod tests;
