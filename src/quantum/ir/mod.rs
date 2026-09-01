@@ -1,4 +1,4 @@
-//! Zamani Quantum Intermediate Representation.
+//! Zamani Quantum Intermediate Representation(ZQIR).
 //!
 //! Canonical, hardware-independent semantic IR for quantum computation.
 //!
