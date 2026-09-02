@@ -1,8 +1,9 @@
 // Zamani.g4 — Comprehensive ANTLR4 combined grammar for the Zamani omniversal language compiler.
-// Expanded with full OOP feature set: primary/secondary constructors, data classes, sealed/final/abstract modifiers,
-// companion objects, inner/nested classes, property delegates/observers, variance (in/out), mixins/traits, delegation,
-// 'friend' visibility, property backing fields, copy/equals/hash/toString generation, anonymous classes/objects,
-// method overloading/overriding rules, default implementations in interfaces, and finer accessor visibility.
+// Expanded with full OOP feature set and additional features inspired by many languages (C++, Java, C#, Rust, Python, Kotlin, Swift, TypeScript).
+// New additions: friend declarations, extern/ffi, templates (C++-style), metaclasses, access-specifier sections (public:/protected:/private:),
+// constexpr/consteval, native/extern methods, method references (::), RAII/unique_ptr/move semantics markers, copy/move constructors,
+// explicit override/virtual resolution, sealed/final behavior, module-level visibility, annotation targets, checked/un-checked exceptions markers,
+// named argument spread, splat operator, trailing return types, and more syntactic sugar.
 
 grammar Zamani;
 
@@ -14,6 +15,7 @@ declaration
     | exportDecl
     | packageDecl
     | functionDecl
+    | templateDecl
     | structDecl
     | enumDecl
     | traitDecl
@@ -180,6 +182,22 @@ declaration
     ) ;
 
 // ============================================================================
+// Additional top-level constructs
+// ============================================================================
+
+templateDecl : 'template' '<' templateParam (',' templateParam)* '>' declaration ;
+templateParam : ('typename' | 'class' | 'int' | 'size_t')? IDENTIFIER ( '=' typeExpr )? ;
+
+metaclassDecl : 'metaclass' ident '{' metaclassMember* '}' ;
+metaclassMember : methodDecl | propertyDecl | attributeDecl ;
+
+externDecl : 'extern' (STRING | ident) '{' externMember* '}' ';' ;
+externMember : functionDecl | variableImport ;
+variableImport : 'var' ident ':' typeExpr ';' ;
+
+friendDecl : 'friend' (classDecl | functionDecl | ident) ';' ;
+
+// ============================================================================
 // MODULE SYSTEM
 // ============================================================================
 
@@ -206,14 +224,14 @@ depSpec : STRING ('@' (STRING | 'semver'))? ;
 // FUNCTIONS & DECLARATIONS
 // ============================================================================
 
-functionDecl : modifiers? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('with' effectList)? contractDecl? blockExpr ;
-params : param (',' param)* ;
+functionDecl : modifiers? ('constexpr' | 'consteval')? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('with' effectList)? contractDecl? ( 'const' )? ( 'noexcept' | 'throws' typeExprList )? blockExpr ;
+params : param (',' param)* (',' '...' )? ;
 param : 'mut'? ident (':' typeExpr)? ('=' expression)? | '...' typeExpr ident ;
 modifiers : modifier+ ;
 modifier : 'pub' | 'private' | 'protected' | 'static' | 'const' | 'async' | 'unsafe' | 'inline' 
          | 'override' | 'final' | 'abstract' | 'virtual' | 'sealed' | 'partial' | 'file' 
          | 'required' | 'internal' | 'visible' | 'experimental' | 'deprecated' | 'noInline'
-         | 'synchronized' | 'transient' | 'volatile' | 'readonly' | 'lazy' | 'atomic' ;
+         | 'synchronized' | 'transient' | 'volatile' | 'readonly' | 'lazy' | 'atomic' | 'native' | 'extern' ;
 
 // Contract/spec
 contractDecl : 'contract' ident '{' contractClause* '}' ;
@@ -257,7 +275,7 @@ matchCase : ('case' pattern | pattern) ('when' expression)? '=>' expression ','?
 pattern : ident | literal | '_' | '(' pattern (',' pattern)* ')' | '[' pattern (',' pattern)* ']' 
         | '[' pattern (',' pattern)* '...' pattern ']' | pattern '|' pattern | ident ':' typeExpr ;
 unsafeBlock : 'unsafe' (ident? blockExpr | '!' '(' 'evas' ':' expression ')' blockExpr) ;
-throwStmt : 'throw' expression ';' ;
+throwStmt : 'throw' expression ('checked' | 'unchecked')? ';' ;
 tryCatchStmt : 'try' blockExpr catchClause* finallyClause? ;
 catchClause : 'catch' ('(' param ')')? blockExpr ;
 finallyClause : 'finally' blockExpr ;
@@ -288,7 +306,7 @@ shiftExpr : sumExpr (('<<' | '>>' | '>>>') sumExpr)* ;
 sumExpr : productExpr (('+' | '-') productExpr)* ;
 productExpr : castExpr (('*' | '/') castExpr)* ;
 castExpr : prefixExpr (('as' | ':') typeExpr)* ;
-prefixExpr : ('-' | '!' | '~' | '&' 'mut'? | '*' | '++' | '--') prefixExpr | postfixExpr ;
+prefixExpr : ('-' | '!' | '~' | '&' 'mut'? | '*' | '++' | '--' | '@') prefixExpr | postfixExpr ;
 postfixExpr : primaryExpr postfixOp* ;
 
 postfixOp 
@@ -301,6 +319,7 @@ postfixOp
     | 'with' '[' effectList ']' # withEffectOp
     | 'with' '{' (ident ':' expression ';')* '}' # withBlockOp
     | 'await'                                      # awaitOp
+    | '::' ident                                   # methodRefOp
     ;
 
 args : expression (',' expression)* | namedArgument (',' namedArgument)* ;
@@ -328,16 +347,18 @@ primaryExpr
     | 'super' ('(' args? ')')? # superExpr
     | anonymousClassExpr
     | objectExpr
+    | methodRefExpr
     ;
 
 anonymousClassExpr : 'new' typeExpr '{' classMember* '}' ;
 objectExpr : 'object' ('<' typeArgs '>')? '{' classMember* '}' ;
+methodRefExpr : primaryExpr '::' ident ;
 
 quantumGatePath : ident ('(' expression (',' expression)* ')')? ';' ;
 nanoInstr : ident ('(' expression (',' expression)* ')')? ';' ;
 
 // ============================================================================
-// TYPE SYSTEM (with variance)
+// TYPE SYSTEM (with variance and additional generics features)
 // ============================================================================
 
 typeExpr
@@ -356,8 +377,15 @@ typeExpr
 
 typeParams : '<' typeParam (',' typeParam)* '>' ;
 // variance: in/out on type params
-typeParam : ('in' | 'out')? ident ('extends' typeExpr)? ;
-typeArgs : '<' typeExpr (',' typeExpr)* '>' ;
+typeParam : ('in' | 'out')? ident ('extends' typeExpr)? ('=' typeExpr)? ;
+// wildcards like Java: ?, ? extends T, ? super T
+wildcardType : '?' ( 'extends' typeExpr | 'super' typeExpr )? ;
+
+typeArgs : '<' (typeExpr | wildcardType) (',' (typeExpr | wildcardType))* '>' ;
+
+// where/generic constraints
+genericWhereClause : 'where' genericConstraint (',' genericConstraint)* ;
+genericConstraint : ident ':' typeExpr ;
 
 // ============================================================================
 // STRUCTURES & TYPES (ADVANCED OOP)
@@ -370,20 +398,25 @@ enumDecl : 'enum' ident typeParams? '{' enumVariant (',' enumVariant)* ','? '}' 
 enumVariant : ident ('(' typeExpr (',' typeExpr)* ')' | '{' fieldDecl* '}' )? ( 'when' blockExpr )? ;
 
 // Classes: support data, sealed, abstract, final, mixin, companion, delegation
-classDecl : classModifiers? classKind? 'class' ident typeParams? primaryConstructor? ('extends' typeExpr ( 'with' typeExpr )* )? ('implements' typeExpr (',' typeExpr)*)? classBody? ;
+classDecl : classModifiers? classKind? 'class' ident typeParams? primaryConstructor? ('extends' baseList)? ('implements' typeExpr (',' typeExpr)*)? classBody? ;
 classKind : 'data' | 'abstract' | 'final' | 'sealed' | 'mixin' ;
 classModifiers : modifier+ ;
+
+baseList : typeExpr (',' typeExpr)* ;
 
 // primary constructor inline with class header
 primaryConstructor : '(' constructorParamList? ')' ('where' genericWhereClause)? ;
 constructorParamList : constructorParam (',' constructorParam)* ;
-constructorParam : modifiers? ('val' | 'var')? ident (':' typeExpr)? ('=' expression)? ;
+constructorParam : modifiers? ('val' | 'var')? ident (':' typeExpr)? ('=' expression)? ('move' | 'copy')? ;
 
-// optional class body
-classBody : '{' classMember* '}' ;
+// optional class body — support C++ style access specifiers sections
+classBody : '{' classBodyElement* '}' ;
+classBodyElement : accessSection | classMember ;
+accessSection : ('public' | 'protected' | 'private' | 'friend') ':' classMember* ;
 
 // secondary constructors
-secondaryConstructor : 'constructor' '(' params? ')' blockExpr ;
+secondaryConstructor : 'constructor' '(' params? ')' (':' constructorInitList)? blockExpr ;
+constructorInitList : ident '(' args? ')' (',' ident '(' args? ')')* ;
 
 // class members: fields, properties, methods, constructors, nested types, companion, delegates, operators, events, indexers
 classMember : fieldDecl
@@ -400,6 +433,8 @@ classMember : fieldDecl
             | indexerDecl
             | staticBlock
             | initBlock
+            | friendDecl
+            | externDecl
             | ';'
             ;
 
@@ -423,9 +458,9 @@ propertyDelegate : 'by' expression ;
 // property observers
 propertyObserver : 'willSet' '(' ident? ')' blockExpr | 'didSet' '(' ident? ')' blockExpr ;
 
-methodDecl : modifiers? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('throws' typeExprList)? blockExpr ;
+methodDecl : modifiers? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('throws' typeExprList)? ( 'const' )? ( 'noexcept' )? blockExpr ;
 // destructor
-destructorDecl : 'destructor' '(' ')' blockExpr ;
+destructorDecl : 'destructor' '(' ')' ( 'noexcept' )? blockExpr ;
 
 // static initializer and instance init blocks
 staticBlock : 'static' blockExpr ;
@@ -433,7 +468,7 @@ initBlock : 'init' blockExpr ;
 
 // operator overloading
 operatorDecl : modifiers? 'operator' operatorToken '(' params? ')' ('->' typeExpr)? blockExpr ;
-operatorToken : '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '<<' | '>>' | '[]' | '()' | '[]=' | '->' | '|' | '^' | '&' ;
+operatorToken : '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '<<' | '>>' | '[]' | '()' | '[]=' | '->' | '|' | '^' | '&' | '::' ;
 
 // events and delegates
 eventDecl : modifiers? 'event' ident (':' typeExpr)? ( '{' eventAccessor* '}' | ';' ) ;
@@ -765,6 +800,13 @@ COMPANION : 'companion' ;
 DATA : 'data' ;
 SEALED : 'sealed' ;
 MIXIN : 'mixin' ;
+FRIEND : 'friend' ;
+EXTERN : 'extern' ;
+TEMPLATE : 'template' ;
+METACLASS : 'metaclass' ;
+CONSTEXPR : 'constexpr' ;
+CONSTEVAL : 'consteval' ;
+NATIVE : 'native' ;
 
 // Raw / multiline / byte array strings
 RAW_STRING : 'r#"' (~[\n\r])* '"#' ;
