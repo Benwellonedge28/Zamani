@@ -1,0 +1,1897 @@
+//! Zamani Quantum Noise (ZQN) — Shared Test Fixtures
+//!
+//! # Purpose
+//!
+//! This module provides deterministic, reusable semantic fixtures for the ZQN
+//! test suite.
+//!
+//! Fixtures are intentionally kept below concrete ZQN implementation types.
+//! They describe stable test inputs which can be consumed by:
+//!
+//! - probability tests;
+//! - channel tests;
+//! - fault tests;
+//! - noise-model tests;
+//! - calibration tests;
+//! - characterization tests;
+//! - simulation tests;
+//! - propagation tests;
+//! - target-compatibility tests;
+//! - serialization tests;
+//! - determinism tests;
+//! - scaling tests;
+//! - differential tests;
+//! - integration tests.
+//!
+//! # Architectural rule
+//!
+//! A fixture is TEST DATA, not production quantum semantics.
+//!
+//! This file MUST NOT become:
+//!
+//! - a second noise model implementation;
+//! - a second quantum IR;
+//! - a simulator;
+//! - a random-number generator;
+//! - a channel implementation;
+//! - a calibration registry;
+//! - a hardware registry;
+//! - a global mutable test database.
+//!
+//! Concrete ZQN implementations consume the fixture values.
+//!
+//! # Canonical qubit identity
+//!
+//! Whenever a fixture identifies a quantum resource, it uses the canonical:
+//!
+//! ```text
+//! crate::quantum::ir::qubit::QubitId
+//! crate::quantum::ir::qubit::PhysicalQubitId
+//! ```
+//!
+//! This file deliberately does NOT define a fixture-specific QubitId.
+//!
+//! This follows the repository-wide rule that ZQN does not own quantum-resource
+//! identity. ZQN owns ZQN-domain object IDs through `core::ids`.
+//!
+//! # Write once, scale everywhere
+//!
+//! Fixtures must not encode an architectural maximum such as:
+//!
+//! ```text
+//! MAX_QUBITS
+//! MAX_SHOTS
+//! MAX_FAULTS
+//! MAX_OPERATIONS
+//! ```
+//!
+//! A fixture plan describes a requested size and exposes a lazy iterator.
+//!
+//! Materialization occurs only when a particular test explicitly requests it.
+//!
+//! Therefore:
+//!
+//! ```text
+//! tiny test       -> tiny materialization
+//! medium test     -> medium materialization
+//! large test      -> streaming iteration
+//! distributed     -> partitioned iteration
+//! ```
+//!
+//! The fixture system itself does not impose a semantic machine-size limit.
+//!
+//! The actual host/resource limits remain the responsibility of the test,
+//! runtime, allocator, and CI environment.
+//!
+//! # Determinism
+//!
+//! Fixtures are deterministic.
+//!
+//! They do not use:
+//!
+//! - thread-local RNGs;
+//! - global RNGs;
+//! - system time;
+//! - process IDs;
+//! - memory addresses;
+//! - hash-map iteration order;
+//! - filesystem ordering.
+//!
+//! A `FixtureSeed` is an explicit value used only where deterministic derived
+//! values are useful.
+//!
+//! # Parallel execution
+//!
+//! A fixture generated with the same seed, scale and index must be identical
+//! regardless of whether tests consume it sequentially or concurrently.
+//!
+//! No mutable global fixture state exists.
+//!
+//! # Serialization
+//!
+//! This file does not define the ZQN wire format.
+//!
+//! Serialization tests should convert fixture data into the canonical ZQN
+//! serialization types and test those serializers there.
+//!
+//! The fixture structures themselves are deliberately simple and stable so
+//! they can also be used as input to serialization tests without becoming the
+//! serialization contract.
+//!
+//! # Integration
+//!
+//! `tests/mod.rs` should expose this module:
+//
+//! ```text
+//! pub(crate) mod fixtures;
+//! ```
+//!
+//! Other ZQN test modules consume it through:
+//
+//! ```text
+//! super::fixtures::*
+//! ```
+//!
+//! or:
+//
+//! ```text
+//! crate::quantum::zqn::tests::fixtures::*
+//! ```
+//!
+//! depending on how the test module tree is composed.
+//!
+//! The fixture module should remain independent of concrete downstream ZQN
+//! modules. This allows the fixture contract to be completed before the rest
+//! of ZQN is finished.
+//!
+//! # Dependency direction
+//!
+//! ```text
+//! quantum::ir::qubit
+//!          │
+//!          ▼
+//!     tests/fixtures
+//!          │
+//!     ┌────┼─────────────┬──────────────┐
+//!     ▼    ▼             ▼              ▼
+//! channel noise      simulation    serialization
+//! tests  tests        tests           tests
+//! ```
+//!
+//! The fixture layer must never depend on those consumers.
+//!
+//! # Security
+//!
+//! Fixture construction must not silently allocate memory proportional to an
+//! untrusted size merely because a test requested a fixture plan.
+//!
+//! Lazy iteration is therefore the default.
+//!
+//! Explicit materialization is caller-controlled.
+//!
+//! # Safety
+//!
+//! This file contains no unsafe Rust.
+//!
+//! `#![forbid(unsafe_code)]` makes accidental introduction of unsafe code a
+//! compile-time error.
+//!
+//! # Rust compatibility
+//!
+//! Target:
+//!
+//! - Rust 1.97;
+//! - Rust 1.97.1;
+//! - Rust 2021 edition;
+//! - stable Rust;
+//! - no nightly features;
+//! - no unsafe code;
+//! - no additional dependencies.
+//!
+//! # Definition of done
+//!
+//! This file is complete when:
+//!
+//! 1. all fixtures are deterministic;
+//! 2. no global mutable state exists;
+//! 3. no hard-coded machine-size ceiling exists;
+//! 4. quantum resources use canonical IR IDs;
+//! 5. ZQN object identities use `core::ids`;
+//! 6. fixture generation can stream rather than materialize;
+//! 7. invalid numeric fixture parameters are rejected;
+//! 8. scale is represented as data;
+//! 9. concrete ZQN implementations are not duplicated here;
+//! 10. tests can use the fixtures without modifying this file;
+//! 11. the file compiles on Rust 1.97/1.97.1;
+//! 12. `unsafe` is forbidden.
+
+#![forbid(unsafe_code)]
+
+use crate::quantum::ir::qubit::{PhysicalQubitId, QubitId};
+use crate::quantum::zqn::core::ids::{
+    CalibrationId,
+    ChannelId,
+    CharacterizationId,
+    CorrelationId,
+    DistributionId,
+    ErrorBudgetId,
+    ExperimentId,
+    FaultId,
+    NoiseApplicationId,
+    NoiseModelId,
+    NoiseParameterId,
+    NoiseProfileId,
+    NoiseRealizationId,
+    NoiseSnapshotId,
+    ObservationId,
+};
+
+use std::fmt;
+use std::num::NonZeroU64;
+
+// ============================================================================
+// Fixture seed
+// ============================================================================
+
+/// Explicit deterministic seed used by fixtures.
+///
+/// This is NOT an RNG and does not maintain mutable state.
+///
+/// It exists so tests can describe deterministic fixture families without
+/// relying on process-global randomness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct FixtureSeed(u64);
+
+impl FixtureSeed {
+    /// Creates a deterministic fixture seed.
+    #[must_use]
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    /// Returns the raw seed value.
+    #[must_use]
+    pub const fn value(self) -> u64 {
+        self.0
+    }
+
+    /// Derives a deterministic child value for an index.
+    ///
+    /// This is deliberately a pure integer mixing function rather than an RNG.
+    ///
+    /// It is suitable for:
+    ///
+    /// - deterministic fixture identities;
+    /// - deterministic fixture parameters;
+    /// - partition-independent test data.
+    ///
+    /// It is NOT intended to be a cryptographic hash or a scientific-quality
+    /// random-number generator.
+    #[must_use]
+    pub const fn derive(self, index: u64) -> u64 {
+        split_mix64(self.0 ^ index)
+    }
+
+    /// Derives a deterministic child seed.
+    #[must_use]
+    pub const fn child(self, index: u64) -> Self {
+        Self::new(self.derive(index))
+    }
+}
+
+impl Default for FixtureSeed {
+    fn default() -> Self {
+        Self::new(0x5A4E_515F_4649_5854)
+    }
+}
+
+impl fmt::Display for FixtureSeed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "0x{:016x}", self.0)
+    }
+}
+
+/// Pure deterministic integer mixer.
+///
+/// This function intentionally has no mutable state.
+const fn split_mix64(mut value: u64) -> u64 {
+    value = value.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    value ^ (value >> 31)
+}
+
+// ============================================================================
+// Fixture scale
+// ============================================================================
+
+/// Requested fixture scale.
+///
+/// This is a request, not a semantic hardware limit.
+///
+/// No maximum quantum-machine size is encoded here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FixtureScale {
+    resource_count: usize,
+    shot_count: usize,
+}
+
+impl FixtureScale {
+    /// Creates a fixture scale.
+    ///
+    /// Zero resources are permitted because zero-sized cases are useful for
+    /// validation, empty-stream, serialization, and boundary tests.
+    #[must_use]
+    pub const fn new(resource_count: usize, shot_count: usize) -> Self {
+        Self {
+            resource_count,
+            shot_count,
+        }
+    }
+
+    /// Smallest useful non-empty fixture.
+    #[must_use]
+    pub const fn minimal() -> Self {
+        Self::new(1, 1)
+    }
+
+    /// Small deterministic smoke-test fixture.
+    #[must_use]
+    pub const fn small() -> Self {
+        Self::new(4, 8)
+    }
+
+    /// Medium deterministic fixture.
+    ///
+    /// This is a test convenience, not an architectural limit.
+    #[must_use]
+    pub const fn medium() -> Self {
+        Self::new(16, 64)
+    }
+
+    /// Returns the requested resource count.
+    #[must_use]
+    pub const fn resource_count(self) -> usize {
+        self.resource_count
+    }
+
+    /// Returns the requested shot count.
+    #[must_use]
+    pub const fn shot_count(self) -> usize {
+        self.shot_count
+    }
+
+    /// Returns whether this fixture has no resources.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.resource_count == 0
+    }
+
+    /// Returns a copy with a different resource count.
+    #[must_use]
+    pub const fn with_resource_count(self, resource_count: usize) -> Self {
+        Self {
+            resource_count,
+            shot_count: self.shot_count,
+        }
+    }
+
+    /// Returns a copy with a different shot count.
+    #[must_use]
+    pub const fn with_shot_count(self, shot_count: usize) -> Self {
+        Self {
+            resource_count: self.resource_count,
+            shot_count,
+        }
+    }
+}
+
+impl Default for FixtureScale {
+    fn default() -> Self {
+        Self::small()
+    }
+}
+
+// ============================================================================
+// Fixture kind
+// ============================================================================
+
+/// Semantic purpose of a fixture.
+///
+/// This describes test intent without coupling the fixture to a particular
+/// concrete implementation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FixtureKind {
+    /// Basic valid semantic object.
+    Minimal,
+
+    /// Identity-only fixture.
+    Identity,
+
+    /// Probability/channel-oriented fixture.
+    Channel,
+
+    /// Fault-oriented fixture.
+    Fault,
+
+    /// Correlation-oriented fixture.
+    Correlated,
+
+    /// Calibration-oriented fixture.
+    Calibration,
+
+    /// Characterization-oriented fixture.
+    Characterization,
+
+    /// Serialization-oriented fixture.
+    Serialization,
+
+    /// Determinism-oriented fixture.
+    Determinism,
+
+    /// Scaling-oriented fixture.
+    Scaling,
+
+    /// Integration-oriented fixture.
+    Integration,
+}
+
+// ============================================================================
+// Canonical quantum resource fixture
+// ============================================================================
+
+/// A logical/physical quantum-resource pair used by ZQN tests.
+///
+/// The two identities deliberately remain different types.
+///
+/// This structure does NOT claim that the logical qubit is actually mapped to
+/// the physical qubit on hardware. It is only a deterministic test fixture
+/// representing a possible mapping pair.
+///
+/// Routing owns actual placement semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QuantumResourceFixture {
+    logical: QubitId,
+    physical: PhysicalQubitId,
+}
+
+impl QuantumResourceFixture {
+    /// Creates a resource fixture from canonical IR identities.
+    #[must_use]
+    pub const fn new(logical: QubitId, physical: PhysicalQubitId) -> Self {
+        Self { logical, physical }
+    }
+
+    /// Creates the deterministic identity-aligned fixture for an index.
+    ///
+    /// This is useful for tests that do not need a non-trivial routing map.
+    #[must_use]
+    pub const fn indexed(index: usize) -> Self {
+        Self {
+            logical: QubitId::new(index),
+            physical: PhysicalQubitId::new(index),
+        }
+    }
+
+    /// Returns the canonical logical-qubit identity.
+    #[must_use]
+    pub const fn logical(self) -> QubitId {
+        self.logical
+    }
+
+    /// Returns the canonical physical-qubit identity.
+    #[must_use]
+    pub const fn physical(self) -> PhysicalQubitId {
+        self.physical
+    }
+}
+
+// ============================================================================
+// Lazy resource fixture plan
+// ============================================================================
+
+/// Lazily generated deterministic quantum-resource fixtures.
+///
+/// The plan itself contains only a seed and a requested scale. It does not
+/// allocate a vector containing every resource.
+///
+/// This is important for scaling tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ResourceFixturePlan {
+    scale: FixtureScale,
+    seed: FixtureSeed,
+}
+
+impl ResourceFixturePlan {
+    /// Creates a lazy resource fixture plan.
+    #[must_use]
+    pub const fn new(scale: FixtureScale, seed: FixtureSeed) -> Self {
+        Self { scale, seed }
+    }
+
+    /// Returns the requested scale.
+    #[must_use]
+    pub const fn scale(self) -> FixtureScale {
+        self.scale
+    }
+
+    /// Returns the fixture seed.
+    #[must_use]
+    pub const fn seed(self) -> FixtureSeed {
+        self.seed
+    }
+
+    /// Returns the number of resources that will be generated.
+    #[must_use]
+    pub const fn len(self) -> usize {
+        self.scale.resource_count()
+    }
+
+    /// Returns whether the plan is empty.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns a lazy iterator.
+    #[must_use]
+    pub fn iter(self) -> ResourceFixtureIter {
+        ResourceFixtureIter {
+            plan: self,
+            next: 0,
+        }
+    }
+}
+
+impl Default for ResourceFixturePlan {
+    fn default() -> Self {
+        Self::new(FixtureScale::small(), FixtureSeed::default())
+    }
+}
+
+/// Lazy resource fixture iterator.
+#[derive(Debug, Clone, Copy)]
+pub struct ResourceFixtureIter {
+    plan: ResourceFixturePlan,
+    next: usize,
+}
+
+impl Iterator for ResourceFixtureIter {
+    type Item = QuantumResourceFixture;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next >= self.plan.len() {
+            return None;
+        }
+
+        let index = self.next;
+        self.next = self.next.saturating_add(1);
+
+        Some(QuantumResourceFixture::indexed(index))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.plan.len().saturating_sub(self.next);
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for ResourceFixtureIter {}
+
+impl std::iter::FusedIterator for ResourceFixtureIter {}
+
+// ============================================================================
+// ZQN identity fixture
+// ============================================================================
+
+/// Deterministic collection of ZQN-domain identities.
+///
+/// These are deliberately separate from quantum-resource identities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ZqnIdentityFixture {
+    noise_model: NoiseModelId,
+    channel: ChannelId,
+    fault: FaultId,
+    noise_application: NoiseApplicationId,
+    noise_snapshot: NoiseSnapshotId,
+    calibration: CalibrationId,
+    characterization: CharacterizationId,
+    experiment: ExperimentId,
+    observation: ObservationId,
+    realization: NoiseRealizationId,
+    correlation: CorrelationId,
+    noise_parameter: NoiseParameterId,
+    distribution: DistributionId,
+    error_budget: ErrorBudgetId,
+    noise_profile: NoiseProfileId,
+}
+
+impl ZqnIdentityFixture {
+    /// Creates a deterministic identity fixture from a base value.
+    ///
+    /// Distinct domains receive distinct deterministic values.
+    #[must_use]
+    pub const fn from_base(base: u64) -> Self {
+        Self {
+            noise_model: NoiseModelId::new(base.wrapping_add(1)),
+            channel: ChannelId::new(base.wrapping_add(2)),
+            fault: FaultId::new(base.wrapping_add(3)),
+            noise_application: NoiseApplicationId::new(base.wrapping_add(4)),
+            noise_snapshot: NoiseSnapshotId::new(base.wrapping_add(5)),
+            calibration: CalibrationId::new(base.wrapping_add(6)),
+            characterization: CharacterizationId::new(base.wrapping_add(7)),
+            experiment: ExperimentId::new(base.wrapping_add(8)),
+            observation: ObservationId::new(base.wrapping_add(9)),
+            realization: NoiseRealizationId::new(base.wrapping_add(10)),
+            correlation: CorrelationId::new(base.wrapping_add(11)),
+            noise_parameter: NoiseParameterId::new(base.wrapping_add(12)),
+            distribution: DistributionId::new(base.wrapping_add(13)),
+            error_budget: ErrorBudgetId::new(base.wrapping_add(14)),
+            noise_profile: NoiseProfileId::new(base.wrapping_add(15)),
+        }
+    }
+
+    /// Returns the deterministic noise-model identity.
+    #[must_use]
+    pub const fn noise_model(self) -> NoiseModelId {
+        self.noise_model
+    }
+
+    /// Returns the deterministic channel identity.
+    #[must_use]
+    pub const fn channel(self) -> ChannelId {
+        self.channel
+    }
+
+    /// Returns the deterministic fault identity.
+    #[must_use]
+    pub const fn fault(self) -> FaultId {
+        self.fault
+    }
+
+    /// Returns the deterministic noise-application identity.
+    #[must_use]
+    pub const fn noise_application(self) -> NoiseApplicationId {
+        self.noise_application
+    }
+
+    /// Returns the deterministic calibration identity.
+    #[must_use]
+    pub const fn calibration(self) -> CalibrationId {
+        self.calibration
+    }
+
+    /// Returns the deterministic characterization identity.
+    #[must_use]
+    pub const fn characterization(self) -> CharacterizationId {
+        self.characterization
+    }
+
+    /// Returns the deterministic experiment identity.
+    #[must_use]
+    pub const fn experiment(self) -> ExperimentId {
+        self.experiment
+    }
+
+    /// Returns the deterministic observation identity.
+    #[must_use]
+    pub const fn observation(self) -> ObservationId {
+        self.observation
+    }
+
+    /// Returns the deterministic realization identity.
+    #[must_use]
+    pub const fn realization(self) -> NoiseRealizationId {
+        self.realization
+    }
+
+    /// Returns the deterministic correlation identity.
+    #[must_use]
+    pub const fn correlation(self) -> CorrelationId {
+        self.correlation
+    }
+
+    /// Returns the deterministic noise-parameter identity.
+    #[must_use]
+    pub const fn noise_parameter(self) -> NoiseParameterId {
+        self.noise_parameter
+    }
+
+    /// Returns the deterministic distribution identity.
+    #[must_use]
+    pub const fn distribution(self) -> DistributionId {
+        self.distribution
+    }
+
+    /// Returns the deterministic error-budget identity.
+    #[must_use]
+    pub const fn error_budget(self) -> ErrorBudgetId {
+        self.error_budget
+    }
+
+    /// Returns the deterministic noise-profile identity.
+    #[must_use]
+    pub const fn noise_profile(self) -> NoiseProfileId {
+        self.noise_profile
+    }
+}
+
+impl Default for ZqnIdentityFixture {
+    fn default() -> Self {
+        Self::from_base(1_000)
+    }
+}
+
+// ============================================================================
+// Probability fixture
+// ============================================================================
+
+/// Validated-independent numeric parameters commonly needed by ZQN tests.
+///
+/// These values intentionally remain plain `f64` because this fixture layer
+/// must not duplicate the semantics of `zqn::probability::Probability`.
+///
+/// Concrete tests should convert these values through the authoritative
+/// `Probability` constructor.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ProbabilityFixture {
+    /// Zero.
+    pub zero: f64,
+
+    /// One.
+    pub one: f64,
+
+    /// A small non-zero probability.
+    pub small: f64,
+
+    /// A medium probability.
+    pub medium: f64,
+
+    /// A large but valid probability.
+    pub large: f64,
+
+    /// A valid probability near one.
+    pub near_one: f64,
+}
+
+impl ProbabilityFixture {
+    /// Creates the canonical probability fixture.
+    #[must_use]
+    pub const fn canonical() -> Self {
+        Self {
+            zero: 0.0,
+            one: 1.0,
+            small: 0.001,
+            medium: 0.05,
+            large: 0.25,
+            near_one: 0.999,
+        }
+    }
+
+    /// Returns all fixture probabilities in deterministic order.
+    #[must_use]
+    pub const fn values(self) -> [f64; 6] {
+        [
+            self.zero,
+            self.one,
+            self.small,
+            self.medium,
+            self.large,
+            self.near_one,
+        ]
+    }
+
+    /// Validates that every fixture value belongs to `[0, 1]` and is finite.
+    pub fn validate(self) -> Result<(), FixtureError> {
+        for value in self.values() {
+            if !value.is_finite() {
+                return Err(FixtureError::NonFiniteProbability { value });
+            }
+
+            if !(0.0..=1.0).contains(&value) {
+                return Err(FixtureError::ProbabilityOutOfRange { value });
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Default for ProbabilityFixture {
+    fn default() -> Self {
+        Self::canonical()
+    }
+}
+
+// ============================================================================
+// Noise parameter fixture
+// ============================================================================
+
+/// Generic physical-parameter fixture.
+///
+/// These values are intentionally not tied to a particular technology.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NoiseParameterFixture {
+    /// Representative gate-error probability.
+    pub gate_error: f64,
+
+    /// Representative preparation-error probability.
+    pub preparation_error: f64,
+
+    /// Representative readout-error probability.
+    pub readout_error: f64,
+
+    /// Representative leakage probability.
+    pub leakage: f64,
+
+    /// Representative loss probability.
+    pub loss: f64,
+
+    /// Representative correlation strength.
+    pub correlation: f64,
+
+    /// Representative drift rate.
+    pub drift_rate: f64,
+
+    /// Representative characteristic time in arbitrary test units.
+    pub coherence_time: f64,
+}
+
+impl NoiseParameterFixture {
+    /// Creates a conservative, technology-neutral parameter set.
+    #[must_use]
+    pub const fn canonical() -> Self {
+        Self {
+            gate_error: 0.001,
+            preparation_error: 0.002,
+            readout_error: 0.01,
+            leakage: 0.0001,
+            loss: 0.0005,
+            correlation: 0.05,
+            drift_rate: 0.000001,
+            coherence_time: 1.0,
+        }
+    }
+
+    /// Returns all probability-like parameters.
+    #[must_use]
+    pub const fn probability_values(self) -> [f64; 6] {
+        [
+            self.gate_error,
+            self.preparation_error,
+            self.readout_error,
+            self.leakage,
+            self.loss,
+            self.correlation,
+        ]
+    }
+
+    /// Validates the fixture.
+    pub fn validate(self) -> Result<(), FixtureError> {
+        for value in self.probability_values() {
+            if !value.is_finite() {
+                return Err(FixtureError::NonFiniteProbability { value });
+            }
+
+            if !(0.0..=1.0).contains(&value) {
+                return Err(FixtureError::ProbabilityOutOfRange { value });
+            }
+        }
+
+        if !self.drift_rate.is_finite() || self.drift_rate < 0.0 {
+            return Err(FixtureError::InvalidNonNegativeParameter {
+                name: "drift_rate",
+                value: self.drift_rate,
+            });
+        }
+
+        if !self.coherence_time.is_finite() || self.coherence_time < 0.0 {
+            return Err(FixtureError::InvalidNonNegativeParameter {
+                name: "coherence_time",
+                value: self.coherence_time,
+            });
+        }
+
+        Ok(())
+    }
+}
+
+impl Default for NoiseParameterFixture {
+    fn default() -> Self {
+        Self::canonical()
+    }
+}
+
+// ============================================================================
+// Correlation fixture
+// ============================================================================
+
+/// Deterministic correlation fixture.
+///
+/// This is deliberately a description rather than a concrete correlation
+/// implementation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CorrelationFixture {
+    /// Stable correlation identity.
+    pub id: CorrelationId,
+
+    /// Number of participating resources.
+    pub resource_count: usize,
+
+    /// Correlation strength.
+    pub strength: f64,
+
+    /// Whether the fixture describes spatial correlation.
+    pub spatial: bool,
+
+    /// Whether the fixture describes temporal correlation.
+    pub temporal: bool,
+}
+
+impl CorrelationFixture {
+    /// Creates a validated correlation fixture.
+    pub fn new(
+        id: CorrelationId,
+        resource_count: usize,
+        strength: f64,
+        spatial: bool,
+        temporal: bool,
+    ) -> Result<Self, FixtureError> {
+        if !strength.is_finite() {
+            return Err(FixtureError::NonFiniteProbability { value: strength });
+        }
+
+        if !(0.0..=1.0).contains(&strength) {
+            return Err(FixtureError::ProbabilityOutOfRange { value: strength });
+        }
+
+        Ok(Self {
+            id,
+            resource_count,
+            strength,
+            spatial,
+            temporal,
+        })
+    }
+}
+
+// ============================================================================
+// Calibration fixture
+// ============================================================================
+
+/// Technology-neutral calibration fixture.
+///
+/// Concrete calibration tests convert this into the authoritative ZQN
+/// calibration structures.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CalibrationFixture {
+    /// Calibration identity.
+    pub id: CalibrationId,
+
+    /// Revision number.
+    pub revision: u64,
+
+    /// Representative gate error.
+    pub gate_error: f64,
+
+    /// Representative readout error.
+    pub readout_error: f64,
+
+    /// Representative coherence time.
+    pub coherence_time: f64,
+
+    /// Validity start in deterministic test time units.
+    pub valid_from: u64,
+
+    /// Validity end in deterministic test time units.
+    ///
+    /// `None` means open-ended for the fixture.
+    pub valid_until: Option<u64>,
+}
+
+impl CalibrationFixture {
+    /// Creates the canonical calibration fixture.
+    #[must_use]
+    pub const fn canonical(id: CalibrationId) -> Self {
+        Self {
+            id,
+            revision: 1,
+            gate_error: 0.001,
+            readout_error: 0.01,
+            coherence_time: 1.0,
+            valid_from: 0,
+            valid_until: Some(1_000),
+        }
+    }
+
+    /// Validates the fixture.
+    pub fn validate(self) -> Result<(), FixtureError> {
+        for (name, value) in [
+            ("gate_error", self.gate_error),
+            ("readout_error", self.readout_error),
+        ] {
+            if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+                return Err(FixtureError::InvalidCalibrationParameter {
+                    name,
+                    value,
+                });
+            }
+        }
+
+        if !self.coherence_time.is_finite() || self.coherence_time < 0.0 {
+            return Err(FixtureError::InvalidCalibrationParameter {
+                name: "coherence_time",
+                value: self.coherence_time,
+            });
+        }
+
+        if let Some(end) = self.valid_until {
+            if end < self.valid_from {
+                return Err(FixtureError::InvalidCalibrationInterval {
+                    start: self.valid_from,
+                    end,
+                });
+            }
+        }
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Complete semantic fixture
+// ============================================================================
+
+/// Stable cross-subsystem fixture description.
+///
+/// This is the primary fixture object for integration tests.
+///
+/// It intentionally contains only semantic test data and identifiers. Concrete
+/// ZQN modules remain responsible for constructing their own domain objects.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ZqnFixture {
+    /// Fixture purpose.
+    pub kind: FixtureKind,
+
+    /// Deterministic fixture seed.
+    pub seed: FixtureSeed,
+
+    /// Requested scale.
+    pub scale: FixtureScale,
+
+    /// ZQN object identities.
+    pub identities: ZqnIdentityFixture,
+
+    /// Standard probability values.
+    pub probabilities: ProbabilityFixture,
+
+    /// Standard physical/noise parameters.
+    pub parameters: NoiseParameterFixture,
+
+    /// Standard calibration values.
+    pub calibration: CalibrationFixture,
+
+    /// Standard correlation description.
+    pub correlation: CorrelationFixture,
+}
+
+impl ZqnFixture {
+    /// Creates the canonical small fixture.
+    pub fn canonical() -> Result<Self, FixtureError> {
+        Self::new(
+            FixtureKind::Minimal,
+            FixtureScale::small(),
+            FixtureSeed::default(),
+        )
+    }
+
+    /// Creates a fixture with explicit kind, scale and seed.
+    pub fn new(
+        kind: FixtureKind,
+        scale: FixtureScale,
+        seed: FixtureSeed,
+    ) -> Result<Self, FixtureError> {
+        let identities = ZqnIdentityFixture::from_base(seed.derive(1));
+
+        let probabilities = ProbabilityFixture::canonical();
+        probabilities.validate()?;
+
+        let parameters = NoiseParameterFixture::canonical();
+        parameters.validate()?;
+
+        let calibration = CalibrationFixture::canonical(identities.calibration());
+        calibration.validate()?;
+
+        let correlation = CorrelationFixture::new(
+            identities.correlation(),
+            scale.resource_count(),
+            parameters.correlation,
+            true,
+            true,
+        )?;
+
+        Ok(Self {
+            kind,
+            seed,
+            scale,
+            identities,
+            probabilities,
+            parameters,
+            calibration,
+            correlation,
+        })
+    }
+
+    /// Returns a fixture plan for lazy resource iteration.
+    #[must_use]
+    pub const fn resources(&self) -> ResourceFixturePlan {
+        ResourceFixturePlan::new(self.scale, self.seed)
+    }
+
+    /// Returns the number of resources represented by this fixture.
+    #[must_use]
+    pub const fn resource_count(&self) -> usize {
+        self.scale.resource_count()
+    }
+
+    /// Returns the requested shot count.
+    #[must_use]
+    pub const fn shot_count(&self) -> usize {
+        self.scale.shot_count()
+    }
+
+    /// Returns the canonical deterministic resource at an index.
+    ///
+    /// Returns `None` when the index is outside the requested fixture scale.
+    #[must_use]
+    pub const fn resource_at(&self, index: usize) -> Option<QuantumResourceFixture> {
+        if index >= self.scale.resource_count() {
+            None
+        } else {
+            Some(QuantumResourceFixture::indexed(index))
+        }
+    }
+
+    /// Validates the complete fixture.
+    pub fn validate(&self) -> Result<(), FixtureError> {
+        self.probabilities.validate()?;
+        self.parameters.validate()?;
+        self.calibration.validate()?;
+
+        if self.correlation.resource_count != self.resource_count() {
+            return Err(FixtureError::InconsistentFixture {
+                field: "correlation.resource_count",
+            });
+        }
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Standard fixture constructors
+// ============================================================================
+
+/// Returns the minimal valid fixture.
+///
+/// This is useful for basic constructor and validation tests.
+pub fn minimal_fixture() -> Result<ZqnFixture, FixtureError> {
+    ZqnFixture::new(
+        FixtureKind::Minimal,
+        FixtureScale::minimal(),
+        FixtureSeed::default(),
+    )
+}
+
+/// Returns the standard small fixture.
+pub fn small_fixture() -> Result<ZqnFixture, FixtureError> {
+    ZqnFixture::new(
+        FixtureKind::Integration,
+        FixtureScale::small(),
+        FixtureSeed::default(),
+    )
+}
+
+/// Returns the standard medium fixture.
+pub fn medium_fixture() -> Result<ZqnFixture, FixtureError> {
+    ZqnFixture::new(
+        FixtureKind::Integration,
+        FixtureScale::medium(),
+        FixtureSeed::default(),
+    )
+}
+
+/// Returns a fixture with an explicitly requested scale.
+///
+/// No architectural maximum is applied here.
+pub fn scaled_fixture(
+    resource_count: usize,
+    shot_count: usize,
+) -> Result<ZqnFixture, FixtureError> {
+    ZqnFixture::new(
+        FixtureKind::Scaling,
+        FixtureScale::new(resource_count, shot_count),
+        FixtureSeed::default(),
+    )
+}
+
+/// Returns a fixture with an explicit seed and scale.
+///
+/// This is the preferred constructor for determinism tests.
+pub fn seeded_fixture(
+    resource_count: usize,
+    shot_count: usize,
+    seed: u64,
+) -> Result<ZqnFixture, FixtureError> {
+    ZqnFixture::new(
+        FixtureKind::Determinism,
+        FixtureScale::new(resource_count, shot_count),
+        FixtureSeed::new(seed),
+    )
+}
+
+/// Creates only a lazy resource plan.
+///
+/// This function is preferable to `scaled_fixture` when a test only needs
+/// resource identity and does not need the complete fixture object.
+#[must_use]
+pub const fn resource_plan(
+    resource_count: usize,
+    shot_count: usize,
+    seed: u64,
+) -> ResourceFixturePlan {
+    ResourceFixturePlan::new(
+        FixtureScale::new(resource_count, shot_count),
+        FixtureSeed::new(seed),
+    )
+}
+
+// ============================================================================
+// Deterministic fixture partitions
+// ============================================================================
+
+/// Describes a deterministic partition of a fixture.
+///
+/// This allows distributed tests to process a fixture without requiring every
+/// worker to materialize the complete fixture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FixturePartition {
+    start: usize,
+    end: usize,
+}
+
+impl FixturePartition {
+    /// Creates a partition `[start, end)`.
+    ///
+    /// An empty partition is valid when `start == end`.
+    pub const fn new(start: usize, end: usize) -> Result<Self, FixtureError> {
+        if end < start {
+            return Err(FixtureError::InvalidPartition { start, end });
+        }
+
+        Ok(Self { start, end })
+    }
+
+    /// Returns the inclusive start/exclusive end range.
+    #[must_use]
+    pub const fn range(self) -> std::ops::Range<usize> {
+        self.start..self.end
+    }
+
+    /// Returns the number of entries in the partition.
+    #[must_use]
+    pub const fn len(self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Returns whether the partition is empty.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.start == self.end
+    }
+}
+
+/// Produces deterministic contiguous partitions for a requested resource
+/// count.
+///
+/// `partitions == 0` is rejected because there is no meaningful partitioning
+/// into zero workers.
+///
+/// The number of partitions may be larger than the resource count. Empty
+/// partitions are therefore possible and deterministic.
+pub fn partition_resource_count(
+    resource_count: usize,
+    partitions: usize,
+) -> Result<Vec<FixturePartition>, FixtureError> {
+    if partitions == 0 {
+        return Err(FixtureError::ZeroPartitions);
+    }
+
+    let mut result = Vec::with_capacity(partitions);
+
+    let base = resource_count / partitions;
+    let remainder = resource_count % partitions;
+
+    let mut start = 0usize;
+
+    for index in 0..partitions {
+        let extra = usize::from(index < remainder);
+        let size = base.saturating_add(extra);
+        let end = start.saturating_add(size);
+
+        result.push(FixturePartition::new(start, end)?);
+        start = end;
+    }
+
+    debug_assert_eq!(start, resource_count);
+
+    Ok(result)
+}
+
+// ============================================================================
+// Shot fixture
+// ============================================================================
+
+/// Deterministic shot identity.
+///
+/// A shot is not a random number. It is an explicit execution identity used
+/// by deterministic tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct FixtureShotId(usize);
+
+impl FixtureShotId {
+    /// Creates a shot identity.
+    #[must_use]
+    pub const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    /// Returns the shot index.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0
+    }
+}
+
+/// Deterministically derives a shot seed.
+///
+/// This makes the result independent of worker/thread scheduling.
+#[must_use]
+pub const fn shot_seed(seed: FixtureSeed, shot: FixtureShotId) -> FixtureSeed {
+    seed.child(shot.index() as u64)
+}
+
+// ============================================================================
+// Fixture error
+// ============================================================================
+
+/// Errors produced while constructing invalid test fixtures.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FixtureError {
+    /// A probability-like value was NaN or infinite.
+    NonFiniteProbability {
+        /// Invalid value.
+        value: f64,
+    },
+
+    /// A probability-like value was outside `[0, 1]`.
+    ProbabilityOutOfRange {
+        /// Invalid value.
+        value: f64,
+    },
+
+    /// A non-negative parameter was invalid.
+    InvalidNonNegativeParameter {
+        /// Parameter name.
+        name: &'static str,
+
+        /// Invalid value.
+        value: f64,
+    },
+
+    /// A calibration parameter was invalid.
+    InvalidCalibrationParameter {
+        /// Parameter name.
+        name: &'static str,
+
+        /// Invalid value.
+        value: f64,
+    },
+
+    /// A calibration interval was malformed.
+    InvalidCalibrationInterval {
+        /// Interval start.
+        start: u64,
+
+        /// Interval end.
+        end: u64,
+    },
+
+    /// A fixture's internal fields disagree.
+    InconsistentFixture {
+        /// Field whose invariant failed.
+        field: &'static str,
+    },
+
+    /// A partition endpoint is invalid.
+    InvalidPartition {
+        /// Partition start.
+        start: usize,
+
+        /// Partition end.
+        end: usize,
+    },
+
+    /// Zero partitions were requested.
+    ZeroPartitions,
+}
+
+impl fmt::Display for FixtureError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonFiniteProbability { value } => {
+                write!(formatter, "fixture value is not finite: {value}")
+            }
+
+            Self::ProbabilityOutOfRange { value } => {
+                write!(formatter, "fixture probability is outside [0, 1]: {value}")
+            }
+
+            Self::InvalidNonNegativeParameter { name, value } => {
+                write!(
+                    formatter,
+                    "fixture parameter `{name}` must be finite and non-negative: {value}"
+                )
+            }
+
+            Self::InvalidCalibrationParameter { name, value } => {
+                write!(
+                    formatter,
+                    "invalid calibration parameter `{name}`: {value}"
+                )
+            }
+
+            Self::InvalidCalibrationInterval { start, end } => {
+                write!(
+                    formatter,
+                    "invalid calibration interval: start={start}, end={end}"
+                )
+            }
+
+            Self::InconsistentFixture { field } => {
+                write!(formatter, "inconsistent fixture field: {field}")
+            }
+
+            Self::InvalidPartition { start, end } => {
+                write!(
+                    formatter,
+                    "invalid fixture partition: start={start}, end={end}"
+                )
+            }
+
+            Self::ZeroPartitions => {
+                formatter.write_str("fixture partition count must be greater than zero")
+            }
+        }
+    }
+}
+
+impl std::error::Error for FixtureError {}
+
+// ============================================================================
+// Compile-time integration assertions
+// ============================================================================
+
+/// Compile-time helper proving that fixtures use the canonical IR qubit
+/// identity types.
+///
+/// This function intentionally performs no runtime work.
+#[allow(dead_code)]
+fn canonical_qubit_identity_contract() {
+    fn accept_logical(_: QubitId) {}
+    fn accept_physical(_: PhysicalQubitId) {}
+
+    let logical = QubitId::new(0);
+    let physical = PhysicalQubitId::new(0);
+
+    accept_logical(logical);
+    accept_physical(physical);
+}
+
+// ============================================================================
+// Unit tests for the fixture layer itself
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seed_is_deterministic() {
+        let seed = FixtureSeed::new(42);
+
+        assert_eq!(seed.derive(0), seed.derive(0));
+        assert_eq!(seed.derive(1), seed.derive(1));
+        assert_eq!(seed.child(7), seed.child(7));
+    }
+
+    #[test]
+    fn different_seed_components_are_not_constant() {
+        let seed = FixtureSeed::new(42);
+
+        assert_ne!(seed.derive(0), seed.derive(1));
+        assert_ne!(seed.derive(1), seed.derive(2));
+    }
+
+    #[test]
+    fn scale_has_no_architectural_maximum() {
+        let scale = FixtureScale::new(usize::MAX, usize::MAX);
+
+        assert_eq!(scale.resource_count(), usize::MAX);
+        assert_eq!(scale.shot_count(), usize::MAX);
+    }
+
+    #[test]
+    fn minimal_fixture_is_valid() {
+        let fixture = minimal_fixture().expect("minimal fixture must be valid");
+
+        fixture
+            .validate()
+            .expect("minimal fixture validation must succeed");
+
+        assert_eq!(fixture.resource_count(), 1);
+        assert_eq!(fixture.shot_count(), 1);
+    }
+
+    #[test]
+    fn small_fixture_is_valid() {
+        let fixture = small_fixture().expect("small fixture must be valid");
+
+        fixture
+            .validate()
+            .expect("small fixture validation must succeed");
+    }
+
+    #[test]
+    fn medium_fixture_is_valid() {
+        let fixture = medium_fixture().expect("medium fixture must be valid");
+
+        fixture
+            .validate()
+            .expect("medium fixture validation must succeed");
+    }
+
+    #[test]
+    fn probability_fixture_is_valid() {
+        ProbabilityFixture::canonical()
+            .validate()
+            .expect("canonical probabilities must be valid");
+    }
+
+    #[test]
+    fn parameter_fixture_is_valid() {
+        NoiseParameterFixture::canonical()
+            .validate()
+            .expect("canonical parameters must be valid");
+    }
+
+    #[test]
+    fn canonical_qubit_identity_is_used() {
+        let fixture =
+            QuantumResourceFixture::indexed(17);
+
+        assert_eq!(fixture.logical(), QubitId::new(17));
+        assert_eq!(fixture.physical(), PhysicalQubitId::new(17));
+    }
+
+    #[test]
+    fn resource_plan_is_lazy() {
+        let plan = resource_plan(1_000_000, 10, 123);
+
+        assert_eq!(plan.len(), 1_000_000);
+
+        // Creating the plan does not require allocating one million entries.
+        // Only the iterator itself exists here.
+        let mut iterator = plan.iter();
+
+        assert_eq!(
+            iterator.next(),
+            Some(QuantumResourceFixture::indexed(0))
+        );
+
+        assert_eq!(
+            iterator.next(),
+            Some(QuantumResourceFixture::indexed(1))
+        );
+    }
+
+    #[test]
+    fn resource_iterator_has_exact_size() {
+        let plan = resource_plan(17, 3, 42);
+
+        let mut iterator = plan.iter();
+
+        assert_eq!(iterator.len(), 17);
+
+        let _ = iterator.next();
+
+        assert_eq!(iterator.len(), 16);
+    }
+
+    #[test]
+    fn resource_iterator_is_deterministic() {
+        let first: Vec<_> = resource_plan(32, 1, 42).iter().collect();
+        let second: Vec<_> = resource_plan(32, 1, 42).iter().collect();
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn resource_iterator_scales_without_semantic_limit() {
+        let plan = resource_plan(usize::MAX, 1, 42);
+
+        assert_eq!(plan.len(), usize::MAX);
+
+        let mut iterator = plan.iter();
+
+        assert_eq!(
+            iterator.next(),
+            Some(QuantumResourceFixture::indexed(0))
+        );
+
+        assert_eq!(
+            iterator.next(),
+            Some(QuantumResourceFixture::indexed(1))
+        );
+    }
+
+    #[test]
+    fn zqn_identity_fixture_is_deterministic() {
+        let first = ZqnIdentityFixture::from_base(100);
+        let second = ZqnIdentityFixture::from_base(100);
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn zqn_identity_domains_are_distinct() {
+        let ids = ZqnIdentityFixture::from_base(100);
+
+        assert_ne!(ids.noise_model().value(), ids.channel().value());
+        assert_ne!(ids.channel().value(), ids.fault().value());
+        assert_ne!(ids.fault().value(), ids.calibration().value());
+    }
+
+    #[test]
+    fn complete_fixture_is_deterministic() {
+        let first =
+            seeded_fixture(32, 128, 987_654_321)
+                .expect("fixture must be valid");
+
+        let second =
+            seeded_fixture(32, 128, 987_654_321)
+                .expect("fixture must be valid");
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn different_seeds_produce_distinct_identity_fixtures() {
+        let first =
+            seeded_fixture(8, 8, 1)
+                .expect("fixture must be valid");
+
+        let second =
+            seeded_fixture(8, 8, 2)
+                .expect("fixture must be valid");
+
+        assert_ne!(first.identities, second.identities);
+    }
+
+    #[test]
+    fn fixture_resource_bounds_are_checked() {
+        let fixture =
+            small_fixture().expect("fixture must be valid");
+
+        assert!(fixture.resource_at(fixture.resource_count()).is_none());
+
+        assert!(fixture.resource_at(0).is_some());
+    }
+
+    #[test]
+    fn zero_resource_fixture_is_valid() {
+        let fixture =
+            scaled_fixture(0, 0)
+                .expect("zero-sized fixture should be valid");
+
+        fixture
+            .validate()
+            .expect("zero-sized fixture should validate");
+
+        assert_eq!(fixture.resource_count(), 0);
+        assert_eq!(fixture.shot_count(), 0);
+        assert!(fixture.resources().is_empty());
+    }
+
+    #[test]
+    fn partitions_cover_resource_space_exactly() {
+        let resource_count = 37;
+        let partitions =
+            partition_resource_count(resource_count, 8)
+                .expect("partitioning must succeed");
+
+        assert_eq!(partitions.len(), 8);
+
+        let mut next = 0;
+
+        for partition in partitions {
+            assert_eq!(partition.range().start, next);
+            next = partition.range().end;
+        }
+
+        assert_eq!(next, resource_count);
+    }
+
+    #[test]
+    fn partitions_are_deterministic() {
+        let first =
+            partition_resource_count(101, 7)
+                .expect("partitioning must succeed");
+
+        let second =
+            partition_resource_count(101, 7)
+                .expect("partitioning must succeed");
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn more_partitions_than_resources_is_supported() {
+        let partitions =
+            partition_resource_count(2, 8)
+                .expect("partitioning must succeed");
+
+        assert_eq!(partitions.len(), 8);
+        assert_eq!(
+            partitions.iter().map(FixturePartition::len).sum::<usize>(),
+            2
+        );
+    }
+
+    #[test]
+    fn zero_partitions_are_rejected() {
+        assert_eq!(
+            partition_resource_count(10, 0),
+            Err(FixtureError::ZeroPartitions)
+        );
+    }
+
+    #[test]
+    fn invalid_partition_is_rejected() {
+        assert_eq!(
+            FixturePartition::new(5, 4),
+            Err(FixtureError::InvalidPartition { start: 5, end: 4 })
+        );
+    }
+
+    #[test]
+    fn shot_seed_is_deterministic() {
+        let seed = FixtureSeed::new(123);
+
+        assert_eq!(
+            shot_seed(seed, FixtureShotId::new(4)),
+            shot_seed(seed, FixtureShotId::new(4))
+        );
+
+        assert_ne!(
+            shot_seed(seed, FixtureShotId::new(4)),
+            shot_seed(seed, FixtureShotId::new(5))
+        );
+    }
+
+    #[test]
+    fn canonical_calibration_is_valid() {
+        let ids = ZqnIdentityFixture::default();
+
+        let calibration =
+            CalibrationFixture::canonical(ids.calibration());
+
+        calibration
+            .validate()
+            .expect("canonical calibration must be valid");
+    }
+
+    #[test]
+    fn invalid_probability_is_rejected() {
+        let fixture = ProbabilityFixture {
+            zero: 0.0,
+            one: 1.0,
+            small: -0.1,
+            medium: 0.05,
+            large: 0.25,
+            near_one: 0.999,
+        };
+
+        assert!(matches!(
+            fixture.validate(),
+            Err(FixtureError::ProbabilityOutOfRange { .. })
+        ));
+    }
+
+    #[test]
+    fn non_finite_probability_is_rejected() {
+        let fixture = ProbabilityFixture {
+            zero: 0.0,
+            one: 1.0,
+            small: f64::NAN,
+            medium: 0.05,
+            large: 0.25,
+            near_one: 0.999,
+        };
+
+        assert!(matches!(
+            fixture.validate(),
+            Err(FixtureError::NonFiniteProbability { .. })
+        ));
+    }
+
+    #[test]
+    fn invalid_correlation_is_rejected() {
+        let result = CorrelationFixture::new(
+            CorrelationId::new(1),
+            2,
+            1.1,
+            true,
+            true,
+        );
+
+        assert!(matches!(
+            result,
+            Err(FixtureError::ProbabilityOutOfRange { .. })
+        ));
+    }
+
+    #[test]
+    fn invalid_calibration_interval_is_rejected() {
+        let ids = ZqnIdentityFixture::default();
+
+        let calibration = CalibrationFixture {
+            id: ids.calibration(),
+            revision: 1,
+            gate_error: 0.001,
+            readout_error: 0.01,
+            coherence_time: 1.0,
+            valid_from: 100,
+            valid_until: Some(50),
+        };
+
+        assert!(matches!(
+            calibration.validate(),
+            Err(FixtureError::InvalidCalibrationInterval {
+                start: 100,
+                end: 50
+            })
+        ));
+    }
+
+    #[test]
+    fn fixture_contains_no_hidden_global_state() {
+        // This test is intentionally simple: constructing equivalent fixtures
+        // repeatedly must produce equivalent values without requiring a reset
+        // operation or global-state cleanup.
+        let first = small_fixture().expect("fixture must be valid");
+        let second = small_fixture().expect("fixture must be valid");
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn fixture_seed_does_not_depend_on_time() {
+        let seed = FixtureSeed::new(777);
+
+        let first = seed.derive(123);
+        let second = seed.derive(123);
+
+        assert_eq!(first, second);
+    }
+}
