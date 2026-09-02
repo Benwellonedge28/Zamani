@@ -1,104 +1,83 @@
-//! Zamani Quantum Computing Subsystem
+//! Zamani Quantum Computing Subsystem.
 //!
-//! Authoritative composition boundary for all quantum-computing functionality
-//! in Zamani.
+//! This module is the authoritative composition boundary for quantum computing
+//! functionality in Zamani.
 //!
-//! # Architectural mission
+//! # Purpose
 //!
-//! `quantum::mod` is a composition root.
+//! `crate::quantum` defines the public namespace and dependency boundaries for
+//! the quantum subsystem. It does not implement quantum semantics, algorithms,
+//! hardware execution, simulation, routing, scheduling, error correction,
+//! benchmarking, or noise modelling.
 //!
-//! It defines:
+//! Domain semantics belong to the appropriate child subsystem.
 //!
-//! - which quantum subsystems exist;
-//! - their public namespace boundaries;
-//! - high-level dependency direction;
-//! - intentionally retained compatibility paths;
-//! - the safety boundary for the quantum namespace.
-//!
-//! It does NOT define quantum semantics.
-//!
-//! Semantic ownership belongs to the appropriate child subsystem, especially:
-//!
-//! ```text
-//! quantum::ir
-//! ```
-//!
-//! The canonical quantum IR is the stable semantic boundary between source
-//! frontends and downstream quantum compilation/execution systems.
-//!
-//! # Fundamental architecture
-//!
-//! ```text
-//!                         Zamani source
-//!                              │
-//!                              ▼
-//!                    ┌──────────────────┐
-//!                    │ quantum::frontend│
-//!                    └────────┬─────────┘
-//!                             │
-//!                             ▼
-//!                    ┌──────────────────┐
-//!                    │   quantum::ir    │
-//!                    │                  │
-//!                    │ canonical WHAT   │
-//!                    └────────┬─────────┘
-//!                             │
-//!            ┌────────────────┼─────────────────┐
-//!            │                │                 │
-//!            ▼                ▼                 ▼
-//!       algorithms       optimization        analysis
-//!            │                │                 │
-//!            │                ▼                 │
-//!            │             routing              │
-//!            │                │                 │
-//!            │                ▼                 │
-//!            │            scheduling             │
-//!            │                │                 │
-//!            └────────────────┼─────────────────┘
-//!                             │
-//!                             ▼
-//!                    error correction
-//!                             │
-//!                             ▼
-//!                       quantum::hardware
-//!                             │
-//!                    ┌────────┼────────┐
-//!                    │        │        │
-//!                    ▼        ▼        ▼
-//!                 simulator adapters  QPU
-//!                    │        │        │
-//!                    └────────┼────────┘
-//!                             ▼
-//!                         execution
-//! ```
-//!
-//! Benchmarking consumes the other subsystems; it is not a dependency of the
-//! canonical IR.
-//!
-//! # Canonical semantic boundary
-//!
-//! The authoritative semantic representation is:
+//! The most important semantic boundary is:
 //!
 //! ```text
 //! crate::quantum::ir
 //! ```
 //!
-//! In particular, quantum identifiers must use:
+//! The canonical quantum IR describes what a quantum computation means.
+//! Downstream subsystems determine how that computation is transformed,
+//! mapped, scheduled, executed, characterized, and measured.
+//!
+//! # Architectural principle
+//!
+//! Zamani follows:
 //!
 //! ```text
-//! crate::quantum::ir::qubit::QubitId
-//! crate::quantum::ir::qubit::PhysicalQubitId
+//!                       Zamani source
+//!                            │
+//!                            ▼
+//!                    quantum::frontend
+//!                            │
+//!                            ▼
+//!                     quantum::ir
+//!                            │
+//!          ┌─────────────────┼──────────────────┐
+//!          │                 │                  │
+//!          ▼                 ▼                  ▼
+//!      algorithms       optimization        analysis
+//!          │                 │                  │
+//!          └─────────────────┼──────────────────┘
+//!                            │
+//!                ┌───────────┼───────────┐
+//!                │           │           │
+//!                ▼           ▼           ▼
+//!             routing    scheduling      ZQN
+//!                │           │           │
+//!                └───────────┼───────────┘
+//!                            ▼
+//!                  error-correction layer
+//!                            │
+//!                            ▼
+//!                    quantum::hardware
+//!                            │
+//!                            ▼
+//!                         runtime
+//!                            │
+//!             ┌──────────────┼──────────────┐
+//!             ▼              ▼              ▼
+//!          simulator        QPU          emulator
+//!             │              │              │
+//!             └──────────────┼──────────────┘
+//!                            ▼
+//!                       observations
+//!                            │
+//!                            ▼
+//!                    quantum::benchmarking
 //! ```
 //!
-//! No second `QubitId` may be created in this root module.
-//!
-//! The IR itself explicitly establishes `quantum::ir::qubit` as the canonical
-//! qubit identity boundary. All downstream quantum subsystems must consume
-//! that type rather than manufacturing competing identities.
+//! The exact implementation dependency graph is owned by the individual
+//! subsystem contracts. This root only establishes the namespace boundary.
 //!
 //! # Write once, scale everywhere
 //!
-//! The quantum namespace deliberately contains no architectural maximum for:
+//! A Zamani quantum program must not encode the physical size of the machine
+//! on which it will execute.
+//!
+//! This module therefore imposes no architectural maximum on:
 //!
 //! - logical qubits;
 //! - physical qubits;
@@ -108,549 +87,774 @@
 //! - circuit depth;
 //! - gate count;
 //! - gate arity;
-//! - topology;
-//! - machine size;
+//! - topology size;
+//! - number of devices;
+//! - number of execution targets;
+//! - quantum technology;
 //! - vendor;
-//! - quantum technology.
+//! - execution architecture.
 //!
-//! A Zamani program may therefore describe any finite computation that can be
-//! represented and processed by the available compiler, runtime, memory and
-//! target resources.
+//! The word "infinity" means:
 //!
-//! "Infinity" means:
+//! > the language and quantum namespace do not impose an artificial finite
+//! > machine-size ceiling.
 //!
-//! > no artificial finite machine-size ceiling is encoded in the quantum
-//! > language architecture.
+//! Every concrete compilation or execution remains bounded by the resources
+//! actually available to that invocation.
 //!
-//! It does NOT mean that an individual machine has infinite memory, address
-//! space, processing capacity or physical qubits.
+//! Resource constraints therefore belong to explicit policies and capabilities,
+//! not to this namespace.
 //!
-//! Concrete resource limits belong to the subsystem that owns them:
-//!
-//! ```text
-//! frontend input limits
-//! IR limits
-//! optimization limits
-//! memory limits
-//! hardware capacity
-//! execution limits
-//! backend limits
-//! ```
-//!
-//! Those limits are policies/capabilities, not semantic limits of Zamani.
-//!
-//! # Separation of concerns
+//! Examples include:
 //!
 //! ```text
-//! IR          = WHAT the computation means
-//! Algorithm   = HOW a logical workload is constructed
-//! Optimization= BETTER equivalent representation
-//! Routing     = WHERE logical resources are placed
-//! Scheduling  = WHEN operations execute
-//! Hardware    = WHAT a target can provide
-//! Backend     = HOW a target is driven
-//! Runtime     = HOW execution is orchestrated
-//! Memory      = HOW state/resources are represented and managed
-//! QEC         = HOW fault tolerance is represented and implemented
-//! Benchmarking= HOW systems are measured
+//! compiler resource policy
+//! runtime resource policy
+//! memory budget
+//! execution budget
+//! target capabilities
+//! device capacity
+//! backend constraints
+//! security limits
 //! ```
 //!
-//! No child module should move these responsibilities into this composition
-//! root.
+//! Such limits must never become semantic constants in this composition root.
 //!
-//! # Dependency direction
+//! # Canonical qubit identity
 //!
-//! The preferred dependency direction is:
+//! The sole authoritative qubit identity implementation is:
 //!
 //! ```text
-//! frontend
-//!    │
-//!    ▼
-//! ir
-//!    │
-//!    ├──────────────► algorithms
-//!    │
-//!    ├──────────────► optimization
-//!    │
-//!    ├──────────────► routing
-//!    │
-//!    ├──────────────► scheduling
-//!    │
-//!    └──────────────► error_correction
-//!                         │
-//!                         ▼
-//!                     hardware
-//!                         │
-//!                         ▼
-//!                       runtime
+//! crate::quantum::ir::qubit
 //! ```
 //!
-//! Memory participates as an execution/resource substrate:
+//! New quantum code must use:
 //!
 //! ```text
-//! ir
-//!  │
-//!  ├──► algorithms / optimization / routing / scheduling / QEC
-//!  │
-//!  ▼
-//! memory + hardware
-//!  │
-//!  ▼
-//! runtime
+//! crate::quantum::ir::qubit::QubitId
+//! crate::quantum::ir::qubit::PhysicalQubitId
 //! ```
 //!
-//! Benchmarking consumes execution, hardware, memory, algorithms, QEC and IR
-//! information:
+//! This root deliberately defines neither type.
 //!
-//! ```text
-//! ir ───────────────┐
-//! algorithms ───────┤
-//! optimization ─────┤
-//! QEC ──────────────┤
-//! memory ───────────┤
-//! hardware ─────────┤
-//!                    ▼
-//!              benchmarking
-//! ```
+//! No quantum child subsystem should introduce a competing `QubitId` merely
+//! because it needs an identifier.
 //!
-//! The reverse dependency is forbidden:
-//!
-//! ```text
-//! ir ─X─► benchmarking
-//! hardware ─X─► benchmarking implementation
-//! memory ─X─► benchmarking implementation
-//! ```
+//! If a subsystem needs a different identity semantic, it must use a distinct,
+//! explicitly named identity owned by that subsystem rather than pretending to
+//! be the canonical qubit identity.
 //!
 //! # Ownership
+//!
+//! ## `algorithms`
+//!
+//! Owns backend-independent quantum algorithm construction and orchestration.
+//!
+//! It does not own:
+//!
+//! - canonical IR semantics;
+//! - hardware;
+//! - routing;
+//! - scheduling;
+//! - vendor APIs;
+//! - execution;
+//! - QPU credentials.
+//!
+//! ## `benchmarking`
+//!
+//! Owns benchmark protocols, workload generation, execution contracts,
+//! statistical analysis, metrics, Quantum Volume, randomized benchmarking,
+//! cross-entropy benchmarking, volumetric/application/QEC benchmarking,
+//! reporting, and regression analysis.
+//!
+//! Benchmarking consumes other quantum subsystems. It is not the semantic
+//! foundation of the quantum namespace.
+//!
+//! ## `error_correction`
+//!
+//! Owns quantum error-correction algorithms, codes, syndrome processing,
+//! decoding, logical fault tolerance, and related fault-tolerant mechanisms.
+//!
+//! Universal noise semantics should ultimately be supplied by `zqn` rather
+//! than duplicated inside QEC.
+//!
+//! ## `frontend`
+//!
+//! Owns parsing and lowering from Zamani quantum syntax and supported external
+//! quantum formats into the canonical `quantum::ir` representation.
+//!
+//! The IR must never depend on frontend ASTs.
+//!
+//! ## `hardware`
+//!
+//! Owns provider-neutral hardware abstraction, target capabilities,
+//! instruction capabilities, topology, calibration, device lifecycle,
+//! execution adapters, and provider-specific integration.
+//!
+//! Vendor-specific implementation belongs here, not in the canonical IR or
+//! ZQN namespace.
 //!
 //! ## `ir`
 //!
 //! Owns canonical, hardware-independent quantum semantics.
 //!
-//! It contains the universal semantic vocabulary required to represent:
+//! It is the stable semantic boundary between frontend and downstream quantum
+//! compilation/execution systems.
 //!
-//! - gate circuits;
-//! - dynamic circuits;
-//! - classical control;
-//! - measurement;
-//! - reset;
-//! - initialization;
-//! - symbolic parameters;
-//! - timing;
-//! - pulse semantics;
-//! - analog/Hamiltonian computation;
-//! - annealing/QUBO models;
-//! - logical/fault-tolerant computation;
-//! - distributed quantum computation;
-//! - extensible future quantum models.
+//! The IR must remain independent of:
 //!
-//! The IR must remain independent of all execution backends.
-//!
-//! ## `frontend`
-//!
-//! Owns source and external quantum-format parsing and lowering.
-//!
-//! Frontends lower INTO `quantum::ir`.
-//!
-//! The IR never depends on frontend ASTs.
-//!
-//! ## `algorithms`
-//!
-//! Owns backend-independent quantum algorithm construction.
-//!
-//! It consumes canonical IR concepts but does not redefine them.
-//!
-//! ## `optimization`
-//!
-//! Owns logical optimization and transformation passes.
-//!
-//! It consumes canonical IR.
-//!
-//! It does not own physical topology, execution or benchmarking.
-//!
-//! ## `routing`
-//!
-//! Owns logical-to-physical placement and connectivity-aware routing.
-//!
-//! It consumes canonical IR and hardware/resource descriptions.
-//!
-//! It does not redefine `QubitId`.
-//!
-//! ## `scheduling`
-//!
-//! Owns operation ordering and scheduling policy.
-//!
-//! Hardware timing constraints are supplied by the hardware subsystem.
-//!
-//! ## `error_correction`
-//!
-//! Owns quantum error-correction algorithms, encodings, decoding and
-//! fault-tolerant mechanisms.
-//!
-//! Logical/physical identity remains interoperable with the canonical IR.
-//!
-//! ## `hardware`
-//!
-//! Owns the provider-neutral Hardware Abstraction Layer and provider/device
-//! integration.
-//!
-//! It contains the physical concepts deliberately excluded from canonical IR:
-//!
-//! - capabilities;
-//! - topology;
-//! - calibration;
-//! - instruction sets;
-//! - execution;
-//! - providers;
-//! - devices;
-//! - backend lifecycle;
-//! - adapters.
-//!
-//! Provider-specific details remain inside hardware adapters.
+//! - vendor SDKs;
+//! - backend credentials;
+//! - hardware connections;
+//! - network clients;
+//! - execution engines;
+//! - routing implementations;
+//! - scheduler implementations;
+//! - QEC implementations;
+//! - benchmark implementations.
 //!
 //! ## `memory`
 //!
 //! Owns quantum/hybrid memory and state-resource management.
 //!
-//! It must remain representation-neutral and must not redefine the canonical
-//! quantum IR.
+//! It must remain representation-aware but execution-backend independent and
+//! must not redefine canonical IR identities.
 //!
-//! ## `benchmarking`
+//! ## `optimization`
 //!
-//! Owns benchmark orchestration, workload generation, execution contracts,
-//! statistics, metrics, Quantum Volume, randomized benchmarking, XEB,
-//! volumetric benchmarking, application benchmarking, QEC benchmarking,
-//! reporting and regression analysis.
+//! Owns logical and representation-preserving quantum transformations.
 //!
-//! Benchmarking is a consumer of quantum subsystems, never their semantic
-//! foundation.
+//! It must not become the owner of physical hardware topology or execution.
 //!
-//! ## `self_healing`
+//! ## `routing`
 //!
-//! This namespace is intentionally NOT declared here until its module boundary
-//! is valid Rust and has a production contract.
+//! Owns logical-to-physical placement and connectivity-aware transformation.
 //!
-//! The current repository contains a placeholder `self_healing/mod.rs` rather
-//! than a completed Rust module. A composition root must never expose an
-//! uncompilable placeholder simply because a directory exists.
+//! It consumes canonical IR and target/resource information.
 //!
-//! ## `zqml`
+//! It must use the canonical qubit identities from `quantum::ir::qubit`.
 //!
-//! This namespace is intentionally not declared until its current module
-//! contents are a valid production Rust API.
+//! ## `scheduling`
 //!
-//! The quantum root must never expose incomplete source merely because the
-//! directory exists.
+//! Owns ordering and timing of executable operations.
+//!
+//! Hardware timing capabilities are supplied through the hardware boundary.
 //!
 //! ## `zqn`
 //!
-//! The current repository contains a malformed filename with a trailing space
-//! (`mod.rs `). It is intentionally not declared here.
+//! When exposed, owns the canonical Zamani Quantum Noise semantics:
 //!
-//! The filename must first be corrected and the module given a completed API
-//! contract before it becomes part of the stable quantum namespace.
+//! - channels;
+//! - faults;
+//! - stochastic distributions;
+//! - correlated noise;
+//! - temporal noise;
+//! - spatial noise;
+//! - crosstalk;
+//! - leakage;
+//! - loss;
+//! - erasure;
+//! - calibration uncertainty;
+//! - drift;
+//! - characterization;
+//! - uncertainty;
+//! - reproducible stochastic execution.
 //!
-//! # Module declaration policy
+//! ZQN is not a competing IR.
 //!
-//! Every directory declared below MUST contain its own authoritative `mod.rs`.
-//!
-//! This file must NOT recreate those module trees inline.
-//!
-//! Correct:
+//! Its relationship to the canonical IR is:
 //!
 //! ```text
-//! pub mod hardware;
+//! quantum::ir
+//!     │
+//!     │ computation semantics
+//!     ▼
+//!     ZQN
+//!     │
+//!     │ physical uncertainty / noise semantics
+//!     ▼
+//! routing / scheduling / QEC / simulation / hardware
 //! ```
 //!
-//! Incorrect:
+//! # Why unfinished modules are not declared
+//!
+//! A directory existing in the source tree is not sufficient reason for this
+//! root to expose it as a Rust module.
+//!
+//! A public declaration such as:
 //!
 //! ```text
-//! pub mod hardware {
-//!     #[path = "..."]
-//!     pub mod backend;
-//! }
+//! pub mod zqml;
 //! ```
 //!
-//! The latter duplicates the responsibility of `hardware/mod.rs` and couples
-//! this composition root to internal file layout.
+//! requires a valid child module boundary and compilable implementation.
+//!
+//! The same rule applies to:
+//!
+//! ```text
+//! self_healing
+//! zqml
+//! zqn
+//! ```
+//!
+//! In particular, the current repository has historically contained an
+//! incorrectly named ZQN module file with a trailing space in the filename.
+//! That filesystem issue must be corrected before `zqn` can be declared here.
+//!
+//! This root therefore refuses to make an incomplete subsystem a dependency of
+//! the complete quantum namespace.
+//!
+//! # Dependency direction
+//!
+//! The composition root does not enforce every internal dependency through
+//! Rust's type system, but the architectural direction is:
+//!
+//! ```text
+//! frontend
+//!     │
+//!     ▼
+//!    IR
+//!     │
+//!     ├──────────────► algorithms
+//!     │
+//!     ├──────────────► optimization
+//!     │
+//!     ├──────────────► routing
+//!     │
+//!     ├──────────────► scheduling
+//!     │
+//!     └──────────────► analysis
+//!
+//! IR + target information
+//!     │
+//!     ├──────────────► routing
+//!     ├──────────────► scheduling
+//!     └──────────────► lowering
+//!
+//! IR + ZQN
+//!     │
+//!     ├──────────────► simulation
+//!     ├──────────────► routing
+//!     ├──────────────► scheduling
+//!     └──────────────► QEC
+//!
+//! compiled representation
+//!     │
+//!     ▼
+//! hardware
+//!     │
+//!     ▼
+//! runtime / backend
+//!     │
+//!     ▼
+//! observations
+//!     │
+//!     ▼
+//! benchmarking / characterization
+//! ```
+//!
+//! The following reverse dependencies are prohibited architecturally:
+//!
+//! ```text
+//! IR ─X─► frontend
+//! IR ─X─► hardware
+//! IR ─X─► routing implementation
+//! IR ─X─► scheduling implementation
+//! IR ─X─► benchmarking implementation
+//! IR ─X─► vendor SDK
+//!
+//! ZQN ─X─► vendor SDK
+//! ZQN ─X─► credentials
+//! ZQN ─X─► UI
+//! ZQN ─X─► CLI
+//!
+//! frontend ─X─► hardware execution
+//! algorithms ─X─► vendor API
+//! ```
+//!
+//! # Composition-root rule
+//!
+//! This file is intentionally a composition root rather than a second domain
+//! implementation.
+//!
+//! It should contain:
+//!
+//! - module declarations;
+//! - module-level documentation;
+//! - narrowly justified compatibility aliases;
+//! - no quantum algorithms;
+//! - no state representation;
+//! - no hardware discovery;
+//! - no device initialization;
+//! - no backend connection;
+//! - no random number generation;
+//! - no global mutable state;
+//! - no serialization implementation;
+//! - no numerical algorithms;
+//! - no vendor logic.
+//!
+//! A new independent quantum subsystem should normally require only a new
+//! completed child module and one declaration here.
+//!
+//! It should not require unrelated existing quantum modules to be edited.
+//!
+//! # Public API policy
+//!
+//! The preferred API is namespace-oriented:
+//!
+//! ```text
+//! crate::quantum::algorithms
+//! crate::quantum::benchmarking
+//! crate::quantum::error_correction
+//! crate::quantum::frontend
+//! crate::quantum::hardware
+//! crate::quantum::ir
+//! crate::quantum::memory
+//! crate::quantum::optimization
+//! crate::quantum::routing
+//! crate::quantum::scheduling
+//! crate::quantum::zqn
+//! ```
+//!
+//! The root deliberately avoids wildcard re-exports.
+//!
+//! In particular, this root must not do:
+//!
+//! ```text
+//! pub use algorithms::*;
+//! pub use ir::*;
+//! pub use hardware::*;
+//! ```
+//!
+//! Such exports make ownership ambiguous, cause accidental API collisions,
+//! increase coupling, and force this file to change whenever an unrelated
+//! child module adds a public symbol.
+//!
+//! The canonical IR itself already owns its own carefully selected
+//! compatibility exports and qubit identity boundary.
+//!
+//! # Compatibility policy
+//!
+//! Historical flat APIs should be preserved by the module that owns the
+//! underlying implementation whenever possible.
+//!
+//! This composition root should not become a compatibility dumping ground.
+//!
+//! If an old API must be preserved at this level, it must be:
+//!
+//! 1. an explicit alias or re-export;
+//! 2. backed by exactly one canonical implementation;
+//! 3. documented as compatibility API;
+//! 4. free of duplicate types;
+//! 5. independent of implementation details;
+//! 6. removable under an explicitly documented compatibility policy.
+//!
+//! # No hard-coded machine assumptions
+//!
+//! This module intentionally contains none of the following:
+//!
+//! ```text
+//! MAX_QUBITS
+//! MAX_PHYSICAL_QUBITS
+//! MAX_CLASSICAL_BITS
+//! MAX_OPERATIONS
+//! MAX_DEPTH
+//! MAX_GATE_ARITY
+//! DEFAULT_QUBIT_COUNT
+//! DEFAULT_TOPOLOGY
+//! IBM_QUBIT_COUNT
+//! IONQ_QUBIT_COUNT
+//! GPU_COUNT
+//! CPU_COUNT
+//! ```
+//!
+//! These values, where they are meaningful, belong to explicit resource or
+//! target policies.
+//!
+//! # Resource and security boundaries
+//!
+//! "No hard-coded size limit" does not mean "unbounded allocation is safe."
+//!
+//! The quantum architecture must distinguish:
+//!
+//! ```text
+//! semantic capacity
+//!       ≠
+//! resource policy
+//!       ≠
+//! physical target capacity
+//! ```
+//!
+//! A compiler invocation may impose a memory budget.
+//! A simulator may impose a state-representation budget.
+//! A QPU may expose a finite number of physical resources.
+//! A scheduler may impose an execution deadline.
+//!
+//! None of those limits belongs in this composition root.
 //!
 //! # Safety
 //!
-//! The entire quantum namespace is safe Rust.
+//! The entire quantum namespace is intended to be safe Rust.
 //!
-//! This composition boundary forbids unsafe Rust explicitly.
+//! This composition boundary explicitly forbids unsafe Rust.
 //!
-//! Child modules are expected to enforce the same rule locally.
+//! Child modules should enforce the same invariant independently.
 //!
-//! No unsafe execution primitive, raw pointer, FFI handle or backend memory
-//! access belongs in this file.
+//! No raw pointers, unsafe blocks, unsafe functions, backend FFI, mutable
+//! globals, or unsafe execution primitives belong here.
 //!
 //! # Global state
 //!
-//! This module owns no global mutable quantum state.
+//! This module owns no global mutable state.
 //!
 //! It performs no:
 //!
-//! - device initialization;
-//! - network I/O;
-//! - backend connection;
-//! - simulator initialization;
-//! - random generation;
-//! - memory allocation;
-//! - benchmark execution;
-//! - source parsing;
-//! - hardware discovery.
+//! - initialization of hardware;
+//! - initialization of simulators;
+//! - network access;
+//! - filesystem access;
+//! - random sampling;
+//! - thread creation;
+//! - memory-pool initialization;
+//! - backend discovery;
+//! - credential loading.
 //!
-//! Concrete objects must be created and owned by their respective subsystems.
+//! Resource ownership belongs to the subsystem that created the resource.
 //!
-//! # Compatibility
+//! # Determinism
 //!
-//! Existing public flat paths are retained only where they already form part of
-//! the repository API and where the authoritative implementation is available
-//! through a child module.
+//! The composition root itself performs no stochastic work.
 //!
-//! New code should prefer the explicit subsystem paths:
+//! Determinism contracts belong to the subsystems that require them.
+//!
+//! In particular, ZQN and stochastic simulation must use explicit execution
+//! contexts and caller-controlled reproducibility information rather than
+//! hidden global RNG state.
+//!
+//! # Thread safety
+//!
+//! This module owns no runtime state and therefore introduces no global
+//! thread-safety requirement.
+//!
+//! Child APIs should document whether their objects are:
+//!
+//! - `Send`;
+//! - `Sync`;
+//! - immutable/shareable;
+//! - internally synchronized;
+//! - intentionally single-threaded.
+//!
+//! The composition root must not impose unnecessary synchronization on those
+//! implementations.
+//!
+//! # Serialization
+//!
+//! This module owns no serialized representation.
+//!
+//! Serialization contracts belong to the subsystem that owns the serialized
+//! semantic object.
+//!
+//! For example:
 //!
 //! ```text
-//! quantum::algorithms
-//! quantum::benchmarking
-//! quantum::error_correction
-//! quantum::frontend
-//! quantum::hardware
-//! quantum::ir
-//! quantum::memory
-//! quantum::optimization
-//! quantum::routing
-//! quantum::scheduling
+//! quantum::ir      → canonical IR serialization
+//! quantum::zqn     → ZQN serialization
+//! quantum::hardware→ target/device serialization
 //! ```
 //!
-//! Compatibility re-exports never create duplicate implementations.
+//! There must not be a second quantum-wide serialization format invented here.
 //!
-//! # Rust compatibility
+//! # Versioning
 //!
-//! Target:
+//! This module does not invent a separate quantum version number.
+//!
+//! Individual subsystem schemas and APIs own their versioning.
+//!
+//! Workspace/compiler compatibility is governed by the repository's Rust and
+//! package configuration.
+//!
+//! Target language/runtime compatibility for this file:
 //!
 //! - Rust 1.97;
 //! - Rust 1.97.1;
 //! - Rust 2021 edition;
 //! - stable Rust;
-//! - no nightly features.
+//! - no nightly features;
+//! - no unsafe code.
 //!
-//! No language feature newer than the declared MSRV is required by this
-//! composition boundary.
+//! # Integration with `quantum::ir`
 //!
-//! # API stability
+//! The canonical IR is intentionally declared independently of all downstream
+//! quantum subsystems.
 //!
-//! This file intentionally contains very little executable behavior.
-//!
-//! Adding a new quantum subsystem should normally require only:
-//!
-//! 1. a completed child module;
-//! 2. a public `mod.rs` contract for that child;
-//! 3. one `pub mod` declaration here;
-//! 4. integration tests in the child subsystem.
-//!
-//! Existing unrelated quantum files must not need modification merely because
-//! a new independent subsystem was introduced.
-//!
-//! # File-completion invariant
-//!
-//! This file is complete when:
-//!
-//! 1. every declared module physically exists;
-//! 2. every declared module owns its own implementation boundary;
-//! 3. no child module is duplicated inline;
-//! 4. no vendor SDK is imported;
-//! 5. no backend is instantiated;
-//! 6. no global mutable state exists;
-//! 7. no unsafe Rust exists;
-//! 8. no quantum-size limit exists;
-//! 9. canonical `quantum::ir::qubit` identity remains authoritative;
-//! 10. compatibility exports do not create duplicate implementations;
-//! 11. incomplete placeholder directories are not exposed as production APIs;
-//! 12. the module remains valid on Rust 1.97/1.97.1;
-//! 13. adding an independent quantum subsystem does not require reworking
-//!     unrelated subsystem implementations.
-//!
-//! # Integration contract
-//!
-//! Downstream code should depend on the narrowest appropriate namespace.
-//!
-//! Examples:
+//! This means a future subsystem can consume:
 //!
 //! ```text
-//! use crate::quantum::ir::qubit::QubitId;
-//! use crate::quantum::ir::program;
-//! use crate::quantum::hardware;
-//! use crate::quantum::optimization;
+//! crate::quantum::ir
 //! ```
 //!
-//! Do not import a qubit identity from a compatibility path if the canonical
-//! `quantum::ir::qubit::QubitId` path is available.
+//! without changing the IR merely because the subsystem exists.
 //!
-//! The canonical data flow is:
+//! The canonical qubit identity remains:
 //!
 //! ```text
-//! source
-//!   │
-//!   ▼
-//! frontend
-//!   │
-//!   ▼
-//! quantum::ir
-//!   │
-//!   ├── validate
-//!   ├── analyze
-//!   ├── optimize
-//!   ├── map
-//!   ├── route
-//!   ├── schedule
-//!   ├── lower
-//!   │
-//!   ▼
-//! hardware target
-//!   │
-//!   ▼
-//! backend/runtime
+//! crate::quantum::ir::qubit::QubitId
+//! crate::quantum::ir::qubit::PhysicalQubitId
 //! ```
 //!
-//! The same canonical semantic program may therefore be lowered to different
-//! compatible targets without changing the source-level program merely because
-//! the target has a different number of qubits, topology, technology or native
-//! instruction set.
+//! # Integration with ZQN
 //!
-//! # No hard-coded hardware assumptions
+//! Once ZQN is complete, the only composition-root change required should be:
 //!
-//! This composition root deliberately contains no:
+//! ```rust
+//! /// Zamani Quantum Noise: backend-independent noise,
+//! /// uncertainty, fault, channel and characterization semantics.
+//! pub mod zqn;
+//! ```
+//!
+//! The root must not import individual ZQN implementation types merely to make
+//! them globally visible.
+//!
+//! ZQN consumers should import the specific APIs from:
 //!
 //! ```text
-//! MAX_QUBITS
-//! MAX_CLASSICAL_BITS
-//! MAX_OPERATIONS
-//! MAX_DEPTH
-//! IBM_QUBITS
-//! IONQ_QUBITS
-//! GPU_COUNT
-//! CPU_COUNT
-//! DEFAULT_TOPOLOGY
+//! crate::quantum::zqn
 //! ```
 //!
-//! Such information belongs to target/resource descriptions.
+//! or its narrower child namespaces.
 //!
-//! # Testing
+//! # Integration with routing
 //!
-//! Composition-root testing should remain lightweight.
+//! Routing should consume canonical IR identities and target information.
 //!
-//! Domain behavior belongs to child modules and their dedicated tests.
+//! If routing needs noise-aware costs, it should consume an explicit ZQN
+//! contract rather than defining another independent noise model.
 //!
-//! The quantum root should primarily be verified by the normal Rust module
-//! compilation process and workspace integration tests.
+//! The composition root itself does not implement that adapter.
 //!
-//! In particular, this file deliberately avoids tests that name speculative
-//! types from unrelated subsystems. Such tests make this composition root
-//! unnecessarily fragile and violate the independence requirement.
+//! # Integration with scheduling
+//!
+//! Scheduling consumes canonical semantic operations and target timing/resource
+//! information.
+//!
+//! Noise-dependent scheduling may consume ZQN through an explicit integration
+//! contract.
+//!
+//! The root itself remains unaware of scheduling policy.
+//!
+//! # Integration with QEC
+//!
+//! QEC remains the owner of fault-tolerant algorithms.
+//!
+//! Universal physical noise semantics should be provided by ZQN.
+//!
+//! The eventual relationship is:
+//!
+//! ```text
+//! ZQN noise/channel/fault model
+//!              │
+//!              ▼
+//!       QEC integration layer
+//!              │
+//!       ┌──────┴──────┐
+//!       ▼             ▼
+//!   syndrome       decoding
+//!       │             │
+//!       └──────┬──────┘
+//!              ▼
+//!       logical analysis
+//! ```
+//!
+//! This avoids duplicate physical-noise definitions.
+//!
+//! # Integration with hardware
+//!
+//! Hardware owns provider-specific behavior.
+//!
+//! It should expose provider-neutral capabilities and execution contracts to
+//! the rest of the quantum system.
+//!
+//! The root never selects a vendor or device.
+//!
+//! # Integration with benchmarking
+//!
+//! Benchmarking consumes canonical IR, algorithms, execution results,
+//! hardware information, QEC information, memory information, calibration,
+//! characterization, and ZQN information as appropriate.
+//!
+//! Benchmarking must not become a dependency of the canonical IR merely because
+//! this root exposes the benchmarking namespace.
+//!
+//! # Integration with memory
+//!
+//! Memory remains a state/resource substrate.
+//!
+//! ZQN channels may eventually be applied through an explicit memory/channel
+//! integration boundary, but neither subsystem should absorb the other's
+//! ownership.
+//!
+//! # Integration with frontend
+//!
+//! Frontends produce canonical IR.
+//!
+//! The frontend must not cause this composition root to depend on a frontend
+//! AST or parser implementation.
+//!
+//! # Testing contract
+//!
+//! This file intentionally has no domain-level tests.
+//!
+//! The Rust compiler verifies that every declared module exists and can be
+//! compiled. Each child subsystem owns its own unit, property, integration,
+//! determinism, scaling, and compatibility tests.
+//!
+//! Composition-level integration tests should live under the quantum test
+//! infrastructure rather than turning this namespace file into a test registry.
+//!
+//! The important root invariants are:
+//!
+//! 1. every declared module has a valid child module;
+//! 2. this file contains no unsafe code;
+//! 3. this file contains no global mutable state;
+//! 4. this file contains no machine-size constants;
+//! 5. this file does not define a competing `QubitId`;
+//! 6. the canonical IR remains independent;
+//! 7. unfinished modules are not exposed;
+//! 8. wildcard re-exports are avoided;
+//! 9. vendor APIs are not imported;
+//! 10. adding an independent child subsystem does not require unrelated
+//!     subsystem modifications.
+//!
+//! # Completion criterion
+//!
+//! This file is complete when the quantum namespace can be compiled while
+//! preserving all of the following:
+//!
+//! ```text
+//! safe Rust
+//!       +
+//! canonical IR ownership
+//!       +
+//! canonical qubit identity
+//!       +
+//! explicit subsystem boundaries
+//!       +
+//! no artificial machine-size limit
+//!       +
+//! no vendor coupling
+//!       +
+//! no global state
+//!       +
+//! no speculative modules
+//!       +
+//! stable public namespaces
+//! ```
 //!
 //! =============================================================================
-//! Implementation
+//! Compiler-enforced safety boundary
 //! =============================================================================
 
 #![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
 
 // =============================================================================
-// Canonical quantum subsystems
+// Production quantum subsystem boundaries
 // =============================================================================
+//
+// IMPORTANT:
+//
+// Each declaration below points to the authoritative `mod.rs` owned by that
+// subsystem. This root does not reproduce child module trees.
+//
+// If a subsystem is incomplete, it must not be declared until its own module
+// boundary is production-ready.
+//
 
 /// Backend-independent quantum algorithm construction.
+///
+/// Owns logical algorithm generation and orchestration.
 pub mod algorithms;
 
-/// Production quantum benchmarking framework.
+/// Quantum benchmarking, measurement, statistics and benchmark orchestration.
 ///
-/// Benchmarking is a consumer/orchestration subsystem and must not become a
-/// dependency of the canonical Quantum IR.
+/// Benchmarking is a consumer of the quantum stack and not the canonical
+/// semantic foundation.
 pub mod benchmarking;
 
 /// Quantum error correction and fault-tolerant computation.
+///
+/// Physical noise semantics should be consumed from ZQN once the ZQN boundary
+/// is complete.
 pub mod error_correction;
 
 /// Quantum source-language and external-format frontends.
 ///
-/// Frontends lower into the canonical `quantum::ir` representation.
+/// Frontends lower into `quantum::ir`.
 pub mod frontend;
 
-/// Provider-neutral quantum hardware abstraction layer.
+/// Provider-neutral quantum hardware abstraction and execution boundary.
+///
+/// Vendor-specific implementations remain inside the hardware subsystem.
 pub mod hardware;
 
 /// Canonical, hardware-independent Zamani Quantum IR.
+///
+/// This is the semantic `WHAT` boundary for quantum computation.
 pub mod ir;
 
-/// Quantum and hybrid memory/resource substrate.
+/// Quantum and hybrid memory/state-resource subsystem.
 pub mod memory;
 
 /// Backend-independent logical quantum optimization.
 pub mod optimization;
 
-/// Hardware-connectivity-aware routing and transpilation.
+/// Logical-to-physical routing and connectivity-aware transformation.
 pub mod routing;
 
-/// Quantum scheduling subsystem.
+/// Quantum operation scheduling and timing representation.
 pub mod scheduling;
 
 // =============================================================================
-// Compatibility exports
+// Intentionally deferred subsystem boundaries
 // =============================================================================
 //
-// These exports preserve established flat public paths without defining a
-// second implementation.
+// These directories may exist in the repository before their APIs are ready.
+// A directory alone is not a valid reason to expose a public Rust module.
 //
-// New code should prefer the explicit subsystem paths documented above.
-// =============================================================================
-
-/// Historical compatibility path for the Quantum Volume estimator.
-///
-/// Preferred path:
-///
-/// `quantum::benchmarking::volume_estimator`
-pub use benchmarking::volume_estimator;
-
-/// Historical compatibility path for T-gate reduction.
-///
-/// Preferred path:
-///
-/// `quantum::optimization::t_gate_reduction`
-pub use optimization::t_gate_reduction;
-
-/// Historical compatibility path for quantum transpilation.
-///
-/// Preferred path:
-///
-/// `quantum::routing::transpiler`
-pub use routing::transpiler;
-
-/// Historical compatibility path for stabilizer scheduling.
-///
-/// Preferred path:
-///
-/// `quantum::scheduling::stabilizer_scheduler`
-pub use scheduling::stabilizer_scheduler;
-
-/// Historical compatibility path for variational algorithms.
-///
-/// Preferred path:
-///
-/// `quantum::algorithms::variational`
-pub use algorithms::variational;
+// `zqn` is especially important: the ZQN subsystem is being constructed as an
+// independent production subsystem and must be exposed only after its child
+// module has a valid `mod.rs` and its historical malformed filename has been
+// corrected.
+//
+// DO NOT uncomment any of these merely to make the namespace look complete.
+//
+// pub mod self_healing;
+// pub mod zqml;
+// pub mod zqn;
 
 // =============================================================================
 // Stable subsystem prelude
 // =============================================================================
+//
+// The prelude exposes subsystem boundaries, not every type contained within
+// them.
+//
+// This deliberately avoids wildcard exports.
+//
+// Users requiring a concrete API should import it from the owning subsystem:
+//
+//     crate::quantum::ir::qubit::QubitId
+//     crate::quantum::hardware::...
+//     crate::quantum::zqn::...
+//
+// once the corresponding subsystem is available.
 
-/// Small, stable import surface for applications that need the quantum
-/// subsystem boundaries rather than individual implementation types.
+/// Stable namespace-oriented quantum prelude.
 ///
-/// Specialized APIs must continue to be imported from their owning modules.
-///
-/// This prelude intentionally does not flatten the Quantum IR and therefore
-/// does not expose duplicate or ambiguous semantic types.
+/// This prelude is deliberately composed of modules rather than a collection
+/// of domain types. That keeps ownership explicit and prevents accidental API
+/// collisions when independent quantum subsystems evolve.
 pub mod prelude {
     pub use super::algorithms;
     pub use super::benchmarking;
@@ -665,27 +869,41 @@ pub mod prelude {
 }
 
 // =============================================================================
-// Lifecycle compatibility hooks
+// Lifecycle compatibility boundary
 // =============================================================================
 //
-// The quantum root owns no global runtime state. These functions therefore
-// remain intentionally empty compatibility boundaries.
+// The quantum composition root does not own resources.
 //
-// Concrete initialization belongs to concrete subsystem constructors and
-// runtime ownership contexts.
-// =============================================================================
+// These functions therefore provide no initialization semantics. They exist
+// only if older callers require a namespace-level lifecycle hook.
+//
+// New code should construct and own resources through the subsystem that
+// actually owns them.
+//
+// They deliberately perform no:
+//
+// - allocation;
+// - I/O;
+// - device discovery;
+// - backend connection;
+// - simulator initialization;
+// - thread creation;
+// - global-state mutation;
+// - random generation.
+//
 
-/// Initializes the quantum subsystem namespace.
+/// Compatibility lifecycle hook for callers that historically initialized the
+/// quantum namespace.
 ///
-/// This is intentionally a side-effect-free compatibility hook. It does not
-/// initialize a backend, allocate memory, contact a QPU, start a simulator or
-/// mutate global state.
+/// This function is intentionally side-effect free. Concrete initialization
+/// belongs to the owning subsystem.
 #[inline]
-pub fn init_quantum() {}
+pub const fn init_quantum() {}
 
-/// Shuts down the quantum subsystem namespace.
+/// Compatibility lifecycle hook for callers that historically shut down the
+/// quantum namespace.
 ///
-/// This is intentionally a side-effect-free compatibility hook. Concrete
-/// resources are released by their owners.
+/// This function is intentionally side-effect free. Concrete resource cleanup
+/// belongs to the owning subsystem.
 #[inline]
-pub fn shutdown_quantum() {}
+pub const fn shutdown_quantum() {}
