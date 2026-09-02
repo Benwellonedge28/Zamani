@@ -120,6 +120,7 @@ declaration
     | typeProviderDecl
     | fileScopedType
     // === Extensions ===
+    | extensionDecl
     | extensionMethodDecl
     | extensionPropertyDecl
     | extensionIndexerDecl
@@ -318,6 +319,8 @@ primaryExpr
     | loopExpr # loopValExpr
     | 'quantum' '{' quantumGatePath* '}' # quantumExpr
     | 'nano' '{' nanoInstr* '}' # nanoExpr
+    | 'spawn' (expression | blockExpr) # spawnExpr
+    | 'channel' '(' typeExpr (',' INT)? ')' # channelExpr
     | 'new' typeExpr ('(' args? ')')? # newExpr
     | 'this' # thisExpr
     | 'super' # superExpr
@@ -360,11 +363,12 @@ enumVariant : ident ('(' typeExpr (',' typeExpr)* ')' | '{' fieldDecl* '}')? ;
 
 classDecl : classModifiers? 'class' ident typeParams? ('extends' typeExpr)? ('implements' typeExpr (',' typeExpr)*)? '{' classMember* '}' ;
 classModifiers : modifier+ ;
-classMember : fieldDecl | propertyDecl | methodDecl | constructorDecl | destructorDecl | classDecl | interfaceDecl | enumDecl | staticBlock | initBlock | operatorDecl | constructorDecl ;
+classMember : fieldDecl | propertyDecl | methodDecl | constructorDecl | destructorDecl | classDecl | interfaceDecl | enumDecl | staticBlock | initBlock | operatorDecl | constructorDecl | eventDecl | delegateDecl | indexerDecl ;
 
 // property with optional accessors or initializer
 propertyDecl : modifiers? 'property' ident ':' typeExpr ( '{' propertyAccessor* '}' | '=' expression ';' | ';' ) ;
-propertyAccessor : 'get' '(' ')' blockExpr | 'set' '(' param ')' blockExpr ;
+// property accessor supports async/get/set/init and visibility modifiers
+propertyAccessor : modifiers? ('get' '(' ')' ( 'async' )? | 'set' '(' param ')' | 'init' '(' ')' ) blockExpr ;
 
 methodDecl : modifiers? 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr ;
 constructorDecl : 'constructor' '(' params? ')' blockExpr ;
@@ -374,8 +378,18 @@ destructorDecl : 'destructor' '(' ')' blockExpr ;
 staticBlock : 'static' blockExpr ;
 initBlock : 'init' blockExpr ;
 
-// operator overloading
-operatorDecl : 'operator' ( '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '<<' | '>>' | '[]' | '()' ) '(' params? ')' ('->' typeExpr)? blockExpr ;
+// operator overloading — expanded to include named operators and indexer/call forms
+operatorDecl : modifiers? 'operator' operatorToken '(' params? ')' ('->' typeExpr)? blockExpr ;
+operatorToken : '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '<<' | '>>' | '[]' | '()' | '[]=' | '->' | '|' ;
+
+// events and delegates
+eventDecl : 'event' ident ':' typeExpr ( '{' eventAccessor* '}' | ';' ) ;
+eventAccessor : 'add' '(' param? ')' blockExpr | 'remove' '(' param? ')' blockExpr | 'invoke' '(' params? ')' blockExpr ;
+
+delegateDecl : 'delegate' ident '(' params? ')' ('->' typeExpr)? ';' ;
+
+// indexer declaration (instance/static/indexer with optional accessors)
+indexerDecl : modifiers? 'indexer' '(' params? ')' ':' typeExpr ( '{' propertyAccessor* '}' | ';' ) ;
 
 interfaceDecl : 'interface' ident typeParams? '{' interfaceMember* '}' ;
 interfaceMember : methodSignature | propertySignature ;
@@ -685,6 +699,10 @@ fileScopedType : 'file_scope' typeExpr ';' ;
 // EXTENSIONS
 // ============================================================================
 
+// general extension declaration that can contain multiple extension members
+extensionDecl : 'extension' typeExpr '{' extensionMember* '}' ;
+extensionMember : methodDecl | propertyDecl | indexerDecl | operatorDecl ;
+
 extensionMethodDecl : 'extension' typeExpr '{' methodDecl* '}' ;
 extensionPropertyDecl : 'extension_property' ident ':' typeExpr blockExpr ;
 extensionIndexerDecl : 'extension_indexer' typeExpr blockExpr ;
@@ -861,7 +879,8 @@ structLiteralTail : '{' (ident ':' expression (',' ident ':' expression)*)? '}' 
 
 ident : IDENTIFIER ;
 docComment : DOC_COMMENT ;
-attributeDecl : '@' ident ('(' args? ')')? ;
+// allow multiple attributes on a declaration
+attributeDecl : ('@' ident ('(' args? ')')?)+ ;
 
 // ============================================================================
 // LEXER TOKENS
@@ -894,4 +913,3 @@ DOC_COMMENT : '///' (~[\n\r])* ;
 COMMENT : '//' (~[\n\r])* -> skip ;
 BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
 WS : [ \t\r\n]+ -> skip ;
-
