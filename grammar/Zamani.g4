@@ -10,6 +10,7 @@ declaration
     : docComment? attributeDecl? ( moduleDecl
     | importDecl
     | exportDecl
+    | packageDecl
     | functionDecl
     | structDecl
     | enumDecl
@@ -188,17 +189,34 @@ usePath : segment ('::' segment)* ('::' '*')? | segment ('::' segment)* '::' '{'
 segment : ident ;
 globalUsing : 'global' 'using' ident ';' ;
 
+// Package / manifest
+packageDecl : 'package' ident '{' packageField* '}' ;
+packageField : 'version' ':' STRING ';'
+             | 'depends' ':' '[' (depSpec (',' depSpec)*)? ']' ';'
+             | 'repository' ':' STRING ';'
+             | 'license' ':' STRING ';'
+             ;
+
+depSpec : STRING ('@' (STRING | 'semver'))? ;
+
 // ============================================================================
 // FUNCTIONS & DECLARATIONS
 // ============================================================================
 
-functionDecl : modifiers? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('with' effectList)? blockExpr ;
+functionDecl : modifiers? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('with' effectList)? contractDecl? blockExpr ;
 params : param (',' param)* ;
 param : 'mut'? ident (':' typeExpr)? ('=' expression)? | '...' typeExpr ident ;
 modifiers : modifier+ ;
 modifier : 'pub' | 'private' | 'protected' | 'static' | 'const' | 'async' | 'unsafe' | 'inline' 
          | 'override' | 'final' | 'abstract' | 'virtual' | 'sealed' | 'partial' | 'file' 
          | 'required' | 'internal' | 'visible' | 'experimental' | 'deprecated' | 'noInline' ;
+
+// Contract/spec
+contractDecl : 'contract' ident '{' contractClause* '}' ;
+contractClause : 'requires' '(' expression ')' ';'
+               | 'ensures' '(' expression ')' ';'
+               | 'invariant' '(' expression ')' ';'
+               ;
 
 // ============================================================================
 // STATEMENTS & CONTROL FLOW
@@ -219,6 +237,7 @@ statement
     | letStmt
     | constStmt
     | blockExpr
+    | yieldStmt
     | expression ';'? ;
 
 returnStmt : 'return' expression? ';' ;
@@ -243,6 +262,9 @@ blockExpr : '{' statement* '}' ;
 letStmt : ('let' | 'var') 'mut'? ident (':' typeExpr)? '=' expression ';' ;
 constStmt : 'const' ident (':' typeExpr)? '=' expression ';' ;
 
+// Yield for generators / coroutines
+yieldStmt : 'yield' expression ';' ;
+
 // ============================================================================
 // EXPRESSIONS
 // ============================================================================
@@ -260,7 +282,7 @@ equalityExpr : comparisonExpr (('==' | '!=' | '===' | '!==') comparisonExpr)* ;
 comparisonExpr : shiftExpr (('<' | '<=' | '>' | '>=' | 'instanceof' | 'is' | 'has') shiftExpr)* ;
 shiftExpr : sumExpr (('<<' | '>>' | '>>>') sumExpr)* ;
 sumExpr : productExpr (('+' | '-') productExpr)* ;
-productExpr : castExpr (('*' | '/' | '%') castExpr)* ;
+productExpr : castExpr (('*' | '/') castExpr)* ;
 castExpr : prefixExpr (('as' | ':') typeExpr)* ;
 prefixExpr : ('-' | '!' | '~' | '&' 'mut'? | '*' | '++' | '--') prefixExpr | postfixExpr ;
 postfixExpr : primaryExpr postfixOp* ;
@@ -274,6 +296,7 @@ postfixOp
     | '--' # postDecOp
     | 'with' '[' effectList ']' # withEffectOp
     | 'with' '{' (ident ':' expression ';')* '}' # withBlockOp
+    | 'await'                                      # awaitOp
     ;
 
 args : expression (',' expression)* | namedArgument (',' namedArgument)* ;
@@ -664,8 +687,22 @@ aspectAdvice : 'before' | 'after' | 'around' ;
 dataParallelismDecl : 'data_parallel' ident '{' parallelConfig* '}' ;
 parallelConfig : ident '=' expression ';' ;
 
+// Enhanced msgChannel with buffering
+msgChannel : 'channel' ident ':' typeExpr ('buffered' '(' INT ')')? ';' ;
+
 messagePassingDecl : 'message_passing' ident '{' msgChannel* '}' ;
 msgChannel : 'channel' ident ':' typeExpr ';' ;
+
+// select/csp style primitives
+selectExpr : 'select' '{' selectCase* '}' ;
+
+selectCase : 'case' ( channelReceive | channelSend | 'default' ) '=>' blockExpr ','? ;
+
+channelReceive : ident '<-' expression    // e.g., x <- ch
+               | '<-' expression          // receive into discard
+               ;
+channelSend : expression '->' expression  // e.g., msg -> ch
+            ;
 
 // ============================================================================
 // AI/ML FEATURES
@@ -789,8 +826,13 @@ interfaceDef : 'interface' ident '{' interfaceMember* '}' ;
 
 literal
     : INT
+    | BIGINT
+    | DECIMAL
     | FLOAT
     | STRING
+    | MULTILINE_STRING
+    | RAW_STRING
+    | BYTEARRAY
     | CHAR
     | 'true'
     | 'false'
@@ -812,12 +854,22 @@ fragment LETTER : [a-zA-Z_] ;
 fragment DIGIT : [0-9] ;
 fragment HEX_DIGIT : [0-9a-fA-F] ;
 
+// Raw / multiline / byte array strings — place before generic STRING
+RAW_STRING : 'r#"' (~[\n\r])* '"#' ;
+MULTILINE_STRING : '"""' (~["]| '"' ~["] | '""' ~["] )* '"""' ;
+BYTEARRAY : 'b"' (~["\\\r\n] | '\\' .)* '"' ;
+
+// Numeric literal extensions
+BIGINT : DIGIT+ 'n' ;            // e.g., 123n
+DECIMAL : DIGIT+ '.' DIGIT+ 'd' ; // e.g., 1.23d
+
 IDENTIFIER : LETTER (LETTER | DIGIT)* ;
 INT : DIGIT+ ('_' DIGIT+)* | '0x' HEX_DIGIT+ | '0b' [01]+ ;
 FLOAT : DIGIT+ '.' DIGIT+ ([eE] [+-]? DIGIT+)? ;
 STRING : '"' (~["\\\n\r] | '\\' . )* '"' ;
-CHAR : '\'' (~['\\\n\r] | '\\' . ) '\'' ;
+CHAR : '\'' (~['\\\n\r] | '\\' .) '\'' ;
 DOC_COMMENT : '///' (~[\n\r])* ;
 COMMENT : '//' (~[\n\r])* -> skip ;
 BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
 WS : [ \t\r\n]+ -> skip ;
+

@@ -1,0 +1,8 @@
+// examples/package.zm — package manifest example
+
+package mylib {
+  version: "1.2.3";
+  depends: [ "github:owner/repo@^1.0.0" ];
+  repository: "https://github.com/owner/repo";
+  license: "MIT";
+}

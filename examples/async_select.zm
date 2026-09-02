@@ -1,0 +1,38 @@
+// examples/async_select.zm — demonstrates async/await, channels/select, yield, and contracts
+
+package demo {
+  version: "0.1.0";
+}
+
+// simple contract on an async function
+contract CheckPositive {
+  requires(x > 0);
+  ensures(result > 0);
+}
+
+fn produce(ch: channel: i32) {
+  for i in 1..5 {
+    i -> ch; // send
+  }
+}
+
+fn consumer(ch: channel: i32) {
+  select {
+    case x <- ch => {
+      // handle x
+    },
+    case default => {
+      // no-op
+    }
+  }
+}
+
+async fn asyncSum(a: i32, b: i32) -> i32 contract CheckPositive {
+  let s = await compute(a, b);
+  yield s; // example yield in async generator style
+  return s;
+}
+
+fn compute(a: i32, b: i32) -> i32 {
+  return a + b;
+}
