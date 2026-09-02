@@ -1,6 +1,6 @@
 // Zamani.g4 — Comprehensive ANTLR4 combined grammar for the Zamani omniversal language compiler.
-// Includes all features from: AI/Cognitive, Quantum, Nano, NIMBUS, Distributed Systems,
-// Resource Management, Cryptography, Meta-Programming, and Omniversal Systems.
+// Includes OOP enhancements: classes (abstract/final/sealed), properties with accessors, constructors, destructors,
+// static/init blocks, inner/nested types, operator overloading, 'new', 'this', 'super', synchronized, transient, volatile, readonly, lazy.
 
 grammar Zamani;
 
@@ -209,7 +209,8 @@ param : 'mut'? ident (':' typeExpr)? ('=' expression)? | '...' typeExpr ident ;
 modifiers : modifier+ ;
 modifier : 'pub' | 'private' | 'protected' | 'static' | 'const' | 'async' | 'unsafe' | 'inline' 
          | 'override' | 'final' | 'abstract' | 'virtual' | 'sealed' | 'partial' | 'file' 
-         | 'required' | 'internal' | 'visible' | 'experimental' | 'deprecated' | 'noInline' ;
+         | 'required' | 'internal' | 'visible' | 'experimental' | 'deprecated' | 'noInline'
+         | 'synchronized' | 'transient' | 'volatile' | 'readonly' | 'lazy' ;
 
 // Contract/spec
 contractDecl : 'contract' ident '{' contractClause* '}' ;
@@ -317,6 +318,9 @@ primaryExpr
     | loopExpr # loopValExpr
     | 'quantum' '{' quantumGatePath* '}' # quantumExpr
     | 'nano' '{' nanoInstr* '}' # nanoExpr
+    | 'new' typeExpr ('(' args? ')')? # newExpr
+    | 'this' # thisExpr
+    | 'super' # superExpr
     ;
 
 quantumGatePath : ident ('(' expression (',' expression)* ')')? ';' ;
@@ -345,19 +349,33 @@ typeParam : ident ('extends' typeExpr)? ;
 typeArgs : '<' typeExpr (',' typeExpr)* '>' ;
 
 // ============================================================================
-// STRUCTURES & TYPES
+// STRUCTURES & TYPES (OOP ENHANCEMENTS)
 // ============================================================================
 
 structDecl : 'struct' ident typeParams? '{' fieldDecl* '}' ;
-fieldDecl : 'pub'? ident ':' typeExpr ';' ;
+fieldDecl : modifiers? ident ':' typeExpr ('=' expression)? ';' ;
 
 enumDecl : 'enum' ident typeParams? '{' enumVariant (',' enumVariant)* ','? '}' ;
 enumVariant : ident ('(' typeExpr (',' typeExpr)* ')' | '{' fieldDecl* '}')? ;
 
-classDecl : 'class' ident typeParams? ('extends' ident)? ('implements' ident (',' ident)*)? '{' classMember* '}' ;
-classMember : fieldDecl | methodDecl | constructorDecl ;
+classDecl : classModifiers? 'class' ident typeParams? ('extends' typeExpr)? ('implements' typeExpr (',' typeExpr)*)? '{' classMember* '}' ;
+classModifiers : modifier+ ;
+classMember : fieldDecl | propertyDecl | methodDecl | constructorDecl | destructorDecl | classDecl | interfaceDecl | enumDecl | staticBlock | initBlock | operatorDecl | constructorDecl ;
+
+// property with optional accessors or initializer
+propertyDecl : modifiers? 'property' ident ':' typeExpr ( '{' propertyAccessor* '}' | '=' expression ';' | ';' ) ;
+propertyAccessor : 'get' '(' ')' blockExpr | 'set' '(' param ')' blockExpr ;
+
 methodDecl : modifiers? 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr ;
 constructorDecl : 'constructor' '(' params? ')' blockExpr ;
+destructorDecl : 'destructor' '(' ')' blockExpr ;
+
+// static initializer and instance init blocks
+staticBlock : 'static' blockExpr ;
+initBlock : 'init' blockExpr ;
+
+// operator overloading
+operatorDecl : 'operator' ( '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '<<' | '>>' | '[]' | '()' ) '(' params? ')' ('->' typeExpr)? blockExpr ;
 
 interfaceDecl : 'interface' ident typeParams? '{' interfaceMember* '}' ;
 interfaceMember : methodSignature | propertySignature ;
@@ -691,7 +709,6 @@ parallelConfig : ident '=' expression ';' ;
 msgChannel : 'channel' ident ':' typeExpr ('buffered' '(' INT ')')? ';' ;
 
 messagePassingDecl : 'message_passing' ident '{' msgChannel* '}' ;
-msgChannel : 'channel' ident ':' typeExpr ';' ;
 
 // select/csp style primitives
 selectExpr : 'select' '{' selectCase* '}' ;
@@ -853,6 +870,11 @@ attributeDecl : '@' ident ('(' args? ')')? ;
 fragment LETTER : [a-zA-Z_] ;
 fragment DIGIT : [0-9] ;
 fragment HEX_DIGIT : [0-9a-fA-F] ;
+
+// Keywords that should be recognized before IDENTIFIER
+THIS : 'this' ;
+SUPER : 'super' ;
+NEW : 'new' ;
 
 // Raw / multiline / byte array strings — place before generic STRING
 RAW_STRING : 'r#"' (~[\n\r])* '"#' ;

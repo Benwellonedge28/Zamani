@@ -1,0 +1,68 @@
+// examples/oop.zm — demonstrates OOP features: classes, inheritance, interfaces, properties, constructors/destructors, static/init, operator overloading
+
+package demo_oop {
+  version: "0.1.0";
+}
+
+interface Drawable {
+  draw(): void;
+}
+
+abstract class Shape implements Drawable {
+  property id: i32 = 0;
+  property name: str {
+    get() {
+      return this.name;
+    }
+    set(n) {
+      this.name = n;
+    }
+  }
+
+  constructor(x: i32) {
+    this.id = x;
+  }
+
+  abstract fn area() -> f64;
+
+  fn draw() -> void {
+    // default draw
+  }
+}
+
+class Circle extends Shape {
+  property radius: f64;
+
+  constructor(x: i32, r: f64) {
+    super(x);
+    this.radius = r;
+  }
+
+  fn area() -> f64 {
+    return 3.1415 * this.radius * this.radius;
+  }
+
+  // operator overloading example
+  operator (+)(other: Circle) -> Circle {
+    return new Circle(this.id, this.radius + other.radius);
+  }
+
+  destructor() {
+    // cleanup
+  }
+
+  static {
+    // static initialization
+  }
+
+  init {
+    // instance init block
+  }
+}
+
+fn main() {
+  let c = new Circle(1, 2.5);
+  let d = new Circle(2, 3.0);
+  let e = c + d;
+  print(e.area());
+}
