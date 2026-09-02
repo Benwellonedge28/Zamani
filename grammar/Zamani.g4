@@ -1,11 +1,11 @@
-// Zamani.g4 — Comprehensive grammar for the Zamani language
-// COMPLETE SPECIFICATION incorporating all documented features:
-// - Control flow, functions, variables, async/await
-// - Quantum computing, nano-agents, multi-timeline systems
-// - Sankofa memory system, algebraic effects
-// - OOP (classes, interfaces, inheritance, properties, etc.)
-// - Advanced type system (dependent types, generics, effects)
-// - Macros, meta-programming, FFI, plugins, packages
+// Zamani.g4 — Comprehensive high-performance mathematical programming language
+// COMPLETE SPECIFICATION with full mathematics support:
+// - Linear algebra, matrix operations, tensor computing
+// - Symbolic mathematics, calculus, differential equations
+// - Statistical distributions, probability, stochastic processes
+// - Complex numbers, polynomial arithmetic, number theory
+// - Numeric methods, FFT, signal processing, optimization
+// - Quantum-enhanced mathematics, nano-computational primitives
 
 grammar Zamani;
 
@@ -39,6 +39,10 @@ declaration
     | pluginDecl
     | macroDecl
     | packageDecl
+    | mathVectorDecl
+    | mathMatrixDecl
+    | mathTensorDecl
+    | mathSymbolicDecl
     | statement
     ;
 
@@ -105,6 +109,7 @@ modifier
     : 'pub' | 'private' | 'protected' | 'static' | 'const' | 'async'
     | 'unsafe' | 'inline' | 'override' | 'final' | 'abstract'
     | 'mut' | 'sealed' | 'partial' | 'extern' | 'volatile'
+    | 'simd' | 'vectorized' | 'gpu' | 'parallel' | 'pure' | 'immutable'
     ;
 
 modifiers: modifier+ ;
@@ -174,6 +179,7 @@ statement
     | dataStmt
     | databaseOp
     | webService
+    | mathStmt
     | expression ';'
     | ';'
     ;
@@ -189,6 +195,9 @@ loopStatement
     | 'do' block 'while' expression ';'
     | 'for' IDENTIFIER 'in' expression block
     | 'for' '(' varKeyword IDENTIFIER ':' typeExpr '=' expression ';' expression ';' expression ')' block
+    | 'forall' IDENTIFIER 'in' expression 'when' expression block  // Quantified loop
+    | 'foreach' IDENTIFIER 'in' expression 'parallel' block         // Parallel loop
+    | 'reduce' IDENTIFIER 'in' expression 'with' expression block   // Reduction loop
     ;
 
 loopControl: 'break' ';' | 'continue' ';' ;
@@ -237,6 +246,201 @@ catchClause: 'catch' '(' IDENTIFIER (':' typeExpr)? ')' block ;
 finallyClause: 'finally' block ;
 
 block: '{' statement* '}' ;
+
+// ==========================================================================
+// MATHEMATICAL STATEMENTS & OPERATIONS
+// ==========================================================================
+
+mathStmt
+    : vectorOp
+    | matrixOp
+    | tensorOp
+    | symbolicOp
+    | calcOp
+    | statisticalOp
+    | numericOp
+    | signalOp
+    | optimizationStmt
+    ;
+
+// Vector Operations
+vectorOp
+    : 'vectorize' IDENTIFIER '(' argumentList? ')' ';'
+    | 'map' lambdaExpression 'over' IDENTIFIER ';'
+    | 'zip' IDENTIFIER 'with' IDENTIFIER 'using' lambdaExpression ';'
+    | 'reduce' IDENTIFIER 'with' lambdaExpression ';'
+    | 'scan' IDENTIFIER 'with' lambdaExpression ';'
+    | 'filter' IDENTIFIER 'by' lambdaExpression ';'
+    ;
+
+// Matrix Operations
+matrixOp
+    : 'transpose' IDENTIFIER ';'
+    | 'inverse' IDENTIFIER ';'
+    | 'determinant' IDENTIFIER ';'
+    | 'rank' IDENTIFIER ';'
+    | 'eigenvalues' IDENTIFIER ';'
+    | 'eigenvectors' IDENTIFIER ';'
+    | 'svd' IDENTIFIER ';'
+    | 'qr' IDENTIFIER ';'
+    | 'lu' IDENTIFIER ';'
+    | 'cholesky' IDENTIFIER ';'
+    | 'norm' IDENTIFIER ('(' STRING ')')? ';'
+    | 'trace' IDENTIFIER ';'
+    | 'lu_solve' IDENTIFIER ',' IDENTIFIER ';'
+    | 'qr_solve' IDENTIFIER ',' IDENTIFIER ';'
+    ;
+
+// Tensor Operations
+tensorOp
+    : 'contract' IDENTIFIER (',' IDENTIFIER)+ ('over' IDENTIFIER (',' IDENTIFIER)*)? ';'
+    | 'einsum' STRING ('with' IDENTIFIER (',' IDENTIFIER)*)? ';'
+    | 'reshape' IDENTIFIER 'to' INTEGER (',' INTEGER)* ';'
+    | 'permute' IDENTIFIER 'axes' INTEGER (',' INTEGER)* ';'
+    | 'outer_product' IDENTIFIER ',' IDENTIFIER ';'
+    | 'inner_product' IDENTIFIER ',' IDENTIFIER ';'
+    | 'kronecker' IDENTIFIER ',' IDENTIFIER ';'
+    | 'hadamard' IDENTIFIER (',' IDENTIFIER)+ ';'  // Element-wise product
+    ;
+
+// Symbolic Operations
+symbolicOp
+    : 'expand' expression ';'
+    | 'simplify' expression ';'
+    | 'factor' expression ';'
+    | 'collect' expression 'by' IDENTIFIER ';'
+    | 'substitute' IDENTIFIER 'with' expression 'in' expression ';'
+    | 'solve' expression ('for' IDENTIFIER)? ';'
+    | 'dsolve' expression ('for' IDENTIFIER)? ';'  // Differential equations
+    | 'series' expression 'around' expression 'order' INTEGER ';'  // Taylor series
+    | 'roots' expression ';'
+    | 'resultant' expression ',' expression ('wrt' IDENTIFIER)? ';'
+    | 'gcd' expression ',' expression ';'
+    | 'lcm' expression ',' expression ';'
+    ;
+
+// Calculus Operations
+calcOp
+    : 'diff' expression ('wrt' IDENTIFIER)? ';'
+    | 'integral' expression ('from' expression 'to' expression)? ';'
+    | 'limit' expression 'as' IDENTIFIER '->' expression ';'
+    | 'gradient' IDENTIFIER ';'
+    | 'jacobian' IDENTIFIER ';'
+    | 'hessian' IDENTIFIER ';'
+    | 'laplacian' IDENTIFIER ';'
+    | 'divergence' IDENTIFIER ';'
+    | 'curl' IDENTIFIER ';'
+    | 'directional_derivative' IDENTIFIER 'in' IDENTIFIER ';'
+    ;
+
+// Statistical Operations
+statisticalOp
+    : 'mean' IDENTIFIER ';'
+    | 'median' IDENTIFIER ';'
+    | 'mode' IDENTIFIER ';'
+    | 'variance' IDENTIFIER ';'
+    | 'std_dev' IDENTIFIER ';'
+    | 'covariance' IDENTIFIER ',' IDENTIFIER ';'
+    | 'correlation' IDENTIFIER ',' IDENTIFIER ';'
+    | 'quantile' IDENTIFIER ',' DECIMAL ';'
+    | 'histogram' IDENTIFIER 'bins' INTEGER ';'
+    | 'pdf' IDENTIFIER 'dist' IDENTIFIER ';'
+    | 'cdf' IDENTIFIER 'dist' IDENTIFIER ';'
+    | 'sample' 'from' IDENTIFIER 'size' INTEGER ';'
+    | 'hypothesis_test' IDENTIFIER ',' IDENTIFIER 'test' STRING ';'
+    | 'anova' IDENTIFIER (',' IDENTIFIER)+ ';'
+    | 'regression' 'y' IDENTIFIER 'x' IDENTIFIER (',' IDENTIFIER)* ';'
+    | 'pca' IDENTIFIER 'components' INTEGER ';'
+    ;
+
+// Numeric Operations
+numericOp
+    : 'fft' IDENTIFIER ';'
+    | 'ifft' IDENTIFIER ';'
+    | 'rfft' IDENTIFIER ';'
+    | 'irfft' IDENTIFIER ';'
+    | 'convolve' IDENTIFIER ',' IDENTIFIER ';'
+    | 'correlate' IDENTIFIER ',' IDENTIFIER ';'
+    | 'interpolate' IDENTIFIER 'kind' STRING ';'
+    | 'differentiate' IDENTIFIER ('order' INTEGER)? ';'
+    | 'integrate' IDENTIFIER 'from' expression 'to' expression ';'
+    | 'quad' IDENTIFIER 'from' expression 'to' expression ';'
+    | 'quad_log' IDENTIFIER 'from' expression 'to' expression ';'
+    | 'quad_oscillatory' IDENTIFIER 'from' expression 'to' expression ';'
+    ;
+
+// Signal Processing
+signalOp
+    : 'butter' 'order' INTEGER 'wn' DECIMAL ('btype' STRING)? ';'
+    | 'cheby1' 'order' INTEGER 'rp' DECIMAL 'wn' DECIMAL ';'
+    | 'cheby2' 'order' INTEGER 'rs' DECIMAL 'wn' DECIMAL ';'
+    | 'bessel' 'order' INTEGER 'wn' DECIMAL ';'
+    | 'ellip' 'order' INTEGER 'rp' DECIMAL 'rs' DECIMAL 'wn' DECIMAL ';'
+    | 'filter' IDENTIFIER 'signal' IDENTIFIER ';'
+    | 'welch' IDENTIFIER 'nperseg' INTEGER ';'
+    | 'spectrogram' IDENTIFIER ';'
+    ;
+
+// Optimization Operations
+optimizationStmt
+    : 'minimize' expression ('subject' 'to' constraintList)? ('method' STRING)? ';'
+    | 'maximize' expression ('subject' 'to' constraintList)? ('method' STRING)? ';'
+    | 'gradient_descent' IDENTIFIER 'rate' DECIMAL 'iterations' INTEGER ';'
+    | 'newton_method' IDENTIFIER 'tolerance' DECIMAL ';'
+    | 'bisect' IDENTIFIER 'from' expression 'to' expression ';'
+    | 'secant' IDENTIFIER 'x0' expression 'x1' expression ';'
+    | 'brent' IDENTIFIER 'from' expression 'to' expression ';'
+    | 'linear_solve' IDENTIFIER ',' IDENTIFIER ';'
+    | 'least_squares' IDENTIFIER ',' IDENTIFIER ';'
+    | 'nonlinear_solve' expression ('initial' IDENTIFIER)? ';'
+    ;
+
+constraintList: constraintExpr (',' constraintExpr)* ;
+
+constraintExpr
+    : expression ('<=' | '>=' | '==' | '<' | '>') expression
+    ;
+
+// ==========================================================================
+// MATHEMATICAL TYPE DECLARATIONS
+// ==========================================================================
+
+mathVectorDecl: 'vector' IDENTIFIER '<' typeExpr (',' INTEGER)? '>' ('=' vectorInit)? ';' ;
+
+vectorInit
+    : '[' expression (',' expression)* ']'
+    | 'zeros' '(' INTEGER ')'
+    | 'ones' '(' INTEGER ')'
+    | 'range' '(' expression ',' expression (',' expression)? ')'
+    | 'linspace' '(' expression ',' expression ',' INTEGER ')'
+    | 'logspace' '(' expression ',' expression ',' INTEGER ')'
+    | 'random' '(' INTEGER ')'
+    | 'normal' '(' INTEGER ',' expression ',' expression ')'
+    ;
+
+mathMatrixDecl: 'matrix' IDENTIFIER '<' typeExpr (',' INTEGER ',' INTEGER)? '>' ('=' matrixInit)? ';' ;
+
+matrixInit
+    : '[[' (expression (',' expression)*)? (',' '[' (expression (',' expression)*)? ']')* ']]'
+    | 'zeros' '(' INTEGER ',' INTEGER ')'
+    | 'ones' '(' INTEGER ',' INTEGER ')'
+    | 'eye' '(' INTEGER (',' INTEGER)? ')'
+    | 'diag' '(' expression (',' INTEGER)? ')'
+    | 'random' '(' INTEGER ',' INTEGER ')'
+    | 'normal' '(' INTEGER ',' INTEGER ',' expression ',' expression ')'
+    | 'uniform' '(' INTEGER ',' INTEGER ',' expression ',' expression ')'
+    ;
+
+mathTensorDecl: 'tensor' IDENTIFIER '<' typeExpr (',' INTEGER)+ '>' ('=' tensorInit)? ';' ;
+
+tensorInit
+    : 'zeros' '(' INTEGER (',' INTEGER)* ')'
+    | 'ones' '(' INTEGER (',' INTEGER)* ')'
+    | 'random' '(' INTEGER (',' INTEGER)* ')'
+    | 'normal' '(' INTEGER (',' INTEGER)* ',' expression ',' expression ')'
+    ;
+
+mathSymbolicDecl: 'sym' IDENTIFIER ('=' expression)? ';' ;
 
 // ==========================================================================
 // CLASS & OOP FEATURES
@@ -383,8 +587,8 @@ quantumStmt
     ;
 
 quantumGate
-    : ('Hadamard' | 'CNOT' | 'PauliX' | 'PauliY' | 'PauliZ' | 'T' | 'S' | 'Swap')
-      '(' IDENTIFIER (',' IDENTIFIER)* ')'
+    : ('Hadamard' | 'CNOT' | 'PauliX' | 'PauliY' | 'PauliZ' | 'T' | 'S' | 'Swap' | 'RX' | 'RY' | 'RZ' | 'Toffoli' | 'Fredkin')
+      '(' IDENTIFIER (',' IDENTIFIER)* (',' DECIMAL)? ')'
     ;
 
 // ==========================================================================
@@ -496,7 +700,6 @@ macroDecl: 'macro' IDENTIFIER '(' parameterList? ')' block ;
 
 macroCall: IDENTIFIER '!' '(' argumentList? ')' ;
 
-// Meta-Object Protocol (MOP)
 mopExpr
     : 'reflect' '(' expression ')'
     | 'introspect' '(' IDENTIFIER ')'
@@ -528,7 +731,7 @@ dataStmt
     | 'deserialize' expression 'from' dataFormat ';'
     ;
 
-dataFormat: 'json' | 'xml' | 'messagepack' | 'protobuf' | 'avro' ;
+dataFormat: 'json' | 'xml' | 'messagepack' | 'protobuf' | 'avro' | 'netcdf' | 'hdf5' ;
 
 // ==========================================================================
 // DATABASE & WEB SERVICES
@@ -538,7 +741,6 @@ databaseOp: 'db' '::' IDENTIFIER '(' argumentList? ')' ';' ;
 
 webService: 'http' '::' IDENTIFIER '(' argumentList? ')' ';' ;
 
-// Hardware Description Language
 hdlModuleDecl: 'hdl' 'module' IDENTIFIER '{' hdlPort* hdlStatement* '}' ;
 
 hdlPort: 'port' IDENTIFIER ':' typeExpr ';' ;
@@ -561,6 +763,7 @@ expression
     | '++' expression | expression '++'                            // Increment
     | '--' expression | expression '--'                            // Decrement
     | expression '^' expression                                    // Power
+    | expression MATMUL expression                                 // Matrix multiplication
     | expression '*' expression | expression '/' expression | expression '%' expression   // Mul
     | expression '+' expression | expression '-' expression        // Add
     | expression '<<' expression | expression '>>' expression | expression '>>>' expression // Shift
@@ -585,7 +788,57 @@ expression
     | expression 'with' '{' (IDENTIFIER ':' expression ';')* '}'  // With expression
     | mopExpr                                                      // Meta-object protocol
     | macroCall                                                    // Macro call
+    | mathExpression                                               // Math expressions
     ;
+
+// Mathematical expressions
+mathExpression
+    : mathFunctionCall
+    | mathConstant
+    | complexLiteral
+    | polynomialExpr
+    ;
+
+mathFunctionCall
+    : MATH_FUNC '(' argumentList? ')'
+    | MATH_FUNC_ADVANCED '(' argumentList? ')'
+    | STATS_FUNC '(' argumentList? ')'
+    ;
+
+MATH_FUNC: 'sin' | 'cos' | 'tan' | 'asin' | 'acos' | 'atan' | 'atan2'
+         | 'sinh' | 'cosh' | 'tanh' | 'asinh' | 'acosh' | 'atanh'
+         | 'exp' | 'log' | 'log10' | 'log2' | 'sqrt' | 'cbrt'
+         | 'abs' | 'ceil' | 'floor' | 'round' | 'trunc'
+         | 'gamma' | 'lgamma' | 'erf' | 'erfc'
+         | 'real' | 'imag' | 'conj' | 'arg' | 'abs'
+         ;
+
+MATH_FUNC_ADVANCED: 'besselj' | 'bessely' | 'besseli' | 'besselk'
+                  | 'legendre' | 'hermite' | 'laguerre'
+                  | 'chebyshev_t' | 'chebyshev_u'
+                  | 'jacobi' | 'gegenbauer'
+                  | 'zeta' | 'polylog' | 'dilog'
+                  | 'elliptic_k' | 'elliptic_e' | 'elliptic_pi'
+                  ;
+
+STATS_FUNC: 'norm_pdf' | 'norm_cdf' | 'norm_ppf' | 'norm_logpdf'
+          | 'uniform_pdf' | 'uniform_cdf'
+          | 'beta_pdf' | 'beta_cdf'
+          | 'gamma_pdf' | 'gamma_cdf'
+          | 'chi2_pdf' | 'chi2_cdf'
+          | 'student_t_pdf' | 'student_t_cdf'
+          | 'f_pdf' | 'f_cdf'
+          | 'poisson_pmf' | 'poisson_cdf'
+          | 'binomial_pmf' | 'binomial_cdf'
+          | 'multinomial_pmf'
+          | 'dirichlet_pdf'
+          ;
+
+mathConstant: 'π' | 'pi' | 'e' | 'φ' | 'phi' | 'γ' | 'gamma_euler' | 'i' ;
+
+complexLiteral: INTEGER_OR_FLOAT ('i' | 'j') | '(' expression ('+' | '-') expression ('i' | 'j') ')' ;
+
+polynomialExpr: 'poly' '(' argumentList? ')' | 'Poly' '[' expression (',' expression)* ']' ;
 
 primary
     : IDENTIFIER
@@ -598,6 +851,8 @@ primary
     | quantumLiteral
     | nanoLiteral
     | mtsLiteral
+    | vectorLiteral
+    | matrixLiteral
     ;
 
 templateString: '`' (templatePart | templateExpression)* '`' ;
@@ -633,6 +888,10 @@ FORMULA: IDENTIFIER (DIGIT* IDENTIFIER)* ;
 
 mtsLiteral: 'mts' '[' INTEGER ']' ;
 
+vectorLiteral: '[' expression (',' expression)* ']' ;
+
+matrixLiteral: '[[' (expression (',' expression)*)? (',' '[' (expression (',' expression)*)? ']')* ']]' ;
+
 // ==========================================================================
 // TYPES
 // ==========================================================================
@@ -657,6 +916,7 @@ typeExpr
     | refType
     | boxedType
     | unionType
+    | mathType
     ;
 
 baseType
@@ -745,6 +1005,21 @@ cognitiveType
     | 'NarrowAI' | 'AGI' | 'ASI' | 'AESI' | 'ASESI'
     ;
 
+// Mathematical Types
+mathType
+    : 'Complex' '<' typeExpr '>'
+    | 'Vector' '<' typeExpr (',' INTEGER)? '>'
+    | 'Matrix' '<' typeExpr (',' INTEGER ',' INTEGER)? '>'
+    | 'Tensor' '<' typeExpr (',' INTEGER)+ '>'
+    | 'Polynomial' '<' typeExpr '>'
+    | 'Rational' '<' typeExpr '>'
+    | 'Distribution' '<' typeExpr '>'
+    | 'Symbolic' '<' typeExpr '>'
+    | 'Expr'  // Symbolic expression
+    | 'Derivative' '<' typeExpr '>'
+    | 'Integral' '<' typeExpr '>'
+    ;
+
 // ==========================================================================
 // ARGUMENTS & PARAMETERS
 // ==========================================================================
@@ -821,6 +1096,9 @@ ELSE: 'else' ;
 WHILE: 'while' ;
 DO: 'do' ;
 FOR: 'for' ;
+FORALL: 'forall' ;
+FOREACH: 'foreach' ;
+REDUCE: 'reduce' ;
 BREAK: 'break' ;
 CONTINUE: 'continue' ;
 MATCH: 'match' ;
@@ -862,12 +1140,85 @@ CONTRACT: 'contract' ;
 REQUIRES: 'requires' ;
 ENSURES: 'ensures' ;
 INVARIANT: 'invariant' ;
+VECTOR: 'vector' ;
+MATRIX: 'matrix' ;
+TENSOR: 'tensor' ;
+VECTORIZE: 'vectorize' ;
+MAP: 'map' ;
+ZIP: 'zip' ;
+ZIP2: 'zip' ;
+SCAN: 'scan' ;
+FILTER: 'filter' ;
+TRANSPOSE: 'transpose' ;
+INVERSE: 'inverse' ;
+DETERMINANT: 'determinant' ;
+RANK: 'rank' ;
+EIGENVALUES: 'eigenvalues' ;
+EIGENVECTORS: 'eigenvectors' ;
+SVD: 'svd' ;
+QR: 'qr' ;
+LU: 'lu' ;
+CHOLESKY: 'cholesky' ;
+NORM: 'norm' ;
+TRACE: 'trace' ;
+CONTRACT: 'contract' ;
+EINSUM: 'einsum' ;
+RESHAPE: 'reshape' ;
+PERMUTE: 'permute' ;
+EXPAND: 'expand' ;
+SIMPLIFY: 'simplify' ;
+FACTOR: 'factor' ;
+SOLVE: 'solve' ;
+DSOLVE: 'dsolve' ;
+SERIES: 'series' ;
+ROOTS: 'roots' ;
+RESULTANT: 'resultant' ;
+DIFF: 'diff' ;
+INTEGRAL: 'integral' ;
+LIMIT: 'limit' ;
+GRADIENT: 'gradient' ;
+JACOBIAN: 'jacobian' ;
+HESSIAN: 'hessian' ;
+LAPLACIAN: 'laplacian' ;
+DIVERGENCE: 'divergence' ;
+CURL: 'curl' ;
+MEAN: 'mean' ;
+MEDIAN: 'median' ;
+MODE: 'mode' ;
+VARIANCE: 'variance' ;
+STD_DEV: 'std_dev' ;
+COVARIANCE: 'covariance' ;
+CORRELATION: 'correlation' ;
+QUANTILE: 'quantile' ;
+HISTOGRAM: 'histogram' ;
+PDF: 'pdf' ;
+CDF: 'cdf' ;
+SAMPLE: 'sample' ;
+HYPOTHESIS_TEST: 'hypothesis_test' ;
+ANOVA: 'anova' ;
+REGRESSION: 'regression' ;
+PCA: 'pca' ;
+FFT: 'fft' ;
+IFFT: 'ifft' ;
+RFFT: 'rfft' ;
+IRFFT: 'irfft' ;
+CONVOLVE: 'convolve' ;
+CORRELATE: 'correlate' ;
+INTERPOLATE: 'interpolate' ;
+MINIMIZE: 'minimize' ;
+MAXIMIZE: 'maximize' ;
+SUBJECT: 'subject' ;
+METHOD: 'method' ;
 OPERATOR: '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '>' | '<=' | '>=' | '&&' | '||' | '&' | '|' | '^' | '~' | '<<' | '>>' | '[' | ']' | '(' | ')' ;
+
+// Mathematical operators
+MATMUL: '@@' | '⊗' ;  // Matrix multiplication
 
 // Common tokens
 IDENTIFIER: [a-zA-Z_][a-zA-Z_0-9]* ;
 INTEGER: [0-9]+ | '0x' [0-9a-fA-F]+ | '0b' [0-1]+ | '0o' [0-7]+ ;
 DECIMAL: [0-9]+ '.' [0-9]+ ([eE] [+-]? [0-9]+)? ;
+INTEGER_OR_FLOAT: INTEGER | DECIMAL ;
 BOOLEAN: 'true' | 'false' ;
 CHAR: '\'' (ESC | ~['\\]) '\'' ;
 
@@ -935,7 +1286,7 @@ DOUBLEOR: '||' ;
 PLUSPLUS: '++' ;
 MINUSMINUS: '--' ;
 DOTQUESTION: '?.' ;
-RANGLE: '>' ;  // For quantum notation
+RANGLE: '>' ;
 
 // Whitespace
 WS: [ \t\r\n]+ -> skip ;
