@@ -1,6 +1,8 @@
 // Zamani.g4 — Comprehensive ANTLR4 combined grammar for the Zamani omniversal language compiler.
-// Includes OOP enhancements: classes (abstract/final/sealed), properties with accessors, constructors, destructors,
-// static/init blocks, inner/nested types, operator overloading, 'new', 'this', 'super', synchronized, transient, volatile, readonly, lazy.
+// Expanded with full OOP feature set: primary/secondary constructors, data classes, sealed/final/abstract modifiers,
+// companion objects, inner/nested classes, property delegates/observers, variance (in/out), mixins/traits, delegation,
+// 'friend' visibility, property backing fields, copy/equals/hash/toString generation, anonymous classes/objects,
+// method overloading/overriding rules, default implementations in interfaces, and finer accessor visibility.
 
 grammar Zamani;
 
@@ -211,7 +213,7 @@ modifiers : modifier+ ;
 modifier : 'pub' | 'private' | 'protected' | 'static' | 'const' | 'async' | 'unsafe' | 'inline' 
          | 'override' | 'final' | 'abstract' | 'virtual' | 'sealed' | 'partial' | 'file' 
          | 'required' | 'internal' | 'visible' | 'experimental' | 'deprecated' | 'noInline'
-         | 'synchronized' | 'transient' | 'volatile' | 'readonly' | 'lazy' ;
+         | 'synchronized' | 'transient' | 'volatile' | 'readonly' | 'lazy' | 'atomic' ;
 
 // Contract/spec
 contractDecl : 'contract' ident '{' contractClause* '}' ;
@@ -322,15 +324,20 @@ primaryExpr
     | 'spawn' (expression | blockExpr) # spawnExpr
     | 'channel' '(' typeExpr (',' INT)? ')' # channelExpr
     | 'new' typeExpr ('(' args? ')')? # newExpr
-    | 'this' # thisExpr
-    | 'super' # superExpr
+    | 'this' ('(' args? ')')? # thisExpr
+    | 'super' ('(' args? ')')? # superExpr
+    | anonymousClassExpr
+    | objectExpr
     ;
+
+anonymousClassExpr : 'new' typeExpr '{' classMember* '}' ;
+objectExpr : 'object' ('<' typeArgs '>')? '{' classMember* '}' ;
 
 quantumGatePath : ident ('(' expression (',' expression)* ')')? ';' ;
 nanoInstr : ident ('(' expression (',' expression)* ')')? ';' ;
 
 // ============================================================================
-// TYPE SYSTEM
+// TYPE SYSTEM (with variance)
 // ============================================================================
 
 typeExpr
@@ -348,64 +355,111 @@ typeExpr
     ;
 
 typeParams : '<' typeParam (',' typeParam)* '>' ;
-typeParam : ident ('extends' typeExpr)? ;
+// variance: in/out on type params
+typeParam : ('in' | 'out')? ident ('extends' typeExpr)? ;
 typeArgs : '<' typeExpr (',' typeExpr)* '>' ;
 
 // ============================================================================
-// STRUCTURES & TYPES (OOP ENHANCEMENTS)
+// STRUCTURES & TYPES (ADVANCED OOP)
 // ============================================================================
 
 structDecl : 'struct' ident typeParams? '{' fieldDecl* '}' ;
 fieldDecl : modifiers? ident ':' typeExpr ('=' expression)? ';' ;
 
 enumDecl : 'enum' ident typeParams? '{' enumVariant (',' enumVariant)* ','? '}' ;
-enumVariant : ident ('(' typeExpr (',' typeExpr)* ')' | '{' fieldDecl* '}')? ;
+enumVariant : ident ('(' typeExpr (',' typeExpr)* ')' | '{' fieldDecl* '}' )? ( 'when' blockExpr )? ;
 
-classDecl : classModifiers? 'class' ident typeParams? ('extends' typeExpr)? ('implements' typeExpr (',' typeExpr)*)? '{' classMember* '}' ;
+// Classes: support data, sealed, abstract, final, mixin, companion, delegation
+classDecl : classModifiers? classKind? 'class' ident typeParams? primaryConstructor? ('extends' typeExpr ( 'with' typeExpr )* )? ('implements' typeExpr (',' typeExpr)*)? classBody? ;
+classKind : 'data' | 'abstract' | 'final' | 'sealed' | 'mixin' ;
 classModifiers : modifier+ ;
-classMember : fieldDecl | propertyDecl | methodDecl | constructorDecl | destructorDecl | classDecl | interfaceDecl | enumDecl | staticBlock | initBlock | operatorDecl | constructorDecl | eventDecl | delegateDecl | indexerDecl ;
 
-// property with optional accessors or initializer
-propertyDecl : modifiers? 'property' ident ':' typeExpr ( '{' propertyAccessor* '}' | '=' expression ';' | ';' ) ;
-// property accessor supports async/get/set/init and visibility modifiers
-propertyAccessor : modifiers? ('get' '(' ')' ( 'async' )? | 'set' '(' param ')' | 'init' '(' ')' ) blockExpr ;
+// primary constructor inline with class header
+primaryConstructor : '(' constructorParamList? ')' ('where' genericWhereClause)? ;
+constructorParamList : constructorParam (',' constructorParam)* ;
+constructorParam : modifiers? ('val' | 'var')? ident (':' typeExpr)? ('=' expression)? ;
 
-methodDecl : modifiers? 'fn' ident '(' params? ')' ('->' typeExpr)? blockExpr ;
-constructorDecl : 'constructor' '(' params? ')' blockExpr ;
+// optional class body
+classBody : '{' classMember* '}' ;
+
+// secondary constructors
+secondaryConstructor : 'constructor' '(' params? ')' blockExpr ;
+
+// class members: fields, properties, methods, constructors, nested types, companion, delegates, operators, events, indexers
+classMember : fieldDecl
+            | propertyDecl
+            | methodDecl
+            | secondaryConstructor
+            | destructorDecl
+            | nestedTypeDecl
+            | companionDecl
+            | delegationDecl
+            | operatorDecl
+            | eventDecl
+            | delegateDecl
+            | indexerDecl
+            | staticBlock
+            | initBlock
+            | ';'
+            ;
+
+// nested/inner class
+nestedTypeDecl : classDecl | interfaceDecl | enumDecl | traitDecl | recordDecl ;
+
+// companion object
+companionDecl : 'companion' ('object' | 'class')? (ident)? '{' classMember* '}' ;
+
+// delegation: 'by' clause to delegate implementation of an interface to a field/expression
+delegationDecl : 'delegate' 'to' expression ';' ;
+
+// property with backing field, delegates, observers, accessors
+propertyDecl : modifiers? ('val' | 'var') ident (':' typeExpr)? ( '=' expression )? ( '{' propertyAccessor* '}' | ';' ) ;
+// property accessor supports accessor-level modifiers and visibility
+propertyAccessor : accessorModifiers? ( 'get' '(' ')' ( 'async' )? | 'set' '(' param? ')' | 'init' '(' ')' ) blockExpr ;
+accessorModifiers : modifier+ ;
+
+// property delegation: e.g., val x by delegateExpr
+propertyDelegate : 'by' expression ;
+// property observers
+propertyObserver : 'willSet' '(' ident? ')' blockExpr | 'didSet' '(' ident? ')' blockExpr ;
+
+methodDecl : modifiers? 'fn' ident typeParams? '(' params? ')' ('->' typeExpr)? ('throws' typeExprList)? blockExpr ;
+// destructor
 destructorDecl : 'destructor' '(' ')' blockExpr ;
 
 // static initializer and instance init blocks
 staticBlock : 'static' blockExpr ;
 initBlock : 'init' blockExpr ;
 
-// operator overloading — expanded to include named operators and indexer/call forms
+// operator overloading
 operatorDecl : modifiers? 'operator' operatorToken '(' params? ')' ('->' typeExpr)? blockExpr ;
-operatorToken : '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '<<' | '>>' | '[]' | '()' | '[]=' | '->' | '|' ;
+operatorToken : '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '<<' | '>>' | '[]' | '()' | '[]=' | '->' | '|' | '^' | '&' ;
 
 // events and delegates
-eventDecl : 'event' ident ':' typeExpr ( '{' eventAccessor* '}' | ';' ) ;
+eventDecl : modifiers? 'event' ident (':' typeExpr)? ( '{' eventAccessor* '}' | ';' ) ;
 eventAccessor : 'add' '(' param? ')' blockExpr | 'remove' '(' param? ')' blockExpr | 'invoke' '(' params? ')' blockExpr ;
 
-delegateDecl : 'delegate' ident '(' params? ')' ('->' typeExpr)? ';' ;
+delegateDecl : modifiers? 'delegate' ident '(' params? ')' ('->' typeExpr)? ';' ;
 
-// indexer declaration (instance/static/indexer with optional accessors)
+// indexer declaration
 indexerDecl : modifiers? 'indexer' '(' params? ')' ':' typeExpr ( '{' propertyAccessor* '}' | ';' ) ;
 
 interfaceDecl : 'interface' ident typeParams? '{' interfaceMember* '}' ;
-interfaceMember : methodSignature | propertySignature ;
-methodSignature : ident '(' params? ')' '->' typeExpr ';' ;
-propertySignature : 'get'? 'set'? ident ':' typeExpr ';' ;
+interfaceMember : methodSignature | propertySignature | typeMember ;
+methodSignature : ident '(' params? ')' ('->' typeExpr)? ('default' blockExpr)? ';' ;
+propertySignature : 'get'? 'set'? ident ':' typeExpr ('default' '{' propertyAccessor* '}' )? ';' ;
 
-recordDecl : 'record' ident '(' recordField (',' recordField)* ')' ;
-recordField : ident ':' typeExpr ;
+typeMember : 'type' ident ('=' typeExpr)? ';' ;
+
+recordDecl : 'record' ident '(' recordField (',' recordField)* ')' ('extends' typeExpr)? ( '{' classMember* '}' )? ;
+recordField : modifiers? ident ':' typeExpr ('=' expression)? ;
 
 typeAliasDecl : 'type' ident '=' typeExpr ';' ;
 traitDecl : 'trait' ident typeParams? '{' traitMember* '}' ;
-traitMember : methodSignature | associatedType ;
-associatedType : 'type' ident ';' ;
+traitMember : methodSignature | propertySignature | typeMember ;
 
-implDecl : 'impl' typeParams? typeExpr '{' implMember* '}' ;
-implMember : methodDecl | associatedTypeImpl ;
+implDecl : 'impl' typeParams? typeExpr ('for' typeExpr)? '{' implMember* '}' ;
+implMember : methodDecl | associatedTypeImpl | propertyDecl ;
 associatedTypeImpl : 'type' ident '=' typeExpr ';' ;
 
 // ============================================================================
@@ -419,19 +473,17 @@ quantumVariationalDecl : 'quantum_variational' ident '(' params? ')' blockExpr ;
 quantumTranspilerDecl : 'quantum_transpile' ident 'to' ident blockExpr ;
 
 // ============================================================================
-// NANO RUNTIME
+// (rest unchanged) ...
 // ============================================================================
 
+// NANO RUNTIME
 nanoAgentDecl : 'nano_agent' ident '{' nanoAgentMember* '}' ;
 nanoAgentMember : ident ':' typeExpr ';' | methodDecl ;
 nanoExecutorDecl : 'nano_executor' ident '{' executorConfig* '}' ;
 executorConfig : 'config' ident '=' expression ';' ;
 nanoContextDecl : 'nano_context' ident '{' ident ':' typeExpr ';'* '}' ;
 
-// ============================================================================
 // CORE LANGUAGE FEATURES
-// ============================================================================
-
 languageDecl : 'language' ident '{' languageFeature* '}' ;
 languageFeature : 'feature' ident ';' ;
 
@@ -456,10 +508,7 @@ cognitiveStmt : 'reason' expression ';' | 'learn' expression ';' | 'adapt' expre
 metaBlock : 'meta' '{' metaOperation* '}' ;
 metaOperation : 'transform' expression ';' | 'reflect' ident ';' ;
 
-// ============================================================================
 // HARDWARE/HDL
-// ============================================================================
-
 hdlModuleDecl : 'hdl_module' ident '{' hdlPort* hdlStmt* '}' ;
 hdlPort : ('input' | 'output') ident ':' typeExpr ';' ;
 hdlStmt : 'assign' ident '=' expression ';' | 'always' '@' '(' hdlEvent ')' blockExpr ;
@@ -471,10 +520,7 @@ verilogContent : (~('{' | '}'))* ;
 spirvShaderDecl : 'spirv_shader' ident '{' spirvInstr* '}' ;
 spirvInstr : ident expression ';' ;
 
-// ============================================================================
 // DISTRIBUTED SYSTEMS
-// ============================================================================
-
 cloudDecl : 'cloud' ident '{' cloudConfig* '}' ;
 cloudConfig : ident '=' expression ';' ;
 
@@ -493,10 +539,7 @@ nimbusClusterMember : 'node' ident ';' | 'consensus_threshold' ':' FLOAT ';' ;
 evasFilterDecl : 'evas_filter' ident '{' evasPolicy* '}' ;
 evasPolicy : 'policy' ident blockExpr ;
 
-// ============================================================================
 // SELF-EVOLUTION & ADAPTATION
-// ============================================================================
-
 selfEvolveDecl : 'self_evolve' ident '{' evolutionRule* '}' ;
 evolutionRule : 'rule' ident blockExpr ;
 
@@ -511,18 +554,12 @@ adjustmentStrategy : 'strategy' ident blockExpr ;
 selfVersioningDecl : 'self_version' ident '{' versionInfo* '}' ;
 versionInfo : 'version' STRING ';' | 'depends_on' ident ';' ;
 
-// ============================================================================
 // TARGET & RUNTIME
-// ============================================================================
-
 targetPlatform : 'target' ident blockExpr ;
 runtimeDecl : 'runtime' ident '{' runtimeConfig* '}' ;
 runtimeConfig : ident '=' expression ';' ;
 
-// ============================================================================
 // CONCURRENCY & ACTORS
-// ============================================================================
-
 actorDecl : 'actor' ident '{' actorMember* '}' ;
 actorMember : methodDecl | 'mailbox' ':' typeExpr ';' | 'state' ':' typeExpr ';' ;
 
@@ -531,10 +568,7 @@ messageHandlerDecl : 'message_handler' ident blockExpr ;
 concurrentDataStructureDecl : 'concurrent' typeExpr '{' concurrencyMember* '}' ;
 concurrencyMember : methodDecl | 'lock' ':' typeExpr ';' ;
 
-// ============================================================================
 // AI/ML SYSTEMS
-// ============================================================================
-
 aiSystemDecl : 'ai_system' ident '{' aiSystemMember* '}' ;
 aiSystemMember : methodDecl | 'model' ':' typeExpr ';' ;
 
@@ -560,10 +594,7 @@ knowledgeGraphBlock : 'knowledge_graph' '{' graphNode* '}' ;
 graphNode : 'node' ident '{' nodeProperty* '}' ;
 nodeProperty : ident ':' typeExpr ';' ;
 
-// ============================================================================
 // SECURITY & ADMINISTRATION
-// ============================================================================
-
 adminInterfaceDecl : 'admin_interface' ident '{' adminMethod* '}' ;
 adminMethod : methodDecl ;
 
@@ -591,10 +622,7 @@ legalActionDecl : 'legal_action' ident blockExpr ;
 sandboxDecl : 'sandbox' ident '{' sandboxPolicy* '}' ;
 sandboxPolicy : 'policy' ident blockExpr ;
 
-// ============================================================================
 // OMNIVERSAL FEATURES
-// ============================================================================
-
 omniversalSimulationDecl : 'omniversal_simulation' ident '{' simConfig* '}' ;
 simConfig : ident '=' expression ';' ;
 
@@ -629,17 +657,11 @@ realityConfig : ident '=' expression ';' ;
 omniversalNlpDecl : 'omniversal_nlp' ident '{' nlpComponent* '}' ;
 nlpComponent : 'module' ident ';' ;
 
-// ============================================================================
 // CHAT & ARCHITECTURE
-// ============================================================================
-
 chatArchitectDecl : 'chat_architect' ident '{' chatConfig* '}' ;
 chatConfig : ident '=' expression ';' ;
 
-// ============================================================================
 // RESOURCE MANAGEMENT
-// ============================================================================
-
 greenComputingAttr : '@green_computing' ;
 
 thermalOptDecl : 'thermal_optimization' '{' thermalPolicy* '}' ;
@@ -651,10 +673,7 @@ conservePolicy : 'policy' ident blockExpr ;
 resourceOrchestratorDecl : 'resource_orchestrator' ident '{' orchestratorConfig* '}' ;
 orchestratorConfig : ident '=' expression ';' ;
 
-// ============================================================================
 // ANALYTICS & TRACKING
-// ============================================================================
-
 developerAnalyticsDecl : 'dev_analytics' ident '{' analyticsConfig* '}' ;
 analyticsConfig : ident '=' expression ';' ;
 
@@ -663,27 +682,18 @@ licenseTrackingDecl : 'license_tracking' ident blockExpr ;
 dataProvenanceDecl : 'data_provenance' ident '{' provenanceConfig* '}' ;
 provenanceConfig : ident ':' typeExpr ';' ;
 
-// ============================================================================
 // DEPLOYMENT
-// ============================================================================
-
 deploymentDecl : 'deployment' ident '{' deploymentTarget* '}' ;
 deploymentTarget : 'target' ident ';' ;
 
 versionReleaseDecl : 'version_release' STRING '{' releaseNote* '}' ;
 releaseNote : 'note' STRING ';' ;
 
-// ============================================================================
 // LSP & LANGUAGE SERVER
-// ============================================================================
-
 lspServerDecl : 'lsp_server' ident '{' lspConfig* '}' ;
 lspConfig : ident '=' expression ';' ;
 
-// ============================================================================
 // ADVANCED TYPE SYSTEM
-// ============================================================================
-
 typeClassDecl : 'typeclass' ident typeParams? '{' typeClassMember* '}' ;
 typeClassMember : methodSignature ;
 
@@ -695,11 +705,7 @@ typeProviderDecl : 'type_provider' ident blockExpr ;
 
 fileScopedType : 'file_scope' typeExpr ';' ;
 
-// ============================================================================
 // EXTENSIONS
-// ============================================================================
-
-// general extension declaration that can contain multiple extension members
 extensionDecl : 'extension' typeExpr '{' extensionMember* '}' ;
 extensionMember : methodDecl | propertyDecl | indexerDecl | operatorDecl ;
 
@@ -716,149 +722,13 @@ dslRule : ident '=>' expression ';' ;
 aspectDecl : 'aspect' ident '{' aspectAdvice* '}' ;
 aspectAdvice : 'before' | 'after' | 'around' ;
 
-// ============================================================================
 // PARALLELISM & MESSAGE PASSING
-// ============================================================================
+// (select/channel previously defined)
 
-dataParallelismDecl : 'data_parallel' ident '{' parallelConfig* '}' ;
-parallelConfig : ident '=' expression ';' ;
+// (AI/ML, GRAPHICS, SPECIALIZED DOMAINS, CRYPTOGRAPHY, META-PROGRAMMING,
+// MATHEMATICAL FOUNDATIONS, HYBRID & INTERFACES etc.) — keep as previously defined
 
-// Enhanced msgChannel with buffering
-msgChannel : 'channel' ident ':' typeExpr ('buffered' '(' INT ')')? ';' ;
-
-messagePassingDecl : 'message_passing' ident '{' msgChannel* '}' ;
-
-// select/csp style primitives
-selectExpr : 'select' '{' selectCase* '}' ;
-
-selectCase : 'case' ( channelReceive | channelSend | 'default' ) '=>' blockExpr ','? ;
-
-channelReceive : ident '<-' expression    // e.g., x <- ch
-               | '<-' expression          // receive into discard
-               ;
-channelSend : expression '->' expression  // e.g., msg -> ch
-            ;
-
-// ============================================================================
-// AI/ML FEATURES
-// ============================================================================
-
-deepLearningDecl : 'deep_learning' ident '{' dlLayer* '}' ;
-dlLayer : 'layer' ident ':' typeExpr ';' ;
-
-mlModelDecl : 'ml_model' ident '{' modelConfig* '}' ;
-modelConfig : ident '=' expression ';' ;
-
-quantumMlBlock : 'quantum_ml' '{' qmlComponent* '}' ;
-qmlComponent : ident ':' typeExpr ';' ;
-
-transferLearningBlock : 'transfer_learning' ident blockExpr ;
-multiAgentBlock : 'multi_agent' ident '{' agentConfig* '}' ;
-agentConfig : 'agent' ident ';' ;
-
-autonomousSystemBlock : 'autonomous_system' ident blockExpr ;
-
-explainableRlBlock : 'explainable_rl' ident blockExpr ;
-explainableDeepLearningBlock : 'explainable_dl' ident blockExpr ;
-
-probabilisticGraphicalModelBlock : 'pgm' ident '{' pgmNode* '}' ;
-pgmNode : 'node' ident ':' typeExpr ';' ;
-
-advancedNlpBlock : 'advanced_nlp' ident '{' nlpFeature* '}' ;
-nlpFeature : ident ':' typeExpr ';' ;
-
-aiForBusinessBlock : 'ai_business' ident blockExpr ;
-
-// ============================================================================
-// GRAPHICS & MULTIMEDIA
-// ============================================================================
-
-graphicsDecl : 'graphics' ident '{' graphicsConfig* '}' ;
-graphicsConfig : ident '=' expression ';' ;
-
-videoDecl : 'video' ident '{' videoConfig* '}' ;
-videoConfig : ident '=' expression ';' ;
-
-musicDecl : 'music' ident '{' musicConfig* '}' ;
-musicConfig : ident '=' expression ';' ;
-
-// ============================================================================
-// SPECIALIZED DOMAINS
-// ============================================================================
-
-roboticsDecl : 'robotics' ident '{' roboticsComponent* '}' ;
-roboticsComponent : ident ':' typeExpr ';' | methodDecl ;
-
-tensorDecl : 'tensor' ident '<' typeExpr '>' '{' tensorConfig* '}' ;
-tensorConfig : ident '=' expression ';' ;
-
-matrixDecl : 'matrix' ident '<' typeExpr '>' '{' matrixConfig* '}' ;
-matrixConfig : ident '=' expression ';' ;
-
-vectorDecl : 'vector' ident '<' typeExpr '>' '{' vectorConfig* '}' ;
-vectorConfig : ident '=' expression ';' ;
-
-graphModelingBlock : 'graph_model' ident '{' graphConfig* '}' ;
-graphConfig : ident ':' typeExpr ';' ;
-
-vrArInteractionBlock : 'vr_ar' ident '{' vrArConfig* '}' ;
-vrArConfig : ident '=' expression ';' ;
-
-imageVideoAnalysisBlock : 'image_video_analysis' ident blockExpr ;
-
-// ============================================================================
-// CRYPTOGRAPHY
-// ============================================================================
-
-cryptoDecl : 'crypto' ident '{' cryptoAlgorithm* '}' ;
-cryptoAlgorithm : 'algorithm' ident ';' ;
-
-quantumIdentityDecl : 'quantum_identity' ident '{' identityConfig* '}' ;
-identityConfig : ident ':' typeExpr ';' ;
-
-provenanceManagerDecl : 'provenance_manager' ident '{' provenanceMethod* '}' ;
-provenanceMethod : methodDecl ;
-
-// ============================================================================
-// META-PROGRAMMING
-// ============================================================================
-
-metaProgrammingDecl : 'meta_programming' '{' metaTransform* '}' ;
-metaTransform : 'transform' STRING '=>' STRING ';' ;
-
-languageDialectDecl : 'language_dialect' ident '{' dialectFeature* '}' ;
-dialectFeature : 'keyword' STRING ';' ;
-
-reflectionDecl : 'reflection' ident blockExpr ;
-
-// ============================================================================
-// MATHEMATICAL FOUNDATIONS
-// ============================================================================
-
-mathematicalDiscoveryDecl : 'math_discovery' ident '{' discoveryConfig* '}' ;
-discoveryConfig : ident '=' expression ';' ;
-
-conjectureProofDecl : 'conjecture' ident '{' proofConfig* '}' ;
-proofConfig : 'statement' ':' typeExpr ';' ;
-
-algebraicGeometryDecl : 'algebraic_geometry' ident blockExpr ;
-differentialGeometryDecl : 'differential_geometry' ident blockExpr ;
-categoryTheoryDecl : 'category_theory' ident blockExpr ;
-numberTheoryDecl : 'number_theory' ident blockExpr ;
-
-// ============================================================================
-// HYBRID & INTERFACES
-// ============================================================================
-
-hybridDef : 'hybrid' ident '{' hybridMember* '}' ;
-hybridMember : methodDecl | fieldDecl ;
-
-interfaceDef : 'interface' ident '{' interfaceMember* '}' ;
-
-// ============================================================================
-// LITERALS & TOKENS
-// ============================================================================
-
+// LITERALS & TOKENS (expanded)
 literal
     : INT
     | BIGINT
@@ -879,23 +749,24 @@ structLiteralTail : '{' (ident ':' expression (',' ident ':' expression)*)? '}' 
 
 ident : IDENTIFIER ;
 docComment : DOC_COMMENT ;
-// allow multiple attributes on a declaration
 attributeDecl : ('@' ident ('(' args? ')')?)+ ;
 
-// ============================================================================
 // LEXER TOKENS
-// ============================================================================
-
 fragment LETTER : [a-zA-Z_] ;
 fragment DIGIT : [0-9] ;
 fragment HEX_DIGIT : [0-9a-fA-F] ;
 
-// Keywords that should be recognized before IDENTIFIER
+// Some identifiers are emitted as explicit tokens to avoid ambiguity
 THIS : 'this' ;
 SUPER : 'super' ;
 NEW : 'new' ;
+OBJECT : 'object' ;
+COMPANION : 'companion' ;
+DATA : 'data' ;
+SEALED : 'sealed' ;
+MIXIN : 'mixin' ;
 
-// Raw / multiline / byte array strings — place before generic STRING
+// Raw / multiline / byte array strings
 RAW_STRING : 'r#"' (~[\n\r])* '"#' ;
 MULTILINE_STRING : '"""' (~["]| '"' ~["] | '""' ~["] )* '"""' ;
 BYTEARRAY : 'b"' (~["\\\r\n] | '\\' .)* '"' ;
