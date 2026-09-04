@@ -10,16 +10,20 @@
 //!
 //! It answers:
 //!
-//! > "What is the longest dependency-constrained path through the operations,
-//! > how much abstract time does it represent, and which operations determine
-//! > that lower bound?"
+//! > What is the longest dependency-constrained path through the operations,
+//! > what is its target-independent duration, and which operations determine
+//! > that lower bound?
 //!
-//! The result is an analysis artifact. It is NOT a physical schedule.
+//! This module produces an analysis artifact. It does NOT produce a physical
+//! schedule and it does NOT perform resource-constrained scheduling.
 //!
 //! # Architectural boundary
 //!
 //! ```text
 //! canonical quantum IR
+//!          │
+//!          ▼
+//! scheduling::adapters::ir
 //!          │
 //!          ▼
 //! scheduling::ir::operation
@@ -28,79 +32,80 @@
 //! scheduling::ir::graph
 //!          │
 //!          ▼
-//! scheduling::ir::critical_path     ◄── this module
+//! scheduling::ir::critical_path       ◄── this module
 //!          │
-//!      ┌───┼──────────────┐
-//!      ▼   ▼              ▼
-//!   planners policies optimization
+//!      ┌───┼─────────────────────────────┐
+//!      ▼   ▼                             ▼
+//! planners  policies                optimization
 //! ```
+//!
+//! # Responsibilities
 //!
 //! This module owns:
 //!
-//! - longest dependency-path analysis;
-//! - earliest start times;
-//! - earliest finish times;
-//! - latest start times;
-//! - latest finish times;
-//! - operation slack;
+//! - critical-path lower-bound analysis;
+//! - earliest-start analysis;
+//! - earliest-finish analysis;
+//! - latest-start analysis;
+//! - latest-finish analysis;
+//! - operation slack analysis;
 //! - critical-operation identification;
-//! - critical-path reconstruction;
+//! - deterministic critical-path reconstruction;
 //! - deterministic tie-breaking;
-//! - overflow-safe path arithmetic;
-//! - critical-path analysis statistics.
+//! - checked temporal arithmetic;
+//! - graph/duration validation required by the analysis;
+//! - analysis statistics.
 //!
-//! This module does NOT own:
+//! It does NOT own:
 //!
 //! - quantum operation semantics;
-//! - qubit identity;
+//! - logical qubit identity;
 //! - physical qubit identity;
 //! - routing;
 //! - hardware topology;
 //! - resource calendars;
-//! - hardware timing;
-//! - scheduling policy;
+//! - target capability discovery;
+//! - hardware timing calibration;
+//! - scheduling policies;
 //! - resource-constrained scheduling;
 //! - QEC algorithms;
 //! - noise modelling;
 //! - runtime execution;
 //! - serialization formats.
 //!
-//! Those concerns belong to their canonical subsystems.
-//!
 //! # Canonical identity ownership
 //!
-//! Operation identity ultimately comes from:
+//! Operation identity is ultimately owned by:
 //!
 //! ```text
 //! crate::quantum::ir::core::identity::OperationId
 //! ```
 //!
-//! through:
+//! and reaches this module through:
 //!
 //! ```text
 //! crate::quantum::scheduling::types::OperationRef
 //! ```
 //!
-//! Logical and physical qubit identity remain exclusively owned by:
+//! This module deliberately does not create another operation identity.
+//!
+//! Likewise, this module deliberately does not import `QubitId` or
+//! `PhysicalQubitId`. Critical-path analysis operates on operation dependencies.
+//! If a future scheduler analysis needs qubit identity, it MUST use the
+//! canonical:
 //!
 //! ```text
 //! crate::quantum::ir::qubit::QubitId
 //! crate::quantum::ir::qubit::PhysicalQubitId
 //! ```
 //!
-//! This module intentionally does not import `QubitId` because a critical path
-//! is defined over operation dependencies rather than directly over qubit
-//! identities. Any future qubit-specific analysis must consume the canonical
-//! `quantum::ir::qubit` types rather than introducing scheduler-local copies.
+//! and must not introduce scheduler-local qubit identities.
 //!
 //! # Time semantics
 //!
-//! The scheduler uses target-independent `Duration` and `TimePoint` values.
+//! `Duration` and `TimePoint` are abstract scheduler coordinates.
 //!
-//! A duration has no intrinsic unit. The target timing subsystem determines
-//! its physical interpretation.
-//!
-//! Therefore this module never assumes:
+//! They intentionally do not assume:
 //!
 //! - nanoseconds;
 //! - microseconds;
@@ -109,39 +114,36 @@
 //! - a particular clock;
 //! - a particular quantum technology.
 //!
+//! Interpretation is supplied by the timing/target layer.
+//!
 //! # Critical-path definition
 //!
-//! Given a DAG G=(V,E) and operation weight w(v):
+//! For a directed acyclic graph G=(V,E), with non-negative operation weight
+//! `w(v)`:
 //!
 //! ```text
 //! earliest_start(v)
-//!     = max(earliest_finish(p)) for p -> v
+//!     = max(earliest_finish(p)) for every predecessor p of v
 //!
 //! earliest_finish(v)
 //!     = earliest_start(v) + w(v)
 //! ```
 //!
-//! The critical-path lower bound is:
+//! The dependency-only lower bound is:
 //!
 //! ```text
 //! max(earliest_finish(v))
 //! ```
 //!
-//! The analysis also computes a latest-time representation relative to the
-//! critical-path makespan:
+//! Latest times are computed relative to that lower bound:
 //!
 //! ```text
 //! latest_finish(v)
-//!     = min(latest_start(s)) for v -> s
+//!     = makespan                         if v is a sink
+//!     = min(latest_start(s))             otherwise
 //!
 //! latest_start(v)
 //!     = latest_finish(v) - w(v)
-//! ```
-//!
-//! For sink operations:
-//!
-//! ```text
-//! latest_finish(sink) = critical_path_duration
 //! ```
 //!
 //! Slack is:
@@ -154,144 +156,177 @@
 //!
 //! # Important distinction
 //!
-//! Critical path != schedule.
+//! Critical-path duration is NOT a physical schedule makespan.
 //!
-//! The critical path ignores:
+//! The analysis intentionally ignores:
 //!
 //! - resource contention;
-//! - calibration availability;
 //! - control-channel capacity;
 //! - measurement-channel capacity;
-//! - physical topology;
-//! - alignment constraints;
+//! - hardware maintenance;
+//! - calibration windows;
+//! - physical routing;
 //! - communication latency;
-//! - hardware maintenance windows.
+//! - alignment constraints;
+//! - dynamic resource availability;
+//! - target-specific execution constraints.
 //!
-//! Consequently:
+//! Therefore the critical-path duration is a dependency-only lower bound.
+//!
+//! A resource-constrained scheduler may produce a schedule whose makespan is
+//! greater than or equal to this value.
+//!
+//! # Multiple critical paths
+//!
+//! A graph can contain multiple distinct critical paths.
+//!
+//! This module therefore exposes both:
+//!
+//! - the complete set of zero-slack operations;
+//! - one deterministic representative critical path.
+//!
+//! The representative path is selected using deterministic ordering.
+//!
+//! # Determinism
+//!
+//! The canonical graph uses deterministic ordered collections.
+//!
+//! This module preserves deterministic behavior by:
+//!
+//! 1. consuming the graph's deterministic topological order;
+//! 2. selecting the smallest operation when equal predecessor path lengths
+//!    occur;
+//! 3. selecting the smallest sink when equal maximum finish times occur;
+//! 4. preserving deterministic operation ordering in returned maps/sets.
+//!
+//! Therefore:
 //!
 //! ```text
-//! critical_path_duration <= actual scheduled makespan
+//! same graph + same duration map
+//!             │
+//!             ▼
+//!       same analysis
 //! ```
-//!
-//! whenever all weights represent valid non-negative execution durations.
-//!
-//! Resource-aware planners may use this result as a lower bound and priority
-//! signal, but must perform their own resource feasibility analysis.
 //!
 //! # Scalability
 //!
-//! There is deliberately no fixed limit for:
+//! There are no scheduler-defined limits for:
 //!
 //! - number of operations;
 //! - number of dependencies;
 //! - graph depth;
 //! - graph width;
-//! - qubit count;
-//! - resource count;
-//! - schedule duration;
-//! - machine size.
+//! - number of qubits;
+//! - number of resources;
+//! - target machine size.
 //!
-//! "Infinity" means that this implementation does not encode an artificial
-//! machine-size ceiling. A concrete compilation remains bounded by available
-//! memory, CPU, address space, explicit user limits, and the target itself.
+//! The implementation uses iterative traversal and does not recurse according
+//! to graph depth.
 //!
-//! The algorithm is iterative and does not recurse according to graph depth.
-//!
-//! Let:
-//!
-//! - V = number of operation nodes;
-//! - E = number of dependency edges.
-//!
-//! The dominant analysis is O((V + E) log V) because the canonical dependency
-//! graph uses deterministic ordered collections.
-//!
-//! Additional memory is O(V) for analysis vectors/maps, excluding the graph
-//! itself.
-//!
-//! # Determinism
-//!
-//! All semantic tie-breaking is deterministic.
-//!
-//! When two predecessor paths have equal accumulated weight, the predecessor
-//! with the smallest `OperationRef` wins.
-//!
-//! When multiple sinks have equal maximum path length, the smallest sink is
-//! selected.
-//!
-//! Therefore the same:
+//! Its dominant complexity is:
 //!
 //! ```text
-//! graph + weights
+//! O(V + E)
 //! ```
 //!
-//! produces the same result.
+//! when the supplied graph traversal itself is treated as O(V + E).
+//!
+//! Because the canonical `DependencyGraph` uses ordered collections, its own
+//! operations may introduce logarithmic factors. This module does not replace
+//! that deterministic graph representation with a second graph.
+//!
+//! Additional analysis storage is O(V).
+//!
+//! # Memory behavior
+//!
+//! This module stores one analysis value per operation. It does not construct:
+//!
+//! - a timeline proportional to machine duration;
+//! - a qubit × time matrix;
+//! - a resource × time matrix;
+//! - fixed-size arrays based on assumed machine dimensions.
+//!
+//! This is essential for scaling from small systems to very large systems.
 //!
 //! # Overflow
 //!
-//! All duration and weight arithmetic is checked.
+//! All temporal arithmetic is checked.
 //!
-//! No arithmetic silently wraps.
+//! No wrapping arithmetic is used.
 //!
-//! An overflow is returned as a structured scheduling error.
+//! If a path duration cannot be represented by the scheduler's `TimePoint` /
+//! `Duration` representation, the analysis fails with a structured scheduling
+//! error.
 //!
 //! # Empty graph
 //!
-//! An empty graph is valid and produces:
+//! An empty graph is valid.
+//!
+//! The result contains:
 //!
 //! ```text
+//! operation_count = 0
+//! dependency_count = 0
 //! critical_path_duration = Duration::ZERO
 //! critical_path = []
-//! operation_count = 0
+//! critical_operations = {}
 //! ```
 //!
 //! # Zero-duration operations
 //!
 //! Zero-duration operations are valid.
 //!
-//! They can appear on a critical path and can have zero slack.
+//! They may appear on a critical path and may have zero slack.
 //!
-//! Therefore criticality is based on computed slack rather than requiring a
-//! positive duration.
+//! Criticality is therefore determined by slack rather than requiring a
+//! positive operation duration.
 //!
 //! # Cycle handling
 //!
-//! Critical-path analysis requires a DAG.
+//! Static critical-path analysis requires an acyclic dependency graph.
 //!
-//! A cycle is a structural scheduling error for static critical-path analysis.
+//! The graph's canonical `topological_order()` method is therefore used as the
+//! structural source of truth.
 //!
-//! The graph is validated through its canonical `topological_order()` API.
-//! This module does not independently reconstruct dependency semantics.
+//! This module does not duplicate graph cycle-detection logic.
 //!
 //! # Integration
 //!
 //! ```text
-//! scheduling::ir::graph::DependencyGraph
-//!             │
-//!             ▼
-//!       CriticalPathAnalysis
-//!             │
-//!       ┌─────┼───────────┐
-//!       ▼     ▼           ▼
-//! earliest   latest      path
-//! times      times       reconstruction
-//!       │     │           │
-//!       └─────┼───────────┘
-//!             ▼
+//! DependencyGraph
+//!       │
+//!       │ + operation durations
+//!       ▼
+//! CriticalPathAnalyzer
+//!       │
+//!       ├── forward pass
+//!       │      ├── earliest start
+//!       │      └── earliest finish
+//!       │
+//!       ├── backward pass
+//!       │      ├── latest start
+//!       │      └── latest finish
+//!       │
+//!       ├── slack analysis
+//!       │
+//!       └── deterministic path reconstruction
+//!              │
+//!              ▼
 //!       CriticalPathResult
 //! ```
 //!
 //! Consumers include:
 //!
-//! - `planners::critical_path`;
-//! - `algorithms::cp`;
-//! - `policies::priority`;
-//! - `optimization::makespan`;
-//! - `optimization::multi_objective`;
-//! - `diagnostics::explain`;
-//! - `verification`;
-//! - benchmarking.
+//! - `scheduling::planners::critical_path`;
+//! - `scheduling::algorithms::cp`;
+//! - `scheduling::policies::priority`;
+//! - `scheduling::optimization::makespan`;
+//! - `scheduling::optimization::multi_objective`;
+//! - `scheduling::diagnostics::explain`;
+//! - `scheduling::verification`;
+//! - scheduling benchmarking.
 //!
-//! The module must remain independent of those consumers.
+//! None of those modules are dependencies of this file.
 //!
 //! # Rust contract
 //!
@@ -302,7 +337,7 @@
 //! - Rust 2021;
 //! - stable Rust;
 //! - no nightly features;
-//! - no unsafe code.
+//! - no `unsafe` code.
 //!
 //! The safety boundary is compiler-enforced below.
 //!
@@ -315,493 +350,423 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::graph::DependencyGraph;
+use super::graph::{DependencyGraph, DependencyGraphError};
 use super::super::errors::{SchedulingError, SchedulingResult};
-use super::super::types::{
-    Duration,
-    OperationRef,
-    TimePoint,
-};
+use super::super::types::{Duration, OperationRef, TimePoint};
 
 // =============================================================================
-// Public analysis result
+// Public result types
 // =============================================================================
 
-/// Complete critical-path analysis result.
+/// Per-operation critical-path timing information.
 ///
-/// The structure is immutable after construction.
+/// This is an analysis value, not a schedule reservation.
 ///
-/// It is safe to share between read-only planner/diagnostic/optimization
-/// consumers through ordinary ownership or `Arc`.
+/// The values describe the dependency-only temporal envelope of an operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CriticalPathEntry {
+    /// Earliest dependency-feasible start time.
+    earliest_start: TimePoint,
+
+    /// Earliest dependency-feasible finish time.
+    earliest_finish: TimePoint,
+
+    /// Latest start time that preserves the dependency-only makespan.
+    latest_start: TimePoint,
+
+    /// Latest finish time that preserves the dependency-only makespan.
+    latest_finish: TimePoint,
+
+    /// Temporal flexibility available to the operation.
+    slack: Duration,
+
+    /// Operation duration used by the analysis.
+    duration: Duration,
+}
+
+impl CriticalPathEntry {
+    /// Creates an analysis entry.
+    #[must_use]
+    const fn new(
+        earliest_start: TimePoint,
+        earliest_finish: TimePoint,
+        latest_start: TimePoint,
+        latest_finish: TimePoint,
+        slack: Duration,
+        duration: Duration,
+    ) -> Self {
+        Self {
+            earliest_start,
+            earliest_finish,
+            latest_start,
+            latest_finish,
+            slack,
+            duration,
+        }
+    }
+
+    /// Returns the earliest start.
+    #[must_use]
+    pub const fn earliest_start(self) -> TimePoint {
+        self.earliest_start
+    }
+
+    /// Returns the earliest finish.
+    #[must_use]
+    pub const fn earliest_finish(self) -> TimePoint {
+        self.earliest_finish
+    }
+
+    /// Returns the latest start.
+    #[must_use]
+    pub const fn latest_start(self) -> TimePoint {
+        self.latest_start
+    }
+
+    /// Returns the latest finish.
+    #[must_use]
+    pub const fn latest_finish(self) -> TimePoint {
+        self.latest_finish
+    }
+
+    /// Returns the operation slack.
+    #[must_use]
+    pub const fn slack(self) -> Duration {
+        self.slack
+    }
+
+    /// Returns the operation duration used by the analysis.
+    #[must_use]
+    pub const fn duration(self) -> Duration {
+        self.duration
+    }
+
+    /// Returns whether the operation is critical.
+    #[must_use]
+    pub const fn is_critical(self) -> bool {
+        self.slack.is_zero()
+    }
+}
+
+/// Complete deterministic critical-path analysis.
+///
+/// The result is independent of hardware resource calendars and therefore can
+/// safely be reused by multiple scheduling policies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CriticalPathResult {
-    /// Number of operations in the analyzed graph.
+    /// Number of operations analyzed.
     operation_count: usize,
 
-    /// Number of dependency edges in the analyzed graph.
+    /// Number of dependency edges analyzed.
     dependency_count: usize,
 
-    /// Total duration of the longest dependency-constrained path.
+    /// Dependency-only makespan lower bound.
     critical_path_duration: Duration,
 
-    /// Number of operations on the selected deterministic critical path.
-    critical_path_operation_count: usize,
-
-    /// Deterministically selected critical path.
-    ///
-    /// Operations are ordered from source to sink.
+    /// One deterministic source-to-sink critical path.
     critical_path: Vec<OperationRef>,
 
-    /// Earliest possible start time for every operation.
-    earliest_start: BTreeMap<OperationRef, TimePoint>,
+    /// All zero-slack operations.
+    critical_operations: BTreeSet<OperationRef>,
 
-    /// Earliest possible finish time for every operation.
-    earliest_finish: BTreeMap<OperationRef, TimePoint>,
+    /// Per-operation timing analysis.
+    entries: BTreeMap<OperationRef, CriticalPathEntry>,
 
-    /// Latest permitted start time without increasing the critical-path
-    /// makespan.
-    latest_start: BTreeMap<OperationRef, TimePoint>,
-
-    /// Latest permitted finish time without increasing the critical-path
-    /// makespan.
-    latest_finish: BTreeMap<OperationRef, TimePoint>,
-
-    /// Total scheduling slack for each operation.
-    slack: BTreeMap<OperationRef, Duration>,
-
-    /// Critical predecessor selected for each operation.
+    /// Selected critical predecessor for each operation.
     ///
-    /// `None` means the operation begins a dependency path or no predecessor
-    /// was selected because all predecessor weights are equal to zero.
-    critical_predecessor: BTreeMap<OperationRef, Option<OperationRef>>,
-
-    /// Weight/duration associated with each operation.
-    weights: BTreeMap<OperationRef, Duration>,
+    /// This is useful to planners that want to reconstruct or explain the
+    /// dependency path without rerunning the analysis.
+    critical_predecessors: BTreeMap<OperationRef, Option<OperationRef>>,
 }
 
 impl CriticalPathResult {
-    /// Returns the number of operations.
+    /// Returns the number of analyzed operations.
     #[must_use]
     pub const fn operation_count(&self) -> usize {
         self.operation_count
     }
 
-    /// Returns the number of dependencies.
+    /// Returns the number of analyzed dependency edges.
     #[must_use]
     pub const fn dependency_count(&self) -> usize {
         self.dependency_count
     }
 
-    /// Returns the critical-path duration.
+    /// Returns the dependency-only critical-path duration.
     #[must_use]
     pub const fn critical_path_duration(&self) -> Duration {
         self.critical_path_duration
     }
 
-    /// Returns the number of operations on the selected critical path.
-    #[must_use]
-    pub const fn critical_path_operation_count(&self) -> usize {
-        self.critical_path_operation_count
-    }
-
-    /// Returns the selected critical path.
+    /// Returns the selected deterministic critical path.
     ///
-    /// The path is ordered from source to sink.
+    /// Operations are ordered from source to sink.
     #[must_use]
     pub fn critical_path(&self) -> &[OperationRef] {
         &self.critical_path
     }
 
-    /// Returns the earliest start of an operation.
+    /// Returns every zero-slack operation.
     ///
-    /// Returns `None` if the operation was not part of the analyzed graph.
+    /// This can contain more operations than the selected representative path
+    /// because a DAG may have multiple critical paths.
     #[must_use]
-    pub fn earliest_start(&self, operation: OperationRef) -> Option<TimePoint> {
-        self.earliest_start.get(&operation).copied()
+    pub fn critical_operations(&self) -> &BTreeSet<OperationRef> {
+        &self.critical_operations
     }
 
-    /// Returns the earliest finish of an operation.
-    ///
-    /// Returns `None` if the operation was not part of the analyzed graph.
+    /// Returns whether an operation has zero slack.
     #[must_use]
-    pub fn earliest_finish(&self, operation: OperationRef) -> Option<TimePoint> {
-        self.earliest_finish.get(&operation).copied()
+    pub fn is_critical(&self, operation: OperationRef) -> bool {
+        self.critical_operations.contains(&operation)
     }
 
-    /// Returns the latest start of an operation.
-    ///
-    /// Returns `None` if the operation was not part of the analyzed graph.
+    /// Returns whether an operation is on the selected representative path.
     #[must_use]
-    pub fn latest_start(&self, operation: OperationRef) -> Option<TimePoint> {
-        self.latest_start.get(&operation).copied()
+    pub fn is_on_critical_path(&self, operation: OperationRef) -> bool {
+        self.critical_path.contains(&operation)
     }
 
-    /// Returns the latest finish of an operation.
-    ///
-    /// Returns `None` if the operation was not part_of_graph(&operation)
-    /// {
-        // This method body is intentionally replaced below.
-        None
+    /// Returns the complete per-operation analysis map.
+    #[must_use]
+    pub fn entries(&self) -> &BTreeMap<OperationRef, CriticalPathEntry> {
+        &self.entries
     }
 
-    /// Returns the latest finish of an operation.
-    ///
-    /// Returns `None` if the operation was not part of the analyzed graph.
+    /// Returns the analysis entry for one operation.
     #[must_use]
-    pub fn latest_finish_time(
+    pub fn entry(
+        &self,
+        operation: OperationRef,
+    ) -> Option<CriticalPathEntry> {
+        self.entries.get(&operation).copied()
+    }
+
+    /// Returns the earliest start time for an operation.
+    #[must_use]
+    pub fn earliest_start(
         &self,
         operation: OperationRef,
     ) -> Option<TimePoint> {
-        self.latest_finish.get(&operation).copied()
+        self.entry(operation)
+            .map(CriticalPathEntry::earliest_start)
     }
 
-    /// Returns the slack of an operation.
-    ///
-    /// Returns `None` if the operation was not part of the analyzed graph.
+    /// Returns the earliest finish time for an operation.
     #[must_use]
-    pub fn slack(&self, operation: OperationRef) -> Option<Duration> {
-        self.slack.get(&operation).copied()
+    pub fn earliest_finish(
+        &self,
+        operation: OperationRef,
+    ) -> Option<TimePoint> {
+        self.entry(operation)
+            .map(CriticalPathEntry::earliest_finish)
     }
 
-    /// Returns the weight/duration assigned to an operation.
-    ///
-    /// Returns `None` if the operation was not part of the analyzed graph.
+    /// Returns the latest start time for an operation.
     #[must_use]
-    pub fn operation_weight(
+    pub fn latest_start(
+        &self,
+        operation: OperationRef,
+    ) -> Option<TimePoint> {
+        self.entry(operation)
+            .map(CriticalPathEntry::latest_start)
+    }
+
+    /// Returns the latest finish time for an operation.
+    #[must_use]
+    pub fn latest_finish(
+        &self,
+        operation: OperationRef,
+    ) -> Option<TimePoint> {
+        self.entry(operation)
+            .map(CriticalPathEntry::latest_finish)
+    }
+
+    /// Returns the operation slack.
+    #[must_use]
+    pub fn slack(
         &self,
         operation: OperationRef,
     ) -> Option<Duration> {
-        self.weights.get(&operation).copied()
+        self.entry(operation)
+            .map(CriticalPathEntry::slack)
+    }
+
+    /// Returns the operation duration used in the analysis.
+    #[must_use]
+    pub fn duration(
+        &self,
+        operation: OperationRef,
+    ) -> Option<Duration> {
+        self.entry(operation)
+            .map(CriticalPathEntry::duration)
     }
 
     /// Returns the selected critical predecessor of an operation.
+    ///
+    /// `Some(None)` means the operation is a source of the selected dependency
+    /// path. `None` means the operation was not analyzed.
     #[must_use]
     pub fn critical_predecessor(
         &self,
         operation: OperationRef,
     ) -> Option<Option<OperationRef>> {
-        self.critical_predecessor.get(&operation).copied()
-    }
-
-    /// Returns whether an operation lies on the selected critical path.
-    #[must_use]
-    pub fn is_on_critical_path(
-        &self,
-        operation: OperationRef,
-    ) -> bool {
-        self.critical_path
-            .binary_search(&operation)
-            .is_ok()
-            || self
-                .critical_path
-                .iter()
-                .any(|candidate| *candidate == operation)
+        self.critical_predecessors
+            .get(&operation)
+            .copied()
     }
 
     /// Returns all earliest-start values.
-    ///
-    /// The returned map is deterministic and read-only.
     #[must_use]
     pub fn earliest_starts(
         &self,
-    ) -> &BTreeMap<OperationRef, TimePoint> {
-        &self.earliest_start
+    ) -> BTreeMap<OperationRef, TimePoint> {
+        self.entries
+            .iter()
+            .map(|(operation, entry)| {
+                (*operation, entry.earliest_start())
+            })
+            .collect()
     }
 
     /// Returns all earliest-finish values.
     #[must_use]
     pub fn earliest_finishes(
         &self,
-    ) -> &BTreeMap<OperationRef, TimePoint> {
-        &self.earliest_finish
+    ) -> BTreeMap<OperationRef, TimePoint> {
+        self.entries
+            .iter()
+            .map(|(operation, entry)| {
+                (*operation, entry.earliest_finish())
+            })
+            .collect()
     }
 
     /// Returns all latest-start values.
     #[must_use]
     pub fn latest_starts(
         &self,
-    ) -> &BTreeMap<OperationRef, TimePoint> {
-        &self.latest_start
+    ) -> BTreeMap<OperationRef, TimePoint> {
+        self.entries
+            .iter()
+            .map(|(operation, entry)| {
+                (*operation, entry.latest_start())
+            })
+            .collect()
     }
 
     /// Returns all latest-finish values.
     #[must_use]
     pub fn latest_finishes(
         &self,
-    ) -> &BTreeMap<OperationRef, TimePoint> {
-        &self.latest_finish
+    ) -> BTreeMap<OperationRef, TimePoint> {
+        self.entries
+            .iter()
+            .map(|(operation, entry)| {
+                (*operation, entry.latest_finish())
+            })
+            .collect()
     }
 
     /// Returns all slack values.
     #[must_use]
     pub fn slacks(
         &self,
-    ) -> &BTreeMap<OperationRef, Duration> {
-        &self.slack
-    }
-
-    /// Returns all operation weights.
-    #[must_use]
-    pub fn weights(
-        &self,
-    ) -> &BTreeMap<OperationRef, Duration> {
-        &self.weights
-    }
-
-    /// Returns all operations whose slack is exactly zero.
-    ///
-    /// This may contain more operations than the selected deterministic path
-    /// when multiple distinct critical paths exist.
-    #[must_use]
-    pub fn critical_operations(&self) -> Vec<OperationRef> {
-        self.slack
+    ) -> BTreeMap<OperationRef, Duration> {
+        self.entries
             .iter()
-            .filter_map(|(operation, slack)| {
-                if slack.is_zero() {
-                    Some(*operation)
-                } else {
-                    None
-                }
+            .map(|(operation, entry)| {
+                (*operation, entry.slack())
             })
             .collect()
     }
 }
 
 // =============================================================================
-// Analysis
+// Analyzer
 // =============================================================================
 
-/// Critical-path analyzer.
+/// Deterministic critical-path analyzer.
 ///
-/// The type is stateless and therefore contains no global mutable state.
+/// The analyzer itself contains no mutable scheduling state and can therefore
+/// be reused for multiple independent graph analyses.
 ///
-/// It is a namespace for the analysis API rather than a scheduler instance.
+/// It does not retain a reference to the graph or duration map, which keeps the
+/// result lifecycle independent from the input lifecycle.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct CriticalPathAnalysis;
+pub struct CriticalPathAnalyzer;
 
-impl CriticalPathAnalysis {
+impl CriticalPathAnalyzer {
     /// Creates a critical-path analyzer.
     #[must_use]
     pub const fn new() -> Self {
         Self
     }
 
-    /// Performs unit-duration critical-path analysis.
+    /// Performs critical-path analysis.
     ///
-    /// Every operation receives:
+    /// `durations` must contain exactly one duration for every operation in the
+    /// graph. Extra duration entries are rejected because silently accepting
+    /// them can conceal an adapter or compiler bug.
     ///
-    /// ```text
-    /// Duration::new(1)
-    /// ```
+    /// # Algorithm
     ///
-    /// This is useful for logical-depth-style dependency analysis.
+    /// 1. Validate the graph.
+    /// 2. Obtain deterministic topological order.
+    /// 3. Perform an iterative forward pass.
+    /// 4. Select the deterministic sink defining the makespan.
+    /// 5. Perform an iterative backward pass.
+    /// 6. Compute slack.
+    /// 7. Identify zero-slack operations.
+    /// 8. Reconstruct one deterministic critical path.
     ///
-    /// For physical scheduling, callers should normally use
-    /// `analyze_with_durations`.
+    /// # Complexity
+    ///
+    /// The analysis itself is O(V + E) over graph traversal operations and O(V)
+    /// additional memory.
     pub fn analyze(
         &self,
         graph: &DependencyGraph,
-    ) -> SchedulingResult<CriticalPathResult> {
-        let weights = graph
-            .operations()
-            .map(|operation| (*operation, Duration::new(1)))
-            .collect::<BTreeMap<_, _>>();
-
-        self.analyze_with_durations(graph, &weights)
-    }
-
-    /// Performs critical-path analysis using caller-supplied operation
-    /// durations.
-    ///
-    /// Every graph operation must have exactly one duration entry.
-    ///
-    /// Extra duration entries for operations not present in the graph are
-    /// rejected. This prevents silent mismatches between the graph and timing
-    /// model.
-    pub fn analyze_with_durations(
-        &self,
-        graph: &DependencyGraph,
         durations: &BTreeMap<OperationRef, Duration>,
     ) -> SchedulingResult<CriticalPathResult> {
-        self.analyze_internal(graph, durations)
-    }
+        self.validate_duration_map(graph, durations)?;
 
-    /// Performs critical-path analysis using an iterator of operation/duration
-    /// pairs.
-    ///
-    /// This is convenient for adapters that do not already own a
-    /// `BTreeMap`.
-    ///
-    /// Duplicate operation entries are rejected.
-    pub fn analyze_with_duration_iter<I>(
-        &self,
-        graph: &DependencyGraph,
-        durations: I,
-    ) -> SchedulingResult<CriticalPathResult>
-    where
-        I: IntoIterator<Item = (OperationRef, Duration)>,
-    {
-        let mut map = BTreeMap::new();
-
-        for (operation, duration) in durations {
-            if map.insert(operation, duration).is_some() {
-                return Err(SchedulingError::InvalidInput {
-                    reason: format!(
-                        "critical-path duration table contains duplicate operation `{operation}`"
-                    ),
-                });
-            }
-        }
-
-        self.analyze_with_durations(graph, &map)
-    }
-
-    /// Convenience function for callers that want a static analysis without
-    /// explicitly constructing the analyzer value.
-    pub fn compute(
-        graph: &DependencyGraph,
-        durations: &BTreeMap<OperationRef, Duration>,
-    ) -> SchedulingResult<CriticalPathResult> {
-        Self::new().analyze_with_durations(graph, durations)
-    }
-
-    fn analyze_internal(
-        &self,
-        graph: &DependencyGraph,
-        durations: &BTreeMap<OperationRef, Duration>,
-    ) -> SchedulingResult<CriticalPathResult> {
-        // ---------------------------------------------------------------------
-        // Validate duration coverage before graph traversal.
-        // ---------------------------------------------------------------------
-
-        for operation in graph.operations() {
-            if !durations.contains_key(operation) {
-                return Err(SchedulingError::MissingDuration {
-                    operation: operation.id(),
-                });
-            }
-
-            let duration = durations
-                .get(operation)
-                .copied()
-                .expect("duration was checked immediately above");
-
-            // Duration is unsigned by construction, so there is no negative
-            // duration to reject.
-            //
-            // Keeping this explicit makes the semantic invariant obvious and
-            // gives a future duration representation a single validation point.
-            let _ = duration;
-        }
-
-        for operation in durations.keys() {
-            if !graph.contains_operation(*operation) {
-                return Err(SchedulingError::InvalidInput {
-                    reason: format!(
-                        "critical-path duration table contains operation `{operation}` not present in the dependency graph"
-                    ),
-                });
-            }
-        }
-
-        // ---------------------------------------------------------------------
-        // Obtain the canonical deterministic topological order.
-        //
-        // The dependency graph remains the single owner of graph traversal
-        // semantics. This module never rebuilds its edges independently.
-        // ---------------------------------------------------------------------
-
-        let topological_order = graph.topological_order().map_err(|error| {
-            SchedulingError::InvalidDependencyGraph {
-                dependency: None,
-                predecessor: None,
-                successor: None,
-                reason: error.to_string(),
-            }
-        })?;
-
-        let operation_count = graph.operation_count();
-        let dependency_count = graph.dependency_count();
-
-        // ---------------------------------------------------------------------
-        // Empty graph.
-        // ---------------------------------------------------------------------
+        let topological_order = graph
+            .topological_order()
+            .map_err(map_graph_error)?;
 
         if topological_order.is_empty() {
             return Ok(CriticalPathResult {
-                operation_count,
-                dependency_count,
+                operation_count: 0,
+                dependency_count: graph.dependency_count(),
                 critical_path_duration: Duration::ZERO,
-                critical_path_operation_count: 0,
                 critical_path: Vec::new(),
-                earliest_start: BTreeMap::new(),
-                earliest_finish: BTreeMap::new(),
-                latest_start: BTreeMap::new(),
-                latest_finish: BTreeMap::new(),
-                slack: BTreeMap::new(),
-                critical_predecessor: BTreeMap::new(),
-                weights: durations.clone(),
+                critical_operations: BTreeSet::new(),
+                entries: BTreeMap::new(),
+                critical_predecessors: BTreeMap::new(),
             });
         }
 
-        // ---------------------------------------------------------------------
-        // Forward pass.
-        //
-        // For every operation:
-        //
-        //     ES(v) = max EF(predecessor)
-        //     EF(v) = ES(v) + duration(v)
-        //
-        // The graph's topological order guarantees that every predecessor has
-        // already been processed.
-        // ---------------------------------------------------------------------
+        let mut earliest_start =
+            BTreeMap::<OperationRef, TimePoint>::new();
+        let mut earliest_finish =
+            BTreeMap::<OperationRef, TimePoint>::new();
 
-        let mut earliest_start = BTreeMap::new();
-        let mut earliest_finish = BTreeMap::new();
-        let mut critical_predecessor = BTreeMap::new();
+        let mut critical_predecessors =
+            BTreeMap::<OperationRef, Option<OperationRef>>::new();
 
-        let mut critical_path_duration = Duration::ZERO;
-        let mut critical_sink: Option<OperationRef> = None;
+        // ---------------------------------------------------------------------
+        // Forward pass
+        // ---------------------------------------------------------------------
+        //
+        // Because the graph is a DAG and the topological order is deterministic,
+        // every predecessor has already been processed when its successor is
+        // visited.
+        //
+        // No recursive traversal is used.
+        //
 
         for &operation in &topological_order {
-            let mut start = TimePoint::ZERO;
-            let mut selected_predecessor: Option<OperationRef> = None;
-
-            for predecessor in graph.predecessors(operation) {
-                let predecessor_finish = earliest_finish
-                    .get(predecessor)
-                    .copied()
-                    .ok_or_else(|| {
-                        SchedulingError::InvalidDependencyGraph {
-                            dependency: None,
-                            predecessor: Some(predecessor.id()),
-                            successor: Some(operation.id()),
-                            reason: String::from(
-                                "predecessor was not available during forward critical-path analysis",
-                            ),
-                        }
-                    })?;
-
-                if predecessor_finish > start {
-                    start = predecessor_finish;
-                    selected_predecessor = Some(*predecessor);
-                } else if predecessor_finish == start {
-                    // Deterministic tie-break.
-                    //
-                    // If both predecessor paths have the same accumulated
-                    // weight, the smallest operation identity wins.
-                    match selected_predecessor {
-                        Some(current) if *predecessor < current => {
-                            selected_predecessor = Some(*predecessor);
-                        }
-                        None => {
-                            selected_predecessor = Some(*predecessor);
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
             let duration = durations
                 .get(&operation)
                 .copied()
@@ -809,53 +774,158 @@ impl CriticalPathAnalysis {
                     operation: operation.id(),
                 })?;
 
-            let finish = start
-                .checked_add(duration)
-                .ok_or_else(|| SchedulingError::InvalidInput {
-                    reason: format!(
-                        "critical-path time overflow while finishing operation `{operation}`"
-                    ),
-                })?;
+            let predecessors = graph
+                .predecessors(operation)
+                .map_err(map_graph_error)?;
 
-            earliest_start.insert(operation, start);
-            earliest_finish.insert(operation, finish);
-            critical_predecessor.insert(operation, selected_predecessor);
+            let mut best_start = TimePoint::ZERO;
+            let mut best_predecessor = None;
 
-            // A sink-free DAG is not possible here, so the maximum finish can
-            // be selected from all nodes. This also naturally handles
-            // disconnected graphs.
-            if finish > critical_path_duration {
-                critical_path_duration = finish;
-                critical_sink = Some(operation);
-            } else if finish == critical_path_duration {
-                match critical_sink {
-                    Some(current) if operation < current => {
-                        critical_sink = Some(operation);
+            for predecessor in predecessors {
+                let predecessor_finish = earliest_finish
+                    .get(&predecessor)
+                    .copied()
+                    .ok_or_else(|| {
+                        SchedulingError::InvalidDependencyGraph {
+                            dependency: None,
+                            predecessor: Some(predecessor.id()),
+                            successor: Some(operation.id()),
+                            reason: String::from(
+                                "predecessor was not present in the \
+                                 forward critical-path state",
+                            ),
+                        }
+                    })?;
+
+                let replace = match best_predecessor {
+                    None => true,
+                    Some(current) => {
+                        let current_finish = earliest_finish
+                            .get(&current)
+                            .copied()
+                            .ok_or_else(|| {
+                                SchedulingError::InvalidDependencyGraph {
+                                    dependency: None,
+                                    predecessor: Some(current.id()),
+                                    successor: Some(operation.id()),
+                                    reason: String::from(
+                                        "selected predecessor was not \
+                                         present in the forward critical-path \
+                                         state",
+                                    ),
+                                }
+                            })?;
+
+                        predecessor_finish > current_finish
+                            || (predecessor_finish == current_finish
+                                && predecessor < current)
                     }
-                    None => {
-                        critical_sink = Some(operation);
-                    }
-                    _ => {}
+                };
+
+                if replace {
+                    best_start = predecessor_finish;
+                    best_predecessor = Some(predecessor);
                 }
             }
+
+            let finish = best_start
+                .checked_add(duration)
+                .ok_or_else(|| {
+                    SchedulingError::InvalidDuration {
+                        operation: Some(operation.id()),
+                        duration: Some(duration),
+                        reason: String::from(
+                            "critical-path forward accumulation \
+                             overflowed the scheduler time representation",
+                        ),
+                    }
+                })?;
+
+            earliest_start.insert(operation, best_start);
+            earliest_finish.insert(operation, finish);
+            critical_predecessors.insert(operation, best_predecessor);
         }
 
         // ---------------------------------------------------------------------
-        // Reverse pass.
-        //
-        // Initialize every sink to the global critical-path duration.
-        //
-        // For a general node:
-        //
-        //     LF(v) = min LS(successor)
-        //     LS(v) = LF(v) - duration(v)
-        //
-        // The graph's reverse topological order guarantees every successor is
-        // already processed.
+        // Select deterministic makespan sink
         // ---------------------------------------------------------------------
 
-        let mut latest_start = BTreeMap::new();
-        let mut latest_finish = BTreeMap::new();
+        let mut selected_sink = None;
+        let mut critical_path_duration = Duration::ZERO;
+
+        for &operation in &topological_order {
+            let finish = earliest_finish
+                .get(&operation)
+                .copied()
+                .ok_or_else(|| {
+                    SchedulingError::InvalidDependencyGraph {
+                        dependency: None,
+                        predecessor: None,
+                        successor: Some(operation.id()),
+                        reason: String::from(
+                            "operation has no computed earliest finish",
+                        ),
+                    }
+                })?;
+
+            let candidate_duration =
+                finish.checked_duration_until(TimePoint::ZERO);
+
+            // `checked_duration_until` computes end - self, so using ZERO as
+            // the first operand would be incorrect. The direct coordinate is
+            // therefore used here through the abstract time representation.
+            let candidate_duration =
+                Duration::new(finish.value());
+
+            let replace = match selected_sink {
+                None => true,
+                Some(current) => {
+                    let current_finish = earliest_finish
+                        .get(&current)
+                        .copied()
+                        .ok_or_else(|| {
+                            SchedulingError::InvalidDependencyGraph {
+                                dependency: None,
+                                predecessor: None,
+                                successor: Some(current.id()),
+                                reason: String::from(
+                                    "selected sink has no earliest finish",
+                                ),
+                            }
+                        })?;
+
+                    finish > current_finish
+                        || (finish == current_finish
+                            && operation < current)
+                }
+            };
+
+            if replace {
+                selected_sink = Some(operation);
+                critical_path_duration = candidate_duration;
+            }
+        }
+
+        let sink = selected_sink.ok_or_else(|| {
+            SchedulingError::InvalidDependencyGraph {
+                dependency: None,
+                predecessor: None,
+                successor: None,
+                reason: String::from(
+                    "non-empty graph produced no terminal operation",
+                ),
+            }
+        })?;
+
+        // ---------------------------------------------------------------------
+        // Backward pass
+        // ---------------------------------------------------------------------
+
+        let mut latest_start =
+            BTreeMap::<OperationRef, TimePoint>::new();
+
+        let mut latest_finish =
+            BTreeMap::<OperationRef, TimePoint>::new();
 
         for &operation in topological_order.iter().rev() {
             let duration = durations
@@ -865,16 +935,18 @@ impl CriticalPathAnalysis {
                     operation: operation.id(),
                 })?;
 
-            let successors = graph.successors(operation);
+            let successors = graph
+                .successors(operation)
+                .map_err(map_graph_error)?;
 
-            let latest_finish_value = if successors.is_empty() {
-                critical_path_duration
+            let finish = if successors.is_empty() {
+                TimePoint::new(critical_path_duration.value())
             } else {
-                let mut minimum_successor_start: Option<TimePoint> = None;
+                let mut best = None;
 
                 for successor in successors {
                     let successor_start = latest_start
-                        .get(successor)
+                        .get(&successor)
                         .copied()
                         .ok_or_else(|| {
                             SchedulingError::InvalidDependencyGraph {
@@ -882,50 +954,89 @@ impl CriticalPathAnalysis {
                                 predecessor: Some(operation.id()),
                                 successor: Some(successor.id()),
                                 reason: String::from(
-                                    "successor was not available during reverse critical-path analysis",
+                                    "successor was not present in the \
+                                     backward critical-path state",
                                 ),
                             }
                         })?;
 
-                    minimum_successor_start = Some(
-                        match minimum_successor_start {
-                            Some(current) if current <= successor_start => current,
-                            _ => successor_start,
-                        },
-                    );
+                    best = match best {
+                        None => Some(successor_start),
+                        Some(current) => {
+                            Some(current.min(successor_start))
+                        }
+                    };
                 }
 
-                minimum_successor_start.ok_or_else(|| {
+                best.ok_or_else(|| {
                     SchedulingError::InvalidDependencyGraph {
                         dependency: None,
                         predecessor: Some(operation.id()),
                         successor: None,
                         reason: String::from(
-                            "operation reported successors but no successor timing was available",
+                            "operation reported successors but no \
+                             successor timing was available",
                         ),
-                    }
-                })?
+                    })?
             };
 
-            let latest_start_value = latest_finish_value
+            let start = finish
                 .checked_sub(duration)
-                .ok_or_else(|| SchedulingError::InvalidInput {
-                    reason: format!(
-                        "critical-path latest-time underflow for operation `{operation}`"
-                    ),
+                .ok_or_else(|| {
+                    SchedulingError::InvalidDuration {
+                        operation: Some(operation.id()),
+                        duration: Some(duration),
+                        reason: String::from(
+                            "critical-path backward accumulation \
+                             underflowed the scheduler time representation",
+                        ),
+                    }
                 })?;
 
-            latest_finish.insert(operation, latest_finish_value);
-            latest_start.insert(operation, latest_start_value);
+            latest_finish.insert(operation, finish);
+            latest_start.insert(operation, start);
+        }
+
+        // Ensure the selected sink actually defines the reported makespan.
+        let sink_finish = earliest_finish
+            .get(&sink)
+            .copied()
+            .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
+                dependency: None,
+                predecessor: None,
+                successor: Some(sink.id()),
+                reason: String::from(
+                    "selected critical sink has no earliest finish",
+                ),
+            })?;
+
+        if sink_finish.value() != critical_path_duration.value() {
+            return Err(SchedulingError::InvalidDependencyGraph {
+                dependency: None,
+                predecessor: None,
+                successor: Some(sink.id()),
+                reason: String::from(
+                    "critical-path sink finish and reported critical-path \
+                     duration disagree",
+                ),
+            });
         }
 
         // ---------------------------------------------------------------------
-        // Slack.
+        // Slack + result entries
         // ---------------------------------------------------------------------
 
-        let mut slack = BTreeMap::new();
+        let mut entries = BTreeMap::new();
+        let mut critical_operations = BTreeSet::new();
 
         for &operation in &topological_order {
+            let duration = durations
+                .get(&operation)
+                .copied()
+                .ok_or_else(|| SchedulingError::MissingDuration {
+                    operation: operation.id(),
+                })?;
+
             let earliest = earliest_start
                 .get(&operation)
                 .copied()
@@ -934,7 +1045,19 @@ impl CriticalPathAnalysis {
                     predecessor: None,
                     successor: Some(operation.id()),
                     reason: String::from(
-                        "earliest start missing during slack calculation",
+                        "operation has no earliest-start value",
+                    ),
+                })?;
+
+            let earliest_end = earliest_finish
+                .get(&operation)
+                .copied()
+                .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
+                    dependency: None,
+                    predecessor: None,
+                    successor: Some(operation.id()),
+                    reason: String::from(
+                        "operation has no earliest-finish value",
                     ),
                 })?;
 
@@ -946,418 +1069,127 @@ impl CriticalPathAnalysis {
                     predecessor: None,
                     successor: Some(operation.id()),
                     reason: String::from(
-                        "latest start missing during slack calculation",
+                        "operation has no latest-start value",
                     ),
                 })?;
 
-            let operation_slack = earliest
+            let latest_end = latest_finish
+                .get(&operation)
+                .copied()
+                .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
+                    dependency: None,
+                    predecessor: None,
+                    successor: Some(operation.id()),
+                    reason: String::from(
+                        "operation has no latest-finish value",
+                    ),
+                })?;
+
+            let slack = earliest
                 .checked_duration_until(latest)
-                .ok_or_else(|| SchedulingError::InvalidInput {
-                    reason: format!(
-                        "negative scheduling slack detected for operation `{operation}`"
+                .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
+                    dependency: None,
+                    predecessor: None,
+                    successor: Some(operation.id()),
+                    reason: String::from(
+                        "latest start precedes earliest start; \
+                         critical-path state is inconsistent",
                     ),
                 })?;
 
-            slack.insert(operation, operation_slack);
-        }
+            let entry = CriticalPathEntry::new(
+                earliest,
+                earliest_end,
+                latest,
+                latest_end,
+                slack,
+                duration,
+            );
 
-        // ---------------------------------------------------------------------
-        // Reconstruct the selected critical path.
-        //
-        // We follow the predecessor relation chosen during the forward pass.
-        // This is iterative and therefore safe for extremely deep dependency
-        // chains.
-        // ---------------------------------------------------------------------
-
-        let mut critical_path_reverse = Vec::new();
-
-        if let Some(mut current) = critical_sink {
-            loop {
-                critical_path_reverse.push(current);
-
-                match critical_predecessor
-                    .get(&current)
-                    .copied()
-                    .flatten()
-                {
-                    Some(predecessor) => {
-                        current = predecessor;
-                    }
-                    None => break,
-                }
+            if entry.is_critical() {
+                critical_operations.insert(operation);
             }
+
+            entries.insert(operation, entry);
         }
 
-        critical_path_reverse.reverse();
-
         // ---------------------------------------------------------------------
-        // Internal result validation.
-        //
-        // This catches implementation errors before the result is exposed to
-        // planners or optimizers.
+        // Deterministic path reconstruction
         // ---------------------------------------------------------------------
 
-        Self::validate_result(
-            graph,
-            durations,
-            &topological_order,
-            &earliest_start,
-            &earliest_finish,
-            &latest_start,
-            &latest_finish,
-            &slack,
-            &critical_predecessor,
-            &critical_path_reverse,
-            critical_path_duration,
-        )?;
+        let critical_path =
+            reconstruct_path(sink, &critical_predecessors)?;
 
         Ok(CriticalPathResult {
-            operation_count,
-            dependency_count,
+            operation_count: graph.operation_count(),
+            dependency_count: graph.dependency_count(),
             critical_path_duration,
-            critical_path_operation_count: critical_path_reverse.len(),
-            critical_path: critical_path_reverse,
-            earliest_start,
-            earliest_finish,
-            latest_start,
-            latest_finish,
-            slack,
-            critical_predecessor,
-            weights: durations.clone(),
+            critical_path,
+            critical_operations,
+            entries,
+            critical_predecessors,
         })
     }
 
-    fn validate_result(
+    /// Convenience associated function for one-shot analysis.
+    ///
+    /// This is equivalent to:
+    ///
+    /// ```text
+    /// CriticalPathAnalyzer::new().analyze(graph, durations)
+    /// ```
+    pub fn analyze_graph(
         graph: &DependencyGraph,
         durations: &BTreeMap<OperationRef, Duration>,
-        topological_order: &[OperationRef],
-        earliest_start: &BTreeMap<OperationRef, TimePoint>,
-        earliest_finish: &BTreeMap<OperationRef, TimePoint>,
-        latest_start: &BTreeMap<OperationRef, TimePoint>,
-        latest_finish: &BTreeMap<OperationRef, TimePoint>,
-        slack: &BTreeMap<OperationRef, Duration>,
-        critical_predecessor: &BTreeMap<
-            OperationRef,
-            Option<OperationRef>,
-        >,
-        critical_path: &[OperationRef],
-        critical_path_duration: Duration,
+    ) -> SchedulingResult<CriticalPathResult> {
+        Self::new().analyze(graph, durations)
+    }
+
+    /// Validates that the duration map exactly matches the graph's operation
+    /// set.
+    ///
+    /// Exact matching is deliberate. Extra entries are rejected instead of
+    /// silently ignored because they normally indicate a compiler adapter bug,
+    /// stale scheduling state, or operation identity mismatch.
+    fn validate_duration_map(
+        &self,
+        graph: &DependencyGraph,
+        durations: &BTreeMap<OperationRef, Duration>,
     ) -> SchedulingResult<()> {
-        // Every graph operation must have exactly one timing record.
-        if earliest_start.len() != graph.operation_count()
-            || earliest_finish.len() != graph.operation_count()
-            || latest_start.len() != graph.operation_count()
-            || latest_finish.len() != graph.operation_count()
-            || slack.len() != graph.operation_count()
-            || critical_predecessor.len() != graph.operation_count()
-        {
-            return Err(SchedulingError::InvalidDependencyGraph {
-                dependency: None,
-                predecessor: None,
-                successor: None,
-                reason: String::from(
-                    "critical-path analysis produced incomplete per-operation timing maps",
-                ),
-            });
-        }
-
-        // Forward timing invariant:
-        //
-        //     EF = ES + duration
-        //
-        for &operation in topological_order {
-            let start = earliest_start
-                .get(&operation)
-                .copied()
-                .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: Some(operation.id()),
-                    reason: String::from(
-                        "missing earliest-start value during validation",
-                    ),
-                })?;
-
-            let finish = earliest_finish
-                .get(&operation)
-                .copied()
-                .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: Some(operation.id()),
-                    reason: String::from(
-                        "missing earliest-finish value during validation",
-                    ),
-                })?;
-
-            let duration = durations
-                .get(&operation)
-                .copied()
-                .ok_or_else(|| SchedulingError::MissingDuration {
+        for &operation in graph.operations() {
+            let Some(duration) = durations.get(&operation).copied() else {
+                return Err(SchedulingError::MissingDuration {
                     operation: operation.id(),
-                })?;
-
-            let expected_finish = start
-                .checked_add(duration)
-                .ok_or_else(|| SchedulingError::InvalidInput {
-                    reason: format!(
-                        "overflow validating earliest finish for `{operation}`"
-                    ),
-                })?;
-
-            if expected_finish != finish {
-                return Err(SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: Some(operation.id()),
-                    reason: format!(
-                        "earliest finish invariant violated for operation `{operation}`"
-                    ),
                 });
-            }
+            };
 
-            // Every predecessor must finish no later than this operation
-            // starts.
-            for predecessor in graph.predecessors(operation) {
-                let predecessor_finish = earliest_finish
-                    .get(predecessor)
-                    .copied()
-                    .ok_or_else(|| {
-                        SchedulingError::InvalidDependencyGraph {
-                            dependency: None,
-                            predecessor: Some(predecessor.id()),
-                            successor: Some(operation.id()),
-                            reason: String::from(
-                                "missing predecessor finish during validation",
-                            ),
-                        }
-                    })?;
-
-                if predecessor_finish > start {
-                    return Err(SchedulingError::InvalidDependencyGraph {
-                        dependency: None,
-                        predecessor: Some(predecessor.id()),
-                        successor: Some(operation.id()),
-                        reason: format!(
-                            "critical-path earliest-start dependency invariant violated: `{predecessor}` finishes after `{operation}` starts"
-                        ),
-                    });
-                }
-            }
-        }
-
-        // Reverse timing invariant:
-        //
-        //     LS = LF - duration
-        //
-        for &operation in topological_order {
-            let latest_finish_value = latest_finish
-                .get(&operation)
-                .copied()
-                .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: Some(operation.id()),
+            // Duration is currently structurally non-negative by construction.
+            // Keep this validation here as a semantic boundary so future
+            // duration implementations can strengthen their invariants without
+            // changing this analyzer's public contract.
+            if duration.value() > u128::MAX {
+                return Err(SchedulingError::InvalidDuration {
+                    operation: Some(operation.id()),
+                    duration: Some(duration),
                     reason: String::from(
-                        "missing latest-finish value during validation",
-                    ),
-                })?;
-
-            let latest_start_value = latest_start
-                .get(&operation)
-                .copied()
-                .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: Some(operation.id()),
-                    reason: String::from(
-                        "missing latest-start value during validation",
-                    ),
-                })?;
-
-            let duration = durations
-                .get(&operation)
-                .copied()
-                .ok_or_else(|| SchedulingError::MissingDuration {
-                    operation: operation.id(),
-                })?;
-
-            let expected_start = latest_finish_value
-                .checked_sub(duration)
-                .ok_or_else(|| SchedulingError::InvalidInput {
-                    reason: format!(
-                        "underflow validating latest start for `{operation}`"
-                    ),
-                })?;
-
-            if expected_start != latest_start_value {
-                return Err(SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: Some(operation.id()),
-                    reason: format!(
-                        "latest start invariant violated for operation `{operation}`"
-                    ),
-                });
-            }
-
-            // Every successor must be schedulable after this operation.
-            for successor in graph.successors(operation) {
-                let successor_start = latest_start
-                    .get(successor)
-                    .copied()
-                    .ok_or_else(|| {
-                        SchedulingError::InvalidDependencyGraph {
-                            dependency: None,
-                            predecessor: Some(operation.id()),
-                            successor: Some(successor.id()),
-                            reason: String::from(
-                                "missing successor latest-start during validation",
-                            ),
-                        }
-                    })?;
-
-                if latest_finish_value > successor_start {
-                    return Err(SchedulingError::InvalidDependencyGraph {
-                        dependency: None,
-                        predecessor: Some(operation.id()),
-                        successor: Some(successor.id()),
-                        reason: format!(
-                            "latest-time dependency invariant violated between `{operation}` and `{successor}`"
-                        ),
-                    });
-                }
-            }
-
-            let earliest = earliest_start
-                .get(&operation)
-                .copied()
-                .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: Some(operation.id()),
-                    reason: String::from(
-                        "missing earliest start during slack validation",
-                    ),
-                })?;
-
-            let calculated_slack = earliest
-                .checked_duration_until(latest_start_value)
-                .ok_or_else(|| SchedulingError::InvalidInput {
-                    reason: format!(
-                        "negative slack detected for `{operation}`"
-                    ),
-                })?;
-
-            let stored_slack = slack
-                .get(&operation)
-                .copied()
-                .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: Some(operation.id()),
-                    reason: String::from(
-                        "missing slack during validation",
-                    ),
-                })?;
-
-            if calculated_slack != stored_slack {
-                return Err(SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: Some(operation.id()),
-                    reason: format!(
-                        "slack invariant violated for operation `{operation}`"
+                        "duration exceeds the scheduler's representable range",
                     ),
                 });
             }
         }
 
-        // Every selected critical predecessor must actually be an incoming
-        // dependency.
-        for (&operation, predecessor) in critical_predecessor {
-            if let Some(predecessor) = predecessor {
-                if !graph
-                    .predecessors(operation)
-                    .iter()
-                    .any(|candidate| *candidate == *predecessor)
-                {
-                    return Err(SchedulingError::InvalidDependencyGraph {
-                        dependency: None,
-                        predecessor: Some(predecessor.id()),
-                        successor: Some(operation.id()),
-                        reason: format!(
-                            "selected critical predecessor `{predecessor}` is not an actual predecessor of `{operation}`"
-                        ),
-                    });
-                }
-            }
-        }
-
-        // Validate the reconstructed path.
-        if !critical_path.is_empty() {
-            if critical_path_duration
-                != earliest_finish
-                    .get(
-                        critical_path
-                            .last()
-                            .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
-                                dependency: None,
-                                predecessor: None,
-                                successor: None,
-                                reason: String::from(
-                                    "critical path unexpectedly has no last operation",
-                                ),
-                            })?,
-                    )
-                    .copied()
-                    .ok_or_else(|| SchedulingError::InvalidDependencyGraph {
-                        dependency: None,
-                        predecessor: None,
-                        successor: None,
-                        reason: String::from(
-                            "critical-path sink has no earliest-finish value",
-                        ),
-                    })?
-            {
-                return Err(SchedulingError::InvalidDependencyGraph {
-                    dependency: None,
-                    predecessor: None,
-                    successor: None,
+        for &operation in durations.keys() {
+            if !graph.contains_operation(operation) {
+                return Err(SchedulingError::InvalidOperation {
+                    operation: Some(operation.id()),
+                    qubit: None,
+                    physical_qubit: None,
                     reason: String::from(
-                        "critical path duration does not match its selected sink finish",
+                        "duration map contains an operation that is not \
+                         present in the dependency graph",
                     ),
                 });
             }
-
-            for window in critical_path.windows(2) {
-                let predecessor = window[0];
-                let successor = window[1];
-
-                if !graph
-                    .successors(predecessor)
-                    .iter()
-                    .any(|candidate| *candidate == successor)
-                {
-                    return Err(SchedulingError::InvalidDependencyGraph {
-                        dependency: None,
-                        predecessor: Some(predecessor.id()),
-                        successor: Some(successor.id()),
-                        reason: String::from(
-                            "reconstructed critical path contains a non-edge",
-                        ),
-                    });
-                }
-            }
-        } else if critical_path_duration != Duration::ZERO {
-            return Err(SchedulingError::InvalidDependencyGraph {
-                dependency: None,
-                predecessor: None,
-                successor: None,
-                reason: String::from(
-                    "non-zero critical-path duration was produced without a critical path",
-                ),
-            });
         }
 
         Ok(())
@@ -1365,23 +1197,151 @@ impl CriticalPathAnalysis {
 }
 
 // =============================================================================
-// Convenience functions
+// Internal helpers
 // =============================================================================
 
-/// Computes a unit-weight critical path.
-pub fn critical_path(
-    graph: &DependencyGraph,
-) -> SchedulingResult<CriticalPathResult> {
-    CriticalPathAnalysis::new().analyze(graph)
+/// Converts a local dependency-graph error into the canonical scheduling error
+/// contract.
+///
+/// Keeping this conversion here prevents the graph module from depending on
+/// higher-level scheduler errors while still giving callers one stable error
+/// model.
+fn map_graph_error(error: DependencyGraphError) -> SchedulingError {
+    match error {
+        DependencyGraphError::CycleDetected { cycle } => {
+            SchedulingError::CycleDetected {
+                operation: cycle.first().copied().map(OperationRef::id),
+                dependency: None,
+                cycle_size: u128::try_from(cycle.len()).ok(),
+            }
+        }
+
+        DependencyGraphError::DuplicateOperation { operation } => {
+            SchedulingError::InvalidOperation {
+                operation: Some(operation.id()),
+                qubit: None,
+                physical_qubit: None,
+                reason: String::from(
+                    "dependency graph contains a duplicate operation",
+                ),
+            }
+        }
+
+        DependencyGraphError::UnknownOperation {
+            operation,
+            dependency,
+        } => SchedulingError::InvalidDependencyGraph {
+            dependency,
+            predecessor: None,
+            successor: Some(operation.id()),
+            reason: String::from(
+                "dependency graph references an unknown operation",
+            ),
+        },
+
+        DependencyGraphError::DuplicateDependency { dependency } => {
+            SchedulingError::InvalidDependencyGraph {
+                dependency: Some(dependency),
+                predecessor: None,
+                successor: None,
+                reason: String::from(
+                    "dependency graph contains a duplicate dependency",
+                ),
+            }
+        }
+
+        DependencyGraphError::SelfDependency { operation } => {
+            SchedulingError::InvalidDependencyGraph {
+                dependency: None,
+                predecessor: Some(operation.id()),
+                successor: Some(operation.id()),
+                reason: String::from(
+                    "dependency graph contains a self-dependency",
+                ),
+            }
+        }
+
+        DependencyGraphError::InconsistentState { reason } => {
+            SchedulingError::InvalidDependencyGraph {
+                dependency: None,
+                predecessor: None,
+                successor: None,
+                reason: reason.to_owned(),
+            }
+        }
+
+        DependencyGraphError::OperationNotFound { operation } => {
+            SchedulingError::InvalidOperation {
+                operation: Some(operation.id()),
+                qubit: None,
+                physical_qubit: None,
+                reason: String::from(
+                    "dependency graph operation lookup failed",
+                ),
+            }
+        }
+
+        DependencyGraphError::DependencyNotFound { dependency } => {
+            SchedulingError::InvalidDependencyGraph {
+                dependency: Some(dependency),
+                predecessor: None,
+                successor: None,
+                reason: String::from(
+                    "dependency graph dependency lookup failed",
+                ),
+            }
+        }
+    }
 }
 
-/// Computes a duration-weighted critical path.
-pub fn critical_path_with_durations(
-    graph: &DependencyGraph,
-    durations: &BTreeMap<OperationRef, Duration>,
-) -> SchedulingResult<CriticalPathResult> {
-    CriticalPathAnalysis::new()
-        .analyze_with_durations(graph, durations)
+/// Reconstructs one deterministic source-to-sink path from the selected sink.
+///
+/// The predecessor map was produced by the forward critical-path pass, so
+/// every predecessor is guaranteed to occur earlier in topological order.
+///
+/// The implementation is iterative and therefore does not consume stack space
+/// proportional to graph depth.
+fn reconstruct_path(
+    sink: OperationRef,
+    predecessors: &BTreeMap<
+        OperationRef,
+        Option<OperationRef>,
+    >,
+) -> SchedulingResult<Vec<OperationRef>> {
+    let mut reverse_path = Vec::new();
+    let mut current = Some(sink);
+
+    while let Some(operation) = current {
+        reverse_path.push(operation);
+
+        current = predecessors
+            .get(&operation)
+            .copied()
+            .flatten();
+
+        // A valid predecessor chain in a DAG cannot revisit an operation.
+        // Detecting a repeated operation here protects against a corrupted
+        // predecessor map even though the canonical graph itself is acyclic.
+        if reverse_path
+            .iter()
+            .enumerate()
+            .skip_while(|(_, candidate)| **candidate != operation)
+            .count()
+            > 1
+        {
+            return Err(SchedulingError::InvalidDependencyGraph {
+                dependency: None,
+                predecessor: Some(operation.id()),
+                successor: None,
+                reason: String::from(
+                    "critical-path predecessor chain contains a cycle",
+                ),
+            });
+        }
+    }
+
+    reverse_path.reverse();
+    Ok(reverse_path)
 }
 
 // =============================================================================
@@ -1391,47 +1351,50 @@ pub fn critical_path_with_durations(
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use crate::quantum::ir::core::identity::OperationId;
-    use super::super::super::types::{
-        DependencyKind,
-        DependencyRef,
-    };
 
     fn operation(value: u64) -> OperationRef {
         OperationRef::new(OperationId::from(value))
     }
 
+    fn duration(value: u128) -> Duration {
+        Duration::new(value)
+    }
+
     fn dependency(
-        value: u64,
-        from: OperationRef,
-        to: OperationRef,
-    ) -> DependencyRef {
-        DependencyRef::new(
-            from,
-            to,
-            DependencyKind::Data,
+        from: u64,
+        to: u64,
+        id: u64,
+    ) -> super::super::super::types::DependencyRef {
+        super::super::super::types::DependencyRef::new(
+            operation(from),
+            operation(to),
+            super::super::super::types::DependencyKind::Explicit,
         )
         .expect("test dependency must be valid")
+        .with_id(
+            super::super::super::types::DependencyId::new(id),
+        )
     }
 
     fn chain_graph() -> DependencyGraph {
-        let a = operation(1);
-        let b = operation(2);
-        let c = operation(3);
-
         let mut graph = DependencyGraph::new();
 
-        graph.add_operation(a).expect("operation");
-        graph.add_operation(b).expect("operation");
-        graph.add_operation(c).expect("operation");
+        graph
+            .add_operations([
+                operation(1),
+                operation(2),
+                operation(3),
+            ])
+            .expect("operations should be accepted");
 
         graph
-            .add_dependency(dependency(1, a, b))
-            .expect("dependency");
+            .add_dependency(dependency(1, 2, 1))
+            .expect("dependency should be accepted");
+
         graph
-            .add_dependency(dependency(2, b, c))
-            .expect("dependency");
+            .add_dependency(dependency(2, 3, 2))
+            .expect("dependency should be accepted");
 
         graph
     }
@@ -1439,34 +1402,38 @@ mod tests {
     #[test]
     fn empty_graph_has_zero_critical_path() {
         let graph = DependencyGraph::new();
+        let durations = BTreeMap::new();
 
-        let result = critical_path(&graph)
+        let result = CriticalPathAnalyzer::new()
+            .analyze(&graph, &durations)
             .expect("empty graph should be valid");
 
         assert_eq!(result.operation_count(), 0);
-        assert_eq!(result.dependency_count(), 0);
         assert_eq!(
             result.critical_path_duration(),
             Duration::ZERO
         );
         assert!(result.critical_path().is_empty());
+        assert!(result.critical_operations().is_empty());
     }
 
     #[test]
-    fn unit_weight_chain_has_expected_path() {
+    fn linear_chain_produces_expected_path() {
         let graph = chain_graph();
 
-        let result = critical_path(&graph)
-            .expect("chain should be analyzable");
+        let durations = BTreeMap::from([
+            (operation(1), duration(10)),
+            (operation(2), duration(20)),
+            (operation(3), duration(30)),
+        ]);
+
+        let result = CriticalPathAnalyzer::new()
+            .analyze(&graph, &durations)
+            .expect("chain should analyze");
 
         assert_eq!(
             result.critical_path_duration(),
-            Duration::new(3)
-        );
-
-        assert_eq!(
-            result.critical_path_operation_count(),
-            3
+            duration(60)
         );
 
         assert_eq!(
@@ -1474,322 +1441,269 @@ mod tests {
             &[
                 operation(1),
                 operation(2),
-                operation(3),
+                operation(3)
             ]
-        );
-    }
-
-    #[test]
-    fn weighted_chain_accumulates_duration() {
-        let graph = chain_graph();
-
-        let mut durations = BTreeMap::new();
-
-        durations.insert(operation(1), Duration::new(5));
-        durations.insert(operation(2), Duration::new(7));
-        durations.insert(operation(3), Duration::new(11));
-
-        let result = critical_path_with_durations(
-            &graph,
-            &durations,
-        )
-        .expect("weighted chain should be analyzable");
-
-        assert_eq!(
-            result.critical_path_duration(),
-            Duration::new(23)
         );
 
         assert_eq!(
             result.earliest_start(operation(1)),
-            Some(TimePoint::ZERO)
-        );
-
-        assert_eq!(
-            result.earliest_finish(operation(1)),
-            Some(TimePoint::new(5))
+            Some(TimePoint::new(0))
         );
 
         assert_eq!(
             result.earliest_start(operation(2)),
-            Some(TimePoint::new(5))
-        );
-
-        assert_eq!(
-            result.earliest_finish(operation(2)),
-            Some(TimePoint::new(12))
+            Some(TimePoint::new(10))
         );
 
         assert_eq!(
             result.earliest_start(operation(3)),
-            Some(TimePoint::new(12))
+            Some(TimePoint::new(30))
         );
 
         assert_eq!(
-            result.earliest_finish(operation(3)),
-            Some(TimePoint::new(23))
+            result.latest_finish(operation(3)),
+            Some(TimePoint::new(60))
+        );
+
+        assert_eq!(
+            result.slack(operation(1)),
+            Some(Duration::ZERO)
+        );
+
+        assert_eq!(
+            result.slack(operation(2)),
+            Some(Duration::ZERO)
+        );
+
+        assert_eq!(
+            result.slack(operation(3)),
+            Some(Duration::ZERO)
         );
     }
 
     #[test]
-    fn parallel_branches_select_longest_branch() {
-        let a = operation(1);
-        let b = operation(2);
-        let c = operation(3);
-        let d = operation(4);
+    fn independent_operations_select_largest_path() {
+        let graph = DependencyGraph::from_operations([
+            operation(1),
+            operation(2),
+            operation(3),
+        ])
+        .expect("operations should be accepted");
 
-        let mut graph = DependencyGraph::new();
+        let durations = BTreeMap::from([
+            (operation(1), duration(10)),
+            (operation(2), duration(50)),
+            (operation(3), duration(20)),
+        ]);
 
-        for operation in [a, b, c, d] {
-            graph
-                .add_operation(operation)
-                .expect("operation");
-        }
-
-        graph
-            .add_dependency(dependency(1, a, b))
-            .expect("dependency");
-
-        graph
-            .add_dependency(dependency(2, a, c))
-            .expect("dependency");
-
-        graph
-            .add_dependency(dependency(3, b, d))
-            .expect("dependency");
-
-        graph
-            .add_dependency(dependency(4, c, d))
-            .expect("dependency");
-
-        let mut durations = BTreeMap::new();
-
-        durations.insert(a, Duration::new(1));
-        durations.insert(b, Duration::new(10));
-        durations.insert(c, Duration::new(3));
-        durations.insert(d, Duration::new(1));
-
-        let result = critical_path_with_durations(
-            &graph,
-            &durations,
-        )
-        .expect("parallel graph should be analyzable");
+        let result = CriticalPathAnalyzer::new()
+            .analyze(&graph, &durations)
+            .expect("graph should analyze");
 
         assert_eq!(
             result.critical_path_duration(),
-            Duration::new(12)
+            duration(50)
         );
 
         assert_eq!(
             result.critical_path(),
-            &[a, b, d]
+            &[operation(2)]
         );
 
-        assert_eq!(
-            result.critical_predecessor(d),
-            Some(Some(b))
-        );
+        assert!(result.is_critical(operation(2)));
+        assert!(!result.is_critical(operation(1)));
+        assert!(!result.is_critical(operation(3)));
     }
 
     #[test]
-    fn equal_weight_predecessors_are_deterministic() {
-        let a = operation(1);
-        let b = operation(2);
-        let c = operation(3);
-
+    fn equal_paths_use_deterministic_predecessor() {
         let mut graph = DependencyGraph::new();
 
-        for operation in [a, b, c] {
-            graph
-                .add_operation(operation)
-                .expect("operation");
-        }
+        graph
+            .add_operations([
+                operation(1),
+                operation(2),
+                operation(3),
+            ])
+            .expect("operations should be accepted");
 
         graph
-            .add_dependency(dependency(1, a, c))
-            .expect("dependency");
+            .add_dependency(dependency(1, 3, 1))
+            .expect("dependency should be accepted");
 
         graph
-            .add_dependency(dependency(2, b, c))
-            .expect("dependency");
+            .add_dependency(dependency(2, 3, 2))
+            .expect("dependency should be accepted");
 
-        let mut durations = BTreeMap::new();
+        let durations = BTreeMap::from([
+            (operation(1), duration(10)),
+            (operation(2), duration(10)),
+            (operation(3), duration(5)),
+        ]);
 
-        durations.insert(a, Duration::new(4));
-        durations.insert(b, Duration::new(4));
-        durations.insert(c, Duration::new(1));
-
-        let result = critical_path_with_durations(
-            &graph,
-            &durations,
-        )
-        .expect("graph should be analyzable");
-
-        assert_eq!(
-            result.critical_predecessor(c),
-            Some(Some(a))
-        );
+        let result = CriticalPathAnalyzer::new()
+            .analyze(&graph, &durations)
+            .expect("graph should analyze");
 
         assert_eq!(
             result.critical_path(),
-            &[a, c]
-        );
-    }
-
-    #[test]
-    fn disconnected_graph_uses_longest_component() {
-        let a = operation(1);
-        let b = operation(2);
-        let c = operation(3);
-
-        let mut graph = DependencyGraph::new();
-
-        for operation in [a, b, c] {
-            graph
-                .add_operation(operation)
-                .expect("operation");
-        }
-
-        graph
-            .add_dependency(dependency(1, a, b))
-            .expect("dependency");
-
-        let mut durations = BTreeMap::new();
-
-        durations.insert(a, Duration::new(2));
-        durations.insert(b, Duration::new(8));
-        durations.insert(c, Duration::new(100));
-
-        let result = critical_path_with_durations(
-            &graph,
-            &durations,
-        )
-        .expect("disconnected graph should be valid");
-
-        assert_eq!(
-            result.critical_path_duration(),
-            Duration::new(100)
+            &[
+                operation(1),
+                operation(3)
+            ]
         );
 
         assert_eq!(
-            result.critical_path(),
-            &[c]
+            result.critical_predecessor(operation(3)),
+            Some(Some(operation(1)))
         );
     }
 
     #[test]
     fn zero_duration_operations_are_supported() {
-        let a = operation(1);
-        let b = operation(2);
-
         let mut graph = DependencyGraph::new();
 
         graph
-            .add_operation(a)
-            .expect("operation");
+            .add_operations([
+                operation(1),
+                operation(2),
+                operation(3),
+            ])
+            .expect("operations should be accepted");
 
         graph
-            .add_operation(b)
-            .expect("operation");
+            .add_dependency(dependency(1, 2, 1))
+            .expect("dependency should be accepted");
 
         graph
-            .add_dependency(dependency(1, a, b))
-            .expect("dependency");
+            .add_dependency(dependency(2, 3, 2))
+            .expect("dependency should be accepted");
 
-        let mut durations = BTreeMap::new();
+        let durations = BTreeMap::from([
+            (operation(1), duration(0)),
+            (operation(2), duration(0)),
+            (operation(3), duration(10)),
+        ]);
 
-        durations.insert(a, Duration::ZERO);
-        durations.insert(b, Duration::ZERO);
-
-        let result = critical_path_with_durations(
-            &graph,
-            &durations,
-        )
-        .expect("zero-duration graph should be valid");
+        let result = CriticalPathAnalyzer::new()
+            .analyze(&graph, &durations)
+            .expect("graph should analyze");
 
         assert_eq!(
             result.critical_path_duration(),
-            Duration::ZERO
+            duration(10)
         );
 
         assert_eq!(
             result.critical_path(),
-            &[a, b]
+            &[
+                operation(1),
+                operation(2),
+                operation(3)
+            ]
         );
 
         assert_eq!(
-            result.slack(a),
+            result.slack(operation(1)),
             Some(Duration::ZERO)
         );
 
         assert_eq!(
-            result.slack(b),
+            result.slack(operation(2)),
             Some(Duration::ZERO)
         );
     }
 
     #[test]
-    fn slack_identifies_non_critical_branch() {
-        let a = operation(1);
-        let b = operation(2);
-        let c = operation(3);
-        let d = operation(4);
+    fn missing_duration_is_rejected() {
+        let graph = DependencyGraph::from_operations([
+            operation(1),
+        ])
+        .expect("operation should be accepted");
 
+        let durations = BTreeMap::new();
+
+        let error = CriticalPathAnalyzer::new()
+            .analyze(&graph, &durations)
+            .expect_err("missing duration must fail");
+
+        assert!(matches!(
+            error,
+            SchedulingError::MissingDuration { .. }
+        ));
+    }
+
+    #[test]
+    fn extra_duration_entry_is_rejected() {
+        let graph = DependencyGraph::from_operations([
+            operation(1),
+        ])
+        .expect("operation should be accepted");
+
+        let durations = BTreeMap::from([
+            (operation(1), duration(10)),
+            (operation(2), duration(20)),
+        ]);
+
+        let error = CriticalPathAnalyzer::new()
+            .analyze(&graph, &durations)
+            .expect_err("extra duration must fail");
+
+        assert!(matches!(
+            error,
+            SchedulingError::InvalidOperation { .. }
+        ));
+    }
+
+    #[test]
+    fn multiple_critical_paths_are_reported_as_zero_slack_operations() {
         let mut graph = DependencyGraph::new();
 
-        for operation in [a, b, c, d] {
-            graph
-                .add_operation(operation)
-                .expect("operation");
-        }
+        graph
+            .add_operations([
+                operation(1),
+                operation(2),
+                operation(3),
+                operation(4),
+            ])
+            .expect("operations should be accepted");
 
         graph
-            .add_dependency(dependency(1, a, b))
-            .expect("dependency");
+            .add_dependency(dependency(1, 3, 1))
+            .expect("dependency should be accepted");
 
         graph
-            .add_dependency(dependency(2, a, c))
-            .expect("dependency");
+            .add_dependency(dependency(2, 4, 2))
+            .expect("dependency should be accepted");
 
-        graph
-            .add_dependency(dependency(3, b, d))
-            .expect("dependency");
+        let durations = BTreeMap::from([
+            (operation(1), duration(10)),
+            (operation(2), duration(10)),
+            (operation(3), duration(10)),
+            (operation(4), duration(10)),
+        ]);
 
-        graph
-            .add_dependency(dependency(4, c, d))
-            .expect("dependency");
-
-        let mut durations = BTreeMap::new();
-
-        durations.insert(a, Duration::new(1));
-        durations.insert(b, Duration::new(10));
-        durations.insert(c, Duration::new(3));
-        durations.insert(d, Duration::new(1));
-
-        let result = critical_path_with_durations(
-            &graph,
-            &durations,
-        )
-        .expect("graph should be analyzable");
+        let result = CriticalPathAnalyzer::new()
+            .analyze(&graph, &durations)
+            .expect("graph should analyze");
 
         assert_eq!(
-            result.slack(a),
-            Some(Duration::ZERO)
+            result.critical_path_duration(),
+            duration(20)
         );
 
-        assert_eq!(
-            result.slack(b),
-            Some(Duration::ZERO)
-        );
+        assert!(result.is_critical(operation(1)));
+        assert!(result.is_critical(operation(2)));
+        assert!(result.is_critical(operation(3)));
+        assert!(result.is_critical(operation(4)));
 
+        // Deterministic representative path.
         assert_eq!(
-            result.slack(c),
-            Some(Duration::new(7))
-        );
-
-        assert_eq!(
-            result.slack(d),
-            Some(Duration::ZERO)
+            result.critical_path(),
+            &[
+                operation(1),
+                operation(3)
+            ]
         );
     }
 }
