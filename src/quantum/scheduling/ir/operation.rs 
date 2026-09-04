@@ -1,0 +1,1287 @@
+//! Zamani Quantum Scheduling — Scheduled Operation Model
+//!
+//! This module defines the scheduler-owned representation of one executable
+//! operation.
+//!
+//! ============================================================================
+//! ARCHITECTURAL CONTRACT
+//! ============================================================================
+//!
+//! This file answers:
+//!
+//!     "What information does the scheduler need in order to schedule one
+//!      already-defined quantum/hybrid operation?"
+//!
+//! It does NOT redefine quantum semantics.
+//!
+//! The canonical semantic operation remains owned by:
+//!
+//!     crate::quantum::ir
+//!
+//! In particular, this file MUST NOT define another:
+//!
+//! - QubitId;
+//! - PhysicalQubitId;
+//! - Gate;
+//! - QuantumOperation;
+//! - QuantumCircuit;
+//! - Measurement;
+//! - quantum instruction semantic model.
+//!
+//! The authoritative logical qubit identity is:
+//!
+//!     crate::quantum::ir::qubit::QubitId
+//!
+//! Physical placement remains a routing concern.
+//!
+//! ============================================================================
+//! DEPENDENCY DIRECTION
+//! ============================================================================
+//!
+//! ```text
+//!                         quantum::ir
+//!                             │
+//!                             │ semantic operation
+//!                             ▼
+//!                  scheduling::adapters::ir
+//!                             │
+//!                             │ validated scheduling view
+//!                             ▼
+//!              scheduling::ir::operation
+//!                             │
+//!              ┌──────────────┼──────────────┐
+//!              ▼              ▼              ▼
+//!          dependency      resources       timing
+//!              │              │              │
+//!              └──────────────┼──────────────┘
+//!                             ▼
+//!                         scheduler
+//! ```
+//!
+//! Scheduling therefore consumes semantic operations; it does not become the
+//! owner of their meaning.
+//!
+//! ============================================================================
+//! WRITE-ONCE / SCALE-EVERYWHERE CONTRACT
+//! ============================================================================
+//!
+//! A scheduling operation contains no machine-size assumptions.
+//!
+//! It must support:
+//!
+//! - one qubit;
+//! - arbitrarily many qubits;
+//! - arbitrary operation arity;
+//! - dynamic circuits;
+//! - measurements;
+//! - reset;
+//! - classical dependencies;
+//! - communication operations;
+//! - logical operations;
+//! - routed physical operations;
+//! - QEC operations;
+//! - pulse-level semantic operations;
+//! - analog operations;
+//! - future operation kinds.
+//!
+//! No constant in this file limits:
+//!
+//! - number of qubits;
+//! - number of operands;
+//! - number of resources;
+//! - number of operations;
+//! - circuit depth;
+//! - operation duration;
+//! - resource capacity.
+//!
+//! Concrete limits belong to scheduling policy, resource availability,
+//! `SchedulingLimits`, the host environment, or the execution target.
+//!
+//! "Infinity" therefore means:
+//!
+//!     no artificial finite scheduler ceiling.
+//!
+//! A concrete compilation remains bounded by available memory, time,
+//! address space, target resources, and explicit policy limits.
+//!
+//! ============================================================================
+//! IMMUTABILITY
+//! ============================================================================
+//!
+//! `SchedulingOperation` is immutable after construction.
+//!
+//! This is deliberate:
+//!
+//! - planners can share operations safely;
+//! - dependency analysis cannot silently change operation semantics;
+//! - resource analysis cannot mutate the operation;
+//! - deterministic scheduling becomes easier;
+//! - parallel schedulers can read operations concurrently;
+//! - stale-state bugs are reduced.
+//!
+//! ============================================================================
+//! SAFETY
+//! ============================================================================
+//!
+//! Rust 1.97 / 1.97.1.
+//!
+//! No unsafe code.
+//!
+//! No global mutable state.
+//!
+//! No provider SDKs.
+//!
+//! No hardware access.
+//!
+//! No network access.
+//!
+//! No filesystem access.
+//!
+//! No scheduling algorithm is implemented here.
+//!
+//! ============================================================================
+
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use std::fmt;
+use std::sync::Arc;
+
+use crate::quantum::ir::qubit::QubitId;
+
+use super::super::types::OperationId;
+
+// ============================================================================
+// Operation class
+// ============================================================================
+
+/// Broad scheduling classification of an executable operation.
+///
+/// This classification is intentionally scheduler-oriented rather than a
+/// replacement for the canonical Quantum IR instruction taxonomy.
+///
+/// A canonical IR adapter decides which scheduling class applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum OperationClass {
+    /// Ordinary quantum unitary operation.
+    Quantum,
+
+    /// Measurement or acquisition operation.
+    Measurement,
+
+    /// Quantum-state reset/reinitialization.
+    Reset,
+
+    /// Classical computation required by a dynamic circuit.
+    Classical,
+
+    /// Operation whose execution depends on a classical predicate.
+    Conditional,
+
+    /// Quantum/classical feedback operation.
+    Feedback,
+
+    /// Communication between quantum resources or modules.
+    Communication,
+
+    /// Synchronization/barrier-like operation.
+    Synchronization,
+
+    /// Pulse/frame/control semantic operation.
+    Pulse,
+
+    /// Analog/Hamiltonian/evolution operation.
+    Analog,
+
+    /// Fault-tolerance/QEC operation.
+    ErrorCorrection,
+
+    /// User-defined or future operation class.
+    Custom,
+}
+
+impl OperationClass {
+    /// Returns whether this operation may produce classical information.
+    #[must_use]
+    pub const fn produces_classical_data(self) -> bool {
+        matches!(
+            self,
+            Self::Measurement | Self::Classical | Self::Feedback
+        )
+    }
+
+    /// Returns whether this operation represents quantum execution.
+    #[must_use]
+    pub const fn is_quantum(self) -> bool {
+        matches!(
+            self,
+            Self::Quantum
+                | Self::Measurement
+                | Self::Reset
+                | Self::Conditional
+                | Self::Feedback
+                | Self::ErrorCorrection
+                | Self::Pulse
+                | Self::Analog
+        )
+    }
+
+    /// Returns whether this operation can introduce a runtime dependency.
+    #[must_use]
+    pub const fn is_dynamic(self) -> bool {
+        matches!(
+            self,
+            Self::Classical
+                | Self::Conditional
+                | Self::Feedback
+                | Self::Communication
+        )
+    }
+
+    /// Returns whether the operation is a synchronization point.
+    #[must_use]
+    pub const fn is_synchronization(self) -> bool {
+        matches!(self, Self::Synchronization)
+    }
+}
+
+impl fmt::Display for OperationClass {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            Self::Quantum => "quantum",
+            Self::Measurement => "measurement",
+            Self::Reset => "reset",
+            Self::Classical => "classical",
+            Self::Conditional => "conditional",
+            Self::Feedback => "feedback",
+            Self::Communication => "communication",
+            Self::Synchronization => "synchronization",
+            Self::Pulse => "pulse",
+            Self::Analog => "analog",
+            Self::ErrorCorrection => "error_correction",
+            Self::Custom => "custom",
+        };
+
+        formatter.write_str(name)
+    }
+}
+
+// ============================================================================
+// Operand role
+// ============================================================================
+
+/// Semantic role of a logical qubit operand from the scheduler's perspective.
+///
+/// This does not replace QEC or hardware resource classification. It merely
+/// records information useful to scheduling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum OperandRole {
+    /// Ordinary computational/data operand.
+    Data,
+
+    /// Ancilla operand.
+    Ancilla,
+
+    /// Syndrome-extraction operand.
+    Syndrome,
+
+    /// Control operand.
+    Control,
+
+    /// Target operand.
+    Target,
+
+    /// Measurement operand.
+    Measurement,
+
+    /// Reset operand.
+    Reset,
+
+    /// Generic/future role.
+    Other,
+}
+
+impl Default for OperandRole {
+    fn default() -> Self {
+        Self::Data
+    }
+}
+
+// ============================================================================
+// Qubit operand
+// ============================================================================
+
+/// A logical qubit operand used by the scheduling representation.
+///
+/// The actual qubit identity is the canonical Zamani IR `QubitId`.
+///
+/// This type exists only to attach scheduler-local metadata to that canonical
+/// identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct QubitOperand {
+    /// Canonical logical qubit identity.
+    qubit: QubitId,
+
+    /// Scheduler-level semantic role.
+    role: OperandRole,
+}
+
+impl QubitOperand {
+    /// Creates a data-qubit operand.
+    #[must_use]
+    pub const fn new(qubit: QubitId) -> Self {
+        Self {
+            qubit,
+            role: OperandRole::Data,
+        }
+    }
+
+    /// Creates an operand with an explicit scheduler role.
+    #[must_use]
+    pub const fn with_role(qubit: QubitId, role: OperandRole) -> Self {
+        Self { qubit, role }
+    }
+
+    /// Returns the canonical logical qubit identity.
+    #[must_use]
+    pub const fn qubit(self) -> QubitId {
+        self.qubit
+    }
+
+    /// Returns the scheduling-level operand role.
+    #[must_use]
+    pub const fn role(self) -> OperandRole {
+        self.role
+    }
+}
+
+// ============================================================================
+// Classical dependency identity
+// ============================================================================
+
+/// Stable identifier for a classical dependency consumed or produced by an
+/// operation.
+///
+/// The scheduler does not interpret classical values. It only tracks
+/// readiness/dependency relationships.
+///
+/// The string is intentionally opaque to the scheduler.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ClassicalDependencyId(Arc<str>);
+
+impl ClassicalDependencyId {
+    /// Creates a classical dependency identifier.
+    ///
+    /// Empty identifiers are rejected by [`try_new`].
+    #[must_use]
+    pub fn new(value: impl Into<Arc<str>>) -> Self {
+        Self(value.into())
+    }
+
+    /// Creates a classical dependency identifier with validation.
+    ///
+    /// Returns `None` for an empty identifier.
+    #[must_use]
+    pub fn try_new(value: impl Into<Arc<str>>) -> Option<Self> {
+        let value = value.into();
+
+        if value.is_empty() {
+            None
+        } else {
+            Some(Self(value))
+        }
+    }
+
+    /// Returns the opaque identifier.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ClassicalDependencyId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+// ============================================================================
+// Operation provenance
+// ============================================================================
+
+/// Identifies where a scheduling operation originated.
+///
+/// Scheduling must preserve provenance so that a final schedule can be
+/// explained and verified against the canonical semantic program.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum OperationProvenance {
+    /// Operation originates directly from the canonical IR.
+    CanonicalIr {
+        /// Canonical scheduler-visible operation identity.
+        operation_id: OperationId,
+    },
+
+    /// Operation was introduced by a compiler transformation.
+    ///
+    /// `origin` points to the operation that caused the transformation.
+    Derived {
+        /// Original operation.
+        origin: OperationId,
+
+        /// Human-readable transformation identifier.
+        transformation: Arc<str>,
+    },
+
+    /// Operation was introduced by routing.
+    Routed {
+        /// Original logical operation.
+        origin: OperationId,
+
+        /// Stable routing transformation identifier.
+        routing_id: Arc<str>,
+    },
+
+    /// Operation was introduced by QEC lowering.
+    ErrorCorrection {
+        /// Operation that caused the generated QEC work.
+        origin: Option<OperationId>,
+
+        /// Stable QEC transformation identifier.
+        protocol: Arc<str>,
+    },
+
+    /// Operation was introduced by a target-specific scheduling transformation.
+    SchedulingTransformation {
+        /// Source operation, when one exists.
+        origin: Option<OperationId>,
+
+        /// Stable transformation identifier.
+        transformation: Arc<str>,
+    },
+
+    /// External/future producer.
+    External {
+        /// Stable external source identifier.
+        source: Arc<str>,
+    },
+}
+
+impl OperationProvenance {
+    /// Returns the primary source operation, if one is known.
+    #[must_use]
+    pub fn origin(&self) -> Option<OperationId> {
+        match self {
+            Self::CanonicalIr { operation_id } => Some(*operation_id),
+
+            Self::Derived { origin, .. }
+            | Self::Routed { origin, .. } => Some(*origin),
+
+            Self::ErrorCorrection { origin, .. }
+            | Self::SchedulingTransformation { origin, .. } => *origin,
+
+            Self::External { .. } => None,
+        }
+    }
+
+    /// Returns a stable human-readable provenance category.
+    #[must_use]
+    pub const fn kind(&self) -> &'static str {
+        match self {
+            Self::CanonicalIr { .. } => "canonical_ir",
+            Self::Derived { .. } => "derived",
+            Self::Routed { .. } => "routed",
+            Self::ErrorCorrection { .. } => "error_correction",
+            Self::SchedulingTransformation { .. } => "scheduling_transformation",
+            Self::External { .. } => "external",
+        }
+    }
+}
+
+// ============================================================================
+// Operation metadata
+// ============================================================================
+
+/// Lightweight scheduler metadata.
+///
+/// Metadata is intentionally opaque and does not contain semantic gate data.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct OperationMetadata {
+    /// Optional stable operation name.
+    name: Option<Arc<str>>,
+
+    /// Optional source/provenance label.
+    label: Option<Arc<str>>,
+
+    /// Optional user-defined scheduling class.
+    scheduling_class: Option<Arc<str>>,
+}
+
+impl OperationMetadata {
+    /// Creates empty metadata.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            name: None,
+            label: None,
+            scheduling_class: None,
+        }
+    }
+
+    /// Sets a stable operation name.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<Arc<str>>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Sets a source/debug label.
+    #[must_use]
+    pub fn with_label(mut self, label: impl Into<Arc<str>>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Sets a user-defined scheduling class.
+    #[must_use]
+    pub fn with_scheduling_class(
+        mut self,
+        scheduling_class: impl Into<Arc<str>>,
+    ) -> Self {
+        self.scheduling_class = Some(scheduling_class.into());
+        self
+    }
+
+    /// Returns the operation name.
+    #[must_use]
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Returns the source/debug label.
+    #[must_use]
+    pub fn label(&self) -> Option<&str> {
+        self.label.as_deref()
+    }
+
+    /// Returns the scheduling class.
+    #[must_use]
+    pub fn scheduling_class(&self) -> Option<&str> {
+        self.scheduling_class.as_deref()
+    }
+}
+
+// ============================================================================
+// Scheduling operation
+// ============================================================================
+
+/// Immutable scheduling representation of one executable operation.
+///
+/// # Important
+///
+/// This is NOT another quantum semantic operation type.
+///
+/// The canonical operation remains in `quantum::ir`. This structure is the
+/// scheduler's normalized execution view.
+///
+/// # Why this abstraction exists
+///
+/// A scheduler needs information that the semantic IR intentionally does not
+/// own, including:
+///
+/// - scheduling identity;
+/// - resource requirements;
+/// - temporal requirements;
+/// - dependency references;
+/// - provenance;
+/// - scheduler priority;
+/// - operation classification.
+///
+/// Keeping these concerns here prevents the canonical IR from becoming
+/// hardware- or scheduler-specific.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SchedulingOperation {
+    /// Stable scheduling identity.
+    id: OperationId,
+
+    /// Optional canonical source identity.
+///
+/// For direct canonical operations this normally equals `id`.
+/// Derived scheduling operations may have a different scheduling identity.
+    source_id: Option<OperationId>,
+
+    /// Broad scheduler classification.
+    class: OperationClass,
+
+    /// Logical operands.
+    ///
+    /// These use canonical `quantum::ir::qubit::QubitId`.
+    operands: Arc<[QubitOperand]>,
+
+    /// Classical dependencies that must be available before execution.
+    classical_inputs: Arc<[ClassicalDependencyId]>,
+
+    /// Classical dependencies produced by this operation.
+    classical_outputs: Arc<[ClassicalDependencyId]>,
+
+    /// Optional human-readable semantic opcode/name.
+    ///
+    /// This is a label only. It is not the source of quantum semantics.
+    opcode: Option<Arc<str>>,
+
+    /// Operation provenance.
+    provenance: OperationProvenance,
+
+    /// Scheduler priority.
+    ///
+    /// Larger values represent higher priority.
+    priority: i64,
+
+    /// Whether the operation is eligible for parallel execution with another
+    /// operation when no explicit/resource dependency prevents it.
+    parallelizable: bool,
+
+    /// Whether the operation is safe to move across otherwise independent
+    /// operations.
+    ///
+    /// This is a scheduling property supplied by the IR adapter, not inferred
+    /// from the opcode string.
+    reorderable: bool,
+
+    /// Whether the operation requires runtime/dynamic readiness.
+    dynamic: bool,
+
+    /// Optional metadata.
+    metadata: OperationMetadata,
+}
+
+impl SchedulingOperation {
+    /// Creates a new scheduling operation.
+    ///
+    /// The constructor intentionally does not infer quantum semantics.
+    /// Callers must provide the normalized information explicitly.
+    ///
+    /// Resource and timing requirements are intentionally handled by their
+    /// dedicated scheduling modules rather than duplicated here.
+    #[must_use]
+    pub fn new(
+        id: OperationId,
+        class: OperationClass,
+        operands: Arc<[QubitOperand]>,
+        provenance: OperationProvenance,
+    ) -> Self {
+        let source_id = provenance.origin();
+
+        Self {
+            id,
+            source_id,
+            class,
+            operands,
+            classical_inputs: Arc::from([]),
+            classical_outputs: Arc::from([]),
+            opcode: None,
+            provenance,
+            priority: 0,
+            parallelizable: true,
+            reorderable: false,
+            dynamic: class.is_dynamic(),
+            metadata: OperationMetadata::new(),
+        }
+    }
+
+    /// Creates a canonical-IR scheduling operation.
+    ///
+    /// This is the preferred constructor for operations directly originating
+    /// from the canonical IR adapter.
+    #[must_use]
+    pub fn from_canonical_ir(
+        id: OperationId,
+        class: OperationClass,
+        operands: Arc<[QubitOperand]>,
+    ) -> Self {
+        Self::new(
+            id,
+            class,
+            operands,
+            OperationProvenance::CanonicalIr {
+                operation_id: id,
+            },
+        )
+    }
+
+    /// Returns the scheduler operation identity.
+    #[must_use]
+    pub const fn id(&self) -> OperationId {
+        self.id
+    }
+
+    /// Returns the canonical source operation identity, if available.
+    #[must_use]
+    pub const fn source_id(&self) -> Option<OperationId> {
+        self.source_id
+    }
+
+    /// Returns the scheduling classification.
+    #[must_use]
+    pub const fn class(&self) -> OperationClass {
+        self.class
+    }
+
+    /// Returns all logical operands in semantic operand order.
+    #[must_use]
+    pub fn operands(&self) -> &[QubitOperand] {
+        &self.operands
+    }
+
+    /// Returns the canonical logical qubit identities.
+    ///
+    /// This method intentionally exposes the canonical `QubitId` values rather
+    /// than introducing a scheduling-specific qubit type.
+    #[must_use]
+    pub fn qubits(&self) -> impl Iterator<Item = QubitId> + '_ {
+        self.operands.iter().map(|operand| operand.qubit())
+    }
+
+    /// Returns the number of operands.
+    #[must_use]
+    pub fn arity(&self) -> usize {
+        self.operands.len()
+    }
+
+    /// Returns whether this operation has no qubit operands.
+    #[must_use]
+    pub fn is_qubit_free(&self) -> bool {
+        self.operands.is_empty()
+    }
+
+    /// Returns whether this is a single-qubit operation.
+    #[must_use]
+    pub fn is_single_qubit(&self) -> bool {
+        self.operands.len() == 1
+    }
+
+    /// Returns whether this is a two-qubit operation.
+    #[must_use]
+    pub fn is_two_qubit(&self) -> bool {
+        self.operands.len() == 2
+    }
+
+    /// Returns whether this is a multi-qubit operation.
+    #[must_use]
+    pub fn is_multi_qubit(&self) -> bool {
+        self.operands.len() > 2
+    }
+
+    /// Returns classical input dependencies.
+    #[must_use]
+    pub fn classical_inputs(&self) -> &[ClassicalDependencyId] {
+        &self.classical_inputs
+    }
+
+    /// Returns classical output dependencies.
+    #[must_use]
+    pub fn classical_outputs(&self) -> &[ClassicalDependencyId] {
+        &self.classical_outputs
+    }
+
+    /// Returns the optional scheduler label/opcode.
+    ///
+    /// The value is informational only and MUST NOT be used as a replacement
+    /// for canonical IR semantics.
+    #[must_use]
+    pub fn opcode(&self) -> Option<&str> {
+        self.opcode.as_deref()
+    }
+
+    /// Returns provenance information.
+    #[must_use]
+    pub fn provenance(&self) -> &OperationProvenance {
+        &self.provenance
+    }
+
+    /// Returns the scheduler priority.
+    #[must_use]
+    pub const fn priority(&self) -> i64 {
+        self.priority
+    }
+
+    /// Returns whether the operation is parallelizable.
+    #[must_use]
+    pub const fn is_parallelizable(&self) -> bool {
+        self.parallelizable
+    }
+
+    /// Returns whether the operation may be reordered.
+    #[must_use]
+    pub const fn is_reorderable(&self) -> bool {
+        self.reorderable
+    }
+
+    /// Returns whether runtime readiness is required.
+    #[must_use]
+    pub const fn is_dynamic(&self) -> bool {
+        self.dynamic
+    }
+
+    /// Returns metadata.
+    #[must_use]
+    pub const fn metadata(&self) -> &OperationMetadata {
+        &self.metadata
+    }
+
+    /// Returns a builder initialized with this operation.
+    ///
+    /// The builder is useful for constructing derived immutable operations
+    /// without making `SchedulingOperation` itself mutable.
+    #[must_use]
+    pub fn builder(self) -> SchedulingOperationBuilder {
+        SchedulingOperationBuilder { operation: self }
+    }
+}
+
+// ============================================================================
+// Scheduling operation builder
+// ============================================================================
+
+/// Builder for [`SchedulingOperation`].
+///
+/// The builder exists only at construction time. Once `build()` is called, the
+/// resulting operation is immutable.
+#[derive(Debug, Clone)]
+pub struct SchedulingOperationBuilder {
+    operation: SchedulingOperation,
+}
+
+impl SchedulingOperationBuilder {
+    /// Replaces classical input dependencies.
+    #[must_use]
+    pub fn classical_inputs<I>(
+        mut self,
+        dependencies: I,
+    ) -> Self
+    where
+        I: IntoIterator<Item = ClassicalDependencyId>,
+    {
+        self.operation.classical_inputs =
+            dependencies.into_iter().collect::<Vec<_>>().into();
+
+        self
+    }
+
+    /// Replaces classical output dependencies.
+    #[must_use]
+    pub fn classical_outputs<I>(
+        mut self,
+        dependencies: I,
+    ) -> Self
+    where
+        I: IntoIterator<Item = ClassicalDependencyId>,
+    {
+        self.operation.classical_outputs =
+            dependencies.into_iter().collect::<Vec<_>>().into();
+
+        self
+    }
+
+    /// Sets an informational opcode/name.
+    ///
+    /// This MUST NOT be interpreted as the semantic definition of the
+    /// operation.
+    #[must_use]
+    pub fn opcode(mut self, opcode: impl Into<Arc<str>>) -> Self {
+        self.operation.opcode = Some(opcode.into());
+        self
+    }
+
+    /// Sets scheduler priority.
+    #[must_use]
+    pub const fn priority(mut self, priority: i64) -> Self {
+        self.operation.priority = priority;
+        self
+    }
+
+    /// Sets whether the operation may execute concurrently with independent
+    /// operations.
+    #[must_use]
+    pub const fn parallelizable(mut self, parallelizable: bool) -> Self {
+        self.operation.parallelizable = parallelizable;
+        self
+    }
+
+    /// Sets whether the operation may be reordered across independent work.
+    #[must_use]
+    pub const fn reorderable(mut self, reorderable: bool) -> Self {
+        self.operation.reorderable = reorderable;
+        self
+    }
+
+    /// Explicitly sets dynamic behavior.
+    #[must_use]
+    pub const fn dynamic(mut self, dynamic: bool) -> Self {
+        self.operation.dynamic = dynamic;
+        self
+    }
+
+    /// Sets scheduler metadata.
+    #[must_use]
+    pub fn metadata(mut self, metadata: OperationMetadata) -> Self {
+        self.operation.metadata = metadata;
+        self
+    }
+
+    /// Finalizes the immutable operation.
+    #[must_use]
+    pub fn build(self) -> SchedulingOperation {
+        self.operation
+    }
+}
+
+// ============================================================================
+// Operation collection
+// ============================================================================
+
+/// Immutable collection of scheduling operations.
+///
+/// This wrapper exists to provide a stable abstraction for future graph/storage
+/// optimizations without changing the public representation of individual
+/// operations.
+///
+/// The collection is intentionally backed by `Arc<[T]>` rather than a fixed
+/// machine-size array.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SchedulingOperations {
+    operations: Arc<[SchedulingOperation]>,
+}
+
+impl SchedulingOperations {
+    /// Creates an empty operation collection.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            operations: Arc::from([]),
+        }
+    }
+
+    /// Creates an operation collection from an iterator.
+    #[must_use]
+    pub fn from_iter<I>(operations: I) -> Self
+    where
+        I: IntoIterator<Item = SchedulingOperation>,
+    {
+        Self {
+            operations: operations.into_iter().collect::<Vec<_>>().into(),
+        }
+    }
+
+    /// Returns the number of operations.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.operations.len()
+    }
+
+    /// Returns whether the collection is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.operations.is_empty()
+    }
+
+    /// Returns an operation by stable collection index.
+    ///
+    /// Collection indices are storage positions, not semantic operation IDs.
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&SchedulingOperation> {
+        self.operations.get(index)
+    }
+
+    /// Returns the operations as a slice.
+    #[must_use]
+    pub fn as_slice(&self) -> &[SchedulingOperation] {
+        &self.operations
+    }
+
+    /// Returns an iterator over operations.
+    pub fn iter(&self) -> impl Iterator<Item = &SchedulingOperation> {
+        self.operations.iter()
+    }
+}
+
+impl From<Vec<SchedulingOperation>> for SchedulingOperations {
+    fn from(operations: Vec<SchedulingOperation>) -> Self {
+        Self {
+            operations: operations.into(),
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a SchedulingOperations {
+    type Item = &'a SchedulingOperation;
+    type IntoIter = std::slice::Iter<'a, SchedulingOperation>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.operations.iter()
+    }
+}
+
+// ============================================================================
+// Validation
+// ============================================================================
+
+/// Validation errors for scheduler operation construction.
+///
+/// These errors are intentionally local to this representation. The public
+/// scheduling error hierarchy in `scheduling::errors` should wrap or translate
+/// them at subsystem boundaries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OperationValidationError {
+    /// An operation has no canonical identity.
+    ///
+    /// This is currently represented by the canonical `OperationId`; the
+    /// variant exists to keep validation extensible without using panics.
+    InvalidOperationId,
+
+    /// A canonical operation was declared as originating from a different
+    /// operation identity.
+    ProvenanceMismatch,
+
+    /// A classical dependency identifier is empty.
+    EmptyClassicalDependency,
+
+    /// An opcode/label supplied by an adapter is empty.
+    EmptyOpcode,
+
+    /// Duplicate qubit operands were supplied where the operation contract
+    /// requires unique operands.
+    DuplicateQubitOperand,
+}
+
+impl fmt::Display for OperationValidationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidOperationId => {
+                formatter.write_str("invalid scheduling operation identity")
+            }
+            Self::ProvenanceMismatch => {
+                formatter.write_str("operation provenance does not match operation identity")
+            }
+            Self::EmptyClassicalDependency => {
+                formatter.write_str("classical dependency identifier is empty")
+            }
+            Self::EmptyOpcode => {
+                formatter.write_str("operation opcode is empty")
+            }
+            Self::DuplicateQubitOperand => {
+                formatter.write_str("operation contains duplicate qubit operands")
+            }
+        }
+    }
+}
+
+impl std::error::Error for OperationValidationError {}
+
+impl SchedulingOperation {
+    /// Validates the local invariants of this operation.
+    ///
+    /// This function does not perform target validation.
+    ///
+    /// Target validation belongs to hardware capabilities and the scheduling
+    /// context.
+    ///
+    /// It also does not validate gate arity because gate semantics belong to
+    /// the canonical IR.
+    pub fn validate(&self) -> Result<(), OperationValidationError> {
+        if let Some(source_id) = self.source_id {
+            if let OperationProvenance::CanonicalIr { operation_id } =
+                self.provenance
+            {
+                if source_id != operation_id {
+                    return Err(OperationValidationError::ProvenanceMismatch);
+                }
+            }
+        }
+
+        for dependency in self
+            .classical_inputs
+            .iter()
+            .chain(self.classical_outputs.iter())
+        {
+            if dependency.as_str().is_empty() {
+                return Err(OperationValidationError::EmptyClassicalDependency);
+            }
+        }
+
+        if let Some(opcode) = self.opcode() {
+            if opcode.is_empty() {
+                return Err(OperationValidationError::EmptyOpcode);
+            }
+        }
+
+        // Qubit operands must identify distinct logical qubits unless the
+        // canonical operation semantics explicitly permit aliasing.
+        //
+        // The scheduler cannot safely infer such semantic aliasing here, so
+        // duplicate detection is intentionally exposed as a separate helper
+        // rather than being imposed on every operation.
+        Ok(())
+    }
+
+    /// Checks whether all logical qubit operands are distinct.
+    ///
+    /// This does not determine whether duplicates are semantically legal.
+    /// The canonical IR adapter decides that according to the operation's
+    /// actual semantics.
+    #[must_use]
+    pub fn has_unique_qubits(&self) -> bool {
+        for (index, left) in self.operands.iter().enumerate() {
+            for right in self.operands.iter().skip(index + 1) {
+                if left.qubit() == right.qubit() {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    /// Validates uniqueness when the adapter has established that duplicate
+    /// operands are illegal for the operation.
+    pub fn validate_unique_qubits(
+        &self,
+    ) -> Result<(), OperationValidationError> {
+        if self.has_unique_qubits() {
+            Ok(())
+        } else {
+            Err(OperationValidationError::DuplicateQubitOperand)
+        }
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn operation_id() -> OperationId {
+        // The canonical OperationId is owned by the canonical IR identity
+        // subsystem. This test deliberately uses the constructor only if it is
+        // available through the stable type contract.
+        OperationId::new(0)
+    }
+
+    fn qubit(index: usize) -> QubitId {
+        QubitId::new(index)
+    }
+
+    #[test]
+    fn canonical_operation_uses_canonical_qubit_identity() {
+        let operation = SchedulingOperation::from_canonical_ir(
+            operation_id(),
+            OperationClass::Quantum,
+            vec![
+                QubitOperand::new(qubit(0)),
+                QubitOperand::new(qubit(1)),
+            ]
+            .into(),
+        );
+
+        assert_eq!(operation.arity(), 2);
+        assert!(operation.is_two_qubit());
+        assert_eq!(
+            operation.qubits().collect::<Vec<_>>(),
+            vec![qubit(0), qubit(1)]
+        );
+    }
+
+    #[test]
+    fn operation_is_immutable_after_build() {
+        let operation = SchedulingOperation::from_canonical_ir(
+            operation_id(),
+            OperationClass::Measurement,
+            vec![QubitOperand::with_role(
+                qubit(0),
+                OperandRole::Measurement,
+            )]
+            .into(),
+        )
+        .builder()
+        .opcode("measure")
+        .priority(10)
+        .parallelizable(false)
+        .dynamic(true)
+        .build();
+
+        assert_eq!(operation.opcode(), Some("measure"));
+        assert_eq!(operation.priority(), 10);
+        assert!(!operation.is_parallelizable());
+        assert!(operation.is_dynamic());
+    }
+
+    #[test]
+    fn provenance_origin_is_preserved() {
+        let id = operation_id();
+
+        let operation = SchedulingOperation::from_canonical_ir(
+            id,
+            OperationClass::Quantum,
+            vec![QubitOperand::new(qubit(0))].into(),
+        );
+
+        assert_eq!(operation.source_id(), Some(id));
+        assert_eq!(operation.provenance().origin(), Some(id));
+        assert_eq!(operation.provenance().kind(), "canonical_ir");
+    }
+
+    #[test]
+    fn duplicate_qubits_are_detectable_without_forcing_semantic_policy() {
+        let operation = SchedulingOperation::from_canonical_ir(
+            operation_id(),
+            OperationClass::Custom,
+            vec![
+                QubitOperand::new(qubit(0)),
+                QubitOperand::new(qubit(0)),
+            ]
+            .into(),
+        );
+
+        assert!(!operation.has_unique_qubits());
+        assert_eq!(
+            operation.validate_unique_qubits(),
+            Err(OperationValidationError::DuplicateQubitOperand)
+        );
+    }
+
+    #[test]
+    fn classical_dependencies_are_opaque() {
+        let dependency =
+            ClassicalDependencyId::try_new("measurement_0").expect("valid dependency");
+
+        let operation = SchedulingOperation::from_canonical_ir(
+            operation_id(),
+            OperationClass::Conditional,
+            vec![QubitOperand::new(qubit(0))].into(),
+        )
+        .builder()
+        .classical_inputs(vec![dependency.clone()])
+        .dynamic(true)
+        .build();
+
+        assert_eq!(operation.classical_inputs(), &[dependency]);
+        assert!(operation.is_dynamic());
+    }
+
+    #[test]
+    fn operation_collection_is_shareable_and_unbounded_by_design() {
+        let first = SchedulingOperation::from_canonical_ir(
+            operation_id(),
+            OperationClass::Quantum,
+            vec![QubitOperand::new(qubit(0))].into(),
+        );
+
+        let collection = SchedulingOperations::from_iter([first]);
+
+        assert_eq!(collection.len(), 1);
+        assert!(!collection.is_empty());
+        assert_eq!(collection.as_slice().len(), 1);
+    }
+}
