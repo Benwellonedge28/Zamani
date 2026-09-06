@@ -1,0 +1,1442 @@
+//! Zamani Quantum Resilience — Timeout Detection
+//!
+//! Path:
+//!     src/quantum/resilience/detection/timeout.rs
+//!
+//! # Purpose
+//!
+//! This module provides the production timeout/deadline detector for
+//! `quantum::resilience`.
+//!
+//! The detector answers one narrow question:
+//!
+//! > Has an explicitly supplied execution-duration observation reached or
+//! > exceeded a configured timeout/deadline boundary?
+//!
+//! It does NOT:
+//!
+//! - read the system clock;
+//! - sleep;
+//! - cancel execution;
+//! - retry execution;
+//! - restart execution;
+//! - select a backend;
+//! - change routing;
+//! - change scheduling;
+//! - recompile a circuit;
+//! - perform QEC;
+//! - perform mitigation;
+//! - diagnose root cause;
+//! - decide whether recovery should occur.
+//!
+//! Those responsibilities belong to the runtime, hardware HAL, scheduling,
+//! diagnosis, policy, planning, adaptation, recovery, mitigation, and
+//! verification subsystems.
+//!
+//! # Architectural position
+//!
+//! ```text
+//! runtime / hardware / scheduler / telemetry
+//!                    |
+//!                    | elapsed-duration observation
+//!                    v
+//!             DetectionObservation
+//!                    |
+//!                    v
+//!             TimeoutDetector
+//!                    |
+//!              +-----+-----+
+//!              |           |
+//!              v           v
+//!           no timeout   timeout
+//!              |           |
+//!              +-----+-----+
+//!                    |
+//!                    v
+//!             DetectionOutput
+//!                    |
+//!                    v
+//!                diagnosis
+//!                    |
+//!                    v
+//!                 policy
+//!                    |
+//!                    v
+//!                planning
+//! ```
+//!
+//! # Critical determinism rule
+//!
+//! This detector MUST NOT obtain the current time itself.
+//!
+//! The following are intentionally forbidden:
+//!
+//! ```text
+//! Instant::now()
+//! SystemTime::now()
+//! thread::sleep(...)
+//! random number generation
+//! environment-variable configuration
+//! process IDs
+//! global mutable state
+//! hidden configuration
+//! ```
+//!
+//! Instead, the execution layer measures elapsed time and supplies it as an
+//! observation.
+//!
+//! This gives:
+//!
+//! ```text
+//! same configuration
+//! + same ordered observations
+//! + same detection context
+//! = same result
+//! ```
+//!
+//! This is required for deterministic replay, simulation, fault injection,
+//! debugging, distributed execution, and production incident analysis.
+//!
+//! # Observation representation
+//!
+//! `DetectionObservation` is intentionally generic. This detector interprets:
+//!
+//! ```text
+//! ObservationPayload::Unsigned(n)
+//! ```
+//!
+//! as an elapsed duration in **nanoseconds**.
+//!
+//! `ObservationPayload::Integer(n)` is also accepted and represents nanoseconds.
+//! Negative elapsed durations are rejected.
+//!
+//! Floating-point durations are deliberately rejected because integer
+//! nanoseconds provide exact, deterministic duration comparison without
+//! floating-point boundary ambiguity.
+//!
+//! Therefore a producer should construct observations such as:
+//!
+//! ```text
+//! ObservationPayload::Unsigned(elapsed.as_nanos() as u128)
+//! ```
+//!
+//! without the detector needing access to a clock.
+//!
+//! # Precision and scalability
+//!
+//! Duration thresholds use `std::time::Duration`, while observed elapsed
+//! nanoseconds are represented by `u128` in the generic observation payload.
+//!
+//! This avoids an architectural machine-size limit and permits the detector to
+//! represent durations beyond the range of a platform `usize`.
+//!
+//! A concrete execution remains bounded by the resources and representations
+//! available to that execution environment.
+//!
+//! No value such as:
+//!
+//! ```text
+//! MAX_EXECUTION_TIME
+//! MAX_QUBITS
+//! DEFAULT_TIMEOUT
+//! RETRY_COUNT = 3
+//! ```
+//!
+//! is embedded in this module.
+//!
+//! # Timeout semantics
+//!
+//! The detector supports two semantic conditions:
+//!
+//! `ElapsedAtLeast`
+//!     Trigger when elapsed duration is greater than or equal to the configured
+//!     threshold.
+//!
+//! `ElapsedGreaterThan`
+//!     Trigger only when elapsed duration is strictly greater than the
+//!     configured threshold.
+//!
+//! The inclusive/exclusive boundary is therefore explicit rather than hidden.
+//!
+//! # Scope
+//!
+//! Timeout scope is caller-defined.
+//!
+//! Examples include:
+//!
+//! ```text
+//! compilation
+//! queue
+//! execution
+//! measurement
+//! synchronization
+//! checkpoint
+//! migration
+//! recovery
+//! custom.execution.phase
+//! ```
+//!
+//! No provider or hardware vocabulary is hard-coded.
+//!
+//! # Multiple observations
+//!
+//! The detector processes observations as a stream.
+//!
+//! It does not materialize the complete stream and therefore requires O(1)
+//! detector state apart from the output generated by the common
+//! `DetectionOutput` contract.
+//!
+//! If a caller supplies an arbitrarily large stream, memory consumption inside
+//! this detector does not grow with the number of observations examined.
+//!
+//! The detector emits at most one timeout signal per observation.
+//!
+//! # Ordering
+//!
+//! The common detection contract provides a monotonically non-decreasing
+//! detection sequence. This implementation additionally rejects an observation
+//! whose sequence is earlier than the detector's previously processed sequence.
+//!
+//! Equal sequence values are accepted because multiple observations can belong
+//! to the same logical detection evaluation.
+//!
+//! # Stale and trust handling
+//!
+//! The detector respects `DetectionContext`:
+//!
+//! - stale/expired observations are rejected when stale observations are not
+//!   allowed;
+//! - unverified observations are rejected when verified observations are
+//!   required.
+//!
+//! This detector does not decide whether untrusted data should be accepted.
+//! That decision belongs to the caller's detection policy/context.
+//!
+//! # Signal identity
+//!
+//! The common detector contract states that signal IDs are caller-independent
+//! normalized identifiers and that detectors must remain deterministic.
+//!
+//! For a timeout observation, this implementation derives the signal identity
+//! deterministically from the originating `ObservationId`.
+//!
+//! The derivation is intentionally a stable pure function and does not use:
+//!
+//! - memory addresses;
+//! - timestamps;
+//! - randomness;
+//! - process IDs;
+//! - global counters.
+//!
+//! # Canonical quantum identity
+//!
+//! Timeout detection normally does not need to identify qubits directly.
+//!
+//! If a producer associates a timeout with a quantum resource, that resource
+//! remains represented by the canonical resilience resource model, which in
+//! turn uses:
+//!
+//! ```text
+//! crate::quantum::ir::qubit::QubitId
+//! crate::quantum::ir::qubit::PhysicalQubitId
+//! ```
+//!
+//! This file deliberately does not define another qubit identity type.
+//!
+//! # Error contract
+//!
+//! All detector errors use:
+//!
+//! ```text
+//! crate::quantum::resilience::errors
+//! ```
+//!
+//! This implementation uses the existing stable error categories rather than
+//! introducing timeout-specific competing error types.
+//!
+//! # Integration contract
+//!
+//! This file depends only on foundational contracts:
+//!
+//! ```text
+//! detection/detector.rs
+//! errors/error.rs
+//! ```
+//!
+//! It may optionally be re-exported by:
+//!
+//! ```text
+//! detection/mod.rs
+//! ```
+//!
+//! It is consumed by:
+//!
+//! ```text
+//! detection registry
+//! diagnosis
+//! telemetry
+//! API/controller
+//! resilience orchestration
+//! ```
+//!
+//! It does NOT depend on:
+//!
+//! ```text
+//! diagnosis/*
+//! policy/*
+//! planning/*
+//! adaptation/*
+//! recovery/*
+//! mitigation/*
+//! verification/*
+//! hardware implementations
+//! routing implementations
+//! scheduling implementations
+//! backend/provider implementations
+//! ```
+//!
+//! This keeps the dependency graph acyclic and allows this file to be completed
+//! independently.
+//!
+//! # Integration with execution
+//!
+//! The execution layer should:
+//!
+//! 1. start its own monotonic timer;
+//! 2. execute the relevant operation/phase;
+//! 3. calculate elapsed duration;
+//! 4. convert elapsed duration to nanoseconds;
+//! 5. create a `DetectionObservation` with
+//!    `ObservationPayload::Unsigned(elapsed_ns)`;
+//! 6. provide that observation to this detector.
+//!
+//! The timer itself belongs outside this module.
+//!
+//! # Integration with hardware
+//!
+//! Hardware providers must not be referenced here.
+//!
+//! A hardware HAL may translate provider-specific timeout information into the
+//! canonical observation contract before invoking this detector.
+//!
+//! # Integration with scheduling
+//!
+//! Scheduling owns actual execution timing constraints.
+//!
+//! This detector only consumes the resulting elapsed-duration observation.
+//!
+//! # Integration with policy
+//!
+//! Policy supplies the configured timeout threshold and scope.
+//!
+//! This module never chooses a default timeout.
+//!
+//! # Integration with recovery
+//!
+//! A timeout signal is evidence only.
+//!
+//! Recovery may later decide to:
+//!
+//! ```text
+//! retry
+//! restart
+//! resume
+//! reschedule
+//! migrate
+//! abort
+//! ```
+//!
+//! The timeout detector never performs any of those actions.
+//!
+//! # Integration with diagnosis
+//!
+//! Diagnosis can combine the timeout signal with:
+//!
+//! - backend health;
+//! - queue state;
+//! - calibration;
+//! - hardware telemetry;
+//! - network state;
+//! - execution stage;
+//! - historical failures;
+//! - QEC signals;
+//! - other detector signals.
+//!
+//! The timeout detector itself makes no root-cause claim.
+//!
+//! # Rust contract
+//!
+//! Supported:
+//!
+//! - Rust 1.97;
+//! - Rust 1.97.1;
+//! - Rust 2021 edition;
+//! - stable Rust;
+//! - no nightly features;
+//! - no unsafe code.
+//!
+//! Safety is compiler-enforced.
+//!
+//! =============================================================================
+//! Implementation
+//! =============================================================================
+
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+
+use std::cmp::Ordering;
+use std::fmt;
+use std::time::Duration;
+
+use crate::quantum::resilience::detection::detector::{
+    DetectionClassification,
+    DetectionConfidence,
+    DetectionContext,
+    DetectionInput,
+    DetectionMetadata,
+    DetectionObservation,
+    DetectionOutput,
+    DetectionPayload,
+    DetectionSequence,
+    DetectionSignal,
+    Detector,
+    DetectorIdentity,
+    ObservationFreshness,
+    ObservationId,
+    ObservationPayload,
+    SignalId,
+};
+
+use crate::quantum::resilience::errors::{
+    ResilienceError,
+    ResilienceErrorCode,
+    ResilienceResult,
+};
+
+// ============================================================================
+// Public schema
+// ============================================================================
+
+/// Stable semantic schema identifier for timeout detection.
+pub const TIMEOUT_DETECTOR_SCHEMA_ID: &str =
+    "zamani.quantum.resilience.detection.timeout";
+
+/// Semantic version of the timeout detector contract.
+///
+/// Increment only when the externally observable semantic contract changes.
+pub const TIMEOUT_DETECTOR_SCHEMA_VERSION: u16 = 1;
+
+// ============================================================================
+// Timeout scope
+// ============================================================================
+
+/// Semantic scope associated with a timeout.
+///
+/// The value is deliberately open-ended so future execution domains do not
+/// require changes to this detector.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TimeoutScope(String);
+
+impl TimeoutScope {
+    /// Creates a timeout scope.
+    ///
+    /// Empty or whitespace-only scopes are rejected because a timeout without
+    /// a semantic scope is difficult to diagnose and audit.
+    pub fn new(value: impl Into<String>) -> ResilienceResult<Self> {
+        let value = value.into();
+
+        if value.trim().is_empty() {
+            return Err(
+                ResilienceError::new(
+                    ResilienceErrorCode::InvalidArgument,
+                    "timeout scope must not be empty",
+                )
+                .with_operation("timeout_scope"),
+            );
+        }
+
+        Ok(Self(value))
+    }
+
+    /// Returns the scope label.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consumes the scope and returns the owned string.
+    #[must_use]
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+impl fmt::Display for TimeoutScope {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+// ============================================================================
+// Timeout predicate
+// ============================================================================
+
+/// Boundary semantics for timeout evaluation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum TimeoutPredicate {
+    /// Trigger when elapsed duration is greater than or equal to the limit.
+    ElapsedAtLeast,
+
+    /// Trigger only when elapsed duration is strictly greater than the limit.
+    ElapsedGreaterThan,
+}
+
+impl TimeoutPredicate {
+    /// Returns the stable machine-readable predicate name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ElapsedAtLeast => "elapsed_at_least",
+            Self::ElapsedGreaterThan => "elapsed_greater_than",
+        }
+    }
+
+    /// Evaluates the predicate.
+    #[must_use]
+    pub const fn matches(self, elapsed: Duration, limit: Duration) -> bool {
+        match self {
+            Self::ElapsedAtLeast => elapsed >= limit,
+            Self::ElapsedGreaterThan => elapsed > limit,
+        }
+    }
+}
+
+// ============================================================================
+// Timeout configuration
+// ============================================================================
+
+/// Immutable timeout detector configuration.
+///
+/// No default timeout is provided. The caller must explicitly configure the
+/// duration and semantic scope.
+///
+/// This prevents accidental production behavior caused by an undocumented
+/// timeout constant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimeoutConfig {
+    scope: TimeoutScope,
+    limit: Duration,
+    predicate: TimeoutPredicate,
+}
+
+impl TimeoutConfig {
+    /// Creates a timeout configuration.
+    pub fn new(
+        scope: TimeoutScope,
+        limit: Duration,
+        predicate: TimeoutPredicate,
+    ) -> ResilienceResult<Self> {
+        /*
+         * Zero is deliberately allowed.
+         *
+         * A zero-duration timeout can be semantically valid when a caller
+         * explicitly wants to detect any non-zero elapsed duration.
+         *
+         * The important architectural rule is that zero is never silently
+         * selected as a default; it must be explicitly supplied.
+         */
+        Ok(Self {
+            scope,
+            limit,
+            predicate,
+        })
+    }
+
+    /// Returns the semantic timeout scope.
+    #[must_use]
+    pub const fn scope(&self) -> &TimeoutScope {
+        &self.scope
+    }
+
+    /// Returns the configured timeout limit.
+    #[must_use]
+    pub const fn limit(&self) -> Duration {
+        self.limit
+    }
+
+    /// Returns the boundary predicate.
+    #[must_use]
+    pub const fn predicate(&self) -> TimeoutPredicate {
+        self.predicate
+    }
+}
+
+// ============================================================================
+// Timeout observation decoding
+// ============================================================================
+
+/// Decoded timeout observation.
+///
+/// This is an internal normalized representation used after validating the
+/// generic resilience observation payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TimeoutMeasurement {
+    elapsed: Duration,
+}
+
+impl TimeoutMeasurement {
+    /// Converts a generic observation payload into an elapsed duration.
+    ///
+    /// Supported representations:
+    ///
+    /// - `Unsigned`: nanoseconds;
+    /// - `Integer`: non-negative nanoseconds.
+    ///
+    /// Other payload kinds are rejected because implicit conversions would make
+    /// timeout semantics ambiguous.
+    fn from_observation(
+        observation: &DetectionObservation,
+    ) -> ResilienceResult<Self> {
+        let nanoseconds = match observation.payload() {
+            ObservationPayload::Unsigned(value) => *value,
+
+            ObservationPayload::Integer(value) => {
+                if *value < 0 {
+                    return Err(
+                        ResilienceError::new(
+                            ResilienceErrorCode::InvalidDetectionInput,
+                            "timeout elapsed duration cannot be negative",
+                        )
+                        .with_operation("timeout_observation"),
+                    );
+                }
+
+                *value as u128
+            }
+
+            ObservationPayload::Boolean(_)
+            | ObservationPayload::Float(_)
+            | ObservationPayload::Text(_)
+            | ObservationPayload::Marker => {
+                return Err(
+                    ResilienceError::new(
+                        ResilienceErrorCode::InvalidDetectionInput,
+                        "timeout detector requires an integer nanosecond elapsed-duration observation",
+                    )
+                    .with_operation("timeout_observation"),
+                );
+            }
+        };
+
+        let elapsed = duration_from_nanoseconds(nanoseconds)?;
+
+        Ok(Self { elapsed })
+    }
+}
+
+// ============================================================================
+// Detector state
+// ============================================================================
+
+/// Detector-local state.
+///
+/// Only the most recent sequence is retained.
+///
+/// No observation history is stored, so state memory remains O(1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct TimeoutDetectorState {
+    last_sequence: Option<DetectionSequence>,
+}
+
+impl TimeoutDetectorState {
+    /// Validates and records the next sequence.
+    fn observe_sequence(
+        &mut self,
+        sequence: DetectionSequence,
+    ) -> ResilienceResult<()> {
+        if let Some(previous) = self.last_sequence {
+            if sequence < previous {
+                return Err(
+                    ResilienceError::new(
+                        ResilienceErrorCode::DetectionInconsistent,
+                        "timeout detector received an observation sequence earlier than a previously processed sequence",
+                    )
+                    .with_operation("timeout_detector"),
+                );
+            }
+        }
+
+        self.last_sequence = Some(sequence);
+        Ok(())
+    }
+
+    /// Clears detector-local state.
+    fn reset(&mut self) {
+        self.last_sequence = None;
+    }
+}
+
+// ============================================================================
+// Timeout detector
+// ============================================================================
+
+/// Production timeout detector.
+///
+/// The detector is deterministic and has no hidden time source.
+///
+/// It consumes caller-supplied elapsed-duration observations and emits
+/// normalized `DetectionSignal` values for observations satisfying the
+/// configured timeout predicate.
+#[derive(Debug, Clone)]
+pub struct TimeoutDetector {
+    identity: DetectorIdentity,
+    config: TimeoutConfig,
+    state: TimeoutDetectorState,
+}
+
+impl TimeoutDetector {
+    /// Creates a timeout detector.
+    ///
+    /// The detector identity is explicit so it remains stable across
+    /// serialization, telemetry, testing, and registry use.
+    pub fn new(
+        name: impl Into<String>,
+        version: impl Into<String>,
+        config: TimeoutConfig,
+    ) -> ResilienceResult<Self> {
+        let identity = DetectorIdentity::new(name, version)?;
+
+        Ok(Self {
+            identity,
+            config,
+            state: TimeoutDetectorState::default(),
+        })
+    }
+
+    /// Creates a detector directly from an existing detector identity.
+    pub fn with_identity(
+        identity: DetectorIdentity,
+        config: TimeoutConfig,
+    ) -> Self {
+        Self {
+            identity,
+            config,
+            state: TimeoutDetectorState::default(),
+        }
+    }
+
+    /// Returns the immutable detector configuration.
+    #[must_use]
+    pub const fn config(&self) -> &TimeoutConfig {
+        &self.config
+    }
+
+    /// Returns the configured timeout scope.
+    #[must_use]
+    pub const fn scope(&self) -> &TimeoutScope {
+        self.config.scope()
+    }
+
+    /// Returns the configured timeout limit.
+    #[must_use]
+    pub const fn limit(&self) -> Duration {
+        self.config.limit()
+    }
+
+    /// Returns the configured predicate.
+    #[must_use]
+    pub const fn predicate(&self) -> TimeoutPredicate {
+        self.config.predicate()
+    }
+
+    /// Evaluates one observation without requiring a collection.
+    ///
+    /// This helper is useful for execution engines that receive one timeout
+    /// observation at a time.
+    pub fn detect_one(
+        &mut self,
+        context: &DetectionContext,
+        observation: &DetectionObservation,
+    ) -> ResilienceResult<DetectionOutput> {
+        let observations = std::iter::once(observation);
+
+        self.detect(DetectionInput::new(context, observations))
+    }
+
+    /// Evaluates one observation and returns whether it crossed the configured
+    /// timeout boundary.
+    ///
+    /// This helper is useful to callers that already own their normalized
+    /// observation and do not need the complete output object.
+    pub fn evaluate_one(
+        &mut self,
+        context: &DetectionContext,
+        observation: &DetectionObservation,
+    ) -> ResilienceResult<bool> {
+        let measurement = self.validate_and_decode(context, observation)?;
+
+        Ok(self
+            .config
+            .predicate()
+            .matches(measurement.elapsed, self.config.limit()))
+    }
+
+    /// Validates an observation against the explicit detection context and
+    /// decodes its elapsed duration.
+    fn validate_and_decode(
+        &mut self,
+        context: &DetectionContext,
+        observation: &DetectionObservation,
+    ) -> ResilienceResult<TimeoutMeasurement> {
+        if observation.sequence() < context.sequence() {
+            return Err(
+                ResilienceError::new(
+                    ResilienceErrorCode::DetectionInconsistent,
+                    "timeout observation sequence is earlier than the detection context sequence",
+                )
+                .with_operation("timeout_detector"),
+            );
+        }
+
+        self.state.observe_sequence(observation.sequence())?;
+
+        if !context.allow_stale_observations()
+            && observation.freshness().is_stale()
+        {
+            return Err(
+                ResilienceError::new(
+                    ResilienceErrorCode::DetectionDataStale,
+                    "timeout detector received stale or expired observation",
+                )
+                .with_operation("timeout_detector"),
+            );
+        }
+
+        if context.require_verified_observations()
+            && !observation.trust().is_verified()
+        {
+            return Err(
+                ResilienceError::new(
+                    ResilienceErrorCode::UntrustedObservation,
+                    "timeout detector requires verified observations",
+                )
+                .with_operation("timeout_detector"),
+            );
+        }
+
+        TimeoutMeasurement::from_observation(observation)
+    }
+
+    /// Creates a deterministic signal for a timeout observation.
+    fn signal_for(
+        &self,
+        observation: &DetectionObservation,
+    ) -> ResilienceResult<DetectionSignal> {
+        let signal_id = signal_id_from_observation(observation.id());
+
+        let confidence = DetectionConfidence::full();
+
+        Ok(DetectionSignal::new(
+            signal_id,
+            self.identity.clone(),
+            DetectionClassification::Timeout,
+            confidence,
+            Some(observation.id()),
+            observation.sequence(),
+        ))
+    }
+
+    /// Creates a deterministic no-condition signal.
+    ///
+    /// This helper is intentionally private. The common detector output is
+    /// allowed to contain zero signals, which is preferable for large
+    /// observation streams because it avoids generating unnecessary objects.
+    fn no_condition_output(
+        &self,
+        sequence: DetectionSequence,
+        observations_examined: u64,
+    ) -> DetectionOutput {
+        let metadata = DetectionMetadata::new(
+            self.identity.clone(),
+            sequence,
+            observations_examined,
+        );
+
+        DetectionOutput::new(metadata, Vec::new())
+    }
+}
+
+impl Detector for TimeoutDetector {
+    fn identity(&self) -> &DetectorIdentity {
+        &self.identity
+    }
+
+    fn detect<'a, I>(
+        &mut self,
+        input: DetectionInput<'a, I>,
+    ) -> ResilienceResult<DetectionOutput>
+    where
+        I: Iterator<Item = &'a DetectionObservation>,
+    {
+        let context = input.context().clone();
+        let mut observations = input.observations();
+
+        /*
+         * The common detection contract exposes an iterator and does not impose
+         * a collection size. We therefore process it incrementally.
+         *
+         * We retain only the output signals required by the common
+         * DetectionOutput API. Detector-local state remains O(1).
+         */
+
+        let mut signals = Vec::new();
+        let mut examined: u64 = 0;
+        let mut last_sequence = context.sequence();
+
+        for observation in &mut observations {
+            examined = examined.checked_add(1).ok_or_else(|| {
+                ResilienceError::new(
+                    ResilienceErrorCode::ArithmeticOverflow,
+                    "timeout detector observation count overflowed",
+                )
+                .with_operation("timeout_detector")
+            })?;
+
+            let measurement = self.validate_and_decode(&context, observation)?;
+
+            last_sequence = observation.sequence();
+
+            if self
+                .config
+                .predicate()
+                .matches(measurement.elapsed, self.config.limit())
+            {
+                signals.push(self.signal_for(observation)?);
+            }
+        }
+
+        /*
+         * An empty stream is valid and deterministic. No artificial signal is
+         * generated because the absence of observations is not itself proof of
+         * a timeout.
+         */
+        if signals.is_empty() {
+            return Ok(self.no_condition_output(last_sequence, examined));
+        }
+
+        let metadata = DetectionMetadata::new(
+            self.identity.clone(),
+            last_sequence,
+            examined,
+        );
+
+        Ok(DetectionOutput::new(metadata, signals))
+    }
+
+    fn is_available(&self) -> bool {
+        true
+    }
+
+    fn reset(&mut self) {
+        self.state.reset();
+    }
+}
+
+// ============================================================================
+// Deterministic signal identity
+// ============================================================================
+
+/// Derives a stable signal identity from an observation identity.
+///
+/// The transformation is a pure integer mixing function. It is not intended
+/// to be cryptographic; its purpose is deterministic namespace separation so
+/// the detector does not need mutable counters, clocks, or randomness.
+///
+/// The final value is guaranteed non-zero because `SignalId` requires a
+/// non-zero representation.
+fn signal_id_from_observation(observation_id: ObservationId) -> SignalId {
+    let mut value = observation_id.value();
+
+    /*
+     * SplitMix64-style integer mixing.
+     *
+     * This is deterministic and contains no unsafe operations or hidden state.
+     * Wrapping arithmetic is intentional and defined for unsigned integers.
+     */
+    value ^= value >> 30;
+    value = value.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    value ^= value >> 27;
+    value = value.wrapping_mul(0x94d0_49bb_1331_11eb);
+    value ^= value >> 31;
+
+    /*
+     * SignalId rejects zero. Zero therefore maps to one rather than being
+     * allowed to create an invalid signal identity.
+     */
+    if value == 0 {
+        value = 1;
+    }
+
+    SignalId::from_u64(value).expect("non-zero signal ID after normalization")
+}
+
+// ============================================================================
+// Duration conversion
+// ============================================================================
+
+/// Converts nanoseconds represented by `u128` into `Duration`.
+///
+/// `Duration::from_nanos` accepts `u64`, so the conversion is performed
+/// explicitly and checked. This avoids silent truncation on very large values.
+///
+/// A value outside the host `Duration` representation is rejected rather than
+/// wrapped or truncated.
+fn duration_from_nanoseconds(nanoseconds: u128) -> ResilienceResult<Duration> {
+    let seconds = nanoseconds / 1_000_000_000u128;
+    let remainder = nanoseconds % 1_000_000_000u128;
+
+    let seconds = u64::try_from(seconds).map_err(|_| {
+        ResilienceError::new(
+            ResilienceErrorCode::RepresentationOverflow,
+            "timeout observation exceeds the representable Duration range",
+        )
+        .with_operation("timeout_duration_conversion")
+    })?;
+
+    let nanos = u32::try_from(remainder).map_err(|_| {
+        ResilienceError::new(
+            ResilienceErrorCode::RepresentationOverflow,
+            "timeout observation nanosecond remainder is not representable",
+        )
+        .with_operation("timeout_duration_conversion")
+    })?;
+
+    Ok(Duration::new(seconds, nanos))
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::num::NonZeroU64;
+
+    fn detector() -> TimeoutDetector {
+        let scope =
+            TimeoutScope::new("execution").expect("valid timeout scope");
+
+        let config = TimeoutConfig::new(
+            scope,
+            Duration::from_secs(1),
+            TimeoutPredicate::ElapsedAtLeast,
+        )
+        .expect("valid timeout configuration");
+
+        TimeoutDetector::new("timeout-detector", "1.0.0", config)
+            .expect("valid timeout detector")
+    }
+
+    fn context(sequence: u64) -> DetectionContext {
+        DetectionContext::new(
+            DetectionSequence::new(
+                NonZeroU64::new(sequence).expect("non-zero sequence"),
+            ),
+            false,
+            false,
+        )
+    }
+
+    fn observation(
+        id: u64,
+        sequence: u64,
+        nanoseconds: u128,
+    ) -> DetectionObservation {
+        DetectionObservation::new(
+            ObservationId::new(
+                NonZeroU64::new(id).expect("non-zero observation ID"),
+            ),
+            DetectionSequence::new(
+                NonZeroU64::new(sequence).expect("non-zero sequence"),
+            ),
+            crate::quantum::resilience::detection::detector::ObservationSource::Runtime,
+            crate::quantum::resilience::detection::detector::ObservationTrust::Verified,
+            ObservationFreshness::Fresh,
+            ObservationPayload::Unsigned(nanoseconds),
+        )
+        .expect("valid observation")
+    }
+
+    #[test]
+    fn exact_boundary_triggers_for_inclusive_predicate() {
+        let mut detector = detector();
+
+        let observation =
+            observation(1, 1, Duration::from_secs(1).as_nanos());
+
+        let output = detector
+            .detect_one(&context(1), &observation)
+            .expect("detection succeeds");
+
+        assert_eq!(output.len(), 1);
+        assert_eq!(
+            output.signals()[0].classification(),
+            DetectionClassification::Timeout
+        );
+    }
+
+    #[test]
+    fn exact_boundary_does_not_trigger_for_strict_predicate() {
+        let scope =
+            TimeoutScope::new("execution").expect("valid timeout scope");
+
+        let config = TimeoutConfig::new(
+            scope,
+            Duration::from_secs(1),
+            TimeoutPredicate::ElapsedGreaterThan,
+        )
+        .expect("valid configuration");
+
+        let mut detector =
+            TimeoutDetector::new("timeout-detector", "1.0.0", config)
+                .expect("valid detector");
+
+        let observation =
+            observation(1, 1, Duration::from_secs(1).as_nanos());
+
+        let output = detector
+            .detect_one(&context(1), &observation)
+            .expect("detection succeeds");
+
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn duration_above_limit_triggers() {
+        let mut detector = detector();
+
+        let observation =
+            observation(1, 1, Duration::from_secs(2).as_nanos());
+
+        let output = detector
+            .detect_one(&context(1), &observation)
+            .expect("detection succeeds");
+
+        assert_eq!(output.len(), 1);
+    }
+
+    #[test]
+    fn duration_below_limit_does_not_trigger() {
+        let mut detector = detector();
+
+        let observation =
+            observation(1, 1, Duration::from_millis(999).as_nanos());
+
+        let output = detector
+            .detect_one(&context(1), &observation)
+            .expect("detection succeeds");
+
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn negative_integer_duration_is_rejected() {
+        let mut detector = detector();
+
+        let observation = DetectionObservation::new(
+            ObservationId::new(
+                NonZeroU64::new(1).expect("non-zero observation ID"),
+            ),
+            DetectionSequence::new(
+                NonZeroU64::new(1).expect("non-zero sequence"),
+            ),
+            crate::quantum::resilience::detection::detector::ObservationSource::Runtime,
+            crate::quantum::resilience::detection::detector::ObservationTrust::Verified,
+            ObservationFreshness::Fresh,
+            ObservationPayload::Integer(-1),
+        )
+        .expect("structurally valid observation");
+
+        let result = detector.detect_one(&context(1), &observation);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn floating_point_duration_is_rejected() {
+        let mut detector = detector();
+
+        let observation = DetectionObservation::new(
+            ObservationId::new(
+                NonZeroU64::new(1).expect("non-zero observation ID"),
+            ),
+            DetectionSequence::new(
+                NonZeroU64::new(1).expect("non-zero sequence"),
+            ),
+            crate::quantum::resilience::detection::detector::ObservationSource::Runtime,
+            crate::quantum::resilience::detection::detector::ObservationTrust::Verified,
+            ObservationFreshness::Fresh,
+            ObservationPayload::Float(1_000_000_000.0),
+        )
+        .expect("finite observation");
+
+        let result = detector.detect_one(&context(1), &observation);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn empty_stream_is_valid() {
+        let mut detector = detector();
+
+        let input = DetectionInput::new(&context(1), std::iter::empty());
+
+        let output = detector.detect(input).expect("empty stream is valid");
+
+        assert!(output.is_empty());
+        assert_eq!(output.metadata().observations_examined(), 0);
+    }
+
+    #[test]
+    fn multiple_observations_are_processed_as_a_stream() {
+        let mut detector = detector();
+
+        let first = observation(
+            1,
+            1,
+            Duration::from_millis(100).as_nanos(),
+        );
+
+        let second = observation(
+            2,
+            2,
+            Duration::from_secs(2).as_nanos(),
+        );
+
+        let third = observation(
+            3,
+            3,
+            Duration::from_secs(3).as_nanos(),
+        );
+
+        let context = context(1);
+
+        let input =
+            DetectionInput::new(&context, [&first, &second, &third].into_iter());
+
+        let output = detector.detect(input).expect("stream detection succeeds");
+
+        assert_eq!(output.metadata().observations_examined(), 3);
+        assert_eq!(output.len(), 2);
+    }
+
+    #[test]
+    fn backwards_sequence_is_rejected() {
+        let mut detector = detector();
+
+        let first = observation(
+            1,
+            2,
+            Duration::from_secs(2).as_nanos(),
+        );
+
+        let second = observation(
+            2,
+            1,
+            Duration::from_secs(2).as_nanos(),
+        );
+
+        let context = context(1);
+
+        let input =
+            DetectionInput::new(&context, [&first, &second].into_iter());
+
+        let result = detector.detect(input);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn stale_observation_is_rejected_when_context_disallows_stale_data() {
+        let mut detector = detector();
+
+        let observation = DetectionObservation::new(
+            ObservationId::new(
+                NonZeroU64::new(1).expect("non-zero observation ID"),
+            ),
+            DetectionSequence::new(
+                NonZeroU64::new(1).expect("non-zero sequence"),
+            ),
+            crate::quantum::resilience::detection::detector::ObservationSource::Runtime,
+            crate::quantum::resilience::detection::detector::ObservationTrust::Verified,
+            ObservationFreshness::Stale,
+            ObservationPayload::Unsigned(
+                Duration::from_secs(2).as_nanos(),
+            ),
+        )
+        .expect("valid observation");
+
+        let result = detector.detect_one(&context(1), &observation);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn unverified_observation_is_rejected_when_verification_is_required() {
+        let mut detector = detector();
+
+        let observation = DetectionObservation::new(
+            ObservationId::new(
+                NonZeroU64::new(1).expect("non-zero observation ID"),
+            ),
+            DetectionSequence::new(
+                NonZeroU64::new(1).expect("non-zero sequence"),
+            ),
+            crate::quantum::resilience::detection::detector::ObservationSource::Runtime,
+            crate::quantum::resilience::detection::detector::ObservationTrust::Unverified,
+            ObservationFreshness::Fresh,
+            ObservationPayload::Unsigned(
+                Duration::from_secs(2).as_nanos(),
+            ),
+        )
+        .expect("valid observation");
+
+        let context = DetectionContext::new(
+            DetectionSequence::new(
+                NonZeroU64::new(1).expect("non-zero sequence"),
+            ),
+            false,
+            true,
+        );
+
+        let result = detector.detect_one(&context, &observation);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn reset_allows_a_new_sequence_epoch() {
+        let mut detector = detector();
+
+        let first = observation(
+            1,
+            10,
+            Duration::from_secs(2).as_nanos(),
+        );
+
+        detector
+            .detect_one(&context(10), &first)
+            .expect("first detection succeeds");
+
+        detector.reset();
+
+        let second = observation(
+            2,
+            1,
+            Duration::from_secs(2).as_nanos(),
+        );
+
+        let output = detector
+            .detect_one(&context(1), &second)
+            .expect("detection after reset succeeds");
+
+        assert_eq!(output.len(), 1);
+    }
+
+    #[test]
+    fn signal_identity_is_deterministic() {
+        let id = ObservationId::new(
+            NonZeroU64::new(123).expect("non-zero observation ID"),
+        );
+
+        let first = signal_id_from_observation(id);
+        let second = signal_id_from_observation(id);
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn signal_identity_is_non_zero() {
+        let id = ObservationId::new(
+            NonZeroU64::new(1).expect("non-zero observation ID"),
+        );
+
+        let signal = signal_id_from_observation(id);
+
+        assert_ne!(signal.value(), 0);
+    }
+
+    #[test]
+    fn huge_representable_nanosecond_duration_is_supported() {
+        let duration =
+            duration_from_nanoseconds(u64::MAX as u128 * 1_000_000_000u128)
+                .expect("duration should be representable");
+
+        assert_eq!(duration.as_secs(), u64::MAX);
+        assert_eq!(duration.subsec_nanos(), 0);
+    }
+
+    #[test]
+    fn overflowing_duration_is_rejected() {
+        let value =
+            (u64::MAX as u128 + 1u128) * 1_000_000_000u128;
+
+        let result = duration_from_nanoseconds(value);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn zero_timeout_is_explicitly_supported() {
+        let scope =
+            TimeoutScope::new("execution").expect("valid scope");
+
+        let config = TimeoutConfig::new(
+            scope,
+            Duration::ZERO,
+            TimeoutPredicate::ElapsedAtLeast,
+        )
+        .expect("zero timeout is valid when explicit");
+
+        let mut detector =
+            TimeoutDetector::new("timeout-detector", "1.0.0", config)
+                .expect("valid detector");
+
+        let observation = observation(1, 1, 0);
+
+        let output = detector
+            .detect_one(&context(1), &observation)
+            .expect("detection succeeds");
+
+        assert_eq!(output.len(), 1);
+    }
+
+    #[test]
+    fn equal_sequence_values_are_allowed() {
+        let mut detector = detector();
+
+        let first = observation(
+            1,
+            1,
+            Duration::from_secs(2).as_nanos(),
+        );
+
+        let second = observation(
+            2,
+            1,
+            Duration::from_secs(3).as_nanos(),
+        );
+
+        let context = context(1);
+
+        let input =
+            DetectionInput::new(&context, [&first, &second].into_iter());
+
+        let output = detector.detect(input).expect("equal sequences are valid");
+
+        assert_eq!(output.len(), 2);
+    }
+}
