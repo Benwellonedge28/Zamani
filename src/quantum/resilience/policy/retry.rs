@@ -1,0 +1,1807 @@
+//! Zamani Quantum Resilience — Retry Policy
+//!
+//! Path:
+//!     src/quantum/resilience/policy/retry.rs
+//!
+//! Purpose:
+//!     Defines the provider-independent retry policy contract used by the
+//!     resilience policy and planning layers.
+//!
+//! Architectural role:
+//!     This module answers:
+//!
+//!         "Given an execution/recovery attempt and its explicit evidence,
+//!          is another attempt permitted, and what retry timing should be
+//!          requested?"
+//!
+//!     It DOES NOT perform the retry.
+//!
+//! The actual execution of a retry belongs to the recovery/execution boundary.
+//!
+//! -----------------------------------------------------------------------------
+//! Fundamental architectural rule
+//! -----------------------------------------------------------------------------
+//!
+//! Retry is not equivalent to resilience.
+//!
+//! A retry is valid only when all applicable authorities agree that another
+//! attempt is meaningful and permitted.
+//!
+//! Conceptually:
+//!
+//!     retry permitted
+//!         =
+//!     retryable failure
+//!     + semantic validity
+//!     + policy permission
+//!     + resource/capability availability
+//!     + budget availability
+//!     + security validity
+//!     + deadline validity
+//!     + recovery preconditions
+//!
+//! A retry policy MUST NEVER turn an unsafe or semantically invalid operation
+//! into a valid one merely because another attempt is available.
+//!
+//! -----------------------------------------------------------------------------
+//! Ownership boundaries
+//! -----------------------------------------------------------------------------
+//!
+//! This module MUST NOT own:
+//!
+//! - quantum IR;
+//! - gates;
+//! - operations;
+//! - circuits;
+//! - logical qubit identity;
+//! - physical qubit identity;
+//! - hardware discovery;
+//! - topology;
+//! - calibration;
+//! - routing;
+//! - scheduling;
+//! - optimization;
+//! - compilation;
+//! - QEC;
+//! - error mitigation;
+//! - fault detection;
+//! - fault diagnosis;
+//! - recovery execution;
+//! - provider SDKs;
+//! - backend-specific logic;
+//! - credentials;
+//! - network I/O;
+//! - filesystem I/O;
+//! - timers/sleep;
+//! - background tasks;
+//! - global mutable state;
+//! - hidden retry loops.
+//!
+//! Existing authoritative subsystems remain owners of those concerns.
+//!
+//! -----------------------------------------------------------------------------
+//! Retry versus restart/resume/recovery
+//! -----------------------------------------------------------------------------
+//!
+//! This module describes RETRY specifically.
+//!
+//! A retry means that the same logical operation may be attempted again under
+//! conditions where repeating the operation is semantically meaningful.
+//!
+//! Retry MUST NOT be assumed equivalent to:
+//!
+//!     restart
+//!     resume
+//!     rollback
+//!     migration
+//!     compensation
+//!
+//! Those actions have separate contracts under `resilience::recovery`.
+//!
+//! In particular, a failed quantum execution MUST NOT automatically imply that
+//! repeating from the beginning is equivalent to restoring the previous
+//! quantum state.
+//!
+//! -----------------------------------------------------------------------------
+//! Write once, scale everywhere
+//! -----------------------------------------------------------------------------
+//!
+//! This module contains no fixed:
+//!
+//!     MAX_RETRIES
+//!     MAX_ATTEMPTS
+//!     MAX_QUBITS
+//!     MAX_BACKENDS
+//!     MAX_EXECUTION_TIME
+//!     MAX_COST
+//!
+//! An attempt limit is optional policy data.
+//!
+//! `None` means that this policy does not impose an attempt-count ceiling.
+//! It does NOT mean that execution must retry forever. Other authoritative
+//! boundaries can still terminate retrying:
+//!
+//!     - caller cancellation;
+//!     - deadline;
+//!     - resource exhaustion;
+//!     - budget exhaustion;
+//!     - capability loss;
+//!     - safety policy;
+//!     - semantic invalidity;
+//!     - recovery failure;
+//!     - external escalation.
+//!
+//! Therefore "infinity" means absence of an artificial finite limit, not an
+//! instruction to create an unbounded blocking loop.
+//!
+//! -----------------------------------------------------------------------------
+//! Determinism
+//! -----------------------------------------------------------------------------
+//!
+//! This module is deterministic for identical explicit inputs.
+//!
+//! It:
+//!
+//! - does not read the clock;
+//! - does not sleep;
+//! - does not perform I/O;
+//! - does not inspect environment variables;
+//! - does not use global mutable state;
+//! - does not create randomness;
+//! - does not generate implicit identifiers;
+//! - does not depend on hash-map iteration order.
+//!
+//! Any current time/deadline measurement must be supplied explicitly by the
+//! caller.
+//!
+//! Any jitter/randomness required by a deployment must be generated by an
+//! explicitly supplied higher-level randomness source. This core policy does
+//! not generate it.
+//!
+//! -----------------------------------------------------------------------------
+//! Security
+//! -----------------------------------------------------------------------------
+//!
+//! A retry decision is not an authorization decision by itself.
+//!
+//! External failures and observations MUST be authenticated/validated by their
+//! owning subsystem before they are treated as trustworthy retry evidence.
+//!
+//! This module does not:
+//!
+//! - authenticate backends;
+//! - validate credentials;
+//! - verify telemetry signatures;
+//! - authorize resources;
+//! - establish ownership.
+//!
+//! Those responsibilities belong to the appropriate security/runtime/
+//! hardware/coordination boundaries.
+//!
+//! -----------------------------------------------------------------------------
+//! Quantum correctness
+//! -----------------------------------------------------------------------------
+//!
+//! Retrying a quantum operation can have different semantics depending on the
+//! execution boundary.
+//!
+//! Examples:
+//!
+//! - retrying a failed submission before the backend accepted it may be
+//!   semantically different from retrying an accepted but unobserved job;
+//! - retrying a measurement may produce another sample rather than reproduce
+//!   the same physical outcome;
+//! - retrying a circuit after partial execution may not be equivalent to
+//!   restarting the circuit;
+//! - retrying after an unknown backend state may require reconciliation rather
+//!   than blind resubmission.
+//!
+//! Therefore this module deliberately does not infer semantic retryability from
+//! an error string or timeout alone.
+//!
+//! The caller must supply the semantic execution state.
+//!
+//! -----------------------------------------------------------------------------
+//! Canonical qubit identity
+//! -----------------------------------------------------------------------------
+//!
+//! This module normally does not require qubit identifiers.
+//!
+//! Retry is an execution-policy concern rather than a resource-identity model.
+//!
+//! If future retry evidence needs to identify a quantum resource, it MUST use:
+//!
+//!     crate::quantum::ir::qubit::QubitId
+//!     crate::quantum::ir::qubit::PhysicalQubitId
+//!
+//! No resilience-specific qubit identifier may be introduced here.
+//!
+//! -----------------------------------------------------------------------------
+//! Integration
+//! -----------------------------------------------------------------------------
+//!
+//! `policy/policy.rs`
+//!     Owns the overall policy and may use `RetryPolicy` when determining
+//!     whether retry is an allowed policy action.
+//!
+//! `policy/budgets.rs`
+//!     Owns retry/resource budgets. This module does not consume or mutate
+//!     those budgets directly.
+//!
+//! `policy/constraints.rs`
+//!     Owns hard constraints. Retry policy must not replace those checks.
+//!
+//! `policy/safety.rs`
+//!     Remains authoritative for safety/authorization constraints.
+//!
+//! `errors/error.rs`
+//!     Owns the canonical `ResilienceError` and its retryability classification.
+//!     This module consumes retryability information but does not define a
+//!     competing error taxonomy.
+//!
+//! `planning/action.rs`
+//!     Represents retry as a planning action.
+//!
+//! `planning/feasibility.rs`
+//!     Determines whether a retry is feasible against current resources and
+//!     capabilities.
+//!
+//! `planning/cost.rs`
+//!     Supplies cost/resource estimates for a possible retry.
+//!
+//! `planning/ranking.rs`
+//!     May rank retry against alternative recovery/adaptation plans.
+//!
+//! `planning/planner.rs`
+//!     Creates a plan after all applicable policy/constraint checks.
+//!
+//! `recovery/retry.rs`
+//!     Owns actual retry execution.
+//!
+//! `recovery/recoverer.rs`
+//!     Orchestrates recovery execution.
+//!
+//! `verification/*`
+//!     Determines whether the result of a retry may be accepted.
+//!
+//! `telemetry/*`
+//!     Supplies explicit observations such as attempt duration or backend
+//!     status.
+//!
+//! `history/*`
+//!     May supply historical evidence to higher-level planning. Historical
+//!     prediction MUST NOT override safety or semantic requirements.
+//!
+//! `coordination/*`
+//!     Owns distributed ownership/leases when retries span distributed
+//!     resources.
+//!
+//! -----------------------------------------------------------------------------
+//! Important non-dependency rule
+//! -----------------------------------------------------------------------------
+//!
+//! This module intentionally does not depend on:
+//!
+//!     planning/*
+//!     recovery/*
+//!     hardware/*
+//!     routing/*
+//!     scheduling/*
+//!     qec/*
+//!     optimization/*
+//!
+//! This keeps policy below planning/execution and prevents circular
+//! dependencies.
+//!
+//! -----------------------------------------------------------------------------
+//! Rust contract
+//! -----------------------------------------------------------------------------
+//!
+//! Target:
+//!     Rust 1.97 / Rust 1.97.1
+//!
+//! Edition:
+//!     Rust 2021
+//!
+//! Safety:
+//!     No unsafe code.
+//!
+//! Dependencies:
+//!     Standard library only.
+//!
+//! =============================================================================
+
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+#![deny(missing_debug_implementations)]
+
+use std::fmt;
+use std::time::Duration;
+
+// =============================================================================
+// Public schema
+// =============================================================================
+
+/// Stable schema identifier for retry policy data.
+pub const RESILIENCE_RETRY_SCHEMA_ID: &str =
+    "zamani.quantum.resilience.policy.retry";
+
+/// Semantic version of the retry policy contract.
+///
+/// This is independent of the Zamani language, IR, crate, and hardware
+/// versions.
+pub const RESILIENCE_RETRY_SCHEMA_VERSION: u16 = 1;
+
+// =============================================================================
+// Retry limit
+// =============================================================================
+
+/// Maximum number of retry attempts permitted by a policy.
+///
+/// The number represents RETRIES after the initial attempt. It does not count
+/// the initial attempt itself.
+///
+/// `None` means that the retry policy imposes no attempt-count ceiling.
+///
+/// This is deliberately an `Option<u64>` rather than a fixed constant.
+/// Actual execution remains bounded by other policy/resource/deadline/safety
+/// boundaries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RetryLimit(Option<u64>);
+
+impl RetryLimit {
+    /// Creates a policy with no attempt-count ceiling.
+    ///
+    /// This does not force an infinite execution loop.
+    pub const fn unlimited() -> Self {
+        Self(None)
+    }
+
+    /// Creates a policy with an explicit maximum number of retries.
+    ///
+    /// Zero means that no retry is permitted.
+    pub const fn limited(max_retries: u64) -> Self {
+        Self(Some(max_retries))
+    }
+
+    /// Returns the configured limit.
+    ///
+    /// `None` means no attempt-count ceiling.
+    pub const fn get(self) -> Option<u64> {
+        self.0
+    }
+
+    /// Returns whether another retry is allowed by this attempt-count
+    /// boundary.
+    ///
+    /// `retries_already_performed` counts retries, not the initial attempt.
+    pub const fn permits(self, retries_already_performed: u64) -> bool {
+        match self.0 {
+            Some(limit) => retries_already_performed < limit,
+            None => true,
+        }
+    }
+
+    /// Returns the number of retries remaining when the limit is finite.
+    ///
+    /// `None` means unbounded by this policy dimension.
+    pub const fn remaining(self, retries_already_performed: u64) -> Option<u64> {
+        match self.0 {
+            Some(limit) => {
+                if retries_already_performed >= limit {
+                    Some(0)
+                } else {
+                    Some(limit - retries_already_performed)
+                }
+            }
+            None => None,
+        }
+    }
+}
+
+impl Default for RetryLimit {
+    fn default() -> Self {
+        Self::unlimited()
+    }
+}
+
+// =============================================================================
+// Backoff strategy
+// =============================================================================
+
+/// Retry backoff strategy.
+///
+/// This type calculates a requested delay; it never sleeps.
+///
+/// All values are explicitly configured. There are no hidden provider-specific
+/// timing constants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RetryBackoff {
+    /// Retry immediately.
+    Immediate,
+
+    /// Wait a fixed duration before each retry.
+    Fixed {
+        /// Delay before the retry.
+        delay: Duration,
+    },
+
+    /// Increase the delay linearly with retry number.
+    ///
+    /// `delay = base * retry_number`, subject to `max_delay` when present.
+    Linear {
+        /// Base delay.
+        base: Duration,
+
+        /// Optional maximum delay.
+        max_delay: Option<Duration>,
+    },
+
+    /// Increase the delay exponentially.
+    ///
+    /// The delay is:
+    ///
+    ///     base * multiplier^(retry_number - 1)
+    ///
+    /// with saturation at `max_delay` when configured.
+    ///
+    /// The multiplier must be at least 1.0 and finite.
+    Exponential {
+        /// Initial delay.
+        base: Duration,
+
+        /// Multiplicative factor.
+        multiplier: f64,
+
+        /// Optional maximum delay.
+        max_delay: Option<Duration>,
+    },
+}
+
+impl RetryBackoff {
+    /// Creates an immediate retry strategy.
+    pub const fn immediate() -> Self {
+        Self::Immediate
+    }
+
+    /// Creates a fixed-delay strategy.
+    pub const fn fixed(delay: Duration) -> Self {
+        Self::Fixed { delay }
+    }
+
+    /// Creates a linear strategy.
+    ///
+    /// Returns an error when `base` is zero and a nonzero progression is
+    /// expected? No: zero is valid and intentionally represents immediate
+    /// retries.
+    pub const fn linear(base: Duration, max_delay: Option<Duration>) -> Self {
+        Self::Linear { base, max_delay }
+    }
+
+    /// Creates an exponential strategy.
+    ///
+    /// The multiplier must be finite and at least `1.0`.
+    pub fn exponential(
+        base: Duration,
+        multiplier: f64,
+        max_delay: Option<Duration>,
+    ) -> Result<Self, RetryPolicyError> {
+        if !multiplier.is_finite() || multiplier < 1.0 {
+            return Err(RetryPolicyError::InvalidBackoffMultiplier {
+                multiplier,
+            });
+        }
+
+        Ok(Self::Exponential {
+            base,
+            multiplier,
+            max_delay,
+        })
+    }
+
+    /// Returns the requested delay before a retry.
+    ///
+    /// `retry_number` is one-based:
+    ///
+    ///     1 = first retry
+    ///     2 = second retry
+    ///     ...
+    ///
+    /// This function performs no sleeping and has no external side effects.
+    pub fn delay_for_retry(self, retry_number: u64) -> Duration {
+        if retry_number == 0 {
+            return Duration::ZERO;
+        }
+
+        match self {
+            Self::Immediate => Duration::ZERO,
+
+            Self::Fixed { delay } => delay,
+
+            Self::Linear { base, max_delay } => {
+                let multiplier = retry_number.min(u64::from(u32::MAX));
+                let result = base.saturating_mul(multiplier as u32);
+
+                match max_delay {
+                    Some(maximum) => result.min(maximum),
+                    None => result,
+                }
+            }
+
+            Self::Exponential {
+                base,
+                multiplier,
+                max_delay,
+            } => {
+                let exponent = retry_number.saturating_sub(1);
+
+                let factor = multiplier.powi(
+                    exponent.min(i32::MAX as u64) as i32
+                );
+
+                let seconds = base.as_secs_f64() * factor;
+
+                let candidate = if seconds.is_finite()
+                    && seconds >= 0.0
+                    && seconds <= Duration::MAX.as_secs_f64()
+                {
+                    Duration::from_secs_f64(seconds)
+                } else {
+                    Duration::MAX
+                };
+
+                match max_delay {
+                    Some(maximum) => candidate.min(maximum),
+                    None => candidate,
+                }
+            }
+        }
+    }
+}
+
+impl Default for RetryBackoff {
+    fn default() -> Self {
+        Self::Immediate
+    }
+}
+
+// =============================================================================
+// Deadline policy
+// =============================================================================
+
+/// Explicit deadline boundary for retry decisions.
+///
+/// The policy itself never reads the current clock. The caller supplies the
+/// elapsed time when evaluating a decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RetryDeadline(Option<Duration>);
+
+impl RetryDeadline {
+    /// Creates a policy without a retry-specific elapsed-time ceiling.
+    pub const fn unlimited() -> Self {
+        Self(None)
+    }
+
+    /// Creates a retry-specific elapsed-time ceiling.
+    pub const fn limited(max_elapsed: Duration) -> Self {
+        Self(Some(max_elapsed))
+    }
+
+    /// Returns the configured deadline.
+    pub const fn get(self) -> Option<Duration> {
+        self.0
+    }
+
+    /// Returns whether another retry is permitted by the elapsed-time
+    /// boundary.
+    pub const fn permits(self, elapsed: Duration) -> bool {
+        match self.0 {
+            Some(limit) => elapsed <= limit,
+            None => true,
+        }
+    }
+
+    /// Returns the remaining time.
+    ///
+    /// `None` means that this policy dimension is unlimited.
+    pub fn remaining(self, elapsed: Duration) -> Option<Duration> {
+        match self.0 {
+            Some(limit) => Some(limit.saturating_sub(elapsed)),
+            None => None,
+        }
+    }
+}
+
+impl Default for RetryDeadline {
+    fn default() -> Self {
+        Self::unlimited()
+    }
+}
+
+// =============================================================================
+// Retry semantic mode
+// =============================================================================
+
+/// Semantic condition governing whether repeating an operation is meaningful.
+///
+/// This is deliberately supplied explicitly rather than inferred by this
+/// module.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum RetrySemanticState {
+    /// The operation has not been accepted/executed and repeating submission
+    /// is semantically safe subject to other policy checks.
+    NotStarted,
+
+    /// The operation was rejected before quantum execution.
+    RejectedBeforeExecution,
+
+    /// The operation failed before a semantic result was produced.
+    FailedBeforeResult,
+
+    /// The operation may have executed, but no trustworthy result was
+    /// observed. Blind retry may duplicate work and therefore requires
+    /// explicit caller permission.
+    ExecutionOutcomeUnknown,
+
+    /// The operation completed and produced a result that requires
+    /// verification.
+    CompletedUnverified,
+
+    /// The operation completed and its result was verified.
+    CompletedVerified,
+
+    /// The operation partially executed.
+    PartialExecution,
+
+    /// The operation is known to have reached a state where repeating the
+    /// original operation is not semantically equivalent.
+    RetryNotEquivalent,
+
+    /// Semantic state is unknown.
+    Unknown,
+}
+
+impl RetrySemanticState {
+    /// Returns whether retry is intrinsically safe from a semantic-state
+    /// perspective.
+    ///
+    /// This is intentionally conservative.
+    pub const fn is_intrinsically_retryable(self) -> bool {
+        matches!(
+            self,
+            Self::NotStarted
+                | Self::RejectedBeforeExecution
+                | Self::FailedBeforeResult
+        )
+    }
+
+    /// Returns whether retry requires explicit policy permission beyond the
+    /// normal retryable-failure path.
+    pub const fn requires_explicit_permission(self) -> bool {
+        matches!(
+            self,
+            Self::ExecutionOutcomeUnknown
+                | Self::PartialExecution
+                | Self::CompletedUnverified
+        )
+    }
+
+    /// Returns whether retry is forbidden by semantic state alone.
+    pub const fn is_forbidden(self) -> bool {
+        matches!(
+            self,
+            Self::CompletedVerified
+                | Self::RetryNotEquivalent
+        )
+    }
+}
+
+// =============================================================================
+// Failure classification supplied by an upstream subsystem
+// =============================================================================
+
+/// Provider-neutral retryability evidence.
+///
+/// This is intentionally separate from the canonical `ResilienceError`.
+///
+/// Upstream errors may be converted to this representation by an integration
+/// adapter. The retry policy then combines that evidence with explicit
+/// semantic/policy state.
+///
+/// `Unknown` is fail-closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum RetryabilityEvidence {
+    /// Retry is explicitly identified as semantically meaningful.
+    Retryable,
+
+    /// Retry is explicitly known to be invalid or useless.
+    NotRetryable,
+
+    /// The available evidence cannot establish retryability.
+    Unknown,
+}
+
+impl RetryabilityEvidence {
+    /// Returns whether retry is explicitly allowed by the failure
+    /// classification.
+    pub const fn is_retryable(self) -> bool {
+        matches!(self, Self::Retryable)
+    }
+
+    /// Returns whether retry is explicitly prohibited.
+    pub const fn is_not_retryable(self) -> bool {
+        matches!(self, Self::NotRetryable)
+    }
+}
+
+// =============================================================================
+// Policy permissions
+// =============================================================================
+
+/// Additional permission required for retrying after an uncertain execution
+/// outcome.
+///
+/// This exists because a timeout or communication failure can occur after a
+/// backend has accepted or executed a quantum job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UnknownOutcomePermission {
+    /// Never retry when execution outcome is unknown.
+    Deny,
+
+    /// Permit retry only when the caller explicitly accepts possible duplicate
+    /// execution semantics.
+    AllowPossibleDuplicate,
+
+    /// Permit retry when an authoritative execution-status reconciliation
+    /// step has established that the original execution did not produce an
+    /// accepted result.
+    RequireReconciliation,
+}
+
+impl Default for UnknownOutcomePermission {
+    fn default() -> Self {
+        Self::Deny
+    }
+}
+
+// =============================================================================
+// Retry policy
+// =============================================================================
+
+/// Immutable provider-independent retry policy.
+///
+/// This type contains policy data only. It never executes a retry.
+///
+/// The policy is intentionally composable with higher-level constraints and
+/// budgets.
+///
+/// A retry is permitted only after the caller has evaluated all independent
+/// hard constraints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RetryPolicy {
+    /// Maximum retry attempts.
+    limit: RetryLimit,
+
+    /// Delay calculation.
+    backoff: RetryBackoff,
+
+    /// Optional elapsed-time boundary.
+    deadline: RetryDeadline,
+
+    /// Whether an unknown execution outcome may be retried.
+    unknown_outcome: UnknownOutcomePermission,
+
+    /// Whether partial execution may be retried.
+    allow_partial_execution: bool,
+
+    /// Whether a completed-but-unverified operation may be retried.
+    allow_completed_unverified: bool,
+}
+
+impl RetryPolicy {
+    /// Creates a policy with explicit configuration.
+    pub const fn new(
+        limit: RetryLimit,
+        backoff: RetryBackoff,
+        deadline: RetryDeadline,
+        unknown_outcome: UnknownOutcomePermission,
+        allow_partial_execution: bool,
+        allow_completed_unverified: bool,
+    ) -> Self {
+        Self {
+            limit,
+            backoff,
+            deadline,
+            unknown_outcome,
+            allow_partial_execution,
+            allow_completed_unverified,
+        }
+    }
+
+    /// Creates a conservative retry policy.
+    ///
+    /// No fixed retry count is imposed.
+    ///
+    /// The policy permits only semantically straightforward retries and
+    /// requires all other conditions to be established by higher-level policy.
+    pub const fn conservative() -> Self {
+        Self {
+            limit: RetryLimit::unlimited(),
+            backoff: RetryBackoff::Immediate,
+            deadline: RetryDeadline::unlimited(),
+            unknown_outcome: UnknownOutcomePermission::Deny,
+            allow_partial_execution: false,
+            allow_completed_unverified: false,
+        }
+    }
+
+    /// Returns the retry-count limit.
+    pub const fn limit(self) -> RetryLimit {
+        self.limit
+    }
+
+    /// Returns the backoff strategy.
+    pub const fn backoff(self) -> RetryBackoff {
+        self.backoff
+    }
+
+    /// Returns the retry elapsed-time boundary.
+    pub const fn deadline(self) -> RetryDeadline {
+        self.deadline
+    }
+
+    /// Returns unknown-outcome behavior.
+    pub const fn unknown_outcome_permission(self) -> UnknownOutcomePermission {
+        self.unknown_outcome
+    }
+
+    /// Returns whether partial execution may be retried.
+    pub const fn allows_partial_execution(self) -> bool {
+        self.allow_partial_execution
+    }
+
+    /// Returns whether completed-but-unverified work may be retried.
+    pub const fn allows_completed_unverified(self) -> bool {
+        self.allow_completed_unverified
+    }
+
+    /// Returns a copy with a different retry limit.
+    pub const fn with_limit(self, limit: RetryLimit) -> Self {
+        Self { limit, ..self }
+    }
+
+    /// Returns a copy with a different backoff strategy.
+    pub const fn with_backoff(self, backoff: RetryBackoff) -> Self {
+        Self { backoff, ..self }
+    }
+
+    /// Returns a copy with a different retry deadline.
+    pub const fn with_deadline(self, deadline: RetryDeadline) -> Self {
+        Self { deadline, ..self }
+    }
+
+    /// Returns a copy with a different unknown-outcome permission.
+    pub const fn with_unknown_outcome_permission(
+        self,
+        permission: UnknownOutcomePermission,
+    ) -> Self {
+        Self {
+            unknown_outcome: permission,
+            ..self
+        }
+    }
+
+    /// Returns a copy with partial-execution retry enabled/disabled.
+    pub const fn with_partial_execution(
+        self,
+        allowed: bool,
+    ) -> Self {
+        Self {
+            allow_partial_execution: allowed,
+            ..self
+        }
+    }
+
+    /// Returns a copy with completed-but-unverified retry enabled/disabled.
+    pub const fn with_completed_unverified(
+        self,
+        allowed: bool,
+    ) -> Self {
+        Self {
+            allow_completed_unverified: allowed,
+            ..self
+        }
+    }
+
+    /// Determines whether retry is permitted by this policy.
+    ///
+    /// This method evaluates only the retry-policy dimensions represented by
+    /// this module. It does NOT claim that the retry is globally safe or
+    /// executable.
+    ///
+    /// Higher-level callers MUST additionally evaluate:
+    ///
+    /// - safety;
+    /// - semantic constraints;
+    /// - capabilities;
+    /// - resources;
+    /// - budgets;
+    /// - authorization;
+    /// - deadlines owned by the execution context;
+    /// - checkpoint/recovery validity;
+    /// - verification requirements.
+    pub fn evaluate(&self, input: RetryEvaluationInput) -> RetryDecision {
+        if input.retryability.is_not_retryable() {
+            return RetryDecision::deny(RetryDenialReason::FailureNotRetryable);
+        }
+
+        if matches!(input.retryability, RetryabilityEvidence::Unknown) {
+            return RetryDecision::deny(RetryDenialReason::RetryabilityUnknown);
+        }
+
+        if input.semantic_state.is_forbidden() {
+            return RetryDecision::deny(RetryDenialReason::SemanticStateForbidsRetry);
+        }
+
+        if input.semantic_state == RetrySemanticState::Unknown {
+            return RetryDecision::deny(RetryDenialReason::SemanticStateUnknown);
+        }
+
+        if matches!(
+            input.semantic_state,
+            RetrySemanticState::ExecutionOutcomeUnknown
+        ) {
+            match self.unknown_outcome {
+                UnknownOutcomePermission::Deny => {
+                    return RetryDecision::deny(
+                        RetryDenialReason::UnknownOutcomeNotPermitted,
+                    );
+                }
+
+                UnknownOutcomePermission::AllowPossibleDuplicate => {}
+
+                UnknownOutcomePermission::RequireReconciliation => {
+                    if !input.outcome_reconciled {
+                        return RetryDecision::deny(
+                            RetryDenialReason::OutcomeReconciliationRequired,
+                        );
+                    }
+                }
+            }
+        }
+
+        if input.semantic_state == RetrySemanticState::PartialExecution
+            && !self.allow_partial_execution
+        {
+            return RetryDecision::deny(
+                RetryDenialReason::PartialExecutionNotPermitted,
+            );
+        }
+
+        if input.semantic_state == RetrySemanticState::CompletedUnverified
+            && !self.allow_completed_unverified
+        {
+            return RetryDecision::deny(
+                RetryDenialReason::CompletedUnverifiedRetryNotPermitted,
+            );
+        }
+
+        if !self.limit.permits(input.retries_already_performed) {
+            return RetryDecision::deny(RetryDenialReason::RetryLimitReached);
+        }
+
+        if !self.deadline.permits(input.elapsed_retry_time) {
+            return RetryDecision::deny(RetryDenialReason::RetryDeadlineReached);
+        }
+
+        let retry_number = match input.retries_already_performed.checked_add(1) {
+            Some(number) => number,
+            None => {
+                return RetryDecision::deny(
+                    RetryDenialReason::AttemptCounterOverflow,
+                );
+            }
+        };
+
+        let delay = self.backoff.delay_for_retry(retry_number);
+
+        if let Some(remaining) = self.deadline.remaining(input.elapsed_retry_time) {
+            if delay > remaining {
+                return RetryDecision::deny(
+                    RetryDenialReason::BackoffExceedsDeadline,
+                );
+            }
+        }
+
+        RetryDecision::allow(retry_number, delay)
+    }
+}
+
+impl Default for RetryPolicy {
+    fn default() -> Self {
+        Self::conservative()
+    }
+}
+
+// =============================================================================
+// Evaluation input
+// =============================================================================
+
+/// Explicit evidence supplied to a retry-policy evaluation.
+///
+/// This is intentionally an immutable value object.
+///
+/// The caller is responsible for obtaining each field from the authoritative
+/// subsystem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RetryEvaluationInput {
+    /// Whether the failure is known to be retryable.
+    pub retryability: RetryabilityEvidence,
+
+    /// Semantic execution state.
+    pub semantic_state: RetrySemanticState,
+
+    /// Number of retries already performed.
+    pub retries_already_performed: u64,
+
+    /// Explicit elapsed time attributable to this retry sequence.
+    ///
+    /// The policy does not read a clock.
+    pub elapsed_retry_time: Duration,
+
+    /// Whether an unknown execution outcome has been reconciled by an
+    /// authoritative execution-status mechanism.
+    pub outcome_reconciled: bool,
+}
+
+impl RetryEvaluationInput {
+    /// Creates an evaluation input.
+    pub const fn new(
+        retryability: RetryabilityEvidence,
+        semantic_state: RetrySemanticState,
+        retries_already_performed: u64,
+        elapsed_retry_time: Duration,
+        outcome_reconciled: bool,
+    ) -> Self {
+        Self {
+            retryability,
+            semantic_state,
+            retries_already_performed,
+            elapsed_retry_time,
+            outcome_reconciled,
+        }
+    }
+
+    /// Creates the common straightforward-retry case.
+    pub const fn retryable_failure(
+        retries_already_performed: u64,
+        elapsed_retry_time: Duration,
+    ) -> Self {
+        Self {
+            retryability: RetryabilityEvidence::Retryable,
+            semantic_state: RetrySemanticState::FailedBeforeResult,
+            retries_already_performed,
+            elapsed_retry_time,
+            outcome_reconciled: false,
+        }
+    }
+}
+
+// =============================================================================
+// Retry decision
+// =============================================================================
+
+/// Result of evaluating a retry policy.
+///
+/// A decision is advisory to the planner/recovery layer. `Allow` does not
+/// authorize execution by itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RetryDecision {
+    /// Retry is permitted by the retry-policy dimensions.
+    Allow {
+        /// One-based retry number.
+        retry_number: u64,
+
+        /// Requested delay before the retry.
+        delay: Duration,
+    },
+
+    /// Retry is denied by the retry-policy dimensions.
+    Deny {
+        /// Stable machine-readable denial reason.
+        reason: RetryDenialReason,
+    },
+}
+
+impl RetryDecision {
+    /// Creates an allow decision.
+    pub const fn allow(retry_number: u64, delay: Duration) -> Self {
+        Self::Allow {
+            retry_number,
+            delay,
+        }
+    }
+
+    /// Creates a deny decision.
+    pub const fn deny(reason: RetryDenialReason) -> Self {
+        Self::Deny { reason }
+    }
+
+    /// Returns whether retry is allowed by this policy.
+    pub const fn is_allowed(self) -> bool {
+        matches!(self, Self::Allow { .. })
+    }
+
+    /// Returns whether retry is denied.
+    pub const fn is_denied(self) -> bool {
+        matches!(self, Self::Deny { .. })
+    }
+
+    /// Returns the retry number when allowed.
+    pub const fn retry_number(self) -> Option<u64> {
+        match self {
+            Self::Allow { retry_number, .. } => Some(retry_number),
+            Self::Deny { .. } => None,
+        }
+    }
+
+    /// Returns the requested delay when allowed.
+    pub const fn delay(self) -> Option<Duration> {
+        match self {
+            Self::Allow { delay, .. } => Some(delay),
+            Self::Deny { .. } => None,
+        }
+    }
+
+    /// Returns the denial reason when denied.
+    pub const fn denial_reason(self) -> Option<RetryDenialReason> {
+        match self {
+            Self::Allow { .. } => None,
+            Self::Deny { reason } => Some(reason),
+        }
+    }
+}
+
+// =============================================================================
+// Denial reason
+// =============================================================================
+
+/// Stable machine-readable reason that the retry policy denied another retry.
+///
+/// This is deliberately a retry-policy taxonomy, not a replacement for
+/// `ResilienceError`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum RetryDenialReason {
+    /// The upstream failure was explicitly classified as non-retryable.
+    FailureNotRetryable,
+
+    /// Retryability could not be established.
+    RetryabilityUnknown,
+
+    /// The semantic execution state explicitly forbids retry.
+    SemanticStateForbidsRetry,
+
+    /// The semantic execution state is unknown.
+    SemanticStateUnknown,
+
+    /// Retrying an unknown outcome is not permitted.
+    UnknownOutcomeNotPermitted,
+
+    /// Execution status must be reconciled before retry.
+    OutcomeReconciliationRequired,
+
+    /// Partial execution retry is disabled.
+    PartialExecutionNotPermitted,
+
+    /// Completed-but-unverified retry is disabled.
+    CompletedUnverifiedRetryNotPermitted,
+
+    /// The configured retry limit has been reached.
+    RetryLimitReached,
+
+    /// The configured retry elapsed-time boundary has been reached.
+    RetryDeadlineReached,
+
+    /// The retry counter could not be incremented safely.
+    AttemptCounterOverflow,
+
+    /// The calculated backoff would exceed the remaining retry deadline.
+    BackoffExceedsDeadline,
+}
+
+impl RetryDenialReason {
+    /// Returns a stable machine-readable reason.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::FailureNotRetryable => "failure_not_retryable",
+            Self::RetryabilityUnknown => "retryability_unknown",
+            Self::SemanticStateForbidsRetry => "semantic_state_forbids_retry",
+            Self::SemanticStateUnknown => "semantic_state_unknown",
+            Self::UnknownOutcomeNotPermitted => "unknown_outcome_not_permitted",
+            Self::OutcomeReconciliationRequired => {
+                "outcome_reconciliation_required"
+            }
+            Self::PartialExecutionNotPermitted => {
+                "partial_execution_not_permitted"
+            }
+            Self::CompletedUnverifiedRetryNotPermitted => {
+                "completed_unverified_retry_not_permitted"
+            }
+            Self::RetryLimitReached => "retry_limit_reached",
+            Self::RetryDeadlineReached => "retry_deadline_reached",
+            Self::AttemptCounterOverflow => "attempt_counter_overflow",
+            Self::BackoffExceedsDeadline => "backoff_exceeds_deadline",
+        }
+    }
+}
+
+impl fmt::Display for RetryDenialReason {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+// =============================================================================
+// Validation error
+// =============================================================================
+
+/// Validation error for retry-policy configuration.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RetryPolicyError {
+    /// Exponential backoff multiplier was invalid.
+    InvalidBackoffMultiplier {
+        /// Supplied multiplier.
+        multiplier: f64,
+    },
+}
+
+impl fmt::Display for RetryPolicyError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidBackoffMultiplier { multiplier } => write!(
+                formatter,
+                "invalid retry backoff multiplier: {multiplier}; \
+                 multiplier must be finite and at least 1.0"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RetryPolicyError {}
+
+// =============================================================================
+// Retry budget projection
+// =============================================================================
+
+/// A read-only projection of retry capacity.
+///
+/// This is useful when `policy/budgets.rs` supplies the actual global budget.
+/// It avoids making this module own the budget system.
+///
+/// The projection can represent both finite and unbounded retry capacity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RetryCapacity {
+    /// Remaining retries according to the supplied budget.
+    ///
+    /// `None` means unbounded by this projection.
+    remaining: Option<u64>,
+}
+
+impl RetryCapacity {
+    /// Creates unbounded capacity.
+    pub const fn unlimited() -> Self {
+        Self { remaining: None }
+    }
+
+    /// Creates finite capacity.
+    pub const fn limited(remaining: u64) -> Self {
+        Self {
+            remaining: Some(remaining),
+        }
+    }
+
+    /// Returns remaining capacity.
+    pub const fn remaining(self) -> Option<u64> {
+        self.remaining
+    }
+
+    /// Returns whether at least one retry remains.
+    pub const fn permits_retry(self) -> bool {
+        match self.remaining {
+            Some(value) => value > 0,
+            None => true,
+        }
+    }
+}
+
+impl Default for RetryCapacity {
+    fn default() -> Self {
+        Self::unlimited()
+    }
+}
+
+// =============================================================================
+// Combined policy/budget decision
+// =============================================================================
+
+/// Combines the local retry-policy decision with an externally supplied retry
+/// capacity.
+///
+/// This function is deliberately pure and does not mutate the budget.
+///
+/// Budget accounting belongs to `policy/budgets.rs` / the execution
+/// coordinator.
+pub fn apply_capacity(
+    decision: RetryDecision,
+    capacity: RetryCapacity,
+) -> RetryDecision {
+    match decision {
+        RetryDecision::Allow {
+            retry_number,
+            delay,
+        } if !capacity.permits_retry() => RetryDecision::deny(
+            RetryDenialReason::RetryLimitReached,
+        ),
+
+        other => other,
+    }
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unlimited_retry_limit_has_no_attempt_ceiling() {
+        let limit = RetryLimit::unlimited();
+
+        assert!(limit.permits(0));
+        assert!(limit.permits(1));
+        assert!(limit.permits(u64::MAX));
+        assert_eq!(limit.remaining(u64::MAX), None);
+    }
+
+    #[test]
+    fn finite_retry_limit_counts_retries_not_initial_attempt() {
+        let limit = RetryLimit::limited(2);
+
+        assert!(limit.permits(0));
+        assert!(limit.permits(1));
+        assert!(!limit.permits(2));
+
+        assert_eq!(limit.remaining(0), Some(2));
+        assert_eq!(limit.remaining(1), Some(1));
+        assert_eq!(limit.remaining(2), Some(0));
+        assert_eq!(limit.remaining(3), Some(0));
+    }
+
+    #[test]
+    fn immediate_backoff_is_zero() {
+        assert_eq!(
+            RetryBackoff::Immediate.delay_for_retry(1),
+            Duration::ZERO
+        );
+        assert_eq!(
+            RetryBackoff::Immediate.delay_for_retry(u64::MAX),
+            Duration::ZERO
+        );
+    }
+
+    #[test]
+    fn fixed_backoff_is_constant() {
+        let delay = Duration::from_millis(25);
+        let backoff = RetryBackoff::fixed(delay);
+
+        assert_eq!(backoff.delay_for_retry(1), delay);
+        assert_eq!(backoff.delay_for_retry(2), delay);
+        assert_eq!(backoff.delay_for_retry(u64::MAX), delay);
+    }
+
+    #[test]
+    fn linear_backoff_saturates_at_maximum() {
+        let backoff = RetryBackoff::linear(
+            Duration::from_millis(10),
+            Some(Duration::from_millis(25)),
+        );
+
+        assert_eq!(
+            backoff.delay_for_retry(1),
+            Duration::from_millis(10)
+        );
+        assert_eq!(
+            backoff.delay_for_retry(2),
+            Duration::from_millis(20)
+        );
+        assert_eq!(
+            backoff.delay_for_retry(3),
+            Duration::from_millis(25)
+        );
+        assert_eq!(
+            backoff.delay_for_retry(100),
+            Duration::from_millis(25)
+        );
+    }
+
+    #[test]
+    fn exponential_backoff_rejects_invalid_multiplier() {
+        assert!(
+            RetryBackoff::exponential(
+                Duration::from_millis(1),
+                0.0,
+                None,
+            )
+            .is_err()
+        );
+
+        assert!(
+            RetryBackoff::exponential(
+                Duration::from_millis(1),
+                f64::NAN,
+                None,
+            )
+            .is_err()
+        );
+
+        assert!(
+            RetryBackoff::exponential(
+                Duration::from_millis(1),
+                f64::INFINITY,
+                None,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn exponential_backoff_is_monotonic_for_valid_multiplier() {
+        let backoff = RetryBackoff::exponential(
+            Duration::from_millis(10),
+            2.0,
+            None,
+        )
+        .expect("valid multiplier");
+
+        assert_eq!(
+            backoff.delay_for_retry(1),
+            Duration::from_millis(10)
+        );
+        assert_eq!(
+            backoff.delay_for_retry(2),
+            Duration::from_millis(20)
+        );
+        assert_eq!(
+            backoff.delay_for_retry(3),
+            Duration::from_millis(40)
+        );
+    }
+
+    #[test]
+    fn deadline_is_explicit_and_clock_free() {
+        let deadline = RetryDeadline::limited(Duration::from_secs(10));
+
+        assert!(deadline.permits(Duration::from_secs(10)));
+        assert!(!deadline.permits(Duration::from_secs(11)));
+
+        assert_eq!(
+            deadline.remaining(Duration::from_secs(4)),
+            Some(Duration::from_secs(6))
+        );
+    }
+
+    #[test]
+    fn conservative_policy_allows_straightforward_retry() {
+        let policy = RetryPolicy::conservative();
+
+        let input = RetryEvaluationInput::retryable_failure(
+            0,
+            Duration::ZERO,
+        );
+
+        let decision = policy.evaluate(input);
+
+        assert_eq!(
+            decision,
+            RetryDecision::Allow {
+                retry_number: 1,
+                delay: Duration::ZERO,
+            }
+        );
+    }
+
+    #[test]
+    fn conservative_policy_denies_unknown_failure_classification() {
+        let policy = RetryPolicy::conservative();
+
+        let input = RetryEvaluationInput::new(
+            RetryabilityEvidence::Unknown,
+            RetrySemanticState::FailedBeforeResult,
+            0,
+            Duration::ZERO,
+            false,
+        );
+
+        assert_eq!(
+            policy.evaluate(input),
+            RetryDecision::Deny {
+                reason: RetryDenialReason::RetryabilityUnknown,
+            }
+        );
+    }
+
+    #[test]
+    fn conservative_policy_denies_semantically_forbidden_retry() {
+        let policy = RetryPolicy::conservative();
+
+        let input = RetryEvaluationInput::new(
+            RetryabilityEvidence::Retryable,
+            RetrySemanticState::RetryNotEquivalent,
+            0,
+            Duration::ZERO,
+            false,
+        );
+
+        assert_eq!(
+            policy.evaluate(input),
+            RetryDecision::Deny {
+                reason: RetryDenialReason::SemanticStateForbidsRetry,
+            }
+        );
+    }
+
+    #[test]
+    fn conservative_policy_denies_unknown_execution_outcome() {
+        let policy = RetryPolicy::conservative();
+
+        let input = RetryEvaluationInput::new(
+            RetryabilityEvidence::Retryable,
+            RetrySemanticState::ExecutionOutcomeUnknown,
+            0,
+            Duration::ZERO,
+            false,
+        );
+
+        assert_eq!(
+            policy.evaluate(input),
+            RetryDecision::Deny {
+                reason: RetryDenialReason::UnknownOutcomeNotPermitted,
+            }
+        );
+    }
+
+    #[test]
+    fn reconciliation_can_enable_unknown_outcome_retry() {
+        let policy = RetryPolicy::conservative()
+            .with_unknown_outcome_permission(
+                UnknownOutcomePermission::RequireReconciliation,
+            );
+
+        let input = RetryEvaluationInput::new(
+            RetryabilityEvidence::Retryable,
+            RetrySemanticState::ExecutionOutcomeUnknown,
+            0,
+            Duration::ZERO,
+            true,
+        );
+
+        assert_eq!(
+            policy.evaluate(input),
+            RetryDecision::Allow {
+                retry_number: 1,
+                delay: Duration::ZERO,
+            }
+        );
+    }
+
+    #[test]
+    fn possible_duplicate_permission_can_enable_unknown_outcome_retry() {
+        let policy = RetryPolicy::conservative()
+            .with_unknown_outcome_permission(
+                UnknownOutcomePermission::AllowPossibleDuplicate,
+            );
+
+        let input = RetryEvaluationInput::new(
+            RetryabilityEvidence::Retryable,
+            RetrySemanticState::ExecutionOutcomeUnknown,
+            0,
+            Duration::ZERO,
+            false,
+        );
+
+        assert_eq!(
+            policy.evaluate(input),
+            RetryDecision::Allow {
+                retry_number: 1,
+                delay: Duration::ZERO,
+            }
+        );
+    }
+
+    #[test]
+    fn partial_execution_is_denied_by_default() {
+        let policy = RetryPolicy::conservative();
+
+        let input = RetryEvaluationInput::new(
+            RetryabilityEvidence::Retryable,
+            RetrySemanticState::PartialExecution,
+            0,
+            Duration::ZERO,
+            false,
+        );
+
+        assert_eq!(
+            policy.evaluate(input),
+            RetryDecision::Deny {
+                reason: RetryDenialReason::PartialExecutionNotPermitted,
+            }
+        );
+    }
+
+    #[test]
+    fn partial_execution_can_be_explicitly_enabled() {
+        let policy = RetryPolicy::conservative()
+            .with_partial_execution(true);
+
+        let input = RetryEvaluationInput::new(
+            RetryabilityEvidence::Retryable,
+            RetrySemanticState::PartialExecution,
+            0,
+            Duration::ZERO,
+            false,
+        );
+
+        assert!(policy.evaluate(input).is_allowed());
+    }
+
+    #[test]
+    fn retry_limit_is_enforced() {
+        let policy = RetryPolicy::conservative()
+            .with_limit(RetryLimit::limited(2));
+
+        let first = policy.evaluate(
+            RetryEvaluationInput::retryable_failure(
+                0,
+                Duration::ZERO,
+            ),
+        );
+
+        let second = policy.evaluate(
+            RetryEvaluationInput::retryable_failure(
+                1,
+                Duration::ZERO,
+            ),
+        );
+
+        let third = policy.evaluate(
+            RetryEvaluationInput::retryable_failure(
+                2,
+                Duration::ZERO,
+            ),
+        );
+
+        assert!(first.is_allowed());
+        assert!(second.is_allowed());
+
+        assert_eq!(
+            third,
+            RetryDecision::Deny {
+                reason: RetryDenialReason::RetryLimitReached,
+            }
+        );
+    }
+
+    #[test]
+    fn retry_deadline_is_enforced() {
+        let policy = RetryPolicy::conservative()
+            .with_deadline(RetryDeadline::limited(
+                Duration::from_secs(5),
+            ));
+
+        let input = RetryEvaluationInput::retryable_failure(
+            0,
+            Duration::from_secs(6),
+        );
+
+        assert_eq!(
+            policy.evaluate(input),
+            RetryDecision::Deny {
+                reason: RetryDenialReason::RetryDeadlineReached,
+            }
+        );
+    }
+
+    #[test]
+    fn backoff_cannot_exceed_retry_deadline() {
+        let policy = RetryPolicy::conservative()
+            .with_backoff(RetryBackoff::fixed(
+                Duration::from_secs(4),
+            ))
+            .with_deadline(RetryDeadline::limited(
+                Duration::from_secs(5),
+            ));
+
+        let input = RetryEvaluationInput::retryable_failure(
+            0,
+            Duration::from_secs(2),
+        );
+
+        assert_eq!(
+            policy.evaluate(input),
+            RetryDecision::Deny {
+                reason: RetryDenialReason::BackoffExceedsDeadline,
+            }
+        );
+    }
+
+    #[test]
+    fn retry_number_overflow_is_denied() {
+        let policy = RetryPolicy::conservative();
+
+        let input = RetryEvaluationInput::retryable_failure(
+            u64::MAX,
+            Duration::ZERO,
+        );
+
+        assert_eq!(
+            policy.evaluate(input),
+            RetryDecision::Deny {
+                reason: RetryDenialReason::AttemptCounterOverflow,
+            }
+        );
+    }
+
+    #[test]
+    fn capacity_is_an_external_budget_projection() {
+        let decision = RetryDecision::allow(
+            1,
+            Duration::ZERO,
+        );
+
+        let result = apply_capacity(
+            decision,
+            RetryCapacity::limited(0),
+        );
+
+        assert_eq!(
+            result,
+            RetryDecision::Deny {
+                reason: RetryDenialReason::RetryLimitReached,
+            }
+        );
+    }
+
+    #[test]
+    fn unlimited_capacity_does_not_change_allowed_decision() {
+        let decision = RetryDecision::allow(
+            1,
+            Duration::ZERO,
+        );
+
+        assert_eq!(
+            apply_capacity(
+                decision,
+                RetryCapacity::unlimited(),
+            ),
+            decision
+        );
+    }
+
+    #[test]
+    fn deny_decision_survives_capacity_application() {
+        let decision = RetryDecision::deny(
+            RetryDenialReason::FailureNotRetryable,
+        );
+
+        assert_eq!(
+            apply_capacity(
+                decision,
+                RetryCapacity::unlimited(),
+            ),
+            decision
+        );
+    }
+}
