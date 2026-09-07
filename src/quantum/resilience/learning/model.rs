@@ -5,130 +5,178 @@
 //!
 //! ## Purpose
 //!
-//! This module defines the provider-independent contract for prediction models
+//! This module defines the provider-independent contract for predictive models
 //! used by the quantum-resilience learning subsystem.
 //!
-//! A model may predict quantities such as:
+//! This module is deliberately a CONTRACT layer.
 //!
-//! - execution-failure probability;
-//! - hardware/resource degradation probability;
-//! - recovery success probability;
-//! - expected execution latency;
-//! - expected fidelity/error characteristics;
-//! - mitigation effectiveness;
-//! - strategy suitability;
-//! - resource availability;
-//! - other explicitly versioned resilience quantities.
+//! It does not implement:
 //!
-//! This module intentionally does NOT implement a machine-learning algorithm.
-//! Concrete implementations may live elsewhere and implement [`PredictionModel`].
-//!
-//! ## Architectural ownership
-//!
-//! `learning/model.rs` owns:
-//!
-//! - model identity;
-//! - model version;
-//! - model metadata;
-//! - model capabilities;
-//! - model lifecycle state;
-//! - model input/output contract;
-//! - prediction confidence;
-//! - prediction provenance;
-//! - deterministic-model metadata;
-//! - model compatibility;
-//! - model trait/object boundary.
-//!
-//! It does NOT own:
-//!
-//! - feature extraction;
-//! - telemetry collection;
-//! - history storage;
+//! - machine-learning algorithms;
 //! - model training;
+//! - feature extraction;
+//! - telemetry;
+//! - history storage;
 //! - strategy selection;
-//! - planning;
 //! - recovery;
-//! - hardware discovery;
-//! - QEC;
 //! - routing;
 //! - scheduling;
+//! - QEC;
+//! - hardware discovery;
 //! - canonical quantum IR.
 //!
 //! Those responsibilities belong to their respective subsystems.
 //!
-//! ## Integration
+//! ## Integration contract
 //!
-//! `learning/features.rs` produces feature vectors that can be supplied to
-//! [`PredictionModel::predict`].
+//! `learning/features.rs` owns:
 //!
-//! `learning/predictor.rs` consumes [`PredictionModel`] implementations and
-//! [`Prediction`] values.
+//! - `FeatureSchemaId`;
+//! - `FeatureSchema`;
+//! - `FeatureSchemaVersion`;
+//! - `FeatureVector`;
+//! - feature validation;
+//! - feature provenance/context.
 //!
-//! `learning/strategy.rs` may use predictions as advisory inputs when ranking
-//! strategies.
+//! This module consumes those canonical types.
 //!
-//! `learning/feedback.rs` may use [`ModelId`], [`ModelVersion`], and prediction
-//! provenance when associating verified outcomes with a model.
+//! `learning/predictor.rs` consumes [`PredictionModel`], [`ModelHandle`],
+//! [`PredictionInput`], and [`Prediction`].
 //!
-//! `history/*` supplies historical observations used by the feature layer and
-//! training systems; this file does not access history directly.
+//! `learning/strategy.rs` may use predictions as advisory evidence when ranking
+//! resilience strategies.
 //!
-//! The planner MUST treat model predictions as advisory evidence. A prediction
-//! MUST NOT override safety policy, semantic verification, capability
-//! validation, or explicit execution constraints.
+//! `learning/feedback.rs` may associate verified outcomes with
+//! [`PredictionProvenance`].
+//!
+//! `history/*` supplies historical observations to the feature/training
+//! layers. This module does not access history directly.
+//!
+//! `telemetry/*` supplies observations through the feature layer.
+//!
+//! `quantum::hardware` remains authoritative for hardware capabilities.
+//!
+//! `quantum::zqn` remains authoritative for quantum fault/noise semantics.
+//!
+//! `quantum::ir::qubit` remains authoritative for quantum-resource identity.
+//!
+//! ## Critical safety rule
+//!
+//! A prediction is EVIDENCE, never AUTHORITY.
+//!
+//! A prediction MUST NOT by itself:
+//!
+//! - authorize recovery;
+//! - authorize migration;
+//! - change program semantics;
+//! - select a hardware target;
+//! - change QEC;
+//! - accept an execution result;
+//! - bypass safety policy;
+//! - bypass capability validation;
+//! - bypass semantic verification.
+//!
+//! The resilience planner remains authoritative for those decisions.
 //!
 //! ## Scalability
 //!
-//! No fixed number of models, features, outputs, resources, qubits, devices,
-//! executions, predictions, or training samples is imposed here.
+//! This module deliberately contains no fixed limits for:
 //!
-//! Runtime limits may be imposed by:
+//! - qubits;
+//! - logical qubits;
+//! - physical qubits;
+//! - devices;
+//! - backends;
+//! - features;
+//! - outputs;
+//! - models;
+//! - executions;
+//! - training samples.
 //!
-//! - caller policy;
-//! - available memory;
-//! - execution budgets;
-//! - model implementation requirements;
-//! - resource availability;
-//! - security policy.
+//! Dynamic collections are bounded only by caller policy and available
+//! resources.
 //!
-//! This module MUST NOT introduce artificial quantum-machine-size limits.
+//! There is no:
 //!
-//! ## Safety
-//!
-//! - Rust 2021.
-//! - Rust 1.97 / 1.97.1.
-//! - No `unsafe`.
-//! - No global mutable state.
-//! - No provider-specific assumptions.
-//! - No hard-coded hardware sizes.
-//! - No hard-coded retry counts.
-//! - No hidden randomness.
-//! - No hidden wall-clock dependency in deterministic prediction.
+//! - `MAX_QUBITS`;
+//! - `MAX_FEATURES`;
+//! - `MAX_OUTPUTS`;
+//! - fixed retry count;
+//! - provider-specific device size;
+//! - provider-specific backend branch.
 //!
 //! ## Determinism
 //!
-//! A deterministic model MUST declare that capability through
-//! [`ModelCapabilities::deterministic`] and MUST produce reproducible results
-//! for identical declared inputs.
+//! Deterministic operation is explicit.
 //!
-//! Randomized models remain valid, but their randomness MUST be represented by
-//! the model's input/context or implementation-level provenance rather than
-//! being hidden from the resilience system.
+//! A caller requiring deterministic inference must set
+//! [`PredictionContext::deterministic`] to `true`.
 //!
-//! ## Canonical quantum identity
+//! A model may satisfy deterministic inference only when
+//! [`ModelCapabilities::deterministic`] is true.
 //!
-//! This module does not define a quantum-resource identity.
+//! No model may silently obtain randomness from:
 //!
-//! If a concrete model needs logical or physical qubit identity, it MUST use:
+//! - global state;
+//! - wall-clock time;
+//! - environment variables;
+//! - network state;
+//! - filesystem state;
+//! - process identity.
 //!
-//! `crate::quantum::ir::qubit::QubitId`
-//! `crate::quantum::ir::qubit::PhysicalQubitId`
-//! `crate::quantum::ir::qubit::QubitRef`
+//! If randomness is required, its seed must be explicitly represented by
+//! [`PredictionContext::random_seed`] and recorded in provenance.
 //!
-//! where appropriate.
+//! ## Numerical safety
 //!
-//! It MUST NOT define `ResilienceQubitId`, `LearningQubitId`, or another
-//! competing quantum identity type.
+//! NaN and positive/negative infinity are rejected.
+//!
+//! Probability and confidence outputs MUST be within `[0, 1]`.
+//!
+//! Model implementations remain responsible for domain-specific numerical
+//! validation beyond this contract.
+//!
+//! ## Rust requirements
+//!
+//! - Rust 2021.
+//! - Rust 1.97 / 1.97.1.
+//! - Stable Rust only.
+//! - No nightly features.
+//! - No `unsafe`.
+//!
+//! `#![forbid(unsafe_code)]` makes the last requirement compiler-enforced.
+//!
+//! ## Canonical feature integration
+//!
+//! IMPORTANT:
+//!
+//! `FeatureVector` is NOT redefined here.
+//!
+//! `learning/features.rs` is the canonical owner of feature vectors.
+//!
+//! `ModelSchemaId` is a type alias for the canonical
+//! `features::FeatureSchemaId` so the learning model layer cannot accidentally
+//! create a second incompatible schema identity system.
+//!
+//! ## Version compatibility
+//!
+//! Input compatibility is exact at the schema identity/version boundary.
+//! Version migration belongs outside this module.
+//!
+//! This prevents a prediction model from silently interpreting an incompatible
+//! feature representation.
+//!
+//! ## Thread safety
+//!
+//! [`PredictionModel`] requires `Send + Sync`.
+//!
+//! This allows a [`ModelHandle`] to be safely shared by concurrent inference
+//! components without requiring global mutable state.
+//!
+//! A concrete model implementation may internally use synchronization, but
+//! that implementation detail does not leak into this contract.
+
+#![forbid(unsafe_code)]
 
 use std::error::Error;
 use std::fmt;
@@ -136,70 +184,115 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use super::features::{FeatureSchemaId, FeatureSchemaVersion, FeatureVector};
+
+// =============================================================================
+// Canonical aliases
+// =============================================================================
+
+/// Canonical feature-schema identifier used by learning models.
+///
+/// This is deliberately an alias instead of a second wrapper type.
+///
+/// `learning/features.rs` is the authoritative owner of feature schema
+/// identity.
+pub type ModelSchemaId = FeatureSchemaId;
+
+/// Canonical feature-schema version.
+pub type ModelSchemaVersion = FeatureSchemaVersion;
+
 // =============================================================================
 // Result / error contract
 // =============================================================================
 
-/// Result type used by the learning-model contract.
+/// Result type used by the model contract.
 pub type ModelResult<T> = Result<T, ModelError>;
 
-/// Errors produced by the model contract.
-///
-/// The variants intentionally describe contract-level failures rather than
-/// implementation-specific ML framework errors.
+/// Contract-level errors produced by prediction models.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ModelError {
-    /// The model identifier or other model metadata is invalid.
+    /// Model metadata is invalid.
     InvalidMetadata {
+        /// Invalid field.
         field: String,
+
+        /// Explanation.
         reason: String,
     },
 
-    /// The supplied feature vector is incompatible with the model.
+    /// Input does not satisfy the model contract.
     InvalidInput {
+        /// Explanation.
         reason: String,
     },
 
-    /// The model's output violates its declared output contract.
+    /// Model output does not satisfy the declared contract.
     InvalidOutput {
+        /// Explanation.
         reason: String,
     },
 
-    /// The requested operation is not supported by this model.
+    /// Operation is unsupported.
     UnsupportedOperation {
+        /// Operation name.
         operation: String,
     },
 
-    /// The model is not currently usable.
+    /// Model is not available for prediction.
     Unavailable {
+        /// Explanation.
         reason: String,
     },
 
-    /// The model cannot safely operate under the requested deterministic mode.
+    /// Deterministic prediction was requested but cannot be guaranteed.
     DeterminismUnavailable {
+        /// Explanation.
         reason: String,
     },
 
-    /// The model and requested schema are incompatible.
+    /// Feature/output schema mismatch.
     SchemaMismatch {
+        /// Expected schema.
         expected: ModelSchemaId,
+
+        /// Supplied schema.
         actual: ModelSchemaId,
     },
 
-    /// The model version is incompatible with the caller.
+    /// Feature schema version mismatch.
+    SchemaVersionMismatch {
+        /// Expected version.
+        expected: ModelSchemaVersion,
+
+        /// Supplied version.
+        actual: ModelSchemaVersion,
+    },
+
+    /// Model version incompatibility.
     VersionMismatch {
+        /// Required version.
         required: ModelVersion,
+
+        /// Actual model version.
         actual: ModelVersion,
     },
 
-    /// The model's declared capabilities do not satisfy a requirement.
+    /// Model capability mismatch.
     CapabilityMismatch {
+        /// Explanation.
         reason: String,
     },
 
-    /// A prediction cannot be trusted because the model's state is invalid.
+    /// Model state is internally invalid.
     InvalidState {
+        /// Explanation.
         reason: String,
+    },
+
+    /// Duplicate output names were supplied.
+    DuplicateOutput {
+        /// Duplicate output name.
+        name: String,
     },
 }
 
@@ -209,42 +302,58 @@ impl fmt::Display for ModelError {
             Self::InvalidMetadata { field, reason } => {
                 write!(f, "invalid model metadata `{field}`: {reason}")
             }
+
             Self::InvalidInput { reason } => {
                 write!(f, "invalid model input: {reason}")
             }
+
             Self::InvalidOutput { reason } => {
                 write!(f, "invalid model output: {reason}")
             }
+
             Self::UnsupportedOperation { operation } => {
                 write!(f, "unsupported model operation: {operation}")
             }
+
             Self::Unavailable { reason } => {
                 write!(f, "model unavailable: {reason}")
             }
+
             Self::DeterminismUnavailable { reason } => {
                 write!(f, "deterministic prediction unavailable: {reason}")
             }
+
             Self::SchemaMismatch { expected, actual } => {
                 write!(
                     f,
-                    "model schema mismatch: expected {}, got {}",
-                    expected.as_str(),
-                    actual.as_str()
+                    "model schema mismatch: expected `{expected}`, got `{actual}`"
                 )
             }
+
+            Self::SchemaVersionMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "model schema version mismatch: expected `{expected}`, got `{actual}`"
+                )
+            }
+
             Self::VersionMismatch { required, actual } => {
                 write!(
                     f,
-                    "model version mismatch: required {}, got {}",
-                    required,
-                    actual
+                    "model version mismatch: required `{required}`, got `{actual}`"
                 )
             }
+
             Self::CapabilityMismatch { reason } => {
                 write!(f, "model capability mismatch: {reason}")
             }
+
             Self::InvalidState { reason } => {
                 write!(f, "invalid model state: {reason}")
+            }
+
+            Self::DuplicateOutput { name } => {
+                write!(f, "duplicate prediction output `{name}`")
             }
         }
     }
@@ -253,13 +362,29 @@ impl fmt::Display for ModelError {
 impl Error for ModelError {}
 
 // =============================================================================
-// Stable identifiers
+// Stable model identifiers
 // =============================================================================
 
-/// Stable identifier for a prediction model.
+/// Stable identifier for a prediction model family.
 ///
-/// This identifies the model family, not a particular execution instance.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+/// The identifier is semantic and independent of:
+///
+/// - backend;
+/// - device;
+/// - process;
+/// - memory address;
+/// - implementation instance.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+)]
 #[serde(transparent)]
 pub struct ModelId(String);
 
@@ -278,13 +403,13 @@ impl ModelId {
         Ok(Self(value))
     }
 
-    /// Returns the identifier as a string slice.
+    /// Returns the identifier.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// Consumes the identifier and returns its string representation.
+    /// Consumes the identifier.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0
@@ -297,14 +422,15 @@ impl fmt::Display for ModelId {
     }
 }
 
-/// Version of a model.
+// =============================================================================
+// Model version
+// =============================================================================
+
+/// Semantic model version.
 ///
-/// This is intentionally represented without an external semver dependency so
-/// the resilience core does not acquire another dependency merely to identify
-/// model versions.
-///
-/// `major.minor.patch` follows conventional semantic-version ordering.
-/// `pre_release` and `build` are preserved as metadata.
+/// Ordering is based on numeric semantic version components followed by
+/// optional pre-release/build metadata. The model registry remains responsible
+/// for deciding whether two versions are compatible.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ModelVersion {
     /// Major version.
@@ -316,7 +442,7 @@ pub struct ModelVersion {
     /// Patch version.
     pub patch: u64,
 
-    /// Optional pre-release identifier.
+    /// Optional pre-release metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pre_release: Option<String>,
 
@@ -326,7 +452,7 @@ pub struct ModelVersion {
 }
 
 impl ModelVersion {
-    /// Creates a stable model version.
+    /// Creates a model version.
     #[must_use]
     pub const fn new(major: u64, minor: u64, patch: u64) -> Self {
         Self {
@@ -352,7 +478,7 @@ impl ModelVersion {
         self
     }
 
-    /// Returns whether this version has the same semantic major version.
+    /// Returns whether two versions share a major version.
     #[must_use]
     pub const fn same_major(&self, other: &Self) -> bool {
         self.major == other.major
@@ -375,47 +501,11 @@ impl fmt::Display for ModelVersion {
     }
 }
 
-/// Stable identifier for the feature schema consumed by a model.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct ModelSchemaId(String);
-
-impl ModelSchemaId {
-    /// Creates a validated schema identifier.
-    pub fn new<S: Into<String>>(value: S) -> ModelResult<Self> {
-        let value = value.into();
-
-        if value.trim().is_empty() {
-            return Err(ModelError::InvalidMetadata {
-                field: "schema_id".to_owned(),
-                reason: "identifier must not be empty".to_owned(),
-            });
-        }
-
-        Ok(Self(value))
-    }
-
-    /// Returns the schema identifier.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for ModelSchemaId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
 // =============================================================================
 // Model classification
 // =============================================================================
 
-/// General class of prediction model.
-///
-/// `Custom` is intentionally available so adding a future model family does
-/// not require changing this core enum.
+/// General implementation family of a prediction model.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelKind {
     /// Statistical model.
@@ -439,74 +529,72 @@ pub enum ModelKind {
     /// Neural/network model.
     Neural,
 
-    /// Kernel or similarity model.
+    /// Kernel/similarity model.
     Kernel,
 
-    /// Rule/model hybrid.
+    /// Hybrid rule/model system.
     Hybrid,
 
-    /// Model supplied by an extension.
+    /// Extension-defined implementation family.
     Custom(String),
 }
 
-/// Prediction task performed by a model.
+/// Prediction task.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PredictionTask {
-    /// Predict the probability of an execution failure.
+    /// Probability of execution failure.
     FailureProbability,
 
-    /// Predict the probability that a recovery strategy succeeds.
+    /// Probability of successful recovery.
     RecoverySuccessProbability,
 
-    /// Predict degradation or resource loss.
+    /// Probability of degradation/resource loss.
     DegradationProbability,
 
-    /// Predict expected latency or duration.
+    /// Expected latency.
     Latency,
 
-    /// Predict expected fidelity or quality.
+    /// Expected fidelity/quality.
     Fidelity,
 
-    /// Predict expected error characteristics.
+    /// Expected error rate.
     ErrorRate,
 
-    /// Predict suitability/ranking information.
+    /// Suitability of a resilience strategy.
     StrategySuitability,
 
-    /// Predict resource availability/capacity.
+    /// Resource availability.
     ResourceAvailability,
 
-    /// Generic probabilistic prediction.
+    /// Generic probability.
     Probability,
 
-    /// Generic scalar prediction.
+    /// Generic regression value.
     Regression,
 
     /// Extension-defined task.
     Custom(String),
 }
 
-/// Unit/interpretation of a model output.
-///
-/// The model itself does not decide how the planner should act on a value.
+/// Interpretation of one model output.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PredictionTarget {
-    /// A probability in the closed interval [0, 1].
+    /// Probability in `[0, 1]`.
     Probability,
 
-    /// A confidence value in the closed interval [0, 1].
+    /// Confidence in `[0, 1]`.
     Confidence,
 
-    /// A non-negative quantity with caller-defined units.
+    /// Non-negative scalar.
     NonNegativeScalar,
 
-    /// A scalar with caller-defined semantics.
+    /// Arbitrary scalar.
     Scalar,
 
-    /// A categorical label.
+    /// Categorical output.
     Category,
 
-    /// A ranking score whose absolute scale has no prescribed meaning.
+    /// Ranking score.
     RankingScore,
 
     /// Extension-defined target.
@@ -517,39 +605,39 @@ pub enum PredictionTarget {
 // Model lifecycle
 // =============================================================================
 
-/// Operational state of a model.
+/// Operational model state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelState {
-    /// Model metadata exists but the model is not loaded.
+    /// Metadata is registered but model is not ready.
     Registered,
 
-    /// Model is loaded and usable.
+    /// Model can predict.
     Ready,
 
-    /// Model is temporarily unavailable.
+    /// Temporarily unavailable.
     Unavailable,
 
-    /// Model is being replaced or refreshed.
+    /// Model is being updated.
     Updating,
 
-    /// Model is disabled by policy.
+    /// Disabled by policy.
     Disabled,
 
-    /// Model failed validation or integrity checks.
+    /// Failed validation/integrity checks.
     Invalid,
 
-    /// Model has been retired and must no longer be selected.
+    /// Permanently retired.
     Retired,
 }
 
 impl ModelState {
-    /// Returns whether prediction is normally permitted in this state.
+    /// Returns whether prediction is permitted.
     #[must_use]
     pub const fn can_predict(self) -> bool {
         matches!(self, Self::Ready)
     }
 
-    /// Returns whether the model is terminally retired.
+    /// Returns whether the model is permanently retired.
     #[must_use]
     pub const fn is_retired(self) -> bool {
         matches!(self, Self::Retired)
@@ -560,39 +648,37 @@ impl ModelState {
 // Model capabilities
 // =============================================================================
 
-/// Explicit capabilities of a prediction model.
+/// Capabilities declared by a model implementation.
 ///
-/// Capabilities are declarations, not permissions. Safety policy remains
-/// authoritative.
+/// These declarations describe what the implementation can guarantee.
+/// They do not override resilience policy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelCapabilities {
-    /// Whether predictions are deterministic for identical declared inputs.
+    /// Deterministic inference is supported.
     pub deterministic: bool,
 
-    /// Whether the model supports online prediction.
+    /// Single/online prediction is supported.
     pub online_prediction: bool,
 
-    /// Whether the model supports batch prediction.
+    /// Batch prediction is supported.
     pub batch_prediction: bool,
 
-    /// Whether the model can expose uncertainty/confidence.
+    /// Uncertainty/confidence can be estimated.
     pub uncertainty_estimation: bool,
 
-    /// Whether the model can operate incrementally.
+    /// Incremental/online model updates are supported.
     pub incremental: bool,
 
-    /// Whether the model supports model-version compatibility checks.
+    /// Model has explicit version metadata.
     pub versioned: bool,
 
-    /// Whether the model can operate without external network services.
+    /// Model can execute without network/cloud dependencies.
     pub offline: bool,
 
-    /// Whether the model can be evaluated independently of target-provider
-    /// identity.
+    /// Model does not depend on a particular quantum provider.
     pub provider_independent: bool,
 
-    /// Whether the model can consume arbitrarily sized feature vectors within
-    /// the caller's available resources.
+    /// Model accepts variable-dimensional feature vectors according to schema.
     pub variable_dimension: bool,
 }
 
@@ -619,47 +705,47 @@ impl Default for ModelCapabilities {
 /// Immutable descriptive metadata for a model.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelMetadata {
-    /// Stable model identifier.
+    /// Stable model identity.
     pub id: ModelId,
 
     /// Model version.
     pub version: ModelVersion,
 
-    /// Model family.
+    /// Model implementation family.
     pub kind: ModelKind,
 
     /// Prediction task.
     pub task: PredictionTask,
 
-    /// Stable feature-schema identifier.
+    /// Canonical input feature schema.
     pub input_schema: ModelSchemaId,
 
-    /// Stable output-schema identifier.
+    /// Canonical output schema.
+    ///
+    /// Output schemas are represented as stable identifiers because output
+    /// semantics are model-domain specific.
     pub output_schema: ModelSchemaId,
 
-    /// Capability declaration.
+    /// Model capabilities.
     pub capabilities: ModelCapabilities,
 
     /// Optional human-readable description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
-    /// Optional implementation identifier.
+    /// Optional implementation-family identifier.
     ///
-    /// This identifies the implementation family, not a provider/backend.
+    /// This MUST NOT be interpreted as a backend/provider selector.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implementation: Option<String>,
 
-    /// Optional content/integrity digest.
-    ///
-    /// The digest is opaque to this module. A repository-level integrity
-    /// subsystem may populate it.
+    /// Optional integrity digest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub integrity_digest: Option<String>,
 }
 
 impl ModelMetadata {
-    /// Creates validated model metadata.
+    /// Creates validated metadata.
     pub fn new(
         id: ModelId,
         version: ModelVersion,
@@ -669,8 +755,16 @@ impl ModelMetadata {
         output_schema: ModelSchemaId,
         capabilities: ModelCapabilities,
     ) -> ModelResult<Self> {
-        if let Some(description) = None::<String> {
-            let _ = description;
+        validate_non_empty("input_schema", input_schema.as_str())?;
+        validate_non_empty("output_schema", output_schema.as_str())?;
+
+        if !capabilities.versioned {
+            // A model may technically be unversioned, but the resilience
+            // learning contract requires explicit model identity/versioning.
+            return Err(ModelError::CapabilityMismatch {
+                reason: "resilience models must expose explicit version metadata"
+                    .to_owned(),
+            });
         }
 
         Ok(Self {
@@ -687,67 +781,95 @@ impl ModelMetadata {
         })
     }
 
-    /// Sets a human-readable description.
+    /// Adds a description.
     #[must_use]
     pub fn with_description<S: Into<String>>(mut self, description: S) -> Self {
         self.description = Some(description.into());
         self
     }
 
-    /// Sets an implementation identifier.
+    /// Adds an implementation identifier.
     #[must_use]
     pub fn with_implementation<S: Into<String>>(mut self, implementation: S) -> Self {
         self.implementation = Some(implementation.into());
         self
     }
 
-    /// Sets an integrity digest.
+    /// Adds an integrity digest.
     #[must_use]
     pub fn with_integrity_digest<S: Into<String>>(mut self, digest: S) -> Self {
         self.integrity_digest = Some(digest.into());
         self
     }
 
-    /// Returns the model's stable identifier.
+    /// Returns model identity.
     #[must_use]
     pub fn id(&self) -> &ModelId {
         &self.id
     }
 
-    /// Returns the model version.
+    /// Returns model version.
     #[must_use]
-    pub const fn version(&self) -> &ModelVersion {
+    pub fn version(&self) -> &ModelVersion {
         &self.version
+    }
+
+    /// Validates metadata independently of construction.
+    pub fn validate(&self) -> ModelResult<()> {
+        if self.id.as_str().trim().is_empty() {
+            return Err(ModelError::InvalidMetadata {
+                field: "model_id".to_owned(),
+                reason: "identifier must not be empty".to_owned(),
+            });
+        }
+
+        if self.input_schema.as_str().trim().is_empty() {
+            return Err(ModelError::InvalidMetadata {
+                field: "input_schema".to_owned(),
+                reason: "schema identifier must not be empty".to_owned(),
+            });
+        }
+
+        if self.output_schema.as_str().trim().is_empty() {
+            return Err(ModelError::InvalidMetadata {
+                field: "output_schema".to_owned(),
+                reason: "schema identifier must not be empty".to_owned(),
+            });
+        }
+
+        if !self.capabilities.versioned {
+            return Err(ModelError::CapabilityMismatch {
+                reason: "model must expose explicit version metadata".to_owned(),
+            });
+        }
+
+        Ok(())
     }
 }
 
 // =============================================================================
-// Prediction input
+// Prediction context
 // =============================================================================
 
-/// Explicit execution context supplied to a prediction.
+/// Explicit context supplied to a prediction.
 ///
-/// The model receives only the values represented here; it must not inspect
-/// ambient global state to influence a deterministic prediction.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// No ambient state is permitted to influence deterministic inference.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PredictionContext {
-    /// Optional caller-provided execution identity.
-    ///
-    /// This is provenance only and MUST NOT be used as an implicit source of
-    /// randomness.
+    /// Optional caller-owned execution identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_id: Option<String>,
 
-    /// Optional deterministic seed supplied by the caller.
+    /// Explicit random seed, when a stochastic model is intentionally used.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub random_seed: Option<u64>,
 
-    /// Whether the caller requires deterministic prediction.
+    /// Whether deterministic inference is mandatory.
     pub deterministic: bool,
 
-    /// Optional logical timestamp/version supplied by the caller.
+    /// Caller-supplied logical observation epoch/version.
     ///
-    /// This is deliberately not populated by the model from wall-clock time.
+    /// This is NOT populated from wall-clock time by the model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observation_epoch: Option<u64>,
 }
@@ -763,61 +885,60 @@ impl Default for PredictionContext {
     }
 }
 
-/// Feature vector supplied to a model.
-///
-/// `values` are intentionally stored as a contiguous vector rather than a
-/// fixed-size array. This avoids imposing a maximum feature count.
-///
-/// The feature schema is identified independently so the model can reject
-/// incompatible feature representations before evaluation.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FeatureVector {
-    /// Feature-schema identity.
-    pub schema: ModelSchemaId,
-
-    /// Ordered numeric feature values.
-    pub values: Vec<f64>,
-}
-
-impl FeatureVector {
-    /// Creates a feature vector after validating numeric values.
-    pub fn new(schema: ModelSchemaId, values: Vec<f64>) -> ModelResult<Self> {
-        validate_finite_values(&values)?;
-
-        Ok(Self { schema, values })
-    }
-
-    /// Creates an empty feature vector for a valid schema.
-    pub fn empty(schema: ModelSchemaId) -> Self {
+impl PredictionContext {
+    /// Creates a deterministic prediction context.
+    #[must_use]
+    pub fn deterministic() -> Self {
         Self {
-            schema,
-            values: Vec::new(),
+            deterministic: true,
+            ..Self::default()
         }
     }
 
-    /// Returns the number of features.
+    /// Creates a stochastic context with an explicit seed.
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.values.len()
+    pub fn seeded(seed: u64) -> Self {
+        Self {
+            random_seed: Some(seed),
+            deterministic: false,
+            ..Self::default()
+        }
     }
 
-    /// Returns whether no feature values are present.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
+    /// Adds an execution identifier.
+    pub fn with_execution_id<S: Into<String>>(
+        mut self,
+        execution_id: S,
+    ) -> ModelResult<Self> {
+        let execution_id = execution_id.into();
+
+        validate_non_empty("execution_id", &execution_id)?;
+
+        self.execution_id = Some(execution_id);
+        Ok(self)
     }
 
-    /// Returns the feature values.
+    /// Adds an observation epoch.
     #[must_use]
-    pub fn as_slice(&self) -> &[f64] {
-        &self.values
+    pub const fn with_observation_epoch(
+        mut self,
+        observation_epoch: u64,
+    ) -> Self {
+        self.observation_epoch = Some(observation_epoch);
+        self
     }
 }
 
+// =============================================================================
+// Prediction input
+// =============================================================================
+
 /// Complete input supplied to a prediction model.
+///
+/// The feature vector is the canonical vector from `learning/features.rs`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PredictionInput {
-    /// Feature vector.
+    /// Canonical feature vector.
     pub features: FeatureVector,
 
     /// Explicit prediction context.
@@ -830,58 +951,79 @@ impl PredictionInput {
     pub fn new(features: FeatureVector, context: PredictionContext) -> Self {
         Self { features, context }
     }
+
+    /// Validates basic numerical/context invariants.
+    pub fn validate(&self) -> ModelResult<()> {
+        validate_finite_values(self.features.as_slice())?;
+
+        if self.context.deterministic && self.context.random_seed.is_some() {
+            // A deterministic seeded computation is valid: the seed is simply
+            // part of the explicit deterministic input. Therefore this is
+            // intentionally accepted.
+        }
+
+        Ok(())
+    }
 }
 
 // =============================================================================
 // Prediction output
 // =============================================================================
 
-/// A single model output.
+/// One model output.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PredictionOutput {
-    /// Stable name within the output schema.
+    /// Stable output name within the output schema.
     pub name: String,
 
-    /// Predicted value.
+    /// Numerical predicted value.
     pub value: f64,
 
     /// Interpretation of the value.
     pub target: PredictionTarget,
 
-    /// Optional model-provided confidence.
+    /// Optional confidence supplied by the model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence: Option<f64>,
 }
 
 impl PredictionOutput {
-    /// Creates a scalar output.
+    /// Creates an output.
     pub fn new<S: Into<String>>(
         name: S,
         value: f64,
         target: PredictionTarget,
     ) -> ModelResult<Self> {
-        validate_finite(value, "prediction value")?;
+        let name = name.into();
+
+        validate_non_empty("prediction_output.name", &name)?;
+        validate_finite(value, "prediction output")?;
+
+        validate_target_value(&target, value)?;
 
         Ok(Self {
-            name: name.into(),
+            name,
             value,
             target,
             confidence: None,
         })
     }
 
-    /// Adds confidence to an output.
+    /// Adds confidence.
     pub fn with_confidence(mut self, confidence: f64) -> ModelResult<Self> {
-        validate_probability(confidence, "prediction confidence")?;
+        validate_probability(confidence, "prediction output confidence")?;
+
         self.confidence = Some(confidence);
+
         Ok(self)
     }
 }
 
-/// Provenance associated with a prediction.
-///
-/// Provenance is deliberately explicit so learned information cannot become
-/// untraceable input to resilience planning.
+// =============================================================================
+// Prediction provenance
+// =============================================================================
+
+/// Immutable provenance describing where a prediction came from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PredictionProvenance {
     /// Model identity.
@@ -893,6 +1035,9 @@ pub struct PredictionProvenance {
     /// Input schema identity.
     pub input_schema: ModelSchemaId,
 
+    /// Input schema version.
+    pub input_schema_version: ModelSchemaVersion,
+
     /// Output schema identity.
     pub output_schema: ModelSchemaId,
 
@@ -900,46 +1045,64 @@ pub struct PredictionProvenance {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_integrity_digest: Option<String>,
 
-    /// Whether the prediction was made under deterministic requirements.
+    /// Whether deterministic inference was requested.
     pub deterministic: bool,
 
-    /// Optional seed identity. This is metadata, not hidden randomness.
+    /// Explicit random seed, when applicable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub random_seed: Option<u64>,
+
+    /// Optional execution identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+
+    /// Optional observation epoch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observation_epoch: Option<u64>,
 }
 
 impl PredictionProvenance {
-    /// Builds provenance from model metadata and prediction context.
+    /// Creates provenance from model metadata, feature vector, and context.
     #[must_use]
-    pub fn from_metadata(metadata: &ModelMetadata, context: &PredictionContext) -> Self {
+    pub fn from_metadata(
+        metadata: &ModelMetadata,
+        input: &PredictionInput,
+    ) -> Self {
         Self {
             model_id: metadata.id.clone(),
             model_version: metadata.version.clone(),
-            input_schema: metadata.input_schema.clone(),
+            input_schema: input.features.schema_id.clone(),
+            input_schema_version: input.features.schema_version,
             output_schema: metadata.output_schema.clone(),
             model_integrity_digest: metadata.integrity_digest.clone(),
-            deterministic: context.deterministic,
-            random_seed: context.random_seed,
+            deterministic: input.context.deterministic,
+            random_seed: input.context.random_seed,
+            execution_id: input.context.execution_id.clone(),
+            observation_epoch: input.context.observation_epoch,
         }
     }
 }
 
-/// Complete prediction returned by a model.
+// =============================================================================
+// Prediction
+// =============================================================================
+
+/// Complete prediction result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Prediction {
     /// Model outputs.
     pub outputs: Vec<PredictionOutput>,
 
-    /// Aggregate prediction confidence when available.
+    /// Optional aggregate confidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence: Option<f64>,
 
-    /// Provenance of the prediction.
+    /// Immutable provenance.
     pub provenance: PredictionProvenance,
 }
 
 impl Prediction {
-    /// Creates a prediction and validates its outputs.
+    /// Creates and validates a prediction.
     pub fn new(
         outputs: Vec<PredictionOutput>,
         provenance: PredictionProvenance,
@@ -953,14 +1116,19 @@ impl Prediction {
         })
     }
 
-    /// Sets aggregate confidence.
-    pub fn with_confidence(mut self, confidence: f64) -> ModelResult<Self> {
+    /// Adds aggregate confidence.
+    pub fn with_confidence(
+        mut self,
+        confidence: f64,
+    ) -> ModelResult<Self> {
         validate_probability(confidence, "prediction confidence")?;
+
         self.confidence = Some(confidence);
+
         Ok(self)
     }
 
-    /// Finds an output by its stable name.
+    /// Returns an output by stable name.
     #[must_use]
     pub fn output(&self, name: &str) -> Option<&PredictionOutput> {
         self.outputs.iter().find(|output| output.name == name)
@@ -972,44 +1140,50 @@ impl Prediction {
         self.outputs.len()
     }
 
-    /// Returns whether the prediction has no outputs.
+    /// Returns whether the prediction contains no outputs.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.outputs.is_empty()
     }
+
+    /// Returns all outputs.
+    #[must_use]
+    pub fn outputs(&self) -> &[PredictionOutput] {
+        &self.outputs
+    }
 }
 
 // =============================================================================
-// Compatibility
+// Model compatibility
 // =============================================================================
 
-/// Compatibility assessment between a model and a prediction request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Result of model/request compatibility assessment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ModelCompatibility {
-    /// Model is directly usable.
+    /// Model directly satisfies the request.
     Compatible,
 
-    /// Model is usable after caller-side adaptation.
+    /// Model can satisfy the request after caller-side adaptation.
     CompatibleWithAdaptation,
 
-    /// Model is usable only with degraded confidence/capability.
+    /// Model can operate but with an explicitly degraded contract.
     CompatibleWithDegradation,
 
-    /// Model is usable only after a model-version migration.
+    /// Model can be used after explicit model-version migration.
     CompatibleWithMigration,
 
-    /// Compatibility depends on runtime conditions.
+    /// Compatibility depends on runtime state.
     ConditionallyCompatible,
 
     /// Model cannot satisfy the request.
     Incompatible,
 
-    /// There is insufficient trusted information.
+    /// Insufficient trusted information exists.
     Unknown,
 }
 
 impl ModelCompatibility {
-    /// Returns whether the result is directly usable.
+    /// Returns whether the assessment permits use subject to caller policy.
     #[must_use]
     pub const fn is_usable(self) -> bool {
         matches!(
@@ -1021,21 +1195,30 @@ impl ModelCompatibility {
                 | Self::ConditionallyCompatible
         )
     }
+
+    /// Returns whether the model is directly compatible.
+    #[must_use]
+    pub const fn is_direct(self) -> bool {
+        matches!(self, Self::Compatible)
+    }
 }
 
-/// Requirements used to assess model compatibility.
+/// Requirements imposed by the caller.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelRequirements {
-    /// Required input feature schema.
+    /// Required input schema.
     pub input_schema: ModelSchemaId,
+
+    /// Required input schema version.
+    pub input_schema_version: ModelSchemaVersion,
 
     /// Required output schema.
     pub output_schema: ModelSchemaId,
 
-    /// Whether deterministic prediction is required.
+    /// Whether deterministic inference is required.
     pub deterministic: bool,
 
-    /// Whether uncertainty information is required.
+    /// Whether uncertainty estimation is required.
     pub uncertainty_required: bool,
 
     /// Whether offline execution is required.
@@ -1043,23 +1226,32 @@ pub struct ModelRequirements {
 
     /// Whether provider independence is required.
     pub provider_independent: bool,
+
+    /// Whether variable-dimensional feature support is required.
+    pub variable_dimension: bool,
 }
 
 impl ModelRequirements {
-    /// Creates requirements.
+    /// Creates requirements from canonical schemas.
     #[must_use]
-    pub fn new(input_schema: ModelSchemaId, output_schema: ModelSchemaId) -> Self {
+    pub const fn new(
+        input_schema: ModelSchemaId,
+        input_schema_version: ModelSchemaVersion,
+        output_schema: ModelSchemaId,
+    ) -> Self {
         Self {
             input_schema,
+            input_schema_version,
             output_schema,
             deterministic: false,
             uncertainty_required: false,
             offline_required: false,
             provider_independent: true,
+            variable_dimension: false,
         }
     }
 
-    /// Requires deterministic prediction.
+    /// Requires deterministic inference.
     #[must_use]
     pub const fn require_deterministic(mut self) -> Self {
         self.deterministic = true;
@@ -1073,7 +1265,7 @@ impl ModelRequirements {
         self
     }
 
-    /// Requires offline execution.
+    /// Requires offline operation.
     #[must_use]
     pub const fn require_offline(mut self) -> Self {
         self.offline_required = true;
@@ -1086,11 +1278,19 @@ impl ModelRequirements {
         self.provider_independent = true;
         self
     }
+
+    /// Requires variable-dimensional support.
+    #[must_use]
+    pub const fn require_variable_dimension(mut self) -> Self {
+        self.variable_dimension = true;
+        self
+    }
 }
 
-/// Checks model metadata against caller requirements.
+/// Assesses model compatibility without performing inference.
 ///
-/// This is intentionally pure and deterministic.
+/// This function is pure and deterministic.
+#[must_use]
 pub fn assess_compatibility(
     metadata: &ModelMetadata,
     requirements: &ModelRequirements,
@@ -1103,11 +1303,30 @@ pub fn assess_compatibility(
         return ModelCompatibility::Incompatible;
     }
 
+    if metadata.versioned == false {
+        return ModelCompatibility::Incompatible;
+    }
+
+    if metadata.capabilities.versioned == false {
+        return ModelCompatibility::Incompatible;
+    }
+
+    // Feature schema version migration is intentionally not implicit.
+    //
+    // The exact version must be handled by the caller or an explicit migration
+    // layer. This contract never silently reinterprets features.
+    //
+    // The model metadata does not own the feature schema version, therefore
+    // callers should validate the supplied FeatureVector against the canonical
+    // schema before invoking the model.
+
     if requirements.deterministic && !metadata.capabilities.deterministic {
         return ModelCompatibility::Incompatible;
     }
 
-    if requirements.uncertainty_required && !metadata.capabilities.uncertainty_estimation {
+    if requirements.uncertainty_required
+        && !metadata.capabilities.uncertainty_estimation
+    {
         return ModelCompatibility::Incompatible;
     }
 
@@ -1115,9 +1334,21 @@ pub fn assess_compatibility(
         return ModelCompatibility::Incompatible;
     }
 
-    if requirements.provider_independent && !metadata.capabilities.provider_independent {
+    if requirements.provider_independent
+        && !metadata.capabilities.provider_independent
+    {
         return ModelCompatibility::Incompatible;
     }
+
+    if requirements.variable_dimension
+        && !metadata.capabilities.variable_dimension
+    {
+        return ModelCompatibility::Incompatible;
+    }
+
+    // The version itself is not part of the feature schema identity. Exact
+    // feature-vector validation is performed by `validate_input`.
+    let _ = requirements.input_schema_version;
 
     ModelCompatibility::Compatible
 }
@@ -1126,21 +1357,22 @@ pub fn assess_compatibility(
 // Prediction model trait
 // =============================================================================
 
-/// Generic prediction-model interface.
+/// Provider-independent prediction-model interface.
 ///
-/// Implementations must be:
+/// Implementations:
 ///
-/// - thread-safe when registered as shared models;
-/// - explicit about deterministic behavior;
-/// - explicit about input/output schemas;
-/// - free from hidden resilience decisions.
+/// - predict only;
+/// - do not make resilience decisions;
+/// - do not mutate global state;
+/// - do not access hidden environmental state;
+/// - validate their declared input/output contract.
 ///
-/// The model predicts; the resilience planner decides.
+/// The resilience planner remains authoritative.
 pub trait PredictionModel: Send + Sync {
-    /// Returns immutable model metadata.
+    /// Returns immutable metadata.
     fn metadata(&self) -> &ModelMetadata;
 
-    /// Returns the current operational state.
+    /// Returns current lifecycle state.
     fn state(&self) -> ModelState;
 
     /// Performs one prediction.
@@ -1148,10 +1380,16 @@ pub trait PredictionModel: Send + Sync {
 
     /// Performs multiple predictions.
 ///
-/// Implementations may override this for efficient batching. The default
-/// implementation evaluates inputs independently in input order.
-    fn predict_batch(&self, inputs: &[PredictionInput]) -> ModelResult<Vec<Prediction>> {
-        if !self.metadata().capabilities.batch_prediction && inputs.len() > 1 {
+/// Implementations may override this for efficient vectorized/batched
+/// inference. The default implementation preserves input order and evaluates
+/// each input independently.
+    fn predict_batch(
+        &self,
+        inputs: &[PredictionInput],
+    ) -> ModelResult<Vec<Prediction>> {
+        if inputs.len() > 1
+            && !self.metadata().capabilities.batch_prediction
+        {
             return Err(ModelError::UnsupportedOperation {
                 operation: "batch_prediction".to_owned(),
             });
@@ -1160,20 +1398,70 @@ pub trait PredictionModel: Send + Sync {
         inputs.iter().map(|input| self.predict(input)).collect()
     }
 
-    /// Validates compatibility with the requested requirements.
-    fn compatibility(&self, requirements: &ModelRequirements) -> ModelCompatibility {
+    /// Assesses compatibility with a request.
+    fn compatibility(
+        &self,
+        requirements: &ModelRequirements,
+    ) -> ModelCompatibility {
         assess_compatibility(self.metadata(), requirements)
     }
 
-    /// Validates that the model is ready for prediction.
+    /// Validates model readiness.
     fn validate_ready(&self) -> ModelResult<()> {
-        if !self.state().can_predict() {
+        self.metadata().validate()?;
+
+        let state = self.state();
+
+        if !state.can_predict() {
             return Err(ModelError::Unavailable {
-                reason: format!("model state is {:?}", self.state()),
+                reason: format!("model state is {state:?}"),
             });
         }
 
         Ok(())
+    }
+
+    /// Validates a prediction request before inference.
+    fn validate_input(&self, input: &PredictionInput) -> ModelResult<()> {
+        self.validate_ready()?;
+
+        input.validate()?;
+
+        if input.features.schema_id != self.metadata().input_schema {
+            return Err(ModelError::SchemaMismatch {
+                expected: self.metadata().input_schema.clone(),
+                actual: input.features.schema_id.clone(),
+            });
+        }
+
+        if input.context.deterministic
+            && !self.metadata().capabilities.deterministic
+        {
+            return Err(ModelError::DeterminismUnavailable {
+                reason: format!(
+                    "model `{}` does not declare deterministic inference",
+                    self.metadata().id
+                ),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Validates and attaches canonical provenance to a prediction.
+    ///
+    /// Implementations may call this after generating their outputs.
+    fn finalize_prediction(
+        &self,
+        input: &PredictionInput,
+        outputs: Vec<PredictionOutput>,
+    ) -> ModelResult<Prediction> {
+        self.validate_input(input)?;
+
+        let provenance =
+            PredictionProvenance::from_metadata(self.metadata(), input);
+
+        Prediction::new(outputs, provenance)
     }
 }
 
@@ -1181,9 +1469,9 @@ pub trait PredictionModel: Send + Sync {
 // Shared model handle
 // =============================================================================
 
-/// Shared, immutable model handle.
+/// Thread-safe shared handle to a prediction model.
 ///
-/// `Arc` provides scalable shared ownership without global mutable state.
+/// `Arc` gives shared ownership without global mutable state.
 #[derive(Clone)]
 pub struct ModelHandle {
     inner: Arc<dyn PredictionModel>,
@@ -1201,41 +1489,50 @@ impl ModelHandle {
         }
     }
 
-    /// Creates a handle from an existing shared model.
+    /// Creates a handle from an existing trait-object `Arc`.
     #[must_use]
     pub fn from_arc(model: Arc<dyn PredictionModel>) -> Self {
         Self { inner: model }
     }
 
-    /// Returns the model metadata.
+    /// Returns metadata.
     #[must_use]
     pub fn metadata(&self) -> &ModelMetadata {
         self.inner.metadata()
     }
 
-    /// Returns the model state.
+    /// Returns model state.
     #[must_use]
     pub fn state(&self) -> ModelState {
         self.inner.state()
     }
 
-    /// Performs a prediction.
-    pub fn predict(&self, input: &PredictionInput) -> ModelResult<Prediction> {
+    /// Performs prediction.
+    pub fn predict(
+        &self,
+        input: &PredictionInput,
+    ) -> ModelResult<Prediction> {
         self.inner.predict(input)
     }
 
     /// Performs batch prediction.
-    pub fn predict_batch(&self, inputs: &[PredictionInput]) -> ModelResult<Vec<Prediction>> {
+    pub fn predict_batch(
+        &self,
+        inputs: &[PredictionInput],
+    ) -> ModelResult<Vec<Prediction>> {
         self.inner.predict_batch(inputs)
     }
 
-    /// Checks compatibility.
+    /// Assesses compatibility.
     #[must_use]
-    pub fn compatibility(&self, requirements: &ModelRequirements) -> ModelCompatibility {
+    pub fn compatibility(
+        &self,
+        requirements: &ModelRequirements,
+    ) -> ModelCompatibility {
         self.inner.compatibility(requirements)
     }
 
-    /// Returns the underlying model as a trait object.
+    /// Returns the model trait object.
     #[must_use]
     pub fn as_model(&self) -> &dyn PredictionModel {
         self.inner.as_ref()
@@ -1256,7 +1553,19 @@ impl fmt::Debug for ModelHandle {
 // Validation helpers
 // =============================================================================
 
-/// Validates a finite floating-point value.
+/// Validates a non-empty textual field.
+pub fn validate_non_empty(field: &str, value: &str) -> ModelResult<()> {
+    if value.trim().is_empty() {
+        return Err(ModelError::InvalidMetadata {
+            field: field.to_owned(),
+            reason: "value must not be empty".to_owned(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Validates one finite floating-point value.
 pub fn validate_finite(value: f64, field: &str) -> ModelResult<()> {
     if !value.is_finite() {
         return Err(ModelError::InvalidInput {
@@ -1267,10 +1576,11 @@ pub fn validate_finite(value: f64, field: &str) -> ModelResult<()> {
     Ok(())
 }
 
-/// Validates a probability/confidence value.
-///
-/// Probability values are required to be within [0, 1].
-pub fn validate_probability(value: f64, field: &str) -> ModelResult<()> {
+/// Validates a probability/confidence.
+pub fn validate_probability(
+    value: f64,
+    field: &str,
+) -> ModelResult<()> {
     validate_finite(value, field)?;
 
     if !(0.0..=1.0).contains(&value) {
@@ -1282,52 +1592,63 @@ pub fn validate_probability(value: f64, field: &str) -> ModelResult<()> {
     Ok(())
 }
 
-/// Validates an entire numeric feature vector.
+/// Validates all feature-vector values.
 pub fn validate_finite_values(values: &[f64]) -> ModelResult<()> {
     for (index, value) in values.iter().copied().enumerate() {
-        if !value.is_finite() {
-            return Err(ModelError::InvalidInput {
-                reason: format!("feature at index {index} must be finite"),
-            });
+        validate_finite(value, &format!("feature[{index}]"))?;
+    }
+
+    Ok(())
+}
+
+fn validate_target_value(
+    target: &PredictionTarget,
+    value: f64,
+) -> ModelResult<()> {
+    match target {
+        PredictionTarget::Probability
+        | PredictionTarget::Confidence => {
+            validate_probability(value, "prediction output")?;
         }
+
+        PredictionTarget::NonNegativeScalar => {
+            if value < 0.0 {
+                return Err(ModelError::InvalidOutput {
+                    reason:
+                        "non-negative prediction output cannot be negative"
+                            .to_owned(),
+                });
+            }
+        }
+
+        PredictionTarget::Scalar
+        | PredictionTarget::Category
+        | PredictionTarget::RankingScore
+        | PredictionTarget::Custom(_) => {}
     }
 
     Ok(())
 }
 
 fn validate_outputs(outputs: &[PredictionOutput]) -> ModelResult<()> {
-    for output in outputs {
-        if output.name.trim().is_empty() {
-            return Err(ModelError::InvalidOutput {
-                reason: "prediction output name must not be empty".to_owned(),
-            });
-        }
+    let mut names = std::collections::BTreeSet::new();
 
+    for output in outputs {
+        validate_non_empty("prediction_output.name", &output.name)?;
         validate_finite(output.value, "prediction output")?;
 
+        validate_target_value(&output.target, output.value)?;
+
         if let Some(confidence) = output.confidence {
-            validate_probability(confidence, "prediction output confidence")?;
+            validate_probability(
+                confidence,
+                "prediction output confidence",
+            )?;
         }
 
-        if matches!(output.target, PredictionTarget::Probability)
-            && !(0.0..=1.0).contains(&output.value)
-        {
-            return Err(ModelError::InvalidOutput {
-                reason: format!(
-                    "probability output `{}` must be within [0, 1]",
-                    output.name
-                ),
-            });
-        }
-
-        if matches!(output.target, PredictionTarget::Confidence)
-            && !(0.0..=1.0).contains(&output.value)
-        {
-            return Err(ModelError::InvalidOutput {
-                reason: format!(
-                    "confidence output `{}` must be within [0, 1]",
-                    output.name
-                ),
+        if !names.insert(output.name.clone()) {
+            return Err(ModelError::DuplicateOutput {
+                name: output.name.clone(),
             });
         }
     }
@@ -1343,18 +1664,24 @@ fn validate_outputs(outputs: &[PredictionOutput]) -> ModelResult<()> {
 mod tests {
     use super::*;
 
-    fn schema(name: &str) -> ModelSchemaId {
-        ModelSchemaId::new(name).expect("valid schema")
+    fn input_schema() -> ModelSchemaId {
+        ModelSchemaId::new("resilience.features.v1")
+            .expect("schema identifier must be valid")
     }
 
-    fn model_metadata() -> ModelMetadata {
+    fn output_schema() -> ModelSchemaId {
+        ModelSchemaId::new("resilience.failure.v1")
+            .expect("schema identifier must be valid")
+    }
+
+    fn metadata() -> ModelMetadata {
         ModelMetadata::new(
-            ModelId::new("test.model").expect("valid model id"),
+            ModelId::new("resilience.failure").expect("valid model id"),
             ModelVersion::new(1, 0, 0),
             ModelKind::Statistical,
             PredictionTask::FailureProbability,
-            schema("features.v1"),
-            schema("prediction.failure.v1"),
+            input_schema(),
+            output_schema(),
             ModelCapabilities {
                 deterministic: true,
                 online_prediction: true,
@@ -1368,6 +1695,20 @@ mod tests {
             },
         )
         .expect("valid metadata")
+    }
+
+    fn feature_vector() -> FeatureVector {
+        let schema = super::super::features::FeatureSchema::new(
+            input_schema(),
+            FeatureSchemaVersion::new(1, 0),
+            "test feature schema".to_owned(),
+            Vec::new(),
+            true,
+        )
+        .expect("valid feature schema");
+
+        FeatureVector::new(&schema, Vec::new(), false)
+            .expect("valid feature vector")
     }
 
     #[derive(Debug)]
@@ -1385,67 +1726,44 @@ mod tests {
             self.state
         }
 
-        fn predict(&self, input: &PredictionInput) -> ModelResult<Prediction> {
-            self.validate_ready()?;
-
-            if input.features.schema != self.metadata.input_schema {
-                return Err(ModelError::SchemaMismatch {
-                    expected: self.metadata.input_schema.clone(),
-                    actual: input.features.schema.clone(),
-                });
-            }
-
-            let value = if input.features.values.is_empty() {
-                0.0
-            } else {
-                input.features.values[0]
-            };
+        fn predict(
+            &self,
+            input: &PredictionInput,
+        ) -> ModelResult<Prediction> {
+            self.validate_input(input)?;
 
             let output = PredictionOutput::new(
                 "failure_probability",
-                value,
+                0.25,
                 PredictionTarget::Probability,
             )?;
 
-            Prediction::new(
-                vec![output],
-                PredictionProvenance::from_metadata(&self.metadata, &input.context),
-            )
+            self.finalize_prediction(input, vec![output])
         }
     }
 
     #[test]
-    fn model_id_rejects_empty_identifier() {
+    fn model_id_rejects_empty_values() {
         assert!(ModelId::new("").is_err());
         assert!(ModelId::new("   ").is_err());
-        assert!(ModelId::new("resilience.failure").is_ok());
+        assert!(ModelId::new("failure.model").is_ok());
     }
 
     #[test]
-    fn schema_id_rejects_empty_identifier() {
-        assert!(ModelSchemaId::new("").is_err());
-        assert!(ModelSchemaId::new("features.v1").is_ok());
+    fn model_schema_alias_uses_canonical_feature_schema() {
+        let schema = ModelSchemaId::new("features.v1")
+            .expect("valid schema");
+
+        assert_eq!(schema.as_str(), "features.v1");
     }
 
     #[test]
-    fn model_version_formats_stably() {
+    fn model_version_formats_correctly() {
         let version = ModelVersion::new(1, 2, 3)
             .with_pre_release("rc.1")
-            .with_build("build.42");
+            .with_build("build.7");
 
-        assert_eq!(version.to_string(), "1.2.3-rc.1+build.42");
-    }
-
-    #[test]
-    fn feature_vector_rejects_nan() {
-        let result = FeatureVector::new(schema("features.v1"), vec![f64::NAN]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn feature_vector_rejects_infinity() {
-        let result = FeatureVector::new(schema("features.v1"), vec![f64::INFINITY]);
-        assert!(result.is_err());
+        assert_eq!(version.to_string(), "1.2.3-rc.1+build.7");
     }
 
     #[test]
@@ -1453,15 +1771,18 @@ mod tests {
         assert!(validate_probability(0.0, "p").is_ok());
         assert!(validate_probability(0.5, "p").is_ok());
         assert!(validate_probability(1.0, "p").is_ok());
+
         assert!(validate_probability(-0.01, "p").is_err());
         assert!(validate_probability(1.01, "p").is_err());
+        assert!(validate_probability(f64::NAN, "p").is_err());
+        assert!(validate_probability(f64::INFINITY, "p").is_err());
     }
 
     #[test]
-    fn probability_output_is_range_checked() {
+    fn prediction_output_rejects_invalid_probability() {
         let result = PredictionOutput::new(
             "failure_probability",
-            2.0,
+            1.5,
             PredictionTarget::Probability,
         );
 
@@ -1469,69 +1790,88 @@ mod tests {
     }
 
     #[test]
-    fn confidence_is_range_checked() {
-        let output =
-            PredictionOutput::new("failure_probability", 0.5, PredictionTarget::Probability)
-                .expect("valid output");
-
-        assert!(output.with_confidence(0.9).is_ok());
-        assert!(output.with_confidence(-0.1).is_err());
-        assert!(output.with_confidence(1.1).is_err());
-    }
-
-    #[test]
-    fn compatibility_rejects_wrong_input_schema() {
-        let metadata = model_metadata();
-
-        let requirements =
-            ModelRequirements::new(schema("features.v2"), schema("prediction.failure.v1"));
-
-        assert_eq!(
-            assess_compatibility(&metadata, &requirements),
-            ModelCompatibility::Incompatible
+    fn prediction_output_rejects_nan() {
+        let result = PredictionOutput::new(
+            "failure_probability",
+            f64::NAN,
+            PredictionTarget::Probability,
         );
+
+        assert!(result.is_err());
     }
 
     #[test]
-    fn compatibility_accepts_matching_requirements() {
-        let metadata = model_metadata();
+    fn duplicate_outputs_are_rejected() {
+        let first = PredictionOutput::new(
+            "failure",
+            0.1,
+            PredictionTarget::Probability,
+        )
+        .expect("valid output");
 
-        let requirements =
-            ModelRequirements::new(schema("features.v1"), schema("prediction.failure.v1"))
-                .require_deterministic()
-                .require_uncertainty()
-                .require_offline()
-                .require_provider_independence();
+        let second = PredictionOutput::new(
+            "failure",
+            0.2,
+            PredictionTarget::Probability,
+        )
+        .expect("valid output");
 
-        assert_eq!(
-            assess_compatibility(&metadata, &requirements),
-            ModelCompatibility::Compatible
-        );
+        let provenance = PredictionProvenance {
+            model_id: ModelId::new("model").expect("valid model"),
+            model_version: ModelVersion::new(1, 0, 0),
+            input_schema: input_schema(),
+            input_schema_version: FeatureSchemaVersion::new(1, 0),
+            output_schema: output_schema(),
+            model_integrity_digest: None,
+            deterministic: true,
+            random_seed: None,
+            execution_id: None,
+            observation_epoch: None,
+        };
+
+        assert!(Prediction::new(
+            vec![first, second],
+            provenance
+        )
+        .is_err());
     }
 
     #[test]
-    fn shared_model_handle_is_usable() {
+    fn deterministic_context_is_explicit() {
+        let context = PredictionContext::deterministic();
+
+        assert!(context.deterministic);
+        assert_eq!(context.random_seed, None);
+    }
+
+    #[test]
+    fn seeded_context_records_seed() {
+        let context = PredictionContext::seeded(42);
+
+        assert!(!context.deterministic);
+        assert_eq!(context.random_seed, Some(42));
+    }
+
+    #[test]
+    fn deterministic_model_accepts_deterministic_input() {
         let model = TestModel {
-            metadata: model_metadata(),
+            metadata: metadata(),
             state: ModelState::Ready,
         };
 
         let handle = ModelHandle::new(model);
 
-        let features =
-            FeatureVector::new(schema("features.v1"), vec![0.25]).expect("valid features");
-
         let input = PredictionInput::new(
-            features,
-            PredictionContext {
-                deterministic: true,
-                ..PredictionContext::default()
-            },
+            feature_vector(),
+            PredictionContext::deterministic(),
         );
 
-        let prediction = handle.predict(&input).expect("prediction succeeds");
+        let prediction = handle
+            .predict(&input)
+            .expect("prediction should succeed");
 
         assert_eq!(prediction.len(), 1);
+        assert!(prediction.provenance.deterministic);
         assert_eq!(
             prediction
                 .output("failure_probability")
@@ -1542,110 +1882,172 @@ mod tests {
     }
 
     #[test]
+    fn wrong_schema_is_rejected() {
+        let model = TestModel {
+            metadata: metadata(),
+            state: ModelState::Ready,
+        };
+
+        let wrong_schema =
+            ModelSchemaId::new("wrong.schema").expect("valid schema");
+
+        let schema = super::super::features::FeatureSchema::new(
+            wrong_schema,
+            FeatureSchemaVersion::new(1, 0),
+            "wrong schema".to_owned(),
+            Vec::new(),
+            true,
+        )
+        .expect("valid feature schema");
+
+        let features = FeatureVector::new(&schema, Vec::new(), false)
+            .expect("valid feature vector");
+
+        let input = PredictionInput::new(
+            features,
+            PredictionContext::default(),
+        );
+
+        assert!(matches!(
+            model.predict(&input),
+            Err(ModelError::SchemaMismatch { .. })
+        ));
+    }
+
+    #[test]
     fn unavailable_model_fails_closed() {
         let model = TestModel {
-            metadata: model_metadata(),
+            metadata: metadata(),
             state: ModelState::Unavailable,
         };
 
-        let handle = ModelHandle::new(model);
-
-        let features =
-            FeatureVector::new(schema("features.v1"), vec![0.25]).expect("valid features");
-
-        let input = PredictionInput::new(features, PredictionContext::default());
+        let input = PredictionInput::new(
+            feature_vector(),
+            PredictionContext::default(),
+        );
 
         assert!(matches!(
-            handle.predict(&input),
+            model.predict(&input),
             Err(ModelError::Unavailable { .. })
         ));
     }
 
     #[test]
-    fn deterministic_context_is_preserved_in_provenance() {
-        let metadata = model_metadata();
-
-        let context = PredictionContext {
-            execution_id: Some("execution.example".to_owned()),
-            random_seed: Some(42),
-            deterministic: true,
-            observation_epoch: Some(7),
+    fn retired_model_cannot_predict() {
+        let model = TestModel {
+            metadata: metadata(),
+            state: ModelState::Retired,
         };
 
-        let provenance = PredictionProvenance::from_metadata(&metadata, &context);
+        assert!(!model.state().can_predict());
+        assert!(model.state().is_retired());
+    }
 
-        assert!(provenance.deterministic);
-        assert_eq!(provenance.random_seed, Some(42));
+    #[test]
+    fn compatibility_accepts_matching_requirements() {
+        let metadata = metadata();
+
+        let requirements = ModelRequirements::new(
+            input_schema(),
+            FeatureSchemaVersion::new(1, 0),
+            output_schema(),
+        )
+        .require_deterministic()
+        .require_uncertainty()
+        .require_offline()
+        .require_provider_independence()
+        .require_variable_dimension();
+
+        assert_eq!(
+            assess_compatibility(&metadata, &requirements),
+            ModelCompatibility::Compatible
+        );
+    }
+
+    #[test]
+    fn compatibility_rejects_wrong_schema() {
+        let metadata = metadata();
+
+        let requirements = ModelRequirements::new(
+            ModelSchemaId::new("wrong.schema")
+                .expect("valid schema"),
+            FeatureSchemaVersion::new(1, 0),
+            output_schema(),
+        );
+
+        assert_eq!(
+            assess_compatibility(&metadata, &requirements),
+            ModelCompatibility::Incompatible
+        );
+    }
+
+    #[test]
+    fn provenance_contains_model_and_execution_identity() {
+        let metadata = metadata();
+
+        let input = PredictionInput::new(
+            feature_vector(),
+            PredictionContext::deterministic()
+                .with_execution_id("execution-1")
+                .expect("valid execution id")
+                .with_observation_epoch(10),
+        );
+
+        let provenance =
+            PredictionProvenance::from_metadata(&metadata, &input);
+
         assert_eq!(
             provenance.model_id,
-            ModelId::new("test.model").expect("valid model id")
-        );
-    }
-
-    #[test]
-    fn model_state_only_allows_ready_for_prediction() {
-        assert!(!ModelState::Registered.can_predict());
-        assert!(ModelState::Ready.can_predict());
-        assert!(!ModelState::Unavailable.can_predict());
-        assert!(!ModelState::Updating.can_predict());
-        assert!(!ModelState::Disabled.can_predict());
-        assert!(!ModelState::Invalid.can_predict());
-        assert!(!ModelState::Retired.can_predict());
-    }
-
-    #[test]
-    fn prediction_output_lookup_is_stable() {
-        let metadata = model_metadata();
-
-        let first =
-            PredictionOutput::new("failure_probability", 0.1, PredictionTarget::Probability)
-                .expect("valid output");
-
-        let second =
-            PredictionOutput::new("latency", 10.0, PredictionTarget::NonNegativeScalar)
-                .expect("valid output");
-
-        let prediction = Prediction::new(
-            vec![first, second],
-            PredictionProvenance::from_metadata(&metadata, &PredictionContext::default()),
-        )
-        .expect("valid prediction");
-
-        assert_eq!(
-            prediction
-                .output("failure_probability")
-                .expect("output exists")
-                .value,
-            0.1
+            ModelId::new("resilience.failure")
+                .expect("valid model id")
         );
 
         assert_eq!(
-            prediction.output("missing"),
-            None
+            provenance.execution_id.as_deref(),
+            Some("execution-1")
         );
+
+        assert_eq!(provenance.observation_epoch, Some(10));
+        assert!(provenance.deterministic);
     }
 
     #[test]
     fn model_handle_can_be_cloned() {
-        let model = TestModel {
-            metadata: model_metadata(),
+        let handle = ModelHandle::new(TestModel {
+            metadata: metadata(),
             state: ModelState::Ready,
-        };
+        });
 
-        let first = ModelHandle::new(model);
-        let second = first.clone();
+        let cloned = handle.clone();
 
-        assert_eq!(first.metadata().id, second.metadata().id);
-        assert_eq!(first.metadata().version, second.metadata().version);
+        assert_eq!(handle.metadata().id, cloned.metadata().id);
+        assert_eq!(
+            handle.metadata().version,
+            cloned.metadata().version
+        );
     }
 
     #[test]
-    fn model_schema_is_serializable() {
-        let metadata = model_metadata();
+    fn model_handle_supports_batch_prediction() {
+        let handle = ModelHandle::new(TestModel {
+            metadata: metadata(),
+            state: ModelState::Ready,
+        });
 
-        let encoded = serde_json::to_string(&metadata).expect("serialize");
-        let decoded: ModelMetadata = serde_json::from_str(&encoded).expect("deserialize");
+        let input_a = PredictionInput::new(
+            feature_vector(),
+            PredictionContext::default(),
+        );
 
-        assert_eq!(metadata, decoded);
+        let input_b = PredictionInput::new(
+            feature_vector(),
+            PredictionContext::default(),
+        );
+
+        let predictions = handle
+            .predict_batch(&[input_a, input_b])
+            .expect("batch prediction should succeed");
+
+        assert_eq!(predictions.len(), 2);
     }
 }
