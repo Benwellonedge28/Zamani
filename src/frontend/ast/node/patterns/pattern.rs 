@@ -1,0 +1,1345 @@
+//! # Zamani Native AST — Pattern
+//!
+//! Production-ready, source-level representation and common contract for
+//! Zamani pattern nodes.
+//!
+//! ## Architectural position
+//!
+//! ```text
+//! Zamani source
+//!     │
+//!     ▼
+//! lexer
+//!     │
+//!     ▼
+//! parser
+//!     │
+//!     ▼
+//! Native Pattern AST
+//!     │
+//!     ├── wildcard.rs
+//!     ├── identifier.rs
+//!     ├── literal.rs
+//!     ├── tuple.rs
+//!     ├── struct.rs
+//!     ├── enum.rs
+//!     ├── range.rs
+//!     ├── or.rs
+//!     └── reference.rs
+//!     │
+//!     ▼
+//! structural validation
+//!     │
+//!     ▼
+//! semantic analysis
+//!     │
+//!     ▼
+//! semantic model
+//!     │
+//!     ▼
+//! ZUIR
+//!     │
+//!     ├── classical IR
+//!     ├── quantum IR
+//!     ├── hybrid IR
+//!     ├── distributed IR
+//!     ├── accelerator IR
+//!     └── future-domain IR
+//!     │
+//!     ▼
+//! target lowering / execution
+//! ```
+//!
+//! ## Responsibility
+//!
+//! This module owns the **common source-level contract for native Zamani
+//! patterns**.
+//!
+//! It provides:
+//!
+//! - the canonical pattern-node identity contract;
+//! - pattern classification;
+//! - deterministic direct-child enumeration;
+//! - local structural validation;
+//! - configurable validation policy;
+//! - stable schema identification;
+//! - integration with the common [`Node`] / [`AstNode`] infrastructure;
+//! - source-level pattern invariants;
+//! - diagnostics-friendly classification.
+//!
+//! It does **not** own concrete pattern variants.
+//!
+//! Concrete patterns belong to sibling modules:
+//!
+//! - `wildcard.rs`;
+//! - `identifier.rs`;
+//! - `literal.rs`;
+//! - `tuple.rs`;
+//! - `struct.rs`;
+//! - `enum.rs`;
+//! - `range.rs`;
+//! - `or.rs`;
+//! - `reference.rs`.
+//!
+//! ## Important architectural distinction
+//!
+//! This module represents **syntax**, not semantic pattern meaning.
+//!
+//! It must never perform:
+//!
+//! - name resolution;
+//! - type inference;
+//! - type checking;
+//! - exhaustiveness analysis;
+//! - reachability analysis;
+//! - binding analysis;
+//! - ownership analysis;
+//! - borrow checking;
+//! - resource allocation;
+//! - quantum mapping;
+//! - quantum routing;
+//! - scheduling;
+//! - calibration;
+//! - QEC;
+//! - noise analysis;
+//! - backend selection;
+//! - hardware mapping;
+//! - QIR lowering;
+//! - LLVM lowering;
+//! - MLIR lowering;
+//! - runtime execution.
+//!
+//! Those responsibilities belong to later compiler layers.
+//!
+//! ## Domain neutrality
+//!
+//! Patterns are intentionally domain-neutral.
+//!
+//! A pattern may eventually match:
+//!
+//! - classical values;
+//! - symbolic values;
+//! - resource handles;
+//! - quantum measurement results;
+//! - generic resources;
+//! - distributed values;
+//! - accelerator values;
+//! - extension-defined values;
+//! - future computational values.
+//!
+//! None of those interpretations belongs in this file.
+//!
+//! For example, a pattern matching a quantum measurement result is still a
+//! source-level pattern. Whether that result controls quantum execution is
+//! determined by semantic analysis and later lowering.
+//!
+//! ## POCO-REAF
+//!
+//! This module contains no assumptions about:
+//!
+//! - machine size;
+//! - CPU architecture;
+//! - GPU architecture;
+//! - FPGA architecture;
+//! - QPU architecture;
+//! - qubit count;
+//! - register width;
+//! - number of resources;
+//! - number of machines;
+//! - vendor;
+//! - backend;
+//! - topology;
+//! - gate set;
+//! - instruction set.
+//!
+//! Therefore a pattern can participate in a program intended to scale from a
+//! tiny execution environment to an arbitrarily large environment supported by
+//! later compilation and execution layers.
+//!
+//! ```text
+//! Program Once
+//!      │
+//!      ▼
+//! Source Pattern
+//!      │
+//!      ▼
+//! Semantic Meaning
+//!      │
+//!      ▼
+//! ZUIR
+//!      │
+//!      ▼
+//! Available Resources
+//!      │
+//!      ▼
+//! Target Realization
+//! ```
+//!
+//! ## Repository integration
+//!
+//! The common AST infrastructure currently provides:
+//!
+//! - [`Node`];
+//! - [`NodeId`];
+//! - [`NodeKind`];
+//! - [`CoreNodeKind`];
+//! - [`NodeMetadata`];
+//! - [`Span`];
+//! - [`AstNode`].
+//!
+//! This module builds only on those foundational contracts.
+//!
+//! The repository's `NodeKind` architecture intentionally has a core and an
+//! extensible extension form, allowing future language constructs without
+//! coupling the native AST to a fixed computational technology. The pattern
+//! abstraction follows that same design principle. 
+//!
+//! ## Dependency boundary
+//!
+//! Allowed dependencies:
+//!
+//! - `core`;
+//! - standard-library collection/iterator primitives;
+//! - `serde`;
+//! - foundational AST node modules.
+//!
+//! Forbidden dependencies:
+//!
+//! - parser;
+//! - lexer;
+//! - semantic analysis;
+//! - compiler driver;
+//! - ZUIR;
+//! - quantum IR;
+//! - QEC;
+//! - optimization;
+//! - scheduling;
+//! - routing;
+//! - calibration;
+//! - runtime;
+//! - hardware;
+//! - vendor APIs;
+//! - QIR;
+//! - LLVM;
+//! - MLIR.
+//!
+//! ## Concrete-pattern integration
+//!
+//! Concrete sibling pattern modules should implement the [`PatternNode`] trait.
+//!
+//! Conceptually:
+//!
+//! ```text
+//! PatternNode
+//!      │
+//!      ├── WildcardPattern
+//!      ├── IdentifierPattern
+//!      ├── LiteralPattern
+//!      ├── TuplePattern
+//!      ├── StructPattern
+//!      ├── EnumPattern
+//!      ├── RangePattern
+//!      ├── OrPattern
+//!      └── ReferencePattern
+//! ```
+//!
+//! The exact concrete representation remains owned by those modules.
+//!
+//! This prevents this file from becoming a giant closed enum that must be
+//! edited whenever a new source-level pattern form is introduced.
+//!
+//! ## Structural validation boundary
+//!
+//! Local validation can verify:
+//!
+//! - the node has a pattern-compatible node kind;
+//! - the pattern has a valid identity;
+//! - direct child references do not point to the pattern itself;
+//! - caller-supplied child-count limits are respected.
+//!
+//! Local validation cannot verify:
+//!
+//! - whether child IDs exist;
+//! - whether a referenced identifier exists;
+//! - whether a literal has the expected type;
+//! - whether bindings are unique;
+//! - whether a range is semantically valid;
+//! - whether a match is exhaustive;
+//! - whether a pattern is reachable;
+//! - whether a pattern is valid for a quantum/classical resource.
+//!
+//! Those require graph-wide validation or semantic analysis.
+//!
+//! ## Scalability
+//!
+//! There is no language-level maximum for:
+//!
+//! - pattern count;
+//! - pattern depth;
+//! - number of match arms;
+//! - number of bindings;
+//! - tuple width;
+//! - list width;
+//! - program size;
+//! - machine size;
+//! - quantum-resource count.
+//!
+//! Resource limits may be supplied explicitly by compiler infrastructure.
+//!
+//! Such limits are **resource/security policies**, not language semantics.
+//!
+//! ## Determinism
+//!
+//! Direct children are returned in source-structural order.
+//!
+//! No hash-map iteration order is used to define pattern semantics.
+//!
+//! Concrete patterns must preserve their source ordering.
+//!
+//! ## Serialization
+//!
+//! This module uses Serde-compatible types but does not define a separate
+//! serialization protocol.
+//!
+//! Repository-wide AST serialization owns:
+//!
+//! - global schema versioning;
+//! - format selection;
+//! - compatibility policy;
+//! - migration;
+//! - persistence.
+//!
+//! ## Security
+//!
+//! This implementation:
+//!
+//! - contains no `unsafe`;
+//! - performs no I/O;
+//! - executes no user code;
+//! - uses no raw pointers;
+//! - uses no global mutable state;
+//! - performs no unchecked indexing;
+//! - performs no recursive traversal;
+//! - does not dereference `NodeId`s.
+//!
+//! Untrusted references remain opaque until validated by the AST graph.
+//!
+//! ## Rust compatibility
+//!
+//! Required toolchain:
+//!
+//! - Rust 1.97;
+//! - Rust 1.97.1;
+//! - edition 2021;
+//! - stable Rust;
+//! - no nightly features;
+//! - no `unsafe`.
+//!
+//! ## No-reedit contract
+//!
+//! This file should require modification only when the **common source-level
+//! pattern contract** changes.
+//!
+//! Changes to:
+//!
+//! - quantum backends;
+//! - QPU topology;
+//! - QEC;
+//! - routing;
+//! - scheduling;
+//! - calibration;
+//! - optimization;
+//! - ZUIR;
+//! - hardware;
+//! - runtime;
+//! - vendor integrations
+//!
+//! must not require modification here.
+//!
+//! ============================================================================
+//! Implementation
+//! ============================================================================
+
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::fmt;
+use core::slice;
+
+use serde::{Deserialize, Serialize};
+
+use super::super::metadata::NodeMetadata;
+use super::super::node::{AstNode, Node};
+use super::super::node_id::NodeId;
+use super::super::node_kind::{CoreNodeKind, NodeKind};
+use super::super::source::Span;
+
+/// Independent schema version for the common native-pattern contract.
+///
+/// This version is intentionally independent from:
+///
+/// - Zamani language version;
+/// - compiler version;
+/// - Rust version;
+/// - global AST serialization version;
+/// - ZUIR version;
+/// - quantum IR version.
+///
+/// Increment this only when the serialized/public meaning of the common
+/// pattern contract changes.
+pub const PATTERN_SCHEMA_VERSION: u16 = 1;
+
+/// Stable source-level name for the native pattern abstraction.
+pub const PATTERN_KIND_NAME: &str = "zamani:pattern";
+
+/// Result type used by pattern-local operations.
+pub type PatternResult<T> = Result<T, PatternError>;
+
+/// Local structural validation errors for patterns.
+///
+/// These errors deliberately exclude semantic errors.
+///
+/// For example, this type does not report:
+///
+/// - non-exhaustive matching;
+/// - incompatible types;
+/// - duplicate bindings;
+/// - unreachable patterns;
+/// - invalid quantum-resource semantics.
+///
+/// Those belong to semantic analysis.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum PatternError {
+    /// The common AST node does not have a pattern-compatible kind.
+    InvalidNodeKind {
+        /// The actual kind stored by the node.
+        actual: NodeKind,
+    },
+
+    /// The pattern itself has the same ID as a direct child.
+    SelfReferentialChild {
+        /// Position of the offending child.
+        child_index: usize,
+    },
+
+    /// A child reference is the default/null AST ID.
+    ///
+    /// Concrete graph validation is still responsible for verifying that
+    /// non-default IDs resolve to actual nodes.
+    InvalidChildReference {
+        /// Position of the offending child.
+        child_index: usize,
+    },
+
+    /// A caller-supplied validation policy was exceeded.
+    LimitExceeded {
+        /// Stable policy name.
+        limit: &'static str,
+
+        /// Observed value.
+        actual: usize,
+
+        /// Allowed value.
+        maximum: usize,
+    },
+}
+
+impl fmt::Display for PatternError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidNodeKind { actual } => {
+                write!(
+                    formatter,
+                    "pattern has invalid AST node kind: {actual}"
+                )
+            }
+
+            Self::SelfReferentialChild { child_index } => {
+                write!(
+                    formatter,
+                    "pattern child {child_index} directly references its enclosing pattern"
+                )
+            }
+
+            Self::InvalidChildReference { child_index } => {
+                write!(
+                    formatter,
+                    "pattern child {child_index} has an invalid node reference"
+                )
+            }
+
+            Self::LimitExceeded {
+                limit,
+                actual,
+                maximum,
+            } => {
+                write!(
+                    formatter,
+                    "pattern validation limit `{limit}` exceeded: \
+                     {actual} > {maximum}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for PatternError {}
+
+/// Caller-controlled structural validation policy.
+///
+/// The default policy is unrestricted.
+///
+/// The AST itself does not impose arbitrary language limits. Compiler services
+/// that need protection against hostile or resource-exhausting input may pass
+/// an explicit policy.
+///
+/// This is deliberately a small policy object because graph-wide resource
+/// limits belong to the AST validation subsystem rather than every individual
+/// node.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PatternValidationPolicy {
+    /// Optional maximum number of direct children.
+    ///
+    /// `None` means unrestricted.
+    pub max_children: Option<usize>,
+}
+
+impl PatternValidationPolicy {
+    /// Creates a policy with no pattern-local limits.
+    #[must_use]
+    pub const fn unrestricted() -> Self {
+        Self {
+            max_children: None,
+        }
+    }
+
+    /// Creates a policy with a caller-defined maximum number of direct
+    /// children.
+    #[must_use]
+    pub const fn with_max_children(max_children: usize) -> Self {
+        Self {
+            max_children: Some(max_children),
+        }
+    }
+
+    fn validate_child_count(self, count: usize) -> PatternResult<()> {
+        if let Some(maximum) = self.max_children {
+            if count > maximum {
+                return Err(PatternError::LimitExceeded {
+                    limit: "max_children",
+                    actual: count,
+                    maximum,
+                });
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Broad source-level classification of a pattern.
+///
+/// This is deliberately smaller than the concrete pattern taxonomy.
+///
+/// Concrete variants remain owned by sibling modules.
+///
+/// This enum is useful for:
+///
+/// - diagnostics;
+/// - visitors;
+/// - tooling;
+/// - debugging;
+/// - semantic dispatch;
+/// - source-level analysis.
+///
+/// It does not describe target or hardware behavior.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum PatternKind {
+    /// Matches any value and normally introduces no binding.
+    Wildcard,
+
+    /// Binds a value to a source identifier.
+    Identifier,
+
+    /// Matches a source literal.
+    Literal,
+
+    /// Matches a tuple-shaped value.
+    Tuple,
+
+    /// Matches a structure by fields.
+    Struct,
+
+    /// Matches an enum/variant-shaped value.
+    Enum,
+
+    /// Matches a range.
+    Range,
+
+    /// Matches any of multiple alternatives.
+    Or,
+
+    /// References another source-level pattern/value abstraction.
+    Reference,
+
+    /// Pattern supplied by an extension.
+    Extension,
+}
+
+impl PatternKind {
+    /// Returns a stable source-level name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Wildcard => "wildcard",
+            Self::Identifier => "identifier",
+            Self::Literal => "literal",
+            Self::Tuple => "tuple",
+            Self::Struct => "struct",
+            Self::Enum => "enum",
+            Self::Range => "range",
+            Self::Or => "or",
+            Self::Reference => "reference",
+            Self::Extension => "extension",
+        }
+    }
+
+    /// Returns whether this kind is a native core pattern.
+    #[must_use]
+    pub const fn is_core(self) -> bool {
+        !matches!(self, Self::Extension)
+    }
+
+    /// Returns whether this kind is extension-defined.
+    #[must_use]
+    pub const fn is_extension(self) -> bool {
+        matches!(self, Self::Extension)
+    }
+}
+
+impl fmt::Display for PatternKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.name())
+    }
+}
+
+/// Common contract implemented by every concrete native pattern node.
+///
+/// The trait intentionally exposes only source-level structure.
+///
+/// A concrete pattern owns its own concrete fields and embeds a [`Node`].
+///
+/// Example conceptual implementation:
+///
+/// ```ignore
+/// pub struct WildcardPattern {
+///     node: Node,
+/// }
+///
+/// impl PatternNode for WildcardPattern {
+///     fn pattern_kind(&self) -> PatternKind {
+///         PatternKind::Wildcard
+///     }
+///
+///     fn node(&self) -> &Node {
+///         &self.node
+///     }
+///
+///     fn direct_child_node_ids(&self) -> &[NodeId] {
+///         &[]
+///     }
+/// }
+///
+/// impl AstNode for WildcardPattern {
+///     fn node(&self) -> &Node {
+///         &self.node
+///     }
+///
+///     fn node_mut(&mut self) -> &mut Node {
+///         &mut self.node
+///     }
+/// }
+/// ```
+///
+/// The exact concrete representation remains owned by its sibling module.
+pub trait PatternNode: AstNode {
+    /// Returns the concrete source-level pattern classification.
+    fn pattern_kind(&self) -> PatternKind;
+
+    /// Returns the direct child node IDs in deterministic source order.
+    ///
+    /// The returned slice must contain only **direct structural children**.
+    ///
+    /// It must not perform recursive traversal.
+    fn direct_child_node_ids(&self) -> &[NodeId];
+
+    /// Performs local structural validation using the supplied policy.
+    ///
+    /// Implementations should normally delegate common checks to
+    /// [`validate_pattern_structure`].
+    fn validate_pattern(&self, policy: PatternValidationPolicy) -> PatternResult<()> {
+        validate_pattern_structure(self.node(), self.direct_child_node_ids(), policy)
+    }
+
+    /// Returns whether this pattern introduces a source binding.
+    ///
+    /// The default is `false`.
+    ///
+    /// Concrete implementations should override this only when the fact is
+    /// syntactically guaranteed by the concrete pattern.
+    ///
+    /// This method does **not** resolve binding identity or type.
+    fn syntactically_binds(&self) -> bool {
+        false
+    }
+
+    /// Returns the stable common pattern schema version.
+    #[inline]
+    #[must_use]
+    fn pattern_schema_version(&self) -> u16 {
+        PATTERN_SCHEMA_VERSION
+    }
+}
+
+/// Performs the common structural validation shared by concrete pattern nodes.
+///
+/// This function deliberately does not require the global AST graph.
+///
+/// It verifies only:
+///
+/// 1. the embedded node is pattern-compatible;
+/// 2. every direct child ID is structurally valid;
+/// 3. no direct child references the pattern itself;
+/// 4. the caller's child-count policy is respected.
+///
+/// It does not verify that child IDs exist.
+///
+/// Graph-wide validation owns reference resolution and graph topology.
+pub fn validate_pattern_structure(
+    node: &Node,
+    children: &[NodeId],
+    policy: PatternValidationPolicy,
+) -> PatternResult<()> {
+    validate_pattern_node_kind(node.node_kind())?;
+
+    policy.validate_child_count(children.len())?;
+
+    let node_id = node.id();
+    let invalid_id = NodeId::default();
+
+    for (child_index, child_id) in children.iter().copied().enumerate() {
+        if child_id == invalid_id {
+            return Err(PatternError::InvalidChildReference { child_index });
+        }
+
+        if child_id == node_id {
+            return Err(PatternError::SelfReferentialChild { child_index });
+        }
+    }
+
+    Ok(())
+}
+
+/// Validates whether a [`NodeKind`] is compatible with the native pattern
+/// abstraction.
+///
+/// Native concrete pattern nodes may use:
+///
+/// - `CoreNodeKind::Pattern`;
+/// - `CoreNodeKind::WildcardPattern`;
+/// - `CoreNodeKind::Identifier`;
+/// - `CoreNodeKind::Literal`;
+///
+/// as appropriate to their existing concrete representation.
+///
+/// Extension-defined pattern nodes are also accepted.
+///
+/// This intentionally avoids assuming that every concrete pattern must have
+/// exactly one specific `CoreNodeKind`.
+pub fn validate_pattern_node_kind(kind: &NodeKind) -> PatternResult<()> {
+    let valid = match kind {
+        NodeKind::Extension(_) => true,
+
+        NodeKind::Core(core_kind) => matches!(
+            core_kind,
+            CoreNodeKind::Pattern
+                | CoreNodeKind::WildcardPattern
+                | CoreNodeKind::Identifier
+                | CoreNodeKind::Literal
+        ),
+    };
+
+    if valid {
+        Ok(())
+    } else {
+        Err(PatternError::InvalidNodeKind {
+            actual: kind.clone(),
+        })
+    }
+}
+
+/// Returns whether a node kind can represent a native pattern.
+///
+/// This is a non-error-producing counterpart to
+/// [`validate_pattern_node_kind`].
+#[must_use]
+pub fn is_pattern_node_kind(kind: &NodeKind) -> bool {
+    match kind {
+        NodeKind::Extension(_) => true,
+
+        NodeKind::Core(core_kind) => matches!(
+            core_kind,
+            CoreNodeKind::Pattern
+                | CoreNodeKind::WildcardPattern
+                | CoreNodeKind::Identifier
+                | CoreNodeKind::Literal
+        ),
+    }
+}
+
+/// Returns the canonical schema version for this abstraction.
+#[inline]
+#[must_use]
+pub const fn schema_version() -> u16 {
+    PATTERN_SCHEMA_VERSION
+}
+
+/// Returns the stable source-level name of this abstraction.
+#[inline]
+#[must_use]
+pub const fn kind_name() -> &'static str {
+    PATTERN_KIND_NAME
+}
+
+/// Returns a deterministic iterator over direct child IDs.
+///
+/// This helper exists so traversal infrastructure does not need to allocate a
+/// temporary vector merely to enumerate a pattern's direct children.
+///
+/// The iterator is non-recursive.
+///
+/// # Scalability
+///
+/// The iterator's complexity is O(1) to construct and O(n) to consume for `n`
+/// direct children.
+///
+/// No recursion is performed here.
+#[must_use]
+pub fn direct_children<'a>(
+    children: &'a [NodeId],
+) -> slice::Iter<'a, NodeId> {
+    children.iter()
+}
+
+/// Returns the number of direct children without traversing descendants.
+#[inline]
+#[must_use]
+pub const fn direct_child_count(children: &[NodeId]) -> usize {
+    children.len()
+}
+
+/// Returns whether a pattern has no direct structural children.
+///
+/// This is a structural property only.
+///
+/// It does not mean the pattern has no semantic dependencies.
+#[inline]
+#[must_use]
+pub fn has_no_direct_children(children: &[NodeId]) -> bool {
+    children.is_empty()
+}
+
+/// Returns a compact, allocation-free classification helper for diagnostics.
+///
+/// The returned value is the stable pattern-kind name.
+#[inline]
+#[must_use]
+pub const fn pattern_kind_name(kind: PatternKind) -> &'static str {
+    kind.name()
+}
+
+/// Lightweight diagnostic information for a pattern.
+///
+/// This intentionally contains no semantic state and no arbitrary metadata.
+///
+/// It is suitable for diagnostics/tooling that needs to identify a pattern
+/// without serializing its complete subtree.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PatternDiagnosticSummary {
+    /// Stable AST node identity.
+    pub id: NodeId,
+
+    /// Concrete source-level pattern category.
+    pub pattern_kind: PatternKind,
+
+    /// Source location.
+    pub span: Span,
+}
+
+impl PatternDiagnosticSummary {
+    /// Creates a diagnostic summary from a concrete pattern node.
+    #[must_use]
+    pub fn new<P>(pattern: &P) -> Self
+    where
+        P: PatternNode + ?Sized,
+    {
+        Self {
+            id: pattern.id(),
+            pattern_kind: pattern.pattern_kind(),
+            span: pattern.span().clone(),
+        }
+    }
+}
+
+impl fmt::Display for PatternDiagnosticSummary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "{} pattern {} at {}",
+            self.pattern_kind,
+            self.id,
+            self.span
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::frontend::ast::node::metadata::NodeMetadata;
+    use crate::frontend::ast::node::node::Node;
+    use crate::frontend::ast::node::node_id::NodeId;
+    use crate::frontend::ast::node::node_kind::{
+        CoreNodeKind,
+        NodeKind,
+    };
+    use crate::frontend::ast::node::source::Span;
+
+    fn test_node(id: NodeId, kind: NodeKind) -> Node {
+        Node::new(
+            id,
+            kind,
+            Span::default(),
+            NodeMetadata::default(),
+        )
+    }
+
+    #[test]
+    fn schema_version_is_stable() {
+        assert_eq!(schema_version(), PATTERN_SCHEMA_VERSION);
+        assert_eq!(PATTERN_SCHEMA_VERSION, 1);
+    }
+
+    #[test]
+    fn kind_name_is_stable() {
+        assert_eq!(kind_name(), "zamani:pattern");
+    }
+
+    #[test]
+    fn pattern_kind_names_are_stable() {
+        assert_eq!(PatternKind::Wildcard.name(), "wildcard");
+        assert_eq!(PatternKind::Identifier.name(), "identifier");
+        assert_eq!(PatternKind::Literal.name(), "literal");
+        assert_eq!(PatternKind::Tuple.name(), "tuple");
+        assert_eq!(PatternKind::Struct.name(), "struct");
+        assert_eq!(PatternKind::Enum.name(), "enum");
+        assert_eq!(PatternKind::Range.name(), "range");
+        assert_eq!(PatternKind::Or.name(), "or");
+        assert_eq!(PatternKind::Reference.name(), "reference");
+        assert_eq!(PatternKind::Extension.name(), "extension");
+    }
+
+    #[test]
+    fn core_pattern_kind_is_accepted() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::Pattern),
+        );
+
+        assert!(validate_pattern_node_kind(node.kind()).is_ok());
+        assert!(is_pattern_node_kind(node.kind()));
+    }
+
+    #[test]
+    fn wildcard_pattern_kind_is_accepted() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::WildcardPattern),
+        );
+
+        assert!(validate_pattern_node_kind(node.kind()).is_ok());
+        assert!(is_pattern_node_kind(node.kind()));
+    }
+
+    #[test]
+    fn identifier_pattern_kind_is_accepted() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::Identifier),
+        );
+
+        assert!(validate_pattern_node_kind(node.kind()).is_ok());
+        assert!(is_pattern_node_kind(node.kind()));
+    }
+
+    #[test]
+    fn literal_pattern_kind_is_accepted() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::Literal),
+        );
+
+        assert!(validate_pattern_node_kind(node.kind()).is_ok());
+        assert!(is_pattern_node_kind(node.kind()));
+    }
+
+    #[test]
+    fn extension_pattern_kind_is_accepted() {
+        let kind = NodeKind::extension(
+            "zamani.test",
+            "custom-pattern",
+        )
+        .expect("test extension kind should be valid");
+
+        assert!(validate_pattern_node_kind(&kind).is_ok());
+        assert!(is_pattern_node_kind(&kind));
+    }
+
+    #[test]
+    fn unrelated_core_kind_is_rejected() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::ForStatement),
+        );
+
+        let result = validate_pattern_node_kind(node.kind());
+
+        assert!(matches!(
+            result,
+            Err(PatternError::InvalidNodeKind { .. })
+        ));
+    }
+
+    #[test]
+    fn invalid_default_child_is_rejected() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::Pattern),
+        );
+
+        let children = [NodeId::default()];
+
+        let result = validate_pattern_structure(
+            &node,
+            &children,
+            PatternValidationPolicy::unrestricted(),
+        );
+
+        assert_eq!(
+            result,
+            Err(PatternError::InvalidChildReference {
+                child_index: 0,
+            })
+        );
+    }
+
+    #[test]
+    fn self_referential_child_is_rejected() {
+        let node_id = NodeId::new(7);
+
+        let node = test_node(
+            node_id,
+            NodeKind::core(CoreNodeKind::Pattern),
+        );
+
+        let children = [node_id];
+
+        let result = validate_pattern_structure(
+            &node,
+            &children,
+            PatternValidationPolicy::unrestricted(),
+        );
+
+        assert_eq!(
+            result,
+            Err(PatternError::SelfReferentialChild {
+                child_index: 0,
+            })
+        );
+    }
+
+    #[test]
+    fn valid_children_are_accepted() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::Pattern),
+        );
+
+        let children = [
+            NodeId::new(2),
+            NodeId::new(3),
+            NodeId::new(4),
+        ];
+
+        assert!(
+            validate_pattern_structure(
+                &node,
+                &children,
+                PatternValidationPolicy::unrestricted(),
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn unrestricted_policy_allows_arbitrary_child_count() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::Pattern),
+        );
+
+        let children: Vec<NodeId> = (2..=1025)
+            .map(NodeId::new)
+            .collect();
+
+        assert!(
+            validate_pattern_structure(
+                &node,
+                &children,
+                PatternValidationPolicy::unrestricted(),
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn explicit_child_limit_is_enforced() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::Pattern),
+        );
+
+        let children = [
+            NodeId::new(2),
+            NodeId::new(3),
+            NodeId::new(4),
+        ];
+
+        let result = validate_pattern_structure(
+            &node,
+            &children,
+            PatternValidationPolicy::with_max_children(2),
+        );
+
+        assert_eq!(
+            result,
+            Err(PatternError::LimitExceeded {
+                limit: "max_children",
+                actual: 3,
+                maximum: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn direct_child_helpers_are_non_recursive() {
+        let children = [
+            NodeId::new(2),
+            NodeId::new(3),
+            NodeId::new(4),
+        ];
+
+        assert_eq!(direct_child_count(&children), 3);
+        assert!(!has_no_direct_children(&children));
+
+        let collected: Vec<NodeId> =
+            direct_children(&children).copied().collect();
+
+        assert_eq!(collected, children);
+    }
+
+    #[test]
+    fn empty_children_are_supported() {
+        let children: [NodeId; 0] = [];
+
+        assert_eq!(direct_child_count(&children), 0);
+        assert!(has_no_direct_children(&children));
+        assert_eq!(
+            direct_children(&children).count(),
+            0
+        );
+    }
+
+    #[test]
+    fn validation_does_not_resolve_graph_references() {
+        let node = test_node(
+            NodeId::new(1),
+            NodeKind::core(CoreNodeKind::Pattern),
+        );
+
+        // These IDs do not have to exist in the current local test fixture.
+        // Graph-wide validation is responsible for reference resolution.
+        let children = [
+            NodeId::new(100),
+            NodeId::new(200),
+        ];
+
+        assert!(
+            validate_pattern_structure(
+                &node,
+                &children,
+                PatternValidationPolicy::unrestricted(),
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn pattern_kind_classification_is_domain_neutral() {
+        let kinds = [
+            PatternKind::Wildcard,
+            PatternKind::Identifier,
+            PatternKind::Literal,
+            PatternKind::Tuple,
+            PatternKind::Struct,
+            PatternKind::Enum,
+            PatternKind::Range,
+            PatternKind::Or,
+            PatternKind::Reference,
+            PatternKind::Extension,
+        ];
+
+        for kind in kinds {
+            assert!(!kind.name().is_empty());
+        }
+    }
+
+    #[test]
+    fn extension_kind_is_not_a_closed_world_failure() {
+        let kind = NodeKind::extension(
+            "future.domain",
+            "resource-pattern",
+        )
+        .expect("future extension kind should be representable");
+
+        assert!(is_pattern_node_kind(&kind));
+    }
+
+    #[test]
+    fn error_display_is_non_empty() {
+        let errors = [
+            PatternError::InvalidNodeKind {
+                actual: NodeKind::core(CoreNodeKind::ForStatement),
+            },
+            PatternError::SelfReferentialChild {
+                child_index: 0,
+            },
+            PatternError::InvalidChildReference {
+                child_index: 1,
+            },
+            PatternError::LimitExceeded {
+                limit: "max_children",
+                actual: 3,
+                maximum: 2,
+            },
+        ];
+
+        for error in errors {
+            assert!(!error.to_string().is_empty());
+        }
+    }
+
+    #[test]
+    fn diagnostic_summary_is_source_level_only() {
+        let node = test_node(
+            NodeId::new(9),
+            NodeKind::core(CoreNodeKind::Pattern),
+        );
+
+        // Construct a minimal test implementation through a local wrapper.
+        struct TestPattern {
+            node: Node,
+            children: Vec<NodeId>,
+        }
+
+        impl AstNode for TestPattern {
+            fn node(&self) -> &Node {
+                &self.node
+            }
+
+            fn node_mut(&mut self) -> &mut Node {
+                &mut self.node
+            }
+        }
+
+        impl PatternNode for TestPattern {
+            fn pattern_kind(&self) -> PatternKind {
+                PatternKind::Tuple
+            }
+
+            fn direct_child_node_ids(&self) -> &[NodeId] {
+                &self.children
+            }
+        }
+
+        let pattern = TestPattern {
+            node,
+            children: Vec::new(),
+        };
+
+        let summary = PatternDiagnosticSummary::new(&pattern);
+
+        assert_eq!(summary.id, NodeId::new(9));
+        assert_eq!(summary.pattern_kind, PatternKind::Tuple);
+    }
+
+    #[test]
+    fn pattern_node_default_validation_is_local_only() {
+        struct TestPattern {
+            node: Node,
+            children: Vec<NodeId>,
+        }
+
+        impl AstNode for TestPattern {
+            fn node(&self) -> &Node {
+                &self.node
+            }
+
+            fn node_mut(&mut self) -> &mut Node {
+                &mut self.node
+            }
+        }
+
+        impl PatternNode for TestPattern {
+            fn pattern_kind(&self) -> PatternKind {
+                PatternKind::Tuple
+            }
+
+            fn direct_child_node_ids(&self) -> &[NodeId] {
+                &self.children
+            }
+        }
+
+        let pattern = TestPattern {
+            node: test_node(
+                NodeId::new(1),
+                NodeKind::core(CoreNodeKind::Pattern),
+            ),
+            children: vec![
+                NodeId::new(2),
+                NodeId::new(3),
+            ],
+        };
+
+        assert!(
+            pattern
+                .validate_pattern(
+                    PatternValidationPolicy::unrestricted()
+                )
+                .is_ok()
+        );
+    }
+}
