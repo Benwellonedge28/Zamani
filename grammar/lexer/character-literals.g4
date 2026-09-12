@@ -7,10 +7,7 @@
  *     grammar/lexer/character-literals.g4
  *
  * Role:
- *     Canonical ANTLR4 lexical grammar for Zamani character literals.
- *
- * Status:
- *     Production lexical architecture.
+ *     Authoritative ANTLR4 lexical grammar for Zamani character literals.
  *
  * Language:
  *     Zamani
@@ -25,91 +22,91 @@
  *     Rust `unsafe` is not required or permitted.
  *
  * ============================================================================
- *
  * ARCHITECTURAL PURPOSE
  * ============================================================================
  *
- * This file is the sole lexical owner of the ordinary Zamani character
- * literal token.
+ * This grammar owns the lexical representation of ordinary Zamani character
+ * literals.
  *
  * It defines:
  *
- *     - character literal delimiters;
- *     - character-body lexical boundaries;
- *     - character escape syntax;
+ *     - the character-literal delimiters;
+ *     - the lexical body;
+ *     - supported character escapes;
  *     - Unicode escape syntax;
- *     - the public character-literal token.
+ *     - the public CHAR token.
  *
  * It does NOT define:
  *
- *     - the `char` type;
- *     - character storage;
- *     - character width on a target;
- *     - UTF-8 encoding decisions;
- *     - UTF-16 encoding decisions;
- *     - UTF-32 representation;
+ *     - the `char` semantic type;
+ *     - character storage representation;
+ *     - UTF-8/UTF-16/UTF-32 target representation;
  *     - Unicode normalization;
- *     - semantic character decoding;
- *     - constant folding;
- *     - compile-time evaluation;
- *     - runtime character operations;
+ *     - Unicode grapheme segmentation;
+ *     - semantic Unicode scalar validation;
+ *     - constant evaluation;
+ *     - type inference;
  *     - memory allocation;
- *     - machine registers;
- *     - target architecture;
- *     - hardware resources;
+ *     - machine widths;
+ *     - register widths;
+ *     - hardware;
  *     - quantum resources;
- *     - scheduling;
- *     - optimization;
  *     - QEC;
  *     - ZQN;
- *     - runtime dispatch.
+ *     - routing;
+ *     - scheduling;
+ *     - optimization;
+ *     - runtime execution;
+ *     - target selection;
+ *     - deployment.
  *
  * ============================================================================
- *
  * DEPENDENCY DIRECTION
  * ============================================================================
  *
- *     grammar/spec/lexical.md
- *              |
- *              v
+ *     source specification
+ *          |
+ *          v
  *     character-literals.g4
- *              |
- *              v
+ *          |
+ *          v
  *     canonical ZamaniLexer
- *              |
- *              v
- *     parser grammars
- *              |
- *              v
- *     native AST
- *              |
- *              v
- *     semantic literal processing
- *              |
- *              v
+ *          |
+ *          v
+ *     parser
+ *          |
+ *          v
+ *     native AST Literal
+ *          |
+ *          v
+ *     semantic literal validation
+ *          |
+ *          v
  *     canonical semantic IR
- *              |
- *              v
- *     compilation / optimization / execution
+ *          |
+ *          +--> classical lowering
+ *          +--> quantum lowering
+ *          +--> HDL/hardware lowering
+ *          +--> distributed lowering
+ *          +--> accelerator lowering
+ *          |
+ *          v
+ *     target realization
  *
- * This file MUST NOT depend on:
+ * This grammar MUST NOT introduce a reverse dependency from grammar to:
  *
  *     AST
  *     semantic analysis
- *     type checking
- *     classical IR
- *     quantum::ir
+ *     IR
+ *     runtime
+ *     hardware
  *     QEC
  *     ZQN
- *     routing
  *     scheduling
- *     hardware discovery
- *     calibration
- *     runtime
- *     deployment
+ *     routing
+ *     optimization
  *
  * ============================================================================
- *
  * CANONICAL LEXER CONTRACT
  * ============================================================================
  *
@@ -121,14 +118,14 @@
  *
  *     tokenVocab = ZamaniLexer;
  *
- * They MUST NOT directly use:
+ * They MUST NOT use:
  *
  *     tokenVocab = ZamaniCharacterLiterals;
  *
- * This grammar is a lexical component assembled into the canonical lexer.
+ * This grammar is a specialized lexical component assembled into the
+ * canonical lexer.
  *
  * ============================================================================
- *
  * TOKEN OWNERSHIP
  * ============================================================================
  *
@@ -136,56 +133,39 @@
  *
  *     CHAR
  *
- * It also owns the private fragments required to recognize CHAR.
+ * The private fragments below exist only to implement CHAR.
  *
- * No other lexer grammar may define another character-literal token.
+ * No other grammar may define another character-literal token.
  *
- * In particular, after migration, the following MUST NOT contain an
- * independently implemented character-literal rule:
+ * In particular:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *     grammar/lexer/literals.g4
  *     grammar/lexer/tokens.g4
- *     grammar/antlr/Core.g4
  *
- * Existing legacy `CHAR_LITERAL` definitions are migration targets and must
- * not remain as a second lexical implementation.
+ * MUST NOT contain another implementation of CHAR.
  *
- * ============================================================================
+ * Legacy token names such as:
  *
- * WHY THE PUBLIC TOKEN IS `CHAR`
- * ============================================================================
+ *     CHAR_LITERAL
  *
- * The canonical Zamani literal architecture already assigns character literal
- * ownership to:
- *
- *     character-literals.g4
- *
- * and the literal aggregation layer imports:
- *
- *     ZamaniCharacterLiterals
- *
- * The public token is therefore standardized here as:
- *
- *     CHAR
- *
- * This also avoids confusing the lexical token with an implementation-specific
- * token naming convention such as `CHAR_LITERAL`.
- *
- * The language type keyword:
- *
- *     char
- *
- * is a separate concern owned by the keyword/type layers.
- *
- * `CHAR` and the keyword representing the `char` type MUST NOT be conflated.
+ * MUST be migrated rather than implemented as a second lexical form.
  *
  * ============================================================================
- *
- * CHARACTER MODEL
+ * CHARACTER LITERAL MODEL
  * ============================================================================
  *
- * A Zamani character literal represents one source-level character value.
+ * Ordinary character literals use single quotes:
+ *
+ *     'a'
+ *
+ * A CHAR token contains exactly one lexical character value:
+ *
+ *     one ordinary source character
+ *
+ * OR:
+ *
+ *     one supported escape sequence
  *
  * Examples:
  *
@@ -195,731 +175,631 @@
  *     'λ'
  *     '→'
  *     '😀'
+ *     '\n'
+ *     '\t'
+ *     '\u03BB'
+ *     '\u{1F600}'
  *
- * A character literal may contain exactly one of:
+ * The lexer recognizes source syntax.
  *
- *     - one ordinary source character;
- *     - one supported escape sequence.
- *
- * The lexer recognizes lexical structure only.
- *
- * It does NOT determine the final target representation of the character.
- *
- * ============================================================================
- *
- * CHARACTER DELIMITERS
- * ============================================================================
- *
- * Ordinary character literals use single quotes:
- *
- *     'a'
- *
- * The opening and closing delimiters are part of the token's source text.
- *
- * An unescaped single quote terminates the literal.
- *
- * Therefore:
- *
- *     'a'
- *
- * is valid, while:
- *
- *     'ab'
- *
- * is not one character literal.
+ * It does not decode the literal into a target representation.
  *
  * ============================================================================
- *
- * ORDINARY CHARACTER
+ * CHARACTER CARDINALITY
  * ============================================================================
  *
- * An ordinary character is any character accepted by the ANTLR character
- * stream except:
+ * Character cardinality is a language-level semantic rule:
  *
- *     single quote
- *     backslash
- *     carriage return
- *     line feed
+ *     exactly one source character
+ *     OR exactly one escape sequence
  *
- * Single quote is excluded because it is the delimiter.
+ * It is NOT a byte-width rule.
  *
- * Backslash is excluded because it introduces an escape sequence.
- *
- * CR/LF are excluded so that ordinary character literals cannot silently
- * consume source line boundaries.
- *
- * ============================================================================
- *
- * ESCAPE SEQUENCES
- * ============================================================================
- *
- * Supported single-character escape spellings are:
- *
- *     \'
- *     \"
- *     \\
- *     \b
- *     \f
- *     \n
- *     \r
- *     \t
- *     \v
- *     \0
- *
- * Supported Unicode escape spellings are:
- *
- *     \uXXXX
- *     \u{HEX_DIGITS}
- *
- * The lexer recognizes these spellings.
- *
- * Semantic literal processing determines their resulting value.
- *
- * ============================================================================
- *
- * ESCAPE CONSISTENCY
- * ============================================================================
- *
- * Character literals use the same escape vocabulary as ordinary string
- * literals so that source-level textual values have one coherent escape
- * language.
- *
- * The character grammar intentionally keeps its own private lexical fragments.
- *
- * It MUST NOT import `ZamaniStringLiterals`, because importing that grammar
- * would also import the STRING token and would cause unrelated token ownership
- * and composition problems.
- *
- * The two specialized literal grammars therefore share a documented lexical
- * contract without creating an ANTLR dependency cycle.
- *
- * If Zamani later introduces a separately shared escape-sequence grammar,
- * migration must preserve this accepted language and token behavior.
- *
- * ============================================================================
- *
- * UNKNOWN ESCAPES
- * ============================================================================
- *
- * Unknown escapes MUST NOT be silently accepted.
+ * Therefore a Unicode scalar represented by multiple UTF-8 code units remains
+ * one Zamani character.
  *
  * For example:
  *
+ *     '😀'
+ *
+ * is one CHAR token.
+ *
+ * The grammar MUST NOT define character cardinality as:
+ *
+ *     one byte
+ *     two bytes
+ *     four bytes
+ *
+ * because those are encoding/storage properties rather than source-language
+ * character semantics.
+ *
+ * ============================================================================
+ * VALID FORMS
+ * ============================================================================
+ *
+ * Valid:
+ *
+ *     'a'
+ *     'Z'
+ *     '0'
+ *     ' '
+ *     'λ'
+ *     '→'
+ *     '😀'
+ *
+ *     '\''
+ *     '\"'
+ *     '\\'
+ *     '\b'
+ *     '\f'
+ *     '\n'
+ *     '\r'
+ *     '\t'
+ *     '\v'
+ *     '\0'
+ *
+ *     '\u0000'
+ *     '\u0041'
+ *     '\u03BB'
+ *     '\u{0}'
+ *     '\u{41}'
+ *     '\u{03BB}'
+ *     '\u{1F600}'
+ *
+ * ============================================================================
+ * INVALID FORMS
+ * ============================================================================
+ *
+ * Invalid:
+ *
+ *     ''
+ *     'ab'
+ *     '😀😀'
+ *     'unterminated
+ *
  *     '\q'
+ *     '\x41'
+ *     '\123'
  *
- * is invalid.
+ *     '\u'
+ *     '\u1'
+ *     '\u12'
+ *     '\u123'
  *
- * The lexer must not reinterpret it as:
+ *     '\u{'
+ *     '\u{}'
+ *     '\u{XYZ}'
  *
- *     'q'
- *
- * or:
- *
- *     '\\q'
- *
- * Such behavior would make source meaning implementation-dependent.
+ * The lexer MUST NOT silently reinterpret malformed escape sequences as
+ * ordinary characters.
  *
  * ============================================================================
- *
- * UNICODE ESCAPES
+ * ESCAPE VOCABULARY
  * ============================================================================
  *
- * Fixed-width Unicode:
+ * Character and string literals intentionally share the same baseline escape
+ * vocabulary.
+ *
+ * Supported single-character escapes:
+ *
+ *     \'      apostrophe
+ *     \"      quotation mark
+ *     \\      backslash
+ *     \b      backspace
+ *     \f      form feed
+ *     \n      line feed
+ *     \r      carriage return
+ *     \t      horizontal tab
+ *     \v      vertical tab
+ *     \0      NUL
+ *
+ * Supported Unicode escapes:
+ *
+ *     \uXXXX
+ *     \u{HEX_DIGITS}
+ *
+ * The exact semantic value of each escape is determined after lexical
+ * recognition.
+ *
+ * ============================================================================
+ * ESCAPE OWNERSHIP
+ * ============================================================================
+ *
+ * This file intentionally duplicates the small lexical escape vocabulary used
+ * by string-literals.g4 instead of importing the complete string lexer.
+ *
+ * It MUST NOT import:
+ *
+ *     ZamaniStringLiterals
+ *
+ * because doing so would import STRING into the character grammar and create
+ * unnecessary token ownership/composition coupling.
+ *
+ * Character and string escape syntax are therefore kept equivalent by
+ * specification rather than by an ANTLR dependency.
+ *
+ * If Zamani later introduces a dedicated shared escape grammar, migration must:
+ *
+ *     1. preserve the accepted language;
+ *     2. preserve CHAR token ownership;
+ *     3. preserve STRING token ownership;
+ *     4. avoid token duplication;
+ *     5. preserve diagnostics;
+ *     6. preserve parser compatibility.
+ *
+ * ============================================================================
+ * ORDINARY CHARACTER
+ * ============================================================================
+ *
+ * An ordinary character is any character in the ANTLR character stream except:
+ *
+ *     '
+ *     \
+ *     carriage return
+ *     line feed
+ *
+ * The apostrophe is excluded because it closes the literal.
+ *
+ * The backslash is excluded because it introduces an escape.
+ *
+ * CR and LF are excluded because character literals cannot span source lines.
+ *
+ * ============================================================================
+ * SOURCE LINE BOUNDARIES
+ * ============================================================================
+ *
+ * Raw CR and LF MUST NOT occur inside CHAR.
+ *
+ * Therefore:
+ *
+ *     '
+ *     '
+ *
+ * cannot become one character literal spanning a source line.
+ *
+ * If a newline character is required, it must be represented explicitly:
+ *
+ *     '\n'
+ *
+ * If a carriage return is required:
+ *
+ *     '\r'
+ *
+ * This prevents malformed source from silently changing lexical boundaries.
+ *
+ * ============================================================================
+ * UNICODE ESCAPE SYNTAX
+ * ============================================================================
+ *
+ * Fixed-width form:
  *
  *     \uXXXX
  *
- * requires exactly four hexadecimal digits.
+ * contains exactly four hexadecimal digits.
  *
- * Braced Unicode:
+ * Braced form:
  *
  *     \u{HEX_DIGITS}
  *
- * requires one or more hexadecimal digits.
+ * contains one or more hexadecimal digits.
  *
- * The braced form intentionally has no artificial lexical digit-count
- * maximum.
+ * The braced form intentionally has no artificial machine-dependent maximum
+ * digit count.
  *
- * The semantic layer determines whether the represented numeric value is a
- * valid Unicode scalar value.
+ * This means lexical syntax does not impose a target-dependent limit.
  *
  * ============================================================================
- *
- * IMPORTANT: UNICODE SEMANTICS
+ * UNICODE SEMANTIC VALIDATION
  * ============================================================================
  *
- * This grammar recognizes Unicode escape syntax.
+ * Lexical validity is NOT semantic validity.
  *
- * It does NOT decide whether the resulting value is:
+ * The lexer recognizes:
  *
- *     - a valid Unicode scalar value;
- *     - a surrogate;
- *     - above the Unicode scalar range;
- *     - otherwise semantically invalid.
+ *     '\u{...}'
  *
- * Semantic literal validation MUST perform those checks.
+ * when the contents have the required hexadecimal lexical structure.
  *
- * Invalid values MUST be rejected rather than:
+ * The semantic literal validator MUST subsequently determine whether the
+ * represented value is a valid Unicode scalar value.
+ *
+ * It MUST reject values that are:
+ *
+ *     - Unicode surrogate code points;
+ *     - outside the Unicode scalar range;
+ *     - otherwise invalid under Zamani's character semantics.
+ *
+ * Invalid semantic values MUST NOT be:
  *
  *     wrapped;
  *     truncated;
  *     replaced;
- *     silently normalized;
- *     silently converted.
+ *     normalized silently;
+ *     converted to another character;
+ *     accepted because the target happens to support a representation.
  *
  * ============================================================================
- *
- * WHY SEMANTIC VALIDATION IS REQUIRED
+ * SOURCE CHARACTER VS GRAPHEME
  * ============================================================================
  *
- * For example:
+ * This grammar defines source character literals.
  *
- *     '\u{1F600}'
+ * It does not define Unicode grapheme clusters.
  *
- * has valid lexical form and can subsequently be interpreted as the Unicode
- * scalar value U+1F600.
+ * A human-visible grapheme may consist of multiple Unicode scalar values.
  *
- * Conversely, a syntactically valid braced sequence representing an invalid
- * Unicode scalar must reach semantic validation and be rejected there.
+ * For example, a base character followed by combining marks is not implicitly
+ * collapsed into one CHAR token.
  *
- * This keeps lexical syntax independent from a particular Rust character
- * representation or target encoding.
- *
- * ============================================================================
- *
- * RAW SOURCE VS DECODED VALUE
- * ============================================================================
- *
- * The lexer preserves source spelling.
- *
- * For:
- *
- *     '\n'
- *
- * the token text remains the source spelling:
- *
- *     '\n'
- *
- * The lexer does NOT replace it with an actual line-feed character.
- *
- * Semantic literal processing later determines the decoded value.
- *
- * This separation is required for:
- *
- *     source maps
- *     diagnostics
- *     formatting
- *     round-trip printing
- *     reproducible compilation
- *     source provenance
- *     semantic preservation
+ * Grapheme-cluster operations, if provided by Zamani, belong to the semantic
+ * text/string layer rather than this lexer.
  *
  * ============================================================================
- *
- * AST INTEGRATION
- * ============================================================================
- *
- * The parser may lower the `CHAR` token into the existing native literal AST.
- *
- * The AST should preserve source spelling before semantic decoding.
- *
- * Conceptually:
- *
- *     CHAR token
- *          |
- *          v
- *     character literal AST node
- *          |
- *          v
- *     semantic character value
- *
- * This grammar does not prescribe the concrete Rust AST structure.
- *
- * Existing literal AST infrastructure remains the owner of AST representation.
- *
- * ============================================================================
- *
- * CHARACTER CARDINALITY
- * ============================================================================
- *
- * The lexical grammar deliberately recognizes exactly one lexical character
- * or one escape sequence between the delimiters.
- *
- * Therefore:
- *
- *     'a'
- *
- * is valid.
- *
- *     ''
- *
- * is invalid.
- *
- *     'ab'
- *
- * is invalid.
- *
- *     '😀'
- *
- * is valid when supplied as a valid source character.
- *
- * A Unicode scalar may occupy multiple UTF-8 code units in source encoding.
- * That does NOT make it multiple Zamani characters at the lexical level.
- *
- * The grammar therefore MUST NOT use a byte-width assumption such as:
- *
- *     1 byte
- *     2 bytes
- *     4 bytes
- *
- * to define character cardinality.
- *
- * ============================================================================
- *
- * MULTICODEPOINT GRAPHEME CLUSTERS
- * ============================================================================
- *
- * This grammar defines lexical character literals, not Unicode grapheme
- * cluster semantics.
- *
- * A sequence such as a base character followed by combining marks is not
- * automatically treated as one character merely because a human reader may
- * perceive it as one displayed grapheme.
- *
- * Grapheme-cluster semantics, if required by Zamani, belong to a higher
- * semantic/textual layer.
- *
- * This prevents the lexer from embedding a particular Unicode segmentation
- * policy.
- *
- * ============================================================================
- *
- * SOURCE UNICODE
- * ============================================================================
- *
- * Ordinary Unicode source characters are accepted from the character stream
- * supplied to ANTLR.
- *
- * This grammar does not:
- *
- *     - normalize Unicode;
- *     - transliterate Unicode;
- *     - convert Unicode into ASCII;
- *     - choose a target encoding;
- *     - perform locale-dependent interpretation.
- *
- * Unicode normalization policy belongs to language semantics/tooling if it is
- * ever required.
- *
- * ============================================================================
- *
  * SOURCE ENCODING
  * ============================================================================
  *
- * Source-byte decoding and validation belong to the compiler's source-input
- * layer.
+ * Source-byte decoding belongs to the compiler source-input layer.
  *
- * Once valid text is supplied to the ANTLR character stream, this grammar
- * operates on that character stream.
+ * Once valid source text has been supplied to the ANTLR character stream, this
+ * grammar operates on that character stream.
  *
- * It must not silently repair malformed source bytes.
+ * This grammar MUST NOT silently repair malformed source encoding.
  *
  * ============================================================================
- *
- * CONTROL CHARACTERS
+ * UNICODE NORMALIZATION
  * ============================================================================
  *
- * Raw CR and LF are forbidden inside ordinary character literals.
+ * This grammar performs no Unicode normalization.
  *
- * Therefore:
+ * It does not:
  *
- *     '
+ *     NFC-normalize;
+ *     NFD-normalize;
+ *     NFKC-normalize;
+ *     NFKD-normalize;
+ *     transliterate;
+ *     locale-convert;
+ *     ASCII-fold.
  *
- *     '
+ * Any language-wide normalization policy belongs to semantic/name/text
+ * specifications and must not be hidden inside this lexical rule.
  *
- * cannot form a character literal spanning a source line.
+ * ============================================================================
+ * RAW SOURCE PRESERVATION
+ * ============================================================================
  *
- * If a line-feed or carriage-return value is required, use the corresponding
- * escape:
+ * The lexer preserves the original token spelling.
+ *
+ * For example:
  *
  *     '\n'
- *     '\r'
  *
- * Other source control characters are not assigned special semantic meaning by
- * this grammar unless they are represented through an explicit escape.
+ * remains lexically:
  *
- * Any stricter source-control policy belongs in the lexical specification and
- * must be applied consistently across string and character literals.
+ *     '\n'
  *
- * ============================================================================
+ * and is not replaced with an actual line-feed character.
  *
- * NO MULTICHARACTER LITERALS
- * ============================================================================
+ * Semantic literal processing later decodes it.
  *
- * This grammar intentionally does not define:
+ * Preserving the raw spelling supports:
  *
- *     'ab'
- *     'hello'
- *     '😀😀'
- *
- * as one CHAR token.
- *
- * A sequence containing multiple characters belongs to a string or another
- * explicitly designed aggregate textual representation.
+ *     source maps
+ *     diagnostics
+ *     formatter behavior
+ *     round-trip printing
+ *     reproducible builds
+ *     provenance
+ *     syntax-aware tooling
  *
  * ============================================================================
- *
- * NO BYTE CHARACTER LITERALS
+ * AST INTEGRATION
  * ============================================================================
  *
- * This baseline does not define a separate byte-character syntax such as:
+ * The parser may map:
  *
- *     b'a'
- *     u8'a'
+ *     CHAR
  *
- * Such syntax would represent a distinct semantic type and must be introduced
- * through an explicit language-versioned design rather than being hidden in
- * the ordinary CHAR grammar.
+ * into the existing native literal AST.
  *
- * ============================================================================
+ * The existing literal AST intentionally preserves source-level spelling and
+ * does not force target-specific representation during parsing.
  *
- * NO C-STYLE CHARACTER REPRESENTATION
- * ============================================================================
+ * Conceptual pipeline:
  *
- * This grammar does not define:
+ *     CHAR token
+ *         |
+ *         v
+ *     Literal AST
+ *         |
+ *         v
+ *     semantic character validation
+ *         |
+ *         v
+ *     semantic value/type
  *
- *     '\x41'
- *     '\123'
- *
- * unless those escape forms are explicitly standardized elsewhere.
- *
- * In particular, the grammar MUST NOT silently acquire implementation-specific
- * C, C++, Rust, Java, Python, or vendor escape syntax.
- *
- * ============================================================================
- *
- * NO MACHINE WIDTH
- * ============================================================================
- *
- * The lexical representation of a character does not imply:
- *
- *     8-bit
- *     16-bit
- *     32-bit
- *     native-register-width
- *
- * storage.
- *
- * Those are semantic/type/target representation concerns.
+ * This grammar does not redefine the AST.
  *
  * ============================================================================
- *
- * SCALABILITY
+ * SEMANTIC TYPE INTEGRATION
  * ============================================================================
  *
- * A character literal itself has one-character semantic cardinality, which is
- * a language rule rather than a machine-size limit.
+ * The lexical token:
  *
- * The grammar imposes no target-dependent character storage width.
+ *     CHAR
  *
- * It contains no:
+ * MUST NOT be confused with the language type keyword:
  *
- *     MAX_CHAR_BYTES
- *     MAX_CHAR_BITS
- *     MAX_UNICODE_BYTES
- *     TARGET_CHAR_WIDTH
- *     DEVICE_CHAR_WIDTH
- *     REGISTER_CHAR_WIDTH
+ *     char
  *
- * Unicode escape syntax likewise has no artificial machine-dependent limit on
- * the number of digits in the braced form.
+ * `CHAR` is a lexer token.
  *
- * Physical implementations remain finite because physical machines have
- * finite resources. "Infinity" here means that the language specification does
- * not impose an arbitrary scalability ceiling where none is semantically
- * required.
+ * `char` is a source-language type/name token governed by the keyword/type
+ * system.
+ *
+ * The lexer must not decide whether a CHAR token is:
+ *
+ *     a scalar character;
+ *     an encoded byte;
+ *     a string element;
+ *     a hardware register value;
+ *     a network field;
+ *     a quantum-control value.
+ *
+ * Those interpretations belong to semantic context.
  *
  * ============================================================================
+ * MACHINE INDEPENDENCE
+ * ============================================================================
  *
+ * CHAR does not imply:
+ *
+ *     8-bit storage;
+ *     16-bit storage;
+ *     32-bit storage;
+ *     64-bit storage;
+ *     native-register width;
+ *     CPU width;
+ *     GPU width;
+ *     FPGA width;
+ *     ASIC width;
+ *     QPU representation.
+ *
+ * The source language defines the character value.
+ *
+ * The compiler and target abstraction determine an appropriate representation
+ * for a particular execution environment.
+ *
+ * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
  * Character syntax participates in:
  *
  *     Program_Once
- *          ->
+ *         ->
  *     Compile_Once
- *          ->
+ *         ->
  *     Run_Everywhere
- *          ->
+ *         ->
  *     Run_Anywhere
- *          ->
+ *         ->
  *     Run_Forever
  *
- * The lexical identity of:
+ * The source:
  *
  *     'λ'
  *
- * must not change because the program is compiled for:
+ * retains the same source-level meaning when compiled for:
  *
- *     a tiny embedded system
- *     a CPU
- *     a GPU
- *     an FPGA
- *     an ASIC
- *     a quantum-classical system
- *     a cluster
- *     a supercomputer
- *     a cloud runtime
- *     a future architecture
+ *     embedded hardware
+ *     CPU
+ *     multicore CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     quantum-classical system
+ *     distributed system
+ *     cluster
+ *     supercomputer
+ *     cloud runtime
+ *     future architecture
+ *
+ * Target representation may differ.
+ *
+ * Source semantics must not.
  *
  * ============================================================================
- *
- * HARD-CODING PROHIBITIONS
+ * SCALABILITY
  * ============================================================================
  *
- * Forbidden in this file:
+ * This grammar imposes no machine-dependent scalability limit.
  *
- *     MAX_CHAR_SIZE
- *     MAX_CHAR_BYTES
+ * It contains no:
+ *
  *     MAX_CHAR_BITS
+ *     MAX_CHAR_BYTES
+ *     MAX_CHAR_WIDTH
  *     MAX_UNICODE_DIGITS
  *     TARGET_CHAR_WIDTH
- *     DEVICE_CHAR_WIDTH
  *     CPU_CHAR_WIDTH
  *     GPU_CHAR_WIDTH
  *     FPGA_CHAR_WIDTH
  *     QPU_CHAR_WIDTH
  *
- * No physical machine characteristic belongs in this grammar.
+ * The one-character cardinality rule is a language semantic requirement, not
+ * a hardware scalability ceiling.
+ *
+ * The braced Unicode spelling:
+ *
+ *     \u{HEX_DIGITS}
+ *
+ * has no artificial grammar-level maximum on HEX_DIGITS.
+ *
+ * Physical parsing remains finite because every concrete machine has finite
+ * resources. POCO-REAF means that the language itself must not introduce an
+ * arbitrary finite ceiling where the semantics do not require one.
  *
  * ============================================================================
+ * RESOURCE LIMITS
+ * ============================================================================
  *
+ * Resource limits MUST NOT be encoded here.
+ *
+ * Examples of concerns that belong elsewhere:
+ *
+ *     maximum source file size
+ *     maximum token length
+ *     maximum parser memory
+ *     maximum compilation memory
+ *     maximum Unicode processing budget
+ *
+ * Such limits belong to configurable compiler/tool/runtime policy.
+ *
+ * They must be explicit and must not alter the language's semantic definition.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Character literals originate from potentially untrusted source input.
+ *
+ * The lexer MUST:
+ *
+ *     - reject malformed lexical forms;
+ *     - reject unknown escapes;
+ *     - avoid silent truncation;
+ *     - avoid silent replacement;
+ *     - preserve deterministic token boundaries;
+ *     - avoid target-dependent interpretation.
+ *
+ * Extremely large braced Unicode sequences may be resource-intensive for later
+ * semantic validation. Resource controls belong to the compiler input/resource
+ * policy, not to a hidden grammar maximum.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Given identical:
+ *
+ *     source text
+ *     grammar version
+ *     lexer configuration
+ *
+ * the lexer must produce identical:
+ *
+ *     token boundaries
+ *     token kinds
+ *     token source text
+ *     source locations
+ *
+ * No locale, target architecture, hardware capability, or runtime state may
+ * influence lexical recognition.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * Character literals are universal source syntax.
+ *
+ * They may appear in:
+ *
+ *     classical programs
+ *     quantum-control programs
+ *     hybrid programs
+ *     HDL
+ *     hardware descriptions
+ *     distributed systems
+ *     AI/data programs
+ *     networking
+ *     cryptography
+ *     embedded programs
+ *     accelerator programs
+ *     future dialects
+ *
+ * This file does not import any of those domain grammars.
+ *
+ * Domain semantics consume CHAR after parsing.
+ *
+ * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Character literals may appear in classical control surrounding quantum
- * operations, metadata, labels, diagnostics, identifiers represented as
- * text,
- * or other hybrid programs.
- *
- * This file does not know whether a character is used by:
- *
- *     quantum code
- *     classical code
- *     HDL
- *     hardware control
- *     AI
- *     networking
- *     distributed execution
- *     cryptography
- *     scientific computing
- *
- * Those meanings are assigned downstream.
- *
- * This grammar therefore has no dependency on:
+ * This grammar has no dependency on:
  *
  *     quantum::ir
  *     QEC
  *     ZQN
+ *     quantum scheduling
  *     routing
- *     scheduling
- *     hardware abstraction
+ *     physical qubits
+ *     logical qubits
+ *     QPU topology
+ *
+ * A character value may be used by quantum-control or hybrid source constructs,
+ * but its lexical definition remains universal.
+ *
+ * The canonical quantum semantic boundary remains `quantum::ir`.
  *
  * ============================================================================
- *
- * HDL / HARDWARE INTEGRATION
+ * HARD-CODING AUDIT
  * ============================================================================
  *
- * Character literals may be used in hardware/software co-design source where
- * textual metadata or control values are required.
+ * The following are deliberately NOT present:
  *
- * The character grammar does not define:
+ *     MAX_QUBITS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_CHAR_BITS
+ *     MAX_CHAR_BYTES
+ *     MAX_REGISTER_WIDTH
+ *     MAX_HARDWARE_SIZE
+ *     MAX_CLUSTER_SIZE
+ *     TARGET_DEVICE_ID
  *
- *     signal width
- *     bus width
- *     register width
- *     memory width
- *     device address
- *     FPGA resource count
- *     ASIC resource count
+ * The only fixed cardinality here is:
  *
- * Such properties belong to hardware semantics and target/resource analysis.
+ *     one source character per CHAR literal
  *
- * ============================================================================
- *
- * RESOURCE INTEGRATION
- * ============================================================================
- *
- * This grammar does not impose resource requirements.
- *
- * It does not know:
- *
- *     memory capacity
- *     storage capacity
- *     execution time
- *     CPU count
- *     accelerator count
- *     network capacity
- *     quantum capacity
- *
- * Resource constraints are evaluated by the appropriate resource, compilation,
- * scheduling, deployment, or runtime subsystem.
+ * That is an intrinsic language rule, not a machine limitation.
  *
  * ============================================================================
- *
- * ERROR OWNERSHIP
+ * COMPATIBILITY
  * ============================================================================
  *
- * This file defines successful lexical recognition.
- *
- * The canonical lexical diagnostic layer is responsible for producing precise
- * user-facing diagnostics for malformed character literals, including:
- *
- *     - unterminated character literal;
- *     - empty character literal;
- *     - multiple-character literal;
- *     - invalid escape;
- *     - malformed Unicode escape;
- *     - invalid delimiter usage.
- *
- * Diagnostic classification MUST NOT require this grammar to duplicate token
- * recognition rules elsewhere.
- *
- * ============================================================================
- *
- * DETERMINISM
- * ============================================================================
- *
- * Given the same:
- *
- *     source character stream
- *     grammar version
- *     lexer configuration
- *
- * this grammar must produce deterministic token boundaries.
- *
- * It must not depend on:
- *
- *     machine size
- *     runtime state
- *     hardware availability
- *     random state
- *     wall-clock time
- *     locale
- *     backend selection
- *     quantum device
- *
- * ============================================================================
- *
- * SECURITY
- * ============================================================================
- *
- * Malformed character literals must not be silently truncated or repaired.
- *
- * The lexer must preserve the source token text for diagnostics and provenance.
- *
- * Resource exhaustion controls for hostile or extremely large source files
- * belong to the compiler's source/resource policy rather than a hard-coded
- * character-literal size restriction.
- *
- * ============================================================================
- *
- * ANTLR COMPOSITION
- * ============================================================================
- *
- * This grammar intentionally does not depend on punctuation.g4.
- *
- * The single-quote and backslash delimiters are represented directly here
- * because they are lexical internals of this literal family.
- *
- * This avoids a dependency cycle such as:
- *
- *     character-literals
- *          ->
- *     punctuation
- *          ->
- *     literals
- *          ->
- *     character-literals
- *
- * ============================================================================
- *
- * IMPORTANT ANTLR COMPOSITION RULE
- * ============================================================================
- *
- * This grammar is imported by:
- *
- *     grammar/lexer/literals.g4
- *
- * through:
- *
- *     ZamaniCharacterLiterals
- *
- * The canonical lexer assembly must then expose the resulting `CHAR` token.
- *
- * `literals.g4` MUST NOT define another `CHAR` rule.
- *
- * `ZamaniLexer.g4` MUST NOT retain its old inline character rule after this
- * migration is integrated.
- *
- * `tokens.g4` MUST NOT retain an independently recognized `CHAR_LITERAL` rule.
- *
- * ============================================================================
- *
- * EXISTING REPOSITORY COMPATIBILITY
- * ============================================================================
- *
- * The repository currently contains legacy character-literal recognition in
- * the monolithic lexer and a legacy `CHAR_LITERAL` rule in the token grammar.
- *
- * Migration must therefore be performed as:
- *
- *     legacy CHAR / CHAR_LITERAL
- *              |
- *              v
- *     ZamaniCharacterLiterals
- *              |
- *              v
- *     canonical CHAR
- *
- * Existing AST/source-spelling behavior must be preserved.
- *
- * Parser grammars must continue to obtain the token through:
- *
- *     ZamaniLexer
- *
- * rather than directly importing this specialized grammar.
- *
- * ============================================================================
- *
- * PUBLIC TOKEN CONTRACT
- * ============================================================================
- *
- * Public token:
+ * The canonical public token is:
  *
  *     CHAR
  *
- * Private fragments:
+ * Existing parser rules using CHAR remain compatible.
  *
- *     CHARACTER_CONTENT
- *     ESCAPE_SEQUENCE
- *     UNICODE_ESCAPE
- *     HEX_DIGIT
+ * If older parser infrastructure uses:
  *
- * These fragment names are implementation details and must not be consumed by
- * parser grammars.
+ *     CHAR_LITERAL
+ *
+ * it must be migrated through an explicit compatibility change rather than
+ * silently defining both tokens.
+ *
+ * No semantic meaning may depend on token-number allocation.
+ *
+ * Generated lexer artifacts are derived outputs and MUST NOT become an
+ * independent source of truth.
  *
  * ============================================================================
- *
  * TEST CONTRACT
  * ============================================================================
  *
- * Positive lexical cases:
+ * The corresponding test suite must include at least:
+ *
+ * POSITIVE:
  *
  *     'a'
  *     'Z'
  *     '0'
- *     '_'
+ *     ' '
  *     'λ'
  *     '→'
  *     '😀'
@@ -933,19 +813,23 @@
  *     '\t'
  *     '\v'
  *     '\0'
+ *     '\u0000'
  *     '\u0041'
  *     '\u03BB'
+ *     '\u{0}'
  *     '\u{41}'
  *     '\u{03BB}'
  *     '\u{1F600}'
  *
- * Negative lexical cases:
+ * NEGATIVE:
  *
  *     ''
  *     'ab'
+ *     '😀😀'
  *     'unterminated
- *     '
- *     'unknown\q'
+ *     '\q'
+ *     '\x41'
+ *     '\123'
  *     '\u'
  *     '\u1'
  *     '\u12'
@@ -954,71 +838,95 @@
  *     '\u{}'
  *     '\u{XYZ}'
  *
- * Boundary cases:
+ * BOUNDARY:
  *
- *     smallest valid literal
- *     largest source character representable by the input character stream
- *     Unicode characters represented by multiple UTF-8 code units
- *     escaped delimiters
- *     escaped backslashes
- *     malformed delimiter sequences
+ *     smallest valid CHAR
+ *     longest generated source sequence around CHAR
+ *     large Unicode escape digit sequences
+ *     adjacent CHAR tokens
+ *     CHAR adjacent to identifiers
+ *     CHAR adjacent to numeric literals
+ *     CHAR adjacent to operators
+ *     CHAR adjacent to comments
  *
- * Cross-domain cases:
+ * SEMANTIC:
  *
- *     classical character usage
- *     quantum/classical control containing CHAR
- *     HDL metadata containing CHAR
- *     hardware configuration containing CHAR
- *     distributed configuration containing CHAR
- *     AI/data configuration containing CHAR
+ *     lexically valid but semantically invalid Unicode scalar values
  *
- * Determinism cases:
+ * DETERMINISM:
  *
- *     identical source -> identical CHAR token boundaries
+ *     repeated lexing of identical input
  *
- * Round-trip cases:
+ * ROUND-TRIP:
  *
- *     source -> lexer -> parser/AST -> printer -> parser
- *
- * must preserve character-literal semantics.
+ *     source -> lexer -> parser -> AST -> printer -> parser
  *
  * ============================================================================
+ * INTEGRATION CHECKLIST
+ * ============================================================================
  *
+ * Before declaring this file complete:
+ *
+ * [ ] `CHAR` has exactly one lexical owner.
+ *
+ * [ ] `literals.g4` imports `ZamaniCharacterLiterals`.
+ *
+ * [ ] `ZamaniLexer.g4` no longer contains a duplicate CHAR implementation.
+ *
+ * [ ] `tokens.g4` does not redefine CHAR.
+ *
+ * [ ] Parser grammars consume CHAR through ZamaniLexer.
+ *
+ * [ ] Existing literal AST receives CHAR source spelling without target
+ *     representation being selected by the lexer.
+ *
+ * [ ] Semantic literal validation owns Unicode scalar validation.
+ *
+ * [ ] Unknown escapes are rejected.
+ *
+ * [ ] Raw CR/LF cannot occur inside CHAR.
+ *
+ * [ ] No machine-dependent width is encoded.
+ *
+ * [ ] No resource-count limit is encoded.
+ *
+ * [ ] No quantum/hardware/backend dependency exists.
+ *
+ * [ ] Rust integration remains compatible with Rust 1.97 / 1.97.1.
+ *
+ * [ ] No unsafe Rust is required.
+ *
+ * [ ] Positive tests pass.
+ *
+ * [ ] Negative tests pass.
+ *
+ * [ ] Boundary tests pass.
+ *
+ * [ ] Determinism tests pass.
+ *
+ * [ ] Round-trip tests pass where parser/printer infrastructure supports them.
+ *
+ * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
  * This file is complete only when:
  *
- *     [ ] CHAR has exactly one lexical owner.
- *     [ ] No duplicate character-literal rule remains in the canonical lexer.
- *     [ ] No duplicate character-literal rule remains in tokens.g4.
- *     [ ] No duplicate character-literal rule exists in Core.g4.
- *     [ ] literals.g4 imports ZamaniCharacterLiterals.
- *     [ ] canonical ZamaniLexer exposes CHAR.
- *     [ ] parser grammars consume CHAR through ZamaniLexer.
- *     [ ] source spelling is preserved.
- *     [ ] supported escapes are deterministic.
- *     [ ] unknown escapes are rejected.
- *     [ ] malformed Unicode escapes are rejected lexically.
- *     [ ] Unicode scalar validity is checked semantically.
- *     [ ] empty literals are rejected.
- *     [ ] multi-character literals are rejected.
- *     [ ] raw CR/LF are rejected.
- *     [ ] no machine-width assumption exists.
- *     [ ] no resource maximum exists.
- *     [ ] no hardware dependency exists.
- *     [ ] no quantum IR dependency exists.
- *     [ ] no QEC/ZQN dependency exists.
- *     [ ] no scheduling/routing dependency exists.
- *     [ ] no unsafe Rust is introduced.
- *     [ ] Rust integration remains compatible with Rust 1.97/1.97.1.
- *     [ ] positive tests pass.
- *     [ ] negative tests pass.
- *     [ ] boundary tests pass.
- *     [ ] cross-domain tests pass.
- *     [ ] determinism tests pass.
- *     [ ] round-trip tests pass.
- *     [ ] lexical specification agrees with this grammar.
+ *     1. It is the sole lexical owner of CHAR.
+ *     2. Its accepted language is documented and tested.
+ *     3. Invalid escapes are rejected.
+ *     4. Character cardinality is enforced lexically.
+ *     5. Unicode semantic validation is explicitly delegated downstream.
+ *     6. Source spelling remains recoverable.
+ *     7. No target-machine representation is encoded.
+ *     8. No scalable resource limit is hard-coded.
+ *     9. Canonical lexer integration succeeds.
+ *    10. Parser integration succeeds.
+ *    11. AST integration succeeds.
+ *    12. Semantic validation integration succeeds.
+ *    13. Cross-domain consumers can use CHAR without importing this grammar.
+ *    14. Deterministic behavior is verified.
+ *    15. Existing valid language behavior is preserved or explicitly migrated.
  *
  * ============================================================================
  */
@@ -1028,17 +936,14 @@ lexer grammar ZamaniCharacterLiterals;
 
 /*
  * ============================================================================
- * PUBLIC CHARACTER TOKEN
+ * PUBLIC TOKEN
  * ============================================================================
  *
- * A character literal consists of exactly one lexical character content item.
+ * Exactly one public token is defined here:
  *
- * The content item is either:
+ *     CHAR
  *
- *     1. an explicit escape sequence; or
- *     2. one ordinary source character.
- *
- * Exactly one content item is required.
+ * Everything else is a private fragment.
  *
  * ============================================================================
  */
@@ -1055,54 +960,51 @@ CHAR
  * CHARACTER CONTENT
  * ============================================================================
  *
- * This is a private fragment.
+ * Exactly one lexical character OR one escape sequence is permitted.
  *
- * It deliberately does not permit:
+ * This is what prevents:
  *
- *     single quote
- *     backslash
- *     carriage return
- *     line feed
+ *     ''
+ *     'ab'
  *
- * Those characters have lexical meaning or would make source-line boundaries
- * ambiguous.
+ * from becoming CHAR tokens.
+ *
  * ============================================================================
  */
 
 fragment CHARACTER_CONTENT
-    : ESCAPE_SEQUENCE
-    | ~['\\\r\n]
+    : CHARACTER
+    | CHARACTER_ESCAPE
     ;
 
 
 /*
  * ============================================================================
- * ESCAPE SEQUENCE
+ * ORDINARY CHARACTER
  * ============================================================================
  *
- * Supported simple escapes:
+ * Exclude:
  *
- *     \'
- *     \"
- *     \\
- *     \b
- *     \f
- *     \n
- *     \r
- *     \t
- *     \v
- *     \0
+ *     apostrophe  -> closes CHAR
+ *     backslash   -> begins escape
+ *     CR          -> source line boundary
+ *     LF          -> source line boundary
  *
- * Supported Unicode escapes:
- *
- *     \uXXXX
- *     \u{HEX_DIGITS}
- *
- * Unknown escape spellings are rejected.
  * ============================================================================
  */
 
-fragment ESCAPE_SEQUENCE
+fragment CHARACTER
+    : ~['\\\r\n]
+    ;
+
+
+/*
+ * ============================================================================
+ * CHARACTER ESCAPES
+ * ============================================================================
+ */
+
+fragment CHARACTER_ESCAPE
     : '\\'
       (
           ['"\\bfnrtv0]
@@ -1116,19 +1018,18 @@ fragment ESCAPE_SEQUENCE
  * UNICODE ESCAPE
  * ============================================================================
  *
- * Fixed-width form:
+ * Two source-level forms:
  *
  *     \uXXXX
- *
- * Braced form:
- *
  *     \u{HEX_DIGITS}
  *
- * The fixed-width form is syntactically four hexadecimal digits.
+ * The fixed-width form is intentionally exactly four digits.
  *
- * The braced form intentionally has no artificial lexical upper bound.
+ * The braced form has no artificial digit-count ceiling.
  *
- * Semantic processing validates the resulting value as a Unicode scalar.
+ * Semantic validation later determines whether the represented number is a
+ * valid Unicode scalar value.
+ *
  * ============================================================================
  */
 
@@ -1140,7 +1041,7 @@ fragment UNICODE_ESCAPE
 
 /*
  * ============================================================================
- * HEXADECIMAL DIGIT
+ * HEX DIGIT
  * ============================================================================
  */
 
