@@ -1,358 +1,239 @@
-/*
- * ============================================================================
- * Zamani Programming Language
- * ============================================================================
- *
- * File:
- *     grammar/lexer/operators.g4
- *
- * Grammar role:
- *     Operator lexical vocabulary.
- *
- * Language:
- *     Zamani
- *
- * Compiler implementation baseline:
- *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     The Rust implementation integrating this grammar MUST use safe Rust.
- *     No unsafe Rust is required or permitted.
- *
- * ============================================================================
- * PURPOSE
- * ============================================================================
- *
- * This file defines the lexical representation of Zamani operators.
- *
- * It answers only:
- *
- *     "Which source-character sequences constitute operator tokens?"
- *
- * It does NOT answer:
- *
- *     - what an operator means;
- *     - whether an operator is valid for a particular type;
- *     - whether an operator is classical or quantum;
- *     - whether an operator is hardware-native;
- *     - whether an operator is overloaded;
- *     - operator precedence;
- *     - operator associativity;
- *     - constant folding;
- *     - algebraic simplification;
- *     - optimization;
- *     - lowering;
- *     - scheduling;
- *     - routing;
- *     - execution;
- *     - resource allocation.
- *
- * Those concerns belong to downstream language/compiler layers.
- *
- * ============================================================================
- * ARCHITECTURAL PIPELINE
- * ============================================================================
- *
- *     source
- *       |
- *       v
- *     lexical foundation
- *       |
- *       v
- *     ZamaniLexer
- *       |
- *       +--> operator tokens
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     frontend AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       +--> type checking
- *       +--> overload resolution
- *       +--> capability checking
- *       +--> effect checking
- *       +--> domain resolution
- *       |
- *       v
- *     canonical semantic IR
- *       |
- *       +--> classical IR
- *       +--> quantum::ir
- *       +--> tensor/data IR
- *       +--> HDL/hardware IR
- *       +--> control/dataflow IR
- *       |
- *       v
- *     optimization
- *       |
- *       v
- *     routing / scheduling / resilience / target lowering
- *       |
- *       v
- *     runtime / hardware
- *
- * ============================================================================
- * OPERATOR DESIGN PRINCIPLES
- * ============================================================================
- *
- * 1. Longest operators must win over their prefixes.
- *
- *    Examples:
- *
- *        >>>=  before  >>  before  >
- *        <<=  before  <<  before  <
- *        **=  before  **  before  *
- *        +=   before  +
- *        ==   before  =
- *        !=   before  !
- *        &&   before  &
- *        ||   before  |
- *        ->   before  -
- *        =>   before  =
- *        ::   before  :
- *
- *    ANTLR's lexer matching behavior is used deliberately here.
- *
- * 2. Operators must not encode machine limits.
- *
- *    This file contains no:
- *
- *        MAX_QUBITS
- *        MAX_CORES
- *        MAX_THREADS
- *        MAX_OPERANDS
- *        MAX_TENSOR_RANK
- *        MAX_VECTOR_WIDTH
- *        MAX_REGISTER_WIDTH
- *        MAX_MEMORY
- *        MAX_DEVICES
- *
- * 3. Operator spelling is not operator semantics.
- *
- *    For example:
- *
- *        *
- *
- *    may represent multiplication for scalar values, matrix/tensor
- *    multiplication in a domain where the semantic type system defines it,
- *    or another explicitly defined operation.
- *
- *    The lexer must not choose among those meanings.
- *
- * 4. Quantum operators are not hardware instructions.
- *
- *    A source operator can eventually lower into:
- *
- *        quantum::ir
- *        classical IR
- *        tensor IR
- *        HDL IR
- *        another canonical representation
- *
- *    depending on semantic context.
- *
- * 5. The operator vocabulary is intentionally extensible.
- *
- *    A new semantic domain should not require rewriting the lexical grammar
- *    merely because an existing operator is given a new typed meaning.
- *
- * 6. Domain-specific operation names should normally remain identifiers.
- *
- *    For example:
- *
- *        H
- *        X
- *        CNOT
- *        custom_gate
- *        vendor_operation
- *
- *    are not operators merely because they are quantum operations.
- *
- * 7. No parser precedence is defined here.
- *
- *    Precedence belongs to the expression grammar.
- *
- * 8. No operator overload resolution is performed here.
- *
- * 9. Unicode operator spellings are explicit and deterministic.
- *
- * 10. Unicode operators must not silently normalize into unrelated ASCII
- *     operators.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * The lexical representation must remain stable as machines evolve.
- *
- * A source expression such as:
- *
- *     a + b
- *
- * does not imply:
- *
- *     one CPU
- *     one ALU
- *     one vector width
- *     one accelerator
- *     one execution location
- *
- * Likewise:
- *
- *     A @@ B
- *
- * does not imply a particular matrix dimension or physical accelerator.
- *
- * Dimensions, types, capabilities, resource requirements and target-specific
- * realization belong to later compiler stages.
- *
- * ============================================================================
- * OPERATOR CATEGORIES
- * ============================================================================
- *
- * Arithmetic:
- *
- *     +  -  *  /  %  **  //
- *
- * Assignment:
- *
- *     =  +=  -=  *=  /=  %=  **=  //=
- *
- * Comparison:
- *
- *     ==  !=  <  <=  >  >=
- *
- * Logical:
- *
- *     !  &&  ||
- *
- * Bitwise:
- *
- *     &  |  ^  ~
- *
- * Shift:
- *
- *     <<  >>  <<<  >>>
- *
- * Range:
- *
- *     ..  ..=
- *
- * Structural / semantic:
- *
- *     ->  =>  ::  ?  ??  ??
- *
- * Matrix/tensor:
- *
- *     @@  ⊗
- *
- * Access / composition:
- *
- *     .  ?.
- *
- * Optional/chaining/nullability operators are lexical only where their
- * spelling is explicitly defined by the language specification.
- *
- * ============================================================================
- * IMPORTANT INTEGRATION RULE
- * ============================================================================
- *
- * This file is a lexer fragment, not the canonical complete lexer.
- *
- * The canonical lexer assembly must import/include these operator rules
- * exactly once.
- *
- * If an existing canonical lexer already defines any of the tokens below,
- * that duplicate definition MUST be removed or migrated as part of lexer
- * assembly.
- *
- * In particular, the repository currently contains legacy operator
- * definitions in monolithic lexer grammars. They must not remain as a second
- * authority after this modular operator grammar becomes canonical.
- *
- * ============================================================================
- */
+lexer grammar ZamaniOperators;
 
+// =============================================================================
+// Zamani Universal Programming Language
+// grammar/lexer/operators.g4
+//
+// PURPOSE
+// -------
+// Authoritative lexical definitions for Zamani operators.
+//
+// This grammar contains ONLY operator tokens. It deliberately does not define:
+//
+//   - keywords;
+//   - identifiers;
+//   - literals;
+//   - punctuation;
+//   - comments;
+//   - whitespace;
+//   - annotations;
+//   - AST nodes;
+//   - expression precedence;
+//   - type semantics;
+//   - classical IR;
+//   - quantum IR;
+//   - QEC;
+//   - ZQN;
+//   - optimization;
+//   - routing;
+//   - scheduling;
+//   - hardware discovery;
+//   - runtime behavior;
+//   - machine-specific limits.
+//
+// ARCHITECTURAL RULE
+// ------------------
+// Lexer:
+//     characters -> operator tokens
+//
+// Parser:
+//     operator tokens -> syntactic expression/operator structure
+//
+// Semantic analysis:
+//     operator structure -> language meaning/type/effect information
+//
+// IR lowering:
+//     semantic operation -> canonical IR
+//
+// Backends:
+//     canonical IR -> target-specific implementation
+//
+// The lexer therefore MUST NOT decide what an operator means for a CPU,
+// GPU, FPGA, ASIC, quantum processor, distributed machine, or future target.
+//
+// =============================================================================
+//
+// FILE CONTRACT
+// ------------
+//
+// Owns:
+//   - lexical recognition of Zamani operator spellings;
+//   - stable operator token names;
+//   - maximal-munch ordering where necessary;
+//   - operator spellings that are part of the language surface.
+//
+// Does not own:
+//   - operator precedence;
+//   - associativity;
+//   - overload resolution;
+//   - type checking;
+//   - implicit conversions;
+//   - constant folding;
+//   - algebraic laws;
+//   - quantum gate semantics;
+//   - hardware instructions;
+//   - target capabilities;
+//   - resource requirements;
+//   - machine sizes.
+//
+// Inputs:
+//   - source characters supplied by the canonical Zamani lexer.
+//
+// Outputs:
+//   - operator tokens consumed by parser grammars.
+//
+// Upstream:
+//   - canonical lexer assembly.
+//
+// Downstream:
+//   - expression grammars;
+//   - statement/declaration grammars where operators occur;
+//   - pattern grammars where applicable;
+//   - compile-time expression grammars;
+//   - macro/metaprogramming grammars.
+//
+// AST contract:
+//   - parser/AST layers preserve the token kind and source span;
+//   - this file creates no AST nodes.
+//
+// Semantic contract:
+//   - token spelling identifies syntax only;
+//   - semantic interpretation is downstream.
+//
+// IR contract:
+//   - no direct IR dependency.
+//
+// Runtime contract:
+//   - no runtime dependency.
+//
+// Scalability contract:
+//   - no machine dimensions, capacities, topology, device IDs, or resource
+//     counts occur here.
+//
+// Rust contract:
+//   - generated parser/lexer integration targets Rust 1.97 / 1.97.1;
+//   - generated/runtime Rust must remain safe Rust;
+//   - this grammar itself contains no Rust and introduces no unsafe code.
+//
+// =============================================================================
+// 1. MULTI-CHARACTER OPERATORS
+//
+// These MUST precede their shorter prefixes in the canonical lexer assembly.
+//
+// Examples:
+//
+//   ...  must not become . . .
+//   ..=  must not become .. +
+//   ..   must not become . .
+//   ->   must not become - >
+//   =>   must not become = >
+//   ::   must not become : :
+//   ==   must not become = =
+//   !=   must not become ! =
+//   <=   must not become < =
+//   >=   must not become > =
+//   &&   must not become & &
+//   ||   must not become | |
+//   <<   must not become < <
+//   >>   must not become > >
+//   +=   must not become + =
+//   -=   must not become - =
+//   *=   must not become * =
+//   /=   must not become / =
+//   %=   must not become % =
+//   &=   must not become & =
+//   |=   must not become | =
+//   ^=   must not become ^ =
+//   ++   must not become + +
+//   --   must not become - -
+//   ?.   must not become ? .
+//   ??   must not become ? ?
+//
+// =============================================================================
 
-/*
- * ============================================================================
- * ARITHMETIC OPERATORS
- * ============================================================================
- *
- * Semantic interpretation belongs to the type/domain system.
- *
- * `+`, `-`, `*`, `/`, `%` are intentionally lexical only.
- *
- * `**` represents exponentiation.
- *
- * `//` is reserved for integer/floor-style division semantics if the language
- * specification assigns that meaning. The lexer does not enforce operand
- * types.
- *
- * ============================================================================
- */
+// -----------------------------------------------------------------------------
+// Range / variadic operators
+// -----------------------------------------------------------------------------
 
-POWER
-    : '**'
+ELLIPSIS
+    : '...'
     ;
 
-FLOOR_DIV
-    : '//'
+DOT_DOT_EQ
+    : '..='
     ;
 
-PLUS
-    : '+'
+DOT_DOT
+    : '..'
     ;
 
-MINUS
-    : '-'
+// -----------------------------------------------------------------------------
+// Function / type / control-flow arrows
+// -----------------------------------------------------------------------------
+
+THIN_ARROW
+    : '->'
     ;
 
-STAR
-    : '*'
+FAT_ARROW
+    : '=>'
     ;
 
-SLASH
-    : '/'
+// -----------------------------------------------------------------------------
+// Namespace / path operator
+// -----------------------------------------------------------------------------
+
+DOUBLE_COLON
+    : '::'
     ;
 
-PERCENT
-    : '%'
+// -----------------------------------------------------------------------------
+// Equality / comparison
+// -----------------------------------------------------------------------------
+
+EQUAL_EQUAL
+    : '=='
     ;
 
-
-/*
- * ============================================================================
- * COMPOUND ASSIGNMENT OPERATORS
- * ============================================================================
- *
- * These remain lexical forms.
- *
- * Whether:
- *
- *     a += b
- *
- * means:
- *
- *     a = a + b
- *
- * or invokes another typed semantic operation is decided downstream.
- *
- * ============================================================================
- */
-
-POWER_ASSIGN
-    : '**='
+NOT_EQUAL
+    : '!='
     ;
 
-FLOOR_DIV_ASSIGN
-    : '//='
+LESS_EQUAL
+    : '<='
     ;
+
+GREATER_EQUAL
+    : '>='
+    ;
+
+// -----------------------------------------------------------------------------
+// Short-circuit logical operators
+// -----------------------------------------------------------------------------
+
+LOGICAL_AND
+    : '&&'
+    ;
+
+LOGICAL_OR
+    : '||'
+    ;
+
+// -----------------------------------------------------------------------------
+// Bit-shift operators
+// -----------------------------------------------------------------------------
+
+LEFT_SHIFT
+    : '<<'
+    ;
+
+RIGHT_SHIFT
+    : '>>'
+    ;
+
+// -----------------------------------------------------------------------------
+// Compound assignment operators
+// -----------------------------------------------------------------------------
 
 PLUS_ASSIGN
     : '+='
@@ -374,967 +255,559 @@ PERCENT_ASSIGN
     : '%='
     ;
 
-
-/*
- * ============================================================================
- * ASSIGNMENT / BINDING
- * ============================================================================
- */
-
-ASSIGN
-    : '='
+AMP_ASSIGN
+    : '&='
     ;
 
-
-/*
- * ============================================================================
- * COMPARISON OPERATORS
- * ============================================================================
- */
-
-EQUAL
-    : '=='
+PIPE_ASSIGN
+    : '|='
     ;
 
-NOT_EQUAL
-    : '!='
+CARET_ASSIGN
+    : '^='
     ;
 
-LESS_THAN_OR_EQUAL
-    : '<='
+// -----------------------------------------------------------------------------
+// Increment / decrement
+// -----------------------------------------------------------------------------
+
+INCREMENT
+    : '++'
     ;
 
-GREATER_THAN_OR_EQUAL
-    : '>='
+DECREMENT
+    : '--'
     ;
 
-LESS_THAN
-    : '<'
+// -----------------------------------------------------------------------------
+// Optional / null-propagation operators
+// -----------------------------------------------------------------------------
+
+QUESTION_DOT
+    : '?.'
     ;
-
-GREATER_THAN
-    : '>'
-    ;
-
-
-/*
- * ============================================================================
- * LOGICAL OPERATORS
- * ============================================================================
- *
- * These are lexical forms only.
- *
- * The semantic system determines:
- *
- *     boolean semantics
- *     three-valued semantics
- *     symbolic semantics
- *     predicate semantics
- *     domain-specific semantics
- *
- * where permitted by the language.
- * ============================================================================
- */
-
-LOGICAL_NOT
-    : '!'
-    ;
-
-LOGICAL_AND
-    : '&&'
-    ;
-
-LOGICAL_OR
-    : '||'
-    ;
-
-
-/*
- * ============================================================================
- * NULLABILITY / OPTIONAL OPERATORS
- * ============================================================================
- *
- * `??` is the null-coalescing spelling.
- *
- * The parser and type system determine whether it is valid in context.
- * ============================================================================
- */
 
 NULL_COALESCE
     : '??'
     ;
 
 
-/*
- * ============================================================================
- * BITWISE OPERATORS
- * ============================================================================
- */
+// =============================================================================
+// 2. SINGLE-CHARACTER OPERATORS
+//
+// Punctuation characters such as parentheses, braces, brackets, comma,
+// semicolon and colon are NOT owned here.
+//
+// IMPORTANT:
+//     DOUBLE_COLON is an operator and therefore belongs here.
+//     COLON is punctuation and belongs in punctuation.g4.
+//
+// Likewise:
+//
+//     DOT_DOT / ELLIPSIS -> operators
+//     DOT                -> punctuation
+//
+// This distinction prevents lexical ownership collisions.
+// =============================================================================
 
-BITWISE_AND
+// -----------------------------------------------------------------------------
+// Arithmetic
+// -----------------------------------------------------------------------------
+
+PLUS
+    : '+'
+    ;
+
+MINUS
+    : '-'
+    ;
+
+STAR
+    : '*'
+    ;
+
+SLASH
+    : '/'
+    ;
+
+MODULO
+    : '%'
+    ;
+
+// -----------------------------------------------------------------------------
+// Assignment
+// -----------------------------------------------------------------------------
+
+ASSIGN
+    : '='
+    ;
+
+// -----------------------------------------------------------------------------
+// Bitwise
+// -----------------------------------------------------------------------------
+
+AMPERSAND
     : '&'
     ;
 
-BITWISE_OR
+PIPE
     : '|'
     ;
 
-BITWISE_XOR
+CARET
     : '^'
     ;
 
-BITWISE_NOT
+TILDE
     : '~'
     ;
 
+// -----------------------------------------------------------------------------
+// Comparison
+//
+// The multi-character <= and >= rules above take precedence over these
+// single-character forms in the canonical lexer.
+// -----------------------------------------------------------------------------
 
-/*
- * ============================================================================
- * SHIFT OPERATORS
- * ============================================================================
- *
- * The grammar does not impose an integer width.
- *
- * Shift amount and operand width are semantic/type-system concerns.
- *
- * The extended shift spellings are reserved for scalable/future arithmetic
- * and domain extensions. Their semantic availability is determined downstream.
- * ============================================================================
- */
-
-SHIFT_LEFT
-    : '<<'
+LESS
+    : '<'
     ;
 
-SHIFT_RIGHT
-    : '>>'
+GREATER
+    : '>'
     ;
 
-SHIFT_LEFT_LOGICAL
-    : '<<<'
-    ;
+// -----------------------------------------------------------------------------
+// Logical / unary
+//
+// ! is an operator, not punctuation.
+// ? is punctuation unless the language later assigns it an operator role.
+// The canonical ownership decision is kept here explicit so another lexer
+// file cannot accidentally define EXCLAMATION again.
+// -----------------------------------------------------------------------------
 
-SHIFT_RIGHT_LOGICAL
-    : '>>>'
+NOT
+    : '!'
     ;
 
 
-/*
- * ============================================================================
- * RANGE OPERATORS
- * ============================================================================
- */
-
-RANGE
-    : '..'
-    ;
-
-RANGE_INCLUSIVE
-    : '..='
-    ;
-
-
-/*
- * ============================================================================
- * FUNCTION / CONTROL / FLOW OPERATORS
- * ============================================================================
- */
-
-ARROW
-    : '->'
-    ;
-
-FAT_ARROW
-    : '=>'
-    ;
-
-
-/*
- * ============================================================================
- * NAMESPACE / PATH OPERATOR
- * ============================================================================
- *
- * `::` is syntactically a path/namespace separator.
- *
- * It is not owned semantically by this file.
- * ============================================================================
- */
-
-DOUBLE_COLON
-    : '::'
-    ;
-
-
-/*
- * ============================================================================
- * MEMBER / OPTIONAL MEMBER ACCESS
- * ============================================================================
- *
- * The ordinary dot is intentionally separate from the optional-member
- * operator.
- *
- * Numeric literal handling must be designed so that:
- *
- *     1.5
- *
- * is not incorrectly split as:
- *
- *     INTEGER DOT INTEGER
- *
- * when FLOAT lexical rules apply.
- *
- * ============================================================================
- */
-
-OPTIONAL_MEMBER_ACCESS
-    : '?.'
-    ;
-
-DOT
-    : '.'
-    ;
-
-
-/*
- * ============================================================================
- * TERNARY / CONDITIONAL OPERATOR
- * ============================================================================
- *
- * The question mark is lexical.
- *
- * The expression grammar determines whether it participates in:
- *
- *     conditional expressions
- *     optional syntax
- *     other language constructs
- *
- * ============================================================================
- */
-
-QUESTION
-    : '?'
-    ;
-
-
-/*
- * ============================================================================
- * MATRIX / TENSOR OPERATORS
- * ============================================================================
- *
- * The repository's existing grammar contains:
- *
- *     @@
- *     ⊗
- *
- * for matrix multiplication / tensor-style multiplication.
- *
- * Those spellings are retained for compatibility.
- *
- * IMPORTANT:
- *
- * This does NOT mean:
- *
- *     fixed matrix size
- *     fixed tensor rank
- *     CPU matrix unit
- *     GPU tensor core
- *     quantum dimension
- *
- * Any such properties belong to types, semantic analysis, capabilities and
- * target lowering.
- * ============================================================================
- */
-
-MATMUL
-    : '@@'
-    ;
-
-TENSOR_PRODUCT
-    : '⊗'
-    ;
-
-
-/*
- * ============================================================================
- * COMPOSITION / PIPE OPERATORS
- * ============================================================================
- *
- * These are intentionally lexical extension points.
- *
- * Their exact semantic meaning must be specified before being exposed as
- * stable language features.
- *
- * A token should not silently acquire different meanings in different
- * compiler stages.
- * ============================================================================
- */
-
-PIPE_FORWARD
-    : '|>'
-    ;
-
-PIPE_BACKWARD
-    : '<|'
-    ;
-
-
-/*
- * ============================================================================
- * FUNCTION / TYPE / META OPERATORS
- * ============================================================================
- *
- * These spellings are reserved here only when the canonical syntax uses them.
- * Their semantics are determined downstream.
- * ============================================================================
- */
-
-FAT_ARROW_REVERSE
-    : '<='
-    ;
-
-
-/*
- * ============================================================================
- * SEMANTIC / COMPARISON EXTENSIONS
- * ============================================================================
- *
- * These operators provide lexical space for semantic comparison where the
- * canonical language specification adopts them.
- *
- * They do not encode machine or hardware semantics.
- * ============================================================================
- */
-
-SPACESHIP
-    : '<=>'
-    ;
-
-
-/*
- * ============================================================================
- * OPERATOR IDENTIFIER EXTENSION
- * ============================================================================
- *
- * IMPORTANT:
- *
- * Zamani should not require every future operator to be hard-coded into the
- * lexer merely because a domain wants to introduce a semantic operation.
- *
- * Therefore:
- *
- *     named operations
- *     quantum operations
- *     hardware operations
- *     accelerator operations
- *     library operations
- *     user-defined semantic functions
- *
- * remain identifiers unless the language specification explicitly reserves a
- * symbolic operator spelling.
- *
- * This prevents the grammar from becoming a closed catalogue of current
- * hardware or mathematical functionality.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * RESERVED OPERATOR SPACE
- * ============================================================================
- *
- * Do NOT add arbitrary punctuation here merely to reserve future syntax.
- *
- * Unassigned operator spellings should remain ordinary lexer errors or be
- * handled through a deliberately specified future operator-extension
- * mechanism.
- *
- * Silent acceptance of unspecified operators would make the language
- * ambiguous and would violate deterministic parsing.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * LEXICAL PRECEDENCE / LONGEST MATCH
- * ============================================================================
- *
- * The following relationships are especially important:
- *
- *     **=  >  **  >  *
- *     //=  >  //  >  /
- *     +=   >  +
- *     -=   >  -
- *     *=   >  *
- *     /=   >  /
- *     %=   >  %
- *     ==   >  =
- *     !=   >  !
- *     <=   >  <
- *     >=   >  >
- *     &&   >  &
- *     ||   >  |
- *     <<<  >  <<  < 
- *     >>>  >  >>  >
- *     ..=  >  ..
- *     ->   >  -
- *     =>   >  =
- *     ::   >  :
- *     ?.   >  ?
- *     @@   >  @
- *     <=>  >  <= / =>
- *
- * ANTLR's maximal-munch behavior and rule priority must be verified in the
- * canonical assembled lexer.
- *
- * If any operator token is moved into another lexer fragment, the assembled
- * lexer must retain deterministic longest-match behavior.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * SEMANTIC OWNERSHIP MATRIX
- * ============================================================================
- *
- * Operator spelling      Lexer       Parser       Semantic       IR
- * ---------------------------------------------------------------------------
- *
- * +                      YES         YES          YES             YES
- * -                      YES         YES          YES             YES
- * *                      YES         YES          YES             YES
- * /                      YES         YES          YES             YES
- * %                      YES         YES          YES             YES
- * **                     YES         YES          YES             YES
- * =                      YES         YES          YES             YES
- * ==                     YES         YES          YES             YES
- * !=                     YES         YES          YES             YES
- * <                      YES         YES          YES             YES
- * <=                     YES         YES          YES             YES
- * >                      YES         YES          YES             YES
- * >=                     YES         YES          YES             YES
- * !                      YES         YES          YES             YES
- * &&                     YES         YES          YES             YES
- * ||                     YES         YES          YES             YES
- * &                      YES         YES          YES             YES
- * |                      YES         YES          YES             YES
- * ^                      YES         YES          YES             YES
- * ~                      YES         YES          YES             YES
- * <<                     YES         YES          YES             YES
- * >>                     YES         YES          YES             YES
- * ..                     YES         YES          YES             YES
- * ..=                    YES         YES          YES             YES
- * ->                     YES         YES          YES             YES
- * =>                     YES         YES          YES             YES
- * ::                     YES         YES          YES             NO*
- * ?.                     YES         YES          YES             YES
- * @@                     YES         YES          YES             YES
- * ⊗                     YES         YES          YES             YES
- *
- * YES means "participates in this layer".
- *
- * The lexer does NOT determine semantic ownership.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * DOMAIN INDEPENDENCE
- * ============================================================================
- *
- * The same operator token may be interpreted differently depending on the
- * semantic types and domain.
- *
- * Examples:
- *
- *     a + b
- *
- * may represent:
- *
- *     scalar addition
- *     vector addition
- *     matrix addition
- *     tensor addition
- *     symbolic addition
- *     polynomial addition
- *     domain-defined addition
- *
- * Likewise:
- *
- *     a * b
- *
- * may represent:
- *
- *     scalar multiplication
- *     matrix multiplication
- *     tensor contraction
- *     element-wise multiplication
- *     domain-defined multiplication
- *
- * and:
- *
- *     A @@ B
- *
- * may represent matrix/tensor multiplication according to the semantic
- * system, without this lexer knowing the dimensions.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * QUANTUM INDEPENDENCE
- * ============================================================================
- *
- * This file intentionally does NOT define:
- *
- *     H
- *     X
- *     Y
- *     Z
- *     CNOT
- *     CZ
- *     SWAP
- *     U
- *     RX
- *     RY
- *     RZ
- *     custom_gate
- *     vendor_gate
- *
- * as operators.
- *
- * Such names are generally identifiers or semantic operation names.
- *
- * This allows:
- *
- *     logical operations
- *     physical operations
- *     calibrated operations
- *     user-defined operations
- *     future gates
- *     provider-specific operations
- *
- * to be handled by semantic/domain layers rather than by a fixed lexer
- * catalogue.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * HARDWARE INDEPENDENCE
- * ============================================================================
- *
- * No operator in this file may imply:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     SIMD width
- *     register count
- *     memory capacity
- *     network topology
- *     device identifier
- *     physical address
- *     execution latency
- *     clock frequency
- *     gate duration
- *
- * Hardware realization is downstream.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * This grammar places no artificial limit on:
- *
- *     expression depth
- *     number of expressions
- *     number of operators
- *     number of operands
- *     number of program statements
- *     number of qubits
- *     number of classical values
- *     number of devices
- *     tensor dimensions
- *     machine resources
- *
- * Any implementation limits arise from:
- *
- *     available memory
- *     parser/runtime implementation
- *     operating-system limits
- *     compilation resources
- *     target capabilities
- *
- * and must not be presented as language-level semantic limits.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * For identical source text and identical lexer configuration:
- *
- *     identical input
- *         ->
- *     identical token sequence
- *
- * must hold.
- *
- * The operator lexer must not depend on:
- *
- *     machine architecture
- *     CPU count
- *     runtime state
- *     network state
- *     hardware discovery
- *     quantum backend
- *     calibration state
- *     wall-clock time
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * ERROR HANDLING
- * ============================================================================
- *
- * Unsupported symbolic sequences must produce deterministic lexical errors.
- *
- * The lexer must not:
- *
- *     silently reinterpret them;
- *     silently delete them;
- *     convert them into comments;
- *     turn them into identifiers without specification;
- *     emit executable semantics.
- *
- * Diagnostics are consumed by the frontend diagnostic system.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Existing operator spellings must be audited before removal.
- *
- * In particular:
- *
- *     @@
- *     ⊗
- *
- * are retained because the existing Zamani grammar documents matrix
- * multiplication using those spellings.
- *
- * Any existing operator spelling found elsewhere in:
- *
- *     grammar/Zamani.g4
- *     grammar/antlr/ZamaniLexer.g4
- *     grammar/antlr/Core.g4
- *     src/lexer.rs
- *     parser
- *     AST
- *     tests
- *
- * must be classified as:
- *
- *     KEEP
- *     MIGRATE
- *     DEPRECATE
- *     REMOVE
- *
- * before the canonical lexer is assembled.
- *
- * No existing valid language construct should disappear silently.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * AST INTEGRATION
- * ============================================================================
- *
- * The existing AST represents prefix and infix operators using operator token
- * identity.
- *
- * Therefore the lexer must preserve enough information for the parser to
- * produce stable operator identity.
- *
- * The lexer must NOT:
- *
- *     resolve overloads;
- *     fold constants;
- *     lower quantum operations;
- *     choose hardware instructions;
- *     select accelerator implementations.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * QUANTUM IR INTEGRATION
- * ============================================================================
- *
- * If an operator eventually denotes quantum semantics:
- *
- *     operator token
- *          |
- *          v
- *     parser AST
- *          |
- *          v
- *     semantic resolution
- *          |
- *          v
- *     canonical quantum representation
- *          |
- *          v
- *     quantum::ir
- *
- * This grammar must never construct a second quantum IR.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * OPTIMIZATION INTEGRATION
- * ============================================================================
- *
- * Optimization must consume semantic IR rather than raw lexer tokens.
- *
- * Examples:
- *
- *     a + 0
- *     x * 1
- *     x ** 1
- *
- * may be optimized only after semantic correctness has been established.
- *
- * The lexer does not perform such transformations.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * SCHEDULING / ROUTING / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Operators do not encode:
- *
- *     placement
- *     timing
- *     resource allocation
- *     routing
- *     physical qubits
- *     machine topology
- *
- * Those decisions belong downstream.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * TEST REQUIREMENTS
- * ============================================================================
- *
- * Positive lexical tests MUST include:
- *
- *     +
- *     -
- *     *
- *     /
- *     %
- *     **
- *     //
- *     =
- *     +=
- *     -=
- *     *=
- *     /=
- *     %=
- *     **=
- *     //=
- *     ==
- *     !=
- *     <
- *     <=
- *     >
- *     >=
- *     !
- *     &&
- *     ||
- *     &
- *     |
- *     ^
- *     ~
- *     <<
- *     >>
- *     <<<
- *     >>>
- *     ..
- *     ..=
- *     ->
- *     =>
- *     ::
- *     ?.
- *     ?
- *     @@
- *     ⊗
- *     <=> 
- *
- * Combination tests MUST include:
- *
- *     a+b
- *     a+=b
- *     a**=b
- *     a<<=b
- *     a==b
- *     a!=b
- *     a<=b
- *     a>=b
- *     a&&b
- *     a||b
- *     a<<b
- *     a>>b
- *     a..b
- *     a..=b
- *     a->b
- *     a=>b
- *     a::b
- *     a?.b
- *     A@@B
- *     A⊗B
- *
- * Longest-match tests MUST verify:
- *
- *     **= is not ** followed by =
- *     //= is not // followed by =
- *     += is not + followed by =
- *     == is not = followed by =
- *     != is not ! followed by =
- *     <= is not < followed by =
- *     >= is not > followed by =
- *     && is not & followed by &
- *     || is not | followed by |
- *     <<< is not << followed by <
- *     >>> is not >> followed by >
- *     ..= is not .. followed by =
- *     -> is not - followed by >
- *     => is not = followed by >
- *     :: is not : followed by :
- *     ?. is not ? followed by .
- *     @@ is not @ followed by @
- *     <=> is not <= followed by >
- *
- * Negative tests MUST include unsupported symbolic combinations.
- *
- * Boundary tests MUST include:
- *
- *     deeply nested expressions
- *     very long operator-containing expressions
- *     large generated programs
- *     many operators in sequence
- *
- * The tests must not use artificial language-level maximums.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * Forbidden:
- *
- *     MAX_OPERATORS
- *     MAX_OPERANDS
- *     MAX_EXPRESSION_DEPTH
- *     MAX_TENSOR_DIMENSION
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_DEVICES
- *
- * This file contains none of these.
- *
- * Any implementation limit discovered in lexer/parser/runtime tests must be
- * classified separately as an implementation/resource limitation rather than
- * a language semantic limit.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete only when:
- *
- * [ ] Every canonical operator spelling has one lexical owner.
- * [ ] No operator is duplicated in another canonical lexer fragment.
- * [ ] Longest-match behavior is tested.
- * [ ] Existing valid operator spellings are preserved or explicitly migrated.
- * [ ] `@@` compatibility is preserved.
- * [ ] `⊗` compatibility is preserved.
- * [ ] Operator precedence remains outside this file.
- * [ ] Operator associativity remains outside this file.
- * [ ] Operator semantics remain outside this file.
- * [ ] Operator overload resolution remains outside this file.
- * [ ] Quantum gate semantics remain outside this file.
- * [ ] Hardware semantics remain outside this file.
- * [ ] No machine-size limits exist.
- * [ ] No qubit-count limits exist.
- * [ ] No operand-count limits exist.
- * [ ] No tensor-rank limits exist.
- * [ ] Deterministic lexing is verified.
- * [ ] Negative lexical cases are verified.
- * [ ] Boundary/scalability cases are verified.
- * [ ] AST integration is verified.
- * [ ] Canonical parser integration is verified.
- * [ ] Canonical lexer assembly is verified.
- * [ ] Rust 1.97 / 1.97.1 integration remains safe Rust.
- *
- * ============================================================================
- */
+// =============================================================================
+// 3. OPERATOR OWNERSHIP NOTES
+// =============================================================================
+//
+// The following characters/tokens intentionally do NOT belong to this file:
+//
+//     ( )       -> punctuation.g4
+//     { }       -> punctuation.g4
+//     [ ]       -> punctuation.g4
+//     ,         -> punctuation.g4
+//     ;         -> punctuation.g4
+//     :         -> punctuation.g4
+//     .         -> punctuation.g4
+//     ?         -> punctuation.g4 unless explicitly promoted by a future
+//                  language-version decision
+//
+// The following are operator tokens despite resembling punctuation:
+//
+//     ->        -> THIN_ARROW
+//     =>        -> FAT_ARROW
+//     ::        -> DOUBLE_COLON
+//     ..        -> DOT_DOT
+//     ..=       -> DOT_DOT_EQ
+//     ...       -> ELLIPSIS
+//     ?.        -> QUESTION_DOT
+//     ??        -> NULL_COALESCE
+//
+// =============================================================================
+//
+// 4. LEXICAL MAXIMAL-MUNCH REQUIREMENT
+// =============================================================================
+//
+// The canonical lexer assembly MUST ensure that multi-character operators
+// are recognized as complete tokens.
+//
+// This is especially important for:
+//
+//     ...    ..=    ..
+//     ->     =>     ::
+//     ==     !=     <=     >=
+//     &&     ||     <<     >>
+//     +=     -=     *=     /=     %=
+//     &=     |=     ^=
+//     ++     --
+//     ?.     ??
+//
+// A parser must never have to reconstruct a compound operator from separate
+// character tokens.
+//
+// For example:
+//
+//     a >= b
+//
+// MUST produce:
+//
+//     IDENTIFIER GREATER_EQUAL IDENTIFIER
+//
+// rather than:
+//
+//     IDENTIFIER GREATER ASSIGN IDENTIFIER
+//
+// Likewise:
+//
+//     x += y
+//
+// MUST produce:
+//
+//     IDENTIFIER PLUS_ASSIGN IDENTIFIER
+//
+// rather than:
+//
+//     IDENTIFIER PLUS ASSIGN IDENTIFIER
+//
+// =============================================================================
+//
+// 5. PRECEDENCE IS NOT DEFINED HERE
+// =============================================================================
+//
+// This file MUST NOT encode:
+//
+//     multiplication > addition
+//     comparison > equality
+//     logical-and > logical-or
+//     assignment associativity
+//
+// Those are parser/semantic contracts.
+//
+// For example, the parser may define:
+//
+//     multiplicativeExpression
+//     additiveExpression
+//     shiftExpression
+//     comparisonExpression
+//     equalityExpression
+//     bitwiseExpression
+//     logicalExpression
+//     assignmentExpression
+//
+// without changing this lexer.
+//
+// This separation allows the language's semantic operator model to evolve
+// without changing lexical ownership.
+//
+// =============================================================================
+//
+// 6. OPERATOR OVERLOADING
+// =============================================================================
+//
+// This file does not decide whether:
+//
+//     +
+//     -
+//     *
+//     /
+//     %
+//     <<
+//     >>
+//     &
+//     |
+//     ^
+//
+// operate on:
+//
+//     integers
+//     floating-point values
+//     vectors
+//     matrices
+//     tensors
+//     symbolic values
+//     user-defined types
+//     hardware values
+//     quantum/classical boundary values
+//     future extensible types
+//
+// That belongs to semantic analysis and type checking.
+//
+// Therefore no target-specific operator meaning is embedded here.
+//
+// =============================================================================
+//
+// 7. QUANTUM INTEGRATION
+// =============================================================================
+//
+// Quantum syntax may reuse ordinary operators for expressions:
+//
+//     +
+//     -
+//     *
+//     /
+//     ==
+//     !=
+//     -> 
+//     => 
+//
+// Quantum-specific semantic operations must be represented by the quantum
+// parser/semantic layer and eventually lowered into the canonical
+// quantum::ir.
+//
+// This file must NOT define:
+//
+//     H
+//     X
+//     CX
+//     measurement semantics
+//     qubit counts
+//     topology
+//     coupling maps
+//     physical gate durations
+//     calibration data
+//     error rates
+//
+// Those belong to their respective language/semantic/backend layers.
+//
+// In particular, this lexer must never contain:
+//
+//     MAX_QUBITS
+//     MAX_GATES
+//     DEVICE_ID
+//     q[0]
+//     q[1]
+//
+// or any equivalent machine-specific restriction.
+//
+// =============================================================================
+//
+// 8. HDL / HARDWARE INTEGRATION
+// =============================================================================
+//
+// Hardware-oriented expressions may reuse:
+//
+//     =
+//     +=
+//     -=
+//     &
+//     |
+//     ^
+//     ~
+//     <<
+//     >>
+//     ==
+//     !=
+//     <
+//     >
+//     <=
+//     >=
+//
+// Hardware meaning belongs to HDL/hardware semantic analysis.
+//
+// This file must not encode:
+//
+//     register width
+//     bus width
+//     FPGA family
+//     ASIC family
+//     clock frequency
+//     number of ports
+//     number of devices
+//     physical address
+//     topology
+//
+// Such properties are represented through semantic declarations, target
+// descriptions, capabilities, resources, or compilation context.
+//
+// =============================================================================
+//
+// 9. CLASSICAL / NUMERICAL INTEGRATION
+// =============================================================================
+//
+// Arithmetic operators remain syntax-level constructs.
+//
+// Their semantics can be applied to scalar and aggregate values without
+// requiring new lexer tokens for every numerical domain.
+//
+// For example, a future tensor system should not require:
+//
+//     TENSOR_PLUS
+//     MATRIX_PLUS
+//     VECTOR_PLUS
+//
+// unless there is a genuine syntactic distinction.
+//
+// The ordinary PLUS token is therefore intentionally reusable.
+//
+// =============================================================================
+//
+// 10. FUTURE EXTENSIBILITY
+// =============================================================================
+//
+// New operator spellings may be added only through the language-versioning
+// process.
+//
+// A future extension MUST:
+//
+//   1. choose an unambiguous spelling;
+//   2. define its lexical ownership here;
+//   3. define parser usage separately;
+//   4. define precedence/associativity separately;
+//   5. define semantic meaning separately;
+//   6. define AST representation;
+//   7. define diagnostics;
+//   8. define compatibility behavior;
+//   9. add positive/negative/boundary tests;
+//  10. verify that no existing operator becomes ambiguous.
+//
+// Domain-specific extensions should prefer dialect/operator-registration
+// mechanisms over permanently hard-coding vendor-specific operators into the
+// universal core language.
+//
+// =============================================================================
+//
+// 11. DETERMINISM
+// =============================================================================
+//
+// For identical source text and identical language version, the canonical
+// lexer must emit the same operator token sequence.
+//
+// Operator tokenization must not depend on:
+//
+//     machine size
+//     CPU count
+//     GPU count
+//     FPGA count
+//     quantum hardware
+//     runtime state
+//     network state
+//     scheduling
+//     calibration
+//     backend selection
+//
+// =============================================================================
+//
+// 12. ERROR HANDLING
+// =============================================================================
+//
+// This file recognizes valid operator spellings.
+//
+// Invalid or unsupported operator sequences must be diagnosed by the canonical
+// lexer/error infrastructure.
+//
+// Do not introduce catch-all operator rules here such as:
+//
+//     OPERATOR : . ;
+//
+// Such a rule would hide spelling errors and make diagnostics less precise.
+//
+// =============================================================================
+//
+// 13. COMPATIBILITY
+// =============================================================================
+//
+// Existing parser consumers already reference named tokens including:
+//
+//     PLUS
+//     MINUS
+//     STAR
+//     SLASH
+//     MODULO
+//     PLUS_ASSIGN
+//     MINUS_ASSIGN
+//     STAR_ASSIGN
+//     SLASH_ASSIGN
+//
+// These token names MUST remain stable during migration.
+//
+// The existing parser also uses operator precedence independently of lexical
+// recognition. Therefore migrating these rules from the monolithic token
+// grammar into this modular file must preserve token identity.
+//
+// =============================================================================
+//
+// 14. REQUIRED MIGRATION
+// =============================================================================
+//
+// The current grammar/lexer/tokens.g4 contains operator definitions alongside
+// many unrelated lexical definitions.
+//
+// During modularization:
+//
+//     tokens.g4
+//          |
+//          +--> keywords.g4
+//          +--> identifiers.g4
+//          +--> literals.g4
+//          +--> operators.g4       <-- this file
+//          +--> punctuation.g4
+//          +--> comments.g4
+//          +--> ...
+//
+// Operator definitions MUST have exactly ONE canonical lexical owner.
+//
+// Do NOT temporarily leave duplicate definitions in both:
+//
+//     tokens.g4
+//     operators.g4
+//
+// because ANTLR will then have competing token definitions and the language
+// will no longer have a single lexical authority.
+//
+// The migration must preserve the public token names consumed by:
+//
+//     grammar/antlr/ZamaniParser.g4
+//     grammar/antlr/Meta.g4
+//     grammar/antlr/Types.g4
+//     other parser grammars
+//     generated parser integration
+//
+// The repository parser currently consumes PLUS/MINUS and other operator
+// tokens, so this migration must be treated as a compatibility-preserving
+// lexer refactor, not a token-renaming exercise.
+//
+// =============================================================================
+//
+// 15. NO DEPENDENCY ON RUNTIME OR HARDWARE
+// =============================================================================
+//
+// This grammar MUST remain usable when no target exists yet.
+//
+// It must be possible to lex:
+//
+//     + - * / %
+//     == != <= >=
+//     && ||
+//     << >>
+//     += -= *= /= %=
+//     & | ^ ~
+//     -> => ::
+//     .. ..= ...
+//
+// without knowing:
+//
+//     target CPU
+//     target GPU
+//     target FPGA
+//     target ASIC
+//     quantum backend
+//     node count
+//     cluster topology
+//     available memory
+//     runtime capabilities
+//
+// =============================================================================
+//
+// 16. SOURCE COMPATIBILITY
+// =============================================================================
+//
+// Existing valid Zamani programs using the operator spellings above must
+// continue to tokenize into the same stable token categories after the
+// modularization.
+//
+// Any intentional language change requires:
+//
+//     language version update
+//     compatibility documentation
+//     migration guidance
+//     regression tests
+//
+// =============================================================================
+//
+// END OF FILE
+// =============================================================================
