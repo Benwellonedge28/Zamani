@@ -7,12 +7,12 @@
  *     grammar/effects/effects.g4
  *
  * Status:
- *     Canonical modular production grammar for Zamani effects.
+ *     Canonical modular production grammar for effect syntax.
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Runtime/compiler baseline:
+ * Language/runtime baseline:
  *     Rust 1.97 / Rust 1.97.1
  *
  * Safety:
@@ -23,201 +23,205 @@
  * PURPOSE
  * ============================================================================
  *
- * This file is the authoritative SYNTAX owner for the Zamani effect system.
+ * This file owns the SOURCE SYNTAX of Zamani computational effects.
  *
- * Effects describe computational effects and source-level effect intent.
+ * An effect describes a kind of computational interaction or externally
+ * observable computational behavior.
  *
- * Examples include:
+ * Examples:
  *
  *     effect IO;
  *     effect Storage;
  *     effect Network;
- *     effect QuantumMeasurement;
- *     effect UserDefined<T>;
+ *     effect quantum::Measurement;
  *
- *     fn read() -> Value
- *         with effects { IO, Storage }
- *
- *     perform Storage::read(key);
- *
- *     handle computation {
- *         case Storage::read(key) => resume(value);
+ *     effect Storage {
+ *         fn read(key: Key) -> Value;
+ *         fn write(key: Key, value: Value) -> Unit;
  *     }
  *
- * The grammar deliberately uses an OPEN-WORLD model.
+ *     fn read(key: Key) -> Value
+ *         with effects { IO, Storage }
+ *     {
+ *         ...
+ *     }
  *
- * There is no finite built-in effect catalogue.
+ * Effects are intentionally OPEN-WORLD.
  *
- * Therefore this grammar does NOT define:
+ * The grammar MUST NOT contain a closed enumeration of:
  *
  *     IO
  *     Network
- *     Quantum
  *     GPU
  *     CPU
  *     FPGA
- *     ZQN
+ *     QPU
+ *     Quantum
  *     QEC
+ *     ZQN
  *     Storage
+ *     etc.
  *
- * as closed grammar enumerations.
- *
- * They are ordinary source-level names.
+ * Such names are source-level identifiers and are interpreted by semantic
+ * analysis and registered language/domain facilities.
  *
  * ============================================================================
- * ARCHITECTURAL BOUNDARY
+ * OWNERSHIP
  * ============================================================================
- *
- * Source
- *   |
- *   v
- * Zamani lexer
- *   |
- *   v
- * effect grammar
- *   |
- *   v
- * frontend AST
- *   |
- *   +--> name resolution
- *   +--> type analysis
- *   +--> effect analysis
- *   +--> capability analysis
- *   +--> resource analysis
- *   |
- *   v
- * canonical semantic representation
- *   |
- *   +--> classical IR
- *   +--> quantum::ir
- *   +--> HDL/hardware representation
- *   +--> resource/effect metadata
- *   |
- *   v
- * optimization
- *   |
- *   v
- * routing / scheduling / resilience / ZQN
- *   |
- *   v
- * target lowering
- *   |
- *   v
- * runtime / hardware
  *
  * THIS FILE OWNS:
  *
  *   - effect declarations;
  *   - effect operation declarations;
+ *   - effect declaration signatures;
  *   - effect references;
  *   - effect reference lists;
- *   - effect clauses;
  *   - effect sets;
+ *   - effect clauses;
  *   - effect invocation syntax;
  *   - effect handler syntax;
- *   - handler patterns;
- *   - continuation/resumption syntax;
- *   - effect-specific abort syntax;
- *   - effect signature syntax;
- *   - effect generic syntax at the effect boundary;
+ *   - effect handler arms;
+ *   - effect handler patterns;
+ *   - resumption syntax;
+ *   - effect-abort syntax;
+ *   - effect-level generic syntax;
  *   - syntactic effect composition.
  *
  * THIS FILE DOES NOT OWN:
  *
  *   - lexical token definitions;
- *   - identifier spelling;
- *   - qualified-name spelling;
- *   - type semantics;
- *   - type checking;
+ *   - identifiers;
+ *   - qualified-name syntax;
+ *   - types;
+ *   - expressions;
+ *   - capability declarations;
  *   - capability discovery;
- *   - capability authorization;
+ *   - resource declarations;
  *   - resource allocation;
  *   - resource limits;
  *   - hardware discovery;
  *   - backend selection;
- *   - CPU/GPU/QPU selection;
- *   - QPU topology;
- *   - physical qubits;
- *   - quantum gate inventories;
+ *   - placement;
+ *   - topology;
+ *   - routing;
+ *   - scheduling;
+ *   - optimization;
+ *   - calibration;
+ *   - quantum gates;
+ *   - QubitId;
+ *   - PhysicalQubitId;
  *   - quantum::ir;
  *   - QEC;
  *   - ZQN;
  *   - resilience;
- *   - routing;
- *   - scheduling;
- *   - calibration;
- *   - optimization;
- *   - execution;
- *   - runtime effect dispatch;
+ *   - runtime dispatch;
  *   - effect implementation.
+ *
+ * ============================================================================
+ * ARCHITECTURAL PRINCIPLE
+ * ============================================================================
+ *
+ *     SOURCE
+ *        |
+ *        v
+ *     lexer
+ *        |
+ *        v
+ *     effect parser
+ *        |
+ *        v
+ *     frontend AST
+ *        |
+ *        +--> name resolution
+ *        +--> type analysis
+ *        +--> effect analysis
+ *        +--> capability analysis
+ *        +--> requirement analysis
+ *        +--> resource analysis
+ *        |
+ *        v
+ *     canonical semantic representation
+ *        |
+ *        +--> classical IR
+ *        +--> quantum::ir
+ *        +--> HDL/hardware representation
+ *        +--> effect metadata
+ *        |
+ *        v
+ *     optimization
+ *        |
+ *        v
+ *     routing / scheduling / resilience / ZQN
+ *        |
+ *        v
+ *     target lowering
+ *        |
+ *        v
+ *     runtime / hardware
+ *
+ * This grammar MUST NOT reverse this dependency direction.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Effect syntax describes WHAT computational behavior a program may perform.
+ * Effects describe WHAT computation may interact with.
  *
- * It must not encode WHERE or HOW that behavior is implemented.
+ * They do not describe WHERE or HOW the interaction is realized.
  *
- * The same source effect declaration must remain valid when the implementation
- * executes on:
- *
- *   - an embedded processor;
- *   - a CPU;
- *   - a multicore system;
- *   - a GPU;
- *   - an FPGA;
- *   - an ASIC;
- *   - a quantum processor;
- *   - a simulator;
- *   - a distributed system;
- *   - a cloud system;
- *   - a heterogeneous system;
- *   - a future computational substrate.
- *
- * No grammar-level limits are imposed on:
+ * Therefore this grammar imposes no language-level limit on:
  *
  *   - number of effects;
  *   - number of operations;
+ *   - number of effect references;
+ *   - number of handler arms;
  *   - number of parameters;
- *   - number of handlers;
- *   - nesting depth;
+ *   - number of generic parameters;
  *   - effect-set size;
- *   - generic arity;
- *   - handler-arm count.
+ *   - handler nesting;
+ *   - program size;
+ *   - machine size;
+ *   - qubit count;
+ *   - CPU count;
+ *   - GPU count;
+ *   - FPGA count;
+ *   - node count;
+ *   - memory capacity.
  *
- * Practical implementation limits belong to explicit compiler/parser/runtime
- * resource policies and MUST NOT become language semantics.
+ * Practical parser/compiler limits are implementation/resource-policy
+ * concerns and MUST NOT become source-language semantics.
  *
  * ============================================================================
- * EFFECT VS CAPABILITY VS RESOURCE
+ * EFFECT / CAPABILITY / RESOURCE SEPARATION
  * ============================================================================
  *
- * Effect:
+ * EFFECT:
+ *     What computational interaction occurs?
  *
- *     What kind of computational interaction can occur?
- *
- * Capability:
- *
+ * CAPABILITY:
  *     What can an execution environment provide?
  *
- * Resource:
+ * RESOURCE:
+ *     What computational resource exists or is requested?
  *
- *     What computational resource is available/requested?
+ * REQUIREMENT:
+ *     What must be satisfied for a valid realization?
  *
- * Constraint:
+ * CONSTRAINT:
+ *     What conditions must a realization obey?
  *
- *     What conditions must a realization satisfy?
- *
- * Preference:
- *
+ * PREFERENCE:
  *     Which valid realization is preferred?
  *
- * Effects MUST NOT be used as an implicit hardware-selection mechanism.
+ * HINT:
+ *     Which implementation direction is suggested without becoming semantic
+ *     necessity?
  *
- * For example:
+ * Effects MUST NOT silently become hardware-selection syntax.
  *
- *     effect QuantumMeasurement;
+ * Example:
+ *
+ *     effect quantum::Measurement;
  *
  * does NOT mean:
  *
@@ -226,13 +230,11 @@
  *     use topology Y
  *     use backend Z
  *
- * Those decisions belong downstream.
- *
  * ============================================================================
  * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Quantum effects may be named by ordinary effect references:
+ * Quantum effects may be represented by ordinary qualified names:
  *
  *     quantum::Measurement
  *     quantum::Reset
@@ -241,83 +243,68 @@
  *
  * This grammar does NOT define quantum semantics.
  *
- * In particular it does not define:
+ * It does not define:
  *
  *     QubitId
  *     PhysicalQubitId
  *     GateKind
  *     topology
  *     calibration
- *     noise model
- *     QEC code
- *     ZQN fault
+ *     noise
+ *     QEC codes
+ *     ZQN faults
  *
- * Quantum semantic lowering remains downstream and the canonical quantum
- * semantic boundary remains:
+ * Quantum lowering remains downstream.
+ *
+ * The canonical quantum semantic boundary remains:
  *
  *     quantum::ir
  *
  * ============================================================================
- * OPEN WORLD
+ * OPEN-WORLD EXTENSIBILITY
  * ============================================================================
  *
- * Effect identities are names.
+ * Future domains require no modification to this grammar:
  *
- * New domains therefore require no modification to this grammar:
- *
- *     effect future::photonic::measurement;
+ *     effect photonic::interaction;
  *     effect neuromorphic::spike;
- *     effect distributed::consensus;
  *     effect accelerator::tensor;
- *     effect custom::domain::operation;
+ *     effect distributed::consensus;
+ *     effect future::computing::operation;
  *
- * The grammar does not need to know what these names mean.
+ * Unknown effect identities remain syntactically valid.
  *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar:
- *
- *   - has no semantic predicates;
- *   - has no embedded actions;
- *   - performs no I/O;
- *   - performs no network access;
- *   - performs no hardware discovery;
- *   - performs no runtime dispatch;
- *   - performs no random operations.
- *
- * Given a deterministic token stream, parsing is deterministic.
+ * Semantic analysis may subsequently reject an unknown or unavailable effect.
  *
  * ============================================================================
- * IMPORT CONTRACT
+ * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
- * The modular effects grammar consumes canonical shared rules supplied by the
- * rest of the grammar architecture:
+ * Canonical lexical vocabulary:
+ *
+ *     grammar/lexer/tokens.g4
+ *
+ * Therefore:
+ *
+ *     tokenVocab = ZamaniTokens
+ *
+ * MUST be used.
+ *
+ * Shared syntax MUST be imported from canonical modular grammars.
+ *
+ * This file MUST NOT redefine:
  *
  *     identifier
  *     qualifiedName
  *     attributes
- *     attribute
- *     typeExpression
- *     genericParameters
- *     parameterList
- *     returnType
- *     whereClause
- *     expression
- *     argumentList
- *     blockExpression
  *     visibility
- *
- * These rules MUST NOT be duplicated here.
- *
- * The canonical aggregate parser must import this grammar and remove any
- * duplicate effect ownership from legacy parser grammars.
- *
- * In particular, the old effect declaration rules in the monolithic
- * grammar/antlr/Core.g4 and the legacy grammar/antlr/Effects.g4 must not
- * remain competing authoritative definitions.
+ *     type expressions
+ *     generic parameters
+ *     parameter lists
+ *     return types
+ *     expressions
+ *     argument lists
+ *     block expressions
  *
  * ============================================================================
  */
@@ -325,36 +312,8 @@
 parser grammar Effects;
 
 options {
-    tokenVocab = ZamaniLexer;
+    tokenVocab = ZamaniTokens;
 }
-
-/*
- * ============================================================================
- * IMPORTS
- * ============================================================================
- *
- * These names are intentionally architectural dependencies rather than
- * reimplementations.
- *
- * The aggregate grammar build must place these parser grammars on the ANTLR
- * grammar source path.
- *
- * Core supplies:
- *     identifiers
- *     qualified names
- *     visibility
- *     attributes
- *     shared declaration infrastructure
- *
- * Types supplies:
- *     type expressions
- *
- * Expressions supplies:
- *     canonical expressions
- *     argument lists
- *     block expressions
- */
-import Core, Types, Expressions;
 
 
 /*
@@ -362,34 +321,30 @@ import Core, Types, Expressions;
  * 1. EFFECT DECLARATIONS
  * ============================================================================
  *
- * An effect declaration introduces an open-world effect identity and may
- * optionally declare its operations.
- *
- * Supported forms:
+ * Forms:
  *
  *     effect IO;
  *
  *     effect IO<T>;
  *
- *     effect Read<T>(key: T) -> Value;
- *
  *     effect Storage {
  *         fn read(key: Key) -> Value;
- *         fn write(key: Key, value: Value) -> Unit;
  *     }
  *
- * The declaration itself has no runtime implementation.
+ *     effect Read(Key) -> Value;
+ *
+ * The declaration introduces source-level effect identity only.
  */
 
 effectDeclaration
     : attributes?
       visibility?
-      EFFECT
-      identifier
+      K_EFFECT
+      qualifiedName
       genericParameters?
       effectDeclarationSignature?
       effectBody?
-      SEMI?
+      SEMICOLON?
     ;
 
 
@@ -398,10 +353,7 @@ effectDeclaration
  * 2. EFFECT DECLARATION SIGNATURE
  * ============================================================================
  *
- * A compact declaration-level signature is useful for effects whose operation
- * surface is represented as one primary effect signature.
- *
- * Examples:
+ * A compact signature form.
  *
  *     effect Read(Key);
  *     effect Read(Key) -> Value;
@@ -418,9 +370,9 @@ effectDeclarationSignature
  * 3. EFFECT BODY
  * ============================================================================
  *
- * The body contains zero or more effect operation declarations.
+ * Zero or more operations are permitted.
  *
- * No fixed operation count is imposed.
+ * No fixed operation count is encoded.
  */
 
 effectBody
@@ -432,10 +384,8 @@ effectBody
 
 /*
  * ============================================================================
- * 4. EFFECT OPERATION
+ * 4. EFFECT OPERATIONS
  * ============================================================================
- *
- * An operation is a named member of an effect declaration.
  *
  * Example:
  *
@@ -444,41 +394,38 @@ effectBody
  *         fn write(key: Key, value: Value) -> Unit;
  *     }
  *
- * The operation is a declaration, not an implementation.
+ * Operations are declarations, not implementations.
  */
 
 effectOperation
     : attributes?
       visibility?
-      ASYNC?
-      FN
+      K_ASYNC?
+      K_FN
       identifier
       genericParameters?
       LPAREN parameterList? RPAREN
       returnType?
       whereClause?
-      SEMI?
+      SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * 5. EFFECT OPERATION SIGNATURE
+ * 5. REUSABLE EFFECT OPERATION SIGNATURE
  * ============================================================================
- *
- * A reusable signature form is provided for semantic tooling and aggregate
- * grammars that need to inspect an effect operation without a body.
  */
 
 effectOperationSignature
-    : ASYNC?
-      FN
+    : K_ASYNC?
+      K_FN
       identifier
       genericParameters?
       LPAREN parameterList? RPAREN
       returnType?
       whereClause?
-      SEMI?
+      SEMICOLON?
     ;
 
 
@@ -487,11 +434,10 @@ effectOperationSignature
  * 6. EFFECT REFERENCES
  * ============================================================================
  *
- * An effect reference identifies an effect without declaring it.
- *
  * Examples:
  *
  *     IO
+ *     Storage
  *     storage::Read
  *     quantum::Measurement
  *     future::domain::Effect
@@ -507,7 +453,7 @@ effectReference
  * 7. EFFECT REFERENCE LIST
  * ============================================================================
  *
- * No finite effect-set size is encoded.
+ * The repetition is intentionally unbounded by language semantics.
  */
 
 effectReferenceList
@@ -519,57 +465,16 @@ effectReferenceList
 
 /*
  * ============================================================================
- * 8. EFFECT CLAUSE
- * ============================================================================
- *
- * Function/declaration-level effect requirement:
- *
- *     fn read() -> Value
- *         with effects { IO, Storage }
- *
- * Effect clauses express source-level effect requirements.
- *
- * They do not allocate resources and do not select a backend.
- */
-
-effectClause
-    : WITH
-      EFFECTS
-      LBRACE
-      effectReferenceList?
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 9. EFFECT REQUIREMENT
- * ============================================================================
- *
- * Alias-level composition rule for grammar consumers that need an explicitly
- * named requirement.
- *
- * This is syntax composition only.
- */
-
-effectRequirement
-    : WITH
-      EFFECTS
-      effectSet
-    ;
-
-
-/*
- * ============================================================================
- * 10. EFFECT SET
+ * 8. EFFECT SET
  * ============================================================================
  *
  * Example:
  *
- *     effects { IO, Network, Storage }
+ *     { IO, Storage, Network }
  *
- * Whether the semantic representation is normalized as a set, ordered row,
- * multiset, capability collection, or another structure belongs downstream.
+ * The parser preserves the syntactic collection.
+ *
+ * Semantic normalization belongs downstream.
  */
 
 effectSet
@@ -581,31 +486,67 @@ effectSet
 
 /*
  * ============================================================================
+ * 9. EFFECT CLAUSE
+ * ============================================================================
+ *
+ * Example:
+ *
+ *     fn read() -> Value
+ *         with effects { IO, Storage }
+ *
+ * `with effects` is source-level effect metadata.
+ *
+ * It does not allocate resources and does not select a target.
+ */
+
+effectClause
+    : K_WITH
+      K_EFFECTS
+      effectSet
+    ;
+
+
+/*
+ * ============================================================================
+ * 10. EFFECT REQUIREMENT
+ * ============================================================================
+ *
+ * Named composition form for aggregate grammars.
+ *
+ * This remains an effect-level requirement, not a resource requirement.
+ */
+
+effectRequirement
+    : K_WITH
+      K_EFFECTS
+      effectSet
+    ;
+
+
+/*
+ * ============================================================================
  * 11. EFFECT INVOCATION
  * ============================================================================
  *
- * Effects are invoked explicitly with `perform`.
+ * Example:
  *
- * Examples:
- *
- *     perform Read(key);
  *     perform Storage::read(key);
  *     perform quantum::Measurement(q);
  *
- * The expression after `perform` belongs to the canonical expression grammar.
+ * The expression grammar owns the expression after `perform`.
  *
- * This prevents effects from creating a second expression language.
+ * This prevents effects from introducing a second expression language.
  */
 
 performExpression
-    : PERFORM
+    : K_PERFORM
       expression
     ;
 
 
 performStatement
     : performExpression
-      SEMI?
+      SEMICOLON?
     ;
 
 
@@ -614,19 +555,17 @@ performStatement
  * 12. EFFECT HANDLING
  * ============================================================================
  *
- * A handler establishes syntax for handling an effectful computation.
- *
  * Example:
  *
  *     handle computation {
  *         case Storage::read(key) => resume(value);
  *     }
  *
- * Handler semantics are resolved later.
+ * The semantic/runtime interpretation is downstream.
  */
 
 handleStatement
-    : HANDLE
+    : K_HANDLE
       expression
       effectHandlerBody
     ;
@@ -652,16 +591,13 @@ effectHandlerBody
  *
  * Example:
  *
- *     case Read(key) => resume(value)
+ *     case Storage::read(key) => resume(value);
  *
- * A handler arm may contain an expression or block.
- *
- * Handler behavior is semantic/runtime territory and is deliberately absent
- * from this grammar.
+ * A handler arm contains either a block or expression.
  */
 
 effectHandler
-    : CASE
+    : K_CASE
       effectHandlerPattern
       FAT_ARROW
       (
@@ -677,14 +613,14 @@ effectHandler
  * 15. EFFECT HANDLER PATTERN
  * ============================================================================
  *
- * Supported forms:
+ * Examples:
  *
  *     Read
  *     Read(key)
  *     Storage::Read(key)
  *     quantum::Measurement(q)
  *
- * The operation name remains open-ended.
+ * Operation identity remains open-world.
  */
 
 effectHandlerPattern
@@ -697,14 +633,14 @@ effectHandlerPattern
 
 /*
  * ============================================================================
- * 16. EFFECT HANDLER CLAUSE
+ * 16. HANDLER CLAUSE
  * ============================================================================
  *
- * Named separately for grammar composition.
+ * Named separately for integration with statement/declaration grammars.
  */
 
 handlerClause
-    : HANDLE
+    : K_HANDLE
       expression
       effectHandlerBody
     ;
@@ -715,23 +651,19 @@ handlerClause
  * 17. RESUMPTION
  * ============================================================================
  *
- * `resume` represents a source-level continuation operation.
- *
- * Examples:
+ * Forms:
  *
  *     resume;
  *     resume(value);
  *     resume value;
  *
- * The grammar does NOT guarantee that a particular runtime supports
- * resumable effects.
+ * The semantic analysis layer determines whether resumption is legal.
  *
- * Semantic analysis determines whether the enclosing handler and effect
- * permit resumption.
+ * The parser does not assume a particular runtime continuation model.
  */
 
 resumeExpression
-    : RESUME
+    : K_RESUME
       (
           LPAREN argumentList? RPAREN
         | expression
@@ -741,7 +673,7 @@ resumeExpression
 
 resumeStatement
     : resumeExpression
-      SEMI?
+      SEMICOLON?
     ;
 
 
@@ -750,277 +682,131 @@ resumeStatement
  * 18. ABORT
  * ============================================================================
  *
- * `abort` terminates the current effectful computation at the semantic level.
+ * `abort` terminates the current effectful computation at the language
+ * semantic level.
  *
- * The grammar does not define how a backend implements the termination.
+ * It does not prescribe a machine-specific implementation.
  */
 
 abortExpression
-    : ABORT
+    : K_ABORT
       expression?
     ;
 
 
 abortStatement
     : abortExpression
-      SEMI?
+      SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * 19. EFFECT TYPE REFERENCE
+ * 19. EFFECT COMPOSITION
  * ============================================================================
  *
- * Effect references may participate in generic semantic structures.
+ * Effect composition is represented syntactically by effect sets.
  *
- * Examples:
- *
- *     IO
- *     IO<Value>
- *     quantum::Measurement<Qubit>
- */
-
-effectTypeReference
-    : qualifiedName
-      genericArguments?
-    ;
-
-
-/*
- * ============================================================================
- * 20. EFFECT GENERIC ARGUMENTS
- * ============================================================================
- *
- * Generic arguments are delegated to the canonical type grammar.
- *
- * This rule does not impose an arity limit.
- */
-
-genericArguments
-    : LESS_THAN
-      typeExpression
-      (COMMA typeExpression)*
-      COMMA?
-      GREATER_THAN
-    ;
-
-
-/*
- * ============================================================================
- * 21. EFFECT COMPOSITION
- * ============================================================================
- *
- * The grammar records effect references.
- *
- * It does not define algebraic semantics such as:
- *
- *     union
- *     intersection
- *     subtraction
- *     normalization
- *     commutativity
- *     idempotence
- *
- * Those properties belong to semantic effect analysis.
+ * This rule exists as an integration point for semantic tooling and aggregate
+ * grammar consumers.
  */
 
 effectComposition
-    : effectReferenceList
+    : effectSet
     ;
 
 
 /*
  * ============================================================================
- * 22. EFFECT NAME
+ * 20. EFFECT REFERENCE EXPRESSION
  * ============================================================================
  *
- * These named rules provide stable parser-tree boundaries for frontend
- * tooling without creating new identifier syntax.
+ * Explicitly names an effect as a semantic reference without performing it.
+ *
+ * Example:
+ *
+ *     IO
+ *     quantum::Measurement
  */
 
-effectName
-    : identifier
+effectReferenceExpression
+    : effectReference
     ;
 
 
-effectDeclarationName
-    : identifier
-    ;
+/*
+ * ============================================================================
+ * 21. EFFECT MEMBER REFERENCE
+ * ============================================================================
+ *
+ * An effect operation can be referenced through a qualified effect name.
+ *
+ * Example:
+ *
+ *     Storage::read
+ *     quantum::Measurement
+ *
+ * No operation catalogue is embedded in the grammar.
+ */
 
-
-effectOperationName
-    : identifier
-    ;
-
-
-qualifiedEffectName
+effectOperationReference
     : qualifiedName
     ;
 
 
 /*
  * ============================================================================
- * 23. EFFECT COMPUTATION
+ * 22. EFFECT DECLARATION MEMBER
  * ============================================================================
  *
- * A computation is deliberately delegated to the canonical expression/block
- * grammar.
- *
- * No second computation language is introduced.
+ * Kept as a named integration rule so future aggregate grammars can consume
+ * effect members without duplicating effect-operation syntax.
  */
 
-effectComputation
-    : blockExpression
-    | expression
+effectMember
+    : effectOperation
     ;
 
 
 /*
  * ============================================================================
- * 24. EFFECT ARGUMENT PATTERN
+ * 23. EFFECT ITEM
  * ============================================================================
  *
- * Handler argument patterns currently consume canonical expressions.
- *
- * Pattern-specific binding semantics belong to the semantic/frontend layer.
+ * Generic integration point for declaration-oriented aggregate grammars.
  */
 
-effectArgumentPattern
-    : expression
+effectItem
+    : effectDeclaration
+    | effectOperation
     ;
 
 
 /*
  * ============================================================================
- * 25. EFFECT BINDING
+ * 24. EFFECT STATEMENT
  * ============================================================================
  *
- * Named binding boundary for effect-aware frontend tooling.
+ * This rule provides one canonical entry point for statement-oriented
+ * integration.
  */
 
-effectBinding
-    : identifier
+effectStatement
+    : performStatement
+    | handleStatement
+    | resumeStatement
+    | abortStatement
     ;
 
 
 /*
  * ============================================================================
- * 26. EFFECT ATTRIBUTE
+ * 25. EFFECT-SPECIFIC TYPE SIGNATURE
  * ============================================================================
  *
- * Effect attributes use the canonical attribute grammar.
+ * Effect signatures intentionally reuse the canonical type system.
  *
- * This grammar intentionally does not define built-in meanings for:
- *
- *     @pure
- *     @resumable
- *     @async
- *     @quantum
- *     @hardware
- *     @distributed
- *     @security
- *     @resource
- *
- * Their semantics belong to semantic analysis.
- */
-
-effectAttribute
-    : attribute
-    ;
-
-
-/*
- * ============================================================================
- * 27. EFFECT ATTRIBUTE LIST
- * ============================================================================
- */
-
-effectAttributeList
-    : attribute+
-    ;
-
-
-/*
- * ============================================================================
- * 28. EFFECT REFERENCE WITH ATTRIBUTES
- * ============================================================================
- *
- * This boundary allows future grammar consumers to attach source metadata
- * without changing effect identity syntax.
- */
-
-annotatedEffectReference
-    : effectAttributeList?
-      effectReference
-    ;
-
-
-/*
- * ============================================================================
- * 29. ANNOTATED EFFECT REFERENCE LIST
- * ============================================================================
- */
-
-annotatedEffectReferenceList
-    : annotatedEffectReference
-      (COMMA annotatedEffectReference)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 30. EFFECT DECLARATION LIST
- * ============================================================================
- *
- * No fixed declaration count is encoded.
- */
-
-effectDeclarationList
-    : effectDeclaration+
-    ;
-
-
-/*
- * ============================================================================
- * 31. EFFECT OPERATION LIST
- * ============================================================================
- */
-
-effectOperationList
-    : effectOperation+
-    ;
-
-
-/*
- * ============================================================================
- * 32. OPTIONAL EFFECT REFERENCE LIST
- * ============================================================================
- */
-
-optionalEffectReferenceList
-    : effectReferenceList?
-    ;
-
-
-/*
- * ============================================================================
- * 33. OPTIONAL EFFECT SET
- * ============================================================================
- */
-
-optionalEffectSet
-    : effectSet?
-    ;
-
-
-/*
- * ============================================================================
- * 34. EFFECT SIGNATURE
- * ============================================================================
- *
- * This is a reusable signature without an implementation body.
+ * No local type grammar is introduced.
  */
 
 effectSignature
@@ -1031,491 +817,345 @@ effectSignature
 
 /*
  * ============================================================================
- * 35. EFFECT OPERATION GROUP
+ * 26. EFFECT DECLARATION ITEM
  * ============================================================================
  *
- * A group is purely syntactic and imposes no runtime grouping semantics.
+ * This is intentionally declaration-oriented and contains no implementation
+ * semantics.
  */
 
-effectOperationGroup
-    : LBRACE
-      effectOperation*
-      RBRACE
+effectDeclarationItem
+    : effectDeclaration
     ;
 
 
 /*
  * ============================================================================
- * 36. EFFECT HANDLER GROUP
+ * 27. EFFECT OPERATION ITEM
  * ============================================================================
  */
 
-effectHandlerGroup
-    : LBRACE
-      effectHandler*
-      RBRACE
+effectOperationItem
+    : effectOperation
     ;
 
 
 /*
  * ============================================================================
- * 37. EFFECT REQUIREMENT LIST
+ * 28. EFFECT HANDLER ITEM
  * ============================================================================
- *
- * Explicitly named composition boundary.
  */
 
-effectRequirementList
-    : effectRequirementItem
-      (COMMA effectRequirementItem)*
-      COMMA?
+effectHandlerItem
+    : effectHandler
     ;
 
 
-effectRequirementItem
+/*
+ * ============================================================================
+ * 29. EFFECT REFERENCE ITEM
+ * ============================================================================
+ */
+
+effectReferenceItem
     : effectReference
     ;
 
 
 /*
  * ============================================================================
- * 38. EFFECT USE
+ * 30. EFFECT SET ITEM
+ * ============================================================================
+ */
+
+effectSetItem
+    : effectSet
+    ;
+
+
+/*
+ * ============================================================================
+ * 31. EFFECT INTEGRATION ROOT
  * ============================================================================
  *
- * Generic source-level effect use.
+ * This is the canonical modular entry point for tooling that wants to parse
+ * an individual effect construct.
  *
- * This is deliberately separate from declaration and invocation.
+ * The complete program parser remains responsible for determining where such
+ * constructs may occur in a complete Zamani compilation unit.
  */
 
-effectUse
-    : effectReference
-    ;
-
-
-/*
- * ============================================================================
- * 39. EFFECT USE LIST
- * ============================================================================
- */
-
-effectUseList
-    : effectUse
-      (COMMA effectUse)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 40. EFFECT HANDLER CASE LIST
- * ============================================================================
- */
-
-effectHandlerCaseList
-    : effectHandler+
-    ;
-
-
-/*
- * ============================================================================
- * 41. EFFECT HANDLER PATTERN LIST
- * ============================================================================
- */
-
-effectHandlerPatternList
-    : effectHandlerPattern
-      (COMMA effectHandlerPattern)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 42. EFFECT-RELATED EXPRESSION
- * ============================================================================
- *
- * This rule gives tooling a stable syntax boundary while retaining the
- * canonical expression grammar.
- */
-
-effectRelatedExpression
-    : performExpression
-    | resumeExpression
-    | abortExpression
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 43. EFFECT-RELATED STATEMENT
- * ============================================================================
- */
-
-effectRelatedStatement
-    : performStatement
+effectConstruct
+    : effectDeclaration
+    | effectOperation
+    | effectClause
+    | performStatement
+    | handleStatement
     | resumeStatement
     | abortStatement
-    | handleStatement
+    | effectReference
+    | effectSet
     ;
 
 
 /*
  * ============================================================================
- * 44. EFFECT DECLARATION CONTRACT
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Frontend AST contract:
+ * The parser produces syntax.
  *
- *     EffectDeclaration
- *         name
- *         generic_parameters
- *         signature
- *         operations
- *         attributes
- *         visibility
- *         source_span
+ * Downstream semantic analysis determines:
  *
- * The AST must NOT contain:
+ *   - whether an effect exists;
+ *   - whether an effect reference resolves;
+ *   - whether an effect operation exists;
+ *   - whether an effect is allowed in its context;
+ *   - whether effect sets compose legally;
+ *   - whether an effect is pure/impure;
+ *   - whether an effect conflicts with another effect;
+ *   - whether capabilities satisfy the effect;
+ *   - whether resources satisfy the effect;
+ *   - whether constraints are satisfied;
+ *   - whether the effect can be lowered to a target;
+ *   - whether quantum effects require quantum::ir;
+ *   - whether hardware realization is possible.
  *
- *     hardware_id
- *     device_id
- *     physical_qubit
- *     topology
- *     calibration
- *     backend
- *     scheduler_state
- *     resource_allocation
- *     runtime_handle
+ * None of those decisions belong here.
  *
- * Those belong downstream.
- */
-
-
-/*
  * ============================================================================
- * 45. SEMANTIC CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * Semantic analysis is responsible for:
+ * The frontend AST should preserve:
  *
- *     - resolving effect names;
- *     - resolving namespaces;
- *     - validating effect declarations;
- *     - validating duplicate operations;
- *     - validating operation signatures;
- *     - checking effect availability;
- *     - checking effect propagation;
- *     - checking handler coverage;
- *     - checking resumability;
- *     - checking effect compatibility;
- *     - checking capability requirements;
- *     - checking resource requirements;
- *     - producing semantic diagnostics;
- *     - lowering effect metadata to the canonical semantic representation.
+ *   - effect identity;
+ *   - qualified-name structure;
+ *   - declaration modifiers;
+ *   - generic parameters;
+ *   - operation signatures;
+ *   - effect-set membership;
+ *   - source ordering;
+ *   - handler-arm ordering;
+ *   - handler patterns;
+ *   - resume/abort syntax;
+ *   - source spans;
+ *   - diagnostics-relevant source spelling.
  *
- * The parser MUST NOT perform any of those operations.
- */
-
-
-/*
+ * This grammar does NOT define Rust AST structures.
+ *
  * ============================================================================
- * 46. HARD-CODING CONTRACT
+ * CAPABILITY INTEGRATION
  * ============================================================================
  *
- * Forbidden in this grammar:
+ * Capability syntax remains owned by:
  *
- *     MAX_EFFECTS
- *     MAX_EFFECT_OPERATIONS
- *     MAX_EFFECT_PARAMETERS
- *     MAX_EFFECT_HANDLERS
- *     MAX_EFFECT_DEPTH
- *     MAX_HANDLER_DEPTH
- *     MAX_EFFECT_SET_SIZE
- *     MAX_RESOURCE_COUNT
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_DEVICES
- *     MAX_NODES
+ *     grammar/core/capabilities.g4
+ *     grammar/effects/capabilities.g4
  *
- * No physical machine property may appear in this grammar as a language
- * limitation.
- */
-
-
-/*
+ * This file does not duplicate capability identifiers or capability versions.
+ *
+ * A semantic effect may subsequently be associated with capabilities such as:
+ *
+ *     quantum::measurement
+ *     quantum::readout
+ *     accelerator::tensor
+ *     distributed::consensus
+ *     hardware::clocked_logic
+ *
+ * without modifying this grammar.
+ *
  * ============================================================================
- * 47. SECURITY CONTRACT
+ * RESOURCE INTEGRATION
  * ============================================================================
  *
- * An effect declaration does NOT grant authorization.
+ * Effect syntax does not encode:
  *
- * For example:
+ *     device 0
+ *     64 qubits
+ *     32 cores
+ *     8 GPUs
+ *     ring topology
+ *     fixed memory
  *
- *     effect FileSystem;
+ * Resource requirements belong to the resource grammar and semantic model.
  *
- * does not itself grant filesystem access.
- *
- * Authorization belongs to capability/security analysis and runtime policy.
- *
- * Likewise:
- *
- *     effect Network;
- *
- * does not grant network access.
- *
- * This prevents source syntax from becoming an implicit security boundary.
- */
-
-
-/*
  * ============================================================================
- * 48. RESOURCE CONTRACT
+ * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Effects may be associated semantically with resource requirements.
+ * An effect such as:
  *
- * This grammar does not allocate resources.
+ *     quantum::Measurement
+ *
+ * may eventually contribute semantic metadata to quantum compilation.
+ *
+ * The path is:
+ *
+ *     effects.g4
+ *          |
+ *          v
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic effect model
+ *          |
+ *          v
+ *     quantum semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * This grammar MUST NOT construct quantum::ir directly.
+ *
+ * ============================================================================
+ * CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * Classical effects are represented identically to all other effect domains.
  *
  * Examples:
  *
- *     effect quantum::Measurement;
- *     effect distributed::Communication;
- *     effect accelerator::TensorExecution;
+ *     IO
+ *     Storage
+ *     Memory
+ *     Process
+ *     FileSystem
  *
- * do not prescribe:
+ * The grammar does not assume a particular operating system or CPU.
  *
- *     device count;
- *     topology;
- *     memory size;
- *     qubit count;
- *     network width;
- *     accelerator count.
- *
- * Those values are determined by downstream resource/capability analysis.
- */
-
-
-/*
  * ============================================================================
- * 49. QUANTUM INTEGRATION CONTRACT
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Quantum effects are represented as open-world qualified names.
+ * Hardware-related effects may be named:
  *
- * Example:
+ *     hardware::clock
+ *     hardware::io
+ *     hardware::reconfiguration
+ *     accelerator::dispatch
  *
- *     with effects {
- *         quantum::Measurement,
- *         quantum::Reset
- *     }
+ * They remain semantic names.
  *
- * The frontend may lower these effect references into semantic metadata
- * associated with a quantum computation.
+ * Hardware topology, placement, timing, routing, scheduling, and physical
+ * resources remain owned by downstream hardware/compiler subsystems.
  *
- * Any actual quantum operation semantics MUST cross the canonical:
- *
- *     quantum::ir
- *
- * boundary.
- *
- * This grammar must never instantiate:
- *
- *     QubitId
- *     PhysicalQubitId
- *     GateKind
- *     topology
- *     calibration
- *
- * or any equivalent machine-specific object.
- */
-
-
-/*
  * ============================================================================
- * 50. ZQN / QEC / RESILIENCE CONTRACT
+ * DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * Effects may describe intent associated with:
+ * Distributed effects may be represented by:
  *
- *     noise;
- *     measurement;
- *     recovery;
- *     resilience;
- *     distributed execution;
+ *     distributed::communication
+ *     distributed::consensus
+ *     distributed::replication
+ *     distributed::remote_execution
  *
- * but this grammar does not define their algorithms.
+ * The grammar does not encode node counts, addresses, regions, or topology.
  *
- * ZQN owns fault/noise semantics.
- * QEC owns detection/correction algorithms.
- * Resilience owns adaptation/recovery decisions.
- *
- * The effect grammar only records source syntax.
- */
-
-
-/*
  * ============================================================================
- * 51. SCHEDULING CONTRACT
+ * RUNTIME CONTRACT
  * ============================================================================
  *
- * Effect syntax does not prescribe:
+ * Runtime dispatch is downstream.
  *
- *     execution order;
- *     duration;
- *     start time;
- *     resource reservation;
- *     placement;
- *     routing;
- *     pulse schedule.
+ * Runtime failures MUST NOT be represented as parser failures.
  *
- * If an effect requires timing/resource information, semantic analysis passes
- * the resulting metadata to scheduling/resource subsystems.
- */
-
-
-/*
+ * An unavailable effect implementation is a semantic/runtime concern.
+ *
  * ============================================================================
- * 52. HARDWARE / HDL CONTRACT
+ * RESILIENCE CONTRACT
  * ============================================================================
  *
- * Hardware-related effects may be expressed through open-world names:
+ * Resilience may consume effect metadata when deciding whether a recovery
+ * strategy preserves program semantics.
  *
- *     hardware::clock;
- *     hardware::io;
- *     hardware::dma;
- *     hardware::interrupt;
- *     accelerator::execute;
+ * This file does not implement:
  *
- * without embedding physical hardware details.
+ *     retry
+ *     restart
+ *     rollback
+ *     reroute
+ *     remap
+ *     reschedule
+ *     recompile
+ *     backend switching
+ *     quarantine
  *
- * HDL semantics remain owned by the HDL grammar/semantic layers.
- */
-
-
-/*
  * ============================================================================
- * 53. DISTRIBUTED COMPUTING CONTRACT
- * ============================================================================
- *
- * Distributed effects may describe:
- *
- *     communication;
- *     synchronization;
- *     consensus;
- *     replication;
- *     remote execution;
- *
- * but this grammar does not prescribe:
- *
- *     node count;
- *     network topology;
- *     transport;
- *     provider;
- *     deployment.
- */
-
-
-/*
- * ============================================================================
- * 54. DETERMINISM CONTRACT
+ * DETERMINISM
  * ============================================================================
  *
- * There are:
+ * This grammar contains:
  *
- *     no semantic predicates;
- *     no actions;
- *     no dynamic token generation;
- *     no external state;
- *     no I/O;
- *     no randomness.
+ *     - no embedded actions;
+ *     - no semantic predicates;
+ *     - no I/O;
+ *     - no network operations;
+ *     - no hardware discovery;
+ *     - no runtime calls;
+ *     - no random operations;
+ *     - no machine-specific state.
  *
- * The same source/token stream therefore has deterministic syntactic
- * interpretation.
- */
-
-
-/*
+ * Parsing therefore depends only on the supplied token stream and grammar.
+ *
  * ============================================================================
- * 55. ERROR CONTRACT
+ * HARD-CODING AUDIT
  * ============================================================================
  *
- * Malformed effect syntax must remain malformed.
+ * No production rule in this file encodes:
  *
- * Examples that must be rejected:
+ *     MAX_EFFECTS
+ *     MAX_OPERATIONS
+ *     MAX_HANDLERS
+ *     MAX_HANDLER_DEPTH
+ *     MAX_EFFECT_SET_SIZE
+ *     MAX_PARAMETERS
+ *     MAX_GENERIC_ARITY
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
  *
- *     effect;
- *     effect ();
- *     effect Name(;
- *     effect Name { fn ; }
- *     perform;
- *     handle;
- *     case => value;
+ * Repetition and recursive composition remain open-ended.
  *
- * Error recovery belongs to the parser/runtime integration.
- *
- * This grammar must not silently reinterpret malformed input as another
- * construct.
- */
-
-
-/*
  * ============================================================================
- * 56. COMPATIBILITY CONTRACT
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- * Effect names are open-ended.
+ * This file is complete only when:
  *
- * Therefore adding a new effect namespace must not require a grammar change.
- *
- * Existing programs using ordinary effect names remain syntactically valid
- * across future hardware generations and computational domains.
- *
- * Breaking changes to effect syntax require an explicit language-version
- * migration policy outside this file.
- */
-
-
-/*
- * ============================================================================
- * 57. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *   [ ] It compiles as part of the canonical ANTLR grammar composition.
- *   [ ] It consumes only canonical lexer tokens.
- *   [ ] It does not define lexer rules.
- *   [ ] It does not duplicate identifier syntax.
- *   [ ] It does not duplicate type syntax.
- *   [ ] It does not duplicate expression syntax.
- *   [ ] It does not duplicate capability syntax.
- *   [ ] It does not define runtime behavior.
- *   [ ] It contains no hardware limits.
- *   [ ] It contains no fixed effect catalogue.
- *   [ ] It contains no machine-specific identifiers.
- *   [ ] It contains no unsafe Rust.
- *   [ ] Effect declarations parse.
- *   [ ] Effect operation declarations parse.
- *   [ ] Effect references parse.
- *   [ ] Effect clauses parse.
- *   [ ] Effect invocation parses.
- *   [ ] Effect handlers parse.
- *   [ ] Handler patterns parse.
- *   [ ] Resumption parses.
- *   [ ] Abort syntax parses.
- *   [ ] Generic effects parse.
- *   [ ] Qualified effect names parse at arbitrary depth.
- *   [ ] Arbitrary effect-set sizes parse.
- *   [ ] Arbitrary operation counts parse.
- *   [ ] Cross-domain effect names remain open-ended.
- *   [ ] Negative syntax is rejected deterministically.
- *   [ ] The resulting AST can preserve source spans.
- *   [ ] Semantic analysis can lower effect metadata independently.
- *   [ ] No downstream hardware decision is embedded in syntax.
+ * [ ] It uses the canonical ZamaniTokens vocabulary.
+ * [ ] It contains no embedded Rust actions.
+ * [ ] It contains no unsafe code.
+ * [ ] It contains no semantic predicates.
+ * [ ] It does not duplicate lexical rules.
+ * [ ] It does not duplicate type rules.
+ * [ ] It does not duplicate expression rules.
+ * [ ] It does not define capabilities.
+ * [ ] It does not define resources.
+ * [ ] It does not define hardware.
+ * [ ] It does not define quantum IR.
+ * [ ] It does not define QEC.
+ * [ ] It does not define ZQN.
+ * [ ] It does not define routing.
+ * [ ] It does not define scheduling.
+ * [ ] It does not define runtime dispatch.
+ * [ ] It remains open-world.
+ * [ ] It contains no machine-size limit.
+ * [ ] Positive effect tests pass.
+ * [ ] Negative effect tests pass.
+ * [ ] Cross-domain effect tests pass.
+ * [ ] Quantum-effect syntax tests pass.
+ * [ ] Hardware-effect syntax tests pass.
+ * [ ] Distributed-effect syntax tests pass.
+ * [ ] Handler/resume/abort tests pass.
+ * [ ] Parser determinism tests pass.
+ * [ ] AST source-span tests pass.
+ * [ ] Round-trip tests pass where the frontend printer supports them.
+ * [ ] Legacy duplicate effect grammar is removed from the authoritative build.
  *
  * ============================================================================
  */
