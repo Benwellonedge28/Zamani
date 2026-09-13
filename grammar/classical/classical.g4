@@ -7,261 +7,199 @@
  *     grammar/classical/classical.g4
  *
  * Role:
- *     Canonical classical-domain composition grammar.
+ *     Classical-domain grammar composition boundary.
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Implementation baseline:
+ * Implementation:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust edition 2021
  *
  * Safety:
- *     No embedded Rust actions.
- *     No semantic predicates.
- *     No target-specific code.
- *     No unsafe implementation.
+ *     This grammar contains no embedded Rust actions.
+ *     This grammar contains no semantic predicates.
+ *     This grammar contains no target-specific implementation code.
+ *     The Rust implementation consuming this grammar MUST remain safe Rust.
  *
  * ============================================================================
- *
- * ARCHITECTURAL PURPOSE
+ * ARCHITECTURAL CONTRACT
  * ============================================================================
  *
- * This grammar is the CLASSICAL DOMAIN COMPOSITION BOUNDARY.
+ * This file does NOT define a second Zamani language.
  *
- * It does not define a second general-purpose Zamani language.
+ * The classical domain uses the canonical Zamani syntax infrastructure.
  *
- * General syntax remains owned by:
+ * Ownership is intentionally divided:
  *
- *     grammar/antlr/ZamaniLexer.g4
- *     grammar/expressions/*
- *     grammar/types/*
- *     grammar/statements/*
- *     grammar/declarations/*
- *     grammar/functions/*
+ *     lexer/
+ *         lexical tokens
  *
- * This grammar composes those language primitives into stable classical
- * semantic-domain entry points.
+ *     core/
+ *         source-unit and language-level composition
  *
- * The resulting architecture is:
+ *     types/
+ *         source-level type expressions
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     canonical syntax
- *          |
- *          +---------------------+
- *          |                     |
- *          v                     v
- *     Expressions             Types
- *          |                     |
- *          +----------+----------+
- *                     |
- *                     v
- *             Classical domain
- *                     |
- *                     v
- *              frontend AST
- *                     |
- *                     v
- *             semantic analysis
- *                     |
- *          +----------+-----------+
- *          |                      |
- *          v                      v
- *     classical semantics   cross-domain semantics
- *          |                      |
- *          +----------+-----------+
- *                     |
- *                     v
- *              canonical IR
- *                     |
- *          +----------+----------+
- *          |                     |
- *          v                     v
- *    classical IR          other canonical IR
- *          |                     |
- *          +----------+----------+
- *                     |
- *                     v
- *              optimization
- *                     |
- *                     v
- *          routing / scheduling
- *                     |
- *                     v
- *              target lowering
- *                     |
- *                     v
- *               execution
+ *     expressions/
+ *         source-level expressions
+ *
+ *     statements/
+ *         source-level statements
+ *
+ *     declarations/
+ *         declarations and bindings
+ *
+ *     functions/
+ *         function declarations and signatures
+ *
+ *     modules/
+ *         modules and imports
+ *
+ *     classical/
+ *         classical-domain composition only
+ *
+ *     frontend AST
+ *         semantic syntax representation
+ *
+ *     semantic analysis
+ *         type/domain/effect/capability interpretation
+ *
+ *     canonical IR
+ *         machine-independent semantic representation
+ *
+ *     classical IR
+ *         classical lowering
+ *
+ *     optimization
+ *         implementation improvement
+ *
+ *     scheduling
+ *         execution ordering and timing
+ *
+ *     hardware
+ *         physical realization
+ *
+ *     runtime
+ *         execution
+ *
+ * The classical grammar MUST NOT duplicate syntax already owned by those
+ * components.
  *
  * ============================================================================
- *
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *   - classical-domain composition;
- *   - classical computation entry points;
- *   - classical expression/value boundaries;
- *   - classical type/value boundaries;
- *   - classical declaration integration points;
- *   - classical statement integration points;
- *   - classical control-region integration points;
- *   - classical computation blocks;
- *   - classical-domain initializer composition;
- *   - classical-domain function-call composition;
- *   - classical-domain cross-domain boundaries;
- *   - stable parser hooks for semantic classification.
- *
- * THIS FILE DOES NOT OWN:
- *
- *   - lexical tokens;
- *   - identifier spelling;
- *   - literals;
- *   - operator precedence;
- *   - general expressions;
- *   - general type syntax;
- *   - general statements;
- *   - declarations;
- *   - function declarations;
- *   - modules;
- *   - memory semantics;
- *   - concurrency semantics;
- *   - classical algorithms;
- *   - vector algorithms;
- *   - matrix algorithms;
- *   - tensor algorithms;
- *   - classical IR;
- *   - quantum::ir;
- *   - QEC;
- *   - ZQN;
- *   - hardware discovery;
- *   - hardware topology;
- *   - routing;
- *   - scheduling;
- *   - optimization;
- *   - runtime execution;
- *   - backend selection;
- *   - ABI selection;
- *   - physical resource limits.
- *
- * ============================================================================
- *
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Classical syntax describes portable computation and semantic intent.
+ * Source code expresses:
  *
- * It MUST NOT encode:
+ *     computation
+ *     semantics
+ *     intent
+ *     requirements
+ *     constraints
+ *     capabilities
+ *     effects
  *
- *   - CPU count;
- *   - core count;
- *   - thread count;
- *   - register count;
- *   - register width;
- *   - SIMD width;
- *   - GPU count;
- *   - FPGA count;
- *   - accelerator count;
- *   - memory capacity;
- *   - cache size;
- *   - NUMA topology;
- *   - node count;
- *   - network topology;
- *   - device identifiers;
- *   - physical addresses;
- *   - machine-specific layouts.
+ * Source code MUST NOT implicitly encode:
  *
- * A classical construct may therefore eventually execute on:
+ *     CPU count
+ *     core count
+ *     thread count
+ *     GPU count
+ *     FPGA count
+ *     accelerator count
+ *     register count
+ *     SIMD width
+ *     cache size
+ *     memory capacity
+ *     NUMA topology
+ *     node count
+ *     cluster size
+ *     network topology
+ *     physical addresses
+ *     device identifiers
+ *     machine-specific qubit/resource counts
  *
- *   - embedded hardware;
- *   - CPU;
- *   - multicore CPU;
- *   - GPU;
- *   - FPGA;
- *   - ASIC;
- *   - accelerator;
- *   - quantum-classical system;
- *   - cluster;
- *   - supercomputer;
- *   - distributed system;
- *   - cloud;
- *   - future execution architecture.
- *
- * Hardware realization belongs downstream.
+ * Physical realization belongs downstream.
  *
  * ============================================================================
- *
  * SCALABILITY CONTRACT
  * ============================================================================
  *
- * No finite machine-oriented limits are encoded here.
+ * This grammar contains no machine-sized constants.
  *
- * In particular, this grammar does NOT define:
+ * There are intentionally no rules such as:
  *
- *   MAX_ELEMENTS
- *   MAX_VECTOR_LENGTH
- *   MAX_MATRIX_ROWS
- *   MAX_MATRIX_COLUMNS
- *   MAX_TENSOR_RANK
- *   MAX_THREADS
- *   MAX_CORES
- *   MAX_DEVICES
- *   MAX_MEMORY
- *   MAX_ARGUMENTS
- *   MAX_PARAMETERS
- *   MAX_NESTING_DEPTH
+ *     MAX_ELEMENTS
+ *     MAX_THREADS
+ *     MAX_CORES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_VECTOR_LENGTH
+ *     MAX_MATRIX_ROWS
+ *     MAX_MATRIX_COLUMNS
+ *     MAX_TENSOR_RANK
  *
- * Repetition uses grammar structure.
+ * Repetition is represented structurally using ANTLR repetition operators.
  *
- * Any practical parser/compiler limit must be implemented as an explicit
- * resource policy rather than silently becoming a language restriction.
+ * Parser implementation limits, if any, are implementation/resource-policy
+ * concerns and MUST NOT become language-semantic limits.
  *
  * ============================================================================
- *
- * SEMANTIC BOUNDARY
+ * DOMAIN CONTRACT
  * ============================================================================
  *
- * This grammar establishes syntax only.
+ * "Classical" is a semantic domain.
  *
- * Semantic analysis determines:
+ * Syntax alone does not determine whether an arbitrary expression is
+ * classical.
  *
- *   - whether a value is classical;
- *   - whether a type is classical;
- *   - whether an operation is valid;
- *   - whether a value is numeric;
- *   - whether an expression is pure;
- *   - whether an operation has effects;
- *   - whether a computation may be parallelized;
- *   - whether an accelerator may be used;
- *   - whether a value participates in a quantum-classical computation;
- *   - whether a construct lowers to classical IR;
- *   - whether a construct crosses into another semantic domain.
+ * For example:
  *
- * This grammar MUST NOT make those decisions.
+ *     x + y
+ *
+ * is syntactically an ordinary expression.
+ *
+ * Whether x and y are:
+ *
+ *     integers
+ *     floating-point values
+ *     vectors
+ *     matrices
+ *     tensors
+ *     symbolic values
+ *     accelerator values
+ *     distributed values
+ *     quantum-derived classical values
+ *
+ * is determined by semantic analysis.
+ *
+ * Therefore this file provides explicit classical-domain composition points
+ * without inventing a parallel type or expression system.
  *
  * ============================================================================
- *
- * CANONICAL DEPENDENCIES
+ * IMPORTANT ANTLR COMPOSITION RULE
  * ============================================================================
  *
- * Expressions owns:
+ * This grammar deliberately references canonical rules rather than copying
+ * their implementations.
+ *
+ * The final ANTLR composition root is responsible for importing/combining the
+ * parser grammars that provide:
  *
  *     expression
- *     expressionList
- *     expression-level composition
- *
- * Types owns:
- *
  *     typeExpression
+ *     statement
+ *     declaration
+ *     functionDeclaration
+ *     block
+ *     identifier
  *
- * The classical grammar consumes those abstractions instead of duplicating
- * their implementations.
+ * This file therefore remains independently stable at the classical-domain
+ * boundary.
+ *
+ * If the repository's ANTLR composition mechanism changes, the composition
+ * root changes the imports; this file's semantic ownership does not change.
  *
  * ============================================================================
  */
@@ -275,52 +213,46 @@ options {
 
 /*
  * ============================================================================
- * 1. CLASSICAL DOMAIN ENTRY POINT
+ * 1. CLASSICAL DOMAIN ROOT
  * ============================================================================
  *
- * Stable parser hook for consumers that need to parse a classical-domain
- * construct.
+ * Stable entry point for classical-domain composition.
  *
- * This rule intentionally does not attempt to classify arbitrary source
- * syntax as classical. Semantic analysis performs classification.
+ * This rule intentionally accepts only constructs that have a classical
+ * semantic interpretation boundary.
+ *
+ * It does NOT attempt to parse an entire Zamani source file.
+ *
+ * Full source-file parsing belongs to the canonical root parser.
  *
  * ============================================================================
  */
 
 classicalConstruct
-    : classicalComputation
-    | classicalDeclarationBoundary
-    | classicalStatementBoundary
-    | classicalControlBoundary
-    | classicalBlock
+    : classicalExpression
+    | classicalType
+    | classicalInitializer
+    | classicalBindingReference
+    | classicalComputationRegion
     ;
 
 
 /*
  * ============================================================================
- * 2. CLASSICAL COMPUTATION
+ * 2. CLASSICAL EXPRESSION
  * ============================================================================
  *
- * A classical computation is represented by the canonical expression grammar.
+ * Expression syntax remains owned by expressions/.
  *
- * This allows:
+ * No arithmetic, logical, comparison, indexing, call, member-access,
+ * lambda, comprehension, literal, or operator grammar is duplicated here.
  *
- *     arithmetic
- *     comparison
- *     function calls
- *     indexing
- *     member access
- *     collection construction
- *     tensor expressions
- *     symbolic expressions
- *     compile-time expressions
- *
- * without creating duplicate expression grammars.
+ * Semantic analysis determines whether the expression is classical.
  *
  * ============================================================================
  */
 
-classicalComputation
+classicalExpression
     : expression
     ;
 
@@ -330,9 +262,10 @@ classicalComputation
  * 3. CLASSICAL VALUE
  * ============================================================================
  *
- * Stable semantic-domain hook for a classical value expression.
+ * Explicit semantic-domain boundary for consumers that require a classical
+ * value expression.
  *
- * The parser does not determine the actual semantic type.
+ * This does not introduce a new AST value representation.
  *
  * ============================================================================
  */
@@ -344,20 +277,19 @@ classicalValue
 
 /*
  * ============================================================================
- * 4. CLASSICAL TYPE BOUNDARY
+ * 4. CLASSICAL TYPE
  * ============================================================================
  *
- * The canonical type grammar remains authoritative.
+ * Type syntax remains owned by types/.
  *
- * This wrapper exists solely as an integration point for consumers that need
- * to request a type expression in the classical domain.
+ * This wrapper exists only as a domain composition boundary.
  *
- * Semantic analysis determines whether the resulting type is classical.
+ * It MUST NOT define a second type system.
  *
  * ============================================================================
  */
 
-classicalTypeBoundary
+classicalType
     : typeExpression
     ;
 
@@ -367,15 +299,15 @@ classicalTypeBoundary
  * 5. CLASSICAL INITIALIZER
  * ============================================================================
  *
- * A classical initializer consists of an optional type annotation followed
- * by the canonical expression.
+ * An initializer combines:
  *
- * Examples:
+ *     optional type expression
+ *     assignment operator
+ *     canonical expression
  *
- *     : int = expression
- *     : Vector<f64, N> = expression
+ * Declaration ownership remains in declarations/.
  *
- * Type semantics remain downstream.
+ * This rule therefore does not define let/var/const declarations.
  *
  * ============================================================================
  */
@@ -392,7 +324,7 @@ classicalInitializer
  * 6. CLASSICAL TYPE ANNOTATION
  * ============================================================================
  *
- * Type syntax belongs to Types.g4.
+ * The actual type-expression grammar is owned by types/.
  *
  * ============================================================================
  */
@@ -405,267 +337,106 @@ classicalTypeAnnotation
 
 /*
  * ============================================================================
- * 7. CLASSICAL BINDING BOUNDARY
+ * 7. CLASSICAL BINDING REFERENCE
  * ============================================================================
  *
- * This is intentionally a composition boundary rather than a replacement
- * for declarations/variables.g4.
+ * A binding reference is intentionally only an identifier boundary.
  *
- * The canonical lexical tokens are consumed directly.
+ * Declaration syntax remains owned by declarations/.
  *
- * ============================================================================
- */
-
-classicalBindingBoundary
-    : classicalBindingKeyword
-      IDENTIFIER
-      classicalTypeAnnotation?
-      classicalInitializer?
-    ;
-
-
-classicalBindingKeyword
-    : LET
-    | VAR
-    | CONST
-    ;
-
-
-/*
- * ============================================================================
- * 8. CLASSICAL DECLARATION BOUNDARY
- * ============================================================================
- *
- * This rule exists so a future canonical declaration composition grammar can
- * integrate classical bindings without this file taking ownership of the
- * complete declaration system.
+ * This prevents classical.g4 from creating a second declaration grammar.
  *
  * ============================================================================
  */
 
-classicalDeclarationBoundary
-    : classicalBindingBoundary
-    ;
-
-
-/*
- * ============================================================================
- * 9. CLASSICAL STATEMENT BOUNDARY
- * ============================================================================
- *
- * A classical expression statement uses the canonical expression grammar.
- *
- * The semicolon token is the canonical SEMICOLON token supplied by the lexer.
- *
- * ============================================================================
- */
-
-classicalStatementBoundary
-    : expression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * 10. CLASSICAL RETURN BOUNDARY
- * ============================================================================
- *
- * Return syntax remains semantically neutral.
- *
- * This rule is provided as a domain integration point and is not intended to
- * replace the canonical statements/returns.g4 implementation.
- *
- * ============================================================================
- */
-
-classicalReturnBoundary
-    : RETURN
-      expression?
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * 11. CLASSICAL CONTROL BOUNDARY
- * ============================================================================
- *
- * Conditions are ordinary canonical expressions.
- *
- * Control-flow semantics remain downstream.
- *
- * ============================================================================
- */
-
-classicalControlBoundary
-    : classicalIfBoundary
-    | classicalWhileBoundary
-    | classicalForBoundary
-    ;
-
-
-/*
- * ============================================================================
- * 12. IF
- * ============================================================================
- */
-
-classicalIfBoundary
-    : IF
-      expression
-      classicalBlock
-      classicalElseBoundary?
-    ;
-
-
-classicalElseBoundary
-    : ELSE
-      (
-          IF
-          expression
-          classicalBlock
-          classicalElseBoundary?
-        | classicalBlock
-      )
-    ;
-
-
-/*
- * ============================================================================
- * 13. WHILE
- * ============================================================================
- */
-
-classicalWhileBoundary
-    : WHILE
-      expression
-      classicalBlock
-    ;
-
-
-/*
- * ============================================================================
- * 14. FOR
- * ============================================================================
- *
- * The iteration source is an expression.
- *
- * No fixed collection size, iteration count, processor count, or execution
- * width is encoded.
- *
- * ============================================================================
- */
-
-classicalForBoundary
-    : FOR
-      classicalPatternIdentifier
-      IN
-      expression
-      classicalBlock
-    ;
-
-
-classicalPatternIdentifier
+classicalBindingReference
     : IDENTIFIER
     ;
 
 
 /*
  * ============================================================================
- * 15. CLASSICAL BLOCK
+ * 8. CLASSICAL COMPUTATION REGION
  * ============================================================================
  *
- * A classical block contains zero or more classical constructs.
+ * A computation region is a classical-domain block containing canonical
+ * Zamani statements.
  *
- * No fixed statement count or nesting depth is encoded.
+ * The canonical statement grammar remains authoritative.
+ *
+ * This rule is intentionally written in terms of statement composition rather
+ * than reproducing:
+ *
+ *     if
+ *     while
+ *     for
+ *     return
+ *     break
+ *     continue
+ *     declaration
+ *     assignment
+ *     expression statement
+ *
+ * syntax here.
  *
  * ============================================================================
  */
 
-classicalBlock
+classicalComputationRegion
     : LBRACE
-      classicalConstruct*
+      classicalStatementSequence
       RBRACE
     ;
 
 
 /*
  * ============================================================================
- * 16. CLASSICAL CALL
+ * 9. CLASSICAL STATEMENT SEQUENCE
  * ============================================================================
  *
- * Function/method invocation syntax belongs to the expression grammar.
+ * Zero or more canonical statements.
  *
- * This wrapper provides a stable classical-domain call boundary.
+ * No fixed statement count is encoded.
+ *
+ * The statement rule is supplied by the canonical statement grammar.
  *
  * ============================================================================
  */
 
-classicalCall
-    : expression
+classicalStatementSequence
+    : statement*
     ;
 
 
 /*
  * ============================================================================
- * 17. CLASSICAL ASSIGNMENT
+ * 10. CLASSICAL EXPRESSION STATEMENT BOUNDARY
  * ============================================================================
  *
- * Assignment operators and precedence remain owned by the expression grammar.
+ * This is a semantic-domain hook only.
  *
- * This rule deliberately does not recreate assignment syntax.
+ * The canonical expression grammar owns expression syntax.
+ *
+ * The canonical statement grammar owns whether an expression can occur as a
+ * statement and how terminators are represented.
  *
  * ============================================================================
  */
 
-classicalAssignment
+classicalExpressionStatement
     : expression
+      SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * 18. CLASSICAL INDEXED COMPUTATION
+ * 11. CLASSICAL CONDITION BOUNDARY
  * ============================================================================
  *
- * Indexing is already part of expression syntax.
+ * A condition is syntactically an expression.
  *
- * This rule exists only as a semantic-domain integration hook.
- *
- * ============================================================================
- */
-
-classicalIndexedComputation
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 19. CLASSICAL FUNCTION ARGUMENTS
- * ============================================================================
- *
- * Delegates entirely to canonical expression-list syntax.
- *
- * ============================================================================
- */
-
-classicalArgumentList
-    : expression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 20. CLASSICAL CONDITION
- * ============================================================================
- *
- * A condition remains an ordinary expression.
- *
- * Semantic analysis determines whether its result is usable as a condition.
+ * Whether the resulting value is a valid condition is semantic analysis.
  *
  * ============================================================================
  */
@@ -677,50 +448,66 @@ classicalCondition
 
 /*
  * ============================================================================
- * 21. CLASSICAL CONSTANT EXPRESSION
+ * 12. CLASSICAL CALL BOUNDARY
  * ============================================================================
  *
- * This is syntactically an expression.
+ * Function and method call syntax belongs to expressions/calls.g4.
  *
- * Compile-time evaluability is a semantic property and is deliberately not
- * decided by the grammar.
+ * This wrapper prevents classical.g4 from duplicating call syntax.
  *
  * ============================================================================
  */
 
-classicalConstantExpression
+classicalCall
     : expression
     ;
 
 
 /*
  * ============================================================================
- * 22. CLASSICAL COMPILE-TIME VALUE
+ * 13. CLASSICAL ASSIGNMENT BOUNDARY
  * ============================================================================
  *
- * Compile-time execution is a semantic/compiler concern.
+ * Assignment syntax belongs to the canonical expression/statement system.
  *
- * The grammar only provides the stable expression boundary.
+ * This rule intentionally does not define an assignment operator grammar.
  *
  * ============================================================================
  */
 
-classicalCompileTimeValue
+classicalAssignment
     : expression
     ;
 
 
 /*
  * ============================================================================
- * 23. CLASSICAL NUMERICAL EXPRESSION
+ * 14. CLASSICAL INDEXING BOUNDARY
+ * ============================================================================
+ *
+ * Indexing syntax belongs to expressions/indexing.g4.
+ *
+ * The semantic layer determines whether the indexed value is a classical
+ * vector, matrix, tensor, collection, memory object, accelerator object,
+ * distributed object, or another value category.
+ *
+ * ============================================================================
+ */
+
+classicalIndexedExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 15. CLASSICAL NUMERICAL EXPRESSION
  * ============================================================================
  *
  * Numeric classification is semantic.
  *
- * An identifier may resolve to a numeric value even though the parser cannot
- * know that from spelling alone.
- *
- * Therefore this rule intentionally consumes an ordinary expression.
+ * The parser must not assume that a syntactic literal or identifier is the
+ * complete definition of a numerical computation.
  *
  * ============================================================================
  */
@@ -732,10 +519,10 @@ classicalNumericalExpression
 
 /*
  * ============================================================================
- * 24. CLASSICAL SYMBOLIC EXPRESSION
+ * 16. CLASSICAL SYMBOLIC EXPRESSION
  * ============================================================================
  *
- * Symbolic/numerical distinction is semantic.
+ * Symbolic classification is semantic.
  *
  * ============================================================================
  */
@@ -747,13 +534,23 @@ classicalSymbolicExpression
 
 /*
  * ============================================================================
- * 25. CLASSICAL COLLECTION EXPRESSION
+ * 17. CLASSICAL COLLECTION EXPRESSION
  * ============================================================================
  *
- * Collection syntax remains owned by Expressions.
+ * Collection syntax remains owned by expressions/ and types/.
  *
- * This boundary allows vector/matrix/tensor/data-domain consumers to attach
- * semantic classification without introducing another collection grammar.
+ * This boundary covers semantic classification of:
+ *
+ *     vectors
+ *     matrices
+ *     tensors
+ *     arrays
+ *     maps
+ *     sequences
+ *     user-defined collections
+ *     future collection abstractions
+ *
+ * without encoding finite sizes.
  *
  * ============================================================================
  */
@@ -765,13 +562,19 @@ classicalCollectionExpression
 
 /*
  * ============================================================================
- * 26. CLASSICAL ACCELERATOR EXPRESSION
+ * 18. CLASSICAL ACCELERATOR BOUNDARY
  * ============================================================================
  *
- * The grammar does not select CPU, GPU, FPGA, ASIC, QPU, or another device.
+ * This rule MUST NOT select a physical accelerator.
  *
- * Accelerator selection belongs to capability analysis, optimization,
- * scheduling, target lowering, and runtime/resource management.
+ * CPU/GPU/FPGA/ASIC/other accelerator selection belongs to:
+ *
+ *     capability analysis
+ *     resource analysis
+ *     optimization
+ *     scheduling
+ *     target lowering
+ *     runtime
  *
  * ============================================================================
  */
@@ -783,13 +586,293 @@ classicalAcceleratorExpression
 
 /*
  * ============================================================================
- * 27. CLASSICAL RESOURCE EXPRESSION
+ * 19. CLASSICAL COMPILE-TIME EXPRESSION
  * ============================================================================
  *
- * Resource requirements are represented semantically elsewhere.
+ * Compile-time evaluability is a semantic/compiler property.
  *
- * This boundary allows a classical expression to participate in resource
- * analysis without embedding a machine-specific resource inventory here.
+ * The grammar does not decide whether an arbitrary expression can execute
+ * during compilation.
+ *
+ * ============================================================================
+ */
+
+classicalCompileTimeExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 20. CLASSICAL CONSTANT EXPRESSION
+ * ============================================================================
+ *
+ * "Constant" is not inferred from syntax alone.
+ *
+ * Semantic analysis/compiler evaluation determines whether an expression is
+ * constant-evaluable.
+ *
+ * ============================================================================
+ */
+
+classicalConstantExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 21. CLASSICAL PURE EXPRESSION BOUNDARY
+ * ============================================================================
+ *
+ * Purity is an effect/semantic property.
+ *
+ * This rule therefore remains syntactically equivalent to an expression.
+ *
+ * ============================================================================
+ */
+
+classicalPureExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 22. CLASSICAL EFFECTFUL COMPUTATION BOUNDARY
+ * ============================================================================
+ *
+ * Effect classification belongs to the effects subsystem.
+ *
+ * The grammar provides a stable integration point without embedding effect
+ * semantics in the classical grammar.
+ *
+ * ============================================================================
+ */
+
+classicalEffectfulComputation
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 23. CLASSICAL FUNCTION-ARGUMENT BOUNDARY
+ * ============================================================================
+ *
+ * Calls are owned by expressions/calls.g4.
+ *
+ * This rule is deliberately generic and does not create a second argument
+ * grammar.
+ *
+ * ============================================================================
+ */
+
+classicalArgumentExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 24. CLASSICAL RANGE BOUNDARY
+ * ============================================================================
+ *
+ * Range syntax belongs to expressions/ranges.g4.
+ *
+ * ============================================================================
+ */
+
+classicalRangeExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 25. CLASSICAL COMPREHENSION BOUNDARY
+ * ============================================================================
+ *
+ * Comprehension syntax belongs to expressions/comprehensions.g4.
+ *
+ * No fixed iteration or result size is encoded.
+ *
+ * ============================================================================
+ */
+
+classicalComprehensionExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 26. CLASSICAL LAMBDA BOUNDARY
+ * ============================================================================
+ *
+ * Lambda syntax belongs to expressions/lambdas.g4.
+ *
+ * ============================================================================
+ */
+
+classicalLambdaExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 27. CLASSICAL GENERIC VALUE BOUNDARY
+ * ============================================================================
+ *
+ * Generic syntax belongs to the canonical type/function/expression systems.
+ *
+ * Generic arity is intentionally unbounded by this grammar.
+ *
+ * ============================================================================
+ */
+
+classicalGenericExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 28. CLASSICAL MEMORY VALUE BOUNDARY
+ * ============================================================================
+ *
+ * Memory ownership, borrowing, allocation, lifetime, and placement are not
+ * classical grammar responsibilities.
+ *
+ * They belong to memory/ and downstream semantic analysis.
+ *
+ * This boundary exists so classical semantic analysis can identify an
+ * expression participating in memory operations.
+ *
+ * ============================================================================
+ */
+
+classicalMemoryExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 29. CLASSICAL PARALLEL VALUE BOUNDARY
+ * ============================================================================
+ *
+ * Parallelism is not represented by a fixed thread/core/device count here.
+ *
+ * Parallel execution decisions belong to concurrency, optimization,
+ * scheduling, resource analysis, and runtime.
+ *
+ * ============================================================================
+ */
+
+classicalParallelExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 30. CLASSICAL DISTRIBUTED VALUE BOUNDARY
+ * ============================================================================
+ *
+ * Distributed placement and communication belong to distributed/ and
+ * networking/.
+ *
+ * No node count or topology is encoded here.
+ *
+ * ============================================================================
+ */
+
+classicalDistributedExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 31. CLASSICAL DATA BOUNDARY
+ * ============================================================================
+ *
+ * Data schema and transformation syntax belongs to data/.
+ *
+ * This is a semantic-domain integration hook only.
+ *
+ * ============================================================================
+ */
+
+classicalDataExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 32. CLASSICAL AI/ML BOUNDARY
+ * ============================================================================
+ *
+ * AI/ML semantics belong to ai/.
+ *
+ * Tensor syntax remains owned by the canonical type/expression systems.
+ *
+ * ============================================================================
+ */
+
+classicalAIExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 33. CLASSICAL NETWORKING BOUNDARY
+ * ============================================================================
+ *
+ * Networking syntax and semantics belong to networking/.
+ *
+ * No endpoint, topology, node, or protocol implementation is owned here.
+ *
+ * ============================================================================
+ */
+
+classicalNetworkExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 34. CLASSICAL SECURITY BOUNDARY
+ * ============================================================================
+ *
+ * Security syntax belongs to security/.
+ *
+ * This grammar does not define cryptographic algorithms, identities,
+ * permissions, or trust semantics.
+ *
+ * ============================================================================
+ */
+
+classicalSecurityExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 35. CLASSICAL RESOURCE BOUNDARY
+ * ============================================================================
+ *
+ * Resource requirements, constraints, capabilities, preferences, performance
+ * requirements, energy requirements, reliability requirements, and portability
+ * requirements belong to the resource/capability grammar.
+ *
+ * They MUST NOT be represented through machine-specific constants here.
  *
  * ============================================================================
  */
@@ -801,22 +884,40 @@ classicalResourceExpression
 
 /*
  * ============================================================================
- * 28. CLASSICAL CROSS-DOMAIN EXPRESSION
+ * 36. CLASSICAL TARGET-INDEPENDENT BOUNDARY
+ * ============================================================================
+ *
+ * A classical expression can be lowered to different implementations.
+ *
+ * The grammar does not choose a target.
+ *
+ * ============================================================================
+ */
+
+classicalPortableExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 37. CLASSICAL CROSS-DOMAIN BOUNDARY
  * ============================================================================
  *
  * Classical computation may participate in:
  *
- *     classical + quantum
- *     classical + HDL
- *     classical + hardware
- *     classical + distributed
- *     classical + AI
- *     classical + accelerator
+ *     quantum-classical programs
+ *     HDL/software co-design
+ *     distributed computation
+ *     accelerator computation
+ *     AI/ML
+ *     networking
+ *     security
+ *     data processing
  *
- * The grammar must not reject such expressions merely because their semantic
- * result crosses a domain.
+ * The grammar does not encode those domain semantics.
  *
- * Semantic analysis is responsible for legality.
+ * Cross-domain semantic analysis owns the interpretation.
  *
  * ============================================================================
  */
@@ -828,94 +929,188 @@ classicalCrossDomainExpression
 
 /*
  * ============================================================================
- * 29. CLASSICAL QUANTUM-CLASSICAL BOUNDARY
+ * 38. CLASSICAL QUANTUM-INTERACTION BOUNDARY
  * ============================================================================
  *
- * This is intentionally syntax-neutral.
+ * This is intentionally only a syntax boundary.
  *
- * A classical expression may supply:
+ * The classical grammar MUST NOT define:
  *
- *     gate parameters
- *     measurement conditions
- *     loop conditions
- *     runtime decisions
- *     resource parameters
- *     symbolic values
+ *     qubit representation
+ *     gate representation
+ *     quantum state representation
+ *     quantum hardware topology
+ *     QEC implementation
+ *     ZQN semantics
  *
- * The quantum grammar and semantic layers own the actual quantum operation
- * semantics.
+ * Those belong to the quantum subsystem and canonical quantum::ir.
  *
  * ============================================================================
  */
 
-classicalQuantumBoundary
+classicalQuantumInteraction
     : expression
     ;
 
 
 /*
  * ============================================================================
- * 30. CLASSICAL HDL PARAMETER BOUNDARY
+ * 39. CLASSICAL HARDWARE-INTERACTION BOUNDARY
  * ============================================================================
  *
- * HDL constructs consume expressions as parameters/configuration values.
+ * Hardware interaction is interpreted downstream.
  *
- * This grammar does not define hardware structure.
+ * No physical device identifier or physical address is allowed to become part
+ * of this classical grammar's implicit semantics.
  *
  * ============================================================================
  */
 
-classicalHardwareParameter
+classicalHardwareInteraction
     : expression
     ;
 
 
 /*
  * ============================================================================
- * 31. CLASSICAL DISTRIBUTED PARAMETER BOUNDARY
+ * 40. CLASSICAL HDL-INTERACTION BOUNDARY
  * ============================================================================
  *
- * Distribution is not encoded as a fixed node or processor count.
+ * HDL syntax belongs to hdl/.
+ *
+ * Hardware implementation is not duplicated here.
  *
  * ============================================================================
  */
 
-classicalDistributedParameter
+classicalHDLInteraction
     : expression
     ;
 
 
 /*
  * ============================================================================
- * 32. CLASSICAL DATA PARAMETER BOUNDARY
+ * 41. CLASSICAL RESULT BOUNDARY
+ * ============================================================================
+ *
+ * A result is represented through the canonical expression system.
+ *
+ * The semantic type and execution representation are resolved downstream.
+ *
  * ============================================================================
  */
 
-classicalDataParameter
+classicalResult
     : expression
     ;
 
 
 /*
  * ============================================================================
- * 33. CLASSICAL AI PARAMETER BOUNDARY
+ * 42. CLASSICAL FAILURE/ERROR VALUE BOUNDARY
+ * ============================================================================
+ *
+ * Error/result semantics belong to the canonical type/effect/error systems.
+ *
+ * This grammar does not create a parallel error model.
+ *
  * ============================================================================
  */
 
-classicalAiParameter
+classicalFailureValue
     : expression
     ;
 
 
 /*
  * ============================================================================
- * 34. CLASSICAL DOMAIN ROOT
+ * 43. CLASSICAL CONSTRAINT VALUE
  * ============================================================================
  *
- * Stable high-level integration rule.
+ * Constraint interpretation belongs to semantic analysis/resource checking.
  *
- * Consumers that need an explicitly classical parser entry point should use
- * this rule rather than reaching into individual helper rules.
+ * ============================================================================
+ */
+
+classicalConstraintValue
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 44. CLASSICAL CAPABILITY VALUE
+ * ============================================================================
+ *
+ * Capability interpretation belongs to semantic analysis/capability checking.
+ *
+ * ============================================================================
+ */
+
+classicalCapabilityValue
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 45. CLASSICAL PORTABILITY VALUE
+ * ============================================================================
+ *
+ * Portability is a semantic/compiler property rather than a physical grammar
+ * restriction.
+ *
+ * ============================================================================
+ */
+
+classicalPortabilityValue
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 46. CLASSICAL DOMAIN MARKER
+ * ============================================================================
+ *
+ * This rule is deliberately an identifier boundary.
+ *
+ * A domain marker must not be implemented as a finite enumeration of machine
+ * types or architectures.
+ *
+ * ============================================================================
+ */
+
+classicalDomainIdentifier
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 47. CLASSICAL SEMANTIC ANCHOR
+ * ============================================================================
+ *
+ * Stable integration rule for semantic-analysis tooling.
+ *
+ * It consumes canonical classical-domain syntax without creating another AST.
+ *
+ * ============================================================================
+ */
+
+classicalSemanticAnchor
+    : classicalConstruct
+    ;
+
+
+/*
+ * ============================================================================
+ * 48. CLASSICAL PROGRAM FRAGMENT
+ * ============================================================================
+ *
+ * A fragment is an arbitrary sequence of classical semantic constructs.
+ *
+ * No finite number of constructs is encoded.
  *
  * ============================================================================
  */
@@ -927,201 +1122,32 @@ classicalProgramFragment
 
 /*
  * ============================================================================
- * 35. SEMANTIC INTEGRATION CONTRACT
+ * 49. CLASSICAL BLOCK CONTENT
  * ============================================================================
  *
- * The parser output of this grammar must be interpreted by the frontend.
- *
- * Required semantic pipeline:
- *
- *     Classical parser context
- *             |
- *             v
- *     source/frontend AST
- *             |
- *             v
- *     name resolution
- *             |
- *             v
- *     type resolution
- *             |
- *             v
- *     effect analysis
- *             |
- *             v
- *     capability analysis
- *             |
- *             v
- *     resource analysis
- *             |
- *             v
- *     classical semantic classification
- *             |
- *             v
- *     canonical classical IR
- *
- * A classical expression that crosses into another domain must not be copied
- * into a second independent representation merely because it crossed the
- * boundary.
- *
- * ============================================================================
- *
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Classical syntax may provide values and conditions consumed by quantum
- * syntax.
- *
- * The canonical quantum semantic boundary remains:
- *
- *     quantum::ir
- *
- * This grammar MUST NOT create:
- *
- *     QubitId
- *     PhysicalQubitId
- *     QuantumGate
- *     QuantumCircuit
- *     QEC state
- *     ZQN state
- *
- * Quantum semantics are established downstream.
- *
- * ============================================================================
- *
- * HARDWARE INTEGRATION
- * ============================================================================
- *
- * This grammar does not select:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     accelerator
- *     device ID
- *     topology
- *     placement
- *
- * Those are determined by:
- *
- *     hardware capabilities
- *     target descriptions
- *     resource constraints
- *     optimization
- *     routing
- *     scheduling
- *     runtime policy
- *
- * ============================================================================
- *
- * RUNTIME INTEGRATION
- * ============================================================================
- *
- * No rule in this grammar executes computation.
- *
- * The grammar performs:
- *
- *     characters -> tokens -> parser structure
- *
- * It does not perform:
- *
- *     parsing -> execution
- *
- * Runtime execution remains downstream.
- *
- * ============================================================================
- *
- * DETERMINISM
- * ============================================================================
- *
- * The grammar contains:
- *
- *     - no semantic predicates;
- *     - no actions;
- *     - no target code;
- *     - no external state;
- *     - no filesystem access;
- *     - no network access;
- *     - no runtime callbacks.
- *
- * Therefore parsing is deterministic for a fixed token stream and grammar
- * version.
- *
- * ============================================================================
- *
- * SECURITY
- * ============================================================================
- *
- * This grammar performs no:
- *
- *     I/O
- *     filesystem access
- *     network access
- *     command execution
- *     code evaluation
- *     dynamic loading
- *     hardware access
- *
- * Rust generated/integrating code must remain safe Rust and use:
- *
- *     #![deny(unsafe_code)]
- *
- * ============================================================================
- *
- * COMPATIBILITY
- * ============================================================================
- *
- * This grammar uses the canonical lexer token names:
- *
- *     IDENTIFIER
- *     LET
- *     VAR
- *     CONST
- *     RETURN
- *     IF
- *     ELSE
- *     FOR
- *     IN
- *     WHILE
- *     ASSIGN
- *     COLON
- *     COMMA
- *     SEMICOLON
- *     LBRACE
- *     RBRACE
- *
- * It intentionally does not introduce token aliases such as:
- *
- *     IDENT
- *     ID
- *     NAME
- *     SEMI
- *
- * ============================================================================
- *
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *   1. ANTLR accepts the grammar.
- *   2. The grammar uses only canonical lexer vocabulary.
- *   3. No lexer rules exist in this parser grammar.
- *   4. No machine-size limits exist.
- *   5. No quantum hardware assumptions exist.
- *   6. No classical IR is duplicated here.
- *   7. No quantum::ir is duplicated here.
- *   8. No QEC/ZQN ownership exists here.
- *   9. Expression syntax remains owned by Expressions.
- *  10. Type syntax remains owned by Types.
- *  11. Declaration/statement ownership remains with their respective
- *      canonical grammars.
- *  12. The frontend has a defined AST destination for every public rule.
- *  13. Positive, negative, boundary, scalability and cross-domain tests exist.
- *  14. Generated Rust integration compiles under Rust 1.97/1.97.1.
- *  15. Generated/integrating Rust contains no unsafe code.
+ * Canonical statements remain authoritative.
  *
  * ============================================================================
  */
+
+classicalBlockContent
+    : statement*
+    ;
+
+
+/*
+ * ============================================================================
+ * 50. CLASSICAL DOMAIN VALIDATION ANCHOR
+ * ============================================================================
+ *
+ * This rule intentionally provides a stable parser entry point for tests and
+ * tooling without adding semantic validation to the grammar.
+ *
+ * Semantic validation MUST remain downstream.
+ *
+ * ============================================================================
+ */
+
+classicalValidationInput
+    : classicalConstruct EOF?
+    ;
