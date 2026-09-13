@@ -10,38 +10,52 @@
  *     ANTLR4 parser grammar
  *
  * Status:
- *     Production memory-domain foundation.
+ *     Canonical memory-domain foundation.
  *
- * Rust integration baseline:
+ * Language role:
+ *     Defines source-level memory intent and composition points.
+ *
+ * Implementation baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Edition 2021
  *     Safe Rust only
- *     No unsafe code
+ *     No unsafe code.
  *
  * ============================================================================
- * PURPOSE
+ *
+ * ARCHITECTURAL PRINCIPLE
  * ============================================================================
  *
- * This file defines the DOMAIN-NEUTRAL MEMORY SYNTAX FOUNDATION for Zamani.
+ * Zamani source describes computation and intent.
  *
- * It establishes the common source-level vocabulary required by:
+ * Memory syntax MUST NOT encode accidental properties of the machine on which
+ * the program happens to execute.
  *
- *     - ownership;
- *     - borrowing;
- *     - lifetimes;
- *     - allocation;
- *     - deallocation;
- *     - shared memory;
- *     - distributed memory;
- *     - memory constraints;
- *     - resource-aware memory semantics;
- *     - future memory models.
+ * Therefore this grammar does NOT encode:
  *
- * This file is intentionally a foundation rather than a second semantic
- * memory system.
+ *     - physical addresses;
+ *     - pointer widths;
+ *     - machine word widths;
+ *     - fixed heap sizes;
+ *     - fixed stack sizes;
+ *     - fixed memory-bank counts;
+ *     - fixed NUMA-node counts;
+ *     - fixed device-memory counts;
+ *     - fixed GPU-memory counts;
+ *     - fixed accelerator counts;
+ *     - fixed distributed-node counts;
+ *     - fixed allocation counts;
+ *     - fixed reference counts;
+ *     - fixed lifetime counts;
+ *     - fixed region counts;
+ *     - fixed memory-space counts.
+ *
+ * Resource availability, placement, allocation strategy, memory topology,
+ * scheduling, and physical realization belong downstream.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ *
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
  *     Zamani source
@@ -50,671 +64,253 @@
  *     ZamaniLexer
  *          |
  *          v
- *     Core/domain parser
+ *     composed parser
  *          |
- *          +-----------------------------+
- *          |                             |
- *          v                             v
- *     Types.g4                       Memory.g4
- *          |                             |
- *          |                 +-----------+-----------+
- *          |                 |           |           |
- *          |                 v           v           v
- *          |             ownership   borrowing   allocation
- *          |                 |           |           |
- *          |                 +-----------+-----------+
- *          |                             |
- *          +-----------------------------+
- *                        |
- *                        v
- *                       AST
- *                        |
- *                        v
- *                structural validation
- *                        |
- *                        v
- *                semantic analysis
- *                        |
- *              +---------+----------+
- *              |                    |
- *              v                    v
- *       ownership model       resource model
- *              |                    |
- *              +---------+----------+
- *                        |
- *                        v
- *                 canonical semantic IR
- *                        |
- *          +-------------+-------------+
- *          |             |             |
- *          v             v             v
- *      classical      quantum        hardware
- *         IR            IR            IR
- *          |             |             |
- *          +-------------+-------------+
- *                        |
- *                        v
- *              optimization/routing/
- *                 scheduling/lowering
- *                        |
- *                        v
- *                    runtime
+ *          +-------------------+
+ *          |                   |
+ *          v                   v
+ *       Types.g4          Expressions.g4
+ *          |                   |
+ *          +---------+---------+
+ *                    |
+ *                    v
+ *              Memory.g4
+ *                    |
+ *                    +-----------------------------+
+ *                    |                             |
+ *                    v                             v
+ *              specialized                 frontend AST
+ *              memory grammars                   |
+ *                    |                           v
+ *                    +------------------ semantic analysis
+ *                                                |
+ *                              +-----------------+----------------+
+ *                              |                 |                |
+ *                              v                 v                v
+ *                         ownership         resource model    effects
+ *                              |                 |                |
+ *                              +-----------------+----------------+
+ *                                                |
+ *                                                v
+ *                                      canonical semantic IR
+ *                                                |
+ *                     +--------------------------+------------------------+
+ *                     |                          |                        |
+ *                     v                          v                        v
+ *               classical IR               quantum::ir             hardware/HDL IR
+ *                     |                          |                        |
+ *                     +--------------------------+------------------------+
+ *                                                |
+ *                                                v
+ *                                optimization / routing / scheduling
+ *                                                |
+ *                                                v
+ *                                         target realization
+ *                                                |
+ *                                                v
+ *                                             runtime
  *
  * ============================================================================
+ *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *   - memory-domain syntax foundations;
- *   - memory-domain qualified names;
- *   - memory-place syntax;
- *   - source-level ownership mode markers;
- *   - source-level borrow mode markers;
- *   - source-level lifetime names;
- *   - memory-region references;
- *   - memory-space references;
- *   - memory-resource requirements;
- *   - memory constraints;
- *   - memory preferences;
- *   - memory hints;
- *   - memory operation invocation structure;
- *   - memory operation argument structure;
- *   - memory policy structure;
- *   - memory-domain extension points;
- *   - stable common syntax consumed by specialized memory grammars.
+ *     - the canonical memory-domain entry point;
+ *     - generic memory constructs;
+ *     - memory-qualified names;
+ *     - memory places;
+ *     - memory spaces;
+ *     - memory regions;
+ *     - ownership markers at the syntactic level;
+ *     - borrow markers at the syntactic level;
+ *     - lifetime references at the syntactic level;
+ *     - memory operation invocation syntax;
+ *     - memory operation arguments;
+ *     - memory resource-intent syntax;
+ *     - memory requirement syntax;
+ *     - memory constraint syntax;
+ *     - memory preference syntax;
+ *     - memory hint syntax;
+ *     - generic memory policy syntax;
+ *     - memory extension points;
+ *     - memory-domain composition.
  *
  * ============================================================================
- * DOES NOT OWN
- * ============================================================================
  *
- * This file does NOT own:
+ * THIS FILE DOES NOT OWN:
  *
- *   - lexical tokens;
- *   - identifier spelling;
- *   - Unicode normalization;
- *   - general expressions;
- *   - general statements;
- *   - general declarations;
- *   - complete type semantics;
- *   - ownership checking;
- *   - borrow checking;
- *   - lifetime inference;
- *   - lifetime validity;
- *   - alias analysis;
- *   - memory allocation;
- *   - physical addresses;
- *   - memory layout;
- *   - allocator implementation;
- *   - garbage collection;
- *   - garbage collector policy;
- *   - NUMA discovery;
- *   - physical memory discovery;
- *   - cache discovery;
- *   - device-memory discovery;
- *   - distributed placement;
- *   - DMA implementation;
- *   - quantum resource allocation;
- *   - qubit allocation;
- *   - quantum routing;
- *   - scheduling;
- *   - optimization;
- *   - QEC;
- *   - ZQN;
- *   - resilience;
- *   - hardware selection;
- *   - backend selection;
- *   - runtime execution;
- *   - machine-specific limits;
- *   - classical IR;
- *   - quantum::ir;
- *   - HDL IR;
- *   - hardware IR.
+ *     - lexer definitions;
+ *     - identifier spelling;
+ *     - Unicode normalization;
+ *     - general expression precedence;
+ *     - general expressions;
+ *     - general types;
+ *     - declarations;
+ *     - statements outside the memory domain;
+ *     - ownership checking;
+ *     - borrow checking;
+ *     - lifetime inference;
+ *     - alias analysis;
+ *     - escape analysis;
+ *     - allocation implementation;
+ *     - deallocation implementation;
+ *     - allocator algorithms;
+ *     - garbage collection;
+ *     - reference counting;
+ *     - physical memory discovery;
+ *     - virtual-memory implementation;
+ *     - NUMA discovery;
+ *     - cache discovery;
+ *     - device-memory discovery;
+ *     - DMA;
+ *     - memory placement;
+ *     - memory scheduling;
+ *     - routing;
+ *     - optimization;
+ *     - quantum allocation;
+ *     - QEC;
+ *     - ZQN;
+ *     - resilience;
+ *     - hardware discovery;
+ *     - backend selection;
+ *     - runtime execution;
+ *     - classical IR;
+ *     - quantum::ir;
+ *     - HDL IR;
+ *     - hardware IR.
  *
  * ============================================================================
- * CANONICAL SEMANTIC BOUNDARY
+ *
+ * INTEGRATION CONTRACT
  * ============================================================================
  *
- * Memory syntax is source syntax only.
- *
- * The parser MUST preserve source intent without deciding how memory is
- * physically implemented.
- *
- * For example:
- *
- *     memory::shared(x)
- *
- * does NOT mean:
- *
- *     heap allocation
- *     shared RAM
- *     cache-coherent memory
- *     NUMA memory
- *     GPU memory
- *     unified memory
- *     distributed shared memory
- *
- * Semantic analysis determines the meaning.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * This grammar MUST remain valid from the smallest supported execution
- * environment to arbitrarily larger environments, subject only to:
- *
- *     - available resources;
- *     - explicit compiler resource policies;
- *     - explicit runtime policies;
- *     - semantic validity;
- *     - target capabilities.
- *
- * This grammar therefore contains NO:
- *
- *     MAX_MEMORY
- *     MAX_ALLOCATION
- *     MAX_REGION_COUNT
- *     MAX_REFERENCE_COUNT
- *     MAX_BORROW_COUNT
- *     MAX_LIFETIME_COUNT
- *     MAX_ADDRESS_WIDTH
- *     MAX_POINTER_WIDTH
- *     MAX_HEAP_SIZE
- *     MAX_STACK_SIZE
- *     MAX_SHARED_MEMORY
- *     MAX_DISTRIBUTED_MEMORY
- *     MAX_MEMORY_SPACES
- *     MAX_MEMORY_OPERATIONS
- *
- * Nor does it encode:
- *
- *     address 0
- *     address 1
- *     heap 0
- *     memory bank 0
- *     NUMA node 0
- *     device memory 0
- *     GPU memory 0
- *
- * Machine/resource limitations belong to explicit downstream policies.
- *
- * ============================================================================
- * OPEN-WORLD MEMORY MODEL
- * ============================================================================
- *
- * Memory is treated as an extensible semantic domain.
- *
- * The grammar must not enumerate every future memory technology.
- *
- * Examples that may be represented without changing the foundational syntax:
- *
- *     memory::local
- *     memory::shared
- *     memory::distributed
- *     memory::persistent
- *     memory::device
- *     memory::unified
- *     memory::remote
- *     memory::nonvolatile
- *     memory::future_domain
- *
- * These names are syntactic identifiers.
- *
- * Their semantics are resolved downstream.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The canonical lexer is:
+ * Canonical lexer:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * This file MUST NOT declare lexer rules.
+ * Canonical type grammar:
  *
- * Existing lexical tokens intentionally reused include:
+ *     grammar/types/types.g4
  *
- *     IDENTIFIER
- *     LINEAR
- *     AFFINE
- *     MUT
- *     LET
- *     CONST
- *     VAR
- *     VAL
- *     NEW
- *     EXTERN
- *     AMPERSAND
- *     STAR
- *     APOSTROPHE
- *     AT
- *     ASSIGN
- *     COMMA
- *     COLON
- *     SEMICOLON
- *     LPAREN
- *     RPAREN
- *     LBRACKET
- *     RBRACKET
- *     DOUBLE_COLON
- *     LESS_THAN
- *     GREATER_THAN
- *     PLUS
- *     MINUS
- *     DOT
- *     DOT_DOT
- *     DOT_DOT_EQ
- *
- * The foundational memory grammar deliberately does not require adding
- * temporary memory-specific keywords to the lexer.
- *
- * Memory-domain operations use the open qualified-name form:
- *
- *     memory::operation(...)
- *
- * This prevents the lexical layer from becoming a closed list of memory
- * technologies.
- *
- * ============================================================================
- * TYPE INTEGRATION
- * ============================================================================
- *
- * Types.g4 remains the canonical owner of:
- *
- *     typeExpression
- *     referenceType
- *     lifetimeAnnotation
- *     pointerType
- *     generic types
- *     dependent types
- *
- * In particular, this grammar MUST NOT redefine:
- *
- *     &T
- *     &mut T
- *     &'a T
- *     *T
- *
- * as competing type productions.
- *
- * This file uses `typeExpression` when a memory construct needs a type.
- *
- * Ownership and borrow semantics are interpreted downstream.
- *
- * ============================================================================
- * EXPRESSION INTEGRATION
- * ============================================================================
- *
- * General expressions remain owned by:
+ * Canonical expression grammar:
  *
  *     grammar/expressions/expressions.g4
  *
- * Memory grammar rules therefore do not recreate arithmetic, calls, indexing,
- * member access, conditional expressions, or other general expression syntax.
+ * Specialized memory grammars:
  *
- * A host parser should integrate:
+ *     grammar/memory/ownership.g4
+ *     grammar/memory/borrowing.g4
+ *     grammar/memory/lifetimes.g4
+ *     grammar/memory/allocation.g4
+ *     grammar/memory/deallocation.g4
+ *     grammar/memory/shared-memory.g4
+ *     grammar/memory/distributed-memory.g4
+ *     grammar/memory/memory-constraints.g4
  *
- *     memoryStatement
+ * IMPORTANT:
  *
- * before generic expression statements where necessary.
+ * Specialized memory grammars MUST consume and extend the vocabulary defined
+ * here. They MUST NOT redefine:
  *
- * Semantic analysis distinguishes:
+ *     memoryPlace
+ *     memorySpace
+ *     memoryLifetime
+ *     memoryQualifiedName
+ *     memoryOperation
+ *     memoryOperationArgument
  *
- *     memory::operation(...)
- *
- * from ordinary function calls.
+ * unless ownership is deliberately transferred through an explicit grammar
+ * architecture change.
  *
  * ============================================================================
+ *
  * AST CONTRACT
  * ============================================================================
  *
- * The parser should lower into the existing canonical AST architecture.
- *
- * Memory grammar nodes MUST retain:
+ * Every memory construct must preserve enough syntax information for the
+ * frontend AST to retain:
  *
  *     - source span;
- *     - operation/namespace name;
- *     - ownership mode;
- *     - mutability;
- *     - lifetime name;
- *     - memory-space name;
- *     - resource expressions;
+ *     - memory operation/path;
+ *     - operation arguments;
+ *     - memory place;
+ *     - memory space;
+ *     - region;
+ *     - ownership marker;
+ *     - borrow marker;
+ *     - lifetime reference;
+ *     - type expression;
+ *     - requirements;
  *     - constraints;
  *     - preferences;
  *     - hints;
- *     - type expressions;
- *     - source expressions;
- *     - arguments;
+ *     - policy;
  *     - extension metadata.
  *
- * The grammar MUST NOT require a new physical-memory AST merely to represent:
- *
- *     heap
- *     stack
- *     address
- *     cache
- *     NUMA node
- *     device memory
- *
- * unless semantic analysis explicitly determines that such a concept has
- * source-level meaning.
+ * The parser does NOT decide their semantic validity.
  *
  * ============================================================================
+ *
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The semantic layer is responsible for determining:
+ * Semantic analysis determines:
  *
- *   - ownership validity;
- *   - move validity;
- *   - copy validity;
- *   - borrow validity;
- *   - mutable-aliasing validity;
- *   - lifetime validity;
- *   - region validity;
- *   - allocation legality;
- *   - deallocation legality;
- *   - memory-space compatibility;
- *   - shared-memory synchronization requirements;
- *   - distributed-memory consistency;
- *   - resource availability;
- *   - capability satisfaction;
- *   - target-specific realization.
+ *     - whether an ownership mode is legal;
+ *     - whether a value may move;
+ *     - whether a value may be copied;
+ *     - whether a borrow is valid;
+ *     - whether mutable aliasing is legal;
+ *     - whether a lifetime is valid;
+ *     - whether a region relationship is valid;
+ *     - whether an allocation is possible;
+ *     - whether deallocation is legal;
+ *     - whether a memory space is compatible;
+ *     - whether a requirement is satisfiable;
+ *     - whether a constraint is satisfiable;
+ *     - whether a preference can be honored;
+ *     - whether a hint is usable;
+ *     - whether a target has the required capability;
+ *     - how memory intent lowers to canonical semantic IR.
  *
- * Syntax alone MUST NOT establish any of those facts.
- *
- * ============================================================================
- * RESOURCE SEMANTICS
- * ============================================================================
- *
- * The grammar distinguishes:
- *
- *     requirement
- *     constraint
- *     preference
- *     hint
- *     memory space
- *     memory resource
- *
- * These must not collapse into one concept.
- *
- * Requirement:
- *
- *     Must be satisfied.
- *
- * Constraint:
- *
- *     Restricts legal implementation choices.
- *
- * Preference:
- *
- *     Describes a desired implementation property.
- *
- * Hint:
- *
- *     Provides optional implementation guidance.
- *
- * Memory space:
- *
- *     Names a semantic memory domain.
- *
- * Memory resource:
- *
- *     Represents a quantity/property that downstream resource analysis may
- *     evaluate.
+ * Syntax MUST NOT perform these decisions.
  *
  * ============================================================================
- * MEMORY PLACE MODEL
+ *
+ * POCO-REAF
  * ============================================================================
  *
- * A memory place is a source-level location expression.
- *
- * It may represent:
- *
- *     variable
- *     field
- *     indexed element
- *     qualified location
- *     dereferenced location
- *     future memory-domain location
- *
- * The grammar deliberately avoids physical addresses.
- *
- * ============================================================================
- * LIFETIME MODEL
- * ============================================================================
- *
- * Lifetime syntax is represented as:
- *
- *     'a
- *     'region
- *     'scope
- *
- * The grammar preserves the name only.
- *
- * It does NOT infer:
- *
- *     start point
- *     end point
- *     region nesting
- *     ownership relationship
- *     lifetime outlives relationship
- *
- * Those are semantic-analysis responsibilities.
- *
- * ============================================================================
- * OWNERSHIP MODEL
- * ============================================================================
- *
- * Source-level ownership modes supported by the foundation are:
- *
- *     linear
- *     affine
- *
- * They are intentionally semantic qualifiers rather than allocator commands.
- *
- * `linear` means, at the language-semantic level, that the associated value
- * participates in linear-use constraints.
- *
- * `affine` means the associated value participates in affine-use constraints.
- *
- * The grammar does not decide:
- *
- *     move implementation
- *     reference counting
- *     tracing GC
- *     stack allocation
- *     heap allocation
- *     register allocation
- *     physical storage
- *
- * ============================================================================
- * BORROW MODEL
- * ============================================================================
- *
- * Borrow syntax uses:
- *
- *     &
- *     &mut
- *
- * together with an existing source-level place.
- *
- * This grammar represents the syntactic operation only.
- *
- * It does not perform:
- *
- *     borrow checking
- *     alias checking
- *     data-race checking
- *     lifetime checking
- *
- * ============================================================================
- * ALLOCATION MODEL
- * ============================================================================
- *
- * Allocation syntax is represented through memory-domain operations and the
- * existing `new` token.
- *
- * The foundational grammar supports:
- *
- *     memory::allocate(...)
- *     memory::allocate_in(...)
- *     memory::reserve(...)
- *     memory::grow(...)
- *
- * without assigning them a physical allocator.
- *
- * `new` is retained as an existing Zamani lexical construct.
- *
- * ============================================================================
- * DEALLOCATION MODEL
- * ============================================================================
- *
- * Deallocation is intentionally represented through the extensible memory
- * namespace:
- *
- *     memory::deallocate(...)
- *     memory::release(...)
- *
- * This avoids introducing a permanently reserved global keyword merely for
- * one implementation strategy.
- *
- * Semantic analysis determines whether explicit release is legal.
- *
- * ============================================================================
- * SHARED MEMORY
- * ============================================================================
- *
- * Shared-memory operations can use:
- *
- *     memory::shared(...)
- *     memory::share(...)
- *     memory::unshare(...)
- *
- * The grammar does not assume:
- *
- *     cache coherence
- *     shared RAM
- *     a particular synchronization primitive
- *     a particular CPU
- *     a particular accelerator.
- *
- * ============================================================================
- * DISTRIBUTED MEMORY
- * ============================================================================
- *
- * Distributed-memory syntax can use:
- *
- *     memory::distributed(...)
- *     memory::remote(...)
- *     memory::replicate(...)
- *     memory::migrate(...)
- *
- * Placement, node selection, network routing and consistency are downstream.
- *
- * ============================================================================
- * EXTENSION MODEL
- * ============================================================================
- *
- * Future memory systems can use:
- *
- *     memory::future_domain::operation(...)
- *
- * without requiring changes to the foundational memory grammar.
- *
- * There is no fixed qualification depth.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * Parsing a memory operation MUST NEVER:
- *
- *     allocate memory;
- *     deallocate memory;
- *     open files;
- *     access operating-system memory;
- *     inspect hardware;
- *     access device memory;
- *     contact a network;
- *     execute a runtime operation;
- *     invoke an allocator;
- *     invoke a backend.
- *
- * The parser produces syntax only.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * The grammar contains:
- *
- *     no semantic predicates;
- *     no embedded Rust;
- *     no target-specific actions;
- *     no runtime calls;
- *     no generated identifiers;
- *     no hardware discovery;
- *     no environment access.
- *
- * Equivalent source produces deterministic parse structure.
- *
- * ============================================================================
- * RUST CONTRACT
- * ============================================================================
- *
- * This grammar contains no Rust implementation.
- *
- * Any generated Rust parser/frontend integration MUST compile with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * and:
- *
- *     #![forbid(unsafe_code)]
- *     #![deny(unsafe_op_in_unsafe_fn)]
- *
- * No unsafe implementation is required by this grammar.
- *
- * ============================================================================
- * SPECIALIZED FILE INTEGRATION
- * ============================================================================
- *
- * Future specialized grammar files should import this grammar:
- *
- *     ownership.g4
- *     borrowing.g4
- *     lifetimes.g4
- *     allocation.g4
- *     deallocation.g4
- *     shared-memory.g4
- *     distributed-memory.g4
- *     memory-constraints.g4
- *
- * They must NOT redefine the foundational rules below.
- *
- * Expected dependency direction:
- *
- *     Memory.g4
- *          |
- *          +--> Ownership.g4
- *          +--> Borrowing.g4
- *          +--> Lifetimes.g4
- *          +--> Allocation.g4
- *          +--> Deallocation.g4
- *          +--> SharedMemory.g4
- *          +--> DistributedMemory.g4
- *          +--> MemoryConstraints.g4
- *
- * Domain composition then integrates those specialized grammars into the
- * statement/declaration compilation boundary.
- *
- * The dependency direction MUST NOT be reversed:
- *
- *     Memory.g4 -> semantic analysis
- *     Memory.g4 -> runtime
- *     Memory.g4 -> hardware
+ * Memory syntax is intentionally open-world.
+ *
+ * The same source-level memory intent must be representable on:
+ *
+ *     - embedded systems;
+ *     - CPUs;
+ *     - multicore systems;
+ *     - GPUs;
+ *     - FPGAs;
+ *     - ASICs;
+ *     - quantum-classical systems;
+ *     - distributed systems;
+ *     - clusters;
+ *     - supercomputers;
+ *     - cloud systems;
+ *     - future architectures.
+ *
+ * The grammar imposes no semantic maximum on:
+ *
+ *     memory size;
+ *     allocation count;
+ *     reference count;
+ *     region count;
+ *     address width;
+ *     memory-space count;
+ *     distributed placement count.
+ *
+ * Practical parser/compiler resource limits, if required, MUST be explicit
+ * implementation policies and MUST NOT become source-language semantics.
  *
  * ============================================================================
  */
@@ -725,437 +321,212 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Types;
 
-
-/* ============================================================================
- * 1. PUBLIC ENTRY POINTS
- * ========================================================================== */
-
-/**
- * Canonical memory-domain syntactic entry point.
+/*
+ * ============================================================================
+ * 1. PUBLIC MEMORY ENTRY POINT
+ * ============================================================================
  *
- * This rule is intentionally broad enough to allow the specialized memory
- * grammars to consume the foundational constructs without modifying this file.
+ * This is the canonical entry point for memory-domain syntax.
+ *
+ * Specialized memory grammars should compose with this rule rather than
+ * creating another generic memory root.
  */
 memoryConstruct
-    : memoryOwnershipQualifier
-    | memoryBorrow
-    | memoryLifetime
-    | memoryPlace
-    | memorySpace
-    | memoryRequirement
-    | memoryConstraint
-    | memoryPreference
-    | memoryHint
-    | memoryPolicy
-    | memoryOperation
-    | memoryAllocation
-    | memoryDeallocation
-    | memorySharing
-    | memoryDistribution
+    : memoryStatement
+    | memoryExpression
+    | memoryDeclaration
+    | memoryAnnotation
     ;
 
 
-/**
- * Memory-domain statement form.
+/*
+ * ============================================================================
+ * 2. MEMORY STATEMENT
+ * ============================================================================
  *
- * This is the integration point for statement composition.
+ * A memory statement is intentionally generic.
+ *
+ * Specialized grammars may refine semantic operation names such as:
+ *
+ *     memory::allocate
+ *     memory::deallocate
+ *     memory::share
+ *     memory::release
+ *     memory::migrate
+ *
+ * without requiring this foundational grammar to know every future operation.
+ *
+ * The trailing semicolon is owned here because this is the generic statement
+ * boundary.
  */
 memoryStatement
     : memoryOperationStatement
-    | memoryAllocationStatement
-    | memoryDeallocationStatement
-    | memorySharingStatement
-    | memoryDistributionStatement
     ;
 
 
-/* ============================================================================
- * 2. NAMES AND QUALIFIED MEMORY OPERATIONS
- * ========================================================================== */
-
-/**
- * A memory-domain name.
- *
- * No finite qualification depth is encoded.
- *
- * Examples:
- *
- *     memory
- *     shared
- *     distributed
- *     future_domain
- */
-memoryName
-    : identifier
-    ;
-
-
-/**
- * Qualified memory-domain name.
- *
- * Examples:
- *
- *     memory::allocate
- *     memory::shared
- *     memory::distributed::migrate
- *     memory::future_domain::operation
- *
- * Qualification depth is unbounded by language semantics.
- */
-memoryQualifiedName
-    : memoryName
-      (DOUBLE_COLON memoryName)*
-    ;
-
-
-/**
- * Explicit memory namespace.
- *
- * The parser intentionally does not reserve `memory` as a lexer keyword.
- *
- * Semantic validation determines whether the first component denotes the
- * canonical memory namespace.
- */
-memoryNamespaceName
-    : memoryQualifiedName
-    ;
-
-
-/* ============================================================================
- * 3. OWNERSHIP
- * ========================================================================== */
-
-/**
- * Source-level ownership qualifier.
- *
- * This is syntax only.
- *
- * Semantic ownership checking occurs downstream.
- */
-memoryOwnershipQualifier
-    : LINEAR
-    | AFFINE
-    ;
-
-
-/**
- * Ownership mode with optional mutability.
- *
- * Examples:
- *
- *     linear
- *     affine
- *     linear mut
- *     affine mut
- */
-memoryOwnershipMode
-    : memoryOwnershipQualifier MUT?
-    ;
-
-
-/**
- * Ownership-qualified binding.
- *
- * Examples:
- *
- *     linear let value: T = expression;
- *     affine let value: T = expression;
- *
- * The initializer expression is intentionally represented through a memory
- * operation payload rather than duplicated general expression grammar.
- *
- * The host declaration grammar may use `memoryOwnershipMode` when composing
- * ordinary declarations.
- */
-memoryOwnedBinding
-    : memoryOwnershipMode
-      LET
-      identifier
-      memoryTypeAnnotation?
-      ASSIGN
-      memoryValue
+memoryOperationStatement
+    : memoryOperation
       SEMICOLON
     ;
 
 
-/**
- * Optional type annotation for a memory-owned binding.
+/*
+ * ============================================================================
+ * 3. MEMORY EXPRESSION
+ * ============================================================================
+ *
+ * Memory operations may also occur in expression position.
+ *
+ * Examples:
+ *
+ *     memory::allocate(...)
+ *     memory::reserve(...)
+ *     memory::map(...)
+ *
+ * Whether a particular operation is expression-producing is a semantic
+ * question.
  */
-memoryTypeAnnotation
-    : COLON typeExpression
+memoryExpression
+    : memoryOperation
     ;
 
 
-/* ============================================================================
- * 4. BORROWING
- * ========================================================================== */
-
-/**
- * Immutable borrow.
+/*
+ * ============================================================================
+ * 4. MEMORY DECLARATION
+ * ============================================================================
  *
- * Example:
+ * This is a syntactic integration point for future declaration-specific
+ * memory forms.
  *
- *     &value
+ * It intentionally does not duplicate variable/type declaration grammar.
  *
- * This rule represents source-level borrow syntax.
- *
- * It does not perform borrow checking.
+ * Specialized declaration grammars may consume memory metadata through
+ * memoryAnnotation or memoryConstruct composition.
  */
-memoryBorrow
-    : AMPERSAND
+memoryDeclaration
+    : memoryBinding
+    ;
+
+
+memoryBinding
+    : memoryOwnershipQualifier?
       memoryPlace
-    | AMPERSAND
-      lifetimeAnnotation
-      memoryPlace
+      memoryTypeAnnotation?
+      memoryLifetimeClause?
+      memorySpaceClause?
     ;
 
 
-/**
- * Mutable borrow.
+/*
+ * ============================================================================
+ * 5. MEMORY ANNOTATION
+ * ============================================================================
+ *
+ * Memory metadata may be attached to declarations, operations, types, or
+ * other source constructs by the composed parser.
+ *
+ * The annotation payload remains an expression-level semantic value.
+ */
+memoryAnnotation
+    : AT memoryQualifiedName
+      memoryAnnotationArguments?
+    ;
+
+
+memoryAnnotationArguments
+    : LPAREN memoryArgumentList? RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * 6. MEMORY OPERATION
+ * ============================================================================
+ *
+ * The operation name is open-world.
+ *
+ * There is deliberately NO exhaustive list such as:
+ *
+ *     ALLOCATE
+ *     DEALLOCATE
+ *     SHARED
+ *     DEVICE
+ *     NUMA
+ *     CACHE
+ *
+ * because doing so would turn every future memory technology into a lexer
+ * change.
+ *
+ * Operation identity is resolved semantically.
  *
  * Examples:
  *
- *     &mut value
- *     &'a mut value
+ *     memory::allocate(...)
+ *     memory::deallocate(...)
+ *     memory::shared(...)
+ *     memory::distributed(...)
+ *     memory::persistent(...)
+ *     memory::future::operation(...)
  */
-memoryMutableBorrow
-    : AMPERSAND
-      lifetimeAnnotation?
-      MUT
-      memoryPlace
+memoryOperation
+    : memoryQualifiedName
+      LPAREN memoryArgumentList? RPAREN
     ;
 
 
-/**
- * Unified borrow expression.
- */
-memoryBorrowExpression
-    : memoryBorrow
-    | memoryMutableBorrow
-    ;
-
-
-/* ============================================================================
- * 5. LIFETIMES
- * ========================================================================== */
-
-/**
- * Source-level lifetime.
+/*
+ * ============================================================================
+ * 7. MEMORY QUALIFIED NAME
+ * ============================================================================
  *
- * Examples:
+ * There is no fixed qualification depth.
  *
- *     'a
- *     'scope
- *     'region
- *
- * The semantic layer determines the lifetime's meaning.
- */
-memoryLifetime
-    : APOSTROPHE
-      identifier
-    ;
-
-
-/**
- * Optional lifetime attached to a memory construct.
- */
-memoryLifetimeReference
-    : memoryLifetime
-    ;
-
-
-/**
- * Lifetime relation.
- *
- * This intentionally preserves relation syntax without deciding its semantic
- * interpretation.
- *
- * Examples:
- *
- *     'a : 'b
- *     'a : 'b, 'c
- */
-memoryLifetimeRelation
-    : memoryLifetime
-      COLON
-      memoryLifetime
-      (COMMA memoryLifetime)*
-    ;
-
-
-/* ============================================================================
- * 6. MEMORY PLACES
- * ========================================================================== */
-
-/**
- * A memory place is a source-level location.
- *
- * The foundational grammar intentionally keeps this structural rather than
- * introducing physical addresses.
- */
-memoryPlace
-    : memoryPlaceRoot
-      memoryPlaceProjection*
-    ;
-
-
-/**
- * Root of a memory place.
- */
-memoryPlaceRoot
-    : identifier
-    | SELF
-    | SUPER
-    ;
-
-
-/**
- * Memory-place projection.
- *
- * This foundation deliberately supports:
- *
- *     .field
- *     [index]
- *
- * without reimplementing the complete expression grammar.
- */
-memoryPlaceProjection
-    : DOT identifier
-    | LBRACKET memoryIndex RBRACKET
-    ;
-
-
-/**
- * Index expression foundation.
- *
- * A memory index can be:
- *
- *     identifier
- *     integer literal
- *     qualified name
- *
- * More general expressions remain owned by expressions.g4.
- */
-memoryIndex
-    : INTEGER
-    | identifier
-    | memoryQualifiedName
-    ;
-
-
-/* ============================================================================
- * 7. MEMORY TYPES
- * ========================================================================== */
-
-/**
- * Memory-aware type reference.
- *
- * This delegates all type construction to the canonical Types grammar.
- */
-memoryType
-    : typeExpression
-    ;
-
-
-/**
- * Optional memory type argument.
- */
-memoryTypedValue
-    : typeExpression
-      memoryValue?
-    ;
-
-
-/* ============================================================================
- * 8. MEMORY SPACES
- * ========================================================================== */
-
-/**
- * Memory-space reference.
- *
- * Examples:
+ * Valid examples include:
  *
  *     memory::local
  *     memory::shared
+ *     memory::device
  *     memory::distributed
  *     memory::persistent
- *     memory::device
- *     memory::future_domain
+ *     memory::remote
+ *     memory::future::domain
+ *     memory::vendor::extension::operation
  *
- * The grammar does not define which spaces actually exist.
+ * The grammar does not determine what any name means.
  */
-memorySpace
-    : memoryNamespaceName
+memoryQualifiedName
+    : memoryPath
     ;
 
 
-/**
- * Memory-space selection.
- */
-memorySpaceSelector
-    : AT
-      memoryQualifiedName
+memoryPath
+    : identifier
+      (DOUBLE_COLON identifier)*
     ;
 
 
-/**
- * Memory-space argument.
+/*
+ * ============================================================================
+ * 8. MEMORY ARGUMENTS
+ * ============================================================================
  *
- * This may be used by allocation, sharing, distribution, and constraints.
- */
-memorySpaceArgument
-    : memorySpaceSelector
-    ;
-
-
-/* ============================================================================
- * 9. MEMORY VALUES
- * ========================================================================== */
-
-/**
- * Foundational memory value.
+ * Arguments consume the canonical expression grammar.
  *
- * This deliberately does not recreate the general expression grammar.
+ * This means memory operations can receive:
  *
- * It accepts source-level names and literal values that are sufficient for
- * memory-domain arguments while leaving general expression ownership with the
- * expression subsystem.
- */
-memoryValue
-    : memoryPlace
-    | INTEGER
-    | FLOAT
-    | STRING_LITERAL
-    | CHAR_LITERAL
-    | TRUE
-    | FALSE
-    | NIL
-    | NULL
-    | memoryQualifiedName
-    | parenthesizedMemoryValue
-    ;
-
-
-/**
- * Parenthesized memory value.
- */
-parenthesizedMemoryValue
-    : LPAREN
-      memoryValue
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 10. MEMORY ARGUMENTS
- * ========================================================================== */
-
-/**
- * Positional memory arguments.
+ *     constants;
+ *     variables;
+ *     symbolic values;
+ *     runtime values;
+ *     type-related values;
+ *     resource expressions;
+ *     computed extents;
+ *     capability predicates;
+ *     future semantic values.
  *
- * No fixed argument count exists.
+ * No fixed argument count is encoded.
  */
 memoryArgumentList
     : memoryArgument
@@ -1164,1191 +535,645 @@ memoryArgumentList
     ;
 
 
-/**
- * A memory argument.
- */
 memoryArgument
-    : memoryNamedArgument
-    | memoryValue
-    | memoryTypeArgument
-    | memorySpaceArgument
-    | memoryLifetimeReference
-    | memoryConstraint
+    : expression
+    | memoryNamedArgument
     ;
 
 
-/**
- * Named memory argument.
- *
- * Example:
- *
- *     size = n
- *     alignment = alignment_requirement
- *
- * The meaning of the name is determined downstream.
- */
 memoryNamedArgument
+    : identifier ASSIGN expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. MEMORY PLACE
+ * ============================================================================
+ *
+ * A memory place identifies a source-level location.
+ *
+ * Physical addresses are intentionally excluded.
+ *
+ * Examples:
+ *
+ *     value
+ *     object.field
+ *     array[index]
+ *     namespace::value
+ *     object.field[index]
+ *
+ * The full expression grammar remains authoritative for complex expressions.
+ *
+ * This rule provides the stable memory-domain location abstraction.
+ */
+memoryPlace
+    : memoryPlaceBase memoryPlaceSuffix*
+    ;
+
+
+memoryPlaceBase
     : identifier
-      ASSIGN
-      memoryValue
+    | memoryQualifiedName
+    | parenthesizedMemoryPlace
     ;
 
 
-/**
- * Type argument.
+memoryPlaceSuffix
+    : memoryMemberSuffix
+    | memoryIndexSuffix
+    | memoryDereferenceSuffix
+    ;
+
+
+memoryMemberSuffix
+    : DOT identifier
+    ;
+
+
+memoryIndexSuffix
+    : LBRACKET expressionList RBRACKET
+    ;
+
+
+memoryDereferenceSuffix
+    : STAR
+    ;
+
+
+parenthesizedMemoryPlace
+    : LPAREN memoryPlace RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * 10. MEMORY TYPE ANNOTATION
+ * ============================================================================
+ *
+ * The canonical type grammar remains authoritative.
+ *
+ * This file MUST NOT redefine:
+ *
+ *     referenceType
+ *     pointerType
+ *     lifetimeAnnotation
+ *     generic types
+ *     arrays
+ *     tuples
+ *     quantum types
+ *     hardware/resource types.
  */
-memoryTypeArgument
-    : typeExpression
+memoryTypeAnnotation
+    : COLON typeExpression
     ;
 
 
-/* ============================================================================
- * 11. GENERIC MEMORY OPERATION
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 11. OWNERSHIP QUALIFIERS
+ * ============================================================================
+ *
+ * The lexer already owns LINEAR and AFFINE.
+ *
+ * These are source-level semantic markers.
+ *
+ * They do NOT mean:
+ *
+ *     stack allocation;
+ *     heap allocation;
+ *     reference counting;
+ *     garbage collection;
+ *     physical storage;
+ *     a particular runtime representation.
+ */
+memoryOwnershipQualifier
+    : LINEAR
+    | AFFINE
+    ;
 
-/**
- * Open-world memory operation.
+
+/*
+ * ============================================================================
+ * 12. BORROW
+ * ============================================================================
+ *
+ * Borrow syntax is represented independently from the canonical reference
+ * type syntax.
+ *
+ * Type-level reference syntax remains owned by grammar/types/types.g4.
+ *
+ * These rules represent source operations such as:
+ *
+ *     &value
+ *     &mut value
+ *     &'a value
+ *     &'a mut value
+ *
+ * Semantic borrow checking remains outside the grammar.
+ */
+memoryBorrow
+    : AMPERSAND
+      memoryLifetimePrefix?
+      MUT?
+      memoryPlace
+    ;
+
+
+memoryLifetimePrefix
+    : APOSTROPHE identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. LIFETIME
+ * ============================================================================
+ *
+ * Lifetime names are preserved, not interpreted.
  *
  * Examples:
  *
- *     memory::allocate(...)
- *     memory::deallocate(...)
- *     memory::shared(...)
- *     memory::distributed::migrate(...)
+ *     'a
+ *     'scope
+ *     'region
+ *     'transaction
+ *     'future
  *
- * The parser records the operation path.
- *
- * Semantic analysis determines whether the operation is:
- *
- *     allocation
- *     deallocation
- *     sharing
- *     migration
- *     replication
- *     mapping
- *     reservation
- *     or a future operation.
+ * There is no fixed number of lifetimes.
  */
-memoryOperation
+memoryLifetime
+    : APOSTROPHE identifier
+    ;
+
+
+memoryLifetimeClause
+    : memoryLifetime
+    ;
+
+
+/*
+ * ============================================================================
+ * 14. MEMORY REGION
+ * ============================================================================
+ *
+ * A region is a semantic grouping/lifetime abstraction.
+ *
+ * It is NOT:
+ *
+ *     a physical heap;
+ *     a physical memory bank;
+ *     a NUMA node;
+ *     a page;
+ *     a cache;
+ *     a device.
+ *
+ * The semantic layer determines its realization.
+ */
+memoryRegion
+    : memoryRegionReference
+    ;
+
+
+memoryRegionReference
     : memoryQualifiedName
-      LPAREN
-      memoryArgumentList?
-      RPAREN
     ;
 
 
-/**
- * Generic memory operation statement.
- */
-memoryOperationStatement
-    : memoryOperation
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 12. ALLOCATION
- * ========================================================================== */
-
-/**
- * Allocation operation.
+/*
+ * ============================================================================
+ * 15. MEMORY SPACE
+ * ============================================================================
  *
- * The operation name is intentionally represented structurally rather than
- * as a new lexer keyword.
- */
-memoryAllocation
-    : memoryQualifiedName
-      LPAREN
-      memoryAllocationArguments?
-      RPAREN
-    ;
-
-
-/**
- * Allocation arguments.
- *
- * Typical semantic forms include:
- *
- *     type
- *     count
- *     size
- *     memory space
- *     lifetime
- *     alignment
- *     ownership mode
- *     constraints
- *
- * None of those meanings are fixed by this grammar.
- */
-memoryAllocationArguments
-    : memoryArgumentList
-    ;
-
-
-/**
- * Allocation statement.
- */
-memoryAllocationStatement
-    : memoryAllocation
-      SEMICOLON
-    ;
-
-
-/**
- * Existing Zamani `new` construct integrated with the memory domain.
+ * Memory spaces are semantic names.
  *
  * Examples:
  *
- *     new T
- *     new T(...)
+ *     memory::local
+ *     memory::shared
+ *     memory::device
+ *     memory::persistent
+ *     memory::remote
+ *     memory::distributed
  *
- * This rule does not decide whether `new` means heap allocation, region
- * allocation, arena allocation, device allocation, or another strategy.
+ * The grammar does not reserve these names.
  */
-memoryNewExpression
-    : NEW
-      typeExpression
-      memoryConstructorArguments?
+memorySpace
+    : memoryQualifiedName
     ;
 
 
-/**
- * Constructor arguments for `new`.
- */
-memoryConstructorArguments
-    : LPAREN
-      memoryArgumentList?
-      RPAREN
+memorySpaceClause
+    : memorySpace
     ;
 
 
-/* ============================================================================
- * 13. DEALLOCATION
- * ========================================================================== */
-
-/**
- * Deallocation operation.
+/*
+ * ============================================================================
+ * 16. MEMORY RESOURCE
+ * ============================================================================
+ *
+ * Resource expressions describe semantic resource intent.
+ *
+ * They do not select a physical resource.
  *
  * Examples:
  *
- *     memory::deallocate(value)
- *     memory::release(value)
+ *     memory::capacity
+ *     memory::bandwidth
+ *     memory::latency
+ *     memory::energy
+ *     memory::reliability
  *
- * The semantic layer determines whether explicit deallocation is legal.
+ * The values are interpreted downstream.
  */
-memoryDeallocation
+memoryResource
     : memoryQualifiedName
-      LPAREN
-      memoryPlaceArgumentList
-      RPAREN
     ;
 
 
-/**
- * Place arguments used by deallocation/release operations.
+memoryResourceClause
+    : memoryResource
+    ;
+
+
+/*
+ * ============================================================================
+ * 17. REQUIREMENTS
+ * ============================================================================
+ *
+ * Requirements are mandatory semantic conditions.
+ *
+ * This grammar only captures their source representation.
  */
-memoryPlaceArgumentList
-    : memoryPlace
-      (COMMA memoryPlace)*
+memoryRequirement
+    : REQUIRES memoryRequirementExpressionList
+    ;
+
+
+memoryRequirementExpressionList
+    : expression
+      (COMMA expression)*
       COMMA?
     ;
 
 
-/**
- * Deallocation statement.
- */
-memoryDeallocationStatement
-    : memoryDeallocation
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 14. SHARED MEMORY
- * ========================================================================== */
-
-/**
- * Shared-memory operation foundation.
+/*
+ * ============================================================================
+ * 18. CONSTRAINTS
+ * ============================================================================
  *
- * Examples:
+ * Constraints restrict legal implementation choices.
  *
- *     memory::shared(value)
- *     memory::share(value)
- *     memory::unshare(value)
- */
-memorySharing
-    : memoryQualifiedName
-      LPAREN
-      memoryArgumentList?
-      RPAREN
-    ;
-
-
-/**
- * Shared-memory statement.
- */
-memorySharingStatement
-    : memorySharing
-      SEMICOLON
-    ;
-
-
-/**
- * Shared-memory binding.
- *
- * The binding does not imply a physical coherence implementation.
- */
-memorySharedBinding
-    : memoryOwnershipMode?
-      LET
-      identifier
-      memoryTypeAnnotation?
-      ASSIGN
-      memorySharing
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 15. DISTRIBUTED MEMORY
- * ========================================================================== */
-
-/**
- * Distributed-memory operation foundation.
- *
- * Examples:
- *
- *     memory::distributed(value)
- *     memory::remote(value)
- *     memory::replicate(value)
- *     memory::migrate(value)
- */
-memoryDistribution
-    : memoryQualifiedName
-      LPAREN
-      memoryArgumentList?
-      RPAREN
-    ;
-
-
-/**
- * Distributed-memory statement.
- */
-memoryDistributionStatement
-    : memoryDistribution
-      SEMICOLON
-    ;
-
-
-/**
- * Distributed-memory binding.
- */
-memoryDistributedBinding
-    : memoryOwnershipMode?
-      LET
-      identifier
-      memoryTypeAnnotation?
-      ASSIGN
-      memoryDistribution
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 16. REQUIREMENTS
- * ========================================================================== */
-
-/**
- * Memory requirement.
- *
- * The first component identifies the required semantic property.
- *
- * Examples:
- *
- *     memory::shared
- *     memory::distributed
- *     memory::persistent
- *     memory::address_stable
- */
-memoryRequirement
-    : REQUIRE_MEMORY
-      memoryQualifiedName
-      memoryRequirementArguments?
-      SEMICOLON?
-    ;
-
-
-/**
- * Requirement arguments.
- */
-memoryRequirementArguments
-    : LPAREN
-      memoryArgumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 17. CONSTRAINTS
- * ========================================================================== */
-
-/**
- * Memory constraint.
- *
- * Constraints are represented structurally and interpreted downstream.
+ * A constraint is not equivalent to a preference or hint.
  */
 memoryConstraint
-    : CONSTRAINT_MEMORY
-      memoryConstraintBody
-      SEMICOLON?
+    : memoryConstraintKeyword memoryConstraintExpressionList
     ;
 
 
-/**
- * Constraint body.
+memoryConstraintKeyword
+    : REQUIRES
+    ;
+
+
+memoryConstraintExpressionList
+    : expression
+      (COMMA expression)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 19. PREFERENCES
+ * ============================================================================
  *
- * The grammar intentionally supports:
+ * Preferences describe desired implementation properties.
  *
- *     named properties;
- *     qualified properties;
- *     values;
- *     lists.
- */
-memoryConstraintBody
-    : memoryQualifiedName
-      (ASSIGN memoryValue)?
-      memoryConstraintTail*
-    ;
-
-
-/**
- * Additional constraint fields.
- */
-memoryConstraintTail
-    : COMMA
-      memoryQualifiedName
-      (ASSIGN memoryValue)?
-    ;
-
-
-/* ============================================================================
- * 18. PREFERENCES
- * ========================================================================== */
-
-/**
- * Non-binding memory preference.
+ * They must not change program semantics when ignored.
+ *
+ * `memoryPreference` deliberately uses an identifier-based operator name
+ * rather than introducing a new lexer keyword.
  */
 memoryPreference
-    : PREFER_MEMORY
-      memoryQualifiedName
-      memoryPreferenceBody?
-      SEMICOLON?
+    : memoryPreferenceKeyword memoryPreferenceExpressionList
     ;
 
 
-/**
- * Preference body.
- */
-memoryPreferenceBody
-    : LPAREN
-      memoryArgumentList?
-      RPAREN
+memoryPreferenceKeyword
+    : WITH
     ;
 
 
-/* ============================================================================
- * 19. HINTS
- * ========================================================================== */
+memoryPreferenceExpressionList
+    : expression
+      (COMMA expression)*
+      COMMA?
+    ;
 
-/**
- * Non-binding memory implementation hint.
+
+/*
+ * ============================================================================
+ * 20. HINTS
+ * ============================================================================
+ *
+ * Hints are advisory.
+ *
+ * Ignoring a hint MUST NOT change program semantics.
  */
 memoryHint
-    : HINT_MEMORY
-      memoryQualifiedName
-      memoryHintBody?
-      SEMICOLON?
+    : memoryHintKeyword memoryHintExpressionList
     ;
 
 
-/**
- * Hint body.
- */
-memoryHintBody
-    : LPAREN
-      memoryArgumentList?
-      RPAREN
+memoryHintKeyword
+    : WITH
     ;
 
 
-/* ============================================================================
- * 20. MEMORY POLICY
- * ========================================================================== */
+memoryHintExpressionList
+    : expression
+      (COMMA expression)*
+      COMMA?
+    ;
 
-/**
- * Structured memory policy.
+
+/*
+ * ============================================================================
+ * 21. MEMORY POLICY
+ * ============================================================================
  *
- * The policy remains declarative.
+ * Policy names are open-world qualified names.
  *
- * It does not execute anything.
+ * A policy is a semantic request to downstream compilation/resource systems.
+ *
+ * It does not directly execute a policy.
  */
 memoryPolicy
-    : AT
-      memoryQualifiedName
-      LPAREN
-      memoryArgumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 21. MEMORY RESOURCE DESCRIPTION
- * ========================================================================== */
-
-/**
- * Generic memory resource descriptor.
- *
- * A resource is not the same thing as a physical allocation.
- */
-memoryResource
-    : memoryQualifiedName
-      memoryResourceArguments?
-    ;
-
-
-/**
- * Resource arguments.
- */
-memoryResourceArguments
-    : LPAREN
-      memoryArgumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 22. MEMORY REGION
- * ========================================================================== */
-
-/**
- * Source-level region reference.
- *
- * A region is a semantic abstraction.
- *
- * It is not a physical address range.
- */
-memoryRegion
     : memoryQualifiedName
     ;
 
 
-/**
- * Region selector.
- */
-memoryRegionSelector
-    : AT
-      memoryRegion
+memoryPolicyClause
+    : WITH memoryPolicy
     ;
 
-
-/* ============================================================================
- * 23. MEMORY ADDRESS ABSTRACTION
- * ========================================================================== */
-
-/**
- * Source-level address expression.
- *
- * This is intentionally a semantic address abstraction rather than a numeric
- * physical address.
- */
-memoryAddress
-    : memoryQualifiedName
-    ;
-
-
-/**
- * Address selector.
- *
- * The semantic layer determines whether an address abstraction is meaningful
- * for the selected target.
- */
-memoryAddressSelector
-    : AT
-      memoryAddress
-    ;
-
-
-/* ============================================================================
- * 24. MEMORY EXTENSION POINT
- * ========================================================================== */
-
-/**
- * Open-world memory extension.
- *
- * Any future memory-domain construct can be represented through a qualified
- * operation/value without changing the foundational grammar.
- */
-memoryExtension
-    : memoryQualifiedName
-      memoryExtensionPayload?
-    ;
-
-
-/**
- * Extension payload.
- */
-memoryExtensionPayload
-    : LPAREN
-      memoryArgumentList?
-      RPAREN
-    | LBRACKET
-      memoryArgumentList?
-      RBRACKET
-    ;
-
-
-/* ============================================================================
- * 25. INTERNAL TOKEN-COMPATIBILITY CONTRACT
- * ========================================================================== */
 
 /*
- * These token aliases deliberately have no lexer implementation here.
+ * ============================================================================
+ * 22. MEMORY INTENT
+ * ============================================================================
  *
- * They identify semantic keywords that should eventually be made explicit
- * lexical tokens if and when the language specification decides that their
- * spellings are globally reserved.
+ * This rule provides a stable composition point for constructs that need to
+ * attach multiple independent memory properties.
  *
- * Until then, the memory namespace remains open-world and these concepts can
- * be represented by qualified identifiers.
+ * The order of clauses is deliberately fixed at the grammar boundary to
+ * preserve deterministic parsing.
  *
- * IMPORTANT:
- *
- * ANTLR parser grammars cannot safely invent a token that the canonical lexer
- * does not emit for a literal spelling and expect the existing lexer to
- * produce it.
- *
- * Therefore the production integration must NOT change the lexer merely to
- * make this foundation work.
- *
- * The actual current canonical lexical vocabulary remains the authority.
- *
- * These rules are represented using identifiers at the syntax level below.
+ * Specialized grammars may expose more precise productions but should consume
+ * the same underlying components.
  */
-
-
-/**
- * Memory requirement marker.
- *
- * Canonical source spelling is interpreted semantically from an identifier.
- *
- * A future lexical reservation may replace this with a dedicated token without
- * changing the semantic model.
- */
-REQUIRE_MEMORY
-    : identifier
+memoryIntent
+    : memoryOwnershipQualifier?
+      memoryTypeAnnotation?
+      memoryLifetimeClause?
+      memorySpaceClause?
+      memoryRegionClause?
+      memoryResourceClause*
+      memoryRequirement*
+      memoryConstraint*
+      memoryPreference*
+      memoryHint*
+      memoryPolicyClause?
     ;
 
 
-/**
- * Memory constraint marker.
- */
-CONSTRAINT_MEMORY
-    : identifier
+memoryRegionClause
+    : IN memoryRegion
     ;
 
 
-/**
- * Memory preference marker.
+/*
+ * ============================================================================
+ * 23. MEMORY RESOURCE SPECIFICATION
+ * ============================================================================
+ *
+ * This is the generic source-level representation for a memory resource
+ * property.
+ *
+ * It intentionally accepts arbitrary expressions.
  */
-PREFER_MEMORY
-    : identifier
+memoryResourceSpecification
+    : memoryResourceClause memoryResourceValue?
     ;
 
 
-/**
- * Memory hint marker.
- */
-HINT_MEMORY
-    : identifier
+memoryResourceValue
+    : ASSIGN expression
     ;
 
 
-/* ============================================================================
- * 26. INTEGRATION CONTRACT
- * ========================================================================== */
-
 /*
- * IMPORTANT ANTLR RULE:
+ * ============================================================================
+ * 24. MEMORY QUALIFICATION
+ * ============================================================================
  *
- * Parser rule names must begin with lowercase characters.
+ * Generic qualification is intentionally open.
  *
- * The four compatibility rules above are intentionally NOT lexer rules in the
- * conceptual architecture. They exist only to describe parser-level marker
- * structure.
+ * This permits future memory technologies to be represented without changing
+ * this foundational grammar.
  *
- * If the canonical grammar assembler imports this parser grammar, these rules
- * must be consumed through parser composition rather than treated as tokens.
+ * Examples:
  *
- * Therefore host grammars should prefer the explicit memory namespace forms:
- *
- *     memory::...
- *
- * and specialized memory files should import this foundation.
- */
-
-
-/* ============================================================================
- * 27. SPECIALIZED-GRAMMAR CONTRACT
- * ========================================================================== */
-
-/*
- * ownership.g4
- *
- * Imports:
- *
- *     Memory
- *
- * Consumes:
- *
- *     memoryOwnershipQualifier
- *     memoryOwnershipMode
- *     memoryOwnedBinding
- *
- * Owns:
- *
- *     ownership-specific source constructs.
- *
- *
- * borrowing.g4
- *
- * Imports:
- *
- *     Memory
- *
- * Consumes:
- *
- *     memoryBorrow
- *     memoryMutableBorrow
- *     memoryBorrowExpression
- *     memoryPlace
- *
- * Owns:
- *
- *     borrow-specific source constructs.
- *
- *
- * lifetimes.g4
- *
- * Imports:
- *
- *     Memory
- *
- * Consumes:
- *
- *     memoryLifetime
- *     memoryLifetimeReference
- *     memoryLifetimeRelation
- *
- * Owns:
- *
- *     lifetime declaration/relationship syntax.
- *
- *
- * allocation.g4
- *
- * Imports:
- *
- *     Memory
- *
- * Consumes:
- *
- *     memoryAllocation
- *     memoryNewExpression
- *     memoryAllocationArguments
- *
- * Owns:
- *
- *     allocation-specific source syntax.
- *
- *
- * deallocation.g4
- *
- * Imports:
- *
- *     Memory
- *
- * Consumes:
- *
- *     memoryDeallocation
- *     memoryPlaceArgumentList
- *
- * Owns:
- *
- *     explicit-release/deallocation syntax.
- *
- *
- * shared-memory.g4
- *
- * Imports:
- *
- *     Memory
- *
- * Consumes:
- *
- *     memorySharing
- *     memorySharedBinding
- *
- * Owns:
- *
- *     shared-memory-specific syntax.
- *
- *
- * distributed-memory.g4
- *
- * Imports:
- *
- *     Memory
- *
- * Consumes:
- *
- *     memoryDistribution
- *     memoryDistributedBinding
- *
- * Owns:
- *
- *     distributed-memory-specific syntax.
- *
- *
- * memory-constraints.g4
- *
- * Imports:
- *
- *     Memory
- *
- * Consumes:
- *
- *     memoryRequirement
- *     memoryConstraint
- *     memoryPreference
- *     memoryHint
- *     memoryResource
- *
- * Owns:
- *
- *     memory resource/constraint declaration syntax.
- */
-
-
-/* ============================================================================
- * 28. IR INTEGRATION
- * ========================================================================== */
-
-/*
- * This grammar MUST NOT construct IR.
- *
- * The intended flow is:
- *
- *     Memory parse tree
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic memory model
- *          |
- *          +------------------------+
- *          |                        |
- *          v                        v
- *     classical semantics     resource semantics
- *          |                        |
- *          +------------+-----------+
- *                       |
- *                       v
- *                 canonical IR
- *
- * For quantum programs:
- *
- *     memory syntax
- *          |
- *          v
- *     AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     quantum::ir
- *
- * Memory.g4 MUST NOT define:
- *
- *     QubitId
- *     PhysicalQubitId
- *     QuantumGate
- *     QuantumCircuit
- *     GateKind
- *     HardwareMemoryId
- *     DeviceMemoryId
- *
- * and MUST NOT depend on:
- *
- *     quantum::ir
- *     QEC
- *     ZQN
- *     routing
- *     scheduling
- *     hardware discovery
- *     resilience.
- */
-
-
-/* ============================================================================
- * 29. COMPILER INTEGRATION
- * ========================================================================== */
-
-/*
- * The compiler consumes this grammar through the normal parser pipeline.
- *
- * The compiler may perform:
- *
- *     syntax validation
- *     AST construction
- *     structural validation
- *     name resolution
- *     type resolution
- *     ownership analysis
- *     borrow checking
- *     lifetime analysis
- *     alias analysis
- *     resource analysis
- *     capability analysis
- *     target-independent lowering
- *
- * None of these operations occur in this grammar.
- *
- * Compiler policies may impose resource limits for safety.
- *
- * Such limits MUST be:
- *
- *     explicit;
- *     configurable;
- *     observable;
- *     independent from language grammar semantics;
- *     independent from hardware identities.
- */
-
-
-/* ============================================================================
- * 30. RUNTIME INTEGRATION
- * ========================================================================== */
-
-/*
- * Runtime does NOT depend directly on Memory.g4.
- *
- * Runtime consumes semantic/compiled representations produced downstream.
- *
- * Therefore:
- *
- *     runtime -> Memory.g4
- *
- * is forbidden.
- *
- * Correct:
- *
- *     Memory.g4
- *          |
- *          v
- *     AST
- *          |
- *          v
- *     semantic memory model
- *          |
- *          v
- *     compiler IR
- *          |
- *          v
- *     runtime
- */
-
-
-/* ============================================================================
- * 31. TOOLING INTEGRATION
- * ========================================================================== */
-
-/*
- * Tooling may consume parse trees for:
- *
- *     syntax highlighting;
- *     formatting;
- *     source indexing;
- *     documentation;
- *     diagnostics;
- *     IDE completion;
- *     refactoring.
- *
- * Tooling MUST NOT infer physical memory behavior from syntax alone.
- *
- * For example:
- *
+ *     memory::local
  *     memory::shared
- *
- * must not cause an IDE to claim:
- *
- *     "This uses shared RAM."
- *
- * unless semantic information has resolved that meaning.
+ *     memory::persistent
+ *     memory::device::global
+ *     memory::distributed::replicated
+ *     memory::future::memory::domain
  */
+memoryQualification
+    : memoryQualifiedName
+    ;
 
-
-/* ============================================================================
- * 32. SECURITY CONTRACT
- * ========================================================================== */
 
 /*
- * Memory syntax is declarative.
- *
- * The parser MUST NOT:
- *
- *     - allocate;
- *     - free;
- *     - map;
- *     - unmap;
- *     - inspect addresses;
- *     - inspect process memory;
- *     - inspect devices;
- *     - access operating-system APIs;
- *     - access environment variables;
- *     - execute external programs;
- *     - perform FFI;
- *     - access networks.
- *
- * All such behavior belongs to later explicitly authorized compiler/runtime
- * components.
- */
-
-
-/* ============================================================================
- * 33. SCALABILITY CONTRACT
- * ========================================================================== */
-
-/*
- * No production grammar rule in this file imposes a machine-size bound.
- *
- * Repetition is used for:
- *
- *     qualified names;
- *     argument lists;
- *     constraint fields;
- *     place projections;
- *     lifetime relations.
- *
- * There are no finite grammar constants representing:
- *
- *     number of memory objects;
- *     number of regions;
- *     number of allocations;
- *     number of references;
- *     number of distributed locations;
- *     number of memory spaces.
- *
- * Actual parser stack/resource exhaustion is an implementation/resource
- * concern, not a source-language limit.
- */
-
-
-/* ============================================================================
- * 34. DETERMINISM CONTRACT
- * ========================================================================== */
-
-/*
- * The grammar contains:
- *
- *     no target-specific actions;
- *     no semantic predicates;
- *     no Rust code;
- *     no I/O;
- *     no environment-dependent behavior;
- *     no hardware discovery;
- *     no generated identifiers.
- *
- * Parsing therefore remains deterministic for a fixed lexer vocabulary and
- * grammar version.
- */
-
-
-/* ============================================================================
- * 35. COMPATIBILITY CONTRACT
- * ========================================================================== */
-
-/*
- * Backward-compatible source constructs must continue to parse unless an
- * explicit language-version policy changes their meaning.
- *
- * Existing:
- *
- *     linear
- *     affine
- *     mut
- *     &
- *     &mut
- *     lifetime syntax
- *     new
- *
- * remain compatible with the existing type/lexer architecture.
- *
- * This file does not redefine the existing reference-type syntax.
- */
-
-
-/* ============================================================================
- * 36. HARD-CODING AUDIT
- * ========================================================================== */
-
-/*
- * AUDIT RESULT
- *
- * Fixed qubit count:
- *     NONE
- *
- * Fixed CPU count:
- *     NONE
- *
- * Fixed core count:
- *     NONE
- *
- * Fixed thread count:
- *     NONE
- *
- * Fixed memory capacity:
- *     NONE
- *
- * Fixed address width:
- *     NONE
- *
- * Fixed pointer width:
- *     NONE
- *
- * Fixed heap size:
- *     NONE
- *
- * Fixed stack size:
- *     NONE
- *
- * Fixed memory-bank count:
- *     NONE
- *
- * Fixed NUMA-node count:
- *     NONE
- *
- * Fixed device-memory count:
- *     NONE
- *
- * Fixed allocation count:
- *     NONE
- *
- * Fixed lifetime count:
- *     NONE
- *
- * Fixed reference count:
- *     NONE
- *
- * Fixed distributed-node count:
- *     NONE
- *
- * Fixed topology:
- *     NONE
- *
- * Fixed device identifier:
- *     NONE
- *
- * Fixed vendor:
- *     NONE
- *
- * Fixed backend:
- *     NONE
- *
- * Fixed address:
- *     NONE
- *
- * Fixed machine width:
- *     NONE
- *
  * ============================================================================
- * 37. COMPLETION CRITERIA
+ * 25. MEMORY OPERATION EXTENSION
  * ============================================================================
  *
- * Memory.g4 is complete when:
+ * Specialized domains can recognize their own semantic operations while
+ * retaining the same qualified-name and argument structure.
  *
- * [ ] It compiles against the canonical ZamaniLexer vocabulary.
+ * Example:
  *
- * [ ] It imports only the canonical Types parser dependency required for
- *     source-level type expressions.
+ *     memory::vendor::technology::operation(...)
  *
- * [ ] It introduces no lexer rules.
- *
- * [ ] It introduces no Rust actions.
- *
- * [ ] It introduces no semantic predicates.
- *
- * [ ] It uses no unsafe implementation.
- *
- * [ ] It does not define an ownership semantic model.
- *
- * [ ] It does not define a second reference type model.
- *
- * [ ] It does not define a second lifetime model.
- *
- * [ ] It does not allocate memory.
- *
- * [ ] It does not deallocate memory.
- *
- * [ ] It does not inspect hardware.
- *
- * [ ] It does not select a target.
- *
- * [ ] It does not depend on quantum::ir.
- *
- * [ ] It does not depend on QEC.
- *
- * [ ] It does not depend on ZQN.
- *
- * [ ] It does not depend on scheduling.
- *
- * [ ] It does not depend on routing.
- *
- * [ ] It does not depend on optimization.
- *
- * [ ] It contains no machine-size constants.
- *
- * [ ] It contains no physical address assumptions.
- *
- * [ ] It supports arbitrarily qualified memory-domain names.
- *
- * [ ] It preserves source-level lifetime information.
- *
- * [ ] It preserves ownership/borrow intent.
- *
- * [ ] It supports memory requirements.
- *
- * [ ] It supports memory constraints.
- *
- * [ ] It supports memory preferences.
- *
- * [ ] It supports memory hints.
- *
- * [ ] It supports allocation/deallocation syntax without prescribing an
- *     allocator.
- *
- * [ ] It supports shared-memory syntax without prescribing coherence.
- *
- * [ ] It supports distributed-memory syntax without prescribing topology.
- *
- * [ ] It provides stable extension points for future memory technologies.
- *
- * [ ] Specialized memory grammars can depend on this file without modifying
- *     its foundational rules.
- *
- * [ ] The host statement/declaration grammar can integrate the memory entry
- *     points without creating circular dependencies.
- *
- * ============================================================================
+ * No new lexer token is necessary.
  */
+memoryExtensionOperation
+    : memoryQualifiedName
+      LPAREN memoryArgumentList? RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * 26. IDENTIFIER BRIDGE
+ * ============================================================================
+ *
+ * The canonical lexer/type/expression grammars use IDENT.
+ *
+ * This grammar intentionally does not introduce IDENTIFIER as an alias.
+ *
+ * This prevents the previous mismatch between memory/allocation grammar and
+ * the repository's canonical lexical contract.
+ */
+identifier
+    : IDENT
+    ;
+
+
+/*
+ * ============================================================================
+ * 27. MEMORY EXPRESSION LIST
+ * ============================================================================
+ *
+ * Used by composed grammars that need memory-specific expression sequences.
+ *
+ * No fixed cardinality is imposed.
+ */
+memoryExpressionList
+    : expression
+      (COMMA expression)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 28. MEMORY TARGET
+ * ============================================================================
+ *
+ * A memory target is a semantic source-level target.
+ *
+ * It is NOT a physical address or hardware identifier.
+ */
+memoryTarget
+    : memoryPlace
+    | memorySpace
+    | memoryRegion
+    ;
+
+
+/*
+ * ============================================================================
+ * 29. MEMORY BOUND
+ * ============================================================================
+ *
+ * A memory bound is represented as a general expression.
+ *
+ * This permits:
+ *
+ *     compile-time constants;
+ *     symbolic quantities;
+ *     generic parameters;
+ *     runtime values;
+ *     resource-derived values.
+ *
+ * No numeric maximum is encoded.
+ */
+memoryBound
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 30. MEMORY RANGE
+ * ============================================================================
+ *
+ * Memory ranges remain semantic expressions.
+ *
+ * This rule does not assume a particular address representation.
+ */
+memoryRange
+    : memoryBound
+      DOT_DOT
+      memoryBound
+    | memoryBound
+      DOT_DOT_EQ
+      memoryBound
+    ;
+
+
+/*
+ * ============================================================================
+ * 31. MEMORY EXTENSION METADATA
+ * ============================================================================
+ *
+ * Future domains may attach arbitrary semantic metadata through a qualified
+ * name and expression payload.
+ *
+ * The grammar remains domain-neutral.
+ */
+memoryExtensionMetadata
+    : AT memoryQualifiedName
+      (LPAREN memoryExpressionList? RPAREN)?
+    ;
+
+
+/*
+ * ============================================================================
+ * 32. MEMORY REQUIREMENT / CONSTRAINT / PREFERENCE / HINT BUNDLE
+ * ============================================================================
+ *
+ * This rule keeps the four concepts structurally separate.
+ */
+memoryPolicyBundle
+    : memoryRequirement*
+      memoryConstraint*
+      memoryPreference*
+      memoryHint*
+      memoryPolicyClause?
+    ;
+
+
+/*
+ * ============================================================================
+ * 33. COMPOSABLE MEMORY SPECIFICATION
+ * ============================================================================
+ *
+ * This is the preferred integration rule for declarations, allocations,
+ * shared-memory constructs, distributed-memory constructs, accelerator
+ * memory, and future memory domains.
+ */
+memorySpecification
+    : memoryIntent
+      memoryPolicyBundle
+    ;
+
+
+/*
+ * ============================================================================
+ * 34. SEMANTIC EXTENSION POINT
+ * ============================================================================
+ *
+ * Specialized grammars can consume:
+ *
+ *     memoryConstruct
+ *     memoryOperation
+ *     memoryPlace
+ *     memorySpace
+ *     memoryRegion
+ *     memoryBorrow
+ *     memoryLifetime
+ *     memorySpecification
+ *
+ * without introducing a parallel memory language.
+ */
+memoryDomainExtension
+    : memoryQualifiedName
+      (LPAREN memoryArgumentList? RPAREN)?
+    ;
