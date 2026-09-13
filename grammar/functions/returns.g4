@@ -1,149 +1,104 @@
 /*
  * ============================================================================
- * Zamani Programming Language — Function Return Grammar
+ * Zamani Universal Programming Language
  * ============================================================================
  *
  * File:
  *     grammar/functions/returns.g4
  *
- * Grammar role:
- *     Reusable parser delegate defining the concrete syntax of function
- *     return types.
+ * Grammar:
+ *     Returns
  *
- * Language:
- *     Zamani
+ * Role:
+ *     Canonical reusable parser grammar for callable return-type clauses.
  *
- * Specification authority:
- *     grammar/spec/syntax.md
- *
- * Minimum implementation baseline:
+ * Implementation baseline:
  *     Rust 1.97 / Rust 1.97.1
  *
  * Safety:
- *     The Zamani compiler implementation MUST use safe Rust only.
- *     Rust `unsafe` is not required by this grammar and must not be used
- *     to implement parsing, AST construction, semantic analysis, or
- *     lowering.
+ *     Grammar integration MUST remain compatible with the repository's
+ *     safe-Rust policy. No unsafe Rust is required or permitted.
  *
  * ============================================================================
- *
- * ARCHITECTURAL POSITION
+ * PURPOSE
  * ============================================================================
  *
- *     source
- *       |
- *       v
- *     Zamani lexer
- *       |
- *       v
- *     root parser
- *       |
- *       +--> functions.g4
- *              |
- *              +--> parameters.g4
- *              |
- *              +--> returns.g4  <--- THIS FILE
- *              |
- *              +--> generics.g4
- *              |
- *              +--> constraints.g4
- *              |
- *              v
- *           frontend AST
- *              |
- *              v
- *           semantic/type/effect/resource analysis
- *              |
- *              v
- *           canonical semantic IR
- *              |
- *              +--> classical IR
- *              +--> quantum::ir
- *              +--> hardware/HDL IR
- *              +--> distributed/accelerator IR
- *              +--> future IR domains
- *              |
- *              v
- *           optimization / scheduling / routing / resilience
- *              |
- *              v
- *           target realization
+ * This file owns the concrete syntax of a callable return-type attachment:
  *
- * ============================================================================
+ *     -> TypeExpression
  *
- * OWNERSHIP
- * ============================================================================
+ * It is deliberately a small parser delegate.
  *
- * This file owns ONLY the concrete syntax of a function's optional return
- * type marker.
+ * Example:
  *
- * Canonical form:
+ *     fn add(a: Int, b: Int) -> Int {
+ *         a + b
+ *     }
  *
- *     ReturnType ::= "->" TypeExpression ;
- *
- * Examples:
- *
- *     fn compute() -> Int { ... }
- *
- *     fn measure() -> Result { ... }
- *
- *     fn transform<T>(value: T) -> T { ... }
- *
- *     fn quantum_operation() -> QuantumState { ... }
- *
- * A function without a return type remains valid:
- *
- *     fn compute() {
+ *     fn measure(q: Qubit) -> Measurement {
  *         ...
  *     }
  *
+ *     fn transform<T>(value: T) -> T {
+ *         ...
+ *     }
+ *
+ *     fn build() {
+ *         ...
+ *     }
+ *
+ * The final example has no return clause. Absence of a return clause is
+ * handled by the surrounding callable declaration.
+ *
+ * ============================================================================
+ * OWNERSHIP
  * ============================================================================
  *
- * THIS FILE DOES NOT OWN
- * ============================================================================
+ * THIS FILE OWNS:
  *
- * This grammar does NOT own:
+ *     - functionReturnClause;
+ *     - the syntactic return-type attachment marker `->`;
+ *     - attachment of exactly one canonical typeExpression to that marker.
  *
- *     - the `->` token;
- *     - lexical analysis;
+ * THIS FILE DOES NOT OWN:
+ *
+ *     - lexer tokens;
  *     - identifiers;
- *     - TypeExpression;
- *     - primitive types;
- *     - generic type syntax;
+ *     - type expressions;
  *     - function declarations;
- *     - function parameters;
+ *     - function names;
+ *     - parameters;
+ *     - generic parameters;
+ *     - where clauses;
+ *     - effects;
+ *     - contracts;
  *     - function bodies;
  *     - return statements;
- *     - type inference;
+ *     - expression syntax;
  *     - type checking;
- *     - ABI rules;
+ *     - type inference;
+ *     - overload resolution;
+ *     - generic substitution;
+ *     - ABI selection;
  *     - calling conventions;
  *     - register allocation;
- *     - machine return registers;
- *     - stack layout;
  *     - memory layout;
- *     - CPU architecture;
- *     - GPU architecture;
- *     - QPU architecture;
- *     - hardware return mechanisms;
- *     - quantum measurement semantics;
- *     - quantum state serialization;
- *     - runtime result transport;
- *     - optimization;
+ *     - resource allocation;
+ *     - hardware selection;
+ *     - quantum allocation;
+ *     - physical qubit assignment;
+ *     - routing;
  *     - scheduling;
- *     - lowering;
- *     - execution.
- *
- * In particular, this file MUST NOT encode a fixed number of return values,
- * fixed machine widths, fixed registers, fixed ABI conventions, or
- * target-specific result representations.
+ *     - optimization;
+ *     - QEC;
+ *     - ZQN;
+ *     - runtime execution.
  *
  * ============================================================================
- *
- * CANONICAL SPECIFICATION
+ * CANONICAL LANGUAGE CONTRACT
  * ============================================================================
  *
- * The canonical language specification defines:
+ * The canonical syntax specification defines:
  *
  *     FunctionDeclaration ::=
  *         ["async"]
@@ -155,661 +110,1002 @@
  *         [WhereClause]
  *         BlockExpression ;
  *
- * Therefore this delegate owns only:
+ * Therefore the return clause is:
  *
- *     returnType
+ *     ReturnClause ::= "->" TypeExpression ;
  *
- * and leaves its optional presence to the function declaration/signature that
- * consumes it.
+ * This file implements that reusable syntactic component.
  *
- * ============================================================================
+ * The return clause is OPTIONAL at the function-declaration level, but the
+ * rule itself represents the complete clause and therefore always contains
+ * both:
  *
- * DESIGN PRINCIPLE
- * ============================================================================
+ *     THIN_ARROW
+ *     typeExpression
  *
- * A return type is a SOURCE-LEVEL TYPE.
- *
- * It is NOT a physical machine result.
- *
- * For example:
- *
- *     fn compute() -> Result { ... }
- *
- * does not imply:
- *
- *     - a particular CPU register;
- *     - a particular calling convention;
- *     - a particular memory representation;
- *     - a particular device;
- *     - a particular quantum backend;
- *     - a particular number of classical values;
- *     - a particular hardware result channel.
- *
- * Those decisions belong downstream.
+ * The surrounding function grammar decides whether the clause is present.
  *
  * ============================================================================
- *
- * POCO-REAF
+ * SEMANTIC BOUNDARY
  * ============================================================================
  *
- * Return syntax participates in:
+ * Parsing establishes only:
  *
- *     Program Once
- *     Compile Once
- *     Run Everywhere
- *     Anywhere
- *     Forever
+ *     `-> TypeExpression`
  *
- * A return type therefore describes the semantic result contract of a
- * computation, not the physical mechanism used to transport that result.
+ * Semantic analysis determines:
  *
- * The same source-level return type must be capable of being lowered to:
+ *     - whether the return type exists;
+ *     - whether the return type is well-formed;
+ *     - whether it is resolvable;
+ *     - whether generic parameters are valid;
+ *     - whether the body returns compatible values;
+ *     - whether every control-flow path satisfies the return contract;
+ *     - whether `void`/unit/never semantics apply;
+ *     - whether an inferred return type is permitted when the clause is absent;
+ *     - whether the function is recursive;
+ *     - whether async return semantics are valid;
+ *     - whether generator return semantics are valid;
+ *     - whether effect/capability constraints are satisfied;
+ *     - whether a quantum return type is semantically legal;
+ *     - whether a hardware/accelerator return type is supported;
+ *     - whether the return type is ABI-compatible with an external function;
+ *     - whether the return type can be lowered to a target.
  *
- *     - embedded systems;
- *     - CPUs;
- *     - multicore CPUs;
- *     - GPUs;
- *     - FPGAs;
- *     - ASICs;
- *     - accelerators;
- *     - quantum systems;
- *     - simulators;
- *     - distributed systems;
- *     - cloud execution;
- *     - future computational substrates.
- *
- * ============================================================================
- *
- * SCALABILITY
- * ============================================================================
- *
- * There is intentionally NO grammar-level finite limit on:
- *
- *     - type-expression complexity;
- *     - generic nesting;
- *     - type composition;
- *     - semantic type size;
- *     - number of function declarations;
- *     - number of functions in a program.
- *
- * Resource limitations are not grammar limitations.
- *
- * Any actual implementation/resource restriction belongs to the appropriate
- * compiler, semantic-analysis, resource-management, or execution layer.
+ * None of those semantic decisions belong in this grammar.
  *
  * ============================================================================
- *
- * IMPORTANT DISTINCTION
- * ============================================================================
- *
- * This grammar permits a syntactically valid type expression.
- *
- * It does NOT guarantee that the type:
- *
- *     - exists;
- *     - is visible;
- *     - satisfies generic constraints;
- *     - is constructible;
- *     - is supported by a target;
- *     - is representable by a selected backend;
- *     - satisfies resource requirements;
- *     - is legal for a particular ABI;
- *     - is legal for a particular execution environment.
- *
- * Those are semantic or target-realization questions.
- *
- * ============================================================================
- *
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Quantum return types are intentionally not special-cased here.
- *
- * If the type system defines a valid quantum type, it may occur as the
- * TypeExpression after `->`.
- *
- * For example, subject to the canonical quantum type system:
- *
- *     fn prepare() -> QuantumState { ... }
- *
- *     fn execute() -> MeasurementResult { ... }
- *
- *     fn transform(q: Qubit) -> Qubit { ... }
- *
- * The grammar does NOT determine whether such values correspond to:
- *
- *     - logical qubits;
- *     - physical qubits;
- *     - classical measurement data;
- *     - simulator objects;
- *     - encoded quantum states;
- *     - provider-specific representations.
- *
- * That distinction belongs to semantic analysis and the canonical IR.
- *
- * `quantum::ir` remains the canonical quantum semantic boundary.
- *
- * ============================================================================
- *
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware-oriented types may be used as return types only when defined by
- * the canonical type system.
- *
- * This file does not introduce:
- *
- *     CPUResult
- *     GPUResult
- *     FPGAResult
- *     ASICResult
- *     QPUResult
- *     DeviceResult
- *
- * or any equivalent provider-specific grammar construct.
- *
- * Hardware realization belongs downstream.
- *
- * ============================================================================
- *
- * DISTRIBUTED / ASYNC INTEGRATION
- * ============================================================================
- *
- * `async` is owned by the function declaration grammar, not this file.
- *
- * An asynchronous function may consume this return-type rule:
- *
- *     async fn compute() -> Result {
- *         ...
- *     }
- *
- * Whether the semantic result is represented as a future, task, promise,
- * distributed value, stream, actor message, or another execution abstraction
- * is determined outside this grammar.
- *
- * ============================================================================
- *
- * FUNCTION-TYPE INTEGRATION
- * ============================================================================
- *
- * This file defines return syntax for DECLARATIONS/SIGNATURES:
- *
- *     fn name(...) -> Type
- *
- * Function-type grammar may independently define syntax for a function type,
- * for example:
- *
- *     (A, B) -> C
- *
- * That is a different syntactic owner.
- *
- * `returns.g4` MUST NOT duplicate or redefine function-type syntax.
- *
- * The shared `THIN_ARROW` lexical token remains owned by the lexer.
- *
- * ============================================================================
- *
- * ERROR HANDLING
- * ============================================================================
- *
- * The parser should reject malformed return syntax deterministically.
- *
- * Examples of malformed syntax include:
- *
- *     fn f() -> { }
- *     fn f() -> ; 
- *     fn f() -> ) { }
- *
- * The grammar must not silently reinterpret malformed return types.
- *
- * Diagnostic wording, source spans, error codes, recovery policy, and
- * user-facing diagnostic rendering belong to the diagnostic/error subsystem.
- *
- * ============================================================================
- *
- * NO TRAILING RETURN SYNTAX
- * ============================================================================
- *
- * The canonical syntax contains exactly one optional return-type clause:
- *
- *     -> TypeExpression
- *
- * This file therefore does NOT add:
- *
- *     -> Type1, Type2
- *     -> (Type1, Type2)
- *     returns Type
- *     : Type
- *
- * unless a future language specification explicitly standardizes such syntax.
- *
- * Future multi-result semantics can be introduced through the type system,
- * for example a tuple/result type, without changing this grammar.
- *
- * ============================================================================
- *
  * AST CONTRACT
  * ============================================================================
  *
- * The parser must preserve whether a return type was syntactically supplied.
+ * The frontend AST should preserve the return clause structurally.
  *
- * The frontend AST should represent:
+ * Conceptually:
  *
- *     no return annotation
+ *     ReturnClause {
+ *         span,
+ *         arrow_span,
+ *         type
+ *     }
  *
- * separately from:
+ * The exact Rust AST type is owned by the frontend/AST layer.
  *
- *     explicit return annotation
+ * This grammar MUST NOT define or duplicate that Rust representation.
  *
- * where that distinction is semantically relevant.
+ * The AST should retain source spans so diagnostics can identify:
  *
- * The AST should contain the parsed TypeExpression and its source span.
- *
- * This grammar does not define the AST data structure.
- *
- * ============================================================================
- *
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis is responsible for determining:
- *
- *     - whether the referenced type exists;
- *     - whether it is well formed;
- *     - whether generic parameters are valid;
- *     - whether bounds are satisfied;
- *     - whether inferred return values match the declared type;
- *     - whether control-flow paths return compatible values;
- *     - whether `void`/unit semantics are valid;
- *     - whether quantum return semantics are valid;
- *     - whether hardware/resource constraints are satisfiable;
- *     - whether the type is supported by a selected compilation target.
- *
- * The grammar performs none of these checks.
+ *     - the `->` marker;
+ *     - the return type;
+ *     - the complete return clause.
  *
  * ============================================================================
- *
- * IR CONTRACT
+ * TYPE SYSTEM CONTRACT
  * ============================================================================
  *
- * This grammar must not construct canonical IR.
+ * `typeExpression` is supplied by the canonical type grammar.
  *
- * The frontend converts the parsed return type into the language's canonical
- * AST/semantic representation.
+ * This file MUST NOT redefine:
  *
- * Semantic analysis then lowers that representation into the appropriate IR.
+ *     typeExpression
+ *     primitiveType
+ *     compositeType
+ *     genericType
+ *     functionType
+ *     quantumType
+ *     hardwareType
+ *     resourceType
+ *     referenceType
+ *     typePath
  *
- * For quantum computations:
+ * This prevents a second, incompatible type system from emerging inside
+ * function grammar.
  *
- *     source return syntax
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic/type analysis
- *          |
- *          v
- *     quantum semantic representation
- *          |
- *          v
- *     quantum::ir
+ * Any supported type expression may therefore become a return type when the
+ * type system and language version permit it.
  *
- * There must be no:
+ * This permits future and cross-domain types such as:
  *
- *     grammar -> quantum::ir -> grammar
+ *     Int
+ *     Result<Value, Error>
+ *     Vec<T>
+ *     Tensor<T, N>
+ *     Qubit
+ *     QuantumState<T>
+ *     Circuit<T>
+ *     HardwareBuffer<T>
+ *     Stream<T>
+ *     Future<T>
+ *     DistributedValue<T>
  *
- * dependency.
- *
- * ============================================================================
- *
- * COMPILER CONTRACT
- * ============================================================================
- *
- * Compilation stages downstream may use the semantic return type for:
- *
- *     - type checking;
- *     - ABI selection;
- *     - calling convention selection;
- *     - result lowering;
- *     - ownership analysis;
- *     - effect analysis;
- *     - resource analysis;
- *     - optimization;
- *     - code generation;
- *     - target lowering.
- *
- * None of those decisions belong in this file.
+ * without modifying this grammar.
  *
  * ============================================================================
- *
- * RUNTIME CONTRACT
+ * POCO-REAF
  * ============================================================================
  *
- * Runtime behavior is determined by the lowered program and execution model.
+ * A return type describes the semantic result of a computation.
  *
- * This grammar does not prescribe:
+ * It MUST NOT describe how that result is physically represented.
  *
- *     - stack return;
- *     - register return;
- *     - heap return;
- *     - message return;
- *     - network return;
- *     - quantum measurement transport;
- *     - device result transport.
+ * Therefore this grammar MUST NOT encode:
  *
- * ============================================================================
+ *     CPU registers
+ *     GPU registers
+ *     SIMD width
+ *     memory addresses
+ *     memory capacity
+ *     device identifiers
+ *     QPU identifiers
+ *     physical qubits
+ *     quantum topology
+ *     FPGA resources
+ *     ASIC resources
+ *     node identifiers
+ *     network locations
+ *     ABI-specific register classes
+ *     calling-convention-specific locations
  *
- * TOOLING CONTRACT
- * ============================================================================
+ * For example:
  *
- * Tools may use this grammar delegate for:
+ *     -> Qubit
  *
- *     - syntax highlighting;
- *     - parsing;
- *     - AST indexing;
- *     - signature extraction;
- *     - documentation generation;
- *     - IDE navigation;
- *     - refactoring;
- *     - source formatting.
+ * expresses a source-level type.
  *
- * Tooling must use the same canonical parser/token vocabulary and must not
- * create an incompatible return-type grammar.
+ * It does NOT mean:
  *
- * ============================================================================
+ *     -> physical qubit 0
  *
- * COMPATIBILITY CONTRACT
- * ============================================================================
+ * and:
  *
- * Canonical syntax:
+ *     -> Buffer<T>
  *
- *     -> TypeExpression
+ * does not specify a particular memory device or capacity.
  *
- * remains the sole return annotation syntax defined here.
- *
- * Existing parser implementations that currently define:
- *
- *     returnType
- *         : THIN_ARROW typeExpression
- *         ;
- *
- * should migrate to this reusable delegate.
- *
- * The migration must preserve the same accepted source syntax.
+ * Physical realization belongs downstream.
  *
  * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
  *
- * INTEGRATION CONTRACT
+ * This grammar contains NO fixed machine/resource limits.
+ *
+ * It MUST NOT contain:
+ *
+ *     MAX_RETURN_TYPES
+ *     MAX_RETURN_PARAMETERS
+ *     MAX_NESTING
+ *     MAX_TYPE_DEPTH
+ *     MAX_QUANTUM_RETURN_SIZE
+ *     MAX_TENSOR_RANK
+ *     MAX_HARDWARE_WIDTH
+ *     MAX_MEMORY
+ *     MAX_QUBITS
+ *
+ * Recursive and nested type expressions are governed by the canonical type
+ * grammar and by explicit compiler/resource policies rather than constants
+ * embedded in this file.
+ *
+ * Example:
+ *
+ *     -> Result<Vec<Matrix<T>>, Error>
+ *
+ * must be syntactically representable without this grammar imposing an
+ * artificial structural ceiling.
+ *
+ * If an implementation has a parser-stack, memory, time, or recursion safety
+ * limit, that is an implementation/resource policy and MUST NOT be encoded as
+ * a language-level grammar limit.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * This grammar consumes tokens supplied by the canonical lexer vocabulary:
+ *
+ *     grammar/lexer/tokens.g4
+ *
+ * In particular:
+ *
+ *     THIN_ARROW
+ *
+ * represents:
+ *
+ *     ->
+ *
+ * This file MUST NOT declare lexer rules.
+ *
+ * The lexer owns token spelling and lexical recognition.
+ *
+ * ============================================================================
+ * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
  * This file is a parser delegate.
  *
- * It expects the importing/root parser to provide:
+ * The canonical composed parser imports this grammar and supplies the
+ * `typeExpression` rule through the canonical Types grammar.
  *
- *     typeExpression
- *
- * and the lexer vocabulary to provide:
- *
- *     THIN_ARROW
- *
- * It intentionally does not redefine either symbol.
- *
- * A consuming function grammar should import this delegate and use:
- *
- *     returnType?
- *
- * after its parameter list.
- *
- * Example:
- *
- *     functionDeclaration
- *         : ...
- *           LPAREN parameterList? RPAREN
- *           returnType?
- *           ...
- *         ;
- *
- * ============================================================================
- *
- * ANTLR IMPORT CONTRACT
- * ============================================================================
- *
- * Intended integration:
+ * Conceptually:
  *
  *     parser grammar Functions;
  *
  *     options {
- *         tokenVocab = ZamaniLexer;
+ *         tokenVocab = ZamaniTokens;
  *     }
  *
- *     import Parameters;
  *     import Returns;
- *     ...
  *
- * The root parser ultimately imports/uses the function grammar.
- *
- * Imported parser rules are part of the parser composition model; this file
- * therefore remains deliberately independent of the root parser's declaration
- * rule.
- *
- * ============================================================================
- *
- * MIGRATION REQUIREMENTS
- * ============================================================================
- *
- * Existing duplicate rules must be removed from their previous owners once
- * the importing grammar is migrated.
- *
- * In particular, the following duplicate implementation:
- *
- *     returnType
- *         : THIN_ARROW typeExpression
+ *     functionDeclaration
+ *         : ...
+ *           functionReturnClause?
+ *           ...
  *         ;
  *
- * in `grammar/antlr/Core.g4`
+ * The exact root grammar may compose the delegates through a different
+ * dependency arrangement, but there MUST be one authoritative
+ * definition of:
  *
- * should no longer remain there once `Returns` is integrated.
- *
- * Likewise, the duplicate `returnType` rule in:
- *
- *     grammar/antlr/ZamaniParser.g4
- *
- * should be migrated to this reusable grammar component.
- *
- * There must be exactly one authoritative reusable concrete-syntax
- * implementation of the function return annotation.
+ *     functionReturnClause
  *
  * ============================================================================
- *
- * TEST CONTRACT
+ * IMPORT / DEPENDENCY CONTRACT
  * ============================================================================
  *
- * Positive syntax tests MUST include:
+ * Direct syntactic dependency:
  *
- *     fn f() { }
+ *     canonical lexer
+ *          |
+ *          v
+ *     THIN_ARROW
+ *          |
+ *          v
+ *     Returns
+ *          |
+ *          v
+ *     function declarations / callable declarations
  *
- *     fn f() -> void { }
+ * Type dependency:
  *
- *     fn f() -> int { }
+ *     canonical Types grammar
+ *          |
+ *          v
+ *     typeExpression
+ *          |
+ *          v
+ *     functionReturnClause
  *
- *     fn f() -> SomeType { }
+ * This is a parser-level composition dependency.
  *
- *     fn f() -> A::B { }
- *
- *     fn f() -> Generic<T> { }
- *
- *     fn f() -> (A, B) { }
- *
- * where each referenced type is valid under the active type grammar.
- *
- * Cross-domain tests MUST include valid type expressions representing:
- *
- *     - classical results;
- *     - numerical results;
- *     - generic results;
- *     - collection results;
- *     - quantum results;
- *     - hybrid results;
- *     - hardware/HDL results where defined;
- *     - distributed results;
- *     - accelerator results.
+ * It is NOT a dependency on the Rust type-system implementation.
  *
  * ============================================================================
- *
- * NEGATIVE TEST CONTRACT
+ * NON-CIRCULAR ARCHITECTURE
  * ============================================================================
  *
- * The following must be rejected as malformed return syntax:
+ * Correct direction:
  *
- *     fn f() -> { }
+ *     lexer
+ *       |
+ *       v
+ *     parser delegates
+ *       |
+ *       v
+ *     frontend AST
+ *       |
+ *       v
+ *     semantic/type analysis
+ *       |
+ *       +--------------------+
+ *       |                    |
+ *       v                    v
+ * classical IR          quantum::ir
+ *       |                    |
+ *       +---------+----------+
+ *                 |
+ *                 v
+ *        optimization / routing /
+ *        scheduling / QEC / ZQN /
+ *        hardware realization
+ *                 |
+ *                 v
+ *              runtime
  *
- *     fn f() -> ;
+ * This file MUST NOT depend on:
  *
- *     fn f() -> ) { }
+ *     AST implementation
+ *     semantic analysis
+ *     classical IR
+ *     quantum::ir
+ *     QEC
+ *     ZQN
+ *     optimization
+ *     routing
+ *     scheduling
+ *     hardware HAL
+ *     runtime
  *
- *     fn f() -> -> Int { }
+ * In particular:
  *
- *     fn f() -> , { }
+ *     returns.g4 -> quantum::ir
  *
- *     fn f() -> Int, Float { }
- *
- * unless a future specification explicitly changes the syntax.
- *
- * Semantic-invalid types are NOT necessarily parser-negative tests.
- *
- * For example, if:
- *
- *     fn f() -> UnknownType { }
- *
- * is syntactically valid,
- *
- * then the parser should accept it and semantic analysis should diagnose
- * `UnknownType`.
+ * is forbidden.
  *
  * ============================================================================
- *
- * BOUNDARY TEST CONTRACT
+ * FUNCTION INTEGRATION
  * ============================================================================
  *
- * Tests must verify that return syntax remains valid for arbitrarily deep
- * type expressions supported by the type grammar, subject only to explicit
- * implementation/resource limits outside the language semantics.
+ * `grammar/functions/functions.g4` currently contains a
+ * `functionReturnClause` rule.
+ *
+ * That duplicate rule MUST be removed from `functions.g4` when this file is
+ * integrated.
+ *
+ * After integration, `functions.g4` should consume:
+ *
+ *     functionReturnClause?
+ *
+ * without redefining it.
+ *
+ * This establishes:
+ *
+ *     functions.g4
+ *         owns function declaration structure
+ *
+ *     returns.g4
+ *         owns return clause syntax
+ *
+ *     types/*
+ *         owns type-expression syntax
+ *
+ * This separation allows each component to evolve independently.
+ *
+ * ============================================================================
+ * OTHER DECLARATION INTEGRATION
+ * ============================================================================
+ *
+ * Other callable/declaration grammars may consume the same rule.
  *
  * Examples include:
  *
- *     fn f() -> Outer<Inner<Value>> { }
+ *     declarations/traits.g4
+ *     declarations/implementations.g4
+ *     functions/foreign-functions.g4
+ *     interoperability/foreign-functions.g4
  *
- *     fn f() -> A::B::C::D { }
+ * They MUST reuse:
  *
- *     fn f() -> Result<Tuple<A, B>, E> { }
+ *     functionReturnClause
  *
- * The grammar must not introduce a fixed nesting depth.
+ * rather than define variants such as:
+ *
+ *     traitReturnClause
+ *     implementationReturnClause
+ *     foreignReturnClause
+ *
+ * unless a future language specification explicitly establishes genuinely
+ * different syntax.
+ *
+ * Semantic differences between declarations are handled by semantic analysis.
  *
  * ============================================================================
+ * DECLARATION VS RETURN STATEMENT
+ * ============================================================================
  *
+ * This file owns:
+ *
+ *     fn f() -> Type
+ *
+ * It does NOT own:
+ *
+ *     return expression;
+ *
+ * Return statements belong to:
+ *
+ *     grammar/statements/returns.g4
+ *
+ * The distinction is important:
+ *
+ *     functionReturnClause
+ *
+ * describes the callable's declared result type.
+ *
+ *     returnStatement
+ *
+ * describes control flow from a function body.
+ *
+ * Semantic analysis connects the two.
+ *
+ * ============================================================================
+ * ABSENCE OF RETURN CLAUSE
+ * ============================================================================
+ *
+ * The following is syntactically valid when the surrounding function grammar
+ * permits it:
+ *
+ *     fn work() {
+ *         ...
+ *     }
+ *
+ * This grammar does not create an explicit token or AST node for the absence
+ * of a return clause.
+ *
+ * The surrounding function declaration represents the optionality:
+ *
+ *     functionReturnClause?
+ *
+ * Semantic analysis decides whether omission means:
+ *
+ *     - inferred return type;
+ *     - unit/void;
+ *     - context-dependent return type;
+ *     - generator-specific semantics;
+ *     - another language-defined rule.
+ *
+ * The grammar MUST NOT silently assign a semantic return type.
+ *
+ * ============================================================================
+ * VOID / UNIT / NEVER
+ * ============================================================================
+ *
+ * Types such as:
+ *
+ *     void
+ *     never
+ *
+ * are lexical/type-system concepts.
+ *
+ * This file does not special-case them.
+ *
+ * Therefore:
+ *
+ *     fn f() -> void { ... }
+ *
+ * and:
+ *
+ *     fn fail() -> never { ... }
+ *
+ * are handled through the canonical `typeExpression` rule.
+ *
+ * Their semantics belong to the type/control-flow systems.
+ *
+ * This prevents return grammar from becoming coupled to one particular
+ * representation of absence or non-returning computation.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Quantum return types are syntactically ordinary type expressions.
+ *
+ * Examples may include:
+ *
+ *     fn prepare() -> Qubit { ... }
+ *
+ *     fn measure(q: Qubit) -> Measurement { ... }
+ *
+ *     fn execute() -> QuantumState<T> { ... }
+ *
+ *     fn build() -> Circuit<Operation> { ... }
+ *
+ * This grammar does NOT determine:
+ *
+ *     - physical qubit assignment;
+ *     - logical-to-physical mapping;
+ *     - gate availability;
+ *     - topology;
+ *     - calibration;
+ *     - noise;
+ *     - fidelity;
+ *     - QEC;
+ *     - ZQN;
+ *     - scheduling;
+ *     - execution provider.
+ *
+ * Those concerns remain downstream.
+ *
+ * The canonical `quantum::ir` remains the semantic quantum boundary.
+ *
+ * ============================================================================
+ * CLASSICAL / HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Return types may represent values associated with:
+ *
+ *     classical computation
+ *     numerical computation
+ *     tensor computation
+ *     accelerator computation
+ *     HDL/software interfaces
+ *     hardware abstractions
+ *     distributed computation
+ *     networking
+ *     cryptography
+ *     AI/ML
+ *     future domains
+ *
+ * This grammar remains domain-neutral because all such meanings are expressed
+ * through the canonical type system.
+ *
+ * ============================================================================
+ * GENERIC INTEGRATION
+ * ============================================================================
+ *
+ * Generic return types are naturally supported through `typeExpression`.
+ *
+ * Examples:
+ *
+ *     fn identity<T>(x: T) -> T {
+ *         x
+ *     }
+ *
+ *     fn make<T>() -> Option<T> {
+ *         ...
+ *     }
+ *
+ *     fn transform<T, U>(x: T) -> Result<U, Error> {
+ *         ...
+ *     }
+ *
+ * Generic declaration syntax belongs to:
+ *
+ *     grammar/functions/generics.g4
+ *
+ * or the appropriate canonical generic-declaration grammar.
+ *
+ * This file only consumes the resulting type expression.
+ *
+ * ============================================================================
+ * FUNCTION-TYPE INTEGRATION
+ * ============================================================================
+ *
+ * A callable may return another callable where the canonical type grammar
+ * permits function types.
+ *
+ * Example:
+ *
+ *     fn factory() -> fn(Int) -> Int {
+ *         ...
+ *     }
+ *
+ * The exact ambiguity and nesting rules are owned by:
+ *
+ *     grammar/types/function-types.g4
+ *
+ * This file MUST NOT duplicate function-type syntax.
+ *
+ * ============================================================================
+ * FOREIGN / FFI INTEGRATION
+ * ============================================================================
+ *
+ * Foreign functions may use:
+ *
+ *     functionReturnClause
+ *
+ * but ABI compatibility is not a grammar concern.
+ *
+ * For example:
+ *
+ *     extern fn external_value() -> ExternalType;
+ *
+ * The grammar establishes only the source syntax.
+ *
+ * Semantic/interoperability layers determine:
+ *
+ *     - ABI;
+ *     - calling convention;
+ *     - representation;
+ *     - ownership;
+ *     - layout;
+ *     - safety;
+ *     - target compatibility.
+ *
+ * ============================================================================
+ * ASYNC INTEGRATION
+ * ============================================================================
+ *
+ * `async` is not owned by this file.
+ *
+ * An async function may still use:
+ *
+ *     functionReturnClause
+ *
+ * The semantic/runtime layer determines whether:
+ *
+ *     -> T
+ *
+ * means a direct T, future-like result, task result, or another language-level
+ * asynchronous semantic representation.
+ *
+ * This grammar does not rewrite the return type.
+ *
+ * ============================================================================
+ * GENERATOR INTEGRATION
+ * ============================================================================
+ *
+ * Generator syntax is owned elsewhere.
+ *
+ * A generator may have a return clause if the language version permits it.
+ *
+ * The semantic generator model determines the distinction between:
+ *
+ *     yielded values
+ *
+ * and:
+ *
+ *     final function result.
+ *
+ * This grammar remains unaware of that distinction.
+ *
+ * ============================================================================
+ * EFFECT / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Effects and capabilities are separate syntax/semantic concerns.
+ *
+ * Conceptually:
+ *
+ *     fn compute() -> Result
+ *         effect ...
+ *         ...
+ *
+ * The return grammar ends at `typeExpression`.
+ *
+ * It MUST NOT consume or define effect syntax.
+ *
+ * This prevents:
+ *
+ *     returns.g4 -> effects.g4
+ *
+ * from becoming a hard dependency when the function declaration can instead
+ * compose both independently.
+ *
+ * ============================================================================
+ * RESOURCE / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Return types must never silently become resource requirements.
+ *
+ * For example:
+ *
+ *     -> Qubit
+ *
+ * does not mean:
+ *
+ *     allocate a physical qubit now.
+ *
+ * Likewise:
+ *
+ *     -> Tensor<Float, N>
+ *
+ * does not imply:
+ *
+ *     - a particular accelerator;
+ *     - a fixed memory size;
+ *     - a fixed vector width;
+ *     - a fixed number of processing elements.
+ *
+ * Resource requirements are established by the resource/capability/semantic
+ * layers.
+ *
+ * ============================================================================
+ * DIAGNOSTICS CONTRACT
+ * ============================================================================
+ *
+ * The grammar must permit deterministic diagnostics for malformed clauses.
+ *
+ * Invalid examples include:
+ *
+ *     fn f() -> { ... }
+ *
+ *     fn f() -> ;
+ *
+ *     fn f() -> ,
+ *
+ *     fn f() -> ) { ... }
+ *
+ *     fn f() -> -> Int { ... }
+ *
+ *     fn f() -> Int Float { ... }
+ *
+ * The parser/frontend diagnostic layer owns:
+ *
+ *     - source spans;
+ *     - error codes;
+ *     - diagnostic severity;
+ *     - human-readable messages;
+ *     - recovery behavior;
+ *     - localization;
+ *     - machine-readable diagnostic output.
+ *
+ * This grammar must not silently:
+ *
+ *     - invent a missing type;
+ *     - discard `->`;
+ *     - consume an unrelated expression as the type;
+ *     - convert malformed syntax into a different declaration.
+ *
+ * ============================================================================
+ * ERROR RECOVERY CONTRACT
+ * ============================================================================
+ *
+ * ANTLR's parser recovery may be used by the frontend, but recovery MUST NOT
+ * alter the canonical AST as though malformed source were valid source.
+ *
+ * A recovered parse must retain enough source information for the frontend
+ * diagnostics layer to report the original syntax error.
+ *
+ * Error recovery policy belongs to the parser/frontend infrastructure rather
+ * than this small delegate grammar.
+ *
+ * ============================================================================
  * DETERMINISM CONTRACT
  * ============================================================================
  *
- * Given identical source text and identical lexer/parser configuration:
+ * For identical:
  *
- *     source -> tokens -> parse tree
+ *     source bytes
+ *     language version
+ *     lexer configuration
+ *     parser configuration
  *
- * must be deterministic.
+ * this rule must produce the same parse structure.
  *
- * This file contains no semantic state, global mutation, I/O, filesystem
- * access, network access, timing dependency, or random behavior.
+ * It must not depend on:
+ *
+ *     - hardware;
+ *     - runtime device state;
+ *     - network state;
+ *     - scheduler state;
+ *     - calibration;
+ *     - random numbers;
+ *     - environment variables.
  *
  * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
  *
+ * The canonical spelling:
+ *
+ *     ->
+ *
+ * is represented by:
+ *
+ *     THIN_ARROW
+ *
+ * If a future language version introduces another return syntax, it MUST NOT
+ * be silently added here.
+ *
+ * The language-version specification must first define:
+ *
+ *     - the new syntax;
+ *     - ambiguity behavior;
+ *     - AST representation;
+ *     - semantic meaning;
+ *     - diagnostics;
+ *     - compatibility policy;
+ *     - migration rules;
+ *     - tests.
+ *
+ * Only then may this grammar be extended.
+ *
+ * Existing syntax:
+ *
+ *     -> TypeExpression
+ *
+ * must remain stable unless an explicit language-version change says otherwise.
+ *
+ * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * No machine-specific hard-coding is permitted here.
+ * This file must contain:
  *
- * Allowed:
+ *     NO machine-size constants
+ *     NO resource-count constants
+ *     NO qubit limits
+ *     NO CPU limits
+ *     NO GPU limits
+ *     NO FPGA limits
+ *     NO memory limits
+ *     NO topology assumptions
+ *     NO device identifiers
+ *     NO vendor identifiers
+ *     NO ABI assumptions
+ *     NO runtime dependencies
  *
- *     `THIN_ARROW`
- *     `TypeExpression`
+ * The only fixed syntax in this file is the language-semantic punctuation:
  *
- * because these are language-level syntax concepts.
+ *     ->
  *
- * Forbidden:
- *
- *     maximum return type size;
- *     maximum return count;
- *     CPU return registers;
- *     GPU result slots;
- *     QPU result slots;
- *     physical qubit count;
- *     memory capacity;
- *     hardware address;
- *     device identifier;
- *     ABI-specific machine layout.
+ * That is a genuine language syntax requirement, not hardware hard-coding.
  *
  * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
  *
+ * Positive tests MUST cover at least:
+ *
+ *     fn f() -> Int { ... }
+ *     fn f() -> Float { ... }
+ *     fn f() -> Bool { ... }
+ *     fn f() -> Result<Value, Error> { ... }
+ *     fn f<T>() -> T { ... }
+ *     fn f() -> Vec<T> { ... }
+ *     fn f() -> Qubit { ... }
+ *     fn f() -> QuantumState<T> { ... }
+ *     fn f() -> Tensor<Float, N> { ... }
+ *
+ * Nested type expressions must be tested where supported:
+ *
+ *     -> Result<Vec<Option<T>>, Error>
+ *
+ * Negative tests MUST cover:
+ *
+ *     missing type after ->
+ *     duplicate ->
+ *     malformed type expression
+ *     invalid delimiter after return type
+ *     return clause in an invalid syntactic position
+ *
+ * Boundary tests MUST cover:
+ *
+ *     shortest valid return clause;
+ *     deeply nested supported type syntax;
+ *     large generic type expressions;
+ *     long qualified type paths;
+ *     many source declarations using return clauses.
+ *
+ * Scalability tests MUST verify that no artificial return-type count,
+ * machine-size, qubit-count, or hardware-size restriction originates here.
+ *
+ * Cross-domain tests MUST include return types used by:
+ *
+ *     classical functions;
+ *     quantum functions;
+ *     hybrid functions;
+ *     HDL/hardware interfaces;
+ *     distributed functions;
+ *     accelerator functions;
+ *     AI/data functions.
+ *
+ * Determinism tests must parse identical source identically.
+ *
+ * Round-trip tests must preserve:
+ *
+ *     ->
+ *
+ * and the complete type-expression structure.
+ *
+ * ============================================================================
+ * TOOLING CONTRACT
+ * ============================================================================
+ *
+ * Language servers, formatters, syntax highlighters, documentation tools,
+ * source analyzers, and refactoring tools should identify:
+ *
+ *     functionReturnClause
+ *
+ * as a structural parser node.
+ *
+ * Tooling must obtain semantic type information from the AST/type system,
+ * not from assumptions embedded in this grammar.
+ *
+ * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is COMPLETE when:
+ * `grammar/functions/returns.g4` is COMPLETE only when:
  *
- * 1. The canonical syntax `-> TypeExpression` is represented exactly once
- *    by this reusable delegate.
+ * 1. It is a parser-only delegate grammar.
  *
- * 2. `THIN_ARROW` is consumed from the canonical lexer vocabulary.
+ * 2. It uses the canonical lexer vocabulary.
  *
- * 3. `TypeExpression` is consumed from the canonical type grammar.
+ * 3. It defines exactly one owned return-clause rule:
  *
- * 4. No identifier, type, ABI, hardware, quantum, or runtime grammar is
- *    duplicated here.
+ *        functionReturnClause
  *
- * 5. Function declaration grammar can import and consume `returnType`.
+ * 4. The rule is:
  *
- * 6. Existing Core/ZamaniParser duplicate `returnType` definitions are
- *    migrated away without changing canonical source semantics.
+ *        THIN_ARROW typeExpression
  *
- * 7. Valid return annotations parse deterministically.
+ * 5. It does not redefine `typeExpression`.
  *
- * 8. Malformed return annotations are rejected deterministically.
+ * 6. It does not redefine lexer tokens.
  *
- * 9. No finite machine/resource limitation exists in the grammar.
+ * 7. It does not depend on AST, IR, runtime, hardware, QEC, or ZQN.
  *
- * 10. AST/semantic/IR ownership remains downstream and unambiguous.
+ * 8. `functions/functions.g4` consumes this rule rather than redefining it.
  *
- * 11. Classical, quantum, HDL, distributed, accelerator, and future type
- *     systems can use the same return syntax without this file changing.
+ * 9. Other callable declaration grammars can reuse this rule.
  *
- * 12. Parser tests, negative tests, boundary tests, compatibility tests,
- *     and cross-domain tests pass.
+ * 10. Optionality remains owned by the enclosing callable declaration.
  *
- * 13. Rust integration remains compatible with Rust 1.97 / 1.97.1 and uses
- *     no Rust `unsafe`.
+ * 11. No hardware/resource limits are encoded.
+ *
+ * 12. No artificial nesting or arity limits are encoded.
+ *
+ * 13. Diagnostics remain deterministic.
+ *
+ * 14. The rule is compatible with the canonical syntax specification.
+ *
+ * 15. Positive, negative, boundary, scalability, cross-domain, determinism,
+ *     and round-trip tests exist.
+ *
+ * 16. The generated parser remains compatible with Rust 1.97 / 1.97.1
+ *     integration and the repository's no-unsafe requirement.
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL RULE
+ * ============================================================================
+ *
+ * One source-level callable result:
+ *
+ *     -> TypeExpression
+ *
+ * has one syntactic meaning.
+ *
+ * Its physical realization may vary across:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     embedded system
+ *     cluster
+ *     supercomputer
+ *     QPU
+ *     simulator
+ *     distributed system
+ *     future computational substrate
+ *
+ * without changing this grammar.
+ *
+ * The grammar describes the program.
+ *
+ * The type system determines meaning.
+ *
+ * The IR represents canonical semantics.
+ *
+ * The compiler determines realization.
+ *
+ * The runtime supplies available resources.
  *
  * ============================================================================
  */
 
+parser grammar Returns;
 
-/*
- * ============================================================================
- * FUNCTION RETURN TYPE
- * ============================================================================
+options {
+    tokenVocab = ZamaniTokens;
+}
+
+
+/* ============================================================================
+ * CANONICAL FUNCTION RETURN CLAUSE
+ * ========================================================================== */
+
+/**
+ * Function return-type attachment.
  *
- * Canonical specification:
+ * Canonical form:
  *
- *     FunctionDeclaration ::=
- *         ...
- *         ["->" TypeExpression]
- *         ...
+ *     -> TypeExpression
  *
- * The optionality belongs to the consuming function declaration/signature.
- * This rule represents the return clause itself.
+ * Examples:
  *
- * `THIN_ARROW` is owned by the canonical lexer.
- * `typeExpression` is owned by the canonical type grammar.
- * ============================================================================
+ *     -> Int
+ *     -> Result<Value, Error>
+ *     -> Qubit
+ *     -> Tensor<Float, N>
+ *
+ * The surrounding callable declaration owns optionality:
+ *
+ *     functionReturnClause?
+ *
+ * This rule itself always requires both the arrow and the type expression.
  */
-
-returnType
-    : THIN_ARROW typeExpression
+functionReturnClause
+    : THIN_ARROW
+      typeExpression
     ;
