@@ -1,46 +1,48 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Programming Language
  * ============================================================================
  *
  * File:
  *     grammar/modules/modules.g4
  *
- * Role:
- *     Canonical parser component for Zamani's module, import, export,
- *     use, and package source syntax.
+ * Grammar:
+ *     Modules
  *
- * Grammar layer:
- *     Syntax only.
+ * Purpose:
+ *     Canonical parser component for Zamani module declarations.
  *
- * Canonical lexical dependency:
- *     grammar/lexer/tokens.g4
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
  *
- * Parser integration:
+ * This grammar owns ONLY module-declaration syntax.
  *
  *     ZamaniTokens
  *          |
  *          v
- *     canonical Zamani parser
+ *     canonical parser
  *          |
- *          +--> Modules.g4
+ *          +--> Names / QualifiedNames
+ *          +--> Visibility
+ *          +--> ModuleAttributes
+ *          |
+ *          v
+ *     Modules
  *          |
  *          v
  *     frontend AST
  *          |
  *          v
- *     module/name/visibility/dependency resolution
+ *     module / namespace / package semantic analysis
  *          |
  *          v
- *     semantic model
- *          |
- *          v
- *     canonical IR
+ *     canonical semantic model
  *          |
  *          +--> classical IR
  *          +--> quantum::ir
- *          +--> HDL/hardware IR
- *          +--> distributed/accelerator IR
+ *          +--> HDL / hardware IR
+ *          +--> distributed / accelerator IR
  *          |
  *          v
  *     optimization / routing / scheduling / lowering
@@ -48,195 +50,278 @@
  *          v
  *     runtime / target realization
  *
- * Runtime/compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * IMPORTANT:
  *
- * Safety:
- *     This grammar contains no Rust code.
- *     The Zamani compiler/runtime implementation MUST use safe Rust only.
- *     No unsafe Rust is required for this grammar component.
+ * This grammar is a syntax layer.
+ *
+ * It MUST NOT:
+ *
+ *     - resolve modules;
+ *     - access the filesystem;
+ *     - access a package registry;
+ *     - access the network;
+ *     - select hardware;
+ *     - select a backend;
+ *     - discover resources;
+ *     - allocate resources;
+ *     - construct IR;
+ *     - construct quantum::ir;
+ *     - perform optimization;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - execute code.
  *
  * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
- * This file OWNS:
+ * THIS FILE OWNS:
  *
- *   - module declarations;
- *   - module paths;
- *   - inline module bodies;
- *   - imports;
- *   - import paths;
- *   - import aliases;
- *   - import lists;
- *   - import sources;
- *   - exports;
- *   - export paths;
- *   - export aliases;
- *   - export lists;
- *   - export sources;
- *   - use declarations;
- *   - use trees;
- *   - use aliases;
- *   - package declarations;
- *   - package metadata fields;
- *   - source-level module/package attributes when explicitly attached to
- *     these declarations.
+ *     - module declaration syntax;
+ *     - module declaration headers;
+ *     - module names as module-qualified-name wrappers;
+ *     - inline module bodies;
+ *     - module body boundaries;
+ *     - module nesting syntax through canonical names;
+ *     - the syntactic composition of:
+ *           visibility
+ *           attributes
+ *           module name
+ *           module body
  *
- * This file DOES NOT OWN:
+ * THIS FILE DOES NOT OWN:
  *
- *   - lexical tokens;
- *   - identifiers;
- *   - literals;
- *   - general expressions;
- *   - general types;
- *   - functions;
- *   - structs;
- *   - quantum operations;
- *   - HDL operations;
- *   - hardware resources;
- *   - resource discovery;
- *   - filesystem access;
- *   - network access;
- *   - package downloading;
- *   - package installation;
- *   - dependency solving;
- *   - registry access;
- *   - semantic module resolution;
- *   - symbol tables;
- *   - visibility checking;
- *   - cycle detection;
- *   - AST storage;
- *   - canonical IR;
- *   - target selection;
- *   - runtime dispatch.
- *
- * ============================================================================
- *
- * CRITICAL SEMANTIC BOUNDARY
- * ============================================================================
- *
- * This grammar describes source-level module intent.
- *
- * Therefore:
- *
- *     import foo::bar;
- *
- * does NOT mean:
- *
- *     read file foo/bar
- *     contact a registry
- *     access a network
- *     download a package
- *     select a machine
- *     select a backend
- *
- * Likewise:
- *
- *     package foo { ... }
- *
- * does NOT itself mean:
- *
- *     publish package
- *     install package
- *     fetch package
- *     trust package
- *
- * Those operations belong to later compiler/toolchain layers.
+ *     - lexical tokens;
+ *     - identifiers;
+ *     - qualified-name syntax;
+ *     - visibility vocabulary;
+ *     - attributes;
+ *     - imports;
+ *     - exports;
+ *     - packages;
+ *     - dependencies;
+ *     - namespaces;
+ *     - declarations;
+ *     - functions;
+ *     - types;
+ *     - expressions;
+ *     - statements;
+ *     - classical computation;
+ *     - quantum computation;
+ *     - quantum gates;
+ *     - quantum::ir;
+ *     - QEC;
+ *     - ZQN;
+ *     - HDL;
+ *     - hardware;
+ *     - resources;
+ *     - scheduling;
+ *     - routing;
+ *     - optimization;
+ *     - runtime execution;
+ *     - filesystem resolution;
+ *     - package resolution;
+ *     - dependency solving;
+ *     - symbol tables;
+ *     - semantic validation.
  *
  * ============================================================================
- *
- * POCO-REAF / SCALABILITY
+ * CANONICAL OWNERSHIP BOUNDARIES
  * ============================================================================
  *
- * This grammar imposes no language-level finite limits on:
+ * Names:
  *
- *   - module depth;
- *   - package depth;
- *   - import count;
- *   - export count;
- *   - use-tree depth;
- *   - use-list size;
- *   - package field count;
- *   - identifier count;
- *   - source-module count.
+ *     grammar/core/names.g4
+ *     grammar/core/qualified-names.g4
  *
- * It contains no:
+ * own canonical name/qualified-name syntax.
  *
- *   MAX_MODULES
- *   MAX_IMPORTS
- *   MAX_EXPORTS
- *   MAX_PATH_DEPTH
- *   MAX_PACKAGE_FIELDS
- *   MAX_NAMESPACES
+ * Visibility:
  *
- * Resource limits are compiler/runtime policy rather than grammar semantics.
+ *     grammar/modules/visibility.g4
  *
- * A sufficiently capable implementation may therefore process arbitrarily
- * large module graphs, subject only to available resources and explicitly
- * configured operational limits.
+ * owns:
+ *
+ *     visibilityModifier
+ *
+ * Module attributes:
+ *
+ *     grammar/modules/module-attributes.g4
+ *
+ * own:
+ *
+ *     moduleAttributes
+ *
+ * Imports:
+ *
+ *     grammar/modules/imports.g4
+ *
+ * Exports:
+ *
+ *     grammar/modules/exports.g4
+ *
+ * Packages:
+ *
+ *     grammar/modules/packages.g4
+ *
+ * Dependencies:
+ *
+ *     grammar/modules/dependencies.g4
+ *
+ * Namespaces:
+ *
+ *     grammar/modules/namespaces.g4
+ *
+ * This file MUST NOT duplicate any of those syntactic vocabularies.
  *
  * ============================================================================
+ * CRITICAL DESIGN RULE
+ * ============================================================================
  *
+ * A module is a SOURCE-LEVEL COMPILATION / ORGANIZATION UNIT.
+ *
+ * A module is NOT inherently:
+ *
+ *     - a filesystem directory;
+ *     - a package;
+ *     - a process;
+ *     - a thread;
+ *     - a machine;
+ *     - a CPU;
+ *     - a GPU;
+ *     - an FPGA;
+ *     - an ASIC;
+ *     - a QPU;
+ *     - a quantum register;
+ *     - a physical qubit set;
+ *     - a network node;
+ *     - a runtime instance;
+ *     - a deployment unit.
+ *
+ * For example:
+ *
+ *     module quantum::algorithms {
+ *         ...
+ *     }
+ *
+ * establishes source-level module syntax.
+ *
+ * It does NOT mean:
+ *
+ *     - use a quantum processor;
+ *     - allocate a fixed number of qubits;
+ *     - use a particular topology;
+ *     - use a particular backend;
+ *     - allocate a particular amount of memory;
+ *     - deploy to a particular machine.
+ *
+ * Those meanings belong to later semantic, compilation, resource, hardware,
+ * scheduling, routing, and runtime layers.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Module syntax is deliberately independent of machine scale.
+ *
+ * The grammar contains NO finite limits for:
+ *
+ *     - number of modules;
+ *     - module nesting depth;
+ *     - module-name segment count;
+ *     - declarations per module;
+ *     - imports per module;
+ *     - exports per module;
+ *     - packages;
+ *     - resources;
+ *     - devices;
+ *     - CPUs;
+ *     - cores;
+ *     - threads;
+ *     - GPUs;
+ *     - FPGAs;
+ *     - ASICs;
+ *         - QPUs;
+ *     - qubits;
+ *     - nodes;
+ *     - accelerators.
+ *
+ * There are intentionally no grammar constants such as:
+ *
+ *     MAX_MODULES
+ *     MAX_MODULE_DEPTH
+ *     MAX_MODULE_NAME_SEGMENTS
+ *     MAX_MODULE_ITEMS
+ *     MAX_IMPORTS
+ *
+ * Repetition is represented structurally with ANTLR repetition operators.
+ *
+ * Operational limits, where necessary, belong to compiler/resource policy.
+ * Such limits MUST NOT become language semantics.
+ *
+ * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * These productions perform no:
+ * This grammar performs:
  *
- *   - filesystem I/O;
- *   - network I/O;
- *   - environment inspection;
- *   - clock access;
- *   - randomness;
- *   - package lookup;
- *   - hardware discovery;
- *   - backend discovery.
+ *     - no filesystem I/O;
+ *     - no network I/O;
+ *     - no environment inspection;
+ *     - no clock access;
+ *     - no randomness;
+ *     - no package lookup;
+ *     - no module lookup;
+ *     - no symbol lookup;
+ *     - no hardware discovery;
+ *     - no resource discovery;
+ *     - no runtime calls.
  *
- * Parsing the same token stream therefore produces the same syntactic
- * structure.
+ * Therefore the syntactic interpretation of a deterministic token stream is
+ * deterministic.
  *
  * ============================================================================
- *
- * DEPENDENCY MODEL
+ * SAFETY / RUST
  * ============================================================================
  *
- * Required canonical lexer vocabulary:
+ * This file contains ANTLR grammar only.
  *
- *   K_MODULE
- *   K_IMPORT
- *   K_EXPORT
- *   K_USE
- *   K_FROM
- *   K_AS
- *   K_PACKAGE
- *   K_PUB
- *   K_PUBLIC
- *   K_PRIVATE
- *   K_PROTECTED
- *   K_INTERNAL
- *   IDENTIFIER
- *   STRING_LITERAL
- *   LBRACE
- *   RBRACE
- *   LBRACKET
- *   RBRACKET
- *   LPAREN
- *   RPAREN
- *   COMMA
- *   SEMICOLON
- *   COLON
- *   DOUBLE_COLON
- *   STAR
- *   ASSIGN
+ * It contains:
  *
- * Delegating parser dependencies:
+ *     - no embedded Rust;
+ *     - no actions;
+ *     - no semantic predicates;
+ *     - no unsafe code.
  *
- *   item
- *   expression
+ * Generated compiler/frontend code is intended for:
  *
- * These rules are intentionally supplied by the canonical parser rather than
- * duplicated here.
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *
+ * The Zamani Rust implementation MUST use safe Rust only.
+ *
+ * ============================================================================
+ * ANTLR COMPOSITION
+ * ============================================================================
+ *
+ * Canonical lexical vocabulary:
+ *
+ *     ZamaniTokens
+ *
+ * Canonical shared name grammar:
+ *
+ *     QualifiedNames
+ *
+ * Canonical visibility grammar:
+ *
+ *     Visibility
+ *
+ * Canonical module attribute grammar:
+ *
+ *     ModuleAttributes
+ *
+ * The aggregate parser composes this module grammar with the rest of the
+ * Zamani grammar.
  *
  * ============================================================================
  */
@@ -247,12 +332,37 @@ options {
     tokenVocab = ZamaniTokens;
 }
 
-
-/* ============================================================================
- * 1. MODULE DECLARATIONS
+/*
+ * ============================================================================
+ * DELEGATED GRAMMAR COMPONENTS
  * ============================================================================
  *
- * Examples:
+ * QualifiedNames:
+ *
+ *     Owns canonical qualified-name structure.
+ *
+ * Visibility:
+ *
+ *     Owns visibility vocabulary.
+ *
+ * ModuleAttributes:
+ *
+ *     Owns module-specific attribute syntax.
+ *
+ * These components MUST remain independent owners.
+ *
+ * ============================================================================
+ */
+
+import QualifiedNames, Visibility, ModuleAttributes;
+
+
+/*
+ * ============================================================================
+ * 1. MODULE DECLARATION
+ * ============================================================================
+ *
+ * Canonical forms:
  *
  *     module math;
  *
@@ -266,672 +376,689 @@ options {
  *         ...
  *     }
  *
- * A module path is a language namespace.
- *
- * It is NOT an operating-system path.
- */
-
-moduleDeclaration
-    : moduleVisibility?
-      K_MODULE
-      modulePath
-      (
-          SEMICOLON
-        | moduleBody
-      )
-    ;
-
-
-/**
- * Inline module contents.
- *
- * `item` belongs to the canonical parser.
- *
- * This permits a module to contain any valid Zamani declaration without
- * creating a second module-specific declaration language.
- */
-moduleBody
-    : LBRACE item* RBRACE
-    ;
-
-
-/**
- * Canonical module path.
- *
- * Examples:
- *
- *     core
- *     core::math
- *     quantum::algorithms::search
- *
- * No fixed depth is encoded.
- */
-modulePath
-    : IDENTIFIER
-      (DOUBLE_COLON IDENTIFIER)*
-    ;
-
-
-/* ============================================================================
- * 2. MODULE VISIBILITY
- * ============================================================================
- *
- * Visibility syntax is owned here only for module-level declarations.
- *
- * The semantic meaning of visibility is resolved later.
- *
- * No filesystem or package-access semantics are implied.
- */
-
-moduleVisibility
-    : K_PUB
-    | K_PUBLIC
-    | K_PRIVATE
-    | K_PROTECTED
-    | K_INTERNAL
-    ;
-
-
-/* ============================================================================
- * 3. IMPORT DECLARATIONS
- * ============================================================================
- *
- * Supported forms:
- *
- *     import foo;
- *
- *     import foo::bar;
- *
- *     import foo::bar as baz;
- *
- *     import {foo, bar};
- *
- *     import {foo as localFoo, bar};
- *
- *     import * as namespace from "source";
- *
- *     import {foo, bar} from "source";
- *
- *     import foo::bar from "source";
- *
- *     import "source";
- *
- * The source is syntax only.
- */
-
-importDeclaration
-    : K_IMPORT
-      importClause?
-      importSource?
-      SEMICOLON?
-    ;
-
-
-/**
- * Import clause.
- *
- * Exactly one of:
- *
- *   - a path;
- *   - a named import list;
- *   - a wildcard namespace import;
- *   - a side-effect-free source-only import handled by the absence of a
- *     clause.
- */
-importClause
-    : importPath
-      importAlias?
-    | importSpecifierGroup
-    | importWildcard
-    ;
-
-
-/**
- * A qualified imported module/symbol path.
- *
- * Example:
- *
- *     quantum::algorithms::search
- */
-importPath
-    : modulePath
-    ;
-
-
-/**
- * Local alias for an imported path.
- *
- * Example:
- *
- *     import quantum::algorithms as algorithms;
- */
-importAlias
-    : K_AS IDENTIFIER
-    ;
-
-
-/**
- * Wildcard namespace import.
- *
- * Example:
- *
- *     import * as quantum;
- *
- * A wildcard is not interpreted as "all physical resources".
- * It is only a source-level namespace selection.
- */
-importWildcard
-    : STAR
-      (K_AS IDENTIFIER)?
-    ;
-
-
-/**
- * Named imports.
- *
- * Examples:
- *
- *     import {foo, bar};
- *
- *     import {foo as localFoo, bar};
- */
-importSpecifierGroup
-    : LBRACE
-      importSpecifierList?
-      RBRACE
-    ;
-
-
-/**
- * One named import.
- */
-importSpecifier
-    : IDENTIFIER
-      importAlias?
-    ;
-
-
-/**
- * Arbitrarily large named-import list.
- */
-importSpecifierList
-    : importSpecifier
-      (
-          COMMA
-          importSpecifier
-      )*
-      COMMA?
-    ;
-
-
-/**
- * Optional import source.
- *
- * Example:
- *
- *     import {foo} from "library";
- *
- * The string remains uninterpreted syntax.
- */
-importSource
-    : K_FROM
-      STRING_LITERAL
-    ;
-
-
-/* ============================================================================
- * 4. EXPORT DECLARATIONS
- * ============================================================================
- *
- * Supported forms:
- *
- *     export foo;
- *     export foo::bar;
- *     export foo as bar;
- *     export {foo, bar};
- *     export {foo as publicFoo};
- *     export *;
- *     export * from "source";
- *     export {foo, bar} from "source";
- *     export foo::bar from "source";
- *
- * Export resolution and visibility are semantic concerns.
- */
-
-exportDeclaration
-    : K_EXPORT
-      exportClause
-      exportSource?
-      SEMICOLON?
-    ;
-
-
-/**
- * Export target.
- */
-exportClause
-    : STAR
-    | exportPath
-      exportAlias?
-    | exportSpecifierGroup
-    ;
-
-
-/**
- * Exported path.
- */
-exportPath
-    : modulePath
-    ;
-
-
-/**
- * Alias for an exported path.
- */
-exportAlias
-    : K_AS IDENTIFIER
-    ;
-
-
-/**
- * Named export group.
- */
-exportSpecifierGroup
-    : LBRACE
-      exportSpecifierList?
-      RBRACE
-    ;
-
-
-/**
- * Named export list.
- */
-exportSpecifierList
-    : exportSpecifier
-      (
-          COMMA
-          exportSpecifier
-      )*
-      COMMA?
-    ;
-
-
-/**
- * One named export.
- */
-exportSpecifier
-    : IDENTIFIER
-      exportAlias?
-    ;
-
-
-/**
- * Optional re-export source.
- *
- * Example:
- *
- *     export * from "library";
- */
-exportSource
-    : K_FROM
-      STRING_LITERAL
-    ;
-
-
-/* ============================================================================
- * 5. USE DECLARATIONS
- * ============================================================================
- *
- * `use` is represented as a recursive source-level selection tree.
- *
- * Examples:
- *
- *     use foo;
- *
- *     use foo::bar;
- *
- *     use foo::bar as baz;
- *
- *     use foo::*;
- *
- *     use foo::{bar, baz};
- *
- *     use foo::{bar as localBar, baz};
- *
- *     use foo::bar::{x, y};
- *
- *     use foo::{bar::{x, y}, baz};
- *
- * The grammar does not impose a nesting limit.
- */
-
-useDeclaration
-    : K_USE
-      useTree
-      SEMICOLON?
-    ;
-
-
-/**
- * Root use tree.
- */
-useTree
-    : useTreePath
-      useTreeSuffix?
-      useTreeAlias?
-    ;
-
-
-/**
- * The path portion of a use tree.
- *
- * The final identifier is retained as a path component; selection is expressed
- * by the optional suffix.
- */
-useTreePath
-    : IDENTIFIER
-      (
-          DOUBLE_COLON
-          IDENTIFIER
-      )*
-    ;
-
-
-/**
- * Selection from a use path.
- *
- * Examples:
- *
- *     use foo::*;
- *
- *     use foo::{bar, baz};
- *
- *     use foo::bar::{x, y};
- */
-useTreeSuffix
-    : DOUBLE_COLON
-      (
-          STAR
-        | LBRACE
-          useTreeList?
-          RBRACE
-      )
-    ;
-
-
-/**
- * Alias for a complete use tree.
- *
- * Example:
- *
- *     use foo::bar as baz;
- */
-useTreeAlias
-    : K_AS IDENTIFIER
-    ;
-
-
-/**
- * Recursive use selection list.
- */
-useTreeList
-    : useTreeNode
-      (
-          COMMA
-          useTreeNode
-      )*
-      COMMA?
-    ;
-
-
-/**
- * One recursive use-tree node.
- *
- * Examples:
- *
- *     foo
- *     foo as bar
- *     foo::bar
- *     foo::{x, y}
- *     foo::*
- */
-useTreeNode
-    : IDENTIFIER
-      useTreeNodeSuffix?
-      useTreeAlias?
-    ;
-
-
-/**
- * Recursive suffix of a use-tree node.
- */
-useTreeNodeSuffix
-    : DOUBLE_COLON
-      (
-          IDENTIFIER
-          (
-              DOUBLE_COLON
-              IDENTIFIER
-          )*
-          (
-              DOUBLE_COLON
-              (
-                  STAR
-                | LBRACE
-                  useTreeList?
-                  RBRACE
-              )
-          )?
-        | STAR
-        | LBRACE
-          useTreeList?
-          RBRACE
-      )
-    ;
-
-
-/* ============================================================================
- * 6. PACKAGE DECLARATIONS
- * ============================================================================
- *
- * A package declaration describes source-level package metadata.
- *
- * It does NOT perform:
- *
- *     - publication;
- *     - installation;
- *     - dependency resolution;
- *     - registry access;
- *     - network access;
- *     - signature verification.
- *
- * Those belong to the package/toolchain layer.
- *
- * Example:
- *
- *     package my_library {
- *         version: "1.0.0";
- *         license: "MIT";
+ *     pub module math {
+ *         ...
  *     }
  *
- * Package metadata is deliberately schema-extensible.
+ *     @experimental
+ *     pub module quantum::algorithms {
+ *         ...
+ *     }
  *
- * The grammar does not hard-code a finite list of metadata keys.
+ * The module declaration may have:
+ *
+ *     - zero or more module attributes;
+ *     - one optional visibility modifier;
+ *     - one canonical qualified module name;
+ *     - either a declaration terminator or an inline body.
+ *
+ * The semantic layer determines whether a particular combination is legal.
+ *
+ * This grammar only recognizes the syntax.
  */
-
-packageDeclaration
-    : packageVisibility?
-      K_PACKAGE
-      IDENTIFIER
-      packageBody
+moduleDeclaration
+    : moduleAttributes?
+      visibilityModifier?
+      K_MODULE
+      moduleName
+      moduleDeclarationTail
     ;
 
 
-/**
- * Package visibility.
+/*
+ * ============================================================================
+ * 2. MODULE DECLARATION TAIL
+ * ============================================================================
+ *
+ * A module declaration is either:
+ *
+ *     module name;
+ *
+ * or:
+ *
+ *     module name {
+ *         ...
+ *     }
+ *
+ * The two forms intentionally have different syntactic meaning:
+ *
+ *     `;`
+ *
+ *     declares a module without an inline body.
+ *
+ *     `{ ... }`
+ *
+ *     establishes an inline module body.
+ *
+ * A module body does not require a trailing semicolon.
+ *
+ * This gives deterministic declaration boundaries and avoids making module
+ * parsing dependent on newline/trivia behavior.
  */
-packageVisibility
-    : K_PUB
-    | K_PUBLIC
-    | K_PRIVATE
-    | K_INTERNAL
+moduleDeclarationTail
+    : SEMICOLON
+    | moduleBody
     ;
 
 
-/**
- * Package metadata body.
+/*
+ * ============================================================================
+ * 3. MODULE NAME
+ * ============================================================================
+ *
+ * Module names use the repository's canonical qualified-name grammar.
+ *
+ * Examples:
+ *
+ *     math
+ *
+ *     math::linear
+ *
+ *     math::linear::matrix
+ *
+ *     quantum::algorithms
+ *
+ *     quantum::algorithms::optimization
+ *
+ *     hardware::accelerators
+ *
+ *     distributed::services
+ *
+ * No maximum number of segments is encoded here.
+ *
+ * This rule is a module-specific wrapper only.
+ *
+ * It does NOT redefine:
+ *
+ *     IDENTIFIER
+ *     simpleName
+ *     nameSegment
+ *     qualifiedName
+ *
+ * The canonical name grammar owns those structures.
  */
-packageBody
+moduleName
+    : qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * 4. MODULE BODY
+ * ============================================================================
+ *
+ * A module body contains the canonical Zamani `item` grammar.
+ *
+ * This is critical.
+ *
+ * Modules MUST NOT define a second declaration language.
+ *
+ * The body therefore delegates declaration ownership to the aggregate parser.
+ *
+ * Depending on the final parser assembly, `item` may contain constructs such
+ * as:
+ *
+ *     imports
+ *     exports
+ *     nested modules
+ *     declarations
+ *     functions
+ *     types
+ *     quantum declarations
+ *     classical declarations
+ *     HDL declarations
+ *     hardware declarations
+ *     distributed declarations
+ *     AI/data declarations
+ *     future language constructs
+ *
+ * This allows one module abstraction to contain all Zamani computational
+ * domains without the module grammar needing to know those domains.
+ *
+ * The module grammar therefore remains future-proof.
+ */
+moduleBody
     : LBRACE
-      packageField*
+      item*
       RBRACE
     ;
 
 
-/**
- * Package field.
+/*
+ * ============================================================================
+ * 5. MODULE DECLARATION HEADER
+ * ============================================================================
  *
- * The key is an identifier and the value is a normal Zamani expression.
+ * Reusable header boundary.
  *
- * This keeps package syntax extensible while leaving the package manifest
- * schema to semantic/toolchain validation.
+ * This rule intentionally excludes:
+ *
+ *     - the body;
+ *     - the terminating semicolon.
+ *
+ * It is useful to aggregate tools that need to recognize a module header
+ * independently of its contents.
+ *
+ * Example:
+ *
+ *     pub module quantum::algorithms
+ *
+ * The actual declaration is completed by `moduleDeclaration`.
  */
-packageField
-    : IDENTIFIER
-      COLON
-      expression
-      SEMICOLON?
+moduleDeclarationHeader
+    : moduleAttributes?
+      visibilityModifier?
+      K_MODULE
+      moduleName
     ;
 
 
-/* ============================================================================
- * 7. MODULE ATTRIBUTES
+/*
+ * ============================================================================
+ * 6. MODULE BODY ITEM BOUNDARY
  * ============================================================================
  *
- * Attributes are deliberately kept as a small syntax-level attachment point.
+ * This named wrapper exists so parser tooling can refer to the semantic
+ * boundary between the module container and the canonical declaration item.
  *
- * The attribute system itself belongs to the canonical attribute grammar.
- *
- * This rule does not interpret attribute names.
- *
- * Example conceptual forms:
- *
- *     #[...]
- *
- * The canonical parser may attach its own attribute rule to module/package
- * declarations. This component therefore does not duplicate that syntax.
- *
+ * It does NOT create another declaration grammar.
+ */
+moduleBodyItem
+    : item
+    ;
+
+
+/*
  * ============================================================================
- * 8. CANONICAL PATH CONTRACT
+ * 7. MODULE BODY ITEM LIST
  * ============================================================================
  *
- * The module path syntax is intentionally independent of:
+ * Zero or more canonical Zamani items.
  *
- *     filesystem separators;
- *     operating-system paths;
- *     URLs;
- *     package registries;
- *     repository layouts;
- *     physical devices;
- *     deployment topology.
+ * There is no finite item count.
+ *
+ * Resource exhaustion is an implementation concern, not a grammar semantic.
+ */
+moduleBodyItems
+    : moduleBodyItem*
+    ;
+
+
+/*
+ * ============================================================================
+ * 8. EXPLICIT MODULE BODY
+ * ============================================================================
+ *
+ * Named structural wrapper used by tools that need a parse-tree node for the
+ * complete body independently of `moduleDeclaration`.
+ *
+ * This is equivalent in meaning to `moduleBody` and deliberately delegates
+ * each item to the canonical parser.
+ *
+ * The rule is retained as a stable integration point.
+ */
+inlineModuleBody
+    : LBRACE
+      moduleBodyItems
+      RBRACE
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. MODULE PATH COMPATIBILITY WRAPPER
+ * ============================================================================
+ *
+ * Existing downstream grammar/tooling may historically refer to a module path
+ * as `modulePath`.
+ *
+ * The old implementation duplicated:
+ *
+ *     IDENTIFIER (DOUBLE_COLON IDENTIFIER)*
+ *
+ * That duplication is intentionally removed.
+ *
+ * `modulePath` is now only a semantic/syntactic wrapper around the canonical
+ * qualified-name grammar.
+ *
+ * New code SHOULD prefer `moduleName`.
+ *
+ * Existing parser tooling may use this wrapper during migration.
+ */
+modulePath
+    : qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * 10. MODULE REFERENCE
+ * ============================================================================
+ *
+ * A module reference is a canonical qualified name used in a module-specific
+ * syntactic position.
+ *
+ * This rule does not resolve the module.
+ *
+ * Examples:
+ *
+ *     math
+ *
+ *     math::linear
+ *
+ *     quantum::algorithms
+ *
+ *     hardware::accelerators
+ *
+ * Semantic resolution determines what the referenced name denotes.
+ */
+moduleReference
+    : qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * 11. MODULE DECLARATION CONTRACT
+ * ============================================================================
+ *
+ * The parser produces enough structure for the frontend AST to preserve:
+ *
+ *     - module attributes;
+ *     - explicit visibility;
+ *     - module-name segments;
+ *     - source spans;
+ *     - source ordering;
+ *     - whether the declaration has a body;
+ *     - body contents;
+ *     - exact source spelling where the AST requires provenance.
+ *
+ * The grammar does NOT define the Rust AST.
+ *
+ * Recommended semantic-neutral shape:
+ *
+ *     ModuleDeclaration
+ *         attributes
+ *         visibility
+ *         name
+ *         body
+ *
+ * Exact AST structures belong to the frontend.
+ *
+ * ============================================================================
+ * 12. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis owns:
+ *
+ *     - module identity;
+ *     - module uniqueness;
+ *     - module nesting semantics;
+ *     - module/namespace relationships;
+ *     - module/package relationships;
+ *     - visibility validation;
+ *     - import/export resolution;
+ *     - symbol resolution;
+ *     - dependency graph construction;
+ *     - dependency-cycle detection;
+ *     - package resolution;
+ *     - module accessibility;
+ *     - declaration ownership;
+ *     - module attributes' meaning;
+ *     - compilation-unit rules;
+ *     - target-independent semantic validation.
+ *
+ * None of these checks belong in this grammar.
+ *
+ * ============================================================================
+ * 13. IMPORT / EXPORT INTEGRATION
+ * ============================================================================
+ *
+ * Imports remain owned by:
+ *
+ *     grammar/modules/imports.g4
+ *
+ * Exports remain owned by:
+ *
+ *     grammar/modules/exports.g4
+ *
+ * This file therefore does NOT define:
+ *
+ *     importDeclaration
+ *     importClause
+ *     importSpecifier
+ *     exportDeclaration
+ *     exportClause
+ *     exportSpecifier
+ *
+ * Those constructs become members of `item` through the aggregate parser.
+ *
+ * This prevents duplicated ownership and prevents modules.g4 from becoming a
+ * monolithic grammar.
+ *
+ * ============================================================================
+ * 14. PACKAGE INTEGRATION
+ * ============================================================================
+ *
+ * Package syntax remains owned by:
+ *
+ *     grammar/modules/packages.g4
+ *
+ * A package may semantically contain or organize modules, but that relationship
+ * is not encoded as a filesystem or deployment assumption here.
+ *
+ * This grammar does not define:
+ *
+ *     packageDeclaration
+ *     packageBody
+ *     packageMetadataField
+ *
+ * ============================================================================
+ * 15. DEPENDENCY INTEGRATION
+ * ============================================================================
+ *
+ * Dependency syntax remains owned by:
+ *
+ *     grammar/modules/dependencies.g4
+ *
+ * Module declarations therefore do not contain a duplicated dependency
+ * language.
+ *
+ * The semantic/package layer may later construct:
+ *
+ *     package/module dependency graph
+ *
+ * from the independently parsed constructs.
+ *
+ * ============================================================================
+ * 16. NAMESPACE INTEGRATION
+ * ============================================================================
+ *
+ * Namespace syntax remains owned by:
+ *
+ *     grammar/modules/namespaces.g4
+ *
+ * A module name may participate in a namespace relationship, but this grammar
+ * does not decide that relationship.
+ *
+ * In particular:
+ *
+ *     module quantum::algorithms;
+ *
+ * does not itself mean that `quantum` is a package, namespace, filesystem
+ * directory, or hardware domain.
+ *
+ * Semantic analysis determines the declaration's relationships.
+ *
+ * ============================================================================
+ * 17. VISIBILITY INTEGRATION
+ * ============================================================================
+ *
+ * Visibility is owned by:
+ *
+ *     grammar/modules/visibility.g4
+ *
+ * Therefore this file deliberately does NOT contain:
+ *
+ *     moduleVisibility
+ *
+ * with duplicated alternatives such as:
+ *
+ *     K_PUB
+ *     K_PUBLIC
+ *     K_PRIVATE
+ *     K_PROTECTED
+ *     K_INTERNAL
+ *
+ * The module declaration consumes:
+ *
+ *     visibilityModifier?
+ *
+ * from the canonical visibility grammar.
+ *
+ * This establishes exactly one visibility vocabulary throughout Zamani.
+ *
+ * ============================================================================
+ * 18. ATTRIBUTE INTEGRATION
+ * ============================================================================
+ *
+ * Module attributes are owned by:
+ *
+ *     grammar/modules/module-attributes.g4
+ *
+ * Therefore this file does not redefine:
+ *
+ *     @name
+ *     @qualified::name
+ *     attribute argument syntax
+ *
+ * The declaration consumes:
+ *
+ *     moduleAttributes?
+ *
+ * from the canonical module-attribute grammar.
+ *
+ * ============================================================================
+ * 19. NAME INTEGRATION
+ * ============================================================================
+ *
+ * Module names consume:
+ *
+ *     qualifiedName
+ *
+ * from the canonical name grammar.
+ *
+ * This means all Zamani domains can share the same structural name rules:
+ *
+ *     classical::math
+ *     quantum::algorithms
+ *     hardware::accelerators
+ *     distributed::services
+ *     ai::models
+ *
+ * No module-specific identifier syntax is introduced.
+ *
+ * ============================================================================
+ * 20. QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * A quantum module is ordinary module syntax.
+ *
+ * For example:
+ *
+ *     module quantum::algorithms {
+ *         ...
+ *     }
+ *
+ * This grammar does not know:
+ *
+ *     - qubits;
+ *     - logical qubits;
+ *     - physical qubits;
+ *     - gates;
+ *     - circuits;
+ *     - QEC;
+ *     - ZQN;
+ *     - backend topology;
+ *     - calibration;
+ *     - scheduling;
+ *     - routing.
+ *
+ * Quantum declarations inside the module are supplied by the canonical
+ * `item` grammar and eventually lower through the repository's canonical
+ * quantum semantic boundary, `quantum::ir`.
+ *
+ * Modules.g4 MUST NOT create a quantum-specific module IR.
+ *
+ * ============================================================================
+ * 21. CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * Classical declarations use the same module mechanism.
+ *
+ * A module can contain classical functions, values, types, numerical
+ * computation, concurrency, and other constructs through `item`.
+ *
+ * This file does not need classical-specific module syntax.
+ *
+ * ============================================================================
+ * 22. HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * HDL and hardware declarations can inhabit ordinary Zamani modules.
+ *
+ * For example, the module grammar does not need separate constructs such as:
+ *
+ *     hardwareModule
+ *     quantumModule
+ *     gpuModule
+ *     fpgaModule
+ *     distributedModule
+ *
+ * unless a future language specification establishes genuinely different
+ * source semantics.
+ *
+ * This keeps the module abstraction domain-independent.
+ *
+ * ============================================================================
+ * 23. POCO-REAF HARDWARE INDEPENDENCE
+ * ============================================================================
+ *
+ * Nothing in this file identifies:
+ *
+ *     - a device;
+ *     - a processor;
+ *     - a backend;
+ *     - a topology;
+ *     - a memory size;
+ *     - a qubit count;
+ *     - a node count;
+ *     - an accelerator count.
+ *
+ * Consequently:
+ *
+ *     module computation;
+ *
+ * remains valid regardless of whether the eventual target is:
+ *
+ *     - an embedded machine;
+ *     - one CPU;
+ *     - many CPUs;
+ *     - a GPU;
+ *     - an FPGA;
+ *     - an ASIC;
+ *     - a QPU;
+ *     - a simulator;
+ *     - a heterogeneous system;
+ *     - a cluster;
+ *     - a cloud deployment;
+ *     - a future architecture.
+ *
+ * ============================================================================
+ * 24. NO FILESYSTEM SEMANTICS
+ * ============================================================================
+ *
+ * A module name is a language name.
+ *
+ * It is not a filesystem path.
  *
  * Therefore:
  *
- *     foo::bar
+ *     module foo::bar;
  *
- * remains a language namespace path.
+ * MUST NOT be interpreted by this grammar as:
  *
- * A resolver may later map it to:
+ *     foo/bar
  *
- *     source module
- *     workspace module
- *     generated module
- *     embedded module
- *     package module
- *     remote source
- *     cached module
- *     another compilation unit
+ * or:
  *
- * without changing the grammar.
+ *     foo/bar.zm
+ *
+ * Filesystem resolution belongs to compiler/toolchain infrastructure.
+ *
+ * The grammar does not perform filesystem resolution.
  *
  * ============================================================================
- * 9. SEMANTIC RESOLUTION BOUNDARY
+ * 25. NO PACKAGE / REGISTRY SEMANTICS
  * ============================================================================
  *
- * These operations are intentionally absent:
+ * This grammar never contacts:
  *
- *     resolve_module()
- *     resolve_import()
- *     resolve_export()
- *     resolve_use()
- *     resolve_package()
- *     load_source()
- *     read_file()
- *     fetch_registry()
- *     download_package()
- *     verify_package()
- *     resolve_dependency()
- *     detect_module_cycle()
- *     check_visibility()
+ *     - package registries;
+ *     - dependency servers;
+ *     - remote repositories;
+ *     - network services.
  *
- * The parser produces syntax.
- *
- * The semantic layer is responsible for:
- *
- *     source identity
- *     canonical module identity
- *     dependency graphs
- *     name resolution
- *     visibility
- *     aliases
- *     imports
- *     exports
- *     re-exports
- *     package metadata validation
- *     cycle diagnostics
- *     capability checks
- *     dependency policy
+ * A module declaration is therefore deterministic and offline-capable at the
+ * grammar level.
  *
  * ============================================================================
- * 10. CANONICAL AST INTEGRATION
+ * 26. NO TARGET COUPLING
  * ============================================================================
  *
- * The frontend should lower these productions into one canonical module
- * representation rather than creating independent representations for:
+ * Module syntax cannot select:
  *
- *     import
- *     export
- *     use
- *     package
+ *     - CPU;
+ *     - GPU;
+ *     - FPGA;
+ *     - ASIC;
+ *     - QPU;
+ *     - accelerator;
+ *     - node;
+ *     - topology;
+ *     - deployment.
  *
- * Recommended conceptual nodes:
- *
- *     ModuleDecl
- *     ModulePath
- *     ImportDecl
- *     ImportTarget
- *     ImportSpecifier
- *     ExportDecl
- *     ExportTarget
- *     UseDecl
- *     UseTree
- *     PackageDecl
- *     PackageField
- *
- * These are AST concepts, not grammar-owned data structures.
+ * Target requirements belong to the appropriate resource/capability/target
+ * grammar and semantic layers.
  *
  * ============================================================================
- * 11. CANONICAL IR INTEGRATION
+ * 27. ERROR BOUNDARY
  * ============================================================================
  *
- * Modules.g4 MUST NOT create or define IR.
+ * Syntax errors handled by this grammar include:
  *
- * The pipeline is:
+ *     module;
+ *
+ *     module ::foo;
+ *
+ *     module foo::;
+ *
+ *     module foo {
+ *
+ *     module foo { };
+ *
+ * where the final case is invalid if the body form is followed by a token that
+ * cannot begin the next canonical item.
+ *
+ * Semantic errors NOT handled here include:
+ *
+ *     duplicate module;
+ *     unresolved module;
+ *     inaccessible module;
+ *     module/package conflict;
+ *     module/namespace conflict;
+ *     dependency cycle;
+ *     invalid visibility;
+ *     invalid attribute;
+ *     invalid declaration in a module;
+ *     invalid quantum operation;
+ *     invalid hardware requirement.
+ *
+ * The parser must not use semantic predicates to implement those checks.
+ *
+ * ============================================================================
+ * 28. AST / IR BOUNDARY
+ * ============================================================================
+ *
+ * The flow is:
  *
  *     source
  *       |
  *       v
- *     Modules.g4
+ *     lexer
+ *       |
+ *       v
+ *     Modules
  *       |
  *       v
  *     frontend AST
@@ -944,133 +1071,150 @@ packageField
  *       |
  *       +--> classical IR
  *       +--> quantum::ir
- *       +--> HDL/hardware representation
- *       +--> distributed representation
+ *       +--> HDL / hardware representation
+ *       +--> distributed / accelerator representation
  *       |
  *       v
- *     optimization / routing / scheduling / target lowering
+ *     optimization
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     lowering
+ *       |
+ *       v
+ *     hardware/runtime
  *
- * In particular, a module declaration must never directly instantiate:
- *
- *     QubitId
- *     PhysicalQubitId
- *     hardware device IDs
- *     schedule IDs
- *     routing structures
- *     QEC structures
- *     ZQN fault objects
- *
- * Those concepts belong to their respective subsystem boundaries.
- *
- * ============================================================================
- * 12. QUANTUM / CLASSICAL / HDL / HARDWARE COMPATIBILITY
- * ============================================================================
- *
- * Module syntax is domain-neutral.
- *
- * Therefore all of the following may be represented as ordinary module
- * namespaces without module-specific machine assumptions:
- *
- *     classical::math
- *     quantum::algorithms
- *     quantum::qec
- *     hdl::rtl
- *     hardware::accelerators
- *     distributed::runtime
- *     ai::models
- *
- * The module grammar does not need separate quantum modules, CPU modules,
- * GPU modules, QPU modules, FPGA modules, or ASIC modules.
- *
- * Domain-specific semantics remain in their domain grammars and semantic
- * layers.
+ * Modules.g4 MUST NOT bypass this architecture.
  *
  * ============================================================================
- * 13. RESOURCE / CAPABILITY INDEPENDENCE
+ * 29. TOOLING CONTRACT
  * ============================================================================
  *
- * Module syntax does not encode:
+ * The parse tree / AST must preserve enough structure for:
  *
- *     number of CPUs
- *     number of GPUs
- *     number of qubits
- *     memory capacity
- *     topology
- *     network size
- *     device count
- *     register count
- *     machine width
- *     accelerator count
+ *     - module navigation;
+ *     - go-to-definition;
+ *     - symbol lookup;
+ *     - module hierarchy visualization;
+ *     - dependency analysis;
+ *     - import analysis;
+ *     - export analysis;
+ *     - refactoring;
+ *     - rename operations;
+ *     - documentation extraction;
+ *     - formatting;
+ *     - source-preserving transformations;
+ *     - diagnostics;
+ *     - IDE/language-server support.
  *
- * A module can therefore remain unchanged while the program is compiled or
- * executed against different available resources.
- *
- * This is required for POCO-REAF:
- *
- *     Program Once
- *          ->
- *     Compile Once
- *          ->
- *     Run Everywhere
- *          ->
- *     Run Anywhere
- *          ->
- *     Run Forever
+ * This grammar must therefore preserve source structure rather than resolving
+ * it during parsing.
  *
  * ============================================================================
- * 14. COMPATIBILITY
+ * 30. COMPATIBILITY
  * ============================================================================
  *
- * Adding a new import/export/package metadata semantic does not require a
- * grammar change unless the source syntax changes.
+ * This version deliberately removes duplicated module-system ownership from the
+ * historical implementation.
  *
- * Adding a new backend, accelerator, quantum processor, HDL target, runtime,
- * package registry, deployment environment, or resource type must not require
- * modification of this grammar merely to recognize the existing module syntax.
+ * The following historical rules are intentionally NOT retained as independent
+ * definitions:
  *
- * New reserved keywords must be handled by the lexical compatibility policy,
- * not silently introduced here.
+ *     moduleVisibility
+ *     importDeclaration
+ *     importClause
+ *     exportDeclaration
+ *     exportClause
+ *     packageDeclaration
+ *     packageBody
+ *     packageField
+ *
+ * They belong to their dedicated grammar components.
+ *
+ * The compatibility wrapper:
+ *
+ *     modulePath
+ *
+ * is retained as a thin qualified-name wrapper so existing parser/tooling
+ * integration can migrate without recreating a second path grammar.
+ *
+ * New code SHOULD use:
+ *
+ *     moduleName
+ *
+ * for module declarations and:
+ *
+ *     qualifiedName
+ *
+ * for general name syntax.
  *
  * ============================================================================
- * 15. HARD-CODING AUDIT
+ * 31. SCALABILITY AUDIT
  * ============================================================================
  *
- * This file contains:
+ * This file contains no:
  *
- *     no fixed module count;
- *     no fixed path depth;
- *     no fixed import count;
- *     no fixed export count;
- *     no fixed package-field count;
- *     no fixed package size;
- *     no fixed hardware size;
- *     no fixed device count;
- *     no fixed quantum count;
- *     no fixed CPU/GPU/QPU count.
+ *     MAX_MODULES
+ *     MAX_MODULE_DEPTH
+ *     MAX_MODULE_ITEMS
+ *     MAX_IMPORTS
+ *     MAX_EXPORTS
+ *     MAX_NAMESPACES
+ *     MAX_QUANTUM_RESOURCES
+ *     MAX_QUBITS
+ *     MAX_DEVICES
+ *     MAX_NODES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
  *
- * Recursive/list productions are bounded only by parser/compiler resources.
+ * No fixed machine topology is represented.
+ *
+ * No fixed resource capacity is represented.
+ *
+ * No finite source-level module graph limit is represented.
  *
  * ============================================================================
- * 16. DETERMINISM / SAFETY
+ * 32. COMPLETION CRITERIA
  * ============================================================================
  *
- * No actions, predicates, target-language code, or semantic callbacks are
- * used in this grammar.
+ * This file is complete when:
  *
- * Consequently this component performs no:
+ *     [ ] It parses canonical module declarations.
+ *     [ ] It supports qualified module names.
+ *     [ ] It supports arbitrary qualified-name depth permitted by resources.
+ *     [ ] It composes canonical visibility syntax.
+ *     [ ] It composes canonical module attributes.
+ *     [ ] It delegates body contents to canonical `item`.
+ *     [ ] It does not redefine imports.
+ *     [ ] It does not redefine exports.
+ *     [ ] It does not redefine packages.
+ *     [ ] It does not redefine dependencies.
+ *     [ ] It does not redefine namespaces.
+ *     [ ] It does not redefine identifiers.
+ *     [ ] It does not redefine qualified-name syntax.
+ *     [ ] It contains no machine-size limits.
+ *     [ ] It contains no hardware identifiers.
+ *     [ ] It performs no I/O.
+ *     [ ] It performs no semantic resolution.
+ *     [ ] It creates no IR.
+ *     [ ] It creates no quantum-specific IR.
+ *     [ ] It contains no Rust actions.
+ *     [ ] It requires no unsafe Rust.
+ *     [ ] It integrates with the aggregate Zamani parser.
+ *     [ ] It passes positive parser tests.
+ *     [ ] It passes negative parser tests.
+ *     [ ] It passes nested-module tests.
+ *     [ ] It passes qualified-name scalability tests.
+ *     [ ] It passes cross-domain module tests.
+ *     [ ] It passes deterministic parsing tests.
  *
- *     filesystem operation;
- *     network operation;
- *     process execution;
- *     environment mutation;
- *     random operation;
- *     hardware access.
- *
- * Generated Rust integration remains subject to the repository-wide rule:
- *
- *     #![forbid(unsafe_code)]
- *
- * or the equivalent crate-level safety policy.
- *
+ * ============================================================================
+ * END
  * ============================================================================
  */
