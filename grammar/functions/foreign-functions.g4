@@ -13,91 +13,88 @@
  *     Production parser grammar
  *
  * Purpose:
- *     Canonical source-level grammar for foreign/external function
- *     declarations and foreign-interface contracts.
+ *     Define the SOURCE-LEVEL syntax for externally implemented functions
+ *     and foreign interfaces.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * ARCHITECTURAL ROLE
  * ============================================================================
  *
- * Zamani source
- *      |
- *      v
- * lexer
- *      |
- *      v
- * ForeignFunctions grammar
- *      |
- *      v
- * canonical frontend AST
- *      |
- *      v
- * structural validation
- *      |
- *      v
- * semantic analysis
- *      |
- *      +--------------------+
- *      |                    |
- *      v                    v
- * classical IR          quantum::ir
- *      |                    |
- *      +----------+---------+
- *                 |
- *                 v
- *        optimization / routing /
- *        scheduling / hardware /
- *        runtime / interoperability
+ * Zamani:
  *
- * This grammar describes the SOURCE-LEVEL INTERFACE.
+ *     source
+ *       |
+ *       v
+ *     lexer
+ *       |
+ *       v
+ *     parser
+ *       |
+ *       +--> functions.g4
+ *       |
+ *       +--> foreign-functions.g4
+ *       |
+ *       +--> types/*
+ *       |
+ *       +--> expressions/*
+ *       |
+ *       +--> effects/*
+ *       |
+ *       +--> core/*
+ *       |
+ *       v
+ *     canonical frontend AST
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       +--> classical IR
+ *       |
+ *       +--> quantum::ir
+ *       |
+ *       v
+ *     lowering / optimization / routing / scheduling / hardware / runtime
  *
- * It does not execute foreign functions.
+ * This grammar defines syntax only.
  *
- * ============================================================================
- * CORE PRINCIPLE
- * ============================================================================
+ * It MUST NOT:
  *
- * A foreign declaration describes an externally supplied computation.
- *
- * It does NOT describe:
- *
- *     - a particular CPU;
- *     - a particular GPU;
- *     - a particular FPGA;
- *     - a particular ASIC;
- *     - a particular QPU;
- *     - a physical qubit;
- *     - a register address;
- *     - a memory address;
- *     - a device ID;
- *     - a network node;
- *     - a vendor implementation;
- *     - a fixed ABI implementation;
- *     - a dynamic-library handle;
- *     - a runtime handle;
- *     - a scheduler;
- *     - a routing decision;
- *     - a calibration;
- *     - a quantum backend;
- *     - a QEC implementation;
- *     - a ZQN implementation.
- *
- * Those are downstream concerns.
+ *     - execute foreign functions;
+ *     - load libraries;
+ *     - resolve symbols;
+ *     - inspect hardware;
+ *     - select a CPU;
+ *     - select a GPU;
+ *     - select an FPGA;
+ *     - select an ASIC;
+ *     - select a QPU;
+ *     - select a physical qubit;
+ *     - select a device;
+ *     - select a network node;
+ *     - select a topology;
+ *     - allocate memory;
+ *     - perform ABI lowering;
+ *     - perform linking;
+ *     - perform dynamic loading;
+ *     - perform scheduling;
+ *     - perform routing;
+ *     - perform optimization;
+ *     - implement QEC;
+ *     - implement ZQN;
+ *     - define quantum IR.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Foreign declarations MUST remain portable descriptions of an interface.
+ * Foreign declarations describe an INTERFACE, not one implementation.
  *
- * The same source declaration may ultimately be implemented by:
+ * A foreign interface may ultimately be provided by:
  *
- *     - a Zamani function;
- *     - a native library;
- *     - C;
- *     - C++;
- *     - another safe systems language;
+ *     - native code;
+ *     - another programming language;
  *     - an operating-system service;
+ *     - a runtime;
  *     - an accelerator;
  *     - an FPGA;
  *     - an ASIC;
@@ -106,8 +103,16 @@
  *     - a distributed service;
  *     - a future execution environment.
  *
- * The grammar therefore records interface requirements and declarations,
- * rather than binding the program to one implementation.
+ * The grammar therefore avoids hard-coded:
+ *
+ *     - vendors;
+ *     - platforms;
+ *     - operating systems;
+ *     - library filenames;
+ *     - device IDs;
+ *     - ABI implementations;
+ *     - hardware dimensions;
+ *     - resource counts.
  *
  * ============================================================================
  * OWNERSHIP
@@ -115,291 +120,170 @@
  *
  * THIS FILE OWNS:
  *
- *     - foreign interface declarations;
- *     - external function declarations;
- *     - foreign function names;
- *     - optional source/interface identity;
- *     - foreign parameter declarations;
- *     - foreign return-type attachment;
- *     - foreign declaration attributes;
- *     - foreign interface requirements;
- *     - foreign interface linkage metadata;
- *     - foreign symbol metadata;
- *     - foreign calling-convention spelling as SOURCE METADATA only;
- *     - foreign variadic declaration syntax;
- *     - foreign declaration version metadata;
- *     - foreign declaration capability requirements;
- *     - foreign declaration effect attachment;
- *     - foreign declaration contract attachment.
+ *     - foreign interface declaration syntax;
+ *     - foreign function declaration syntax;
+ *     - external symbol metadata syntax;
+ *     - external language metadata syntax;
+ *     - ABI/calling-convention metadata syntax;
+ *     - linkage metadata syntax;
+ *     - variadic declaration syntax;
+ *     - callback/function-pointer interface metadata;
+ *     - foreign representation metadata;
+ *     - foreign interface attributes;
+ *     - foreign requirements/capability attachment boundaries.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - general function declarations;
+ *     - ordinary functions
  *       -> grammar/functions/functions.g4
  *
- *     - function types;
+ *     - function types
  *       -> grammar/types/function-types.g4
  *
- *     - general types;
- *       -> grammar/types/
+ *     - general types
+ *       -> grammar/types/*
  *
- *     - expressions;
- *       -> grammar/expressions/
+ *     - expressions
+ *       -> grammar/expressions/*
  *
- *     - statements;
- *       -> grammar/statements/
+ *     - effects
+ *       -> grammar/effects/*
  *
- *     - modules/packages;
- *       -> grammar/modules/
+ *     - capabilities
+ *       -> grammar/core/*
  *
- *     - ABI implementation;
- *       -> compiler/interoperability/runtime layers
+ *     - requirements
+ *       -> grammar/core/*
  *
- *     - dynamic library loading;
- *       -> runtime/interoperability layer
+ *     - attributes
+ *       -> grammar/core/attributes.g4
  *
- *     - linker behavior;
- *       -> compiler/linking layer
+ *     - modules/packages
+ *       -> grammar/modules/*
  *
- *     - calling-convention implementation;
- *       -> target/backend layer
+ *     - memory ownership/lifetimes
+ *       -> grammar/memory/*
  *
- *     - memory layout;
- *       -> target/type/code-generation layers
+ *     - linking
+ *       -> compiler/linking
  *
- *     - hardware discovery;
- *       -> hardware abstraction layer
+ *     - ABI lowering
+ *       -> compiler/backend/target layers
  *
- *     - quantum IR;
- *       -> quantum::ir
- *
- *     - QEC;
- *       -> quantum QEC subsystem
- *
- *     - ZQN;
- *       -> quantum ZQN subsystem
- *
- *     - routing;
- *       -> routing subsystem
- *
- *     - scheduling;
- *       -> scheduling subsystem
- *
- *     - optimization;
- *       -> optimization subsystem
- *
- *     - runtime dispatch;
+ *     - dynamic loading
  *       -> runtime
  *
+ *     - hardware discovery
+ *       -> hardware HAL
+ *
+ *     - routing
+ *       -> routing
+ *
+ *     - scheduling
+ *       -> scheduling
+ *
+ *     - optimization
+ *       -> optimization
+ *
+ *     - QEC
+ *       -> quantum QEC
+ *
+ *     - ZQN
+ *       -> quantum ZQN
+ *
+ *     - canonical quantum IR
+ *       -> quantum::ir
+ *
  * ============================================================================
- * DEPENDENCY CONTRACT
+ * COMPOSITION CONTRACT
  * ============================================================================
  *
- * This grammar consumes:
+ * This grammar is a parser delegate.
  *
- *     grammar/lexer/tokens.g4
- *     grammar/core/names.g4
- *     grammar/core/qualified-names.g4
- *     grammar/types/
- *     grammar/effects/
- *     grammar/core/capabilities.g4
- *     grammar/core/requirements.g4
- *     grammar/core/constraints.g4
- *     grammar/core/attributes.g4
- *     grammar/expressions/
+ * The complete Zamani parser must provide or compose:
  *
- * through parser composition.
- *
- * It does NOT redefine those grammars.
- *
- * The composed parser MUST provide the following canonical rules:
- *
- *     qualifiedName
  *     typeExpression
  *     expression
+ *     qualifiedName
+ *     attribute
  *     effectClause
  *     capabilityRequirement
  *     requirementClause
- *     constraintClause
- *     attribute
  *
- * If the repository chooses different canonical rule names, the composition
- * layer MUST provide compatibility aliases rather than duplicating the
- * underlying grammar.
+ * This grammar deliberately does NOT redefine those constructs.
  *
  * ============================================================================
- * LEXER CONTRACT
+ * LEXICAL CONTRACT
  * ============================================================================
  *
- * This grammar uses the canonical ZamaniTokens vocabulary.
+ * Lexer vocabulary:
  *
- * It MUST NOT define lexer tokens.
+ *     grammar/lexer/tokens.g4
  *
- * Relevant canonical tokens include:
+ * Token vocabulary:
  *
- *     K_EXTERN
- *     K_FN
- *     K_PUB
- *     K_PUBLIC
- *     K_PRIVATE
- *     K_PROTECTED
- *     K_INTERNAL
- *     K_STATIC
- *     K_CONST
- *     K_MUT
- *     K_ASYNC
- *     K_SAFE
- *     K_UNSAFE
- *     K_VOLATILE
- *     K_INLINE
- *     K_FINAL
- *     K_ABSTRACT
- *     K_OVERRIDE
- *     K_WITH
- *     K_AS
- *     K_FROM
- *     K_USE
- *     K_IMPORT
+ *     ZamaniTokens
  *
- *     IDENTIFIER
- *     STRING_LITERAL
- *     ELLIPSIS
- *     THIN_ARROW
- *     DOUBLE_COLON
- *     EQUAL_EQUAL
- *     COMMA
- *     DOT
- *     COLON
- *     SEMICOLON
- *     LPAREN
- *     RPAREN
- *     LBRACE
- *     RBRACE
- *     LBRACKET
- *     RBRACKET
- *
- * The lexer is authoritative for token spelling.
- *
- * ============================================================================
- * SEMANTIC BOUNDARY
- * ============================================================================
- *
- * Parsing answers:
- *
- *     "Is this a syntactically valid foreign declaration?"
- *
- * Semantic analysis answers:
- *
- *     - Does the foreign symbol exist?
- *     - Does the source identity resolve?
- *     - Is the type compatible?
- *     - Is the selected ABI compatible?
- *     - Is the calling convention supported?
- *     - Are ownership rules compatible?
- *     - Are effects compatible?
- *     - Are capabilities available?
- *     - Are resource requirements satisfiable?
- *     - Is the target capable of providing the interface?
- *     - Is the external implementation trusted?
- *     - Is dynamic loading permitted?
- *     - Is the interface safe to invoke?
- *
- * The grammar MUST NOT answer those questions.
- *
- * ============================================================================
- * SAFETY
- * ============================================================================
- *
- * The grammar introduces no executable foreign-function behavior.
- *
- * It cannot:
- *
- *     - load a library;
- *     - open a file;
- *     - access a network;
- *     - resolve a symbol;
- *     - execute native code;
- *     - invoke an ABI;
- *     - access hardware.
- *
- * Rust implementations consuming this grammar MUST use:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Edition 2021
- *
- * and MUST NOT require unsafe Rust.
+ * This grammar MUST NOT define lexer rules.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * There are no grammar-level maximums for:
+ * No grammar-level maximum is imposed on:
  *
- *     foreign interfaces;
- *     foreign functions;
- *     parameters;
- *     generic parameters;
- *     declarations;
- *     source size;
- *     interface metadata;
- *     implementation alternatives;
- *     capabilities;
- *     requirements;
- *     effects.
+ *     - interfaces;
+ *     - functions;
+ *     - parameters;
+ *     - generic parameters;
+ *     - attributes;
+ *     - requirements;
+ *     - capabilities;
+ *     - interface metadata;
+ *     - declarations;
+ *     - source size.
  *
- * Repetition is therefore represented structurally and bounded only by
- * implementation/resource policy.
- *
- * The grammar MUST NOT contain:
+ * There is deliberately no:
  *
  *     MAX_FOREIGN_FUNCTIONS
  *     MAX_PARAMETERS
- *     MAX_ABI_ENTRIES
+ *     MAX_INTERFACES
  *     MAX_DEVICES
  *     MAX_QUBITS
  *     MAX_CPUS
  *     MAX_THREADS
+ *     MAX_GPUS
  *
- * or equivalent machine-specific ceilings.
+ * or equivalent limit.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing MUST be deterministic.
+ * Parsing depends only on source text and the supplied token stream.
  *
- * This grammar MUST NOT depend on:
+ * It does not depend on:
  *
- *     - wall-clock time;
- *     - randomness;
- *     - process state;
- *     - machine topology;
- *     - environment variables;
+ *     - hardware;
  *     - filesystem state;
  *     - network state;
+ *     - environment variables;
+ *     - randomness;
+ *     - wall-clock time;
  *     - backend availability.
  *
  * ============================================================================
- * SOURCE COMPATIBILITY
+ * SAFETY
  * ============================================================================
  *
- * The canonical legacy Zamani form:
+ * This grammar contains no executable code.
  *
- *     extern "library" {
- *         fn helper(x: int) -> int;
- *     }
+ * Rust implementations integrating the generated parser target:
  *
- * remains representable.
+ *     Rust 1.97 / 1.97.1
+ *     Edition 2021
  *
- * A direct foreign binding may be represented as:
- *
- *     foreign library::helper(x);
- *
- * only where the surrounding expression/call grammar explicitly permits
- * foreign calls.
- *
- * This file owns the DECLARATION contract, not expression-call semantics.
+ * and must remain safe Rust.
  *
  * ============================================================================
  */
@@ -412,44 +296,32 @@ options {
 
 
 /* ============================================================================
- * 1. TOP-LEVEL FOREIGN DECLARATION
+ * 1. FOREIGN INTERFACE
  * ============================================================================
  *
- * Canonical forms:
+ * Canonical examples:
  *
- *     extern "source" {
- *         fn name(...);
+ *     extern "math" {
+ *         fn sin(x: float) -> float;
  *     }
  *
  *     extern {
- *         fn name(...);
+ *         fn helper(x: int) -> int;
  *     }
  *
- *     extern "source" @attribute {
- *         fn name(...);
+ *     extern "runtime.math" @some_attribute {
+ *         fn sin(x: float) -> float;
  *     }
  *
- * The source identifier is intentionally opaque at grammar level.
- *
- * It MUST NOT be interpreted as:
- *
- *     - a filesystem path;
- *     - a URL;
- *     - a dynamic-library filename;
- *     - a package;
- *     - a device;
- *     - a vendor;
- *     - a backend.
- *
- * Such interpretation belongs to semantic/linking policy.
+ * The source identity is opaque to this grammar.
  * ============================================================================
  */
 
 foreignFunctionDeclaration
-    : foreignDeclarationModifiers*
+    : foreignDeclarationModifier*
       K_EXTERN
       foreignSource?
-      foreignDeclarationAttribute*
+      foreignDeclarationMetadata*
       LBRACE
       foreignFunctionMember*
       RBRACE
@@ -457,19 +329,20 @@ foreignFunctionDeclaration
 
 
 /* ============================================================================
- * 2. FOREIGN SOURCE
+ * 2. FOREIGN SOURCE IDENTITY
  * ============================================================================
  *
- * The source is an opaque source-level identity.
+ * The source identity is NOT interpreted here as:
  *
- * Examples may include:
+ *     - a path;
+ *     - a URL;
+ *     - a library filename;
+ *     - a package;
+ *     - a device;
+ *     - a vendor;
+ *     - a backend.
  *
- *     extern "libmath" { ... }
- *     extern "platform.math" { ... }
- *     extern "service.math" { ... }
- *     extern "quantum.interface" { ... }
- *
- * The grammar does not assign implementation semantics to the string.
+ * Those interpretations belong to semantic/linking/deployment layers.
  * ============================================================================
  */
 
@@ -481,16 +354,9 @@ foreignSource
 /* ============================================================================
  * 3. FOREIGN DECLARATION MODIFIERS
  * ============================================================================
- *
- * These are source-level modifiers only.
- *
- * Their legality and meaning are semantic.
- *
- * No modifier here selects a physical target.
- * ============================================================================
  */
 
-foreignDeclarationModifiers
+foreignDeclarationModifier
     : K_PUB
     | K_PUBLIC
     | K_PRIVATE
@@ -501,38 +367,157 @@ foreignDeclarationModifiers
     | K_INLINE
     | K_FINAL
     | K_ABSTRACT
-    | K_EXTERN
     ;
 
 
 /* ============================================================================
- * 4. FOREIGN DECLARATION ATTRIBUTES
+ * 4. FOREIGN DECLARATION METADATA
  * ============================================================================
  *
- * Attributes are deliberately delegated to the canonical attribute grammar.
+ * Metadata is intentionally extensible.
  *
- * The composed parser supplies:
+ * This avoids adding hard-coded keywords such as:
  *
- *     attribute
+ *     C
+ *     C++
+ *     Java
+ *     Python
+ *     CUDA
+ *     OpenCL
+ *     AWS
+ *     Azure
+ *     GCP
  *
- * This grammar does not create a second attribute language.
+ * as grammar-level concepts.
+ *
+ * The semantic layer may interpret metadata according to a versioned schema.
  * ============================================================================
  */
 
-foreignDeclarationAttribute
+foreignDeclarationMetadata
+    : foreignLanguageClause
+    | foreignAbiClause
+    | foreignLinkageClause
+    | foreignAttribute
+    | foreignRequirementAttachment
+    | foreignCapabilityAttachment
+    ;
+
+
+/* ============================================================================
+ * 5. FOREIGN LANGUAGE
+ * ============================================================================
+ *
+ * The language name is symbolic and extensible.
+ *
+ * Examples:
+ *
+ *     language = "C"
+ *     language = "C++"
+ *     language = "Fortran"
+ *     language = "Python"
+ *     language = "SystemVerilog"
+ *     language = "OpenQASM"
+ *
+ * No exhaustive list is encoded.
+ * ============================================================================
+ */
+
+foreignLanguageClause
+    : K_LANGUAGE EQUALS STRING_LITERAL
+    ;
+
+
+/* ============================================================================
+ * 6. FOREIGN ABI
+ * ============================================================================
+ *
+ * ABI names are symbolic.
+ *
+ * Examples may include:
+ *
+ *     c
+ *     cdecl
+ *     stdcall
+ *     system
+ *     platform-defined
+ *
+ * This grammar does not decide whether an ABI exists or is supported.
+ * ============================================================================
+ */
+
+foreignAbiClause
+    : foreignAbiKeyword EQUALS STRING_LITERAL
+    ;
+
+
+foreignAbiKeyword
+    : IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * 7. FOREIGN LINKAGE
+ * ============================================================================
+ *
+ * Linkage metadata identifies how a declaration is externally connected.
+ *
+ * It does NOT perform linking.
+ * ============================================================================
+ */
+
+foreignLinkageClause
+    : foreignLinkageKeyword EQUALS STRING_LITERAL
+    ;
+
+
+foreignLinkageKeyword
+    : IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * 8. FOREIGN ATTRIBUTES
+ * ============================================================================
+ *
+ * Attribute semantics belong to grammar/core/attributes.g4.
+ *
+ * This rule is only an integration boundary.
+ * ============================================================================
+ */
+
+foreignAttribute
     : attribute
     ;
 
 
 /* ============================================================================
- * 5. FOREIGN INTERFACE MEMBERS
+ * 9. FOREIGN REQUIREMENTS
  * ============================================================================
  *
- * A foreign interface may contain function declarations.
+ * Requirements describe what must be available for an interface to be usable.
  *
- * Future repository extensions MAY add additional interface members, but they
- * must be introduced explicitly rather than silently treating arbitrary source
- * text as an external declaration.
+ * They do not identify one physical machine.
+ * ============================================================================
+ */
+
+foreignRequirementAttachment
+    : requirementClause
+    ;
+
+
+/* ============================================================================
+ * 10. FOREIGN CAPABILITIES
+ * ============================================================================
+ */
+
+foreignCapabilityAttachment
+    : capabilityRequirement
+    ;
+
+
+/* ============================================================================
+ * 11. FOREIGN MEMBERS
  * ============================================================================
  */
 
@@ -542,29 +527,27 @@ foreignFunctionMember
 
 
 /* ============================================================================
- * 6. FOREIGN FUNCTION
+ * 12. FOREIGN FUNCTION
  * ============================================================================
  *
- * A foreign function is a declaration, never a definition.
+ * Foreign functions are declarations only.
  *
- * Therefore:
+ * A foreign function body is intentionally not accepted.
  *
- *     fn foo(...);
+ * Valid:
  *
- * is valid.
+ *     fn add(a: int, b: int) -> int;
  *
- * A body:
+ * Invalid:
  *
- *     { ... }
- *
- * is deliberately NOT accepted.
- *
- * Implementations are supplied elsewhere.
+ *     fn add(a: int, b: int) -> int {
+ *         ...
+ *     }
  * ============================================================================
  */
 
 foreignFunction
-    : foreignFunctionModifiers*
+    : foreignFunctionModifier*
       K_FN
       foreignFunctionName
       foreignGenericParameters?
@@ -572,28 +555,17 @@ foreignFunction
       foreignParameterList?
       RPAREN
       foreignReturnClause?
-      foreignEffectClause?
-      foreignRequirementClause*
-      foreignCapabilityClause*
-      foreignFunctionAttribute*
+      foreignFunctionMetadata*
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 7. FOREIGN FUNCTION MODIFIERS
- * ============================================================================
- *
- * `extern` is intentionally accepted for compatibility with source that
- * repeats the external nature at function level.
- *
- * Semantic analysis MUST determine whether duplicate `extern` modifiers are
- * redundant, permitted, deprecated, or invalid for the selected language
- * version.
+ * 13. FOREIGN FUNCTION MODIFIERS
  * ============================================================================
  */
 
-foreignFunctionModifiers
+foreignFunctionModifier
     : K_PUB
     | K_PUBLIC
     | K_PRIVATE
@@ -601,20 +573,18 @@ foreignFunctionModifiers
     | K_INTERNAL
     | K_STATIC
     | K_CONST
-    | K_MUT
     | K_ASYNC
     | K_VOLATILE
     | K_INLINE
     | K_FINAL
     | K_ABSTRACT
     | K_OVERRIDE
-    | K_EXTERN
     | K_SAFE
     ;
 
 
 /* ============================================================================
- * 8. FOREIGN FUNCTION NAME
+ * 14. FOREIGN FUNCTION NAME
  * ============================================================================
  */
 
@@ -624,19 +594,28 @@ foreignFunctionName
 
 
 /* ============================================================================
- * 9. FOREIGN GENERIC PARAMETERS
+ * 15. FOREIGN GENERIC PARAMETERS
  * ============================================================================
  *
- * Generic foreign interfaces remain symbolic.
+ * Generic parameters remain symbolic.
  *
- * They do not represent physical resources.
+ * They do not represent:
+ *
+ *     - number of CPUs;
+ *     - number of GPUs;
+ *     - number of qubits;
+ *     - memory capacity;
+ *     - device count.
  * ============================================================================
  */
 
 foreignGenericParameters
     : LESS_THAN
       foreignGenericParameter
-      (COMMA foreignGenericParameter)*
+      (
+          COMMA
+          foreignGenericParameter
+      )*
       COMMA?
       GREATER_THAN
     ;
@@ -655,43 +634,27 @@ foreignGenericParameterBound
 
 
 /* ============================================================================
- * 10. FOREIGN PARAMETERS
- * ============================================================================
- *
- * Ordinary parameters.
- *
- * No fixed parameter limit is encoded.
+ * 16. FOREIGN PARAMETERS
  * ============================================================================
  */
 
 foreignParameterList
     : foreignParameter
-      (COMMA foreignParameter)*
+      (
+          COMMA
+          foreignParameter
+      )*
       COMMA?
     ;
 
 
-/* ============================================================================
- * 11. FOREIGN PARAMETER
- * ============================================================================
- *
- * The grammar deliberately uses canonical typeExpression.
- *
- * It does not introduce ABI-specific types such as:
- *
- *     c_int
- *     llvm_i32
- *     cuda_ptr
- *     qir_qubit
- *
- * Such representations belong to interoperability/type-lowering layers.
- * ============================================================================
- */
-
 foreignParameter
     : foreignParameterModifier*
       foreignParameterName
-      (COLON typeExpression)?
+      (
+          COLON
+          typeExpression
+      )?
       foreignParameterDefault?
     ;
 
@@ -709,55 +672,13 @@ foreignParameterName
 
 
 foreignParameterDefault
-    : EQUAL_EQUAL
+    : EQUALS
       expression
     ;
 
 
 /* ============================================================================
- * 12. VARIADIC FOREIGN PARAMETERS
- * ============================================================================
- *
- * A variadic marker is source syntax only.
- *
- * Semantic analysis determines whether the selected external interface can
- * actually support variadic calls.
- *
- * No finite argument count is encoded.
- * ============================================================================
- */
-
-foreignVariadicParameter
-    : foreignParameterModifier*
-      ELLIPSIS
-      foreignParameterName
-      (COLON typeExpression)?
-    ;
-
-
-/*
- * Explicit list form preserving source order.
- *
- * The semantic layer MUST enforce:
- *
- *     - placement rules;
- *     - uniqueness;
- *     - at most one variadic parameter where required;
- *     - compatibility with the resolved interface.
- */
-
-foreignParameterListWithVariadic
-    : foreignParameter
-      (COMMA foreignParameter)*
-      COMMA
-      foreignVariadicParameter
-      COMMA?
-    | foreignVariadicParameter
-    ;
-
-
-/* ============================================================================
- * 13. FOREIGN RETURN TYPE
+ * 17. FOREIGN RETURN TYPE
  * ============================================================================
  */
 
@@ -768,119 +689,168 @@ foreignReturnClause
 
 
 /* ============================================================================
- * 14. FOREIGN EFFECTS
+ * 18. FOREIGN FUNCTION METADATA
  * ============================================================================
  *
- * Effect syntax remains owned by grammar/effects/.
- *
- * The composition layer supplies effectClause.
- *
- * This wrapper prevents foreign-functions.g4 from creating another effect
- * language.
+ * These metadata categories are deliberately open-ended.
  * ============================================================================
  */
 
-foreignEffectClause
+foreignFunctionMetadata
+    : foreignSymbolClause
+    | foreignLanguageClause
+    | foreignAbiClause
+    | foreignLinkageClause
+    | foreignRepresentationClause
+    | foreignVariadicClause
+    | foreignCallbackClause
+    | foreignEffectAttachment
+    | foreignRequirementAttachment
+    | foreignCapabilityAttachment
+    | foreignAttribute
+    ;
+
+
+/* ============================================================================
+ * 19. FOREIGN SYMBOL
+ * ============================================================================
+ *
+ * Separates the Zamani declaration name from the externally visible symbol.
+ *
+ * Example:
+ *
+ *     fn add_numbers(a: int, b: int)
+ *         symbol = "external_add";
+ *
+ * This is metadata only.
+ * ============================================================================
+ */
+
+foreignSymbolClause
+    : foreignSymbolKeyword EQUALS STRING_LITERAL
+    ;
+
+
+foreignSymbolKeyword
+    : IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * 20. FOREIGN REPRESENTATION
+ * ============================================================================
+ *
+ * A source type and its external representation are distinct concepts.
+ *
+ * Examples:
+ *
+ *     representation = "opaque"
+ *     representation = "pointer"
+ *     representation = "struct"
+ *     representation = "vector"
+ *
+ * The representation name is intentionally symbolic.
+ * ============================================================================
+ */
+
+foreignRepresentationClause
+    : foreignRepresentationKeyword EQUALS STRING_LITERAL
+    ;
+
+
+foreignRepresentationKeyword
+    : IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * 21. VARIADIC INTERFACE
+ * ============================================================================
+ *
+ * The grammar permits declaration of variadic foreign functions without
+ * imposing an argument-count limit.
+ *
+ * Semantic analysis determines whether the selected interface/ABI permits it.
+ * ============================================================================
+ */
+
+foreignVariadicClause
+    : foreignVariadicKeyword
+    ;
+
+
+foreignVariadicKeyword
+    : IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * 22. CALLBACK INTERFACE
+ * ============================================================================
+ *
+ * Callback metadata remains symbolic because complete function-type semantics
+ * belong to grammar/types/function-types.g4.
+ *
+ * The foreign layer does not create a second function-type grammar.
+ * ============================================================================
+ */
+
+foreignCallbackClause
+    : foreignCallbackKeyword
+      EQUALS
+      typeExpression
+    ;
+
+
+foreignCallbackKeyword
+    : IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * 23. EFFECT ATTACHMENT
+ * ============================================================================
+ *
+ * Effects are owned by grammar/effects/*.
+ * ============================================================================
+ */
+
+foreignEffectAttachment
     : effectClause
     ;
 
 
 /* ============================================================================
- * 15. FOREIGN REQUIREMENTS
+ * 24. GENERIC FOREIGN CALL TARGET
  * ============================================================================
  *
- * Requirements describe semantic prerequisites.
+ * A foreign declaration and a foreign call are deliberately separated.
  *
- * They do NOT select a particular machine.
+ * The declaration grammar owns the interface.
+ *
+ * Expression/call grammar owns invocation syntax.
+ *
+ * This rule exists only as a reusable name boundary for parser composition.
  * ============================================================================
  */
 
-foreignRequirementClause
-    : requirementClause
+foreignQualifiedSymbol
+    : qualifiedName
     ;
 
 
 /* ============================================================================
- * 16. FOREIGN CAPABILITIES
+ * 25. OPTIONAL EXPLICIT EXTERNAL SYMBOL
  * ============================================================================
  *
- * Capabilities describe what an implementation must provide.
- *
- * A capability is not a device identifier.
- *
- * Example semantic distinction:
- *
- *     requires quantum
- *
- * is not equivalent to:
- *
- *     use qpu_17
- *
- * The latter belongs to deployment/target configuration.
- * ============================================================================
- */
-
-foreignCapabilityClause
-    : capabilityRequirement
-    ;
-
-
-/* ============================================================================
- * 17. EXPLICIT FOREIGN SYMBOL DECLARATION
- * ============================================================================
- *
- * This rule provides a structured symbol-binding form for implementations
- * that need to distinguish the Zamani source name from an external symbol.
+ * A qualified external identity may be expressed symbolically.
  *
  * Example:
  *
- *     fn add(a: int, b: int) -> int
- *         symbol "external_add";
+ *     namespace::symbol
  *
- * The actual symbol-resolution policy remains semantic.
- *
- * This rule is optional syntax and must only be enabled by the composed
- * language profile if the canonical specification accepts symbol metadata.
- * ============================================================================
- */
-
-foreignSymbolBinding
-    : K_EXTERN
-      IDENTIFIER
-      DOUBLE_COLON
-      STRING_LITERAL
-    ;
-
-
-/* ============================================================================
- * 18. EXPLICIT SOURCE-TO-SYMBOL BINDING
- * ============================================================================
- *
- * This is metadata, not execution.
- *
- * Example:
- *
- *     bind "zamani.math" :: "sqrt";
- *
- * The exact use of this production is intentionally left to the semantic
- * composition layer.
- * ============================================================================
- */
-
-foreignSymbolReference
-    : STRING_LITERAL
-      DOUBLE_COLON
-      IDENTIFIER
-    ;
-
-
-/* ============================================================================
- * 19. FOREIGN INTERFACE NAME
- * ============================================================================
- *
- * Qualified names are consumed through the canonical name grammar.
- *
- * This prevents foreign interfaces from creating a second namespace model.
+ * The grammar does not interpret the namespace as a library, vendor, device,
+ * platform, or filesystem path.
  * ============================================================================
  */
 
@@ -890,17 +860,17 @@ foreignQualifiedName
 
 
 /* ============================================================================
- * 20. FOREIGN DECLARATION WITH QUALIFIED SOURCE
+ * 26. FOREIGN INTERFACE GROUP
  * ============================================================================
  *
- * This is an explicit syntactic boundary for future interoperability profiles.
- *
- * The qualified name remains source metadata.
+ * Reusable wrapper for parser composition.
  * ============================================================================
  */
 
-foreignNamedInterface
-    : foreignQualifiedName
+foreignInterface
+    : K_EXTERN
+      foreignSource?
+      foreignDeclarationMetadata*
       LBRACE
       foreignFunctionMember*
       RBRACE
@@ -908,735 +878,226 @@ foreignNamedInterface
 
 
 /* ============================================================================
- * 21. FOREIGN CALL INTEGRATION CONTRACT
+ * 27. DECLARATION-ONLY FOREIGN FUNCTION
  * ============================================================================
  *
- * IMPORTANT:
+ * Useful when another grammar already supplies the `extern` boundary.
+ * ============================================================================
+ */
+
+foreignFunctionPrototype
+    : foreignFunction
+    ;
+
+
+/* ============================================================================
+ * 28. SEMANTIC CONTRACT
+ * ============================================================================
  *
- * This file does NOT own the ordinary expression:
+ * The parser MUST NOT determine:
  *
- *     library::function(...)
+ *     - whether a library exists;
+ *     - whether a symbol exists;
+ *     - whether an ABI is supported;
+ *     - whether a language implementation exists;
+ *     - whether a representation is compatible;
+ *     - whether ownership is safe;
+ *     - whether a capability exists;
+ *     - whether a resource requirement can be satisfied;
+ *     - whether a target supports the interface;
+ *     - whether external code is trusted;
+ *     - whether a dynamic loader may be used.
  *
- * nor:
- *
- *     foreign library::function(...)
- *
- * Those are call-expression concerns and belong to the canonical expressions
- * / interoperability grammar.
- *
- * This prevents the same call syntax from being parsed independently by:
- *
- *     functions/foreign-functions.g4
- *     expressions/calls.g4
- *     interoperability/
- *
- * There must be one canonical call-expression production.
- *
+ * These are semantic/compiler/runtime questions.
  * ============================================================================
  */
 
 
 /* ============================================================================
- * 22. ABI INTEGRATION CONTRACT
+ * 29. HARD-CODING PROHIBITIONS
  * ============================================================================
  *
- * ABI syntax MUST remain declarative.
+ * This grammar MUST NOT grow exhaustive keyword lists for:
  *
- * If the language eventually permits:
+ *     vendors
+ *     cloud providers
+ *     operating systems
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     QPUs
+ *     quantum providers
+ *     network providers
+ *     library names
+ *     device models
+ *     ABI implementations
+ *     deployment environments
  *
- *     abi "C"
- *     abi "system"
- *     calling_convention "..."
- *
- * those values MUST be represented as source metadata and interpreted by the
- * interoperability/compiler layer.
- *
- * They MUST NOT:
- *
- *     - generate native calls;
- *     - load libraries;
- *     - select hardware;
- *     - allocate memory;
- *     - access registers;
- *     - access physical addresses.
- *
- * The grammar deliberately does not encode a fixed list of vendor ABI names.
- *
- * This is necessary for POCO-REAF and future interoperability.
- *
+ * Such values are represented as symbolic metadata and interpreted downstream.
  * ============================================================================
  */
 
 
 /* ============================================================================
- * 23. QUANTUM INTEGRATION
+ * 30. INTEROPERABILITY BOUNDARY
  * ============================================================================
  *
- * Foreign functions MAY expose quantum-related interfaces.
+ * Conceptually:
  *
- * Example:
+ *     Foreign source declaration
+ *             |
+ *             v
+ *     parsed foreign interface
+ *             |
+ *             v
+ *     semantic validation
+ *             |
+ *             +--> type compatibility
+ *             +--> effect compatibility
+ *             +--> capability requirements
+ *             +--> resource requirements
+ *             +--> ABI compatibility
+ *             +--> linkage resolution
+ *             |
+ *             v
+ *     canonical semantic model
+ *             |
+ *             +--> classical IR
+ *             |
+ *             +--> quantum::ir
+ *             |
+ *             v
+ *     target-specific lowering
  *
- *     extern "quantum.service" {
- *         fn execute(circuit: QuantumCircuit) -> Measurement;
- *     }
+ * Foreign grammar MUST NOT bypass the canonical semantic/IR boundary.
+ * ============================================================================
+ */
+
+
+/* ============================================================================
+ * 31. QUANTUM INTEROPERABILITY
+ * ============================================================================
  *
- * This grammar does not define:
+ * A foreign interface may eventually expose quantum functionality.
  *
- *     - QPU topology;
- *     - physical qubit IDs;
- *     - gate calibration;
- *     - QEC;
- *     - ZQN;
- *     - scheduling;
- *     - routing.
+ * This grammar does NOT create quantum-specific foreign types.
  *
- * If the type is quantum-specific, its canonical type grammar owns the syntax.
+ * For example, it must NOT define:
  *
- * Later semantic lowering MAY map an external call into:
+ *     QPU_PTR
+ *     PHYSICAL_QUBIT
+ *     IBM_QUBIT
+ *     CUDA_QUBIT
+ *     QIR_QUBIT
  *
+ * Instead:
+ *
+ *     foreign declarations
+ *         |
+ *         v
+ *     canonical Zamani type semantics
+ *         |
+ *         v
+ *     quantum semantic analysis
+ *         |
+ *         v
  *     quantum::ir
  *
- * where appropriate.
- *
- * The grammar itself MUST NEVER construct or duplicate quantum IR.
- *
+ * Hardware realization remains downstream.
  * ============================================================================
  */
 
 
 /* ============================================================================
- * 24. HARDWARE INTEGRATION
+ * 32. MEMORY / OWNERSHIP INTEROPERABILITY
  * ============================================================================
  *
- * Foreign functions MAY expose hardware-oriented interfaces.
+ * This grammar does not create a second ownership system.
  *
- * Example:
+ * Ownership, borrowing, lifetime, transfer, retain/release, allocation and
+ * deallocation semantics belong to the memory/type/semantic subsystems.
  *
- *     extern "accelerator" {
- *         fn transform(data: Tensor) -> Tensor;
- *     }
- *
- * The declaration does not specify:
- *
- *     GPU count;
- *     FPGA count;
- *     memory size;
- *     vector width;
- *     device address;
- *     PCI identifier;
- *     accelerator topology.
- *
- * Hardware capability resolution occurs downstream.
- *
+ * Foreign declarations may carry metadata through the generic attribute and
+ * requirement mechanisms.
  * ============================================================================
  */
 
 
 /* ============================================================================
- * 25. DISTRIBUTED INTEGRATION
+ * 33. SECURITY
  * ============================================================================
  *
- * A foreign function MAY represent a distributed service.
+ * Foreign declarations are trust boundaries.
  *
- * The grammar does not encode:
+ * Semantic/compiler layers may use the parsed declaration to enforce:
  *
- *     node count;
- *     node identity;
- *     topology;
- *     network address;
- *     cluster size;
- *     deployment location.
+ *     - trust policy;
+ *     - capability policy;
+ *     - effect policy;
+ *     - sandbox policy;
+ *     - signing policy;
+ *     - provenance;
+ *     - ABI safety;
+ *     - deployment policy.
  *
- * Those are deployment/runtime concerns.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 26. OWNERSHIP / MEMORY INTEGRATION
- * ============================================================================
- *
- * Foreign parameters may use canonical Zamani ownership/type constructs.
- *
- * This grammar does not invent an ABI memory model.
- *
- * Semantic interoperability must determine whether:
- *
- *     ownership;
- *     borrowing;
- *     lifetime;
- *     mutability;
- *     transfer;
- *     copying;
- *     aliasing
- *
- * can be represented safely by the foreign interface.
- *
+ * None of these policies are executed by this grammar.
  * ============================================================================
  */
 
 
 /* ============================================================================
- * 27. SECURITY INTEGRATION
+ * 34. COMPATIBILITY
  * ============================================================================
  *
- * A foreign declaration is an authority boundary.
- *
- * The grammar itself does not grant authority.
- *
- * Semantic analysis and runtime policy MUST determine:
- *
- *     - whether the interface is permitted;
- *     - whether the source is trusted;
- *     - whether execution is sandboxed;
- *     - whether capabilities are granted;
- *     - whether network/filesystem access is permitted;
- *     - whether the foreign implementation is allowed.
- *
- * A source declaration MUST NOT implicitly bypass the security model.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 28. DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * Parser diagnostics SHOULD identify:
- *
- *     - missing foreign source;
- *     - malformed foreign function;
- *     - missing function name;
- *     - malformed parameter list;
- *     - malformed return clause;
- *     - malformed generic parameter list;
- *     - invalid declaration termination;
- *     - unexpected function body;
- *     - malformed foreign metadata.
- *
- * Semantic diagnostics belong to semantic analysis.
- *
- * Examples:
- *
- *     foreign symbol not found
- *     ABI incompatible
- *     capability unavailable
- *     foreign source not permitted
- *     foreign interface type incompatible
- *
- * MUST NOT be reported by this grammar.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 29. AST INTEGRATION
- * ============================================================================
- *
- * The parser MUST lower:
- *
- *     foreignFunctionDeclaration
- *
- * into the repository's canonical external declaration AST.
- *
- * The current repository already defines an ExternalDeclaration concept for:
- *
- *     extern "source" { ... }
- *
- * and deliberately stores canonical child NodeIds rather than embedding
- * duplicate AST hierarchies.
- *
- * Therefore the parser integration contract is:
- *
- *     foreignFunctionDeclaration
- *              |
- *              v
- *     ExternalDeclaration
- *              |
- *              +---- NodeId -> external function declaration
- *              |
- *              +---- NodeId -> external function declaration
- *              |
- *              +---- ...
- *
- * This grammar MUST NOT introduce:
- *
- *     ForeignFunctionAst
- *     ForeignAbiAst
- *     ForeignRuntimeAst
- *
- * if equivalent canonical AST nodes already exist.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 30. SEMANTIC INTEGRATION
- * ============================================================================
- *
- * Semantic analysis MUST resolve:
- *
- *     source identity;
- *     namespace;
- *     function identity;
- *     parameter types;
- *     result types;
- *     generic constraints;
- *     effects;
- *     requirements;
- *     capabilities;
- *     ownership;
- *     ABI compatibility;
- *     implementation availability;
- *     security policy.
- *
- * No such resolution occurs during parsing.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 31. IR INTEGRATION
- * ============================================================================
- *
- * A foreign declaration normally does not become an executable IR operation.
- *
- * It supplies interface metadata.
- *
- * A foreign call expression may subsequently lower into the appropriate
- * canonical IR representation.
- *
- * For quantum calls:
- *
- *     source
- *       |
- *       v
- *     AST
- *       |
- *       v
- *     semantic resolution
- *       |
- *       v
- *     quantum::ir
- *
- * where the call is semantically a quantum operation.
- *
- * The grammar MUST NOT duplicate quantum::ir.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 32. COMPILER INTEGRATION
- * ============================================================================
- *
- * Compiler stages consume the resolved semantic declaration.
- *
- * Possible later stages include:
- *
- *     name resolution
- *     type checking
- *     effect checking
- *     capability checking
- *     ABI checking
- *     interface resolution
- *     linking
- *     lowering
- *     optimization
- *     scheduling
- *     routing
- *     target selection
- *     code generation
- *
- * None of those stages is owned by this grammar.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 33. RUNTIME INTEGRATION
- * ============================================================================
- *
- * Runtime integration may resolve a foreign implementation dynamically or
- * statically according to runtime policy.
- *
- * This grammar imposes no requirement that the implementation be:
- *
- *     native;
- *     local;
- *     synchronous;
- *     CPU-based;
- *     classical;
- *     quantum;
- *     single-device;
- *     single-node.
- *
- * Runtime behavior is downstream.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 34. NO UNSAFE REQUIREMENT
- * ============================================================================
- *
- * Nothing in this grammar requires unsafe Rust.
- *
- * Foreign execution implementations MUST be isolated behind safe Rust
- * abstractions.
- *
- * This grammar therefore remains compatible with the repository requirement:
- *
- *     Rust 1.97 / 1.97.1
- *     Edition 2021
- *     no unsafe
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 35. COMPATIBILITY
- * ============================================================================
- *
- * Existing canonical syntax:
- *
- *     extern "library" {
- *         fn foo(x: int) -> int;
- *     }
- *
- * MUST remain parseable.
- *
- * Existing direct-call syntax must remain owned by the appropriate expression
- * grammar rather than being duplicated here.
- *
- * Changes to this grammar MUST be classified as:
- *
- *     Equivalent
- *     Compatible Extension
- *     Deprecated
- *     Breaking
- *     Experimental
- *     Reserved
- *
- * according to:
- *
- *     grammar/specification/compatibility.md
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 36. SCALABILITY TEST CONTRACT
- * ============================================================================
- *
- * The grammar MUST parse foreign interfaces containing:
- *
- *     zero functions;
- *     one function;
- *     many functions;
- *     many parameters;
- *     generic parameters;
- *     variadic declarations;
- *     long qualified names;
- *     large type expressions;
- *     large metadata sets.
- *
- * No artificial language maximum is permitted.
- *
- * Extremely large inputs may still be rejected by configurable parser/resource
- * policies. Such limits are implementation/resource limits, not grammar
- * semantics.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 37. POSITIVE TEST CONTRACT
- * ============================================================================
- *
- * Minimum positive examples:
+ * Legacy conceptual form:
  *
  *     extern "math" {
- *         fn sqrt(x: float) -> float;
+ *         fn add(a: int, b: int) -> int;
  *     }
  *
- *     extern {
- *         fn log(x: float) -> float;
- *     }
+ * remains representable.
  *
- *     extern "quantum.interface" {
- *         fn execute(circuit: QuantumCircuit) -> Measurement;
- *     }
- *
- *     extern "accelerator" {
- *         fn transform(data: Tensor) -> Tensor;
- *     }
- *
- *     extern "service" {
- *         fn request<T>(value: T) -> T;
- *     }
- *
- *     extern "native" {
- *         fn printf(...args: str) -> int;
- *     }
- *
- * Exact availability of QuantumCircuit, Measurement, Tensor, etc. is determined
- * by the canonical type grammar.
- *
+ * The grammar intentionally does not require the foreign source to be a
+ * particular library or platform.
  * ============================================================================
  */
 
 
 /* ============================================================================
- * 38. NEGATIVE TEST CONTRACT
+ * 35. PRODUCTION INVARIANTS
  * ============================================================================
  *
- * These MUST be rejected:
+ * INVARIANT 1
+ *     No physical-machine limits are encoded.
  *
- *     extern "x" {
- *         fn;
- *     }
+ * INVARIANT 2
+ *     No vendor/platform enumeration is encoded.
  *
- *     extern "x" {
- *         fn foo()
- *     }
+ * INVARIANT 3
+ *     No second type system is created.
  *
- *     extern "x" {
- *         fn foo() { }
- *     }
+ * INVARIANT 4
+ *     No second expression grammar is created.
  *
- *     extern "x" {
- *         fn foo(;
- *     }
+ * INVARIANT 5
+ *     No second function-type grammar is created.
  *
- *     extern "x" {
- *         fn foo() -> ;
- *     }
+ * INVARIANT 6
+ *     No ABI implementation is performed.
  *
- *     extern "x" {
- *         fn foo(...);
- *     }
+ * INVARIANT 7
+ *     No linker/runtime behavior is performed.
  *
- *     extern "x" {
- *         fn foo(x: int) -> int = 1;
- *     }
+ * INVARIANT 8
+ *     Foreign declarations remain semantic interfaces.
  *
- * The final case is especially important:
+ * INVARIANT 9
+ *     Quantum interfaces must ultimately enter canonical quantum semantics.
  *
- * foreign functions are declarations, not definitions.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 39. BOUNDARY TEST CONTRACT
- * ============================================================================
- *
- * Test:
- *
- *     - empty interface;
- *     - one declaration;
- *     - large declaration lists;
- *     - large parameter lists;
- *     - generic declarations;
- *     - variadic declarations;
- *     - deeply nested type expressions;
- *     - long source identities;
- *     - large attribute sets.
- *
- * The tests MUST NOT assume:
- *
- *     32 qubits;
- *     64 parameters;
- *     1024 functions;
- *     128 devices;
- *     any other arbitrary machine-derived limit.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 40. CROSS-DOMAIN TEST CONTRACT
- * ============================================================================
- *
- * Foreign interfaces MUST be testable with:
- *
- *     classical + foreign
- *     quantum + foreign
- *     hybrid + foreign
- *     HDL + foreign
- *     hardware + foreign
- *     distributed + foreign
- *     AI + foreign
- *     networking + foreign
- *     security + foreign
- *
- * The grammar remains domain-neutral.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 41. ROUND-TRIP CONTRACT
- * ============================================================================
- *
- * Where the repository provides a canonical source printer:
- *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     AST
- *       |
- *       v
- *     printer
- *       |
- *       v
- *     parser
- *
- * MUST preserve the intended foreign-interface semantics.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 42. HARD-CODING AUDIT
- * ============================================================================
- *
- * This grammar contains no:
- *
- *     MAX_FOREIGN_FUNCTIONS
- *     MAX_PARAMETERS
- *     MAX_GENERIC_PARAMETERS
- *     MAX_INTERFACES
- *     MAX_ABI_VARIANTS
- *     MAX_DEVICES
- *     MAX_QUBITS
- *     MAX_THREADS
- *     MAX_NODES
- *
- * Any implementation limit discovered in generated/parser/frontend code MUST
- * be classified separately as:
- *
- *     language requirement
- *     resource policy
- *     implementation limit
- *     target constraint
- *     accidental hard-coding
- *
- * Accidental hard-coding MUST be removed.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 43. DEPENDENCY DIRECTION
- * ============================================================================
- *
- *     ZamaniTokens
- *          |
- *          v
- *     ForeignFunctions
- *          |
- *          v
- *     canonical AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +----------------------+
- *          |                      |
- *          v                      v
- *     classical IR           quantum::ir
- *          |                      |
- *          +----------+-----------+
- *                     |
- *                     v
- *              compiler pipeline
- *                     |
- *                     v
- *        runtime / hardware / deployment
- *
- * No reverse dependency is permitted.
- *
- * In particular:
- *
- *     foreign grammar -> runtime
- *
- * MUST NOT exist.
- *
- *     foreign grammar -> hardware
- *
- * MUST NOT exist.
- *
- *     foreign grammar -> quantum::ir
- *
- * MUST NOT exist.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 44. DEFINITION OF DONE
- * ============================================================================
- *
- * This grammar is complete only when:
- *
- * [ ] canonical token vocabulary is consumed;
- * [ ] no lexer tokens are duplicated;
- * [ ] foreign declarations parse deterministically;
- * [ ] external source identity is represented opaquely;
- * [ ] foreign functions cannot contain bodies;
- * [ ] parameters use canonical type expressions;
- * [ ] return types use canonical type expressions;
- * [ ] generic parameters use canonical type boundaries;
- * [ ] effects use the canonical effects grammar;
- * [ ] requirements use canonical requirement grammar;
- * [ ] capabilities use canonical capability grammar;
- * [ ] attributes use canonical attribute grammar;
- * [ ] no ABI implementation is encoded;
- * [ ] no hardware identity is encoded;
- * [ ] no machine size is encoded;
- * [ ] no fixed resource ceiling is encoded;
- * [ ] no unsafe Rust is required;
- * [ ] AST lowering uses the repository's canonical ExternalDeclaration;
- * [ ] child declarations use canonical AST node identity;
- * [ ] semantic resolution is downstream;
- * [ ] IR lowering is downstream;
- * [ ] runtime resolution is downstream;
- * [ ] positive tests exist;
- * [ ] negative tests exist;
- * [ ] boundary tests exist;
- * [ ] cross-domain tests exist;
- * [ ] scalability tests exist;
- * [ ] compatibility tests exist;
- * [ ] round-trip tests exist where supported;
- * [ ] documentation agrees with grammar authority;
- * [ ] legacy valid extern syntax remains compatible;
- * [ ] no duplicate foreign-call grammar exists elsewhere;
- * [ ] hard-coding audit passes.
+ * INVARIANT 10
+ *     Rust integration remains compatible with Rust 1.97 / 1.97.1 and safe
+ *     Rust requirements.
  *
  * ============================================================================
  */
