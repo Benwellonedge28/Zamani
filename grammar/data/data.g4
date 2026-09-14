@@ -2,180 +2,288 @@
  * Zamani — Universal Data Grammar
  * Path: grammar/data/data.g4
  *
- * Purpose
- * -------
- * Authoritative parser grammar for Zamani's language-level data model.
+ * Copyright / project ownership:
+ *   Benwellonedge28/Zamani
  *
- * This grammar describes:
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This file defines the parser-level syntax for Zamani's portable data
+ * programming model.
+ *
+ * It describes DATA INTENT, not a database engine, storage engine, network
+ * provider, memory allocator, accelerator, machine topology, or deployment.
+ *
+ * The grammar is deliberately independent of:
+ *
+ *   - CPU count
+ *   - GPU count
+ *   - FPGA count
+ *   - node count
+ *   - memory size
+ *   - storage size
+ *   - record count
+ *   - collection cardinality
+ *   - stream cardinality
+ *   - partition count
+ *   - replica count
+ *   - network topology
+ *   - database vendor
+ *   - cloud provider
+ *   - device identifier
+ *   - physical address
+ *   - filesystem layout
+ *   - execution placement
+ *
+ * Those concerns belong to semantic analysis, resource/capability models,
+ * compilation, scheduling, execution, deployment, and runtime systems.
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS
  *
  *   - data declarations
- *   - schemas
- *   - fields
- *   - records
- *   - collections
- *   - sequences
- *   - streams
- *   - transformations
- *   - projections
- *   - filtering
- *   - grouping
- *   - aggregation
- *   - joins
- *   - sorting
- *   - windowing
- *   - mapping
- *   - folding/reduction
- *   - serialization/deserialization intent
- *   - format selection
- *   - data contracts
- *   - data validation
- *   - data lineage/provenance declarations
- *   - partitioning
- *   - distribution
- *   - replication intent
- *   - consistency requirements
- *   - data movement
+ *   - logical schemas
+ *   - logical records
+ *   - logical collections
+ *   - logical streams
+ *   - logical sources and sinks
+ *   - data expressions
+ *   - data transformations
+ *   - logical queries
  *   - pipelines
- *   - bounded/unbounded data
- *   - lazy/eager evaluation intent
- *   - resource-neutral data requirements
+ *   - validation intent
+ *   - serialization intent
+ *   - data movement intent
+ *   - materialization intent
+ *   - partitioning intent
+ *   - distribution intent
+ *   - replication intent
+ *   - consistency intent
+ *   - provenance/lineage declarations
+ *   - logical resource requirements/preferences/hints for data operations
  *
- * Architectural ownership
- * -----------------------
+ * THIS FILE DOES NOT OWN
  *
- * THIS FILE OWNS:
- *   - syntax for expressing data semantics and intent
- *   - syntax for data transformations
- *   - syntax for data contracts
- *   - syntax for data-flow composition
- *   - syntax for portable serialization intent
- *   - syntax for logical partitioning and distribution intent
- *
- * THIS FILE DOES NOT OWN:
- *   - concrete database implementations
- *   - filesystem implementation
- *   - network transports
- *   - serialization libraries
+ *   - lexer definitions
+ *   - token definitions
+ *   - AST implementation
+ *   - semantic type checking
+ *   - database implementations
+ *   - SQL engines
+ *   - filesystem implementations
+ *   - network implementations
+ *   - serialization implementations
  *   - compression implementations
+ *   - storage engines
  *   - memory allocation
- *   - CPU/GPU/FPGA/quantum resources
+ *   - hardware discovery
+ *   - hardware topology
  *   - scheduling
  *   - routing
- *   - hardware discovery
+ *   - optimization algorithms
  *   - runtime resource discovery
- *   - concrete storage engines
- *   - concrete cloud providers
- *   - physical topology
+ *   - cloud-provider APIs
  *   - canonical IR definitions
+ *   - execution engines
  *
- * Integration boundary
- * --------------------
+ * ============================================================================
+ * ARCHITECTURAL BOUNDARY
+ * ============================================================================
  *
  * Source
- *   -> Zamani lexer
+ *   -> shared Zamani lexer
  *   -> Zamani parser
- *   -> this delegated parser grammar
- *   -> AST
+ *   -> this data parser grammar
+ *   -> syntax AST
  *   -> semantic analysis
- *   -> data semantic model / IR
+ *   -> data semantic model / canonical IR
  *   -> optimization
  *   -> scheduling
- *   -> execution/runtime
- *   -> storage/network/hardware backends
+ *   -> execution
+ *   -> storage/network/hardware/runtime backends
  *
- * The grammar MUST remain backend independent.
+ * The grammar never directly selects a physical backend.
  *
- * Scalability
- * -----------
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
  *
- * There are deliberately no fixed:
+ * The grammar supports:
  *
- *   - record counts
- *   - field counts
- *   - collection sizes
- *   - stream sizes
- *   - partition counts
- *   - node counts
- *   - replica counts
- *   - tensor/data dimensions
- *   - memory limits
- *   - device counts
- *   - database counts
- *   - storage capacities
+ *   Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Resource availability is a semantic/runtime concern, not a grammar limit.
+ * by ensuring that source-level data constructs describe portable semantics.
  *
- * Safety
- * ------
+ * A source program may therefore express:
  *
- * No target-language actions are used.
- * No unsafe operations are required.
- * No filesystem/network access is performed by the grammar.
+ *   requires distributed execution
  *
- * Rust integration
- * ----------------
+ * without expressing:
  *
- * Generated parser code MUST be generated with the repository's Rust ANTLR
- * toolchain and compiled under Rust 1.97 / 1.97.1 without unsafe code in
- * Zamani-owned integration code.
+ *   use 64 machines
+ *   use provider X
+ *   use device Y
  *
- * Token integration
- * -----------------
+ * Likewise:
  *
- * This is intentionally a parser grammar.
+ *   partition by key
  *
- * The root Zamani grammar MUST provide the shared lexer/token vocabulary.
- * This file MUST NOT define a second lexer.
+ * is semantic intent.
  *
- * The root grammar should delegate/import this grammar after the shared
- * data-related lexical vocabulary has been centralized.
+ * The actual partition count, topology, placement and transport are decided
+ * later by compilation/execution/resource systems.
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * There are NO grammar-level maximums for:
+ *
+ *   records
+ *   fields
+ *   collection elements
+ *   stream elements
+ *   partitions
+ *   replicas
+ *   nodes
+ *   dimensions
+ *   datasets
+ *   pipelines
+ *   transformations
+ *   data sources
+ *   data sinks
+ *
+ * Any practical limit comes from parser implementation, available memory,
+ * compilation resources, runtime resources, or explicit semantic constraints.
+ *
+ * ============================================================================
+ * SAFETY
+ * ============================================================================
+ *
+ * This grammar contains no target-language actions.
+ * This grammar performs no filesystem access.
+ * This grammar performs no network access.
+ * This grammar performs no runtime resource discovery.
+ * This grammar requires no unsafe Rust.
+ *
+ * Zamani-owned Rust integration MUST compile with:
+ *
+ *   Rust 1.97 / 1.97.1
+ *
+ * and must not introduce `unsafe`.
+ *
+ * ============================================================================
+ * TOKEN INTEGRATION
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * The shared Zamani lexer owns tokens.
+ *
+ * The long-term production architecture should provide a stable shared lexer
+ * vocabulary, preferably through a dedicated Zamani lexer grammar.
+ *
+ * This grammar intentionally does NOT define lexer rules.
+ *
+ * ============================================================================
+ * IMPORTANT INTEGRATION RULE
+ * ============================================================================
+ *
+ * `dataStmt` is the root integration rule.
+ *
+ * The root parser must consume:
+ *
+ *     dataStmt
+ *
+ * rather than duplicate the data alternatives in another grammar.
+ *
+ * Existing root-level rules such as:
+ *
+ *     dataStmt
+ *     databaseOp
+ *     webService
+ *
+ * must be migrated so that data semantics have one authoritative owner.
+ *
+ * Database/network/provider-specific syntax must not be reintroduced here.
+ * Such operations must be represented as logical data endpoint/resource
+ * semantics and lowered later.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * GRAMMAR DECLARATION
+ * ============================================================================
  */
 
 parser grammar ZamaniDataParser;
 
 options {
+    /*
+     * Shared Zamani token vocabulary.
+     *
+     * During the lexer/parser split migration this should become the stable
+     * generated lexer vocabulary (for example ZamaniLexer).
+     *
+     * Until that migration is complete, the repository integration layer may
+     * generate the shared vocabulary from the existing Zamani grammar.
+     */
     tokenVocab = Zamani;
 }
 
 
-/* ==========================================================================
+/*
+ * ============================================================================
  * TOP-LEVEL DATA DECLARATIONS
- * ========================================================================== */
+ * ============================================================================
+ */
 
 dataDeclaration
     : dataSchemaDecl
     | dataRecordDecl
     | dataCollectionDecl
+    | dataSequenceDecl
     | dataStreamDecl
-    | dataPipelineDecl
-    | dataContractDecl
-    | dataViewDecl
     | dataSourceDecl
     | dataSinkDecl
+    | dataPipelineDecl
+    | dataViewDecl
     | dataTransformDecl
+    | dataContractDecl
     | dataPartitionDecl
     | dataDistributionDecl
+    | dataReplicationDecl
+    | dataProvenanceDecl
     ;
 
 
-/* ==========================================================================
- * DATA STATEMENTS
+/*
+ * ============================================================================
+ * ROOT STATEMENT INTEGRATION
+ * ============================================================================
  *
- * This rule is the integration boundary consumed by the root `statement`
- * rule. The root grammar should expose:
+ * The root Zamani statement rule should contain exactly one data entry point:
  *
  *     | dataStmt
  *
- * without duplicating the alternatives below.
- * ========================================================================== */
+ * This grammar owns the alternatives beneath that entry point.
+ * ============================================================================
+ */
 
 dataStmt
     : dataDeclaration
     | dataExpressionStmt
-    | dataSerializationStmt
     | dataTransformationStmt
     | dataQueryStmt
     | dataPipelineStmt
+    | dataSerializationStmt
     | dataValidationStmt
     | dataMovementStmt
     | dataMaterializationStmt
@@ -183,25 +291,62 @@ dataStmt
     ;
 
 
-/* ==========================================================================
+/*
+ * ============================================================================
  * DATA EXPRESSIONS
- * ========================================================================== */
+ * ============================================================================
+ *
+ * Expression precedence is deliberately delegated to the shared Zamani
+ * expression system where possible.
+ *
+ * Data-specific operations are represented as explicit forms instead of
+ * allowing unrestricted recursive invocation of arbitrary data expressions.
+ * This prevents accidental grammar ambiguity and makes semantic lowering
+ * deterministic.
+ * ============================================================================
+ */
 
 dataExpression
+    : dataPrimaryExpression dataPostfix*
+    ;
+
+dataPrimaryExpression
     : dataReference
     | dataLiteral
     | dataCollectionLiteral
     | dataRecordLiteral
-    | dataFieldAccess
-    | dataIndexAccess
-    | dataSliceExpression
     | dataTransformExpression
     | dataQueryExpression
     | dataPipelineExpression
+    | dataSerializationExpression
+    | dataMaterializationExpression
     | dataCastExpression
     | dataCoalesceExpression
     | dataConditionalExpression
-    | dataExpression '(' argumentList? ')'
+    | '(' dataExpression ')'
+    ;
+
+dataPostfix
+    : dataFieldAccessSuffix
+    | dataIndexAccessSuffix
+    | dataSliceAccessSuffix
+    | dataCallSuffix
+    ;
+
+dataFieldAccessSuffix
+    : '.' IDENTIFIER
+    ;
+
+dataIndexAccessSuffix
+    : '[' expression ']'
+    ;
+
+dataSliceAccessSuffix
+    : '[' expression? ':' expression? ']'
+    ;
+
+dataCallSuffix
+    : '(' argumentList? ')'
     ;
 
 dataExpressionStmt
@@ -214,7 +359,8 @@ dataReference
     ;
 
 qualifiedDataName
-    : IDENTIFIER ('::' IDENTIFIER)*
+    : IDENTIFIER
+      ('::' IDENTIFIER)*
     ;
 
 dataLiteral
@@ -230,7 +376,8 @@ dataRecordLiteral
     ;
 
 dataFieldInitializerList
-    : dataFieldInitializer (',' dataFieldInitializer)*
+    : dataFieldInitializer
+      (',' dataFieldInitializer)*
     ;
 
 dataFieldInitializer
@@ -238,42 +385,53 @@ dataFieldInitializer
     ;
 
 dataExpressionList
-    : dataExpression (',' dataExpression)*
-    ;
-
-dataFieldAccess
-    : dataExpression '.' IDENTIFIER
-    ;
-
-dataIndexAccess
-    : dataExpression '[' expression ']'
-    ;
-
-dataSliceExpression
-    : dataExpression '[' expression? ':' expression? ']'
+    : dataExpression
+      (',' dataExpression)*
     ;
 
 dataCastExpression
-    : 'cast' '(' dataExpression 'as' typeExpr ')'
+    : 'cast'
+      '('
+      dataExpression
+      'as'
+      typeExpr
+      ')'
     ;
 
 dataCoalesceExpression
-    : dataExpression '??' dataExpression
+    : dataExpression
+      '??'
+      dataExpression
     ;
 
 dataConditionalExpression
-    : 'if' expression 'then' dataExpression 'else' dataExpression
+    : 'if'
+      expression
+      'then'
+      dataExpression
+      'else'
+      dataExpression
     ;
 
 
-/* ==========================================================================
+/*
+ * ============================================================================
  * SCHEMAS
+ * ============================================================================
  *
- * A schema describes logical data structure.
+ * A schema is logical structure.
  *
- * It does NOT describe physical database layout, machine memory layout,
- * network packets, or hardware storage.
- * ========================================================================== */
+ * It does not imply:
+ *
+ *   - SQL table
+ *   - filesystem layout
+ *   - memory layout
+ *   - network packet layout
+ *   - physical database index
+ *
+ * Those interpretations belong to later semantic/target stages.
+ * ============================================================================
+ */
 
 dataSchemaDecl
     : visibilityModifier?
@@ -287,18 +445,16 @@ dataSchemaDecl
     ;
 
 dataSchemaExtends
-    : 'extends' qualifiedDataName (',' qualifiedDataName)*
+    : 'extends'
+      qualifiedDataName
+      (',' qualifiedDataName)*
     ;
 
 dataSchemaMember
     : dataFieldDecl
     | dataConstraintDecl
     | dataIndexDecl
-    | dataSchemaAttribute
-    ;
-
-dataSchemaAttribute
-    : annotation
+    | annotation
     ;
 
 dataFieldDecl
@@ -328,39 +484,47 @@ dataDefaultValue
     ;
 
 dataFieldConstraint
-    : 'where' expression
+    : 'where'
+      expression
     ;
 
 dataConstraintDecl
     : 'constraint'
       IDENTIFIER?
-      '(' expression ')'
+      '('
+      expression
+      ')'
       ';'
     ;
 
 dataIndexDecl
     : 'index'
       IDENTIFIER?
-      '(' dataIndexFieldList ')'
+      '('
+      dataIndexFieldList
+      ')'
       dataIndexOption*
       ';'
     ;
 
 dataIndexFieldList
-    : IDENTIFIER (',' IDENTIFIER)*
+    : IDENTIFIER
+      (',' IDENTIFIER)*
     ;
 
 dataIndexOption
     : 'unique'
     | 'ordered'
-    | 'descending'
     | 'ascending'
+    | 'descending'
     ;
 
 
-/* ==========================================================================
+/*
+ * ============================================================================
  * RECORDS
- * ========================================================================== */
+ * ============================================================================
+ */
 
 dataRecordDecl
     : visibilityModifier?
@@ -380,12 +544,11 @@ dataRecordMember
     ;
 
 
-/* ==========================================================================
+/*
+ * ============================================================================
  * COLLECTIONS
- *
- * Collection cardinality is intentionally expressed semantically rather than
- * through fixed grammar limits.
- * ========================================================================== */
+ * ============================================================================
+ */
 
 dataCollectionDecl
     : visibilityModifier?
@@ -413,16 +576,55 @@ dataCollectionOption
     ;
 
 dataInitializer
-    : '=' dataExpression
+    : '='
+      dataExpression
     ;
 
 
-/* ==========================================================================
- * STREAMS
+/*
+ * ============================================================================
+ * SEQUENCES
+ * ============================================================================
  *
- * Streams may be bounded or unbounded.
- * The grammar must not encode an artificial maximum size.
- * ========================================================================== */
+ * A sequence is an ordered logical data abstraction.
+ *
+ * It is intentionally distinct from a physical array/vector/buffer.
+ * ============================================================================
+ */
+
+dataSequenceDecl
+    : visibilityModifier?
+      'sequence'
+      IDENTIFIER
+      genericParameters?
+      ':'
+      typeExpr
+      dataSequenceOption*
+      dataInitializer?
+      ';'
+    ;
+
+dataSequenceOption
+    : 'ordered'
+    | 'lazy'
+    | 'eager'
+    | 'persistent'
+    | 'ephemeral'
+    | 'mutable'
+    | 'immutable'
+    ;
+
+
+/*
+ * ============================================================================
+ * STREAMS
+ * ============================================================================
+ *
+ * A stream may be bounded or unbounded.
+ *
+ * No stream cardinality is encoded into the grammar.
+ * ============================================================================
+ */
 
 dataStreamDecl
     : visibilityModifier?
@@ -451,7 +653,6 @@ dataStreamOption
 dataStreamStmt
     : 'stream'
       dataExpression
-      ('pipe' dataExpression)?
       dataStreamOperator*
       ';'
     ;
@@ -459,6 +660,7 @@ dataStreamStmt
 dataStreamOperator
     : 'map' lambdaExpression
     | 'filter' lambdaExpression
+    | 'flat_map' lambdaExpression
     | 'window' dataWindowSpec
     | 'batch' dataBatchSpec
     | 'buffer' dataExpression
@@ -469,16 +671,24 @@ dataStreamOperator
     ;
 
 
-/* ==========================================================================
+/*
+ * ============================================================================
  * SOURCES AND SINKS
+ * ============================================================================
  *
- * These describe logical endpoints. They do not hard-code providers.
- * ========================================================================== */
+ * Endpoints are logical.
+ *
+ * A string endpoint is intentionally opaque to the grammar. Semantic analysis
+ * determines whether it represents a logical resource, URI, symbolic endpoint,
+ * provider-independent identifier, or another supported endpoint abstraction.
+ * ============================================================================
+ */
 
 dataSourceDecl
     : visibilityModifier?
       'source'
       IDENTIFIER
+      genericParameters?
       ':'
       typeExpr
       dataEndpointSpec?
@@ -489,6 +699,7 @@ dataSinkDecl
     : visibilityModifier?
       'sink'
       IDENTIFIER
+      genericParameters?
       ':'
       typeExpr
       dataEndpointSpec?
@@ -496,8 +707,10 @@ dataSinkDecl
     ;
 
 dataEndpointSpec
-    : 'from' dataEndpointExpression
-    | 'to' dataEndpointExpression
+    : 'from'
+      dataEndpointExpression
+    | 'to'
+      dataEndpointExpression
     ;
 
 dataEndpointExpression
@@ -507,9 +720,11 @@ dataEndpointExpression
     ;
 
 
-/* ==========================================================================
- * DATA PIPELINES
- * ========================================================================== */
+/*
+ * ============================================================================
+ * PIPELINES
+ * ============================================================================
+ */
 
 dataPipelineDecl
     : visibilityModifier?
@@ -526,15 +741,24 @@ dataPipelineMember
     | dataPipelineOutput
     | dataPipelineStage
     | dataPipelinePolicy
+    | dataPipelineRequirement
     | dataPipelineConstraint
     ;
 
 dataPipelineInput
-    : 'input' IDENTIFIER ':' typeExpr ';'
+    : 'input'
+      IDENTIFIER
+      ':'
+      typeExpr
+      ';'
     ;
 
 dataPipelineOutput
-    : 'output' IDENTIFIER ':' typeExpr ';'
+    : 'output'
+      IDENTIFIER
+      ':'
+      typeExpr
+      ';'
     ;
 
 dataPipelineStage
@@ -553,9 +777,19 @@ dataPipelinePolicy
       ';'
     ;
 
-dataPipelineConstraint
+dataPipelineRequirement
     : 'requires'
-      '(' expression ')'
+      '('
+      expression
+      ')'
+      ';'
+    ;
+
+dataPipelineConstraint
+    : 'constraint'
+      '('
+      expression
+      ')'
       ';'
     ;
 
@@ -578,22 +812,27 @@ dataPipelineStageExpression
     ;
 
 
-/* ==========================================================================
- * TRANSFORMATIONS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * TRANSFORMS
+ * ============================================================================
+ */
 
 dataTransformDecl
     : visibilityModifier?
       'transform'
       IDENTIFIER
       genericParameters?
-      '(' parameterList? ')'
+      '('
+      parameterList?
+      ')'
       ('->' typeExpr)?
       block
     ;
 
 dataTransformationStmt
-    : dataTransformExpression ';'
+    : dataTransformExpression
+      ';'
     ;
 
 dataTransformExpression
@@ -619,55 +858,104 @@ dataTransformExpression
     ;
 
 dataMapExpression
-    : 'map' '(' dataExpression ',' lambdaExpression ')'
+    : 'map'
+      '('
+      dataExpression
+      ','
+      lambdaExpression
+      ')'
     ;
 
 dataFilterExpression
-    : 'filter' '(' dataExpression ',' lambdaExpression ')'
+    : 'filter'
+      '('
+      dataExpression
+      ','
+      lambdaExpression
+      ')'
     ;
 
 dataFlatMapExpression
-    : 'flat_map' '(' dataExpression ',' lambdaExpression ')'
+    : 'flat_map'
+      '('
+      dataExpression
+      ','
+      lambdaExpression
+      ')'
     ;
 
 dataReduceExpression
-    : 'reduce' '(' dataExpression ',' lambdaExpression ')'
+    : 'reduce'
+      '('
+      dataExpression
+      ','
+      lambdaExpression
+      ')'
     ;
 
 dataFoldExpression
-    : 'fold' '(' dataExpression ',' dataExpression ',' lambdaExpression ')'
+    : 'fold'
+      '('
+      dataExpression
+      ','
+      dataExpression
+      ','
+      lambdaExpression
+      ')'
     ;
 
 dataGroupExpression
-    : 'group' '(' dataExpression 'by' dataExpressionList ')'
+    : 'group'
+      '('
+      dataExpression
+      'by'
+      dataExpressionList
+      ')'
     ;
 
 dataSortExpression
-    : 'sort' '(' dataExpression 'by' dataSortKeyList ')'
+    : 'sort'
+      '('
+      dataExpression
+      'by'
+      dataSortKeyList
+      ')'
     ;
 
 dataSortKeyList
-    : dataSortKey (',' dataSortKey)*
+    : dataSortKey
+      (',' dataSortKey)*
     ;
 
 dataSortKey
-    : dataExpression ('ascending' | 'descending')?
+    : dataExpression
+      ('ascending' | 'descending')?
     ;
 
 dataDistinctExpression
-    : 'distinct' '(' dataExpression ')'
+    : 'distinct'
+      '('
+      dataExpression
+      ')'
     ;
 
 dataProjectExpression
-    : 'project' '(' dataExpression 'select' dataProjectionList ')'
+    : 'project'
+      '('
+      dataExpression
+      'select'
+      dataProjectionList
+      ')'
     ;
 
 dataProjectionList
-    : dataProjection (',' dataProjection)*
+    : dataProjection
+      (',' dataProjection)*
     ;
 
 dataProjection
-    : dataExpression ('as' IDENTIFIER)?
+    : dataExpression
+      ('as' IDENTIFIER)?
     ;
 
 dataJoinExpression
@@ -699,7 +987,8 @@ dataAggregateExpression
     ;
 
 dataAggregateList
-    : dataAggregate (',' dataAggregate)*
+    : dataAggregate
+      (',' dataAggregate)*
     ;
 
 dataAggregate
@@ -718,50 +1007,112 @@ dataWindowExpression
     ;
 
 dataWindowSpec
-    : 'tumbling' '(' expression ')'
-    | 'sliding' '(' expression ',' expression ')'
-    | 'session' '(' expression ')'
-    | 'count' '(' expression ')'
-    | 'custom' '(' expression ')'
+    : 'tumbling'
+      '('
+      expression
+      ')'
+    | 'sliding'
+      '('
+      expression
+      ','
+      expression
+      ')'
+    | 'session'
+      '('
+      expression
+      ')'
+    | 'count'
+      '('
+      expression
+      ')'
+    | 'custom'
+      '('
+      expression
+      ')'
+    ;
+
+dataBatchSpec
+    : 'batch'
+      '('
+      expression
+      ')'
     ;
 
 dataUnionExpression
-    : 'union' '(' dataExpressionList ')'
+    : 'union'
+      '('
+      dataExpressionList
+      ')'
     ;
 
 dataDifferenceExpression
-    : 'difference' '(' dataExpression ',' dataExpression ')'
+    : 'difference'
+      '('
+      dataExpression
+      ','
+      dataExpression
+      ')'
     ;
 
 dataIntersectionExpression
-    : 'intersection' '(' dataExpressionList ')'
+    : 'intersection'
+      '('
+      dataExpressionList
+      ')'
     ;
 
 dataConcatExpression
-    : 'concat' '(' dataExpressionList ')'
+    : 'concat'
+      '('
+      dataExpressionList
+      ')'
     ;
 
 dataLimitExpression
-    : 'limit' '(' dataExpression ',' expression ')'
+    : 'limit'
+      '('
+      dataExpression
+      ','
+      expression
+      ')'
     ;
 
 dataTakeExpression
-    : 'take' '(' dataExpression ',' expression ')'
+    : 'take'
+      '('
+      dataExpression
+      ','
+      expression
+      ')'
     ;
 
 dataDropExpression
-    : 'drop' '(' dataExpression ',' expression ')'
+    : 'drop'
+      '('
+      dataExpression
+      ','
+      expression
+      ')'
     ;
 
 
-/* ==========================================================================
- * QUERY EXPRESSIONS
+/*
+ * ============================================================================
+ * QUERY LANGUAGE
+ * ============================================================================
  *
- * These are logical operations, not database-provider syntax.
- * ========================================================================== */
+ * This is intentionally a logical query language.
+ *
+ * It is NOT SQL.
+ *
+ * A compiler may lower it to SQL, an in-memory execution plan, distributed
+ * execution, accelerator execution, streaming execution, or another backend.
+ * ============================================================================
+ */
 
 dataQueryStmt
-    : dataQueryExpression ';'
+    : dataQueryExpression
+      ';'
     ;
 
 dataQueryExpression
@@ -777,97 +1128,93 @@ dataSelectExpression
     ;
 
 dataQueryClause
-    : 'where' expression
-    | 'group' 'by' dataExpressionList
-    | 'having' expression
-    | 'order' 'by' dataSortKeyList
-    | 'limit' expression
-    | 'offset' expression
+    : 'where'
+      expression
+    | 'group'
+      'by'
+      dataExpressionList
+    | 'having'
+      expression
+    | 'order'
+      'by'
+      dataSortKeyList
+    | 'limit'
+      expression
+    | 'offset'
+      expression
+    | 'distinct'
     ;
 
 
-/* ==========================================================================
- * SERIALIZATION
- *
- * Serialization is expressed as intent.
- *
- * A format name does NOT select a particular implementation library.
- * The compiler/runtime resolves the format through capability negotiation.
- * ========================================================================== */
+/*
+ * ============================================================================
+ * VIEWS
+ * ============================================================================
+ */
 
-dataSerializationStmt
-    : 'serialize'
-      dataExpression
-      'to'
-      dataFormatSpec
-      dataSerializationOption*
+dataViewDecl
+    : visibilityModifier?
+      'view'
+      IDENTIFIER
+      genericParameters?
+      ':'
+      typeExpr?
+      '='
+      dataQueryExpression
       ';'
-    | 'deserialize'
+    ;
+
+
+/*
+ * ============================================================================
+ * VALIDATION
+ * ============================================================================
+ */
+
+dataValidationStmt
+    : 'validate'
       dataExpression
-      'from'
-      dataFormatSpec
-      dataSerializationOption*
+      dataValidationClause*
       ';'
     ;
 
-dataSerializationExpression
-    : 'serialize'
-      '('
-      dataExpression
-      'to'
-      dataFormatSpec
-      ')'
-    | 'deserialize'
-      '('
-      dataExpression
-      'from'
-      dataFormatSpec
-      ')'
+dataValidationClause
+    : 'against'
+      qualifiedDataName
+    | 'with'
+      dataValidationOptions
     ;
 
-dataFormatSpec
-    : dataBuiltinFormat
-    | dataNamedFormat
+dataValidationOptions
+    : '{'
+      dataValidationOption*
+      '}'
     ;
 
-dataBuiltinFormat
-    : 'json'
-    | 'xml'
-    | 'messagepack'
-    | 'protobuf'
-    | 'cbor'
-    | 'text'
-    | 'binary'
-    | 'csv'
-    | 'tsv'
-    ;
-
-dataNamedFormat
+dataValidationOption
     : IDENTIFIER
-    ;
-
-dataSerializationOption
-    : 'canonical'
-    | 'compact'
-    | 'pretty'
-    | 'deterministic'
-    | 'lossless'
-    | 'lossy'
-    | 'schema' dataReference
-    | 'version' expression
-    | 'encoding' STRING
-    | 'compression' IDENTIFIER
+      '='
+      dataExpression
+      ';'
     ;
 
 
-/* ==========================================================================
- * VALIDATION AND DATA CONTRACTS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * DATA CONTRACTS
+ * ============================================================================
+ *
+ * Contracts describe semantic guarantees and requirements.
+ *
+ * They do not directly execute validation.
+ * ============================================================================
+ */
 
 dataContractDecl
     : visibilityModifier?
       'data_contract'
       IDENTIFIER
+      genericParameters?
       '{'
       dataContractMember*
       '}'
@@ -878,156 +1225,140 @@ dataContractMember
     | dataContractEnsures
     | dataContractInvariant
     | dataContractSchema
-    | dataContractVersion
-    | dataContractCompatibility
+    | dataContractAttribute
     ;
 
 dataContractRequires
-    : 'requires' '(' expression ')' ';'
+    : 'requires'
+      '('
+      expression
+      ')'
+      ';'
     ;
 
 dataContractEnsures
-    : 'ensures' '(' expression ')' ';'
+    : 'ensures'
+      '('
+      expression
+      ')'
+      ';'
     ;
 
 dataContractInvariant
-    : 'invariant' '(' expression ')' ';'
+    : 'invariant'
+      '('
+      expression
+      ')'
+      ';'
     ;
 
 dataContractSchema
-    : 'schema' dataReference ';'
-    ;
-
-dataContractVersion
-    : 'version' expression ';'
-    ;
-
-dataContractCompatibility
-    : 'compatible' '(' expression ')' ';'
-    ;
-
-dataValidationStmt
-    : 'validate'
-      dataExpression
-      ('against' dataReference)?
-      ('with' expression)?
+    : 'schema'
+      qualifiedDataName
       ';'
     ;
 
+dataContractAttribute
+    : annotation
+    ;
 
-/* ==========================================================================
- * VIEWS
+
+/*
+ * ============================================================================
+ * SERIALIZATION
+ * ============================================================================
  *
- * A view is a logical derived data representation.
- * ========================================================================== */
+ * Serialization is expressed as semantic intent.
+ *
+ * Concrete formats are symbolic identifiers rather than hard-coded provider
+ * implementations.
+ *
+ * This permits:
+ *
+ *   JSON
+ *   XML
+ *   CBOR
+ *   MessagePack
+ *   Protocol Buffers
+ *   future formats
+ *
+ * without making the grammar dependent on serialization libraries.
+ * ============================================================================
+ */
 
-dataViewDecl
-    : visibilityModifier?
-      'view'
-      IDENTIFIER
-      genericParameters?
-      ':'
+dataSerializationStmt
+    : 'serialize'
+      dataExpression
+      dataSerializationTarget?
+      dataFormatSpec?
+      ';'
+    | 'deserialize'
+      dataSerializationInput
+      dataFormatSpec?
+      'as'
       typeExpr
-      '='
-      dataQueryExpression
       ';'
     ;
 
-
-/* ==========================================================================
- * PARTITIONING
- *
- * Partitioning is logical.
- *
- * No fixed partition count is encoded here.
- * ========================================================================== */
-
-dataPartitionDecl
-    : visibilityModifier?
-      'partition'
-      IDENTIFIER
-      'of'
-      dataReference
-      dataPartitionStrategy
-      ';'
-    ;
-
-dataPartitionStrategy
-    : 'by' dataExpressionList
-    | 'hash' dataExpressionList
-    | 'range' dataExpressionList
-    | 'key' dataExpressionList
-    | 'custom' dataExpression
-    ;
-
-
-/* ==========================================================================
- * DISTRIBUTION
- *
- * Distribution expresses intent. It does not select machines or nodes.
- * ========================================================================== */
-
-dataDistributionDecl
-    : visibilityModifier?
-      'distribution'
-      IDENTIFIER
-      'of'
-      dataReference
-      dataDistributionPolicy*
-      ';'
-    ;
-
-dataDistributionPolicy
-    : 'partitioned'
-    | 'replicated'
-    | 'sharded'
-    | 'local'
-    | 'remote'
-    | 'distributed'
-    | 'elastic'
-    | 'placement' dataExpression
-    | 'consistency' dataConsistencyModel
-    | 'durability' dataExpression
-    ;
-
-dataConsistencyModel
-    : IDENTIFIER
-    ;
-
-
-/* ==========================================================================
- * DATA MOVEMENT
- * ========================================================================== */
-
-dataMovementStmt
-    : 'move'
+dataSerializationExpression
+    : 'serialize'
+      '('
       dataExpression
-      ('to' | 'from')
+      dataFormatSpec?
+      ')'
+    | 'deserialize'
+      '('
+      dataSerializationInput
+      dataFormatSpec?
+      ')'
+    ;
+
+dataSerializationTarget
+    : 'to'
       dataEndpointExpression
-      dataMovementOption*
+    ;
+
+dataSerializationInput
+    : dataEndpointExpression
+    | dataExpression
+    ;
+
+dataFormatSpec
+    : 'format'
+      dataFormatName
+      dataFormatOptionBlock?
+    ;
+
+dataFormatName
+    : IDENTIFIER
+    | qualifiedDataName
+    ;
+
+dataFormatOptionBlock
+    : '{'
+      dataFormatOption*
+      '}'
+    ;
+
+dataFormatOption
+    : IDENTIFIER
+      '='
+      dataExpression
       ';'
     ;
 
-dataMovementOption
-    : 'streaming'
-    | 'buffered'
-    | 'lazy'
-    | 'eager'
-    | 'lossless'
-    | 'lossy'
-    | 'ordered'
-    | 'unordered'
-    ;
 
-
-/* ==========================================================================
+/*
+ * ============================================================================
  * MATERIALIZATION
- * ========================================================================== */
+ * ============================================================================
+ */
 
 dataMaterializationStmt
     : 'materialize'
       dataExpression
-      dataMaterializationOption*
+      dataMaterializationTarget?
+      dataMaterializationOptions?
       ';'
     ;
 
@@ -1035,380 +1366,473 @@ dataMaterializationExpression
     : 'materialize'
       '('
       dataExpression
-      dataMaterializationOption*
+      dataMaterializationTarget?
+      dataMaterializationOptions?
       ')'
+    ;
+
+dataMaterializationTarget
+    : 'to'
+      dataEndpointExpression
+    ;
+
+dataMaterializationOptions
+    : '{'
+      dataMaterializationOption*
+      '}'
     ;
 
 dataMaterializationOption
-    : 'persistent'
-    | 'ephemeral'
-    | 'cached'
-    | 'lazy'
-    | 'eager'
-    | 'incremental'
-    ;
-
-
-/* ==========================================================================
- * BATCHING
- * ========================================================================== */
-
-dataBatchSpec
-    : 'fixed' '(' expression ')'
-    | 'adaptive' '(' expression ')'
-    | 'until' '(' expression ')'
-    ;
-
-
-/* ==========================================================================
- * DATA OPERATIONS
- *
- * These preserve compatibility with the original language-level data
- * operations while expanding them into the production data model.
- * ========================================================================== */
-
-databaseOp
-    : 'Database'
-      '::'
-      IDENTIFIER
-      '('
-      argumentList?
-      ')'
-      ';'
-    ;
-
-webService
-    : 'HTTP'
-      '::'
-      IDENTIFIER
-      '('
-      argumentList?
-      ')'
-      ';'
-    ;
-
-
-/* ==========================================================================
- * DATA NAMING
- *
- * Data identifiers deliberately reuse the language-wide identifier model.
- * There is no separate data-specific identifier namespace.
- * ========================================================================== */
-
-dataName
     : IDENTIFIER
+      '='
+      dataExpression
+      ';'
     ;
 
-dataQualifiedName
-    : dataName ('::' dataName)*
-    ;
-
-
-/* ==========================================================================
- * ARGUMENTS
- *
- * Reuse the language-wide argumentList where available.
- *
- * The fallback rule below exists only as an explicit integration contract
- * for parser delegation. The root grammar must ultimately expose the
- * canonical argumentList rule and this rule must not be duplicated there.
- * ========================================================================== */
-
-dataArgumentList
-    : dataArgument (',' dataArgument)*
-    ;
-
-dataArgument
-    : dataExpression
-    | IDENTIFIER '=' dataExpression
-    ;
-
-
-/* ==========================================================================
- * INTEGRATION NOTES
- * ========================================================================== */
 
 /*
- * ROOT GRAMMAR INTEGRATION
- * ------------------------
+ * ============================================================================
+ * DATA MOVEMENT
+ * ============================================================================
  *
- * The root Zamani grammar must:
+ * Movement is a semantic operation.
  *
- *   1. import/delegate this parser grammar;
- *   2. expose dataDeclaration where declarations are accepted;
- *   3. expose dataStmt where statements are accepted;
- *   4. reuse the root `expression`, `typeExpr`, `literal`,
- *      `parameterList`, `lambdaExpression`, `argumentList`,
- *      `block`, `annotation`, and visibility rules;
- *   5. NOT copy these rules into Zamani.g4.
+ * The compiler/runtime chooses:
  *
+ *   local memory
+ *   distributed memory
+ *   storage
+ *   network transport
+ *   accelerator transfer
+ *   another supported mechanism
  *
- * LEXER INTEGRATION
- * -----------------
+ * based on capabilities and constraints.
+ * ============================================================================
+ */
+
+dataMovementStmt
+    : 'move'
+      dataExpression
+      'to'
+      dataEndpointExpression
+      dataMovementOptions?
+      ';'
+    ;
+
+dataMovementOptions
+    : '{'
+      dataMovementOption*
+      '}'
+    ;
+
+dataMovementOption
+    : IDENTIFIER
+      '='
+      dataExpression
+      ';'
+    ;
+
+
+/*
+ * ============================================================================
+ * PARTITIONING
+ * ============================================================================
  *
- * The shared lexer must own the keywords introduced by this grammar.
+ * Partition count is never a grammar constant.
  *
- * It must NOT create a separate data lexer.
+ * The user may specify a semantic partitioning expression, such as:
  *
- * Data keywords must therefore be added to the authoritative lexical
- * vocabulary in the root/shared lexer layer during grammar modularization.
+ *   partition by key
  *
+ * without specifying the number of physical partitions.
+ * ============================================================================
+ */
+
+dataPartitionDecl
+    : visibilityModifier?
+      'partition'
+      IDENTIFIER
+      'of'
+      dataExpression
+      dataPartitionSpec
+      ';'
+    ;
+
+dataPartitionSpec
+    : 'by'
+      dataPartitionKeyList
+      dataPartitionOptionBlock?
+    ;
+
+dataPartitionKeyList
+    : dataExpression
+      (',' dataExpression)*
+    ;
+
+dataPartitionOptionBlock
+    : '{'
+      dataPartitionOption*
+      '}'
+    ;
+
+dataPartitionOption
+    : IDENTIFIER
+      '='
+      dataExpression
+      ';'
+    ;
+
+
+/*
+ * ============================================================================
+ * DISTRIBUTION
+ * ============================================================================
  *
- * AST INTEGRATION
- * ---------------
+ * Distribution describes logical placement intent.
  *
- * The parser must produce syntax nodes that are lowered into the existing
- * Zamani AST/data semantic model.
+ * It does not name a fixed number of nodes.
+ * ============================================================================
+ */
+
+dataDistributionDecl
+    : visibilityModifier?
+      'distribution'
+      IDENTIFIER
+      'of'
+      dataExpression
+      dataDistributionSpec
+      ';'
+    ;
+
+dataDistributionSpec
+    : 'by'
+      dataDistributionPolicy
+      dataDistributionOptionBlock?
+    ;
+
+dataDistributionPolicy
+    : IDENTIFIER
+    | qualifiedDataName
+    ;
+
+dataDistributionOptionBlock
+    : '{'
+      dataDistributionOption*
+      '}'
+    ;
+
+dataDistributionOption
+    : IDENTIFIER
+      '='
+      dataExpression
+      ';'
+    ;
+
+
+/*
+ * ============================================================================
+ * REPLICATION
+ * ============================================================================
  *
- * The grammar must not instantiate runtime data structures.
+ * Replication factor is deliberately an expression rather than a grammar
+ * constant. The semantic layer determines whether the requested value can
+ * actually be satisfied.
+ * ============================================================================
+ */
+
+dataReplicationDecl
+    : visibilityModifier?
+      'replicate'
+      IDENTIFIER
+      'of'
+      dataExpression
+      dataReplicationSpec
+      ';'
+    ;
+
+dataReplicationSpec
+    : 'with'
+      dataReplicationPolicy
+      dataReplicationOptionBlock?
+    ;
+
+dataReplicationPolicy
+    : IDENTIFIER
+    | qualifiedDataName
+    ;
+
+dataReplicationOptionBlock
+    : '{'
+      dataReplicationOption*
+      '}'
+    ;
+
+dataReplicationOption
+    : IDENTIFIER
+      '='
+      dataExpression
+      ';'
+    ;
+
+
+/*
+ * ============================================================================
+ * PROVENANCE / LINEAGE
+ * ============================================================================
+ */
+
+dataProvenanceDecl
+    : visibilityModifier?
+      'provenance'
+      IDENTIFIER
+      'for'
+      dataExpression
+      '{'
+      dataProvenanceMember*
+      '}'
+    ;
+
+dataProvenanceMember
+    : dataLineageDecl
+    | dataProvenanceAttribute
+    ;
+
+dataLineageDecl
+    : 'derived_from'
+      dataExpressionList
+      ';'
+    ;
+
+dataProvenanceAttribute
+    : IDENTIFIER
+      '='
+      dataExpression
+      ';'
+    ;
+
+
+/*
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTENT
+ * ============================================================================
  *
+ * These constructs are intentionally generic.
  *
- * SEMANTIC ANALYSIS
- * -----------------
+ * A data program may state:
  *
- * Semantic analysis must validate:
+ *   requires(...)
+ *   prefers(...)
+ *   hints(...)
  *
- *   - schema references
- *   - field existence
- *   - field types
- *   - generic constraints
- *   - nullability
- *   - data contracts
- *   - transformation compatibility
- *   - stream boundedness requirements
- *   - serialization compatibility
- *   - format capability requirements
- *   - distribution requirements
- *   - consistency requirements
+ * but the grammar never converts these into fixed machine assumptions.
+ * ============================================================================
+ */
+
+dataResourceClause
+    : dataRequiresClause
+    | dataConstraintClause
+    | dataPreferenceClause
+    | dataHintClause
+    ;
+
+dataRequiresClause
+    : 'requires'
+      '('
+      expression
+      ')'
+    ;
+
+dataConstraintClause
+    : 'constraint'
+      '('
+      expression
+      ')'
+    ;
+
+dataPreferenceClause
+    : 'prefers'
+      '('
+      expression
+      ')'
+    ;
+
+dataHintClause
+    : 'hint'
+      '('
+      expression
+      ')'
+    ;
+
+
+/*
+ * ============================================================================
+ * DATA OPTIONS
+ * ============================================================================
  *
- * None of these semantic checks belong inside this grammar.
+ * Generic options preserve forward compatibility.
  *
+ * Unknown options must be rejected or accepted according to semantic
+ * capability/version policy rather than silently changing meaning.
+ * ============================================================================
+ */
+
+dataOptionBlock
+    : '{'
+      dataOption*
+      '}'
+    ;
+
+dataOption
+    : IDENTIFIER
+      '='
+      dataExpression
+      ';'
+    ;
+
+
+/*
+ * ============================================================================
+ * BACKWARD-COMPATIBILITY BRIDGE
+ * ============================================================================
  *
- * RESOURCE INTEGRATION
- * --------------------
+ * Existing Zamani source historically contains forms represented by rules
+ * such as:
  *
- * Expressions such as:
+ *   Database::...
+ *   stream ...
+ *   serialization operations
  *
- *   distribution
- *   partition
- *   materialize
- *   stream
- *   placement
+ * The production grammar deliberately does NOT reintroduce a separate
+ * provider-specific `databaseOp` grammar.
  *
- * describe requirements/intent only.
+ * Database operations must be represented through logical sources, sinks,
+ * queries, transformations, materialization, and endpoint/resource semantics.
  *
- * They MUST be resolved later against the resource/capability model.
+ * Migration mapping:
  *
- * No grammar rule may introduce:
+ *   old database operation
+ *       ->
+ *   logical data source/sink/query operation
  *
- *   MAX_RECORDS
- *   MAX_FIELDS
- *   MAX_PARTITIONS
- *   MAX_STREAM_ITEMS
- *   MAX_NODES
- *   MAX_BYTES
- *   MAX_DATABASES
- *   MAX_CONNECTIONS
+ * The compatibility layer outside this grammar may recognize deprecated
+ * syntax and lower it into the new semantic model.
  *
- * or equivalent fixed limits.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * EXTENSIBILITY
+ * ============================================================================
  *
+ * Future data-domain constructs should be added through explicit grammar
+ * rules or registered dialects.
  *
- * HARDWARE INTEGRATION
- * --------------------
+ * They must NOT be introduced through:
  *
- * This grammar does not refer directly to:
+ *   catch-all token rules
+ *   arbitrary text
+ *   provider-specific lexer hacks
+ *   fixed resource assumptions
+ *   embedded target-language actions
  *
- *   CPU
- *   GPU
- *   FPGA
- *   ASIC
- *   QPU
- *   physical memory
- *   device IDs
- *   topology
- *   hardware addresses
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
  *
- * Hardware realization belongs to the compiler/runtime/resource layers.
+ * UPSTREAM
  *
- *
- * QUANTUM INTEGRATION
- * -------------------
- *
- * Data expressions may be used by quantum/classical hybrid programs through
- * the common expression/type system.
- *
- * This grammar does not define quantum state, qubit, gate, QEC, or ZQN
- * semantics.
- *
- * Those remain owned by the quantum language/IR and corresponding
- * subsystems.
- *
- *
- * HDL INTEGRATION
- * ---------------
- *
- * Data declarations may describe logical data exchanged with HDL modules,
- * but this grammar does not define signals, clocks, ports, timing, or
- * hardware layout.
- *
- *
- * DISTRIBUTED INTEGRATION
- * ----------------------
- *
- * Distribution is an intent.
- *
- * Mapping data to concrete nodes is a compiler/runtime responsibility.
- *
- *
- * SECURITY INTEGRATION
- * --------------------
- *
- * Access control, identity, encryption implementation, key management, and
- * trust policy remain outside this grammar.
- *
- * The grammar only permits the semantic layer to attach those policies
- * through the repository's common capability/effect/security model.
- *
- *
- * DETERMINISM
- * -----------
- *
- * Parsing must be deterministic.
- *
- * Canonical serialization is represented by:
- *
- *   serialize <expr> to <format> deterministic;
- *
- * but determinism of the produced representation is a semantic/backend
- * contract, not a parser guarantee.
- *
- *
- * POCO-REAF
- * ---------
- *
- * A valid data program must describe logical data semantics rather than
- * binding itself to a specific implementation.
- *
- * Therefore:
- *
- *   source program
+ *   Shared lexer
  *       |
  *       v
- *   logical data semantics
+ *   Zamani parser
  *       |
- *       +--> local execution
- *       +--> distributed execution
- *       +--> accelerated execution
- *       +--> heterogeneous execution
- *       +--> future execution
- *
- * without source-level rewriting merely because available resources change.
+ *       v
+ *   dataStmt / dataDeclaration / dataExpression
  *
  *
- * COMPATIBILITY
- * -------------
+ * DOWNSTREAM
  *
- * Existing:
- *
- *   serialize
- *   deserialize
- *   json
- *   xml
- *   messagepack
- *   protobuf
- *   cbor
- *   stream
- *   pipe
- *   Database::...
- *   HTTP::...
- *
- * forms are preserved at the grammar boundary.
- *
- * Their implementations must be migrated behind the new data semantic
- * abstraction rather than removed silently.
- *
- *
- * ERROR HANDLING
- * --------------
- *
- * Invalid data syntax must result in normal parser diagnostics.
- *
- * The grammar must never:
- *
- *   - print errors
- *   - perform I/O
- *   - panic
- *   - access the filesystem
- *   - access the network
- *   - select a backend
- *   - silently recover by changing program meaning
+ *   syntax AST
+ *       |
+ *       v
+ *   semantic analysis
+ *       |
+ *       +--> type checking
+ *       |
+ *       +--> capability checking
+ *       |
+ *       +--> effect checking
+ *       |
+ *       +--> resource validation
+ *       |
+ *       v
+ *   canonical data semantic representation / IR
+ *       |
+ *       +--> optimization
+ *       |
+ *       +--> scheduling
+ *       |
+ *       +--> routing
+ *       |
+ *       +--> hardware/resource realization
+ *       |
+ *       v
+ *   execution/runtime
  *
  *
- * TEST REQUIREMENTS
- * -----------------
+ * CROSS-DOMAIN
  *
- * This grammar requires corresponding tests under:
+ * Classical
+ *   data types and expressions integrate with the common type/expression
+ *   systems.
  *
- *   grammar/tests/data/
+ * Quantum
+ *   quantum results may be represented as data, but quantum semantics remain
+ *   owned by the quantum subsystem and `quantum::ir`.
  *
- * including:
+ * HDL
+ *   hardware data interfaces may consume data contracts and schemas, but
+ *   physical signal semantics remain owned by HDL/hardware grammar and IR.
  *
- *   positive/
- *   negative/
- *   scalability/
- *   serialization/
- *   streaming/
- *   transformations/
- *   schemas/
- *   contracts/
- *   distribution/
- *   cross-domain/
- *   compatibility/
+ * Distributed
+ *   partition/distribution/replication are logical intents; node placement
+ *   remains outside this grammar.
  *
- * Minimum semantic coverage must include:
+ * AI
+ *   tensors/datasets may use data declarations and schemas; model semantics
+ *   remain owned by the AI subsystem.
  *
- *   - empty collection
- *   - singleton collection
- *   - arbitrarily large logical collection
- *   - bounded stream
- *   - unbounded stream
- *   - schema inheritance
- *   - optional fields
- *   - nullable fields
- *   - nested records
- *   - nested collections
- *   - transformations
- *   - joins
- *   - aggregation
- *   - windows
- *   - serialization
- *   - deserialization
- *   - pipelines
- *   - partitioning
- *   - distribution
- *   - contracts
- *   - malformed syntax
- *   - cross-domain classical/data programs
- *   - cross-domain quantum/data programs
- *   - cross-domain HDL/data programs
+ * Networking
+ *   endpoints remain logical; transport protocols remain owned by networking.
+ *
+ * Security
+ *   data contracts may be checked against security policies, but cryptographic
+ *   implementations remain outside this grammar.
  *
  *
- * COMPLETION CRITERIA
- * -------------------
+ * ============================================================================
+ * NO CIRCULAR DEPENDENCY CONTRACT
+ * ============================================================================
  *
- * This file is complete when:
+ * This grammar MUST NOT depend on:
  *
- *   1. It is imported by the authoritative Zamani parser grammar.
- *   2. No data rule is duplicated in the root grammar.
- *   3. Shared lexer tokens are centrally defined.
- *   4. Existing serialization syntax remains parse-compatible.
- *   5. Data declarations and expressions have deterministic parse trees.
- *   6. No machine-size limit exists in the grammar.
- *   7. No provider-specific implementation is encoded.
- *   8. No filesystem/network side effects exist.
- *   9. Rust-generated parser integration compiles under Rust 1.97/1.97.1.
- *  10. Zamani-owned integration code contains no unsafe.
- *  11. Positive, negative, boundary, compatibility, and cross-domain tests
- *      pass.
- *  12. AST/semantic/IR ownership is documented and stable.
+ *   runtime
+ *   scheduler
+ *   optimizer
+ *   hardware discovery
+ *   storage implementation
+ *   network implementation
+ *   quantum execution
+ *   canonical IR implementation
+ *
+ * Those systems consume the grammar's AST/semantic output.
+ *
+ * ============================================================================
  */
