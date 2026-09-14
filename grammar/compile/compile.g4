@@ -1,15 +1,28 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Programming Language
  * ============================================================================
  *
  * File:
  *     grammar/compile/compile.g4
  *
- * Role:
- *     Canonical parser fragment for source-level compilation intent.
+ * Grammar:
+ *     Compile
  *
- * Architectural position:
+ * Status:
+ *     Production compilation-intent parser grammar
+ *
+ * Purpose:
+ *     Owns source-level compilation intent.
+ *
+ * This file describes WHAT compilation is requested, not HOW a compiler,
+ * backend, scheduler, router, hardware device, QPU, CPU, GPU, FPGA, ASIC,
+ * simulator, cluster, cloud service, or runtime must implement it.
+ *
+ * ============================================================================
+ *
+ * ARCHITECTURAL POSITION
+ * ============================================================================
  *
  *     source
  *       |
@@ -17,7 +30,7 @@
  *     ZamaniLexer
  *       |
  *       v
- *     Core / domain parser
+ *     ZamaniParser / Compile
  *       |
  *       v
  *     frontend AST
@@ -25,68 +38,33 @@
  *       v
  *     semantic analysis
  *       |
- *       +--> capability / requirement analysis
- *       +--> resource analysis
+ *       +--> name resolution
+ *       +--> type analysis
  *       +--> effect analysis
- *       +--> target-independent compilation planning
+ *       +--> capability analysis
+ *       +--> resource analysis
+ *       +--> target resolution
+ *       +--> compilation planning
  *       |
  *       v
- *     canonical IR
+ *     canonical semantic IR
  *       |
- *       +--> optimization
- *       +--> scheduling
- *       +--> routing
- *       +--> hardware lowering
- *       +--> backend
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL / hardware representation
+ *       +--> distributed representation
  *       |
  *       v
- *     executable / deployable artifact
- *
- * Implementation baseline:
- *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     This grammar introduces no Rust implementation code.
- *     All compiler implementations consuming this grammar MUST use safe Rust.
- *     Rust `unsafe` is neither required nor permitted by this grammar contract.
- *
- * ============================================================================
- *
- * FUNDAMENTAL CONTRACT
- * ============================================================================
- *
- * This grammar describes COMPILATION INTENT.
- *
- * It does NOT perform compilation.
- *
- * It does NOT:
- *
- *     - select a physical machine;
- *     - discover hardware;
- *     - define a hardware topology;
- *     - define a quantum topology;
- *     - define a qubit count;
- *     - define a CPU count;
- *     - define a GPU count;
- *     - define a memory limit;
- *     - define a register limit;
- *     - define a fixed vector width;
- *     - define a fixed tensor dimension;
- *     * define backend-specific gate sets;
- *     - perform optimization;
- *     - perform scheduling;
- *     - perform routing;
- *     - perform QEC;
- *     - define ZQN/noise semantics;
- *     - generate machine code;
- *     - execute code;
- *     - access the filesystem;
- *     - access the network;
- *     - execute arbitrary host-language code.
- *
- * Compilation intent is declarative.
- *
- * Hardware-specific realization is a downstream concern.
+ *     optimization
+ *       |
+ *       v
+ *     routing / scheduling / resilience / HAL
+ *       |
+ *       v
+ *     target lowering
+ *       |
+ *       v
+ *     runtime / deployment
  *
  * ============================================================================
  *
@@ -95,58 +73,25 @@
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * A Zamani source program should describe:
+ * Source compilation intent MUST remain independent of:
  *
- *     WHAT computation is required
- *     WHAT capabilities are required
- *     WHAT constraints must hold
- *     WHAT implementation freedom is permitted
+ *     - CPU count
+ *     - GPU count
+ *     - FPGA count
+ *     - ASIC count
+ *     - accelerator count
+ *     - qubit count
+ *     - register count
+ *     - memory capacity
+ *     - topology
+ *     - physical addresses
+ *     - device identifiers
+ *     - vendor identifiers
+ *     - queue size
+ *     - deployment size
+ *     - network size
  *
- * rather than:
- *
- *     WHICH CURRENT MACHINE MUST EXECUTE IT
- *
- * Consequently:
- *
- *     requirement != target
- *     capability != device
- *     preference != requirement
- *     constraint != topology
- *     hint != guarantee
- *     resource expression != fixed resource count
- *
- * ============================================================================
- *
- * INTEGRATION CONTRACT
- * ============================================================================
- *
- * This is a PARSER grammar.
- *
- * Canonical lexer:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * The canonical parser assembly is responsible for importing this grammar.
- *
- * This grammar intentionally uses the existing lexical vocabulary:
- *
- *     IDENTIFIER
- *     INTEGER
- *     FLOAT
- *     STRING
- *     TRUE
- *     FALSE
- *
- * together with punctuation/operators supplied by ZamaniLexer.
- *
- * Compilation keywords are represented through the existing language's
- * extensible identifier surface where dedicated lexical tokens do not yet
- * exist. This avoids silently modifying the canonical lexer from a parser
- * fragment and avoids creating a second lexical authority.
- *
- * A future lexer revision may promote frequently-used compilation words to
- * reserved tokens. Such a promotion is a compatibility change and MUST NOT
- * change the semantic model defined here.
+ * No finite machine inventory is encoded here.
  *
  * ============================================================================
  *
@@ -155,59 +100,135 @@
  *
  * THIS FILE OWNS:
  *
- *     - source-level compilation intent syntax;
- *     - target-independent compilation requests;
+ *     - the `compile` declaration boundary;
+ *     - compilation-intent grouping;
  *     - compilation profiles;
  *     - compilation requirements;
  *     - compilation constraints;
  *     - compilation preferences;
  *     - compilation hints;
- *     - feature-selection requests;
- *     - artifact-kind requests;
- *     - compilation-stage requests;
- *     - conditional compilation declarations;
- *     - compile-time target-independent configuration.
+ *     - compilation feature requests;
+ *     - compilation artifact requests;
+ *     - compilation stage requests;
+ *     - compilation plan composition;
+ *     - target-independent compilation options.
  *
  * THIS FILE DOES NOT OWN:
  *
+ *     - lexical tokens;
  *     - identifiers;
- *     - paths;
- *     - expressions;
+ *     - qualified names;
+ *     - ordinary expressions;
  *     - types;
- *     - modules;
- *     - functions;
+ *     - runtime control flow;
+ *     - compile-time expressions;
+ *     - compile-time functions;
+ *     - targets;
+ *     - hardware descriptions;
  *     - resources;
- *     - hardware capabilities;
- *     - quantum IR;
- *     - classical IR;
- *     - HDL IR;
+ *     - quantum syntax;
+ *     - classical syntax;
+ *     - HDL syntax;
  *     - optimization algorithms;
  *     - scheduling algorithms;
  *     - routing algorithms;
- *     - QEC algorithms;
- *     - ZQN/noise models;
- *     - backend implementation;
- *     - executable generation;
+ *     - QEC;
+ *     - ZQN;
+ *     - resilience;
+ *     - canonical IR;
  *     - runtime execution.
  *
+ * Those concepts remain owned by their respective grammar or semantic
+ * subsystem.
+ *
  * ============================================================================
  *
- * IMPORTANT AST RULE
+ * IMPORTANT COMPOSITION RULE
  * ============================================================================
  *
- * Every rule in this file should lower to an AST representation of SOURCE
- * INTENT.
+ * This grammar MUST NOT define:
  *
- * It must NOT lower directly to:
+ *     identifier
+ *     qualifiedName
+ *     expression
+ *     argumentList
+ *     blockExpression
+ *     pattern
+ *     typeExpression
+ *     attribute
  *
- *     CompilationTarget
+ * Those are canonical parser contracts.
+ *
+ * Redefining them here would create competing syntax authorities.
+ *
+ * ============================================================================
+ *
+ * IMPORTANT SEMANTIC RULE
+ * ============================================================================
+ *
+ * A grammar node created by this file represents SOURCE INTENT.
+ *
+ * It MUST NOT directly become:
+ *
+ *     physical device configuration
  *     backend configuration
- *     physical device identifiers
  *     hardware topology
- *     compiler implementation objects
- *     machine-code instructions
+ *     quantum operation
+ *     quantum circuit
+ *     machine instruction
+ *     schedule
+ *     route
+ *     executable
  *
- * Semantic analysis owns that interpretation.
+ * Semantic analysis and lowering perform those transformations.
+ *
+ * ============================================================================
+ *
+ * SAFETY
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no embedded Rust;
+ *     - no semantic actions;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no device discovery;
+ *     - no host execution;
+ *     - no unsafe code.
+ *
+ * Compiler/runtime implementation target:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *
+ * Compiler implementation MUST use safe Rust only.
+ *
+ * ============================================================================
+ *
+ * SCALABILITY
+ * ============================================================================
+ *
+ * This grammar contains no:
+ *
+ *     MAX_TARGETS
+ *     MAX_FEATURES
+ *     MAX_RESOURCES
+ *     MAX_DEVICES
+ *     MAX_QUBITS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_MEMORY
+ *     MAX_NODES
+ *     MAX_STAGES
+ *     MAX_ARTIFACTS
+ *     MAX_REQUIREMENTS
+ *     MAX_CONSTRAINTS
+ *
+ * Repetition is represented by parser repetition.
+ *
+ * Actual resource limits belong to compiler policy, resource analysis,
+ * execution infrastructure, or hardware capability discovery.
  *
  * ============================================================================
  */
@@ -219,609 +240,589 @@ options {
 }
 
 
-/*
+/* ============================================================================
+ * 1. CANONICAL ENTRY POINT
  * ============================================================================
- * COMPILATION UNIT INTEGRATION
- * ============================================================================
  *
- * `compileDeclaration` is the only top-level entry point owned by this file.
+ * Canonical source form:
  *
- * The canonical program/declaration grammar imports or references this rule.
+ *     compile <compile-specification>
  *
- * Example integration:
+ * `COMPILE` is the lexical boundary for this grammar.
  *
- *     declaration
- *         : ...
- *         | compileDeclaration
- *         ;
+ * This is deliberately NOT represented as an arbitrary IDENTIFIER.
  *
- * The canonical declaration grammar remains responsible for declaration
- * ordering, attributes, visibility and module placement.
+ * That prevents:
  *
- * This grammar does not redefine `declaration`.
+ *     compile(...)
+ *
+ * from becoming indistinguishable from an ordinary function call or user
+ * identifier and gives the language a stable compilation-intent boundary.
+ *
+ * The COMPILE token is shared with:
+ *
+ *     grammar/compile/compile-time.g4
+ *
+ * and therefore MUST be defined once by the canonical lexer.
  */
+
 compileDeclaration
-    : compileDirective
-    | compilationProfile
-    | compilationRequirement
-    | compilationConstraint
-    | compilationPreference
-    | compilationHint
-    | compilationFeature
-    | compilationConditional
-    | compilationArtifact
-    | compilationStage
+    : COMPILE compileSpecification SEMI?
     ;
 
 
-/*
+/* ============================================================================
+ * 2. COMPILATION SPECIFICATION
  * ============================================================================
- * GENERIC COMPILATION DIRECTIVE
- * ============================================================================
  *
- * Generic directive form:
+ * A compilation specification can contain zero or more independent intent
+ * clauses.
  *
- *     compile <name> ...
+ * The grammar imposes no fixed number of clauses.
  *
- * The directive name remains an identifier rather than a finite enum.
+ * Empty compilation specifications are rejected because:
  *
- * This is intentional.
+ *     compile;
  *
- * New compiler strategies can therefore be introduced without changing the
- * grammar merely because a new backend or compilation technology appears.
+ * carries no compilation intent and is therefore almost certainly a source
+ * error.
  *
- * Semantic validation determines which directive names are recognized.
+ * If the language later assigns a meaningful semantic to an empty compile
+ * declaration, that is a semantic-version change rather than an implicit
+ * parser behavior.
  */
-compileDirective
-    : identifier compileDirectiveBody?
+
+compileSpecification
+    : compileClause+
     ;
 
 
-compileDirectiveBody
-    : LPAREN compileArgumentList? RPAREN
-    | LBRACE compileDirectiveEntry* RBRACE
-    | ASSIGN expression
-    ;
-
-
-compileDirectiveEntry
-    : identifier ASSIGN expression SEMICOLON
-    | identifier expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * COMPILATION PROFILE
+/* ============================================================================
+ * 3. COMPILATION CLAUSES
  * ============================================================================
  *
- * A profile describes a named set of compilation intent.
+ * Each clause has a distinct semantic category.
+ *
+ * The categories MUST remain distinct in the AST.
+ *
+ * In particular:
+ *
+ *     requirement != constraint
+ *     preference != hint
+ *     target != capability
+ *     artifact != stage
+ *     profile != target
+ *
+ * The compiler must not collapse them into a generic compiler-option map.
+ */
+
+compileClause
+    : compileProfile
+    | compileRequirement
+    | compileConstraint
+    | compilePreference
+    | compileHint
+    | compileFeature
+    | compileArtifact
+    | compileStage
+    | compilePlan
+    | compileOption
+    ;
+
+
+/* ============================================================================
+ * 4. PROFILE
+ * ============================================================================
+ *
+ * A profile is a named reusable compilation-intent grouping.
+ *
+ * Example:
+ *
+ *     compile profile portable_quantum {
+ *         ...
+ *     }
  *
  * A profile is NOT:
  *
- *     - a hardware target;
- *     - a device configuration;
- *     - a backend implementation;
- *     - an optimization pass.
- *
- * Profiles may be resolved by tooling, build configuration, or semantic
- * analysis.
- *
- * The grammar does not prescribe a finite set of profile names.
+ *     - a physical device;
+ *     - a backend;
+ *     - a topology;
+ *     - a schedule;
+ *     - an optimization implementation.
  */
-compilationProfile
-    : identifier identifier LBRACE compilationProfileEntry* RBRACE
+
+compileProfile
+    : PROFILE identifier compileProfileBody
+    ;
+
+compileProfileBody
+    : LBRACE compileProfileEntry* RBRACE
+    ;
+
+compileProfileEntry
+    : compileClause
     ;
 
 
-compilationProfileEntry
-    : identifier ASSIGN expression SEMICOLON
-    | identifier expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * REQUIREMENTS
+/* ============================================================================
+ * 5. REQUIREMENT
  * ============================================================================
  *
- * Requirements are semantic obligations.
+ * A requirement is mandatory semantic intent.
  *
- * A requirement means:
+ * Example:
  *
- *     "The resulting execution must satisfy this property."
+ *     compile requires quantum;
  *
- * It does NOT mean:
+ *     compile requires {
+ *         capability: quantum;
+ *         precision: p;
+ *     }
  *
- *     "Use this particular device."
+ * A requirement says what must be true.
  *
- * Examples at the semantic level include:
- *
- *     requires quantum
- *     requires capability
- *     requires precision
- *     requires memory
- *     requires latency
- *
- * The grammar remains generic so future computing paradigms do not require
- * parser redesign.
+ * It does NOT select a physical device.
  */
-compilationRequirement
-    : identifier compilationRequirementBody
+
+compileRequirement
+    : REQUIRES compileRequirementValue
     ;
 
-
-compilationRequirementBody
+compileRequirementValue
     : expression
-    | LBRACE compilationRequirementEntry* RBRACE
+    | compilePropertyBlock
     ;
 
 
-compilationRequirementEntry
-    : identifier COLON expression SEMICOLON
-    | identifier ASSIGN expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * CONSTRAINTS
+/* ============================================================================
+ * 6. CONSTRAINT
  * ============================================================================
  *
- * Constraints limit legal implementations without prescribing one particular
- * implementation.
+ * A constraint limits acceptable implementations.
  *
- * A constraint can be evaluated against:
+ * It does not identify a particular implementation.
  *
- *     - semantic properties;
- *     - capabilities;
- *     - resource models;
- *     - deployment environments;
- *     - compilation contexts.
+ * Example:
  *
- * It must not become a hidden hardware-selection mechanism.
+ *     compile constrain latency < bound;
+ *
+ * The comparison itself remains an ordinary Zamani expression.
+ *
+ * Semantic validity is downstream.
  */
-compilationConstraint
-    : identifier compilationConstraintBody
+
+compileConstraint
+    : CONSTRAIN compileConstraintValue
     ;
 
-
-compilationConstraintBody
+compileConstraintValue
     : expression
-    | LBRACE compilationConstraintEntry* RBRACE
+    | compileConstraintBlock
+    ;
+
+compileConstraintBlock
+    : LBRACE compileConstraintEntry+ RBRACE
+    ;
+
+compileConstraintEntry
+    : identifier compileConstraintOperator expression SEMI?
+    ;
+
+compileConstraintOperator
+    : EQUALS
+    | NOT_EQUALS
+    | LESS_THAN
+    | LESS_THAN_EQUAL
+    | GREATER_THAN
+    | GREATER_THAN_EQUAL
     ;
 
 
-compilationConstraintEntry
-    : identifier comparisonOperator expression SEMICOLON
-    | identifier COLON expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * PREFERENCES
+/* ============================================================================
+ * 7. PREFERENCE
  * ============================================================================
  *
- * Preferences are non-mandatory optimization or realization guidance.
+ * A preference is optional guidance.
  *
- * A preference MUST NOT be treated as a semantic requirement.
- *
- * This distinction is essential for portability.
+ * Ignoring a preference MUST NOT change program semantic correctness.
  */
-compilationPreference
-    : identifier compilationPreferenceBody
+
+compilePreference
+    : PREFER compilePreferenceValue
     ;
 
-
-compilationPreferenceBody
+compilePreferenceValue
     : expression
-    | LBRACE compilationPreferenceEntry* RBRACE
+    | compilePropertyBlock
     ;
 
 
-compilationPreferenceEntry
-    : identifier ASSIGN expression SEMICOLON
-    | identifier COLON expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * HINTS
+/* ============================================================================
+ * 8. HINT
  * ============================================================================
  *
- * Hints provide optional information to downstream compilation stages.
+ * A hint provides optional implementation information.
  *
- * Hints must never be required for semantic correctness.
+ * A compiler/backend is permitted to ignore a hint.
  *
- * A backend may ignore a hint.
+ * A hint MUST NOT be required for semantic correctness.
  */
-compilationHint
-    : identifier compilationHintBody
+
+compileHint
+    : HINT compileHintValue
     ;
 
-
-compilationHintBody
+compileHintValue
     : expression
-    | LBRACE compilationHintEntry* RBRACE
+    | compilePropertyBlock
     ;
 
 
-compilationHintEntry
-    : identifier ASSIGN expression SEMICOLON
-    | identifier COLON expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * FEATURE SELECTION
+/* ============================================================================
+ * 9. FEATURE
  * ============================================================================
  *
- * Feature declarations describe source-level or compilation-level optional
- * capabilities.
+ * Feature requests describe language/compiler/environment capabilities.
  *
- * The grammar intentionally does not enumerate every future feature.
+ * They are intentionally open-ended.
  *
- * Feature identity belongs to semantic capability resolution.
+ * The grammar does not enumerate:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     QPU
+ *     ASIC
+ *     vendor-specific features
+ *
+ * Such identities are semantic capability information.
  */
-compilationFeature
-    : identifier compilationFeatureBody
+
+compileFeature
+    : FEATURE compileFeatureValue
     ;
 
+compileFeatureValue
+    : expression
+    | compileFeatureBlock
+    ;
 
-compilationFeatureBody
+compileFeatureBlock
+    : LBRACE compileFeatureEntry+ RBRACE
+    ;
+
+compileFeatureEntry
     : identifier
-    | expression
-    | LBRACE compilationFeatureEntry* RBRACE
+      (ASSIGN expression)?
+      SEMI?
     ;
 
 
-compilationFeatureEntry
-    : identifier ASSIGN expression SEMICOLON
-    | identifier COLON expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * CONDITIONAL COMPILATION
+/* ============================================================================
+ * 10. ARTIFACT
  * ============================================================================
  *
- * Conditional compilation selects source-level structure based on a
- * compile-time semantic predicate.
+ * An artifact request describes a desired semantic representation.
  *
- * This is distinct from runtime `if`.
+ * It does not prescribe its implementation.
  *
- * The condition is still an ordinary Zamani expression.
- *
- * The semantic layer determines whether it is compile-time evaluable.
- *
- * This rule imposes no fixed number of branches.
- */
-compilationConditional
-    : identifier expression
-      LBRACE compilationConditionalBody RBRACE
-      (identifier LBRACE compilationConditionalBody RBRACE)*
-      (identifier LBRACE compilationConditionalBody RBRACE)?
-    ;
-
-
-compilationConditionalBody
-    : compilationConditionalItem*
-    ;
-
-
-compilationConditionalItem
-    : compileDeclaration
-    | expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * ARTIFACT REQUEST
- * ============================================================================
- *
- * An artifact request describes WHAT representation is desired.
- *
- * It does not prescribe how the representation is generated.
- *
- * Examples of semantic artifact categories:
+ * Examples include, semantically:
  *
  *     source
- *     canonical IR
- *     quantum IR
- *     classical IR
- *     HDL
+ *     canonical-ir
+ *     quantum-ir
+ *     classical-ir
+ *     hdl
  *     object
  *     executable
- *     deployable package
+ *     deployable
  *
- * Actual artifact identifiers remain extensible.
+ * The grammar does not enumerate those values.
  */
-compilationArtifact
-    : identifier compilationArtifactBody
+
+compileArtifact
+    : ARTIFACT compileArtifactSpecification
     ;
 
-
-compilationArtifactBody
+compileArtifactSpecification
     : identifier
+    | qualifiedName
     | STRING
-    | LBRACE compilationArtifactEntry* RBRACE
+    | compilePropertyBlock
     ;
 
 
-compilationArtifactEntry
-    : identifier ASSIGN expression SEMICOLON
-    | identifier COLON expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * COMPILATION STAGE
+/* ============================================================================
+ * 11. STAGE
  * ============================================================================
  *
- * A compilation stage identifies a semantic stage or requested pipeline
- * boundary.
+ * A stage identifies a semantic compilation boundary.
  *
- * It does NOT execute that stage.
+ * It does not execute that stage.
  *
- * It does NOT define its implementation.
+ * It does not prescribe its implementation.
  */
-compilationStage
-    : identifier compilationStageBody?
+
+compileStage
+    : STAGE compileStageSpecification
     ;
 
-
-compilationStageBody
+compileStageSpecification
     : identifier
-    | LBRACE compilationStageEntry* RBRACE
-    ;
-
-
-compilationStageEntry
-    : identifier ASSIGN expression SEMICOLON
-    | identifier COLON expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * TARGET-NEUTRAL TARGET EXPRESSION
- * ============================================================================
- *
- * POCO-REAF requires the language to distinguish a semantic requirement from
- * a concrete target.
- *
- * This rule therefore represents target intent as an expression/name rather
- * than an enum containing today's architectures.
- *
- * Examples of semantic target categories:
- *
- *     classical
- *     quantum
- *     hybrid
- *     hardware
- *     distributed
- *     accelerator
- *
- * A concrete implementation such as:
- *
- *     x86_64
- *     arm64
- *     a particular QPU
- *     a particular FPGA
- *
- * is resolved outside this grammar.
- */
-compilationTarget
-    : identifier
-    | qualifiedIdentifier
+    | qualifiedName
     | STRING
-    | expression
+    | compilePropertyBlock
     ;
 
 
-compilationTargetSet
-    : compilationTarget
-    | LBRACKET compilationTargetList? RBRACKET
-    ;
-
-
-compilationTargetList
-    : compilationTarget
-      (COMMA compilationTarget)*
-    ;
-
-
-/*
- * ============================================================================
- * RESOURCE-NEUTRAL RESOURCE EXPRESSION
+/* ============================================================================
+ * 12. PLAN
  * ============================================================================
  *
- * Resource quantities are expressions.
+ * A plan describes desired compilation composition.
  *
- * No maximum cardinality is encoded.
+ * The compiler remains responsible for constructing the actual executable
+ * compilation plan.
+ *
+ * This syntax is intent, not execution.
+ */
+
+compilePlan
+    : PLAN compilePlanBody
+    ;
+
+compilePlanBody
+    : LBRACE compilePlanEntry+ RBRACE
+    ;
+
+compilePlanEntry
+    : compilePlanStage
+    | compileClause
+    ;
+
+compilePlanStage
+    : STAGE compileStageSpecification SEMI?
+    ;
+
+
+/* ============================================================================
+ * 13. GENERIC COMPILATION OPTION
+ * ============================================================================
+ *
+ * Options are intentionally namespaced/open-ended.
+ *
+ * They are not backend switches by definition.
+ *
+ * Semantic analysis determines whether an option is:
+ *
+ *     - recognized;
+ *     - compatible;
+ *     - deprecated;
+ *     - unsupported;
+ *     - ignored;
+ *     - transformed.
+ *
+ * An option MUST NOT silently acquire semantic authority merely because a
+ * backend recognizes its name.
+ */
+
+compileOption
+    : OPTION identifier
+      (ASSIGN expression)?
+      SEMI?
+    ;
+
+
+/* ============================================================================
+ * 14. PROPERTY BLOCK
+ * ============================================================================
+ *
+ * Generic property blocks provide extensibility without adding a new grammar
+ * rule every time a future computing model introduces a new semantic property.
+ *
+ * Properties remain data.
+ *
+ * Their names and values are interpreted downstream.
+ */
+
+compilePropertyBlock
+    : LBRACE compilePropertyEntry+ RBRACE
+    ;
+
+compilePropertyEntry
+    : compilePropertyName
+      (COLON | ASSIGN)
+      expression
+      SEMI?
+    ;
+
+compilePropertyName
+    : identifier
+    | qualifiedName
+    ;
+
+
+/* ============================================================================
+ * 15. TARGET INTEGRATION
+ * ============================================================================
+ *
+ * Target semantics belong to:
+ *
+ *     grammar/compile/target.g4
+ *
+ * This file MUST NOT duplicate target grammar.
+ *
+ * The canonical parser composition layer should integrate:
+ *
+ *     compileDeclaration
+ *         |
+ *         +--> compile target intent
+ *                 |
+ *                 v
+ *             CompileTarget
+ *
+ * Therefore target-specific grammar is intentionally NOT reproduced here.
+ *
+ * A compilation property may reference a target-related semantic expression,
+ * but this file does not interpret it.
+ */
+
+
+/* ============================================================================
+ * 16. COMPILE-TIME INTEGRATION
+ * ============================================================================
+ *
+ * Compile-time control syntax belongs to:
+ *
+ *     grammar/compile/compile-time.g4
+ *
+ * This file does NOT redefine:
+ *
+ *     compile if
+ *     compile select
+ *     compile require
+ *     compile specialize
+ *     compile feature
+ *     compile-time loops
+ *     compile-time matching
+ *
+ * Those are control/evaluation constructs rather than compilation-intent
+ * declaration structure.
+ *
+ * The canonical parser composition layer decides where
+ * `compileTimeControlForm` may appear.
+ */
+
+
+/* ============================================================================
+ * 17. EXPRESSION INTEGRATION
+ * ============================================================================
+ *
+ * Every value-bearing position consumes the canonical:
+ *
+ *     expression
+ *
+ * rule.
+ *
+ * This file therefore creates no second expression grammar.
+ *
+ * Consequences:
+ *
+ *     arithmetic
+ *     logical operators
+ *     comparison
+ *     function calls
+ *     indexing
+ *     member access
+ *     ranges
+ *     quantum/classical expressions
+ *
+ * remain owned by the canonical expression parser.
+ */
+
+
+/* ============================================================================
+ * 18. NAME INTEGRATION
+ * ============================================================================
+ *
+ * `identifier` and `qualifiedName` are consumed from the canonical parser.
+ *
+ * They MUST NOT be redefined here.
+ *
+ * This prevents independent name-resolution domains from emerging.
+ */
+
+
+/* ============================================================================
+ * 19. RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Resource semantics belong to:
+ *
+ *     grammar/resources/
+ *
+ * This file can express resource-related intent through:
+ *
+ *     expression
+ *     compilePropertyBlock
+ *
+ * but does not define:
+ *
+ *     memory models
+ *     qubit models
+ *     CPU models
+ *     GPU models
+ *     FPGA models
+ *     node models
+ *     resource allocation
+ *     resource discovery
+ *
+ * Therefore:
+ *
+ *     compile requires memory > required
+ *
+ * is source intent.
+ *
+ * Whether that requirement is satisfiable belongs to semantic/resource
+ * analysis.
+ */
+
+
+/* ============================================================================
+ * 20. CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Capability discovery and interpretation belong downstream.
  *
  * Examples:
  *
- *     number of qubits
- *     amount of memory
- *     parallelism
- *     latency
- *     energy
+ *     quantum capability
+ *     tensor capability
+ *     parallel execution capability
+ *     fault-tolerant capability
  *
- * The semantic resource model determines units and feasibility.
+ * are not machine definitions.
+ *
+ * This grammar does not know whether a capability is provided by:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     simulator
+ *     distributed cluster
+ *     future architecture
  */
-compilationResource
-    : identifier
-    | qualifiedIdentifier
-    | expression
-    ;
 
 
-compilationResourceBinding
-    : identifier ASSIGN compilationResource
-    ;
-
-
-/*
- * ============================================================================
- * CAPABILITY REFERENCE
+/* ============================================================================
+ * 21. QUANTUM INTEGRATION
  * ============================================================================
  *
- * Capabilities describe what an execution environment can provide.
+ * Quantum source syntax remains owned by grammar/quantum/.
  *
- * A capability is not a device.
- *
- * Capability discovery belongs to the hardware/runtime/compiler context.
- */
-compilationCapability
-    : identifier
-    | qualifiedIdentifier
-    | STRING
-    ;
-
-
-compilationCapabilityList
-    : compilationCapability
-      (COMMA compilationCapability)*
-    ;
-
-
-/*
- * ============================================================================
- * COMPILATION ARGUMENTS
- * ============================================================================
- *
- * Arguments remain ordinary Zamani expressions.
- *
- * This prevents the grammar from creating a second expression/type system.
- */
-compileArgumentList
-    : compileArgument
-      (COMMA compileArgument)*
-    ;
-
-
-compileArgument
-    : identifier ASSIGN expression
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * IDENTIFIER INTEGRATION
- * ============================================================================
- *
- * These rules are deliberately compatibility aliases.
- *
- * If the canonical parser already owns `identifier` and
- * `qualifiedIdentifier`, the canonical parser must replace these references
- * with those shared rules during grammar assembly.
- *
- * They are not intended to introduce a second identifier definition.
- */
-identifier
-    : IDENTIFIER
-    ;
-
-
-qualifiedIdentifier
-    : identifier
-      (DCOLON identifier)*
-    ;
-
-
-/*
- * ============================================================================
- * COMPARISON OPERATORS
- * ============================================================================
- *
- * These operators are intentionally limited to the operators already supplied
- * by the canonical lexical grammar.
- *
- * Semantic typing and comparison validity remain downstream.
- */
-comparisonOperator
-    : EQ
-    | NEQ
-    | LT
-    | LE
-    | GT
-    | GE
-    ;
-
-
-/*
- * ============================================================================
- * INTEGRATION ADAPTERS
- * ============================================================================
- *
- * These aliases make the file easy to integrate into different parser
- * assembly arrangements without duplicating semantic rules.
- *
- * Canonical parser integration should reference:
- *
- *     compileDeclaration
- *
- * directly.
- *
- * These adapters are not alternate compilation systems.
- */
-compileItem
-    : compileDeclaration
-    ;
-
-
-compileItems
-    : compileItem*
-    ;
-
-
-/*
- * ============================================================================
- * SEMANTIC INTEGRATION CONTRACT
- * ============================================================================
- *
- * The AST generated from this grammar should preserve at least these
- * distinctions:
- *
- *     Requirement
- *     Constraint
- *     Preference
- *     Hint
- *     Capability
- *     Resource
- *     TargetIntent
- *     ArtifactRequest
- *     StageRequest
- *     FeatureSelection
- *
- * They MUST NOT be collapsed into a generic "compiler option".
- *
- * Downstream semantic analysis is responsible for resolving:
- *
- *     source intent
- *         ->
- *     compilation context
- *         ->
- *     available capabilities
- *         ->
- *     feasible resource assignments
- *         ->
- *     compilation plan
- *
- * ============================================================================
- *
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * This file does not define:
+ * This grammar MUST NOT define:
  *
  *     Qubit
  *     PhysicalQubitId
@@ -829,273 +830,423 @@ compileItems
  *     QuantumGate
  *     QuantumOperation
  *     Circuit
+ *     Measurement
  *     QEC code
- *     Noise model
+ *     noise model
  *
- * Quantum source syntax belongs to:
+ * Compilation intent can refer to quantum requirements through expressions
+ * and semantic properties.
  *
- *     grammar/quantum/
- *
- * Quantum semantic lowering ultimately belongs at the canonical:
+ * After semantic analysis, quantum computation MUST lower through the
+ * repository's canonical:
  *
  *     quantum::ir
  *
  * boundary.
  *
- * Compilation intent may refer to quantum capabilities/resources through
- * generic expressions, but this file must never create a second quantum IR.
- *
+ * This file therefore never creates or duplicates a quantum IR.
+ */
+
+
+/* ============================================================================
+ * 22. CLASSICAL INTEGRATION
  * ============================================================================
  *
- * CLASSICAL INTEGRATION
+ * Classical semantics remain owned by the classical grammar and semantic
+ * layers.
+ *
+ * Compilation intent may constrain or describe classical execution
+ * requirements but cannot redefine classical computation.
+
+
+/* ============================================================================
+ * 23. HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Classical computation remains governed by the canonical classical grammar
- * and semantic/type system.
+ * HDL syntax belongs to:
  *
- * This file may express compilation requirements for classical computation
- * but does not redefine classical expressions, functions or types.
+ *     grammar/hdl/
  *
- * ============================================================================
+ * Hardware-description syntax belongs to:
  *
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
+ *     grammar/hardware/
  *
- * HDL and hardware grammars own:
+ * This file can express compilation intent surrounding such programs but
+ * cannot define:
  *
- *     hardware modules
- *     signals
  *     ports
+ *     wires
  *     clocks
- *     timing
- *     hardware resources
- *     hardware semantics
+ *     registers
+ *     topology
+ *     physical placement
+ *     chip inventory
  *
- * This grammar only expresses compilation intent around those constructs.
- *
- * A target declaration must never force a fixed chip, FPGA, ASIC, topology,
- * clock frequency or device count.
- *
+ * Those are downstream semantic/hardware concerns.
+ */
+
+
+/* ============================================================================
+ * 24. OPTIMIZATION INTEGRATION
  * ============================================================================
  *
- * OPTIMIZATION INTEGRATION
- * ============================================================================
+ * Optimization intent may be expressed as a preference or option.
  *
- * Optimization is downstream.
+ * This file does NOT select or implement optimization algorithms.
  *
- * A source preference may influence optimization, but this grammar does not
- * select or implement an optimization algorithm.
+ * For example, a preference such as:
  *
- * Examples:
+ *     compile prefer optimization.level = level;
  *
- *     preference
- *     hint
- *     optimization intent
+ * is metadata.
  *
- * remain metadata/intent until semantic analysis and optimization planning.
- *
- * ============================================================================
- *
- * SCHEDULING INTEGRATION
+ * It does not directly invoke an optimization pass.
+ */
+
+
+/* ============================================================================
+ * 25. SCHEDULING INTEGRATION
  * ============================================================================
  *
  * Scheduling is downstream.
  *
- * Compilation intent may express constraints/preferences such as:
+ * Compilation intent may express:
  *
  *     latency
- *     ordering
  *     throughput
- *     timing requirements
- *     resource requirements
+ *     ordering
+ *     timing
+ *     resource
  *
- * but must not create schedules or timestamps.
+ * requirements or preferences.
  *
+ * This grammar never creates timestamps or schedules.
+ */
+
+
+/* ============================================================================
+ * 26. ROUTING / HARDWARE HAL
  * ============================================================================
  *
- * ROUTING / HARDWARE INTEGRATION
+ * Routing and hardware realization remain downstream.
+ *
+ * No physical topology can be inferred merely from a compilation declaration.
+ */
+
+
+/* ============================================================================
+ * 27. QEC / ZQN / RESILIENCE
  * ============================================================================
  *
- * Placement, topology and routing are downstream.
+ * QEC owns error-correction algorithms.
  *
- * Source code must not encode an accidental fixed topology merely because
- * one backend currently has such a topology.
+ * ZQN owns noise/fault semantics.
  *
+ * Resilience owns adaptive recovery/decision orchestration.
+ *
+ * Compilation intent may express semantic reliability/resilience requirements,
+ * but this file does not define their implementation.
+ */
+
+
+/* ============================================================================
+ * 28. RUNTIME INTEGRATION
  * ============================================================================
  *
- * ZQN / QEC INTEGRATION
- * ============================================================================
+ * Runtime execution is downstream.
  *
- * Noise and fault semantics belong to ZQN.
- *
- * Error correction belongs to QEC.
- *
- * Compilation intent may express requirements concerning reliability or
- * resilience but must not define the algorithms implementing them.
- *
- * ============================================================================
- *
- * RUNTIME INTEGRATION
- * ============================================================================
- *
- * Runtime receives the semantic compilation result.
- *
- * This grammar does not define:
+ * This grammar does not:
  *
  *     dispatch
- *     execution
+ *     execute
  *     retry
- *     recovery
- *     backend switching
+ *     recover
+ *     migrate
+ *     switch backends
+ *     access devices
  *
- * Those belong to runtime/resilience/execution subsystems.
- *
+ * A compilation declaration may produce metadata consumed by those systems,
+ * but it does not perform their work.
+ */
+
+
+/* ============================================================================
+ * 29. SECURITY
  * ============================================================================
  *
- * SCALABILITY CONTRACT
+ * A compile declaration is NOT an authorization mechanism.
+ *
+ * Syntax such as:
+ *
+ *     compile ...
+ *
+ * MUST NOT grant:
+ *
+ *     filesystem access
+ *     network access
+ *     credential access
+ *     device access
+ *     process execution
+ *
+ * Permissions and capabilities are established by the compiler/runtime
+ * security model.
+ */
+
+
+/* ============================================================================
+ * 30. DETERMINISM
  * ============================================================================
  *
- * This grammar contains no machine-cardinality constants.
+ * Parsing must depend exclusively on the token stream.
  *
- * It does not define:
+ * This grammar performs no:
+ *
+ *     - time inspection;
+ *     - randomness;
+ *     - environment inspection;
+ *     - filesystem access;
+ *     - network access;
+ *     - hardware discovery.
+ *
+ * Therefore identical source/token streams have identical parse structure.
+ */
+
+
+/* ============================================================================
+ * 31. SCALABILITY
+ * ============================================================================
+ *
+ * Repetition is unbounded at the language level:
+ *
+ *     compileClause+
+ *     compileProfileEntry*
+ *     compilePropertyEntry+
+ *     compilePlanEntry+
+ *
+ * There are no hardware-cardinality limits.
+ *
+ * A practical compiler may impose resource budgets for safety and denial-of-
+ * service protection, but such budgets MUST be external to language semantics
+ * and MUST NOT be encoded as grammar cardinality limits.
+ */
+
+
+/* ============================================================================
+ * 32. AST CONTRACT
+ * ============================================================================
+ *
+ * The frontend AST should preserve the following semantic categories:
+ *
+ *     CompileDeclaration
+ *       └── CompileSpecification
+ *             ├── Profile
+ *             ├── Requirement
+ *             ├── Constraint
+ *             ├── Preference
+ *             ├── Hint
+ *             ├── Feature
+ *             ├── Artifact
+ *             ├── Stage
+ *             ├── Plan
+ *             └── Option
+ *
+ * Each category must preserve source spans.
+ *
+ * Values must retain their canonical expression representation rather than
+ * being prematurely converted into backend/compiler objects.
+ */
+
+
+/* ============================================================================
+ * 33. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     compile source intent
+ *          |
+ *          v
+ *     resolve names
+ *          |
+ *          v
+ *     validate expressions/types
+ *          |
+ *          v
+ *     resolve capabilities
+ *          |
+ *          v
+ *     evaluate resource requirements
+ *          |
+ *          v
+ *     resolve target intent
+ *          |
+ *          v
+ *     construct compilation plan
+ *
+ * Semantic errors include:
+ *
+ *     unknown profile
+ *     unknown capability
+ *     contradictory requirements
+ *     impossible constraints
+ *     invalid option
+ *     unsupported artifact
+ *     incompatible stages
+ *     unsatisfied resource requirement
+ *
+ * These are NOT parser errors.
+ */
+
+
+/* ============================================================================
+ * 34. COMPILER / IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar does not lower directly to machine code.
+ *
+ * The expected direction is:
+ *
+ *     Compile AST
+ *        |
+ *        v
+ *     semantic compilation intent
+ *        |
+ *        v
+ *     target-independent compilation plan
+ *        |
+ *        v
+ *     canonical semantic IR
+ *        |
+ *        +--> quantum::ir
+ *        +--> classical IR
+ *        +--> HDL/hardware representation
+ *        +--> distributed representation
+ *
+ * The compiler may then invoke:
+ *
+ *     optimization
+ *     routing
+ *     scheduling
+ *     resilience
+ *     hardware HAL
+ *     backend lowering
+ *
+ * according to the resolved plan.
+ */
+
+
+/* ============================================================================
+ * 35. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The `compile` introducer is a stable language keyword/token.
+ *
+ * Clause names are deliberately semantic categories.
+ *
+ * Future implementation properties should preferably be introduced as:
+ *
+ *     qualified names
+ *     properties
+ *     options
+ *     profiles
+ *     capabilities
+ *
+ * rather than extending a finite machine-specific enum.
+ *
+ * Adding a new property should therefore not require changing the grammar
+ * merely because a new processor, accelerator, quantum technology, topology,
+ * or execution environment appears.
+ */
+
+
+/* ============================================================================
+ * 36. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file intentionally contains no:
  *
  *     MAX_QUBITS
  *     MAX_CORES
  *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
  *     MAX_DEVICES
  *     MAX_NODES
  *     MAX_MEMORY
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_SIZE
+ *     MAX_TARGETS
+ *     MAX_RESOURCES
+ *     MAX_ARTIFACTS
+ *     MAX_STAGES
  *
- * Any practical limit belongs to:
+ * No physical device identifier is embedded in syntax.
  *
- *     parser/runtime limits
- *     compiler resource policy
- *     semantic analysis
- *     hardware capability
- *     runtime availability
+ * No hardware topology is embedded in syntax.
  *
- * and must be represented explicitly rather than silently embedded in syntax.
- *
+ * No compiler backend is selected by grammar.
+ */
+
+
+/* ============================================================================
+ * 37. COMPLETION CRITERIA
  * ============================================================================
  *
- * DETERMINISM CONTRACT
- * ============================================================================
+ * This file is complete only when ALL of the following are true:
  *
- * For the same source token stream, this grammar must produce the same parse
- * structure.
+ * [ ] COMPILE is provided exactly once by the canonical lexer.
  *
- * It must not:
+ * [ ] This grammar does not redefine identifier.
  *
- *     - inspect hardware;
- *     - inspect wall-clock time;
- *     - access environment variables;
- *     - perform network access;
- *     - perform filesystem access;
- *     - perform random selection.
+ * [ ] This grammar does not redefine qualifiedName.
  *
- * ============================================================================
+ * [ ] This grammar does not redefine expression.
  *
- * DIAGNOSTICS CONTRACT
- * ============================================================================
+ * [ ] This grammar does not redefine typeExpression.
  *
- * Syntax errors belong to the parser.
+ * [ ] This grammar does not redefine blockExpression.
  *
- * Semantic errors such as:
+ * [ ] Target syntax remains owned by target.g4.
  *
- *     unknown capability
- *     impossible resource requirement
- *     unavailable target
- *     unsupported artifact
- *     contradictory constraints
+ * [ ] Compile-time control remains owned by compile-time.g4.
  *
- * belong to semantic analysis/compiler diagnostics.
+ * [ ] Expression-level compile-time syntax remains owned by
+ *     expressions/compile-time.g4.
  *
- * The grammar must not encode those errors as parser actions.
+ * [ ] Compilation-time functions remain owned by
+ *     functions/compile-time-functions.g4.
  *
- * ============================================================================
+ * [ ] Resource semantics remain owned by resources/.
  *
- * SECURITY CONTRACT
- * ============================================================================
+ * [ ] Hardware semantics remain owned by hardware/.
  *
- * Compilation syntax does not grant permissions.
+ * [ ] Quantum syntax remains owned by quantum/.
  *
- * A source-level request such as:
+ * [ ] quantum::ir remains the canonical quantum semantic boundary.
  *
- *     compile
- *     deploy
- *     target
- *     hardware
- *     network
+ * [ ] No fixed machine/resource limits exist.
  *
- * must never itself authorize:
+ * [ ] Parser generation succeeds using ZamaniLexer.
  *
- *     filesystem access
- *     network access
- *     device access
- *     credential access
- *     process execution
+ * [ ] The canonical parser can invoke compileDeclaration.
  *
- * Capability enforcement belongs downstream.
+ * [ ] The generated Rust parser compiles under Rust 1.97 and 1.97.1.
  *
- * ============================================================================
+ * [ ] Compiler implementation contains no unsafe Rust.
  *
- * COMPATIBILITY CONTRACT
- * ============================================================================
+ * [ ] Positive tests exist.
  *
- * New compilation concepts should preferably be represented as extensible
- * identifiers and semantic records rather than requiring a new finite enum
- * in this grammar.
+ * [ ] Negative tests exist.
  *
- * This permits future compilation technologies to be introduced without
- * breaking old source programs.
+ * [ ] Boundary tests exist.
  *
- * If an existing identifier is promoted to a reserved lexer token, that
- * change requires a language-version compatibility review.
+ * [ ] Cross-domain tests exist.
  *
- * ============================================================================
+ * [ ] Determinism tests exist.
  *
- * COMPLETION CRITERIA
- * ============================================================================
+ * [ ] AST source spans are preserved.
  *
- * This file is complete when:
+ * [ ] Semantic errors are not represented as parser actions.
  *
- * 1. It is imported by the canonical parser assembly.
- *
- * 2. Its lexer vocabulary comes exclusively from ZamaniLexer.
- *
- * 3. No second lexer is introduced.
- *
- * 4. No machine-specific limits are encoded.
- *
- * 5. No backend-specific target enum is encoded.
- *
- * 6. Requirements, constraints, preferences and hints remain distinct.
- *
- * 7. Compilation syntax lowers to source intent rather than machine code.
- *
- * 8. Quantum syntax remains owned by grammar/quantum/.
- *
- * 9. Hardware syntax remains owned by grammar/hardware/ and grammar/hdl/.
- *
- * 10. Canonical IR remains the semantic boundary.
- *
- * 11. Optimization, scheduling and routing remain downstream.
- *
- * 12. Runtime and resilience remain downstream.
- *
- * 13. The grammar is deterministic.
- *
- * 14. The grammar introduces no filesystem/network side effects.
- *
- * 15. Positive, negative, boundary and cross-domain tests exist.
- *
- * 16. Parser generation succeeds with the canonical Zamani lexer.
- *
- * 17. Rust consumers remain compatible with Rust 1.97/1.97.1.
- *
- * 18. Rust implementations contain no `unsafe`.
+ * [ ] No filesystem/network/device side effects exist in parsing.
  *
  * ============================================================================
  */
