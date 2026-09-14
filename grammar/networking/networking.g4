@@ -9,49 +9,139 @@
  * Grammar:
  *     Networking
  *
+ * Status:
+ *     Production networking grammar composition/root.
+ *
  * Purpose:
- *     Canonical production parser grammar for backend-independent networking
- *     intent in Zamani.
+ *     Provide the canonical parser-level integration boundary for all
+ *     networking language constructs in Zamani.
  *
  * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
  *
  * Safety:
- *     This grammar contains no embedded Rust actions, semantic predicates,
- *     filesystem access, network access, hardware access, runtime calls, or
- *     unsafe code.
+ *     - No embedded Rust.
+ *     - No unsafe code.
+ *     - No semantic predicates.
+ *     - No filesystem access.
+ *     - No network access.
+ *     - No hardware access.
+ *     - No runtime callbacks.
+ *     - No environment-dependent parsing.
+ *     - No randomness.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * ARCHITECTURAL ROLE
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     Networking parser grammar
- *          |
- *          v
- *     Frontend AST
- *          |
- *          +--> name resolution
- *          +--> type analysis
- *          +--> effect analysis
- *          +--> capability analysis
- *          +--> resource/constraint analysis
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> distributed execution model
- *          +--> hardware/runtime networking model
- *          |
- *          v
- *     routing / scheduling / deployment / runtime
+ * This file is an AGGREGATE / COMPOSITION grammar.
+ *
+ * It does NOT duplicate the implementation of individual networking
+ * constructs.
+ *
+ * Ownership is divided as follows:
+ *
+ *     networking.g4
+ *         |
+ *         +--> endpoints.g4
+ *         +--> channels.g4
+ *         +--> messages.g4
+ *         +--> protocols.g4
+ *         +--> services.g4
+ *         +--> network-capabilities.g4
+ *
+ * The resulting parser surface is then consumed by the wider Zamani parser.
+ *
+ *
+ * SOURCE
+ *   |
+ *   v
+ * ZamaniLexer
+ *   |
+ *   v
+ * Core parser / Networking parser
+ *   |
+ *   v
+ * Networking syntax
+ *   |
+ *   v
+ * Frontend AST
+ *   |
+ *   +--> name resolution
+ *   +--> type analysis
+ *   +--> effect analysis
+ *   +--> capability analysis
+ *   +--> resource analysis
+ *   +--> security analysis
+ *   +--> distributed analysis
+ *   |
+ *   v
+ * Canonical semantic representation
+ *   |
+ *   +--> classical IR
+ *   +--> networking semantic model
+ *   +--> distributed semantic model
+ *   +--> quantum::ir where quantum computation participates
+ *   +--> hardware/runtime model
+ *   |
+ *   v
+ * Optimization
+ *   |
+ *   v
+ * Routing
+ *   |
+ *   v
+ * Scheduling
+ *   |
+ *   v
+ * Placement / deployment
+ *   |
+ *   v
+ * Runtime / hardware realization
+ *
+ * This grammar MUST NEVER construct IR.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Networking syntax describes logical communication intent.
+ *
+ * It MUST NOT make the following permanent source-level assumptions:
+ *
+ *     - machine count;
+ *     - node count;
+ *     - CPU count;
+ *     - GPU count;
+ *     - FPGA count;
+ *     - QPU count;
+ *     - endpoint count;
+ *     - channel count;
+ *     - service count;
+ *     - protocol count;
+ *     - network topology;
+ *     - physical addresses;
+ *     - fixed bandwidth;
+ *     - fixed latency;
+ *     - fixed link count;
+ *     - fixed deployment topology;
+ *     - fixed provider;
+ *     - fixed transport implementation.
+ *
+ * Therefore:
+ *
+ *     Program Once
+ *         ->
+ *     Compile Once
+ *         ->
+ *     Run Everywhere
+ *         ->
+ *     Run Anywhere
+ *         ->
+ *     Run Forever
+ *
+ * remains a semantic/compiler/runtime responsibility rather than a
+ * machine-specific grammar restriction.
  *
  * ============================================================================
  * OWNERSHIP
@@ -59,249 +149,265 @@
  *
  * THIS FILE OWNS:
  *
- *     - networking declaration syntax;
- *     - logical endpoint declarations;
- *     - logical channel declarations;
- *     - service declarations;
- *     - protocol declarations;
- *     - message/communication intent declarations;
- *     - connection/communication intent;
- *     - networking requirements;
- *     - networking constraints;
- *     - networking preferences;
- *     - networking policy blocks;
- *     - networking metadata;
- *     - networking-scoped nested configuration syntax;
- *     - source-level networking expressions.
+ *     - networking grammar composition;
+ *     - networking parser entry points;
+ *     - networking construct aggregation;
+ *     - networking-domain integration boundaries;
+ *     - networking grammar version surface;
+ *     - networking construct dispatch;
+ *     - networking-wide syntax grouping.
  *
  * THIS FILE DOES NOT OWN:
  *
  *     - lexer definitions;
- *     - identifier syntax;
- *     - qualified-name syntax;
- *     - general expressions;
- *     - data schemas;
- *     - serialization formats;
- *     - cryptographic algorithms;
- *     - authentication implementation;
- *     - authorization implementation;
- *     - physical network discovery;
- *     - physical topology;
- *     - routing algorithms;
- *     - packet scheduling;
- *     - resource allocation;
+ *     - identifiers;
+ *     - qualified names;
+ *     - expressions;
+ *     - types;
+ *     - endpoint implementation;
+ *     - channel implementation;
+ *     - message schema implementation;
+ *     - protocol implementation;
+ *     - service implementation;
+ *     - capability implementation;
+ *     - routing;
+ *     - scheduling;
+ *     - placement;
+ *     - distributed execution;
  *     - hardware discovery;
- *     - device discovery;
- *     - IP allocation;
+ *     - resource allocation;
  *     - socket implementation;
- *     - transport implementation;
- *     - TCP implementation;
- *     - UDP implementation;
- *     - QUIC implementation;
- *     - HTTP implementation;
- *     - MPI implementation;
- *     - RDMA implementation;
- *     - vendor APIs;
- *     - cloud-provider APIs;
- *     - runtime networking;
- *     - distributed fault recovery;
+ *     - TCP;
+ *     - UDP;
+ *     - QUIC;
+ *     - HTTP;
+ *     - MPI;
+ *     - RDMA;
+ *     - serialization;
+ *     - cryptography;
+ *     - authentication;
+ *     - authorization;
+ *     - quantum gates;
+ *     - quantum states;
+ *     - QEC;
+ *     - ZQN;
  *     - resilience;
  *     - classical IR;
  *     - quantum::ir;
- *     - QEC;
- *     - ZQN.
+ *     - runtime execution.
  *
  * ============================================================================
- * POCO-REAF
+ * COMPONENT OWNERSHIP
  * ============================================================================
  *
- * Networking syntax expresses communication intent rather than requiring a
- * particular physical realization.
+ * Endpoint syntax:
  *
- * A Zamani program may therefore express:
+ *     grammar/networking/endpoints.g4
  *
- *     - communication;
- *     - service interaction;
- *     - endpoint requirements;
- *     - protocol requirements;
- *     - latency preferences;
- *     - bandwidth requirements;
- *     - reliability requirements;
- *     - locality preferences;
- *     - security requirements;
- *     - ordering requirements;
- *     - delivery semantics;
- *     - communication relationships;
+ * Networking channel syntax:
  *
- * without embedding a particular machine or network topology.
+ *     grammar/networking/channels.g4
  *
- * The following are deliberately NOT grammar-level limits:
+ * Message syntax:
  *
- *     - number of endpoints;
- *     - number of services;
- *     - number of channels;
- *     - number of nodes;
- *     - number of messages;
- *     - number of communication relationships;
- *     - bandwidth;
- *     - latency;
- *     - network size;
- *     - address-space size;
- *     - topology size;
- *     - deployment size.
+ *     grammar/networking/messages.g4
+ *
+ * Protocol syntax:
+ *
+ *     grammar/networking/protocols.g4
+ *
+ * Service syntax:
+ *
+ *     grammar/networking/services.g4
+ *
+ * Networking capability syntax:
+ *
+ *     grammar/networking/network-capabilities.g4
+ *
+ * This file MUST NOT redefine any of those constructs.
  *
  * ============================================================================
- * PHYSICAL NETWORK INDEPENDENCE
+ * IMPORTANT DISTINCTION: NETWORKING VS CONCURRENCY
  * ============================================================================
  *
- * The grammar does not require:
+ * Zamani also contains:
  *
- *     host
- *     port
- *     IPv4
- *     IPv6
- *     MAC address
- *     socket
- *     interface
- *     router
- *     switch
- *     subnet
- *     physical link
- *     device identifier
+ *     grammar/concurrency/channels.g4
  *
- * A source program MAY express an address as semantic data where a particular
- * application requires one, but such an address is data/intent and MUST NOT
- * become an implicit requirement of the networking grammar.
+ * That grammar owns language-level concurrency channels.
  *
- * Physical realization is selected downstream.
+ * This directory owns networking channels.
+ *
+ * They MUST remain separate.
+ *
+ * Networking channels describe logical communication relationships and their
+ * networking semantics.
+ *
+ * Concurrency channels describe language-level concurrent communication
+ * primitives.
+ *
+ * This aggregate grammar MUST NOT merge the two abstractions.
  *
  * ============================================================================
- * TRANSPORT INDEPENDENCE
+ * IMPORTANT DISTINCTION: NETWORKING VS DISTRIBUTED
  * ============================================================================
  *
- * Protocol syntax is intentionally represented as a source-level name or
- * expression.
+ * Networking owns communication semantics.
  *
- * This permits:
+ * Distributed computing owns:
  *
- *     protocol: tcp;
- *     protocol: udp;
- *     protocol: quic;
- *     protocol: mpi;
- *     protocol: rdma;
- *     protocol: custom::transport;
- *
- * without this grammar implementing or assuming any of them.
- *
- * Whether a protocol name is:
- *
- *     - available;
- *     - supported;
- *     - preferred;
- *     - required;
- *     - portable;
- *     - secure;
- *     - executable;
- *
- * is determined by semantic/capability/runtime layers.
- *
- * ============================================================================
- * SECURITY BOUNDARY
- * ============================================================================
- *
- * Networking syntax may express security requirements such as:
- *
- *     security: secure_channel;
- *     requires: encrypted_transport;
- *
- * but MUST NOT define:
- *
- *     - cryptographic algorithms;
- *     - key generation;
- *     - key storage;
- *     - certificate verification;
- *     - identity verification;
- *     - authorization;
- *     - trust policy implementation.
- *
- * Those belong to grammar/security and downstream security systems.
- *
- * ============================================================================
- * DISTRIBUTED BOUNDARY
- * ============================================================================
- *
- * Networking describes communication.
- *
- * Distributed execution describes execution placement and distributed
- * computation.
- *
- * Therefore this grammar MUST NOT define:
- *
- *     - node discovery;
- *     - process placement;
- *     - cluster membership;
+ *     - node membership;
+ *     - placement;
  *     - replication;
- *     - consensus;
+ *     - distributed execution;
+ *     - cluster semantics;
  *     - distributed scheduling;
- *     - distributed checkpoint implementation.
+ *     - distributed recovery.
  *
- * Those belong to grammar/distributed and downstream distributed systems.
- *
- * ============================================================================
- * DATA BOUNDARY
- * ============================================================================
- *
- * Networking can reference a message/data value through expressions.
- *
- * It does not define:
- *
- *     - schemas;
- *     - serialization formats;
- *     - database structures;
- *     - stream transformations;
- *     - binary encodings.
- *
- * Those belong to grammar/data and interoperability/serialization layers.
+ * This file therefore does not import or duplicate distributed execution
+ * declarations merely because they may use networking.
  *
  * ============================================================================
- * HARDWARE / QUANTUM BOUNDARY
+ * IMPORTANT DISTINCTION: NETWORKING VS HARDWARE
  * ============================================================================
  *
- * Networking can connect classical, quantum, HDL, accelerator, AI, or
- * heterogeneous computations.
+ * Networking can describe communication involving:
  *
- * It MUST NOT define:
+ *     - CPUs;
+ *     - GPUs;
+ *     - FPGAs;
+ *     - ASICs;
+ *     - QPUs;
+ *     - accelerators;
+ *     - embedded systems;
+ *     - distributed systems;
+ *     - future computational substrates.
+ *
+ * But networking.g4 does not define their physical resources.
+ *
+ * Hardware capability and physical realization remain downstream concerns.
+ *
+ * ============================================================================
+ * IMPORTANT DISTINCTION: NETWORKING VS QUANTUM
+ * ============================================================================
+ *
+ * Networking may participate in hybrid quantum/classical computation.
+ *
+ * This file does NOT define:
  *
  *     QubitId
  *     PhysicalQubitId
+ *     LogicalQubitId
  *     Gate
  *     Circuit
- *     FPGA resource
- *     GPU resource
- *     CPU topology
- *     hardware topology
- *     pulse
- *     calibration
+ *     QuantumState
+ *     QuantumTopology
+ *     Calibration
+ *     Pulse
+ *     QEC code
+ *     ZQN fault
  *
- * If communication participates in quantum computation, quantum semantics
- * continue through the canonical `quantum::ir` boundary.
+ * Quantum semantic lowering remains connected to the canonical:
+ *
+ *     quantum::ir
+ *
+ * boundary.
+ *
+ * ============================================================================
+ * IMPORTANT DISTINCTION: NETWORKING VS SECURITY
+ * ============================================================================
+ *
+ * Networking syntax may reference security requirements through expressions,
+ * capabilities, effects, or qualified names.
+ *
+ * It does not implement:
+ *
+ *     - cryptography;
+ *     - key generation;
+ *     - key storage;
+ *     - certificate validation;
+ *     - authentication;
+ *     - authorization;
+ *     - trust evaluation.
+ *
+ * Those belong to the security/effects/security architecture.
+ *
+ * ============================================================================
+ * IMPORTANT DISTINCTION: NETWORKING VS DATA
+ * ============================================================================
+ *
+ * Networking may reference message/data values.
+ *
+ * It does not define:
+ *
+ *     - serialization;
+ *     - wire encodings;
+ *     - database schemas;
+ *     - compression;
+ *     - binary layouts;
+ *     - data transformation semantics.
+ *
+ * Message syntax is delegated to messages.g4.
+ *
+ * Data schemas remain owned by grammar/data.
+ *
+ * ============================================================================
+ * OPEN-WORLD DESIGN
+ * ============================================================================
+ *
+ * This grammar intentionally does NOT enumerate transports such as:
+ *
+ *     TCP
+ *     UDP
+ *     QUIC
+ *     HTTP
+ *     MQTT
+ *     gRPC
+ *     MPI
+ *     RDMA
+ *     InfiniBand
+ *
+ * as a closed grammar vocabulary.
+ *
+ * Such names can be represented through the canonical name/expression system
+ * and resolved by semantic/capability analysis.
+ *
+ * This means a future transport can be introduced without requiring a new
+ * grammar rule merely because its name is new.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * All collections use unbounded ANTLR repetition operators.
- *
- * There are deliberately no grammar constants such as:
+ * There are NO constants such as:
  *
  *     MAX_ENDPOINTS
  *     MAX_CHANNELS
  *     MAX_SERVICES
- *     MAX_NODES
+ *     MAX_PROTOCOLS
  *     MAX_MESSAGES
  *     MAX_CONNECTIONS
+ *     MAX_NODES
+ *     MAX_NETWORK_SIZE
+ *     MAX_BANDWIDTH
+ *     MAX_LATENCY
  *
- * Practical limits are implementation/resource-policy concerns.
+ * in this grammar.
+ *
+ * Repetition is delegated to component grammars and uses ANTLR repetition
+ * semantics without an artificial language-level upper bound.
+ *
+ * Practical limits may come from:
+ *
+ *     - available memory;
+ *     - parser implementation;
+ *     - compiler resource policy;
+ *     - operating-system resources;
+ *     - runtime resources;
+ *     - deployment resources;
+ *     - target hardware.
+ *
+ * Those are NOT grammar limits.
  *
  * ============================================================================
  * DETERMINISM
@@ -309,60 +415,364 @@
  *
  * This grammar contains:
  *
- *     - no semantic predicates;
- *     - no embedded actions;
+ *     - no actions;
+ *     - no predicates;
  *     - no random behavior;
  *     - no environment inspection;
- *     - no network access;
  *     - no filesystem access;
+ *     - no network access;
  *     - no hardware access.
  *
- * Parsing is therefore independent of the current execution environment.
+ * Consequently parsing depends only on the supplied token stream and the
+ * imported grammar definitions.
  *
  * ============================================================================
- * LEXICAL CONTRACT
+ * IMPORT MODEL
  * ============================================================================
  *
- * The canonical lexer is:
+ * ANTLR parser imports compose parser grammars into the importing grammar.
  *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * This parser consumes:
- *
- *     IDENTIFIER
- *     LPAREN
- *     RPAREN
- *     LBRACE
- *     RBRACE
- *     LBRACKET
- *     RBRACKET
- *     COMMA
- *     COLON
- *     SEMICOLON
- *     DOT
- *     DOUBLE_COLON
- *
- * and the expression grammar.
- *
- * This file MUST NOT define lexer rules.
- *
- * Networking terminology is intentionally contextual rather than introducing
- * a second lexer authority.
+ * The component grammars therefore remain independently maintainable while
+ * networking.g4 provides one stable networking-domain integration boundary.
  *
  * ============================================================================
- * INTEGRATION
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * Required parser imports:
+ * Direct dependencies:
  *
+ *     ZamaniLexer
  *     Names
  *     Expressions
+ *     Endpoints
+ *     NetworkingChannels
+ *     Messages
+ *     Protocols
+ *     Services
+ *     NetworkCapabilities
  *
- * Canonical public entry point:
+ * Indirect dependencies are inherited through those component grammars.
  *
- *     networkingDeclaration
+ * This file MUST NOT depend directly on:
  *
- * The networking aggregate/parser integration should consume that rule.
+ *     Quantum IR
+ *     QEC
+ *     ZQN
+ *     Scheduling
+ *     Routing
+ *     Hardware HAL
+ *     Resilience
+ *     Runtime
+ *
+ * Those systems consume the semantic representation produced after parsing.
+ *
+ * ============================================================================
+ * GRAMMAR COMPOSITION
+ * ============================================================================
+ *
+ * The canonical component grammar names currently used by the networking
+ * directory are:
+ *
+ *     Endpoints
+ *     NetworkingChannels
+ *     Messages
+ *     Protocols
+ *     Services
+ *     NetworkCapabilities
+ *
+ * The component grammar root rules are intentionally consumed through stable
+ * construct rules rather than copying their internal productions.
+ *
+ * ============================================================================
+ * PUBLIC ENTRY POINTS
+ * ============================================================================
+ *
+ * `networkingUnit`
+ *
+ *     Parses one or more networking constructs followed by EOF.
+ *
+ * `networkingConstruct`
+ *
+ *     Parses exactly one networking construct.
+ *
+ * These are the stable composition boundaries for frontend integration.
+ *
+ * The wider Zamani parser SHOULD import Networking and consume
+ * `networkingConstruct` at the appropriate language-domain boundary.
+ *
+ * ============================================================================
+ * NO SECOND NETWORKING AST
+ * ============================================================================
+ *
+ * This grammar produces ANTLR parse-tree contexts.
+ *
+ * It MUST NOT define a second semantic networking model.
+ *
+ * The frontend AST layer owns transformation from:
+ *
+ *     parse tree
+ *         ->
+ *     frontend AST
+ *
+ * Semantic analysis then produces canonical networking semantics.
+ *
+ * ============================================================================
+ * FRONTEND INTEGRATION
+ * ============================================================================
+ *
+ * Frontend responsibilities:
+ *
+ *     1. Invoke `networkingUnit` or `networkingConstruct`.
+ *
+ *     2. Preserve source spans.
+ *
+ *     3. Preserve the selected component construct.
+ *
+ *     4. Build the frontend AST.
+ *
+ *     5. Perform name resolution.
+ *
+ *     6. Perform type checking.
+ *
+ *     7. Perform effect checking.
+ *
+ *     8. Perform capability checking.
+ *
+ *     9. Perform resource/constraint analysis.
+ *
+ *     10. Lower to canonical semantic representations.
+ *
+ * This grammar MUST NOT perform any of those semantic operations itself.
+ *
+ * ============================================================================
+ * IR INTEGRATION
+ * ============================================================================
+ *
+ * Networking syntax may eventually lower to:
+ *
+ *     - networking semantic IR/model;
+ *     - classical IR;
+ *     - distributed semantic representation;
+ *     - hardware communication representation;
+ *     - quantum::ir-adjacent communication metadata where appropriate.
+ *
+ * The grammar itself never chooses the target representation.
+ *
+ * In particular:
+ *
+ *     grammar -> quantum::ir
+ *
+ * is NOT a direct dependency.
+ *
+ * The correct architecture is:
+ *
+ *     grammar
+ *       ->
+ *     frontend AST
+ *       ->
+ *     semantic analysis
+ *       ->
+ *     canonical semantic representation
+ *       ->
+ *     quantum::ir / classical IR / distributed / hardware representations
+ *
+ * ============================================================================
+ * RUNTIME INTEGRATION
+ * ============================================================================
+ *
+ * Runtime networking is downstream.
+ *
+ * This grammar does not:
+ *
+ *     - open sockets;
+ *     - create endpoints;
+ *     - allocate ports;
+ *     - establish connections;
+ *     - send messages;
+ *     - receive messages;
+ *     - select routes;
+ *     - allocate physical links.
+ *
+ * Runtime behavior is derived from semantic information after compilation.
+ *
+ * ============================================================================
+ * RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Networking requirements such as:
+ *
+ *     latency
+ *     bandwidth
+ *     reliability
+ *     locality
+ *     energy
+ *     availability
+ *     security
+ *
+ * remain expressions / semantic properties.
+ *
+ * This grammar does not turn them into hard-coded resource limits.
+ *
+ * Resource analysis determines whether a realization satisfies the program.
+ *
+ * ============================================================================
+ * CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Network capabilities are delegated to:
+ *
+ *     grammar/networking/network-capabilities.g4
+ *
+ * Capability checking is semantic.
+ *
+ * A source-level capability requirement MUST NOT automatically select a
+ * particular device or provider.
+ *
+ * ============================================================================
+ * VERSIONING
+ * ============================================================================
+ *
+ * This grammar is part of the Zamani language grammar version.
+ *
+ * Syntax changes MUST follow the repository's language compatibility policy.
+ *
+ * Component grammars may evolve independently internally, but the public
+ * construct rules exposed here MUST remain stable across compatible grammar
+ * revisions.
+ *
+ * ============================================================================
+ * ERROR HANDLING
+ * ============================================================================
+ *
+ * Syntax errors are reported by the ANTLR parser/frontend diagnostic layer.
+ *
+ * This grammar MUST NOT embed custom error handling code.
+ *
+ * Semantic errors such as:
+ *
+ *     unknown protocol
+ *     unsatisfied capability
+ *     impossible requirement
+ *     invalid endpoint reference
+ *     invalid security requirement
+ *
+ * are NOT parser errors and must be reported by semantic analysis.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * networkingUnit MUST be tested with:
+ *
+ *     endpoint declarations;
+ *     channel declarations;
+ *     message declarations;
+ *     protocol declarations;
+ *     service declarations;
+ *     networking capability declarations;
+ *     mixed networking programs.
+ *
+ * Cross-domain tests MUST include:
+ *
+ *     classical + networking
+ *     quantum + networking
+ *     hybrid + networking
+ *     HDL + networking
+ *     hardware + networking
+ *     distributed + networking
+ *     AI + networking
+ *     data + networking
+ *     security + networking
+ *
+ * Scalability tests MUST verify absence of grammar-level finite limits for:
+ *
+ *     endpoints;
+ *     channels;
+ *     messages;
+ *     protocols;
+ *     services;
+ *     capability declarations;
+ *     construct count.
+ *
+ * Determinism tests MUST parse identical token streams repeatedly and obtain
+ * identical parse structures.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file MUST NOT contain:
+ *
+ *     MAX_ENDPOINTS
+ *     MAX_CHANNELS
+ *     MAX_SERVICES
+ *     MAX_PROTOCOLS
+ *     MAX_MESSAGES
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_QUANTUM_NODES
+ *     MAX_BANDWIDTH
+ *     MAX_LATENCY
+ *     MAX_NETWORK_SIZE
+ *
+ * Any such restriction belongs to resource analysis, compilation policy,
+ * runtime policy, or target capability negotiation.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ * [ ] It is the sole aggregate networking grammar.
+ *
+ * [ ] It does not duplicate endpoint syntax.
+ *
+ * [ ] It does not duplicate channel syntax.
+ *
+ * [ ] It does not duplicate message syntax.
+ *
+ * [ ] It does not duplicate protocol syntax.
+ *
+ * [ ] It does not duplicate service syntax.
+ *
+ * [ ] It does not duplicate capability syntax.
+ *
+ * [ ] It exposes stable networking parser entry points.
+ *
+ * [ ] It imports the canonical networking component grammars.
+ *
+ * [ ] It uses the canonical Zamani lexer.
+ *
+ * [ ] It uses canonical Names and Expressions.
+ *
+ * [ ] It has no embedded Rust.
+ *
+ * [ ] It has no unsafe code.
+ *
+ * [ ] It has no semantic predicates.
+ *
+ * [ ] It has no machine-size constants.
+ *
+ * [ ] It has no physical-network assumptions.
+ *
+ * [ ] It has no transport-specific closed-world enumeration.
+ *
+ * [ ] It does not depend directly on runtime/hardware/QEC/ZQN/resilience.
+ *
+ * [ ] Component grammars remain independently completable.
+ *
+ * [ ] Frontend AST integration consumes the public rules.
+ *
+ * [ ] Positive tests pass.
+ *
+ * [ ] Negative tests pass.
+ *
+ * [ ] Cross-domain tests pass.
+ *
+ * [ ] Scalability tests pass.
+ *
+ * [ ] Determinism tests pass.
  *
  * ============================================================================
  */
@@ -373,778 +783,116 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names, Expressions;
-
-
-/* ============================================================================
- * PUBLIC ENTRY POINT
- * ========================================================================== */
+/*
+ * Parser composition imports.
+ *
+ * Names and Expressions are retained here because the networking component
+ * grammars use the canonical name/expression rules and the aggregate grammar
+ * is intended to remain independently generatable.
+ */
+import
+    Names,
+    Expressions,
+    Endpoints,
+    NetworkingChannels,
+    Messages,
+    Protocols,
+    Services,
+    NetworkCapabilities
+    ;
 
 /*
- * A networking declaration introduces a logical networking specification.
+ * ============================================================================
+ * PUBLIC ROOT
+ * ============================================================================
  *
- * Canonical source shape:
+ * A networking compilation unit consists of zero or more networking
+ * constructs followed by EOF.
  *
- *     networking my_network {
- *         ...
- *     }
- *
- * The spelling `networking` is validated by semantic analysis because the
- * canonical lexer intentionally does not reserve every future domain word.
+ * No finite construct count is encoded.
  */
-networkingDeclaration
-    : networkingMarker
-      identifier
-      networkingBody?
-      SEMICOLON?
+networkingUnit
+    : networkingConstruct*
+      EOF
     ;
 
-
-/* ============================================================================
- * CONTEXTUAL MARKER
- * ========================================================================== */
-
-networkingMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * NETWORKING BODY
- * ========================================================================== */
-
-networkingBody
-    : LBRACE
-      networkingMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * TOP-LEVEL NETWORKING MEMBERS
- * ========================================================================== */
-
-networkingMember
+/*
+ * ============================================================================
+ * PUBLIC SINGLE-CONSTRUCT ENTRY POINT
+ * ============================================================================
+ *
+ * This is the preferred integration point for the wider Zamani parser.
+ */
+networkingConstruct
     : endpointDeclaration
-    | channelDeclaration
+    | networkChannelConstruct
+    | messageConstruct
+    | protocolConstruct
     | serviceDeclaration
-    | protocolDeclaration
-    | messageDeclaration
-    | connectionDeclaration
-    | communicationDeclaration
-    | requirementDeclaration
-    | constraintDeclaration
-    | preferenceDeclaration
-    | policyDeclaration
-    | metadataDeclaration
-    | networkingBlock
-    | networkingExpressionMember
+    | networkCapabilityConstruct
     ;
-
-
-/* ============================================================================
- * LOGICAL ENDPOINT
- * ========================================================================== */
 
 /*
- * Endpoint means a logical communication participant.
- *
- * It does not inherently mean:
- *
- *     IP address
- *     hostname
- *     socket
- *     physical interface
- *     machine
- *     device
- *
- * Example:
- *
- *     endpoint producer {
- *         role: source;
- *         capability: publish;
- *     }
- */
-endpointDeclaration
-    : endpointMarker
-      identifier
-      networkingObjectBody?
-      SEMICOLON?
-    ;
-
-endpointMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * LOGICAL CHANNEL
- * ========================================================================== */
-
-/*
- * A channel expresses a communication relationship.
- *
- * It does not imply a particular transport or physical link.
- */
-channelDeclaration
-    : channelMarker
-      identifier
-      networkingObjectBody?
-      SEMICOLON?
-    ;
-
-channelMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * SERVICE
- * ========================================================================== */
-
-/*
- * A service is a logical communication interface.
- *
- * Service discovery, process placement and deployment are downstream concerns.
- */
-serviceDeclaration
-    : serviceMarker
-      identifier
-      networkingObjectBody?
-      SEMICOLON?
-    ;
-
-serviceMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * PROTOCOL
- * ========================================================================== */
-
-/*
- * A protocol declaration identifies a logical protocol requirement or
- * capability.
- *
- * Example:
- *
- *     protocol control {
- *         requires: reliable;
- *     }
- *
- * The protocol name itself remains an ordinary source-level name.
- */
-protocolDeclaration
-    : protocolMarker
-      identifier
-      networkingObjectBody?
-      SEMICOLON?
-    ;
-
-protocolMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * MESSAGE
- * ========================================================================== */
-
-/*
- * Message declarations identify logical messages.
- *
- * Message schema and serialization remain owned by data/interoperability
- * layers.
- */
-messageDeclaration
-    : messageMarker
-      identifier
-      messageBody?
-      SEMICOLON?
-    ;
-
-messageMarker
-    : identifier
-    ;
-
-messageBody
-    : LBRACE
-      messageMember*
-      RBRACE
-    ;
-
-messageMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    | networkingBlock
-    ;
-
-
-/* ============================================================================
- * CONNECTION INTENT
- * ========================================================================== */
-
-/*
- * A connection is an intent to establish or represent a logical relationship.
- *
- * It does not execute a connection.
- */
-connectionDeclaration
-    : connectionMarker
-      identifier
-      connectionBody?
-      SEMICOLON?
-    ;
-
-connectionMarker
-    : identifier
-    ;
-
-connectionBody
-    : LBRACE
-      connectionMember*
-      RBRACE
-    ;
-
-connectionMember
-    : fromMember
-    | toMember
-    | protocolMember
-    | channelMember
-    | connectionOptionMember
-    | networkingBlock
-    ;
-
-fromMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-toMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-protocolMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-channelMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-connectionOptionMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * COMMUNICATION INTENT
- * ========================================================================== */
-
-/*
- * Communication expresses intent to send, receive, publish, subscribe, or
- * otherwise communicate.
- *
- * Runtime behavior belongs downstream.
- */
-communicationDeclaration
-    : communicationMarker
-      identifier
-      communicationBody?
-      SEMICOLON?
-    ;
-
-communicationMarker
-    : identifier
-    ;
-
-communicationBody
-    : LBRACE
-      communicationMember*
-      RBRACE
-    ;
-
-communicationMember
-    : sourceMember
-    | destinationMember
-    | payloadMember
-    | messageMember
-    | deliveryMember
-    | orderingMember
-    | communicationOptionMember
-    | networkingBlock
-    ;
-
-sourceMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-destinationMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-payloadMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-messageMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-deliveryMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-orderingMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-communicationOptionMember
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * REQUIREMENTS
- * ========================================================================== */
-
-/*
- * Requirements are mandatory semantic conditions.
- *
- * They are not physical resource allocations.
- *
- * Examples:
- *
- *     requires: reliable;
- *     requires: encrypted;
- *     requires: low_latency;
- *     requires: quantum_networking;
- */
-requirementDeclaration
-    : requirementMarker
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-requirementMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * CONSTRAINTS
- * ========================================================================== */
-
-/*
- * Constraints restrict legal realizations without selecting a particular
- * realization.
- */
-constraintDeclaration
-    : constraintMarker
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-constraintMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * PREFERENCES
- * ========================================================================== */
-
-/*
- * Preferences are optimization hints rather than semantic requirements.
- *
- * A preference may be ignored when satisfying it would violate stronger
- * requirements or constraints.
- */
-preferenceDeclaration
-    : preferenceMarker
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-preferenceMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * POLICY
- * ========================================================================== */
-
-/*
- * Policy data is source-level intent.
- *
- * It does not execute retries, failover, recovery, authentication, routing,
- * scheduling, or resilience behavior.
- */
-policyDeclaration
-    : policyMarker
-      identifier
-      networkingObjectBody?
-      SEMICOLON?
-    ;
-
-policyMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * METADATA
- * ========================================================================== */
-
-/*
- * Metadata is descriptive information and has no inherent execution effect.
- */
-metadataDeclaration
-    : metadataMarker
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-metadataMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * GENERIC NETWORKING BLOCK
- * ========================================================================== */
-
-/*
- * Extension point for networking-specific constructs.
- *
- * Example:
- *
- *     qos {
- *         latency: requirement;
- *         throughput: requirement;
- *     }
- *
- * The grammar remains extensible without adding a global keyword for every
- * future networking concept.
- */
-networkingBlock
-    : identifier
-      networkingObjectBody
-    ;
-
-networkingObjectBody
-    : LBRACE
-      networkingProperty*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * NETWORKING PROPERTY
- * ========================================================================== */
-
-networkingProperty
-    : networkingAssignment
-    | networkingNestedBlock
-    ;
-
-networkingAssignment
-    : identifier
-      COLON
-      expression
-      SEMICOLON
-    ;
-
-networkingNestedBlock
-    : identifier
-      networkingObjectBody
-    ;
-
-
-/* ============================================================================
- * NETWORKING EXPRESSION MEMBER
- * ========================================================================== */
-
-/*
- * Allows a networking-scoped expression to be represented without inventing
- * another statement syntax.
- *
- * Semantic analysis decides whether the expression has networking meaning.
- */
-networkingExpressionMember
-    : expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * REUSABLE NETWORKING LISTS
- * ========================================================================== */
-
-/*
- * These rules intentionally contain no finite bounds.
- */
-
-networkingIdentifierList
-    : identifier
-      (COMMA identifier)*
-    ;
-
-networkingQualifiedNameList
-    : qualifiedName
-      (COMMA qualifiedName)*
-    ;
-
-networkingExpressionList
-    : expression
-      (COMMA expression)*
-    ;
-
-
-/* ============================================================================
- * CONNECTION TARGET
- * ========================================================================== */
-
-/*
- * A communication target may be:
- *
- *     - a logical endpoint;
- *     - a service;
- *     - a channel;
- *     - a name;
- *     - an expression producing a target;
- *     - a future runtime-resolved target.
- *
- * This grammar does not force one physical addressing mechanism.
- */
-networkingTarget
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * DELIVERY INTENT
- * ========================================================================== */
-
-/*
- * Delivery semantics are represented as source-level intent.
- *
- * Examples:
- *
- *     reliable
- *     best_effort
- *     ordered
- *     unordered
- *     exactly_once
- *     at_least_once
- *     at_most_once
- *
- * These are not interpreted by the parser.
- */
-deliveryIntent
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * ORDERING INTENT
- * ========================================================================== */
-
-orderingIntent
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * PROTOCOL REFERENCE
- * ========================================================================== */
-
-protocolReference
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * SERVICE REFERENCE
- * ========================================================================== */
-
-serviceReference
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * ENDPOINT REFERENCE
- * ========================================================================== */
-
-endpointReference
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * CHANNEL REFERENCE
- * ========================================================================== */
-
-channelReference
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * NETWORKING CAPABILITY REFERENCE
- * ========================================================================== */
-
-/*
- * Capability names are deliberately not enumerated here.
- *
- * This allows future networking capabilities without grammar churn.
- */
-networkingCapabilityReference
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * NETWORKING REQUIREMENT REFERENCE
- * ========================================================================== */
-
-networkingRequirementReference
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * NETWORKING CONSTRAINT REFERENCE
- * ========================================================================== */
-
-networkingConstraintReference
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * NETWORKING PREFERENCE REFERENCE
- * ========================================================================== */
-
-networkingPreferenceReference
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * NETWORKING POLICY REFERENCE
- * ========================================================================== */
-
-networkingPolicyReference
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * END OF GRAMMAR
+ * ============================================================================
+ * STABLE COMPONENT ADAPTERS
  * ============================================================================
  *
- * INTEGRATION CONTRACT
+ * These adapter rules intentionally contain no semantic logic.
  *
- * 1. The canonical lexer remains:
- *
- *        grammar/antlr/ZamaniLexer.g4
- *
- * 2. Names come from:
- *
- *        grammar/core/names.g4
- *
- * 3. Expressions come from:
- *
- *        grammar/expressions/expressions.g4
- *
- * 4. No networking lexer is introduced here.
- *
- * 5. No networking AST is introduced here.
- *
- * 6. No network runtime behavior is introduced here.
- *
- * 7. No physical topology is introduced here.
- *
- * 8. No hard-coded resource limits are introduced here.
- *
- * 9. Networking semantics are lowered by frontend semantic analysis.
- *
- * 10. Distributed execution consumes the resulting semantic model rather
- *     than importing networking implementation details.
- *
- * 11. Hardware/resource systems determine physical realization.
- *
- * 12. Security systems determine security realization.
- *
- * 13. Data/interoperability systems determine representation and serialization.
- *
- * 14. Scheduling determines temporal ordering.
- *
- * 15. Routing/deployment determines physical/network placement.
- *
- * 16. Runtime determines actual communication.
- *
- * 17. Quantum communication continues through the canonical quantum::ir
- *     semantic boundary when quantum computation is involved.
- *
- * 18. QEC, ZQN and resilience remain outside this grammar.
- *
- * ============================================================================
+ * They exist to provide a stable aggregate-domain naming layer while the
+ * component grammars remain independently maintainable.
  */
+
+/*
+ * Endpoint adapter.
+ *
+ * `endpointDeclaration` is owned by Endpoints.
+ */
+networkingEndpoint
+    : endpointDeclaration
+    ;
+
+/*
+ * Networking-channel adapter.
+ *
+ * `networkChannelConstruct` is owned by NetworkingChannels.
+ */
+networkingChannel
+    : networkChannelConstruct
+    ;
+
+/*
+ * Message adapter.
+ *
+ * `messageConstruct` is owned by Messages.
+ */
+networkingMessage
+    : messageConstruct
+    ;
+
+/*
+ * Protocol adapter.
+ *
+ * `protocolConstruct` is owned by Protocols.
+ */
+networkingProtocol
+    : protocolConstruct
+    ;
+
+/*
+ * Service adapter.
+ *
+ * `serviceDeclaration` is owned by Services.
+ */
+networkingService
+    : serviceDeclaration
+    ;
+
+/*
+ * Capability adapter.
+ *
+ * `networkCapabilityConstruct` is owned by NetworkCapabilities.
+ */
+networkingCapability
+    : networkCapabilityConstruct
+    ;
