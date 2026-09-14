@@ -831,3 +831,93 @@ fragment ESCAPE_SEQUENCE
         | 'u' '{' HEX_DIGIT+ '}'
       )
     ;
+
+// ============================================================================
+// HDL / HARDWARE LANGUAGE KEYWORDS
+// ============================================================================
+
+K_INPUT          : 'input' ;
+K_OUTPUT         : 'output' ;
+K_INOUT          : 'inout' ;
+
+K_INTERFACE      : 'interface' ;
+K_SIGNAL         : 'signal' ;
+K_WIRE           : 'wire' ;
+K_NET            : 'net' ;
+K_LOGIC          : 'logic' ;
+K_BIT            : 'bit' ;
+K_UINT           : 'uint' ;
+
+K_REGISTER       : 'register' ;
+K_MEMORY         : 'memory' ;
+
+K_CLOCK          : 'clock' ;
+K_RESET          : 'reset' ;
+
+K_PROCESS        : 'process' ;
+K_ALWAYS         : 'always' ;
+K_COMBINATIONAL  : 'combinational' ;
+K_SEQUENTIAL     : 'sequential' ;
+
+K_STATE          : 'state' ;
+K_MACHINE        : 'machine' ;
+K_INITIAL        : 'initial' ;
+K_TRANSITION     : 'transition' ;
+
+K_PIPELINE       : 'pipeline' ;
+K_STAGE          : 'stage' ;
+
+K_INSTANCE       : 'instance' ;
+K_CONNECT        : 'connect' ;
+
+K_PARAMETER      : 'parameter' ;
+K_LOCALPARAM     : 'localparam' ;
+
+K_SIGNED         : 'signed' ;
+K_UNSIGNED       : 'unsigned' ;
+
+K_RISING         : 'rising' ;
+K_FALLING        : 'falling' ;
+K_POSEDGE        : 'posedge' ;
+K_NEGEDGE        : 'negedge' ;
+
+K_ENABLE         : 'enable' ;
+K_SYNCHRONOUS    : 'synchronous' ;
+K_ASYNCHRONOUS   : 'asynchronous' ;
+
+K_LATCH          : 'latch' ;
+K_TRI            : 'tri' ;
+K_PULLUP         : 'pullup' ;
+K_PULLDOWN       : 'pulldown' ;
+K_HIGHZ          : 'highz' ;
+
+K_DRIVE          : 'drive' ;
+K_RESOLVE        : 'resolve' ;
+
+K_READ           : 'read' ;
+K_WRITE          : 'write' ;
+K_SYNC           : 'sync' ;
+K_ASYNC          : 'async' ;
+
+K_TIMING         : 'timing' ;
+K_LATENCY        : 'latency' ;
+K_THROUGHPUT     : 'throughput' ;
+K_FREQUENCY      : 'frequency' ;
+K_DUTY           : 'duty' ;
+K_PHASE          : 'phase' ;
+
+K_ASSERT         : 'assert' ;
+K_ASSUME         : 'assume' ;
+K_COVER          : 'cover' ;
+
+K_FOREVER        : 'forever' ;
+K_REPEAT         : 'repeat' ;
+
+K_DEFAULT        : 'default' ;
+K_REQUIRES       : 'requires' ;
+K_WHERE          : 'where' ;
+K_TO             : 'to' ;
+K_DO             : 'do' ;
+
+K_ACTIVE_HIGH    : 'active_high' ;
+K_ACTIVE_LOW     : 'active_low' ;
