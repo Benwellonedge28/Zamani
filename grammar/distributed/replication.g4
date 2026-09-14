@@ -9,8 +9,8 @@
  * Grammar:
  *     Replication
  *
- * Purpose:
- *     Production source grammar for distributed replication intent.
+ * Status:
+ *     Production distributed-replication parser component.
  *
  * Language/runtime baseline:
  *     Rust 1.97 / Rust 1.97.1
@@ -19,538 +19,669 @@
  *     No unsafe code
  *
  * ============================================================================
- *
- * ARCHITECTURAL ROLE
+ * PURPOSE
  * ============================================================================
  *
- * This grammar defines SOURCE-LEVEL SYNTAX for distributed replication.
+ * This file defines the SOURCE-LEVEL SYNTAX for distributed replication
+ * intent in Zamani.
  *
- * Replication describes the semantic intent that one logical computation,
- * value, service, state object, data object, execution unit, or other
+ * Replication describes the logical requirement that a computation, service,
+ * value, state abstraction, data abstraction, execution unit, or other
  * replication-capable entity may have multiple logical realizations.
  *
- * This file does NOT implement replication.
+ * This grammar does NOT implement replication.
  *
- * The grammar is upstream of:
+ * It records syntax that downstream semantic and execution layers may
+ * interpret into:
  *
- *     - semantic analysis;
- *     - type checking;
- *     - capability checking;
- *     - resource analysis;
- *     - consistency analysis;
- *     - placement;
- *     - scheduling;
- *     - routing;
- *     - networking;
- *     - storage;
- *     - hardware selection;
- *     - deployment;
- *     - runtime execution;
- *     - resilience/recovery.
+ *     - replication requirements;
+ *     - replication policies;
+ *     - replica relationships;
+ *     - replication factors;
+ *     - consistency requirements;
+ *     - availability requirements;
+ *     - durability requirements;
+ *     - synchronization requirements;
+ *     - placement requirements;
+ *     - resource requirements;
+ *     - replication dependencies.
  *
  * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - distributed replication declaration syntax;
- *     - replication intent syntax;
- *     - logical replica identity syntax;
- *     - replica-set/group syntax;
- *     - replication policy references;
+ *     - replication declaration syntax;
+ *     - logical replication names;
+ *     - replication bodies;
+ *     - replication properties;
+ *     - logical replica declarations;
+ *     - replica groups;
+ *     - replication dependencies;
+ *     - replication policy expressions;
  *     - replication factor expressions;
- *     - replication mode expressions;
- *     - replication consistency intent;
- *     - replication placement intent;
- *     - replication durability intent;
- *     - replication availability intent;
- *     - replication ordering intent;
- *     - replication synchronization intent;
- *     - replication dependency syntax;
- *     - replication options;
- *     - replication extension points.
+ *     - replication target expressions;
+ *     - replication extension syntax.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - identifiers;
- *     - qualified names;
- *     - expressions;
- *     - types;
- *     - lexical tokens;
- *     - resources;
- *     - capabilities;
- *     - physical devices;
- *     - nodes;
- *     - network endpoints;
- *     - network transport;
- *     - placement algorithms;
- *     - scheduling algorithms;
- *     - routing algorithms;
- *     - storage implementation;
- *     - consensus algorithms;
- *     - consistency implementation;
- *     - replication protocols;
- *     - serialization implementation;
- *     - fault detection;
- *     - fault recovery;
- *     - resilience;
+ *     - lexical token definitions;
+ *     - identifier spelling;
+ *     - qualified-name spelling;
+ *     - general expressions;
+ *     - general types;
+ *     - memory management;
+ *     - networking;
+ *     - transport protocols;
+ *     - node discovery;
+ *     - service discovery;
  *     - hardware discovery;
- *     - quantum routing;
- *     - QEC;
- *     - ZQN;
+ *     - resource discovery;
+ *     - placement algorithms;
+ *     - scheduling;
+ *     - routing;
+ *     - consensus;
+ *     - consistency algorithms;
+ *     - replication protocols;
+ *     - storage engines;
+ *     - serialization;
+ *     - checkpoint implementation;
+ *     - retry/recovery;
+ *     - resilience;
  *     - classical IR;
  *     - quantum::ir;
+ *     - QEC;
+ *     - ZQN;
  *     - HDL IR;
- *     - runtime execution.
+ *     - runtime execution;
+ *     - provider-specific APIs.
  *
  * ============================================================================
+ * ARCHITECTURAL BOUNDARY
+ * ============================================================================
  *
+ * The intended pipeline is:
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     Replication parser component
+ *          |
+ *          v
+ *     Frontend AST
+ *          |
+ *          v
+ *     name resolution
+ *          |
+ *          v
+ *     type/effect/capability analysis
+ *          |
+ *          v
+ *     distributed semantic analysis
+ *          |
+ *          v
+ *     resource/constraint analysis
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          +--> classical IR
+ *          |
+ *          +--> quantum::ir
+ *          |
+ *          +--> HDL/hardware representation
+ *          |
+ *          +--> distributed execution metadata
+ *          |
+ *          v
+ *     optimization / routing / scheduling
+ *          |
+ *          v
+ *     deployment / runtime
+ *
+ * Grammar is therefore upstream of execution.
+ *
+ * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Replication syntax describes WHAT replication semantics are desired.
+ * Zamani follows:
  *
- * It must not encode temporary physical deployment facts.
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Therefore this grammar does NOT impose or encode:
+ * Replication syntax must describe logical intent rather than temporary
+ * physical deployment facts.
  *
- *     MAX_REPLICAS
- *     MAX_NODES
- *     MAX_SHARDS
- *     MAX_PARTITIONS
- *     MAX_DEVICES
- *     MAX_WORKERS
- *     MAX_PROCESSES
+ * This grammar therefore MUST NOT encode:
  *
- * and does not require:
+ *     - maximum replicas;
+ *     - maximum nodes;
+ *     - maximum processes;
+ *     - maximum workers;
+ *     - maximum devices;
+ *     - fixed cluster sizes;
+ *     - fixed topology;
+ *     - fixed hostnames;
+ *     - fixed IP addresses;
+ *     - fixed ports;
+ *     - fixed machine identifiers;
+ *     - fixed hardware identifiers;
+ *     - fixed CPU counts;
+ *     - fixed GPU counts;
+ *     - fixed QPU counts;
+ *     - fixed memory capacities;
+ *     - fixed network capacities.
  *
- *     node 0;
- *     node 1;
- *     device 0;
- *     replica 0;
- *     replica 1;
- *
- * A replication factor, when explicitly supplied, is an expression:
- *
- *     factor: replicas;
- *
- *     factor: desired_replicas;
- *
- *     factor: resource.replica_capacity;
- *
- * The semantic/resource layers determine whether that expression can be
- * satisfied.
+ * A source program may explicitly request a semantic replication quantity,
+ * but that quantity is a PROGRAM REQUIREMENT, not a statement about the
+ * physical machine.
  *
  * ============================================================================
- *
  * SCALABILITY
  * ============================================================================
  *
- * No finite language-level limit is imposed on:
+ * No grammar-level finite limit is imposed on:
  *
  *     - replication declarations;
- *     - replica sets;
- *     - replica members;
- *     - replication options;
+ *     - replica declarations;
+ *     - replica groups;
+ *     - replication properties;
  *     - dependencies;
- *     - policy nesting;
+ *     - nested policy blocks;
  *     - expression complexity;
  *     - qualified-name depth;
- *     - replication groups;
- *     - logical replicas.
+ *     - logical replica count;
+ *     - replication factor expressions.
  *
- * Repetition uses ANTLR repetition operators.
+ * ANTLR repetition operators are used instead of artificial finite bounds.
  *
- * Practical limits such as:
+ * Practical limits are external:
  *
  *     - parser memory;
  *     - compiler memory;
- *     - available execution resources;
- *     - deployment limits;
- *     - resource availability;
- *     - provider constraints;
+ *     - operating-system limits;
+ *     - runtime resources;
+ *     - deployment capacity;
+ *     - available hardware;
+ *     - network capacity;
+ *     - provider policy.
  *
- * are NOT language-level grammar limits.
- *
- * ============================================================================
- *
- * SEMANTIC PRINCIPLE
- * ============================================================================
- *
- * Replication is not synonymous with:
- *
- *     placement;
- *     redundancy;
- *     backup;
- *     caching;
- *     sharding;
- *     partitioning;
- *     consensus;
- *     failover;
- *     retry.
- *
- * Those concepts may interact with replication but remain independently owned.
- *
- * The semantic layer must preserve these distinctions.
+ * Such limits MUST NOT be encoded as language grammar limits.
  *
  * ============================================================================
- *
- * REPLICATION FACTOR
+ * REPLICATION IS NOT PLACEMENT
  * ============================================================================
  *
- * A replication factor is a semantic quantity.
+ * Replication describes logical multiplicity.
  *
- * The grammar therefore accepts an expression rather than an integer literal
- * restricted by a grammar-defined maximum.
+ * Placement determines where a realization is physically located.
  *
- * Examples:
+ * Therefore:
  *
- *     factor: desired_replicas;
+ *     replica primary
  *
- *     factor: available_replicas;
+ * does NOT mean:
  *
- *     factor: policy.replication_factor;
+ *     machine 0
  *
- *     factor: min(required, capacity);
+ * and:
  *
- * The semantic layer determines:
+ *     replica secondary
  *
- *     - type;
- *     - unit;
- *     - validity;
- *     - availability;
- *     - feasibility;
- *     - policy compliance.
+ * does NOT mean:
  *
- * The grammar does not determine any of these.
+ *     machine 1
+ *
+ * No implicit physical mapping is permitted.
  *
  * ============================================================================
- *
- * REPLICA IDENTITY
+ * REPLICATION IS NOT CONSISTENCY
  * ============================================================================
  *
- * A logical replica name is a source-level identifier.
+ * Replication and consistency are separate semantic dimensions.
  *
- * It is NOT:
+ * This grammar may carry:
  *
- *     - a machine identifier;
- *     - a process identifier;
- *     - a hardware identifier;
- *     - a network address;
- *     - a device address;
- *     - a physical replica location.
+ *     consistency: policy;
  *
- * Physical identity is resolved downstream.
- *
- * ============================================================================
- *
- * RESOURCE BOUNDARY
- * ============================================================================
- *
- * Replication may express requirements, constraints, preferences, and hints.
- *
- * These are deliberately distinct.
- *
- * REQUIREMENT:
- *
- *     mandatory semantic condition.
- *
- * CONSTRAINT:
- *
- *     restriction on legal realizations.
- *
- * PREFERENCE:
- *
- *     desirable realization property.
- *
- * HINT:
- *
- *     non-binding implementation guidance.
- *
- * This grammar records their syntax only.
- *
- * It does not decide whether a requested property can be satisfied.
- *
- * ============================================================================
- *
- * CONSISTENCY BOUNDARY
- * ============================================================================
- *
- * Replication and consistency are related but separate semantic concepts.
- *
- * This grammar can record a consistency policy reference.
- *
- * It does not implement:
+ * but does not implement:
  *
  *     - linearizability;
  *     - sequential consistency;
  *     - causal consistency;
  *     - eventual consistency;
- *     - transactional consistency;
+ *     - quorum algorithms;
  *     - consensus;
- *     - quorum algorithms.
+ *     - transactional protocols.
  *
- * Those semantics belong to the distributed semantic/runtime layers.
- *
- * ============================================================================
- *
- * PLACEMENT BOUNDARY
- * ============================================================================
- *
- * Replication may express placement intent such as:
- *
- *     locality;
- *     affinity;
- *     anti_affinity;
- *     diversity;
- *     topology_aware;
- *     region_aware;
- *     energy_aware.
- *
- * Such names are semantic values.
- *
- * They do NOT identify physical nodes.
- *
- * The hardware/resource/deployment subsystem resolves physical realization.
+ * Those are downstream semantic/runtime responsibilities.
  *
  * ============================================================================
- *
- * FAILURE / RESILIENCE BOUNDARY
+ * REPLICATION IS NOT FAULT TOLERANCE
  * ============================================================================
  *
- * Replication may improve availability or fault tolerance, but replication
- * syntax does not implement recovery.
+ * Replication may contribute to fault tolerance, but this grammar does not
+ * implement:
  *
- * The grammar does not:
+ *     - failure detection;
+ *     - failover;
+ *     - retry;
+ *     - restart;
+ *     - recovery;
+ *     - leader election;
+ *     - replica repair;
+ *     - checkpoint restoration.
  *
- *     retry;
- *     restart;
- *     fail over;
- *     elect leaders;
- *     restore checkpoints;
- *     repair replicas;
- *     detect faults.
- *
- * Resilience decides how to respond to execution failures.
+ * Those concerns belong to distributed runtime and resilience layers.
  *
  * ============================================================================
+ * REPLICATION IS NOT BACKUP
+ * ============================================================================
  *
+ * A replication declaration MUST NOT implicitly mean:
+ *
+ *     - backup;
+ *     - snapshot;
+ *     - archival storage;
+ *     - persistence;
+ *     - cache;
+ *     - checkpoint.
+ *
+ * Such semantics require explicit downstream interpretation.
+ *
+ * ============================================================================
+ * REPLICATION FACTOR
+ * ============================================================================
+ *
+ * A replication factor is represented by an expression.
+ *
+ * Examples:
+ *
+ *     factor: desired_replicas;
+ *     factor: resources.replication_capacity;
+ *     factor: policy.replica_count;
+ *     factor: compute_factor();
+ *
+ * This permits the semantic/resource system to determine the actual value.
+ *
+ * The grammar does NOT impose:
+ *
+ *     factor <= N
+ *
+ * for any hard-coded N.
+ *
+ * The semantic layer is responsible for:
+ *
+ *     - type checking;
+ *     - unit checking;
+ *     - validity;
+ *     - feasibility;
+ *     - resource availability;
+ *     - policy compliance.
+ *
+ * ============================================================================
  * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Distributed replication syntax may appear around quantum-related
- * computation, state, services, or execution metadata where the semantics
- * permit it.
+ * Replication syntax may occur around distributed quantum computation.
  *
- * This grammar MUST NOT define:
+ * However this grammar MUST NOT define:
  *
  *     QubitId;
  *     PhysicalQubitId;
  *     Gate;
  *     Circuit;
- *     quantum topology;
+ *     QuantumOperation;
+ *     topology;
  *     calibration;
- *     pulse semantics;
+ *     pulse;
  *     QEC;
  *     ZQN.
  *
- * Quantum semantic lowering remains through:
+ * Quantum semantics remain owned by the quantum subsystem and ultimately
+ * cross the canonical:
  *
  *     quantum::ir
  *
- * Replication of arbitrary unknown quantum state must never be assumed to
- * mean that the state can simply be copied or serialized.
+ * boundary.
  *
- * Semantic analysis must reject or constrain replication requests that violate
- * the applicable quantum semantics.
+ * In particular, a replication declaration MUST NOT be interpreted by the
+ * grammar as permission to copy an arbitrary unknown quantum state.
  *
- * ============================================================================
- *
- * MEMORY BOUNDARY
- * ============================================================================
- *
- * `memory/distributed-memory.g4` owns distributed-memory operation syntax.
- *
- * This file owns general distributed replication intent.
- *
- * A memory replication operation may reference this semantic domain, but this
- * file must not redefine:
- *
- *     memoryPlace;
- *     memoryQualifiedName;
- *     memory ownership;
- *     borrowing;
- *     lifetimes;
- *     allocation;
- *     deallocation.
+ * Quantum no-cloning and valid logical-state handling are semantic concerns.
  *
  * ============================================================================
- *
- * NETWORKING BOUNDARY
+ * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * Replication does not select a transport protocol.
+ * Replication can describe logical replication of hardware-related computation
+ * or execution units, but this grammar does not define:
+ *
+ *     - wires;
+ *     - clocks;
+ *     - FPGA resources;
+ *     - ASIC cells;
+ *     - physical ports;
+ *     - hardware addresses;
+ *     - physical device identifiers.
+ *
+ * Hardware realization belongs to the HDL and hardware subsystems.
+ *
+ * ============================================================================
+ * RESOURCE BOUNDARY
+ * ============================================================================
+ *
+ * Replication properties may reference the universal resource system.
+ *
+ * The following concepts remain distinct:
+ *
+ *     requirement
+ *     constraint
+ *     preference
+ *     hint
+ *     capability
+ *
+ * This file records syntax only.
+ *
+ * It does not decide whether a resource condition can be satisfied.
+ *
+ * ============================================================================
+ * NETWORK BOUNDARY
+ * ============================================================================
+ *
+ * Replication does not select a transport.
  *
  * It does not imply:
  *
- *     TCP;
- *     UDP;
- *     QUIC;
- *     HTTP;
- *     RPC;
- *     MPI;
- *     RDMA;
- *     InfiniBand;
+ *     TCP
+ *     UDP
+ *     QUIC
+ *     HTTP
+ *     RPC
+ *     MPI
+ *     RDMA
+ *     InfiniBand
  *     vendor-specific transport.
  *
- * Network realization is owned by networking/runtime/deployment layers.
+ * Network realization belongs to the networking, deployment, and runtime
+ * layers.
  *
  * ============================================================================
- *
- * STORAGE BOUNDARY
+ * MEMORY BOUNDARY
  * ============================================================================
  *
- * Replication does not imply:
+ * Distributed-memory operation syntax belongs to:
  *
- *     persistent storage;
- *     database replication;
- *     filesystem replication;
- *     object storage;
- *     cache replication.
+ *     memory/distributed-memory.g4
  *
- * If persistence is semantically required, that requirement must be represented
- * by the appropriate storage/data/resource abstractions.
+ * This file does not redefine:
+ *
+ *     - allocation;
+ *     - deallocation;
+ *     - ownership;
+ *     - borrowing;
+ *     - lifetimes;
+ *     - memory locations.
+ *
+ * A replicated object may reference memory semantics through shared canonical
+ * abstractions.
  *
  * ============================================================================
- *
- * OPEN-WORLD DESIGN
+ * OPEN-WORLD EXTENSIBILITY
  * ============================================================================
  *
- * Replication modes and policies are represented primarily through identifiers
- * and qualified names rather than a closed grammar enumeration.
+ * Replication policies are intentionally represented primarily through
+ * identifiers and expressions.
  *
- * This allows future technologies to be represented without repeatedly
- * changing the global lexer.
+ * This avoids a closed enumeration such as:
  *
- * Examples:
+ *     SYNCHRONOUS
+ *     ASYNCHRONOUS
+ *     ACTIVE_ACTIVE
+ *     ACTIVE_PASSIVE
  *
- *     distributed::replication
- *     distributed::replication::active_active
- *     distributed::replication::active_passive
+ * becoming a permanent language limitation.
+ *
+ * Future policies may therefore be represented through semantic names such as:
+ *
  *     distributed::replication::synchronous
  *     distributed::replication::asynchronous
- *     distributed::replication::quorum
+ *     distributed::replication::active_active
  *     distributed::replication::erasure
- *     distributed::replication::custom_policy
+ *     distributed::replication::custom
  *
- * Whether any such policy is supported is a semantic/backend question.
+ * The semantic layer determines whether a policy exists and whether it is
+ * supported by a particular compilation/execution environment.
  *
  * ============================================================================
- *
  * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * Canonical dependency direction:
+ * This grammar consumes:
  *
  *     ZamaniLexer
- *          |
- *          +--> Names
- *          |
- *          +--> Expressions
- *          |
- *          +--> Replication
- *          |
- *          v
- *     Distributed aggregate grammar
+ *     Names
+ *     Expressions
  *
- * This file consumes:
+ * Names owns:
  *
  *     identifier
- *     qualifiedName / name-reference infrastructure
+ *     qualified names
+ *     name references
+ *
+ * Expressions owns:
+ *
  *     expression
+ *     expression lists
+ *     calls
+ *     operators
+ *     indexing
+ *     member access
  *
- * from the canonical shared grammar.
- *
- * This file MUST NOT redefine those rules.
- *
- * ============================================================================
- *
- * BUILD CONTRACT
- * ============================================================================
- *
- * This is a parser grammar component.
- *
- * It intentionally contains:
- *
- *     - no lexer grammar;
- *     - no embedded Rust;
- *     - no semantic predicates;
- *     - no filesystem operations;
- *     - no networking;
- *     - no runtime calls;
- *     - no hardware discovery;
- *     - no mutable global state;
- *     - no randomness.
- *
- * Rust 1.97 / 1.97.1 compatibility is therefore enforced at the frontend and
- * generated-parser integration layer rather than through Rust-specific grammar
- * actions.
+ * This grammar MUST NOT redefine those concepts.
  *
  * ============================================================================
+ * LEXICAL CONTRACT
+ * ============================================================================
  *
+ * This file introduces NO lexer rules.
+ *
+ * In particular it does not add global tokens for:
+ *
+ *     replication
+ *     replica
+ *     replicas
+ *     factor
+ *     consistency
+ *     durability
+ *     availability
+ *     placement
+ *     synchronization
+ *
+ * These remain contextual semantic names.
+ *
+ * This keeps the language extensible without continuously expanding the global
+ * keyword vocabulary.
+ *
+ * ============================================================================
+ * IMPORTANT CONTEXTUAL-NAME CONTRACT
+ * ============================================================================
+ *
+ * Because the declaration marker is represented through the canonical
+ * identifier rule, this parser component alone does not determine that an
+ * arbitrary identifier is semantically the word:
+ *
+ *     replication
+ *
+ * The frontend semantic layer MUST perform contextual classification.
+ *
+ * This is deliberate.
+ *
+ * It prevents domain grammar from becoming a second lexical authority.
+ *
+ * ============================================================================
  * PUBLIC INTEGRATION CONTRACT
  * ============================================================================
  *
- * The distributed aggregate grammar already exposes:
+ * The stable public entry point is:
  *
  *     distributedReplicationDeclaration
  *
- * as a distributed declaration branch.
+ * The aggregate:
  *
- * This file is the authoritative owner of that rule.
+ *     grammar/distributed/distributed.g4
  *
- * The aggregate grammar MUST import this grammar component and MUST NOT define
- * another competing `distributedReplicationDeclaration`.
+ * MUST import this grammar component and route its replication declaration
+ * branch to:
+ *
+ *     distributedReplicationDeclaration
+ *
+ * It MUST NOT define a second rule with the same responsibility.
  *
  * ============================================================================
- *
- * SOURCE-PRESERVATION CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * AST construction must preserve:
+ * The frontend AST representation for this grammar must preserve:
  *
- *     - declaration order;
- *     - target expression;
- *     - replication factor expression;
+ *     - source span of declaration;
+ *     - logical replication name;
+ *     - body presence/absence;
+ *     - member ordering;
+ *     - property names;
+ *     - property expressions;
  *     - replica names;
- *     - policy expressions;
- *     - option order;
- *     - dependency order;
- *     - nested blocks;
- *     - source spans;
- *     - syntactic distinctions that affect diagnostics.
+ *     - replica-body structure;
+ *     - dependency expressions;
+ *     - extension expressions;
+ *     - nested block structure.
  *
- * Semantic normalization belongs downstream.
+ * The AST MUST NOT resolve:
+ *
+ *     - physical nodes;
+ *     - devices;
+ *     - addresses;
+ *     - transport;
+ *     - topology;
+ *     - runtime placement.
  *
  * ============================================================================
- *
- * DIAGNOSTIC CONTRACT
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The parser is responsible for structural syntax errors.
+ * Semantic analysis must determine:
  *
- * Semantic analysis is responsible for errors such as:
+ *     - whether the declaration marker is valid;
+ *     - whether the logical target is replicable;
+ *     - whether the factor expression is valid;
+ *     - whether a policy exists;
+ *     - whether policies conflict;
+ *     - whether requested resources are satisfiable;
+ *     - whether placement constraints are satisfiable;
+ *     - whether consistency requirements are realizable;
+ *     - whether durability requirements are realizable;
+ *     - whether quantum-related replication is semantically legal.
  *
- *     - non-replicable target;
- *     - invalid replication factor type;
+ * Syntax alone MUST NOT imply any of those properties.
+ *
+ * ============================================================================
+ * DUPLICATE PROPERTY POLICY
+ * ============================================================================
+ *
+ * This grammar permits repeated properties.
+ *
+ * Example:
+ *
+ *     replication workload {
+ *         preference: low_latency;
+ *         preference: low_energy;
+ *     }
+ *
+ * The grammar does not silently select one.
+ *
+ * Semantic analysis MUST determine whether:
+ *
+ *     - repeated properties are cumulative;
+ *     - repeated properties conflict;
+ *     - later properties override earlier properties;
+ *     - duplicates are forbidden.
+ *
+ * This preserves source information and avoids hidden grammar semantics.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no actions;
+ *     - no semantic predicates;
+ *     - no filesystem operations;
+ *     - no networking;
+ *     - no runtime callbacks;
+ *     - no randomness;
+ *     - no hardware discovery.
+ *
+ * Parsing therefore depends only on the token stream and grammar.
+ *
+ * ============================================================================
+ * SOURCE PRESERVATION
+ * ============================================================================
+ *
+ * AST construction must preserve source ordering and spans.
+ *
+ * Semantic canonicalization may happen later.
+ *
+ * The parser MUST NOT reorder:
+ *
+ *     - replicas;
+ *     - properties;
+ *     - dependencies;
+ *     - nested blocks.
+ *
+ * ============================================================================
+ * DIAGNOSTIC BOUNDARY
+ * ============================================================================
+ *
+ * Parser errors include:
+ *
+ *     - malformed declaration;
+ *     - malformed body;
+ *     - malformed property;
+ *     - malformed replica declaration;
+ *     - malformed dependency;
+ *     - malformed argument list;
+ *     - unbalanced delimiters.
+ *
+ * Semantic errors include:
+ *
+ *     - invalid replication target;
+ *     - invalid factor;
  *     - unsupported policy;
- *     - insufficient resources;
- *     - impossible consistency requirement;
- *     - impossible placement requirement;
- *     - illegal quantum-state replication;
- *     - conflicting replication policies.
+ *     - impossible resource requirement;
+ *     - contradictory constraints;
+ *     - invalid quantum replication;
+ *     - invalid consistency combination.
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no Rust implementation code.
+ *
+ * Therefore generated/parser integration must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust Edition 2021
+ *
+ * The implementation must use safe Rust only.
+ *
+ * No unsafe blocks or unsafe abstractions are required by this grammar.
  *
  * ============================================================================
  */
@@ -569,25 +700,23 @@ import Names, Expressions;
  * ========================================================================== */
 
 /*
- * Complete distributed replication declaration.
+ * Complete replication declaration.
  *
- * Canonical contextual form:
+ * Canonical source shape:
  *
- *     replication name;
+ *     replication workload;
  *
  * or:
  *
- *     replication name {
- *         target: value;
- *         factor: replicas;
+ *     replication workload {
+ *         target: computation;
+ *         factor: desired_replicas;
  *     }
  *
- * `replication` remains an identifier at lexical level.
- *
- * Semantic analysis is responsible for contextual classification.
+ * The first identifier is contextually classified as `replication`.
  */
 distributedReplicationDeclaration
-    : replicationMarker
+    : replicationDeclarationMarker
       identifier
       distributedReplicationBody?
       SEMICOLON?
@@ -595,29 +724,23 @@ distributedReplicationDeclaration
 
 
 /* ============================================================================
- * CONTEXTUAL MARKER
+ * DECLARATION MARKER
  * ========================================================================== */
 
 /*
- * The declaration marker is intentionally contextual.
+ * Contextual marker.
  *
- * This avoids forcing a new globally reserved lexer keyword solely for
- * distributed replication.
+ * No new lexer keyword is introduced.
  */
-replicationMarker
+replicationDeclarationMarker
     : identifier
     ;
 
 
 /* ============================================================================
- * BODY
+ * REPLICATION BODY
  * ========================================================================== */
 
-/*
- * Zero or more replication members.
- *
- * There is no fixed number of options or declarations.
- */
 distributedReplicationBody
     : LBRACE
       distributedReplicationMember*
@@ -626,34 +749,45 @@ distributedReplicationBody
 
 
 /* ============================================================================
- * MEMBERS
+ * REPLICATION MEMBERS
  * ========================================================================== */
 
 distributedReplicationMember
-    : distributedReplicationAssignment
-    | distributedReplicationExpression
-    | distributedReplicationBlock
+    : distributedReplicationProperty
     | distributedReplicationReplica
     | distributedReplicationDependency
+    | distributedReplicationGroup
+    | distributedReplicationBlock
+    | distributedReplicationExpressionStatement
     ;
 
 
 /* ============================================================================
- * GENERIC ASSIGNMENT
+ * PROPERTY
  * ========================================================================== */
 
 /*
- * Generic replication property:
+ * Generic property form:
  *
  *     target: workload;
  *     factor: desired_replicas;
  *     mode: distributed::replication::synchronous;
- *     policy: policy_name;
  *     consistency: consistency_policy;
+ *     placement: placement_policy;
+ *     availability: availability_policy;
+ *     durability: durability_policy;
+ *     synchronization: synchronization_policy;
+ *     requirement: resource_requirement;
+ *     constraint: resource_constraint;
+ *     preference: resource_preference;
+ *     hint: resource_hint;
+ *     policy: replication_policy;
  *
- * Semantic analysis determines the meaning of the key.
+ * The property name is intentionally an identifier.
+ *
+ * Semantic analysis owns the property vocabulary.
  */
-distributedReplicationAssignment
+distributedReplicationProperty
     : identifier
       COLON
       expression
@@ -662,79 +796,29 @@ distributedReplicationAssignment
 
 
 /* ============================================================================
- * DIRECT EXPRESSION
+ * LOGICAL REPLICA
  * ========================================================================== */
 
 /*
- * Allows an expression to occur as a replication member when the surrounding
- * semantic context permits it.
- */
-distributedReplicationExpression
-    : expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * NESTED BLOCK
- * ========================================================================== */
-
-/*
- * Generic policy/constraint/metadata block.
+ * A replica is a logical entity.
  *
- * Examples:
+ * It does not identify:
  *
- *     policy {
- *         mode: synchronous;
- *     }
- *
- *     placement {
- *         preference: locality;
- *     }
- *
- *     consistency {
- *         policy: causal;
- *     }
- *
- * The block name remains an identifier so future extensions do not require
- * global lexer changes.
- */
-distributedReplicationBlock
-    : identifier
-      LBRACE
-      distributedReplicationMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * EXPLICIT REPLICA
- * ========================================================================== */
-
-/*
- * A logical replica declaration.
- *
- * Example:
- *
- *     replica primary;
- *
- *     replica backup {
- *         role: secondary;
- *     }
- *
- * The name is a LOGICAL replica name.
- *
- * It is never implicitly a machine, node, device, process, or network address.
+ *     - a node;
+ *     - a process;
+ *     - a machine;
+ *     - a device;
+ *     - an address.
  */
 distributedReplicationReplica
-    : replicaMarker
+    : replicaDeclarationMarker
       identifier
       distributedReplicationReplicaBody?
       SEMICOLON?
     ;
 
 
-replicaMarker
+replicaDeclarationMarker
     : identifier
     ;
 
@@ -747,9 +831,53 @@ distributedReplicationReplicaBody
 
 
 distributedReplicationReplicaMember
-    : distributedReplicationAssignment
-    | distributedReplicationExpression
+    : distributedReplicationProperty
     | distributedReplicationBlock
+    | distributedReplicationExpressionStatement
+    ;
+
+
+/* ============================================================================
+ * REPLICA GROUP
+ * ========================================================================== */
+
+/*
+ * A logical replica group permits a program to describe related replicas
+ * without tying them to physical deployment.
+ *
+ * Example:
+ *
+ *     group workers {
+ *         members: worker_set;
+ *         policy: replication_policy;
+ *     }
+ */
+distributedReplicationGroup
+    : groupDeclarationMarker
+      identifier
+      distributedReplicationGroupBody?
+      SEMICOLON?
+    ;
+
+
+groupDeclarationMarker
+    : identifier
+    ;
+
+
+distributedReplicationGroupBody
+    : LBRACE
+      distributedReplicationGroupMember*
+      RBRACE
+    ;
+
+
+distributedReplicationGroupMember
+    : distributedReplicationProperty
+    | distributedReplicationReplica
+    | distributedReplicationDependency
+    | distributedReplicationBlock
+    | distributedReplicationExpressionStatement
     ;
 
 
@@ -758,218 +886,265 @@ distributedReplicationReplicaMember
  * ========================================================================== */
 
 /*
- * Replication dependencies describe semantic ordering/relationship between
- * logical replication declarations.
- *
  * Example:
  *
- *     depends_on: base_state;
+ *     depends_on: base_replication;
  *
- * The dependency is semantic.
+ * This describes a logical semantic dependency.
  *
- * It does not specify a network path or machine dependency.
+ * It does not describe:
+ *
+ *     - network routing;
+ *     - machine dependency;
+ *     - hardware dependency.
  */
 distributedReplicationDependency
-    : dependencyMarker
+    : dependencyDeclarationMarker
       COLON
       expression
       SEMICOLON
     ;
 
 
-dependencyMarker
+dependencyDeclarationMarker
     : identifier
     ;
 
 
 /* ============================================================================
- * SEMANTIC SPECIALIZATIONS
+ * NESTED POLICY / CONSTRAINT BLOCK
  * ========================================================================== */
 
 /*
- * The following rules provide stable semantic entry points for downstream
- * parser composition while still delegating values to the common expression
- * grammar.
+ * Generic nested block.
  *
- * They intentionally do not enumerate a finite set of policies.
+ * Examples:
+ *
+ *     policy {
+ *         mode: synchronous;
+ *     }
+ *
+ *     consistency {
+ *         requirement: causal;
+ *     }
+ *
+ *     placement {
+ *         preference: locality;
+ *     }
+ *
+ *     resources {
+ *         requirement: resources.replication_capacity;
+ *     }
+ *
+ * The block name remains contextual.
  */
+distributedReplicationBlock
+    : identifier
+      LBRACE
+      distributedReplicationMember*
+      RBRACE
+    ;
 
+
+/* ============================================================================
+ * EXPRESSION STATEMENT
+ * ========================================================================== */
 
 /*
- * Logical replication target.
+ * Allows a semantic expression to appear in a replication body.
  *
- * The target is represented by an expression because the target may be:
+ * Example:
  *
- *     a value;
- *     a service;
- *     a computation;
- *     a state object;
- *     a data object;
- *     a resource-backed abstraction;
- *     a symbolic reference.
+ *     validate_replication_policy();
+ *
+ * The expression itself belongs to the canonical expression grammar.
+ *
+ * This rule does not define what such an expression means.
+ */
+distributedReplicationExpressionStatement
+    : expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * TARGET
+ * ========================================================================== */
+
+/*
+ * Semantic target expression.
+ *
+ * Examples:
+ *
+ *     computation
+ *     service
+ *     state
+ *     data
+ *     workload
+ *     module::operation()
  */
 distributedReplicationTarget
     : expression
     ;
 
 
+/* ============================================================================
+ * FACTOR
+ * ========================================================================== */
+
 /*
- * Replication factor.
+ * Replication factor is an expression rather than a grammar-level integer.
  *
- * IMPORTANT:
+ * Valid examples include:
  *
- * This is an expression, not a grammar-level integer.
+ *     3
+ *     desired_replicas
+ *     policy.replica_count
+ *     resources.replication_capacity
+ *     compute_factor()
  *
- * Therefore the grammar does not impose:
- *
- *     minimum replica count;
- *     maximum replica count;
- *     machine count;
- *     cluster count.
+ * The grammar does not impose a maximum.
  */
 distributedReplicationFactor
     : expression
     ;
 
 
-/*
- * Replication mode/policy.
- */
+/* ============================================================================
+ * MODE
+ * ========================================================================== */
+
 distributedReplicationMode
     : expression
     ;
 
 
-/*
- * Consistency policy reference.
- */
+/* ============================================================================
+ * POLICY
+ * ========================================================================== */
+
+distributedReplicationPolicy
+    : expression
+    ;
+
+
+/* ============================================================================
+ * CONSISTENCY
+ * ========================================================================== */
+
 distributedReplicationConsistency
     : expression
     ;
 
 
-/*
- * Placement policy reference.
- */
+/* ============================================================================
+ * PLACEMENT
+ * ========================================================================== */
+
 distributedReplicationPlacement
     : expression
     ;
 
 
-/*
- * Availability policy reference.
- */
+/* ============================================================================
+ * AVAILABILITY
+ * ========================================================================== */
+
 distributedReplicationAvailability
     : expression
     ;
 
 
-/*
- * Durability policy reference.
- */
+/* ============================================================================
+ * DURABILITY
+ * ========================================================================== */
+
 distributedReplicationDurability
     : expression
     ;
 
 
-/*
- * Synchronization policy reference.
- */
+/* ============================================================================
+ * SYNCHRONIZATION
+ * ========================================================================== */
+
 distributedReplicationSynchronization
     : expression
     ;
 
 
-/*
- * Resource requirement reference.
- *
- * The expression is interpreted by the universal resource subsystem.
- */
+/* ============================================================================
+ * RESOURCE REQUIREMENT
+ * ========================================================================== */
+
 distributedReplicationRequirement
     : expression
     ;
 
 
-/*
- * Resource constraint reference.
- */
+/* ============================================================================
+ * RESOURCE CONSTRAINT
+ * ========================================================================== */
+
 distributedReplicationConstraint
     : expression
     ;
 
 
-/*
- * Resource preference reference.
- */
+/* ============================================================================
+ * RESOURCE PREFERENCE
+ * ========================================================================== */
+
 distributedReplicationPreference
     : expression
     ;
 
 
-/*
- * Resource hint reference.
- */
+/* ============================================================================
+ * RESOURCE HINT
+ * ========================================================================== */
+
 distributedReplicationHint
     : expression
     ;
 
 
 /* ============================================================================
- * STRUCTURED OPTION LIST
+ * EXPRESSION ARGUMENTS
  * ========================================================================== */
 
 /*
- * A reusable option list for semantic consumers.
+ * Reusable comma-separated expression list.
  *
- * Example conceptual form:
- *
- *     replication_options(
- *         factor,
- *         consistency,
- *         placement
- *     )
- *
- * This grammar does not attach semantics to positional arguments.
+ * There is no fixed argument count.
  */
 distributedReplicationArguments
-    : distributedReplicationArgument
-      (COMMA distributedReplicationArgument)*
-    ;
-
-
-distributedReplicationArgument
     : expression
+      (COMMA expression)*
     ;
 
 
 /* ============================================================================
- * QUALIFIED POLICY REFERENCE
+ * QUALIFIED EXTENSION
  * ========================================================================== */
 
 /*
- * A policy/reference is represented through the shared name/expression system.
+ * Open-world extension syntax.
  *
- * This intentionally avoids a second replication-policy identifier grammar.
- */
-distributedReplicationPolicyReference
-    : expression
-    ;
-
-
-/* ============================================================================
- * EXTENSION POINT
- * ========================================================================== */
-
-/*
- * Open-world extension point.
+ * Example:
  *
- * Future replication technologies can use a qualified semantic name and
- * expression arguments without requiring this grammar to enumerate every
- * future replication algorithm.
+ *     distributed::replication::custom_policy(arg1, arg2)
+ *
+ * This does not make the policy valid.
+ *
+ * Semantic registration/validation remains downstream.
  */
 distributedReplicationExtension
     : identifier
-      (DCOLON identifier)*
+      (
+          DOUBLE_COLON
+          identifier
+      )*
       (
           LPAREN
           distributedReplicationArguments?
@@ -979,229 +1154,395 @@ distributedReplicationExtension
 
 
 /* ============================================================================
- * SEMANTIC INTEGRATION NOTES
+ * SEMANTIC PROPERTY SHAPES
  * ========================================================================== */
 
 /*
- * The following conceptual source forms are intentionally represented by the
- * generic assignment rule rather than by independent hard-coded grammar
- * keywords:
+ * The following rules provide stable parser-level contracts for downstream
+ * grammar composition without duplicating expression syntax.
  *
- *     target: workload;
- *     factor: replicas;
- *     mode: synchronous;
- *     consistency: causal;
- *     placement: locality;
- *     availability: high;
- *     durability: durable;
- *     synchronization: automatic;
- *     requirement: resource.requirement;
- *     constraint: resource.constraint;
- *     preference: resource.preference;
- *     hint: resource.hint;
- *     policy: replication_policy;
+ * They are intentionally aliases over `expression`.
  *
- * This preserves the distinction between syntax and semantic vocabulary.
- *
- * Semantic analysis SHOULD normalize these keys into the canonical replication
- * model rather than requiring every future key to become a grammar rule.
+ * No physical resource is selected by these rules.
  */
 
 
+/*
+ * Logical target.
+ */
+distributedReplicationTargetProperty
+    : distributedReplicationTarget
+    ;
+
+
+/*
+ * Desired replication quantity.
+ */
+distributedReplicationFactorProperty
+    : distributedReplicationFactor
+    ;
+
+
+/*
+ * Replication policy.
+ */
+distributedReplicationPolicyProperty
+    : distributedReplicationPolicy
+    ;
+
+
+/*
+ * Consistency requirement.
+ */
+distributedReplicationConsistencyProperty
+    : distributedReplicationConsistency
+    ;
+
+
+/*
+ * Placement requirement/preference.
+ */
+distributedReplicationPlacementProperty
+    : distributedReplicationPlacement
+    ;
+
+
+/*
+ * Availability requirement.
+ */
+distributedReplicationAvailabilityProperty
+    : distributedReplicationAvailability
+    ;
+
+
+/*
+ * Durability requirement.
+ */
+distributedReplicationDurabilityProperty
+    : distributedReplicationDurability
+    ;
+
+
+/*
+ * Synchronization requirement.
+ */
+distributedReplicationSynchronizationProperty
+    : distributedReplicationSynchronization
+    ;
+
+
 /* ============================================================================
- * NON-PHYSICAL IDENTITY GUARANTEE
+ * SEMANTIC INTEGRATION GUARANTEES
  * ========================================================================== */
 
 /*
- * The grammar deliberately permits logical names such as:
+ * GUARANTEE 1: NO PHYSICAL IDENTITY
  *
- *     primary
- *     secondary
- *     replica_a
- *     replica_b
+ * A logical replica identifier MUST NOT be interpreted as a physical identity.
  *
- * but these names have NO physical meaning.
+ * The following mappings are forbidden unless explicitly supplied by a
+ * separate deployment/placement system:
  *
- * The compiler/runtime must never infer:
- *
- *     primary -> machine 0
+ *     primary   -> machine 0
  *     secondary -> machine 1
+ *     replica_a -> device 0
  *
- * or any equivalent fixed mapping.
+ *
+ * GUARANTEE 2: NO RESOURCE INVENTORY
+ *
+ * The grammar does not inspect or encode the available number of:
+ *
+ *     nodes;
+ *     processes;
+ *     CPUs;
+ *     GPUs;
+ *     QPUs;
+ *     FPGAs;
+ *     devices;
+ *     memory units;
+ *     network links.
+ *
+ *
+ * GUARANTEE 3: NO TRANSPORT
+ *
+ * Replication does not select a networking protocol.
+ *
+ *
+ * GUARANTEE 4: NO PLACEMENT
+ *
+ * Replication describes logical multiplicity.
+ *
+ * Physical realization belongs to placement/resource/deployment systems.
+ *
+ *
+ * GUARANTEE 5: NO SCHEDULING
+ *
+ * Replication does not determine execution order or timing.
+ *
+ * Scheduling owns those concerns.
+ *
+ *
+ * GUARANTEE 6: NO ROUTING
+ *
+ * Replication does not determine physical communication paths.
+ *
+ * Routing/networking own those concerns.
+ *
+ *
+ * GUARANTEE 7: NO CONSENSUS IMPLEMENTATION
+ *
+ * A consistency property is data consumed by semantic/runtime systems.
+ *
+ *
+ * GUARANTEE 8: NO RESILIENCE IMPLEMENTATION
+ *
+ * Replication syntax does not perform retry, restart, recovery, or failover.
+ *
+ *
+ * GUARANTEE 9: NO QUANTUM STATE COPYING ASSUMPTION
+ *
+ * Replication of a quantum-related computation does not imply copying an
+ * arbitrary unknown quantum state.
+ *
+ *
+ * GUARANTEE 10: NO IR DUPLICATION
+ *
+ * The grammar never creates a second:
+ *
+ *     quantum::ir
+ *
+ * representation.
+ *
+ * Quantum semantics lower through the canonical quantum IR boundary.
  */
 
 
 /* ============================================================================
- * QUANTITY / RESOURCE GUARANTEE
+ * POCO-REAF RESOURCE RESOLUTION
  * ========================================================================== */
 
 /*
- * A source expression such as:
+ * The following conceptual source:
  *
- *     factor: 3;
+ *     replication workload {
+ *         factor: resources.replication_capacity;
+ *     }
  *
- * is a program-level semantic request for a replication factor of three.
+ * means:
  *
- * It is NOT a declaration that the machine has three nodes.
+ *     "Use the resource system's replication capacity when determining the
+ *      desired replication factor."
  *
- * Conversely:
+ * It does NOT mean:
  *
- *     factor: available_replicas;
+ *     "The machine has a fixed number of replicas."
  *
- * permits the semantic/resource layers to derive a suitable value from the
- * execution environment.
+ * Similarly:
  *
- * The grammar does not evaluate either expression.
+ *     replication workload {
+ *         requirement: resources.distributed_replication;
+ *     }
+ *
+ * describes a requirement.
+ *
+ * It does not select a particular provider, node, machine, or device.
  */
 
 
 /* ============================================================================
- * DYNAMIC RESOURCE GUARANTEE
+ * QUANTUM SAFETY
  * ========================================================================== */
 
 /*
- * Replication may depend on runtime/resource information without embedding
- * that information in grammar structure.
+ * A construct such as:
  *
- * For example, semantic systems may interpret:
+ *     replication quantum_workload {
+ *         target: quantum_program;
+ *         factor: desired_parallel_realizations;
+ *     }
  *
- *     factor: resources.replication_capacity;
+ * remains syntactically valid.
  *
- * or:
+ * Whether the requested semantic replication is physically or mathematically
+ * valid is determined by the quantum semantic layer.
  *
- *     factor: policy.desired_factor;
+ * In particular, the compiler MUST distinguish:
  *
- * according to the canonical resource model.
+ *     - replicated program descriptions;
+ *     - replicated classical control;
+ *     - independent executions;
+ *     - replicated logical information;
+ *     - QEC-supported logical-state handling;
+ *     - measurement-derived information;
+ *     - provider-supported state mechanisms;
+ *     - invalid attempts to copy arbitrary unknown quantum state.
  *
- * This is essential for POCO-REAF.
+ * This grammar does not implement those distinctions.
  */
 
 
 /* ============================================================================
- * QUANTUM SAFETY GUARANTEE
+ * COMPILER INTEGRATION
  * ========================================================================== */
 
 /*
- * The existence of a replication declaration does NOT authorize copying an
- * arbitrary quantum state.
+ * Frontend:
  *
- * For quantum-related targets, semantic validation must distinguish between:
+ *     ReplicationContext
+ *          |
+ *          v
+ *     distributed replication AST node
  *
- *     - replicated classical control/data;
- *     - replicated circuit/program descriptions;
- *     - replicated logical information under an appropriate protocol;
- *     - QEC-supported logical state handling;
- *     - measurement-derived state;
- *     - provider-supported state;
- *     - physically impossible or semantically invalid copying.
+ * Semantic analysis:
  *
- * No quantum no-cloning semantics are implemented here; they belong to the
- * quantum semantic layer.
+ *     AST
+ *       |
+ *       +--> name resolution
+ *       +--> type checking
+ *       +--> effect checking
+ *       +--> capability checking
+ *       +--> resource checking
+ *       +--> consistency validation
+ *       +--> placement validation
+ *       +--> quantum semantic validation
+ *       |
+ *       v
+ *     canonical semantic representation
+ *
+ * Backend:
+ *
+ *     canonical semantics
+ *          |
+ *          +--> optimization
+ *          +--> routing
+ *          +--> scheduling
+ *          +--> hardware/resource realization
+ *          +--> runtime dispatch
  */
 
 
 /* ============================================================================
- * CONSISTENCY / QUORUM SAFETY GUARANTEE
+ * RUNTIME INTEGRATION
  * ========================================================================== */
 
 /*
- * A replication factor does not automatically imply a quorum.
+ * Runtime components may consume semantic replication metadata such as:
  *
- * The grammar therefore does not calculate:
+ *     target
+ *     desired factor
+ *     policy
+ *     consistency
+ *     availability
+ *     durability
+ *     placement constraints
  *
- *     quorum = factor / 2 + 1
+ * Runtime MUST NOT interpret this grammar directly as a physical deployment
+ * specification.
  *
- * or any equivalent formula.
+ * Runtime resolution occurs through:
  *
- * Such policy belongs to the semantic/runtime implementation of the selected
- * consistency model.
+ *     resource discovery
+ *     capability negotiation
+ *     placement
+ *     scheduling
+ *     deployment
+ *     networking
+ *     resilience
  */
 
 
 /* ============================================================================
- * NO AUTOMATIC FAILOVER GUARANTEE
+ * RESOURCE INTEGRATION
  * ========================================================================== */
 
 /*
- * Replication does not automatically mean failover.
+ * Resource analysis owns feasibility.
  *
- * A resilient runtime may use replicas for recovery, but the resilience layer
- * decides whether:
+ * For example:
+ *
+ *     factor: desired_replicas;
+ *
+ * may become:
+ *
+ *     requested replication = evaluate(desired_replicas)
+ *
+ * followed by:
+ *
+ *     available capacity = resource system
+ *
+ * followed by:
+ *
+ *     placement = placement system
+ *
+ * followed by:
+ *
+ *     execution = runtime
+ *
+ * No grammar rule is modified based on the discovered resource count.
+ */
+
+
+/* ============================================================================
+ * CONSISTENCY INTEGRATION
+ * ========================================================================== */
+
+/*
+ * The consistency subsystem consumes semantic expressions such as:
+ *
+ *     consistency: policy;
+ *
+ * It determines whether the requested consistency model is:
+ *
+ *     supported;
+ *     unsupported;
+ *     conditionally supported;
+ *     unknown;
+ *     conflicting.
+ *
+ * This grammar remains independent of the implementation algorithm.
+ */
+
+
+/* ============================================================================
+ * RESILIENCE INTEGRATION
+ * ========================================================================== */
+
+/*
+ * Resilience may consume replication metadata when deciding how to recover
+ * from distributed failures.
+ *
+ * It may determine:
  *
  *     retry;
- *     reroute;
  *     restart;
- *     resume;
- *     switch replica;
- *     rollback;
- *     abort
+ *     reroute;
+ *     reschedule;
+ *     remap;
+ *     switch backend;
+ *     quarantine;
+ *     recover;
+ *     abort.
  *
- * is valid.
- *
- * This grammar remains unaware of those decisions.
+ * None of those actions are implemented here.
  */
 
 
 /* ============================================================================
- * NO AUTOMATIC PLACEMENT GUARANTEE
+ * SOURCE COMPATIBILITY
  * ========================================================================== */
 
 /*
- * A placement expression such as:
+ * The canonical public rule:
  *
- *     placement: locality;
+ *     distributedReplicationDeclaration
  *
- * is an abstract semantic preference/requirement.
+ * MUST remain stable.
  *
- * It does not imply:
+ * If older frontend code already references this rule, the aggregate grammar
+ * should continue exposing it.
  *
- *     region X;
- *     rack Y;
- *     node Z;
- *     device N;
- *     topology T.
- *
- * Physical realization belongs downstream.
- */
-
-
-/* ============================================================================
- * DETERMINISM GUARANTEE
- * ========================================================================== */
-
-/*
- * This grammar has:
- *
- *     - no semantic predicates;
- *     - no actions;
- *     - no I/O;
- *     - no randomness;
- *     - no runtime callbacks;
- *     - no resource discovery;
- *     - no network calls;
- *     - no hardware calls.
- *
- * Therefore parsing depends only on the supplied token stream.
- */
-
-
-/* ============================================================================
- * SOURCE ORDER GUARANTEE
- * ========================================================================== */
-
-/*
- * Grammar repetition preserves source order in the parse tree.
- *
- * AST construction must preserve that order until semantic canonicalization
- * explicitly establishes that ordering is irrelevant.
- *
- * This matters for:
- *
- *     diagnostics;
- *     source mapping;
- *     deterministic serialization;
- *     tooling;
- *     round-trip printing.
+ * Internal helper-rule names may evolve without changing the public entry
+ * point, provided AST semantics remain compatible.
  */
 
 
@@ -1210,232 +1551,33 @@ distributedReplicationExtension
  * ========================================================================== */
 
 /*
- * This file intentionally contains no:
+ * This file contains no:
  *
  *     MAX_REPLICAS
  *     MAX_NODES
- *     MAX_PARTITIONS
  *     MAX_SHARDS
- *     MAX_DEVICES
+ *     MAX_PARTITIONS
  *     MAX_WORKERS
  *     MAX_PROCESSES
+ *     MAX_DEVICES
+ *     MAX_GPUS
+ *     MAX_QPUS
+ *     MAX_CPUS
  *
- * It also contains no:
+ * It contains no:
  *
- *     fixed node ID;
- *     fixed device ID;
- *     fixed address;
- *     fixed port;
+ *     fixed node IDs;
+ *     fixed device IDs;
+ *     fixed network addresses;
  *     fixed topology;
- *     fixed provider;
- *     fixed region;
- *     fixed cluster size;
- *     fixed hardware size.
+ *     fixed deployment;
+ *     fixed transport;
+ *     fixed provider.
  *
- * Any finite parser/runtime limit encountered during implementation must be
- * classified separately as:
+ * Numeric literals, when supplied through `expression`, are PROGRAM VALUES,
+ * not machine-capacity declarations.
  *
- *     1. language semantic requirement;
- *     2. parser implementation limit;
- *     3. resource constraint;
- *     4. runtime/deployment constraint;
- *     5. test-only limitation;
- *     6. accidental hard-coding.
- *
- * Accidental hard-coding must be removed.
- */
-
-
-/* ============================================================================
- * INTEGRATION REQUIREMENTS
- * ========================================================================== */
-
-/*
- * REQUIRED AGGREGATE INTEGRATION
- *
- * grammar/distributed/distributed.g4
- *
- * MUST:
- *
- *     - import Replication;
- *     - retain distributedReplicationDeclaration as the public branch;
- *     - remove any duplicate local implementation of that rule;
- *     - preserve the existing distributedDeclaration/member dispatch.
- *
- * REQUIRED SHARED DEPENDENCIES
- *
- * grammar/core/names.g4
- * grammar/expressions/expressions.g4
- *
- * MUST remain the owners of names and expressions.
- *
- * REQUIRED RESOURCE INTEGRATION
- *
- * grammar/resources/*
- *
- * remains the owner of resource/capability semantics.
- *
- * REQUIRED MEMORY INTEGRATION
- *
- * grammar/memory/distributed-memory.g4
- *
- * remains the owner of distributed-memory-specific syntax.
- *
- * REQUIRED NETWORK INTEGRATION
- *
- * grammar/networking/*
- *
- * remains the owner of network transport and endpoint semantics.
- *
- * REQUIRED HARDWARE INTEGRATION
- *
- * grammar/hardware/*
- *
- * remains the owner of physical hardware semantics.
- *
- * REQUIRED QUANTUM INTEGRATION
- *
- * grammar/quantum/*
- *
- * remains the owner of quantum semantics.
- *
- * REQUIRED RESILIENCE INTEGRATION
- *
- * src/quantum/resilience/*
- * or the repository's canonical resilience subsystem
- *
- * remains the owner of recovery/failure decisions.
- */
-
-
-/* ============================================================================
- * AST CONTRACT
- * ========================================================================== */
-
-/*
- * The frontend AST should represent this grammar with a dedicated distributed
- * replication node or equivalent canonical distributed-domain node.
- *
- * The AST SHOULD preserve at minimum:
- *
- *     declaration name;
- *     target expression;
- *     factor expression;
- *     policy/mode expressions;
- *     options;
- *     logical replica declarations;
- *     dependencies;
- *     nested scopes;
- *     source spans.
- *
- * The AST MUST NOT introduce:
- *
- *     PhysicalNodeId;
- *     DeviceId;
- *     QubitId;
- *     PhysicalQubitId;
- *     NetworkAddress;
- *     TransportHandle;
- *
- * merely because replication syntax exists.
- *
- * Physical realization belongs downstream.
- */
-
-
-/* ============================================================================
- * IR CONTRACT
- * ========================================================================== */
-
-/*
- * This grammar does NOT define an IR.
- *
- * After parsing and semantic analysis, the replication intent should be
- * lowered into the repository's canonical distributed semantic representation.
- *
- * If the replicated target is quantum:
- *
- *     quantum::ir
- *
- * remains the canonical quantum semantic boundary.
- *
- * If the target is classical:
- *
- *     the canonical classical representation remains authoritative.
- *
- * If the target is HDL/hardware:
- *
- *     the canonical HDL/hardware representation remains authoritative.
- *
- * Replication metadata may accompany these representations through the
- * repository's canonical execution/resource metadata rather than creating a
- * second domain-specific IR.
- */
-
-
-/* ============================================================================
- * COMPILER CONTRACT
- * ========================================================================== */
-
-/*
- * Compiler stages downstream of this grammar are responsible for determining:
- *
- *     - whether replication is semantically valid;
- *     - whether the target is replicable;
- *     - required resources;
- *     - feasible replication factor;
- *     - consistency compatibility;
- *     - placement feasibility;
- *     - scheduling;
- *     - lowering;
- *     - target realization.
- *
- * Compilation must not silently convert a logical replication request into a
- * fixed physical deployment.
- */
-
-
-/* ============================================================================
- * RUNTIME CONTRACT
- * ========================================================================== */
-
-/*
- * Runtime systems may resolve:
- *
- *     available resources;
- *     replica placement;
- *     transport;
- *     synchronization;
- *     lifecycle;
- *     failure handling;
- *     dynamic scaling.
- *
- * Runtime behavior must remain constrained by the compiled semantic contract.
- *
- * A runtime must not silently change the program's semantic replication
- * requirement merely because a particular backend is convenient.
- */
-
-
-/* ============================================================================
- * TOOLING CONTRACT
- * ========================================================================== */
-
-/*
- * Tooling must be able to:
- *
- *     - syntax-highlight replication declarations;
- *     - locate replication declarations;
- *     - inspect logical replica names;
- *     - inspect replication expressions;
- *     - provide structural diagnostics;
- *     - preserve source spans;
- *     - format without changing semantics;
- *     - support future policy names without requiring every policy to be a
- *       lexer keyword.
- *
- * Language servers should rely on the AST rather than reparsing semantic
- * meaning from raw text.
+ * This distinction must be preserved by semantic analysis.
  */
 
 
@@ -1444,130 +1586,91 @@ distributedReplicationExtension
  * ========================================================================== */
 
 /*
- * REQUIRED POSITIVE TEST CATEGORIES
- *
- * 1. Minimal declaration
+ * Positive tests MUST include:
  *
  *     replication workload;
- *
- * 2. Target
  *
  *     replication workload {
  *         target: computation;
  *     }
  *
- * 3. Expression factor
- *
  *     replication workload {
  *         factor: desired_replicas;
  *     }
  *
- * 4. Literal factor
- *
  *     replication workload {
- *         factor: 3;
+ *         factor: resources.replication_capacity;
+ *         consistency: policy;
+ *         placement: locality;
  *     }
  *
- * 5. Policy
- *
  *     replication workload {
- *         policy: distributed::replication::policy;
+ *         replica primary;
+ *         replica secondary;
  *     }
  *
- * 6. Multiple options
+ *     replication workload {
+ *         group workers {
+ *             members: worker_set;
+ *         }
+ *     }
  *
- * 7. Nested policy blocks
+ *     replication workload {
+ *         policy {
+ *             mode: distributed::replication::synchronous;
+ *         }
+ *     }
  *
- * 8. Logical replica declarations
+ * Negative tests MUST include:
  *
- * 9. Dependencies
+ *     replication;
  *
- * 10. Qualified policy names
+ *     replication workload {
+ *         factor:
+ *     }
  *
- * 11. Cross-domain target expressions
+ *     replication workload {
+ *         target:
+ *     }
  *
- * 12. Large numbers of members
+ *     replication workload {
+ *         replica;
+ *     }
  *
- * 13. Deeply nested semantic blocks within implementation limits
+ *     replication workload {
+ *         {
+ *     }
  *
- * 14. Classical + replication
+ * Boundary tests MUST include:
  *
- * 15. Quantum + replication metadata
+ *     - one replication;
+ *     - many replication properties;
+ *     - many replicas;
+ *     - deeply nested policy blocks;
+ *     - deeply qualified policy names;
+ *     - large expression trees;
+ *     - large argument lists.
  *
- * 16. HDL/hardware + replication metadata
+ * Scalability tests MUST verify that the grammar contains no source-level
+ * machine-size ceiling.
  *
- * 17. Distributed + AI/data replication
+ * Cross-domain tests MUST include combinations with:
  *
- * ============================================================================
+ *     classical;
+ *     quantum;
+ *     HDL;
+ *     hardware;
+ *     AI;
+ *     accelerator;
+ *     networking;
+ *     memory;
+ *     distributed execution.
  *
- * NEGATIVE TESTS
+ * Quantum tests MUST verify that parsing does not imply physical quantum-state
+ * copying semantics.
  *
- * Must reject structurally malformed forms including:
- *
- *     - missing declaration name;
- *     - missing `{`;
- *     - missing `}`;
- *     - missing `:`;
- *     - missing expression;
- *     - malformed argument list;
- *     - malformed replica declaration;
- *     - malformed dependency;
- *     - malformed qualified extension.
- *
- * Semantic-negative tests belong to semantic analysis rather than this parser.
- *
- * ============================================================================
- *
- * BOUNDARY TESTS
- *
- * Test:
- *
- *     zero optional members;
- *     one member;
- *     many members;
- *     deeply nested blocks;
- *     large expression trees;
- *     long qualified names;
- *     many logical replica declarations;
- *     large replication-factor expressions.
- *
- * No test may establish a false language maximum.
- *
- * ============================================================================
- *
- * SCALABILITY TESTS
- *
- * Verify that the grammar itself contains no artificial limit for:
- *
- *     replicas;
- *     nodes;
- *     machines;
- *     devices;
- *     resources;
- *     workers;
- *     program size.
- *
- * ============================================================================
- *
- * DETERMINISM TESTS
- *
- * The same token stream must produce equivalent parse structures across
- * repeated parser invocations.
- *
- * ============================================================================
- *
- * ROUND-TRIP TESTS
- *
- * Where the frontend provides a printer:
- *
- *     source
- *       -> lexer
- *       -> parser
- *       -> AST
- *       -> printer
- *       -> parser
- *
- * must preserve intended replication semantics.
+ * Determinism tests MUST verify that identical token streams produce identical
+ * parse structures.
  */
 
 
@@ -1576,71 +1679,135 @@ distributedReplicationExtension
  * ========================================================================== */
 
 /*
- * This file is COMPLETE only when:
+ * This file is COMPLETE only when all of the following are true:
  *
- * [ ] It compiles under the repository's canonical ANTLR build.
+ * [ ] `Replication` is the parser grammar name.
  *
- * [ ] Its imported grammar names match the actual repository grammar names.
+ * [ ] `ZamaniLexer` is the canonical token vocabulary.
  *
- * [ ] Its token names match the canonical Zamani lexer.
+ * [ ] `Names` supplies identifier/name infrastructure.
  *
- * [ ] `distributedReplicationDeclaration` is owned here exactly once.
+ * [ ] `Expressions` supplies expression infrastructure.
  *
- * [ ] `distributed/distributed.g4` imports this component rather than
- *     redefining its replication rule.
+ * [ ] No duplicate identifier grammar exists here.
  *
- * [ ] No duplicate identifier/name/expression grammar exists here.
+ * [ ] No duplicate expression grammar exists here.
  *
- * [ ] No physical resource identifiers are hard-coded.
+ * [ ] `distributedReplicationDeclaration` is the stable public entry point.
  *
- * [ ] No finite replication maximum is encoded.
+ * [ ] `distributed.g4` imports/consumes this rule exactly once.
  *
- * [ ] Replication quantities are expression-based.
+ * [ ] No competing replication declaration rule exists elsewhere in the
+ *     distributed aggregate.
  *
- * [ ] Logical replica identity is separated from physical identity.
+ * [ ] No lexer keyword is introduced here.
  *
- * [ ] Resource requirement/constraint/preference/hint semantics remain
- *     downstream.
+ * [ ] No physical node/device identity is encoded.
  *
- * [ ] Consistency implementation remains downstream.
+ * [ ] No fixed replication limit exists.
  *
- * [ ] Placement remains downstream.
+ * [ ] No fixed machine capacity exists.
  *
- * [ ] Networking remains downstream.
+ * [ ] No transport protocol is selected.
  *
- * [ ] Scheduling remains downstream.
+ * [ ] No placement algorithm is implemented.
  *
- * [ ] Hardware selection remains downstream.
+ * [ ] No scheduling is implemented.
  *
- * [ ] Quantum semantics remain downstream through `quantum::ir`.
+ * [ ] No routing is implemented.
  *
- * [ ] QEC and ZQN remain outside this grammar.
+ * [ ] No consistency algorithm is implemented.
  *
- * [ ] Resilience remains outside this grammar.
+ * [ ] No resilience algorithm is implemented.
  *
- * [ ] AST source-order and source-span preservation is defined.
+ * [ ] No QEC semantics are duplicated.
  *
- * [ ] Positive parser tests exist.
+ * [ ] No ZQN semantics are duplicated.
  *
- * [ ] Negative parser tests exist.
+ * [ ] No quantum::ir representation is duplicated.
  *
- * [ ] Boundary tests exist.
+ * [ ] AST source ordering and source spans can be preserved.
  *
- * [ ] Scalability tests exist.
+ * [ ] Semantic validation owns replication feasibility.
  *
- * [ ] Determinism tests exist.
+ * [ ] Resource analysis owns physical capacity.
  *
- * [ ] Cross-domain tests exist.
+ * [ ] Placement owns physical realization.
+ *
+ * [ ] Runtime owns execution.
+ *
+ * [ ] Rust integration remains Rust 1.97/1.97.1 compatible.
+ *
+ * [ ] No unsafe implementation is required.
+ *
+ * [ ] Positive parser tests pass.
+ *
+ * [ ] Negative parser tests pass.
+ *
+ * [ ] Boundary tests pass.
+ *
+ * [ ] Cross-domain tests pass.
+ *
+ * [ ] Scalability tests pass.
+ *
+ * [ ] Determinism tests pass.
  *
  * [ ] Hard-coding audit passes.
  *
- * [ ] Documentation agrees with the grammar.
+ * [ ] Documentation identifies this file as the authoritative owner of
+ *     distributed replication syntax.
+ */
+
+
+/* ============================================================================
+ * FINAL ARCHITECTURAL GUARANTEE
+ * ========================================================================== */
+
+/*
+ * This grammar expresses:
  *
- * [ ] No later grammar component needs to reopen this file merely to add a
- *     new replication policy or physical resource.
+ *     WHAT should be replicated
+ *     HOW replication is semantically constrained
+ *     WHICH logical relationships exist
  *
- * ============================================================================
+ * It does NOT permanently encode:
  *
- * END OF FILE
- * ============================================================================
+ *     WHERE replication occurs
+ *     WHICH machine performs it
+ *     WHICH device performs it
+ *     HOW many machines exist
+ *     WHICH topology exists
+ *     WHICH transport is used
+ *     WHICH runtime performs it
+ *
+ * Therefore the same Zamani source semantics can remain valid while the
+ * available execution environment changes from:
+ *
+ *     tiny embedded system
+ *          ->
+ *     single machine
+ *          ->
+ *     multicore system
+ *          ->
+ *     accelerator
+ *          ->
+ *     quantum system
+ *          ->
+ *     heterogeneous machine
+ *          ->
+ *     cluster
+ *          ->
+ *     supercomputer
+ *          ->
+ *     cloud
+ *          ->
+ *     future computing architecture.
+ *
+ * This is the required grammar-level foundation for:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * and:
+ *
+ *     Zamani — From Atom to Everywhere.
  */
