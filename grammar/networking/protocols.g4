@@ -1,6 +1,7 @@
 /*
  * ============================================================================
  * Zamani Universal Programming Language
+ * Production Networking Protocol Grammar
  * ============================================================================
  *
  * File:
@@ -10,51 +11,52 @@
  *     Protocols
  *
  * Purpose:
- *     Canonical production parser grammar for protocol declarations,
- *     protocol references, protocol composition, protocol requirements,
- *     protocol capabilities, and protocol preferences.
+ *     Source-level declaration of logical communication protocols and their
+ *     contracts.
  *
  * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Edition 2021
+ *     Safe Rust only
+ *
+ * ANTLR:
+ *     ANTLR4 parser grammar
  *
  * Safety:
- *     This grammar contains no embedded Rust actions, semantic predicates,
- *     filesystem access, network access, hardware access, runtime calls,
- *     or unsafe code.
+ *     - No embedded Rust actions.
+ *     - No semantic predicates.
+ *     - No unsafe code.
+ *     - No filesystem access.
+ *     - No network access.
+ *     - No hardware access.
+ *     - No runtime callbacks.
+ *     - No randomness.
+ *     - No backend discovery.
+ *     - No target-specific assumptions.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * ARCHITECTURAL ROLE
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     Protocols parser
- *          |
- *          v
- *     Networking frontend AST
- *          |
- *          +--> name resolution
- *          +--> type analysis
- *          +--> capability analysis
- *          +--> requirement analysis
- *          +--> constraint analysis
- *          +--> security analysis
- *          +--> resource analysis
- *          |
- *          v
- *     canonical semantic networking model
- *          |
- *          +--> distributed execution
- *          +--> hardware/network realization
- *          +--> resource selection
- *          +--> compilation
- *          +--> runtime
+ * This grammar owns the SOURCE-LEVEL SYNTAX of a logical communication
+ * protocol.
  *
- * The grammar does NOT directly construct or select a runtime protocol.
+ * A protocol describes communication semantics and contracts.
+ *
+ * It does NOT describe a particular implementation.
+ *
+ * The same protocol may be realized through:
+ *
+ *     - in-process communication;
+ *     - shared memory;
+ *     - IPC;
+ *     - local channels;
+ *     - distributed channels;
+ *     - network transports;
+ *     - accelerator fabrics;
+ *     - hardware communication interfaces;
+ *     - quantum communication infrastructure;
+ *     - future communication substrates.
  *
  * ============================================================================
  * OWNERSHIP
@@ -62,210 +64,315 @@
  *
  * THIS FILE OWNS:
  *
- *     - protocol declaration syntax;
+ *     - protocol declarations;
  *     - protocol names;
- *     - protocol references;
- *     - protocol composition syntax;
- *     - protocol version requirements as source-level expressions;
- *     - protocol capabilities as source-level declarations;
+ *     - protocol generic parameters;
+ *     - protocol inheritance/refinement;
+ *     - protocol composition;
+ *     - protocol roles;
+ *     - protocol message references;
+ *     - protocol operation contracts;
+ *     - protocol properties;
  *     - protocol requirements;
+ *     - protocol capability references;
  *     - protocol constraints;
  *     - protocol preferences;
- *     - protocol metadata;
- *     - protocol inheritance/extension intent;
- *     - protocol bindings to logical networking constructs;
- *     - protocol options represented as expressions.
+ *     - protocol metadata boundaries;
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
- *     - identifier spelling;
- *     - qualified-name spelling;
+ *     - lexical identifiers;
+ *     - lexical literals;
+ *     - types;
  *     - general expressions;
- *     - message schemas;
- *     - serialization;
  *     - endpoint declarations;
  *     - channel declarations;
+ *     - message schemas;
  *     - service declarations;
- *     - physical topology;
  *     - routing;
- *     - packet scheduling;
- *     - sockets;
- *     - ports;
- *     - IP addresses;
- *     - MAC addresses;
- *     - network interfaces;
- *     - device discovery;
+ *     - scheduling;
+ *     - placement;
+ *     - resource discovery;
  *     - hardware discovery;
- *     - transport implementation;
- *     - cryptographic algorithms;
+ *     - serialization;
+ *     - compression;
+ *     - encryption;
  *     - authentication;
  *     - authorization;
- *     - trust implementation;
+ *     - transport implementation;
+ *     - sockets;
+ *     - ports;
+ *     - IP/MAC addresses;
+ *     - network topology;
+ *     - physical devices;
+ *     - cluster topology;
+ *     - runtime queues;
+ *     - retry implementation;
+ *     - distributed consensus;
  *     - QEC;
  *     - ZQN;
  *     - quantum::ir;
- *     - classical IR;
+ *     - hardware calibration;
  *     - runtime execution.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * A protocol in Zamani is a semantic communication contract.
+ * Protocol syntax describes WHAT communication contract exists.
  *
- * It does not inherently mean:
+ * It does not permanently determine WHERE or HOW the contract is realized.
+ *
+ * Therefore a protocol declaration MUST NOT require:
+ *
+ *     a particular machine;
+ *     a particular device;
+ *     a particular node;
+ *     a particular network;
+ *     a particular address;
+ *     a particular port;
+ *     a particular transport;
+ *     a particular number of participants;
+ *     a particular bandwidth;
+ *     a particular latency;
+ *     a particular topology;
+ *     a particular provider.
+ *
+ * Such properties belong to target/resource/deployment/runtime layers.
+ *
+ * ============================================================================
+ * OPEN-WORLD DESIGN
+ * ============================================================================
+ *
+ * Protocol names are not enumerated.
+ *
+ * This grammar deliberately does NOT define closed protocol sets such as:
  *
  *     TCP
  *     UDP
  *     QUIC
  *     HTTP
+ *     MQTT
+ *     gRPC
  *     MPI
  *     RDMA
- *     Ethernet
  *     InfiniBand
- *     a particular quantum-network protocol
- *     a particular vendor protocol
  *
- * Such names may be referenced by source programs, but their realization is
- * determined downstream.
+ * Those may be represented as qualified names, dialect declarations, or
+ * target-specific capabilities elsewhere.
  *
- * Therefore:
- *
- *     protocol requirement
- *
- * is distinct from:
- *
- *     protocol implementation
- *
- * and:
- *
- *     protocol implementation
- *
- * is distinct from:
- *
- *     physical network realization.
+ * A future protocol therefore does not require this grammar to change merely
+ * because its name or implementation is new.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * No grammar-level limits exist for:
+ * There are NO grammar constants for:
  *
- *     - protocol declarations;
- *     - protocol references;
- *     - protocol versions;
- *     - protocol capabilities;
- *     - protocol requirements;
- *     - protocol constraints;
- *     - protocol preferences;
- *     - protocol composition depth;
- *     - protocol options;
- *     - protocol metadata;
- *     - message types;
- *     - endpoints;
- *     - channels;
- *     - services;
- *     - nodes;
- *     - network size.
+ *     MAX_PROTOCOLS
+ *     MAX_ROLES
+ *     MAX_MESSAGES
+ *     MAX_OPERATIONS
+ *     MAX_FIELDS
+ *     MAX_PARAMETERS
+ *     MAX_REQUIREMENTS
+ *     MAX_CAPABILITIES
+ *     MAX_ENDPOINTS
+ *     MAX_CHANNELS
+ *     MAX_PARTICIPANTS
+ *     MAX_PROTOCOL_DEPTH
  *
- * ANTLR repetition operators are intentionally unbounded.
+ * All collections use unbounded ANTLR repetition.
  *
- * Practical limits belong to compiler/resource policy and runtime resources,
- * not to source grammar.
+ * Physical/resource limits are intentionally downstream.
  *
  * ============================================================================
- * DETERMINISM
+ * SEMANTIC BOUNDARY
  * ============================================================================
  *
- * This grammar contains:
+ * Parser:
  *
- *     - no semantic predicates;
- *     - no embedded actions;
- *     - no target-specific code;
- *     - no random behavior;
- *     - no environment inspection;
- *     - no filesystem access;
- *     - no network access;
- *     - no hardware access.
+ *     source
+ *       -> lexer
+ *       -> Protocols
+ *       -> frontend AST
  *
- * Parsing is therefore deterministic and environment-independent.
+ * Semantic analysis:
+ *
+ *       -> name resolution
+ *       -> type checking
+ *       -> protocol validation
+ *       -> capability checking
+ *       -> effect checking
+ *       -> resource analysis
+ *       -> security analysis
+ *
+ * Lowering:
+ *
+ *       -> canonical semantic representation
+ *       -> distributed/networking representation
+ *       -> classical IR where appropriate
+ *       -> quantum::ir where quantum computation is involved
+ *
+ * Then:
+ *
+ *       -> optimization
+ *       -> routing
+ *       -> scheduling
+ *       -> placement
+ *       -> resilience
+ *       -> hardware/runtime realization
+ *
+ * THIS GRAMMAR NEVER CREATES IR.
  *
  * ============================================================================
- * LEXICAL CONTRACT
+ * QUANTUM INTEGRATION
  * ============================================================================
  *
- * The canonical lexer is:
+ * A protocol may carry or coordinate quantum-related values through ordinary
+ * canonical types and expressions.
  *
- *     grammar/antlr/ZamaniLexer.g4
+ * This grammar MUST NOT define:
  *
- * Required stable token:
+ *     QubitId
+ *     PhysicalQubitId
+ *     GateKind
+ *     QuantumState
+ *     QuantumTopology
+ *     Calibration
+ *     QEC codes
+ *     ZQN fault models
  *
- *     PROTOCOL
+ * If protocol semantics interact with quantum computation, semantic lowering
+ * integrates with the canonical `quantum::ir` boundary.
  *
- * representing:
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Protocols may describe logical interfaces used by hardware/software
+ * co-design.
+ *
+ * This grammar does not define:
+ *
+ *     pins;
+ *     FPGA routing;
+ *     ASIC wiring;
+ *     physical buses;
+ *     fixed bus widths;
+ *     fixed device counts;
+ *     physical clock topology.
+ *
+ * HDL and hardware grammars own those concerns.
+ *
+ * ============================================================================
+ * SECURITY INTEGRATION
+ * ============================================================================
+ *
+ * Protocols may express logical requirements such as:
+ *
+ *     requires security::confidentiality;
+ *     requires security::authentication;
+ *
+ * through canonical qualified names.
+ *
+ * This grammar does not define cryptographic algorithms or security policy
+ * semantics.
+ *
+ * Security remains owned by the security/effects/security grammar and
+ * corresponding semantic subsystem.
+ *
+ * ============================================================================
+ * MESSAGE INTEGRATION
+ * ============================================================================
+ *
+ * Message schemas are owned by:
+ *
+ *     grammar/networking/messages.g4
+ *
+ * and, during migration, existing distributed messaging grammar.
+ *
+ * This file only references message declarations.
+ *
+ * It MUST NOT create a second message-schema language.
+ *
+ * ============================================================================
+ * ENDPOINT INTEGRATION
+ * ============================================================================
+ *
+ * Endpoint declarations are owned by:
+ *
+ *     grammar/networking/endpoints.g4
+ *
+ * Protocols may reference endpoint roles/types symbolically.
+ *
+ * This grammar does not define physical endpoint addressing.
+ *
+ * ============================================================================
+ * CHANNEL INTEGRATION
+ * ============================================================================
+ *
+ * Channels are owned by:
+ *
+ *     grammar/networking/channels.g4
+ *
+ * A protocol may constrain or describe channel semantics but does not create
+ * channel runtime objects.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * This parser consumes the canonical ZamaniLexer.
+ *
+ * Structural protocol keywords are:
  *
  *     protocol
+ *     extends
+ *     uses
+ *     role
+ *     message
+ *     operation
+ *     requires
+ *     provides
+ *     property
+ *     constraint
+ *     preference
+ *     capability
  *
- * This is intentionally a reserved networking declaration keyword.
+ * The lexer MUST expose these as canonical keyword tokens or compatible
+ * literal tokens.
  *
- * Protocol implementation names such as:
+ * Protocol names, role names, message names, operation names, capability names,
+ * and future extension names remain canonical identifiers.
  *
- *     tcp
- *     udp
- *     quic
- *     mpi
- *     rdma
- *     http
- *     custom_transport
- *
- * remain ordinary identifiers/qualified names unless the language specification
- * explicitly reserves them.
- *
- * This file MUST NOT define lexer rules.
+ * No transport-specific lexer vocabulary is required here.
  *
  * ============================================================================
  * IMPORT CONTRACT
  * ============================================================================
  *
- * This grammar consumes:
- *
- *     Names
- *     Expressions
- *
- * Names owns:
+ * Core:
  *
  *     identifier
  *     qualifiedName
+ *     attributes
+ *     visibility
+ *     genericParameters
+ *     whereClause
  *
- * Expressions owns:
+ * Types:
+ *
+ *     typeExpression
+ *
+ * Expressions:
  *
  *     expression
+ *     argumentList
  *
- * This grammar MUST NOT redefine those rules.
- *
- * ============================================================================
- * ANTLR COMPOSITION CONTRACT
- * ============================================================================
- *
- * Protocols is a leaf parser grammar.
- *
- * The networking aggregate grammar must import this grammar and consume:
- *
- *     protocolDeclaration
- *     protocolReference
- *
- * The aggregate networking grammar MUST NOT redefine those rules.
- *
- * The aggregate should therefore contain an integration path equivalent to:
- *
- *     networkingMember
- *         : endpointDeclaration
- *         | channelDeclaration
- *         | serviceDeclaration
- *         | protocolDeclaration
- *         | ...
- *         ;
+ * Attributes are imported from the canonical attribute grammar rather than
+ * redefined.
  *
  * ============================================================================
  */
@@ -276,40 +383,448 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names, Expressions;
+import Core, Types, Expressions, Attributes;
 
-
-/* ============================================================================
- * PUBLIC ENTRY POINTS
- * ========================================================================== */
 
 /*
- * Complete protocol declaration.
+ * ============================================================================
+ * PUBLIC ENTRY POINT
+ * ============================================================================
  *
- * Example:
+ * Stable parser-composition boundary.
  *
- *     protocol reliable_stream {
- *         requires: ordered;
- *         requires: reliable;
- *     }
+ * Higher-level networking grammars should consume `protocolConstruct` rather
+ * than duplicating protocol rules.
  */
-protocolDeclaration
-    : PROTOCOL protocolName protocolDeclarationBody?
-      SEMICOLON?
+protocolConstruct
+    : protocolDeclaration
+    | protocolReference
     ;
 
 
 /*
- * Protocol reference.
+ * ============================================================================
+ * PROTOCOL DECLARATION
+ * ============================================================================
  *
- * A protocol reference identifies an existing logical protocol without
- * declaring a new one.
+ * Canonical examples:
  *
- * Examples:
+ *     protocol ReliableTransport;
  *
- *     tcp
- *     custom::transport
- *     quantum::network::transport
+ *     protocol ReliableTransport {
+ *         role sender;
+ *         role receiver;
+ *     }
+ *
+ *     protocol ApplicationProtocol<T> extends BaseProtocol {
+ *         ...
+ *     }
+ *
+ * The declaration describes a logical contract, not an implementation.
+ */
+protocolDeclaration
+    : attribute*
+      visibility?
+      PROTOCOL
+      identifier
+      genericParameters?
+      protocolInheritanceClause?
+      protocolWhereClause?
+      protocolBody?
+      SEMI?
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL INHERITANCE / REFINEMENT
+ * ============================================================================
+ *
+ * Protocol refinement is semantic composition.
+ *
+ * It does not imply implementation inheritance, class inheritance, or runtime
+ * dispatch.
+ */
+protocolInheritanceClause
+    : EXTENDS
+      qualifiedName
+      (COMMA qualifiedName)*
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL CONSTRAINTS
+ * ============================================================================
+ *
+ * Generic protocol constraints remain associated with the canonical type/core
+ * system.
+ *
+ * The rule is intentionally a delegation boundary.
+ */
+protocolWhereClause
+    : WHERE
+      expression
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL BODY
+ * ============================================================================
+ *
+ * The body contains zero or more protocol members.
+ *
+ * No fixed member count is encoded.
+ */
+protocolBody
+    : LBRACE
+      protocolMember*
+      RBRACE
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL MEMBER
+ * ============================================================================
+ */
+protocolMember
+    : protocolRoleDeclaration
+    | protocolMessageReference
+    | protocolOperationDeclaration
+    | protocolUseDeclaration
+    | protocolProvideDeclaration
+    | protocolRequirementDeclaration
+    | protocolCapabilityDeclaration
+    | protocolConstraintDeclaration
+    | protocolPreferenceDeclaration
+    | protocolPropertyDeclaration
+    | protocolNestedDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL ROLE
+ * ============================================================================
+ *
+ * A role is a logical participant in the protocol.
+ *
+ * It does NOT identify:
+ *
+ *     a machine;
+ *     a process;
+ *     a node;
+ *     a device;
+ *     an address;
+ *     a network interface.
+ */
+protocolRoleDeclaration
+    : attribute*
+      ROLE
+      identifier
+      protocolRoleTypeClause?
+      SEMI
+    ;
+
+protocolRoleTypeClause
+    : COLON
+      qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * MESSAGE REFERENCE
+ * ============================================================================
+ *
+ * This references a message schema owned elsewhere.
+ *
+ * It does not define the message fields here.
+ */
+protocolMessageReference
+    : attribute*
+      MESSAGE
+      qualifiedName
+      protocolMessageDirectionClause?
+      SEMI
+    ;
+
+protocolMessageDirectionClause
+    : COLON
+      qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL OPERATIONS
+ * ============================================================================
+ *
+ * Operations describe logical communication actions/contracts.
+ *
+ * They do NOT prescribe:
+ *
+ *     transport;
+ *     scheduling;
+ *     retries;
+ *     sockets;
+ *     threads;
+ *     machines;
+ *     devices.
+ */
+protocolOperationDeclaration
+    : attribute*
+      OPERATION
+      identifier
+      genericParameters?
+      LPAREN
+      protocolParameterList?
+      RPAREN
+      protocolReturnClause?
+      protocolOperationClause*
+      protocolWhereClause?
+      SEMI
+    ;
+
+
+/*
+ * ============================================================================
+ * OPERATION PARAMETERS
+ * ============================================================================
+ *
+ * Parameters use canonical types.
+ *
+ * There is no fixed parameter count.
+ */
+protocolParameterList
+    : protocolParameter
+      (COMMA protocolParameter)*
+      COMMA?
+    ;
+
+protocolParameter
+    : identifier
+      COLON
+      typeExpression
+      protocolParameterDefault?
+    ;
+
+protocolParameterDefault
+    : ASSIGN
+      expression
+    ;
+
+
+/*
+ * ============================================================================
+ * OPERATION RETURN
+ * ============================================================================
+ */
+protocolReturnClause
+    : ARROW
+      typeExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * OPERATION CLAUSES
+ * ============================================================================
+ *
+ * These are semantic references, not implementations.
+ */
+protocolOperationClause
+    : protocolRequiresClause
+    | protocolProvidesClause
+    | protocolUsesClause
+    ;
+
+protocolRequiresClause
+    : REQUIRES
+      qualifiedName
+    ;
+
+protocolProvidesClause
+    : PROVIDES
+      qualifiedName
+    ;
+
+protocolUsesClause
+    : USES
+      qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL COMPOSITION
+ * ============================================================================
+ *
+ * `uses` expresses logical dependence/composition.
+ *
+ * It does not force a particular implementation library.
+ */
+protocolUseDeclaration
+    : attribute*
+      USES
+      qualifiedName
+      SEMI
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL PROVIDED CONTRACT
+ * ============================================================================
+ */
+protocolProvideDeclaration
+    : attribute*
+      PROVIDES
+      qualifiedName
+      SEMI
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL REQUIREMENTS
+ * ============================================================================
+ *
+ * A requirement describes a semantic need.
+ *
+ * It is not a hardware/resource allocation.
+ */
+protocolRequirementDeclaration
+    : attribute*
+      REQUIRES
+      qualifiedName
+      protocolRequirementValue?
+      SEMI
+    ;
+
+protocolRequirementValue
+    : ASSIGN
+      expression
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL CAPABILITIES
+ * ============================================================================
+ *
+ * Capability references describe capabilities required/provided by a protocol.
+ *
+ * Capability discovery remains downstream.
+ */
+protocolCapabilityDeclaration
+    : attribute*
+      CAPABILITY
+      qualifiedName
+      protocolCapabilityValue?
+      SEMI
+    ;
+
+protocolCapabilityValue
+    : ASSIGN
+      expression
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL CONSTRAINTS
+ * ============================================================================
+ *
+ * Constraints express conditions on valid realization.
+ *
+ * They do not become machine constants.
+ */
+protocolConstraintDeclaration
+    : attribute*
+      CONSTRAINT
+      expression
+      SEMI
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL PREFERENCES
+ * ============================================================================
+ *
+ * Preferences are advisory.
+ *
+ * A preference MUST NOT be interpreted as a mandatory machine-selection rule.
+ */
+protocolPreferenceDeclaration
+    : attribute*
+      PREFERENCE
+      expression
+      SEMI
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL PROPERTIES
+ * ============================================================================
+ *
+ * Generic properties provide extensibility without adding transport-specific
+ * grammar rules.
+ *
+ * Example:
+ *
+ *     property ordering: Ordering;
+ *     property semantics: Ordering::Total;
+ *     property mode = expression;
+ *
+ * The semantic layer determines the property's meaning.
+ */
+protocolPropertyDeclaration
+    : attribute*
+      PROPERTY
+      identifier
+      protocolPropertyTypeClause?
+      protocolPropertyInitializer?
+      SEMI
+    ;
+
+protocolPropertyTypeClause
+    : COLON
+      typeExpression
+    ;
+
+protocolPropertyInitializer
+    : ASSIGN
+      expression
+    ;
+
+
+/*
+ * ============================================================================
+ * NESTED PROTOCOL DECLARATIONS
+ * ============================================================================
+ *
+ * Nested protocols are allowed for namespace/scoping purposes.
+ *
+ * Their semantic legality is checked downstream.
+ */
+protocolNestedDeclaration
+    : protocolDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL REFERENCE
+ * ============================================================================
+ *
+ * A reference is simply a canonical qualified name.
+ *
+ * It does not resolve the referenced protocol.
  */
 protocolReference
     : qualifiedName
@@ -317,602 +832,80 @@ protocolReference
 
 
 /*
- * A protocol name is deliberately represented by the canonical name system.
+ * ============================================================================
+ * PROTOCOL REFERENCE LIST
+ * ============================================================================
+ *
+ * Unbounded protocol references.
  */
-protocolName
+protocolReferenceList
+    : protocolReference
+      (COMMA protocolReference)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * OPTIONAL PROTOCOL REFERENCE LIST
+ * ============================================================================
+ */
+optionalProtocolReferenceList
+    : protocolReferenceList?
+    ;
+
+
+/*
+ * ============================================================================
+ * PROTOCOL ROLE REFERENCE
+ * ============================================================================
+ */
+protocolRoleReference
     : qualifiedName
     ;
 
 
-/* ============================================================================
- * PROTOCOL DECLARATION BODY
- * ========================================================================== */
-
-protocolDeclarationBody
-    : LBRACE protocolMember* RBRACE
-    ;
-
-
-protocolMember
-    : protocolExtendsDeclaration
-    | protocolVersionDeclaration
-    | protocolProvidesDeclaration
-    | protocolRequiresDeclaration
-    | protocolConstraintDeclaration
-    | protocolPreferenceDeclaration
-    | protocolCapabilityDeclaration
-    | protocolBindingDeclaration
-    | protocolOptionDeclaration
-    | protocolMetadataDeclaration
-    | protocolInterfaceDeclaration
-    | protocolCompositionDeclaration
-    ;
-
-
-/* ============================================================================
- * INHERITANCE / EXTENSION
- * ========================================================================== */
-
 /*
- * Declares protocol-level extension intent.
- *
- * Example:
- *
- *     extends base::reliable
- *
- * This does not mean implementation inheritance.
- *
- * Semantic analysis determines whether extension is valid.
- */
-protocolExtendsDeclaration
-    : EXTENDS protocolReference protocolReferenceListTail? SEMICOLON
-    ;
-
-
-protocolReferenceListTail
-    : COMMA protocolReference (COMMA protocolReference)*
-    ;
-
-
-/* ============================================================================
- * VERSION
- * ========================================================================== */
-
-/*
- * Version syntax is intentionally expression-based.
- *
- * The grammar does not prescribe:
- *
- *     semantic versioning;
- *     integer-only versions;
- *     vendor version formats;
- *     protocol revision limits.
- *
- * Those policies belong to protocol/version semantic analysis.
- */
-protocolVersionDeclaration
-    : VERSIONING COLON expression SEMICOLON
-    ;
-
-
-/*
- * Explicit protocol version requirement.
- *
- * This permits a protocol declaration to distinguish:
- *
- *     declared version
- *
- * from:
- *
- *     required compatible version.
- */
-protocolVersionRequirement
-    : versionRequirementMarker COLON expression SEMICOLON
-    ;
-
-
-versionRequirementMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * PROVIDES
- * ========================================================================== */
-
-/*
- * Declares semantic capabilities provided by the protocol.
- *
- * Examples:
- *
- *     provides: ordered_delivery;
- *     provides: reliable_delivery;
- *     provides: streaming;
- */
-protocolProvidesDeclaration
-    : PROVIDES protocolValueExpressionList SEMICOLON
-    ;
-
-
-/* ============================================================================
- * REQUIREMENTS
- * ========================================================================== */
-
-/*
- * Requirements are mandatory semantic conditions.
- *
- * Examples:
- *
- *     requires: reliable;
- *     requires: ordered;
- *     requires: bidirectional;
- *     requires: secure_channel;
- *
- * A requirement does not allocate a physical resource.
- */
-protocolRequiresDeclaration
-    : REQUIRES protocolValueExpressionList SEMICOLON
-    ;
-
-
-/*
- * A reusable protocol requirement expression.
- */
-protocolRequirement
-    : REQUIRES COLON expression SEMICOLON
-    ;
-
-
-/* ============================================================================
- * CONSTRAINTS
- * ========================================================================== */
-
-/*
- * Constraints restrict valid realizations without selecting a concrete
- * implementation.
- *
- * Example:
- *
- *     constraint: latency < desired_latency;
- */
-protocolConstraintDeclaration
-    : constraintMarker COLON expression SEMICOLON
-    ;
-
-
-constraintMarker
-    : CONSTRAINT
-    ;
-
-
-/* ============================================================================
- * PREFERENCES
- * ========================================================================== */
-
-/*
- * Preferences are optimization hints.
- *
- * They are weaker than requirements and constraints.
- *
- * Example:
- *
- *     prefer: low_latency;
- */
-protocolPreferenceDeclaration
-    : PREFER protocolValueExpressionList SEMICOLON
-    ;
-
-
-/* ============================================================================
- * CAPABILITIES
- * ========================================================================== */
-
-/*
- * A protocol capability declaration describes a semantic capability exposed
- * by the protocol.
- *
- * Example:
- *
- *     capability: multicast;
- *     capability: ordered_delivery;
- */
-protocolCapabilityDeclaration
-    : CAPABILITY protocolValueExpressionList SEMICOLON
-    ;
-
-
-/* ============================================================================
- * BINDINGS
- * ========================================================================== */
-
-/*
- * A binding associates a logical protocol with another semantic entity.
- *
- * This may later be interpreted by:
- *
- *     endpoint analysis;
- *     service analysis;
- *     channel analysis;
- *     distributed execution;
- *     hardware/network realization.
- *
- * It does NOT establish a physical address.
- */
-protocolBindingDeclaration
-    : BIND protocolBindingTarget COLON expression SEMICOLON
-    ;
-
-
-protocolBindingTarget
-    : protocolBindingName
-    ;
-
-
-protocolBindingName
-    : identifier
-    ;
-
-
-/* ============================================================================
- * OPTIONS
- * ========================================================================== */
-
-/*
- * Generic protocol options deliberately use expressions.
- *
- * This prevents the grammar from embedding a finite vendor-specific option
- * vocabulary.
- *
- * Examples:
- *
- *     option framing: framing_mode;
- *     option ordering: ordered;
- *     option custom::feature: value;
- */
-protocolOptionDeclaration
-    : OPTION identifier COLON expression SEMICOLON
-    ;
-
-
-/*
- * Namespaced option key.
- *
- * Allows:
- *
- *     custom::transport::feature
- *
- * without hard-coding future protocol namespaces.
- */
-protocolQualifiedOptionDeclaration
-    : OPTION qualifiedName COLON expression SEMICOLON
-    ;
-
-
-/* ============================================================================
- * METADATA
- * ========================================================================== */
-
-/*
- * Metadata is deliberately expression-based.
- *
- * Metadata has no inherent runtime meaning.
- *
- * Tooling, semantic analysis and downstream compilation may interpret it.
- */
-protocolMetadataDeclaration
-    : METADATA identifier COLON expression SEMICOLON
-    ;
-
-
-/*
- * Namespaced metadata key.
- */
-protocolQualifiedMetadataDeclaration
-    : METADATA qualifiedName COLON expression SEMICOLON
-    ;
-
-
-/* ============================================================================
- * INTERFACE DECLARATIONS
- * ========================================================================== */
-
-/*
- * A protocol interface describes logical operations exposed by a protocol.
- *
- * It does not define:
- *
- *     sockets;
- *     packets;
- *     system calls;
- *     memory layouts;
- *     ABI;
- *     physical transport.
- */
-protocolInterfaceDeclaration
-    : INTERFACE identifier protocolInterfaceBody?
-      SEMICOLON?
-    ;
-
-
-protocolInterfaceBody
-    : LBRACE protocolInterfaceMember* RBRACE
-    ;
-
-
-protocolInterfaceMember
-    : protocolOperationDeclaration
-    | protocolEventDeclaration
-    | protocolInterfaceRequirement
-    | protocolInterfaceCapability
-    | protocolInterfaceMetadata
-    ;
-
-
-protocolOperationDeclaration
-    : FN identifier
-      LPAREN optionalExpressionList RPAREN
-      protocolReturnType?
-      SEMICOLON
-    ;
-
-
-protocolReturnType
-    : THIN_ARROW expression
-    ;
-
-
-protocolEventDeclaration
-    : EVENT identifier
-      LPAREN optionalExpressionList RPAREN
-      SEMICOLON
-    ;
-
-
-protocolInterfaceRequirement
-    : REQUIRES COLON expression SEMICOLON
-    ;
-
-
-protocolInterfaceCapability
-    : CAPABILITY COLON expression SEMICOLON
-    ;
-
-
-protocolInterfaceMetadata
-    : METADATA identifier COLON expression SEMICOLON
-    ;
-
-
-/* ============================================================================
- * PROTOCOL COMPOSITION
- * ========================================================================== */
-
-/*
- * Protocol composition allows a protocol to be described as requiring or
- * combining other protocol contracts.
- *
- * Example:
- *
- *     compose transport::reliable,
- *             transport::ordered;
- *
- * Composition is semantic composition, not physical network topology.
- */
-protocolCompositionDeclaration
-    : COMPOSE protocolReferenceList SEMICOLON
-    ;
-
-
-protocolReferenceList
-    : protocolReference
-      (COMMA protocolReference)*
-    ;
-
-
-/* ============================================================================
- * VALUE EXPRESSIONS
- * ========================================================================== */
-
-/*
- * Generic protocol value list.
- *
- * No fixed number of protocol values is allowed or required.
- */
-protocolValueExpressionList
-    : expression
-      (COMMA expression)*
-    ;
-
-
-/* ============================================================================
- * VERSION / COMPATIBILITY EXPRESSIONS
- * ========================================================================== */
-
-/*
- * Compatibility requirement is intentionally expressed as a normal source
- * expression.
- *
- * This permits semantic layers to support:
- *
- *     exact version
- *     minimum version
- *     maximum version
- *     compatible range
- *     capability-based compatibility
- *     dialect-specific compatibility
- *
- * without baking a finite version scheme into the grammar.
- */
-protocolCompatibilityDeclaration
-    : COMPATIBLE COLON expression SEMICOLON
-    ;
-
-
-/* ============================================================================
- * PROTOCOL REFERENCES IN GENERIC CONTEXTS
- * ========================================================================== */
-
-/*
- * A protocol selector remains a logical name.
- *
- * It is NOT:
- *
- *     an IP address;
- *     a port;
- *     a socket;
- *     a physical interface;
- *     a machine ID;
- *     a device ID.
- */
-protocolSelector
-    : protocolReference
-    ;
-
-
-/* ============================================================================
- * PROTOCOL REQUIREMENT BLOCK
- * ========================================================================== */
-
-/*
- * Reusable nested protocol policy block.
- *
- * Example:
- *
- *     policy {
- *         requires: reliable;
- *         capability: ordered;
- *         prefer: low_latency;
- *     }
- *
- * Policy semantics belong downstream.
- */
-protocolPolicyBlock
-    : POLICY LBRACE protocolPolicyMember* RBRACE
-    ;
-
-
-protocolPolicyMember
-    : protocolRequiresDeclaration
-    | protocolConstraintDeclaration
-    | protocolPreferenceDeclaration
-    | protocolCapabilityDeclaration
-    | protocolCompatibilityDeclaration
-    | protocolMetadataDeclaration
-    ;
-
-
-/* ============================================================================
- * PROTOCOL REFERENCE BLOCK
- * ========================================================================== */
-
-/*
- * A reference can carry requirements/preferences without becoming a protocol
- * declaration.
- *
- * Example:
- *
- *     use protocol::reliable {
- *         requires: ordered;
- *         prefer: low_latency;
- *     }
- *
- * This remains logical intent.
- */
-protocolUseDeclaration
-    : USE protocolReference protocolUseBody?
-      SEMICOLON?
-    ;
-
-
-protocolUseBody
-    : LBRACE protocolUseMember* RBRACE
-    ;
-
-
-protocolUseMember
-    : protocolRequiresDeclaration
-    | protocolConstraintDeclaration
-    | protocolPreferenceDeclaration
-    | protocolCapabilityDeclaration
-    | protocolCompatibilityDeclaration
-    | protocolMetadataDeclaration
-    ;
-
-
-/* ============================================================================
- * PROTOCOL CONSTRAINT EXPRESSIONS
- * ========================================================================== */
-
-/*
- * Constraint expressions remain ordinary Zamani expressions.
- *
- * This allows future resource/capability systems to interpret:
- *
- *     latency
- *     reliability
- *     ordering
- *     throughput
- *     availability
- *     energy
- *     locality
- *
- * without making those properties machine constants in this grammar.
- */
-protocolConstraintExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * PROTOCOL PREFERENCE EXPRESSIONS
- * ========================================================================== */
-
-protocolPreferenceExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * PROTOCOL CAPABILITY EXPRESSIONS
- * ========================================================================== */
-
-protocolCapabilityExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * PROTOCOL REQUIREMENT EXPRESSIONS
- * ========================================================================== */
-
-protocolRequirementExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * CANONICAL GENERIC MEMBERS
  * ============================================================================
- *
- * These aliases make the public protocol grammar easier for downstream
- * networking composition layers to consume without redefining expressions.
+ * PROTOCOL ROLE REFERENCE LIST
+ * ============================================================================
  */
-
-protocolRequirementValue
-    : protocolRequirementExpression
+protocolRoleReferenceList
+    : protocolRoleReference
+      (COMMA protocolRoleReference)*
+      COMMA?
     ;
 
 
-protocolConstraintValue
-    : protocolConstraintExpression
+/*
+ * ============================================================================
+ * PROTOCOL MESSAGE REFERENCE LIST
+ * ============================================================================
+ */
+protocolMessageReferenceList
+    : qualifiedName
+      (COMMA qualifiedName)*
+      COMMA?
     ;
 
 
-protocolPreferenceValue
-    : protocolPreferenceExpression
+/*
+ * ============================================================================
+ * PROTOCOL OPERATION REFERENCE
+ * ============================================================================
+ */
+protocolOperationReference
+    : qualifiedName
     ;
 
 
-protocolCapabilityValue
-    : protocolCapabilityExpression
+/*
+ * ============================================================================
+ * PROTOCOL OPERATION REFERENCE LIST
+ * ============================================================================
+ */
+protocolOperationReferenceList
+    : protocolOperationReference
+      (COMMA protocolOperationReference)*
+      COMMA?
     ;
