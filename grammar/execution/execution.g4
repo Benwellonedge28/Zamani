@@ -10,33 +10,42 @@
  *     Execution
  *
  * Status:
- *     Production-ready execution-intent parser grammar
- *
- * Purpose:
- *     Owns source-level execution intent and execution-context composition.
+ *     Production execution-composition grammar
  *
  * ============================================================================
+ * PURPOSE
+ * ============================================================================
  *
+ * This grammar is the canonical source-level composition boundary for
+ * execution intent.
+ *
+ * It defines WHAT it means syntactically to request execution of an already
+ * described Zamani computation.
+ *
+ * It does NOT define HOW execution is realized.
+ *
+ * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
  *     Zamani source
  *          |
  *          v
- *     ZamaniLexer
+ *     canonical lexer
  *          |
  *          v
- *     ZamaniParser
+ *     canonical parser
  *          |
  *          v
  *     frontend AST
  *          |
- *          +--> name resolution
- *          +--> type analysis
- *          +--> effect analysis
- *          +--> capability analysis
- *          +--> resource analysis
- *          +--> target resolution
+ *          +--> semantic analysis
+ *          |       |
+ *          |       +--> type analysis
+ *          |       +--> effect analysis
+ *          |       +--> capability analysis
+ *          |       +--> resource analysis
+ *          |       +--> target resolution
  *          |
  *          v
  *     canonical semantic representation
@@ -47,7 +56,7 @@
  *          +--> distributed representation
  *          |
  *          v
- *     optimization
+ *     compilation / optimization
  *          |
  *          +--> routing
  *          +--> scheduling
@@ -55,384 +64,295 @@
  *          +--> hardware HAL
  *          |
  *          v
- *     target realization
+ *     dispatch / deployment planning
  *          |
  *          v
- *     runtime / deployment
+ *     runtime
  *
  * ============================================================================
- *
  * CORE PRINCIPLE
  * ============================================================================
  *
- * This file describes:
+ * Execution syntax expresses execution intent.
  *
- *     WHAT execution is requested.
- *
- * It does NOT describe:
- *
- *     HOW execution is implemented.
- *
- * Therefore this grammar MUST NOT encode:
+ * It MUST NOT permanently encode:
  *
  *     - a particular CPU;
+ *     - a particular core;
+ *     - a particular thread;
  *     - a particular GPU;
- *     - a particular QPU;
  *     - a particular FPGA;
  *     - a particular ASIC;
- *     - a vendor;
- *     - a device identifier;
+ *     - a particular QPU;
+ *     - a particular simulator;
+ *     - a particular vendor;
+ *     - a physical device identifier;
  *     - a physical address;
  *     - a fixed topology;
  *     - a fixed number of devices;
  *     - a fixed number of qubits;
  *     - a fixed number of cores;
  *     - a fixed number of threads;
- *     - a fixed amount of memory;
+ *     - a fixed memory capacity;
  *     - a fixed network size;
- *     - a fixed queue size;
- *     - a fixed execution duration;
+ *     - a fixed accelerator count;
  *     - a fixed schedule;
  *     - a fixed placement;
- *     - a fixed backend;
- *     - a fixed simulator.
+ *     - a fixed deployment topology.
+ *
+ * Such information belongs to the appropriate semantic/resource/target/
+ * hardware/runtime layer.
  *
  * ============================================================================
- *
  * POCO-REAF
  * ============================================================================
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Execution syntax is therefore expressed in terms of:
+ * The source program describes portable computation and execution intent.
  *
- *     intent
- *     context
+ * Physical realization is selected later from:
+ *
+ *     capabilities
  *     requirements
  *     constraints
  *     preferences
  *     hints
- *     capabilities
- *     resources
- *     placement intent
- *     scheduling intent
- *     dispatch intent
- *     lifecycle intent
- *     deployment intent
+ *     resource availability
+ *     target context
+ *     scheduling context
+ *     placement context
+ *     dispatch context
+ *     deployment context
  *
- * rather than machine-specific implementation details.
+ * Therefore:
+ *
+ *     source semantics != physical realization
  *
  * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - execution declaration syntax;
- *     - execution regions;
- *     - execution requests;
- *     - execution contexts;
- *     - execution requirements;
- *     - execution constraints;
- *     - execution preferences;
- *     - execution hints;
- *     - execution capability requirements;
- *     - execution resource requirements;
- *     - execution placement intent;
- *     - execution scheduling intent;
- *     - execution dispatch intent;
- *     - execution synchronization intent;
- *     - execution lifecycle intent;
- *     - execution result-binding intent;
- *     - execution failure-policy intent;
- *     - execution retry-policy intent;
- *     - execution deployment intent;
- *     - execution option/property composition.
+ *     - execution declaration composition;
+ *     - execution subject composition;
+ *     - execution-level optional context;
+ *     - the boundary between an executable computation and execution intent;
+ *     - integration points for specialized execution grammars.
  *
  * THIS FILE DOES NOT OWN:
  *
  *     - lexical tokens;
  *     - identifiers;
- *     - qualified names;
- *     - ordinary expressions;
+ *     - expressions;
  *     - types;
+ *     - declarations;
  *     - functions;
  *     - modules;
- *     - quantum operations;
- *     - quantum IR;
- *     - classical IR;
- *     - HDL semantics;
- *     - hardware discovery;
- *     - resource discovery;
- *     - routing algorithms;
- *     - scheduling algorithms;
- *     - optimization algorithms;
+ *     - execution-context internals;
+ *     - scheduling syntax;
+ *     - placement syntax;
+ *     - dispatch syntax;
+ *     - synchronization syntax;
+ *     - deployment syntax;
+ *     - runtime capability syntax;
+ *     - distributed execution syntax;
+ *     - resource semantics;
+ *     - hardware semantics;
+ *     - target semantics;
+ *     - routing;
+ *     - optimization;
+ *     - QEC;
+ *     - ZQN;
  *     - resilience algorithms;
+ *     - classical IR;
+ *     - quantum::ir;
+ *     - HDL IR;
  *     - runtime implementation;
- *     - deployment implementation;
- *     - device communication;
  *     - backend APIs.
  *
  * ============================================================================
- *
- * CANONICAL COMPOSITION CONTRACT
+ * DEPENDENCY RULE
  * ============================================================================
  *
- * This is a parser grammar.
+ * Lower-level language constructs are imported.
  *
- * The canonical parser composition layer is responsible for importing this
- * grammar and exposing:
+ * Specialized execution grammars are composed here only through their public
+ * entry points where doing so does not create a dependency cycle.
  *
- *     executionDeclaration
+ * The dependency direction is:
  *
- * where execution syntax is legal in the source language.
- *
- * This file MUST NOT define:
- *
- *     lexer grammar ...
- *     grammar Zamani ...
- *     lexer tokens
- *     EOF entry points
- *
- * ============================================================================
- *
- * EXISTING LEXER CONTRACT
- * ============================================================================
- *
- * This grammar intentionally uses only execution-related tokens already
- * established by the canonical lexer where such tokens exist, including:
- *
- *     EXECUTE
- *     DEPLOY
- *     SIMULATE
- *     ASYNC
- *     AWAIT
- *     SPAWN
- *     PARALLEL
- *     WITH
- *     IN
- *
- * Open-ended semantic names such as:
- *
- *     target
- *     resource
- *     capability
- *     schedule
- *     dispatch
- *     placement
- *     retry
- *     result
- *
- * remain identifiers unless the canonical lexer later makes them reserved.
- *
- * This avoids forcing an ever-growing closed vocabulary into the lexer.
- *
- * ============================================================================
- *
- * IMPORTANT QUANTUM INTEGRATION
- * ============================================================================
- *
- * `grammar/antlr/Quantum.g4` already defines:
- *
- *     quantumExecutionRegion
- *         : EXECUTE quantumBlock
- *         ;
- *
- * Therefore this file MUST NOT redefine that rule or steal ownership of
- * quantum operation syntax.
- *
- * Quantum execution remains:
- *
- *     quantum source intent
+ *     ZamaniLexer
  *          |
  *          v
- *     quantum::ir
+ *        Core
  *          |
  *          v
- *     routing
+ *   execution subgrammars
  *          |
  *          v
- *     scheduling
+ *      Execution
  *          |
  *          v
- *     execution
+ *   canonical parser
  *
- * This grammar supplies generic execution intent around semantic program
- * execution. It does not replace the quantum execution region.
- *
- * ============================================================================
- *
- * COMPILATION INTEGRATION
- * ============================================================================
- *
- * Compilation intent belongs to:
- *
- *     grammar/compile/
- *
- * Execution begins after semantic compilation intent has been resolved.
- *
- * Therefore:
- *
- *     compile != execute
- *
- * and:
- *
- *     compilation target != execution target
- *
- * Execution may consume the result of compilation, but this grammar does not
- * prescribe how compilation is performed.
+ * Execution subgrammars MUST NOT depend on Execution merely to define their
+ * own concepts.
  *
  * ============================================================================
- *
- * SCHEDULING INTEGRATION
+ * IMPORTANT OWNERSHIP SEPARATION
  * ============================================================================
  *
- * Scheduling intent is represented here only as source intent.
+ * The following files remain authoritative for their respective concepts:
  *
- * This grammar does NOT implement:
+ *     execution-context.g4
+ *         execution context structure
  *
- *     ASAP
- *     ALAP
- *     list scheduling
- *     critical-path scheduling
- *     RCPSP
- *     resource allocation
- *     timing calculation
- *     dependency analysis
- *     pulse scheduling
+ *     scheduling.g4
+ *         scheduling intent
  *
- * Those belong to:
+ *     placement.g4
+ *         placement intent
  *
- *     quantum scheduling
- *     generic scheduling
- *     hardware timing
+ *     dispatch.g4
+ *         dispatch intent
  *
- * ============================================================================
+ *     synchronization.g4
+ *         execution-level synchronization intent
  *
- * ROUTING INTEGRATION
- * ============================================================================
+ *     runtime-capabilities.g4
+ *         runtime capability declarations/requirements
  *
- * Placement/routing requests are represented as intent.
+ *     deployment.g4
+ *         deployment intent
  *
- * This file does not:
+ *     distributed/remote-execution.g4
+ *         distributed remote-execution semantics
  *
- *     - map logical qubits;
- *     - select physical qubits;
- *     - construct topology;
- *     - insert SWAPs;
- *     - choose paths;
- *     - bind hardware locations.
+ * Execution.g4 MUST NOT copy those grammars.
  *
  * ============================================================================
- *
- * RESILIENCE INTEGRATION
+ * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Retry/failure/recovery syntax expresses policy intent only.
+ * Quantum syntax remains owned by the quantum grammar/frontend.
  *
- * Resilience remains responsible for deciding whether and how recovery occurs.
+ * This grammar does not define:
  *
- * This grammar does NOT implement:
+ *     qubits
+ *     registers
+ *     gates
+ *     measurements
+ *     quantum states
+ *     physical qubits
+ *     quantum topology
+ *     pulses
+ *     QEC
+ *     noise
+ *     ZQN
  *
- *     retry algorithms;
- *     recovery algorithms;
- *     fault diagnosis;
- *     QEC;
- *     mitigation;
- *     backend switching;
- *     checkpoint reconstruction.
+ * Quantum source syntax is lowered through the canonical quantum semantic
+ * pipeline and ultimately into quantum::ir.
  *
- * ============================================================================
+ * This grammar may execute a quantum computation because the execution subject
+ * is deliberately generic.
  *
- * RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Execution may reference resource and capability expressions.
- *
- * It does not discover or allocate those resources.
- *
- * The semantic/resource layers determine:
- *
- *     whether a requirement is satisfiable;
- *     whether a capability exists;
- *     whether a constraint can be satisfied;
- *     whether a preference can be honored.
+ * It does not become a second quantum IR.
  *
  * ============================================================================
+ * CLASSICAL / HDL / DISTRIBUTED / AI BOUNDARY
+ * ============================================================================
  *
+ * The execution subject is intentionally domain-neutral.
+ *
+ * It can refer to semantic computations originating from:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     distributed
+ *     AI
+ *     data
+ *     accelerator
+ *     networking
+ *     cryptographic
+ *     scientific
+ *     future
+ *
+ * domains without enumerating those domains here.
+ *
+ * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * There are deliberately no finite parser limits.
+ * No grammar-level finite machine limit exists here.
  *
- * The grammar contains no:
+ * This grammar contains no:
  *
- *     MAX_DEVICES
- *     MAX_TARGETS
- *     MAX_RESOURCES
+ *     MAX_QUBITS
  *     MAX_CORES
  *     MAX_THREADS
- *     MAX_QUBITS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_DEVICES
  *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_RESOURCES
+ *     MAX_TARGETS
  *     MAX_JOBS
- *     MAX_STAGES
- *     MAX_RETRIES
- *     MAX_DEPLOYMENTS
+ *     MAX_EXECUTIONS
  *     MAX_ARGUMENTS
+ *     MAX_CONTEXT_ENTRIES
  *
- * Repetition is represented structurally through parser repetition.
+ * Repetition and nesting are represented structurally by the grammar.
  *
- * Actual limits belong to:
+ * Actual resource limits are determined by:
  *
- *     - resource analysis;
+ *     - parser resource policy;
+ *     - semantic analysis;
  *     - compiler policy;
- *     - execution policy;
- *     - operating-system limits;
- *     - runtime limits;
+ *     - resource management;
  *     - target capabilities;
- *     - explicitly supplied user constraints.
+ *     - runtime policy;
+ *     - operating-system limits;
+ *     - explicitly declared constraints.
  *
  * ============================================================================
- *
  * DETERMINISM
  * ============================================================================
  *
- * Parsing is deterministic with respect to the canonical token stream.
- *
- * This file contains:
+ * This grammar contains:
  *
  *     - no semantic actions;
- *     - no runtime calls;
- *     - no device discovery;
+ *     - no predicates;
  *     - no filesystem operations;
  *     - no network operations;
- *     - no random selection;
- *     - no backend selection;
+ *     - no hardware discovery;
+ *     - no runtime calls;
+ *     - no random behavior;
  *     - no mutable global state.
  *
- * ============================================================================
+ * Given the same canonical token stream, parsing is deterministic.
  *
+ * ============================================================================
  * SAFETY
  * ============================================================================
  *
- * This grammar contains no Rust implementation code.
+ * This grammar contains no Rust code and therefore introduces no unsafe
+ * operations.
  *
- * Compiler/runtime implementation requirements:
+ * Generated/parser integration MUST remain compatible with:
  *
  *     Rust 1.97
  *     Rust 1.97.1
  *     Rust 2021
- *     stable Rust
- *     no unsafe Rust
+ *     safe Rust only
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * PARSER GRAMMAR DECLARATION
+ * No `unsafe` implementation is required by this grammar.
+ *
  * ============================================================================
  */
 
@@ -442,29 +362,27 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+import Core, ExecutionContext;
+
 
 /*
  * ============================================================================
- * 1. EXECUTION DECLARATION
+ * 1. CANONICAL EXECUTION DECLARATION
  * ============================================================================
  *
- * Canonical forms:
+ * Canonical conceptual forms:
  *
- *     execute expression;
+ *     execute computation;
  *
- *     execute {
- *         ...
- *     }
- *
- *     execute expression with {
+ *     execute computation with {
  *         ...
  *     };
  *
- * The expression identifies the semantic computation.
+ * The computation is an existing language expression/semantic subject.
  *
- * The execution context describes intent around its realization.
+ * Execution does not itself compile, schedule, route, deploy, or dispatch the
+ * computation.
  *
- * Nothing here causes execution during parsing.
  * ============================================================================
  */
 
@@ -477,11 +395,19 @@ executionDeclaration
  * ============================================================================
  * 2. EXECUTION REQUEST
  * ============================================================================
+ *
+ * The execution request consists of:
+ *
+ *     subject
+ *     optional execution context
+ *
+ * The context is deliberately delegated to ExecutionContext.
+ *
+ * ============================================================================
  */
 
 executionRequest
-    : executionSubject
-      executionContext?
+    : executionSubject executionContextAttachment?
     ;
 
 
@@ -490,18 +416,25 @@ executionRequest
  * 3. EXECUTION SUBJECT
  * ============================================================================
  *
- * The subject remains an ordinary expression.
+ * The subject is an already-described computation.
  *
- * This permits:
+ * It is intentionally expression-based so this grammar does not need a
+ * closed list of computational domains.
  *
- *     execute main();
- *     execute circuit;
- *     execute program;
- *     execute expression;
- *     execute pipeline;
- *     execute module::entry;
+ * Examples of semantic subjects include:
  *
- * without creating a closed list of executable entities.
+ *     function calls
+ *     named computations
+ *     pipelines
+ *     classical programs
+ *     quantum programs
+ *     hybrid programs
+ *     hardware computations
+ *     distributed computations
+ *     AI pipelines
+ *     accelerator computations
+ *
+ * The expression grammar remains authoritative for expression syntax.
  *
  * ============================================================================
  */
@@ -514,777 +447,39 @@ executionSubject
 
 /*
  * ============================================================================
- * 4. EXECUTION CONTEXT
+ * 4. OPTIONAL EXECUTION CONTEXT
  * ============================================================================
  *
- * The context is an unordered semantic collection.
+ * `with` is the explicit syntactic attachment point for execution context.
  *
- * Its meaning is determined by semantic analysis.
+ * ExecutionContext owns the internal context representation.
  *
- * The grammar intentionally permits multiple categories without assigning
- * execution priority.
+ * Execution.g4 MUST NOT redefine:
+ *
+ *     context keys
+ *     context values
+ *     context objects
+ *     context lists
+ *     context comparisons
+ *
  * ============================================================================
  */
 
-executionContext
-    : WITH executionContextBody
-    | executionContextBody
-    ;
-
-
-executionContextBody
-    : LBRACE executionClause+ RBRACE
+executionContextAttachment
+    : WITH executionContext
     ;
 
 
 /*
  * ============================================================================
- * 5. EXECUTION CLAUSES
+ * 5. EXECUTION TERMINATOR
  * ============================================================================
- */
-
-executionClause
-    : executionRequirement
-    | executionConstraint
-    | executionPreference
-    | executionHint
-    | executionCapability
-    | executionResource
-    | executionTarget
-    | executionPlacement
-    | executionSchedule
-    | executionDispatch
-    | executionSynchronization
-    | executionLifecycle
-    | executionResult
-    | executionFailurePolicy
-    | executionRetryPolicy
-    | executionOption
-    | executionProperty
-    ;
-
-
-/*
- * ============================================================================
- * 6. REQUIREMENTS
- * ============================================================================
- *
- * A requirement is mandatory.
- *
- * Example:
- *
- *     requires quantum;
- *
- *     requires expression;
- *
- * The grammar does not decide whether the requirement can be satisfied.
- * ============================================================================
- */
-
-executionRequirement
-    : REQUIRES executionValue executionClauseTerminator?
-    ;
-
-
-executionValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 7. CONSTRAINTS
- * ============================================================================
- *
- * Constraints restrict acceptable realizations.
- *
- * They do not select one physical implementation.
- * ============================================================================
- */
-
-executionConstraint
-    : identifier executionConstraintOperator expression executionClauseTerminator?
-    ;
-
-
-executionConstraintOperator
-    : EQUALS
-    | NOT_EQUALS
-    | LESS_THAN
-    | LESS_THAN_EQUAL
-    | GREATER_THAN
-    | GREATER_THAN_EQUAL
-    ;
-
-
-/*
- * ============================================================================
- * 8. PREFERENCES
- * ============================================================================
- *
- * Preferences are non-mandatory guidance.
- *
- * Failure to honor a preference MUST NOT automatically imply semantic
- * execution failure.
- * ============================================================================
- */
-
-executionPreference
-    : identifier executionPreferenceValue executionClauseTerminator?
-    ;
-
-
-executionPreferenceValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 9. HINTS
- * ============================================================================
- *
- * Hints are advisory implementation information.
- *
- * A hint must never become a hidden semantic requirement merely because a
- * backend happens to understand it.
- * ============================================================================
- */
-
-executionHint
-    : identifier executionHintValue executionClauseTerminator?
-    ;
-
-
-executionHintValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 10. CAPABILITY REQUIREMENTS
- * ============================================================================
- *
- * Capability names are open-ended.
- *
- * Examples:
- *
- *     capability quantum;
- *     capability tensor;
- *     capability realtime;
- *     capability distributed;
- *
- * The parser does not enumerate possible future capabilities.
- * ============================================================================
- */
-
-executionCapability
-    : identifier executionCapabilityValue executionClauseTerminator?
-    ;
-
-
-executionCapabilityValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 11. RESOURCE INTENT
- * ============================================================================
- *
- * Resource syntax describes semantic requirements.
- *
- * It does not allocate resources.
- *
- * Examples:
- *
- *     resource memory;
- *     resource quantum;
- *     resource accelerator;
- *
- * Resource quantities and limits are expressions.
- *
- * Therefore:
- *
- *     resource qubits >= required
- *
- * is possible without encoding a fixed machine size.
- * ============================================================================
- */
-
-executionResource
-    : identifier executionResourceValue executionClauseTerminator?
-    ;
-
-
-executionResourceValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 12. TARGET INTENT
- * ============================================================================
- *
- * A target is an abstract execution target.
- *
- * It may identify:
- *
- *     a target class;
- *     a semantic environment;
- *     a target profile;
- *     a target expression;
- *     a deployment target;
- *
- * It does NOT automatically identify a physical machine.
- *
- * ============================================================================
- */
-
-executionTarget
-    : identifier executionTargetValue executionClauseTerminator?
-    ;
-
-
-executionTargetValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 13. PLACEMENT INTENT
- * ============================================================================
- *
- * Placement specifies where execution is preferred or constrained to occur.
- *
- * It does not perform placement.
- *
- * Examples can be represented through open semantic properties:
- *
- *     placement { locality: ...; affinity: ...; }
- *
- * ============================================================================
- */
-
-executionPlacement
-    : identifier executionPlacementValue executionClauseTerminator?
-    ;
-
-
-executionPlacementValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 14. SCHEDULING INTENT
- * ============================================================================
- *
- * Scheduling syntax expresses requirements or preferences for temporal
- * realization.
- *
- * It does NOT calculate a schedule.
- *
- * Examples of semantic properties:
- *
- *     scheduling { policy: ...; priority: ...; deadline: ...; }
- *
- * The grammar does not enumerate scheduling algorithms.
- * ============================================================================
- */
-
-executionSchedule
-    : identifier executionScheduleValue executionClauseTerminator?
-    ;
-
-
-executionScheduleValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 15. DISPATCH INTENT
- * ============================================================================
- *
- * Dispatch determines semantic intent for handing a compiled/executable
- * representation to an execution environment.
- *
- * Actual dispatch is a runtime concern.
- * ============================================================================
- */
-
-executionDispatch
-    : identifier executionDispatchValue executionClauseTerminator?
-    ;
-
-
-executionDispatchValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 16. SYNCHRONIZATION
- * ============================================================================
- *
- * Synchronization expresses an ordering or completion requirement.
- *
- * It does not introduce synchronization primitives into the generated target
- * by itself.
- * ============================================================================
- */
-
-executionSynchronization
-    : identifier executionSynchronizationValue executionClauseTerminator?
-    ;
-
-
-executionSynchronizationValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 17. LIFECYCLE
- * ============================================================================
- *
- * Lifecycle intent can describe semantic states such as:
- *
- *     start
- *     pause
- *     resume
- *     stop
- *     suspend
- *     terminate
- *
- * These words remain identifiers so future lifecycle states do not require
- * lexer changes.
- * ============================================================================
- */
-
-executionLifecycle
-    : identifier executionLifecycleValue executionClauseTerminator?
-    ;
-
-
-executionLifecycleValue
-    : expression?
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 18. RESULT BINDING
- * ============================================================================
- *
- * Execution results may be bound to ordinary language expressions through
- * result-binding syntax.
- *
- * The exact result type is determined semantically.
  *
- * This is important for:
- *
- *     classical results;
- *     quantum measurements;
- *     accelerator results;
- *     distributed results;
- *     HDL/hardware observations;
- *     future computational domains.
- * ============================================================================
- */
-
-executionResult
-    : identifier executionResultValue executionClauseTerminator?
-    ;
-
-
-executionResultValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 19. FAILURE POLICY
- * ============================================================================
- *
- * Failure policy is declarative intent.
- *
- * It does not implement recovery.
- *
- * This keeps execution grammar separate from resilience.
- * ============================================================================
- */
-
-executionFailurePolicy
-    : identifier executionFailurePolicyValue executionClauseTerminator?
-    ;
-
-
-executionFailurePolicyValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 20. RETRY POLICY
- * ============================================================================
- *
- * Retry is deliberately represented as policy data.
- *
- * No finite retry count is encoded by this grammar.
- *
- * A caller may express:
- *
- *     retry { ... }
- *
- * and semantic/resilience layers determine:
- *
- *     whether retry is legal;
- *     how many attempts are allowed;
- *     whether state can be recovered;
- *     whether retry preserves semantics.
- * ============================================================================
- */
-
-executionRetryPolicy
-    : identifier executionRetryPolicyValue executionClauseTerminator?
-    ;
-
-
-executionRetryPolicyValue
-    : expression
-    | executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 21. GENERIC EXECUTION OPTION
- * ============================================================================
- *
- * Open-ended options permit future execution capabilities without forcing
- * every future capability into this grammar.
- *
- * Options are data.
- *
- * They are not automatically authoritative.
- * ============================================================================
- */
-
-executionOption
-    : identifier
-      (
-          ASSIGN expression
-        | executionPropertyBlock
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 22. GENERIC PROPERTY
- * ============================================================================
- *
- * Generic properties are the principal extensibility mechanism.
- *
- * This is important for POCO-REAF because future execution technologies can
- * introduce semantic properties without requiring a closed list of hardware
- * concepts.
- * ============================================================================
- */
-
-executionProperty
-    : identifier
-      executionPropertyValue
-      executionClauseTerminator?
-    ;
-
-
-executionPropertyValue
-    : COLON expression
-    | ASSIGN expression
-    | executionPropertyBlock
-    | expression
-    ;
-
-
-executionPropertyBlock
-    : LBRACE executionPropertyEntry+ RBRACE
-    ;
-
-
-executionPropertyEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-executionPropertyName
-    : identifier
-    | qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 23. ASYNCHRONOUS EXECUTION
- * ============================================================================
- *
- * The existing ASYNC keyword is reused.
- *
- * Async execution is source intent.
- *
- * It does not prescribe a particular runtime task model.
- * ============================================================================
- */
-
-executionAsyncDeclaration
-    : ASYNC EXECUTE executionRequest executionTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 24. SPAWNED EXECUTION
- * ============================================================================
- *
- * The existing SPAWN keyword is reused.
- *
- * No fixed task/thread/process model is assumed.
- * ============================================================================
- */
-
-executionSpawnDeclaration
-    : SPAWN executionRequest executionTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 25. AWAIT
- * ============================================================================
- *
- * The existing AWAIT keyword expresses waiting for an execution value or
- * completion boundary.
- *
- * Runtime semantics belong downstream.
- * ============================================================================
- */
-
-executionAwaitStatement
-    : AWAIT expression executionTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 26. PARALLEL EXECUTION
- * ============================================================================
- *
- * PARALLEL expresses semantic concurrency/parallelism intent.
- *
- * It does not mean:
- *
- *     one thread;
- *     one core;
- *     one GPU;
- *     one device;
- *     one node.
- *
- * The execution planner determines realization.
- * ============================================================================
- */
-
-executionParallelDeclaration
-    : PARALLEL executionParallelSubject executionParallelContext?
-      executionTerminator?
-    ;
-
-
-executionParallelSubject
-    : expression
-    | blockExpression
-    ;
-
-
-executionParallelContext
-    : WITH executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 27. DEPLOYMENT
- * ============================================================================
- *
- * Deployment is distinct from execution.
- *
- * Deployment describes intent to make an executable computation available in
- * an execution environment.
- *
- * It does not perform deployment.
- *
- * The existing DEPLOY keyword is used.
- * ============================================================================
- */
-
-executionDeploymentDeclaration
-    : DEPLOY executionDeploymentSubject executionDeploymentContext?
-      executionTerminator?
-    ;
-
-
-executionDeploymentSubject
-    : expression
-    | blockExpression
-    ;
-
-
-executionDeploymentContext
-    : WITH executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 28. SIMULATION
- * ============================================================================
- *
- * Simulation is an execution strategy.
- *
- * It is NOT part of the canonical quantum semantics.
- *
- * The existing SIMULATE keyword is reused.
- *
- * The simulator implementation remains downstream.
- * ============================================================================
- */
-
-executionSimulationDeclaration
-    : SIMULATE executionSimulationSubject executionSimulationContext?
-      executionTerminator?
-    ;
-
-
-executionSimulationSubject
-    : expression
-    | blockExpression
-    ;
-
-
-executionSimulationContext
-    : WITH executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 29. EXECUTION PIPELINE
- * ============================================================================
- *
- * This syntax permits an execution request to describe an ordered semantic
- * pipeline without encoding implementation algorithms.
- *
- * Example:
- *
- *     execute program with {
- *         pipeline: [stage_a, stage_b, stage_c];
- *     };
- *
- * The actual lowering and stage execution remain compiler/runtime concerns.
- * ============================================================================
- */
-
-executionPipeline
-    : identifier executionPipelineBody executionClauseTerminator?
-    ;
-
-
-executionPipelineBody
-    : executionPropertyBlock
-    ;
-
-
-/*
- * ============================================================================
- * 30. EXECUTION BOUNDARY
- * ============================================================================
- *
- * An execution boundary explicitly marks a semantic handoff.
- *
- * It may be used by frontend/semantic tooling to distinguish ordinary source
- * computation from execution intent.
- *
- * The boundary does not perform a runtime operation.
- * ============================================================================
- */
-
-executionBoundary
-    : EXECUTE executionBoundarySubject executionTerminator?
-    ;
-
-
-executionBoundarySubject
-    : blockExpression
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 31. EXECUTION HANDLE
- * ============================================================================
- *
- * A handle is represented as an ordinary expression.
- *
- * No runtime handle representation is hard-coded here.
- * ============================================================================
- */
-
-executionHandle
-    : identifier
-    | qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 32. EXECUTION TERMINATORS
- * ============================================================================
+ * Execution declarations use the canonical statement terminator from the
+ * language grammar.
  *
- * Semicolon remains optional at the execution boundary where the canonical
- * source grammar permits expression/block termination.
+ * The canonical token vocabulary owns the actual token.
  *
- * The parser does not impose a global statement-termination policy.
  * ============================================================================
  */
 
@@ -1293,518 +488,40 @@ executionTerminator
     ;
 
 
-executionClauseTerminator
-    : SEMI
-    ;
-
-
 /*
  * ============================================================================
- * 33. EXECUTION PROPERTY LIST
+ * 6. SPECIALIZED EXECUTION INTEGRATION CONTRACT
  * ============================================================================
  *
- * Named properties remain extensible.
- * ============================================================================
- */
-
-executionPropertyList
-    : executionPropertyEntry+
-    ;
-
-
-/*
- * ============================================================================
- * 34. EXECUTION REQUIREMENT BLOCK
- * ============================================================================
+ * Specialized execution grammars are NOT duplicated here.
  *
- * This dedicated form allows multiple requirements while keeping requirement
- * semantics distinct from preferences and hints.
- * ============================================================================
- */
-
-executionRequirementBlock
-    : LBRACE executionRequirementEntry+ RBRACE
-    ;
-
-
-executionRequirementEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 35. EXECUTION CONSTRAINT BLOCK
- * ============================================================================
- */
-
-executionConstraintBlock
-    : LBRACE executionConstraintEntry+ RBRACE
-    ;
-
-
-executionConstraintEntry
-    : executionPropertyName
-      executionConstraintOperator
-      expression
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 36. EXECUTION PREFERENCE BLOCK
- * ============================================================================
- */
-
-executionPreferenceBlock
-    : LBRACE executionPreferenceEntry+ RBRACE
-    ;
-
-
-executionPreferenceEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 37. EXECUTION HINT BLOCK
- * ============================================================================
- */
-
-executionHintBlock
-    : LBRACE executionHintEntry+ RBRACE
-    ;
-
-
-executionHintEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 38. EXECUTION RESOURCE BLOCK
- * ============================================================================
- */
-
-executionResourceBlock
-    : LBRACE executionResourceEntry+ RBRACE
-    ;
-
-
-executionResourceEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 39. EXECUTION CAPABILITY BLOCK
- * ============================================================================
- */
-
-executionCapabilityBlock
-    : LBRACE executionCapabilityEntry+ RBRACE
-    ;
-
-
-executionCapabilityEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 40. EXECUTION TARGET BLOCK
- * ============================================================================
- */
-
-executionTargetBlock
-    : LBRACE executionTargetEntry+ RBRACE
-    ;
-
-
-executionTargetEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 41. EXECUTION PLACEMENT BLOCK
- * ============================================================================
- */
-
-executionPlacementBlock
-    : LBRACE executionPlacementEntry+ RBRACE
-    ;
-
-
-executionPlacementEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 42. EXECUTION SCHEDULE BLOCK
- * ============================================================================
- */
-
-executionScheduleBlock
-    : LBRACE executionScheduleEntry+ RBRACE
-    ;
-
-
-executionScheduleEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 43. EXECUTION DISPATCH BLOCK
- * ============================================================================
- */
-
-executionDispatchBlock
-    : LBRACE executionDispatchEntry+ RBRACE
-    ;
-
-
-executionDispatchEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 44. EXECUTION SYNCHRONIZATION BLOCK
- * ============================================================================
- */
-
-executionSynchronizationBlock
-    : LBRACE executionSynchronizationEntry+ RBRACE
-    ;
-
-
-executionSynchronizationEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 45. EXECUTION RESULT BLOCK
- * ============================================================================
- */
-
-executionResultBlock
-    : LBRACE executionResultEntry+ RBRACE
-    ;
-
-
-executionResultEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 46. EXECUTION FAILURE BLOCK
- * ============================================================================
- */
-
-executionFailureBlock
-    : LBRACE executionFailureEntry+ RBRACE
-    ;
-
-
-executionFailureEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 47. EXECUTION RETRY BLOCK
- * ============================================================================
- */
-
-executionRetryBlock
-    : LBRACE executionRetryEntry+ RBRACE
-    ;
-
-
-executionRetryEntry
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 48. EXECUTION CONTEXT PROPERTY COMPOSITION
- * ============================================================================
+ * Their public entry points are consumed by the canonical parser composition
+ * layer according to the language's source-level placement rules.
  *
- * This generic rule is intentionally available to semantic adapters.
+ * The authoritative ownership is:
  *
- * It allows future execution domains to carry structured information without
- * modifying this grammar every time a new accelerator or execution model is
- * introduced.
- * ============================================================================
- */
-
-executionContextProperty
-    : executionPropertyName
-      (
-          COLON expression
-        | ASSIGN expression
-        | executionPropertyBlock
-      )
-      executionClauseTerminator?
-    ;
-
-
-/*
- * ============================================================================
- * 49. EXECUTION CONTEXT LIST
- * ============================================================================
- */
-
-executionContextList
-    : executionContextProperty+
-    ;
-
-
-/*
- * ============================================================================
- * 50. OPEN EXECUTION EXTENSION
- * ============================================================================
+ *     execution-context.g4
+ *         -> executionContext
  *
- * Extension points are named semantic properties rather than hard-coded
- * machine concepts.
+ *     scheduling.g4
+ *         -> scheduling intent
  *
- * This is the mechanism that lets future computing substrates participate in
- * execution without changing the fundamental execution model.
- * ============================================================================
- */
-
-executionExtension
-    : identifier
-      executionExtensionBody
-      executionClauseTerminator?
-    ;
-
-
-executionExtensionBody
-    : executionPropertyBlock
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 51. SOURCE-LEVEL EXECUTION POLICY
- * ============================================================================
+ *     placement.g4
+ *         -> placement intent
  *
- * Policy is declarative data.
+ *     dispatch.g4
+ *         -> dispatchDeclaration
  *
- * The runtime/resilience/compiler layers interpret it.
- * ============================================================================
- */
-
-executionPolicy
-    : identifier
-      executionPolicyBody
-      executionClauseTerminator?
-    ;
-
-
-executionPolicyBody
-    : executionPropertyBlock
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 52. EXECUTION SESSION INTENT
- * ============================================================================
+ *     synchronization.g4
+ *         -> synchronization intent
  *
- * A session is a semantic grouping, not a runtime object definition.
- * ============================================================================
- */
-
-executionSession
-    : identifier
-      executionSessionBody
-      executionClauseTerminator?
-    ;
-
-
-executionSessionBody
-    : executionPropertyBlock
-    | blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 53. EXECUTION PROGRAM COMPOSITION
- * ============================================================================
+ *     runtime-capabilities.g4
+ *         -> runtime capability intent
  *
- * This rule allows multiple execution requests to be represented as a
- * structured execution composition.
+ *     deployment.g4
+ *         -> deployment intent
  *
- * There is no fixed number of execution units.
- * ============================================================================
- */
-
-executionComposition
-    : identifier executionCompositionBody
-    ;
-
-
-executionCompositionBody
-    : LBRACE executionCompositionEntry+ RBRACE
-    ;
-
-
-executionCompositionEntry
-    : executionDeclaration
-    | executionAsyncDeclaration
-    | executionSpawnDeclaration
-    | executionAwaitStatement
-    | executionParallelDeclaration
-    | executionDeploymentDeclaration
-    | executionSimulationDeclaration
-    | executionExtension
-    ;
-
-
-/*
- * ============================================================================
- * 54. EXECUTION PROGRAM
- * ============================================================================
- *
- * A complete execution specification may contain arbitrary numbers of
- * execution entries.
- *
- * ============================================================================
- */
-
-executionProgram
-    : executionCompositionEntry+
-    ;
-
-
-executionCompositionEntry
-    : executionDeclaration
-    | executionAsyncDeclaration
-    | executionSpawnDeclaration
-    | executionAwaitStatement
-    | executionParallelDeclaration
-    | executionDeploymentDeclaration
-    | executionSimulationDeclaration
-    | executionExtension
-    ;
-
-
-/*
- * ============================================================================
- * 55. SEMANTIC INTEGRATION CONTRACT
- * ============================================================================
- *
- * The AST produced from this grammar MUST preserve:
- *
- *     1. execution subject;
- *     2. execution context;
- *     3. requirement;
- *     4. constraint;
- *     5. preference;
- *     6. hint;
- *     7. capability;
- *     8. resource;
- *     9. target;
- *    10. placement;
- *    11. scheduling;
- *    12. dispatch;
- *    13. synchronization;
- *    14. lifecycle;
- *    15. result;
- *    16. failure policy;
- *    17. retry policy;
- *    18. extension properties.
- *
- * Semantic analysis MUST NOT collapse these categories into a single
- * untyped key/value dictionary.
+ * This file does not reproduce those rules.
  *
  * ============================================================================
  */
@@ -1812,56 +529,40 @@ executionCompositionEntry
 
 /*
  * ============================================================================
- * 56. IR INTEGRATION CONTRACT
+ * 7. SEMANTIC INTEGRATION CONTRACT
  * ============================================================================
  *
- * This grammar does NOT construct IR.
+ * Parsing produces syntax nodes only.
  *
- * Semantic lowering may produce:
+ * Conceptual AST:
  *
- *     classical execution intent
- *     quantum execution intent
- *     HDL execution intent
- *     distributed execution intent
- *     accelerator execution intent
+ *     ExecutionDeclaration
+ *         |
+ *         +--> Subject
+ *         |
+ *         +--> Optional ExecutionContext
  *
- * Quantum computations MUST ultimately enter the canonical:
+ * Semantic analysis transforms that structure into execution intent.
  *
- *     quantum::ir
+ * Conceptually:
  *
- * boundary.
+ *     ExecutionDeclaration
+ *             |
+ *             v
+ *     ExecutionIntent
+ *             |
+ *       +-----+------+-------------------+
+ *       |            |                   |
+ *       v            v                   v
+ *   capability    resources           target
+ *     analysis      analysis          resolution
+ *       |            |                   |
+ *       +------------+-------------------+
+ *                    |
+ *                    v
+ *          canonical semantic model
  *
- * This file MUST NOT create:
- *
- *     QuantumGate
- *     QuantumCircuit
- *     QubitId
- *     PhysicalQubitId
- *     schedule nodes
- *     routing nodes
- *     hardware instructions
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 57. HARDWARE INTEGRATION CONTRACT
- * ============================================================================
- *
- * Hardware realization occurs downstream.
- *
- * An execution target expression may refer semantically to:
- *
- *     target classes;
- *     capability sets;
- *     resource requirements;
- *     deployment environments;
- *     hardware descriptions;
- *     runtime-discovered targets.
- *
- * The grammar itself does not resolve any of these.
+ * No runtime action occurs during parsing.
  *
  * ============================================================================
  */
@@ -1869,50 +570,38 @@ executionCompositionEntry
 
 /*
  * ============================================================================
- * 58. RUNTIME INTEGRATION CONTRACT
+ * 8. IR INTEGRATION
  * ============================================================================
  *
- * Runtime receives a validated execution plan rather than a parse tree.
+ * Execution.g4 does not define an IR.
  *
- * The runtime is responsible for:
+ * The subject is lowered through the appropriate canonical semantic pipeline:
  *
- *     dispatch;
- *     lifecycle;
- *     cancellation;
- *     synchronization;
- *     result collection;
- *     resource interaction;
- *     backend interaction;
- *     runtime failures.
+ *     classical subject
+ *          -> classical semantic/IR pipeline
  *
- * None of these operations occur in the parser.
+ *     quantum subject
+ *          -> quantum frontend
+ *          -> quantum::ir
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 59. RESILIENCE INTEGRATION CONTRACT
- * ============================================================================
+ *     HDL subject
+ *          -> HDL/hardware semantic representation
  *
- * Execution failure/retry declarations are inputs to resilience policy.
+ *     distributed subject
+ *          -> distributed semantic representation
  *
- * They do not implement:
+ *     hybrid subject
+ *          -> combined canonical semantic representation
  *
- *     retry;
- *     rollback;
- *     resume;
- *     remap;
- *     reroute;
- *     reschedule;
- *     recompile;
- *     reoptimize;
- *     backend switching;
- *     quarantine;
- *     abort.
+ * Execution intent remains orthogonal to those representations.
  *
- * Those decisions belong to the resilience subsystem.
+ * Therefore:
+ *
+ *     grammar -> AST -> semantic model -> IR
+ *
+ * and never:
+ *
+ *     grammar -> custom execution IR -> other IR
  *
  * ============================================================================
  */
@@ -1920,55 +609,21 @@ executionCompositionEntry
 
 /*
  * ============================================================================
- * 60. SECURITY CONTRACT
+ * 9. COMPILATION INTEGRATION
  * ============================================================================
  *
- * Execution grammar contains no:
+ * Compilation is separate from execution.
  *
- *     filesystem access;
- *     network access;
- *     process spawning;
- *     device access;
- *     shell execution;
- *     dynamic code execution;
- *     credential access.
+ * Execution.g4 may identify the computation whose compiled representation is
+ * ultimately executed, but it does not define:
  *
- * `spawn` is source-level execution intent only.
+ *     compiler targets
+ *     optimization passes
+ *     lowering algorithms
+ *     code generation
+ *     target-specific instruction selection
  *
- * Security/capability analysis must authorize actual runtime operations.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 61. SCALABILITY CONTRACT
- * ============================================================================
- *
- * The following are intentionally absent:
- *
- *     MAX_EXECUTIONS
- *     MAX_TARGETS
- *     MAX_DEVICES
- *     MAX_RESOURCES
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_QUBITS
- *     MAX_NODES
- *     MAX_JOBS
- *     MAX_PIPELINE_STAGES
- *     MAX_RETRIES
- *     MAX_DEPLOYMENTS
- *
- * The only practical limits are imposed by:
- *
- *     parser/runtime memory;
- *     address space;
- *     compilation resources;
- *     explicit policy;
- *     execution resources;
- *     target capabilities.
+ * Those remain owned by grammar/compile and the compiler implementation.
  *
  * ============================================================================
  */
@@ -1976,46 +631,25 @@ executionCompositionEntry
 
 /*
  * ============================================================================
- * 62. DETERMINISM CONTRACT
+ * 10. SCHEDULING INTEGRATION
  * ============================================================================
  *
- * The parser preserves source order.
+ * Execution.g4 does not implement scheduling.
  *
- * It does not decide:
+ * It does not calculate:
  *
- *     which target wins;
- *     which resource wins;
- *     which backend wins;
- *     which schedule wins;
- *     which route wins;
- *     which recovery action wins.
+ *     start times
+ *     end times
+ *     dependencies
+ *     resource occupancy
+ *     critical paths
+ *     ASAP schedules
+ *     ALAP schedules
+ *     RCPSP schedules
+ *     pulse schedules
  *
- * Those decisions belong to deterministic policy/planning layers downstream.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 63. COMPATIBILITY CONTRACT
- * ============================================================================
- *
- * This grammar is additive and open-ended.
- *
- * New execution capabilities should preferably be introduced as:
- *
- *     identifier + structured property/value
- *
- * rather than by expanding a finite keyword inventory.
- *
- * Existing canonical lexer tokens remain authoritative.
- *
- * A future reserved execution keyword must be introduced centrally in:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * and then consumed here.
+ * Scheduling intent is consumed from the dedicated scheduling grammar and
+ * resolved later by the scheduling subsystem.
  *
  * ============================================================================
  */
@@ -2023,78 +657,22 @@ executionCompositionEntry
 
 /*
  * ============================================================================
- * 64. TEST CONTRACT
+ * 11. PLACEMENT / ROUTING INTEGRATION
  * ============================================================================
  *
- * Positive tests MUST cover:
+ * Execution.g4 does not map computation onto physical resources.
  *
- *     execute expression;
- *     execute block;
- *     execute expression with { ... };
- *     async execute ...;
- *     spawn ...;
- *     await ...;
- *     parallel ...;
- *     deploy ...;
- *     simulate ...;
- *     requirements;
- *     constraints;
- *     preferences;
- *     hints;
- *     capabilities;
- *     resources;
- *     targets;
- *     placement;
- *     scheduling;
- *     dispatch;
- *     synchronization;
- *     lifecycle;
- *     result binding;
- *     failure policies;
- *     retry policies;
- *     nested property blocks;
- *     open-ended extensions.
+ * In particular it does not select:
  *
- * Negative tests MUST cover:
+ *     CPU cores
+ *     GPU devices
+ *     FPGA regions
+ *     ASIC instances
+ *     QPU qubits
+ *     cluster nodes
+ *     network paths
  *
- *     empty execution context;
- *     malformed property blocks;
- *     malformed constraints;
- *     missing execution subject;
- *     missing required values;
- *     malformed assignment;
- *     malformed nested contexts.
- *
- * Boundary tests MUST cover:
- *
- *     zero execution declarations in optional contexts;
- *     very large numbers of clauses;
- *     very large property blocks;
- *     deeply nested valid contexts;
- *     very large execution programs.
- *
- * Scalability tests MUST verify the grammar contains no source-level limit
- * related to:
- *
- *     qubits;
- *     cores;
- *     threads;
- *     devices;
- *     nodes;
- *     resources;
- *     memory;
- *     execution units.
- *
- * Cross-domain tests MUST cover:
- *
- *     classical + execution;
- *     quantum + execution;
- *     HDL + execution;
- *     distributed + execution;
- *     AI + execution;
- *     hybrid + execution;
- *     quantum + classical + distributed + execution;
- *     quantum + HDL + hardware + execution.
+ * Placement and routing are downstream realization concerns.
  *
  * ============================================================================
  */
@@ -2102,72 +680,319 @@ executionCompositionEntry
 
 /*
  * ============================================================================
- * 65. COMPLETION CRITERIA
+ * 12. DISPATCH INTEGRATION
  * ============================================================================
  *
- * This file is complete when:
+ * Dispatch remains owned by:
  *
- *     [ ] It compiles against the canonical ZamaniLexer.
+ *     grammar/execution/dispatch.g4
  *
- *     [ ] It introduces no lexer rules.
+ * Execution.g4 MUST NOT reimplement dispatch declarations.
  *
- *     [ ] It introduces no duplicate identifier rule.
+ * The canonical integration contract is:
  *
- *     [ ] It introduces no duplicate expression rule.
+ *     execution
+ *          |
+ *          +--> semantic execution intent
+ *                         |
+ *                         v
+ *                    dispatch intent
+ *                         |
+ *                         v
+ *                    dispatch plan
  *
- *     [ ] It introduces no duplicate type rule.
+ * The dispatch plan is not part of the source grammar AST.
  *
- *     [ ] It introduces no duplicate block rule.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 13. DEPLOYMENT INTEGRATION
+ * ============================================================================
  *
- *     [ ] It introduces no physical hardware assumption.
+ * Deployment remains owned by:
  *
- *     [ ] It introduces no machine-size limit.
+ *     grammar/execution/deployment.g4
  *
- *     [ ] It introduces no quantum-size limit.
+ * Execution.g4 does not define:
  *
- *     [ ] It introduces no scheduling algorithm.
+ *     replicas
+ *     rollout algorithms
+ *     service deployment
+ *     provider APIs
+ *     cluster topology
+ *     node allocation
+ *     container implementation
+ *     cloud implementation
  *
- *     [ ] It introduces no routing algorithm.
+ * Deployment intent is resolved downstream.
  *
- *     [ ] It introduces no optimization algorithm.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 14. RESILIENCE INTEGRATION
+ * ============================================================================
  *
- *     [ ] It introduces no resilience algorithm.
+ * Execution syntax may eventually carry references to resilience policy
+ * through the execution-context system.
  *
- *     [ ] It does not construct IR.
+ * Execution.g4 does not implement:
  *
- *     [ ] It does not execute code.
+ *     retry algorithms
+ *     rollback
+ *     checkpoint reconstruction
+ *     fault diagnosis
+ *     mitigation
+ *     QEC
+ *     ZQN
+ *     backend switching
  *
- *     [ ] It preserves execution intent in the AST.
+ * Those remain outside the grammar.
  *
- *     [ ] It supports arbitrary extensible execution properties.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 15. RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
  *
- *     [ ] It supports classical execution.
+ * Resource and capability information is interpreted semantically.
  *
- *     [ ] It supports quantum execution integration.
+ * Execution.g4 does not define physical resource inventories.
  *
- *     [ ] It supports HDL/hardware execution integration.
+ * For example, source semantics may require:
  *
- *     [ ] It supports distributed execution integration.
+ *     quantum capability
  *
- *     [ ] It supports heterogeneous execution integration.
+ * without specifying:
  *
- *     [ ] It supports asynchronous execution intent.
+ *     a particular QPU
+ *     a particular vendor
+ *     a particular qubit identifier
+ *     a fixed qubit count
  *
- *     [ ] It supports parallel execution intent.
+ * Similarly, a computation may express a resource relationship without
+ * embedding a fixed machine capacity.
  *
- *     [ ] It supports deployment intent.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 16. FUTURE EXTENSIBILITY
+ * ============================================================================
  *
- *     [ ] It supports simulation intent.
+ * New computational domains MUST NOT require modification to this grammar
+ * merely because a new kind of machine becomes available.
  *
- *     [ ] It supports execution policy.
+ * A future domain should be able to provide its own semantic grammar and
+ * integrate through:
  *
- *     [ ] It supports failure/retry intent without implementing recovery.
+ *     executionSubject
+ *     expression
+ *     executionContext
  *
- *     [ ] It remains compatible with POCO-REAF.
+ * or the canonical parser composition layer.
  *
- *     [ ] Compiler implementation remains Rust 1.97/1.97.1 compatible.
+ * The execution grammar therefore remains stable while the set of realizable
+ * computing technologies grows.
  *
- *     [ ] Compiler implementation uses no unsafe Rust.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 17. ERROR-BOUNDARY CONTRACT
+ * ============================================================================
+ *
+ * Syntax errors belong to the parser.
+ *
+ * Semantic errors belong to semantic analysis.
+ *
+ * Examples:
+ *
+ *     Syntax error:
+ *         malformed execution declaration
+ *
+ *     Semantic error:
+ *         referenced computation does not exist
+ *
+ *     Type error:
+ *         execution subject has an invalid semantic type
+ *
+ *     Capability error:
+ *         required capability cannot be satisfied
+ *
+ *     Resource error:
+ *         declared requirement cannot be satisfied
+ *
+ *     Target error:
+ *         no compatible target exists
+ *
+ *     Runtime error:
+ *         execution environment fails
+ *
+ * Execution.g4 MUST NOT attempt to collapse these distinct error classes.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 18. DETERMINISM / REPRODUCIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The parser must produce equivalent syntax structure for equivalent canonical
+ * token streams.
+ *
+ * There is no:
+ *
+ *     timestamp generation
+ *     UUID generation
+ *     device discovery
+ *     backend selection
+ *     randomization
+ *     runtime inspection
+ *
+ * inside this grammar.
+ *
+ * Reproducibility is therefore delegated to deterministic downstream semantic
+ * and compilation policies.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 19. SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar scales structurally rather than by enumerating machine sizes.
+ *
+ * A single execution subject can represent a tiny computation or a semantic
+ * computation whose eventual realization consumes arbitrarily many resources.
+ *
+ * The grammar imposes no fixed limit on:
+ *
+ *     program size
+ *     expression complexity
+ *     context nesting
+ *     resource cardinality
+ *     target cardinality
+ *     device cardinality
+ *     node cardinality
+ *     qubit cardinality
+ *     accelerator cardinality
+ *
+ * Subject only to actual parser/runtime memory and time resources and to
+ * explicitly defined implementation safeguards.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 20. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * No machine-size constant is present.
+ *
+ * No:
+ *
+ *     MAX_*
+ *     device ID
+ *     physical address
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     QPU count
+ *     qubit count
+ *     node count
+ *     memory size
+ *     topology
+ *     queue size
+ *
+ * is encoded in this grammar.
+ *
+ * Any future machine-specific requirement MUST be represented through the
+ * appropriate target/resource/capability/constraint system rather than added
+ * as a grammar-level limit.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 21. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete only when:
+ *
+ * [ ] It parses the canonical execution declaration.
+ *
+ * [ ] It reuses the canonical lexer.
+ *
+ * [ ] It reuses Core expression/block syntax.
+ *
+ * [ ] It reuses ExecutionContext rather than duplicating context syntax.
+ *
+ * [ ] It contains no machine-size limits.
+ *
+ * [ ] It contains no hardware discovery.
+ *
+ * [ ] It contains no runtime behavior.
+ *
+ * [ ] It contains no scheduling implementation.
+ *
+ * [ ] It contains no placement implementation.
+ *
+ * [ ] It contains no routing implementation.
+ *
+ * [ ] It contains no dispatch implementation.
+ *
+ * [ ] It contains no deployment implementation.
+ *
+ * [ ] It does not duplicate quantum syntax.
+ *
+ * [ ] It does not create a second quantum IR.
+ *
+ * [ ] It has no semantic actions.
+ *
+ * [ ] It has no unsafe Rust dependency.
+ *
+ * [ ] It passes parser generation with the canonical ZamaniLexer.
+ *
+ * [ ] It passes Rust 1.97 / 1.97.1 compilation of the generated parser.
+ *
+ * [ ] Positive execution tests pass.
+ *
+ * [ ] Negative syntax tests pass.
+ *
+ * [ ] Cross-domain execution subjects parse.
+ *
+ * [ ] Large/repeated execution structures do not encounter artificial
+ *     grammar-level machine limits.
+ *
+ * [ ] Parser output is deterministic.
+ *
+ * [ ] AST lowering has a documented ExecutionDeclaration ->
+ *     ExecutionIntent contract.
+ *
+ * [ ] No downstream file needs to modify the fundamental ownership model
+ *     established here.
  *
  * ============================================================================
  */
