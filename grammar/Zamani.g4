@@ -1,1295 +1,2349 @@
-// Zamani.g4 — Comprehensive high-performance mathematical programming language
-// COMPLETE SPECIFICATION with full mathematics support:
-// - Linear algebra, matrix operations, tensor computing
-// - Symbolic mathematics, calculus, differential equations
-// - Statistical distributions, probability, stochastic processes
-// - Complex numbers, polynomial arithmetic, number theory
-// - Numeric methods, FFT, signal processing, optimization
-// - Quantum-enhanced mathematics, nano-computational primitives
+/*
+ * Zamani.g4
+ * ============================================================================
+ * Canonical Zamani language grammar.
+ *
+ * Language goals
+ * --------------
+ * - Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+ * - Scale from the smallest supported computation to arbitrarily large
+ *   computations subject only to program semantics and available resources.
+ * - One language for classical, quantum, hybrid, HDL, hardware/software
+ *   co-design, AI/ML, data, distributed, networking, security, scientific,
+ *   embedded, accelerator and future computational domains.
+ *
+ * Architectural boundary
+ * ----------------------
+ * This grammar defines SOURCE SYNTAX.
+ *
+ * It does NOT define:
+ *   - machine limits
+ *   - physical topology
+ *   - device identifiers
+ *   - physical qubit mappings
+ *   - scheduling algorithms
+ *   - routing algorithms
+ *   - QEC implementation
+ *   - ZQN fault/noise implementation
+ *   - HAL implementation
+ *   - calibration implementation
+ *   - optimizer implementation
+ *   - compiler backend implementation
+ *   - runtime implementation
+ *
+ * Canonical downstream pipeline:
+ *
+ *   Zamani source
+ *       |
+ *       v
+ *   Zamani.g4
+ *       |
+ *       v
+ *   Lexer / Parser
+ *       |
+ *       v
+ *   Domain-neutral AST
+ *       |
+ *       v
+ *   Structural + semantic analysis
+ *       |
+ *       v
+ *   Canonical semantic model
+ *       |
+ *       +----------------------+----------------------+
+ *       |                      |                      |
+ *       v                      v                      v
+ *   Classical IR          quantum::ir          HDL/Hardware IR
+ *       |                      |                      |
+ *       +----------------------+----------------------+
+ *                              |
+ *                              v
+ *                  optimization / lowering
+ *                              |
+ *                  routing / scheduling
+ *                              |
+ *                    resilience / QEC / ZQN
+ *                              |
+ *                             HAL
+ *                              |
+ *                       target realization
+ *
+ * IMPORTANT:
+ *   quantum::ir remains the canonical quantum semantic boundary.
+ *   This grammar does not create a second quantum IR.
+ *
+ * Rust implementation policy:
+ *   - Rust 2021
+ *   - Rust 1.97.1 baseline
+ *   - safe Rust only
+ *   - no unsafe language construct
+ *
+ * Hard-coding policy:
+ *   The grammar MUST NOT establish universal limits for:
+ *     qubits, CPUs, cores, threads, GPUs, FPGAs, nodes, memory,
+ *     tensor dimensions, vector widths, registers, accelerators,
+ *     timelines, processes, devices, network links, or similar resources.
+ *
+ * Literal program values are allowed. Universal implementation limits are not.
+ *
+ * This file is the canonical ANTLR composition/root grammar.
+ * Domain-specific documentation and contracts live under grammar/.
+ */
 
 grammar Zamani;
 
-program : docComment? declaration* EOF ;
 
-// ==========================================================================
-// DECLARATIONS
-// ==========================================================================
+/* ============================================================================
+ * 1. COMPILATION UNIT
+ * ========================================================================== */
 
-declaration
-    : moduleDecl
-    | importDecl
-    | exportDecl
-    | functionDecl
-    | structDecl
-    | enumDecl
-    | traitDecl
-    | implDecl
-    | classDecl
-    | interfaceDecl
-    | recordDecl
-    | typeAlias
-    | constDecl
-    | quantumCircuitDecl
-    | nanoAgentDecl
-    | languageDecl
-    | effectDecl
-    | globalUsing
-    | attributeDecl
-    | hdlModuleDecl
-    | pluginDecl
-    | macroDecl
-    | packageDecl
-    | mathVectorDecl
-    | mathMatrixDecl
-    | mathTensorDecl
-    | mathSymbolicDecl
+program
+    : documentation* attribute* compilationUnitItem* EOF
+    ;
+
+compilationUnitItem
+    : packageDeclaration
+    | moduleDeclaration
+    | importDeclaration
+    | exportDeclaration
+    | usingDeclaration
+    | languageDeclaration
+    | dialectDeclaration
+    | declaration
     | statement
     ;
 
-// Package Manifest
-packageDecl: 'package' IDENTIFIER '{' packageField* '}' ;
-packageField
-    : 'version' ':' STRING ';'
-    | 'depends' ':' '[' STRING (',' STRING)* ']' ';'
-    | 'repository' ':' STRING ';'
-    | 'license' ':' STRING ';'
+
+/* ============================================================================
+ * 2. DOCUMENTATION / ATTRIBUTES
+ * ========================================================================== */
+
+documentation
+    : DOC_COMMENT
     ;
 
-// ==========================================================================
-// DOCUMENTATION & ANNOTATIONS
-// ==========================================================================
-
-docComment: (DOC_COMMENT)+ ;
-
-attributeDecl: annotation+ declaration ;
-
-annotation: '@' IDENTIFIER ('(' annotationValue? ')')? ;
-
-annotationValue
-    : literal
-    | IDENTIFIER
-    | annotation
-    | annotationValue ',' annotationValue
+attribute
+    : '@' qualifiedName
+    | '@' qualifiedName '(' argumentList? ')'
+    | '@' qualifiedName '{' attributeEntry* '}'
     ;
 
-// ==========================================================================
-// MODULE SYSTEM
-// ==========================================================================
-
-moduleDecl: 'module' IDENTIFIER ('::' IDENTIFIER)* ('{' declaration* '}')? ';' ;
-
-importDecl
-    : 'import' IDENTIFIER ';'
-    | 'import' IDENTIFIER 'as' IDENTIFIER ';'
-    | 'import' '{' importList '}' 'from' STRING ';'
-    | 'import' '*' 'as' IDENTIFIER 'from' STRING ';'
+attributeEntry
+    : identifier ':' expression ';'?
+    | identifier '=' expression ';'?
     ;
 
-importList: IDENTIFIER (',' IDENTIFIER)* ;
-
-exportDecl
-    : 'export' IDENTIFIER ('to' IDENTIFIER)? ';'
-    | 'export' '{' exportList '}' ';'
-    | 'export' '*' 'from' STRING ';'
+languageDeclaration
+    : 'language' qualifiedName versionClause? block
     ;
 
-exportList: IDENTIFIER ('as' IDENTIFIER)? (',' IDENTIFIER ('as' IDENTIFIER)?)* ;
+versionClause
+    : 'version' versionLiteral
+    ;
 
-globalUsing: 'global' 'using' IDENTIFIER ';' ;
+versionLiteral
+    : INTEGER_LITERAL
+    | DECIMAL_LITERAL
+    | STRING_LITERAL
+    ;
 
-usingDirective: 'using' IDENTIFIER ';' ;
 
-// ==========================================================================
-// VISIBILITY & MODIFIERS
-// ==========================================================================
+/* ============================================================================
+ * 3. PACKAGES / MODULES / IMPORTS
+ * ========================================================================== */
 
-visibilityModifier: 'public' | 'private' | 'protected' | 'internal' ;
+packageDeclaration
+    : 'package' qualifiedName versionClause? packageBody?
+    ;
+
+packageBody
+    : '{' packageItem* '}'
+    ;
+
+packageItem
+    : packageProperty
+    | dependencyDeclaration
+    | moduleDeclaration
+    | declaration
+    ;
+
+packageProperty
+    : identifier ':' expression ';'
+    ;
+
+dependencyDeclaration
+    : 'depends' qualifiedName versionConstraint? dependencyOptions? ';'
+    ;
+
+dependencyOptions
+    : '{' attributeEntry* '}'
+    ;
+
+versionConstraint
+    : STRING_LITERAL
+    | versionLiteral
+    | comparisonVersion+
+    ;
+
+comparisonVersion
+    : comparisonOperator versionLiteral
+    ;
+
+moduleDeclaration
+    : visibility? 'module' qualifiedName genericParameterList? moduleBody?
+    ;
+
+moduleBody
+    : '{' compilationUnitItem* '}'
+    ;
+
+importDeclaration
+    : 'import' importPath importAlias? ';'
+    | 'import' '{' importSpecifierList '}' 'from' importPath ';'
+    | 'import' '*' 'as' identifier 'from' importPath ';'
+    ;
+
+importPath
+    : qualifiedName
+    | STRING_LITERAL
+    ;
+
+importAlias
+    : 'as' identifier
+    ;
+
+importSpecifierList
+    : importSpecifier (',' importSpecifier)*
+    ;
+
+importSpecifier
+    : identifier importAlias?
+    ;
+
+exportDeclaration
+    : 'export' exportSpecifier ';'
+    | 'export' '{' exportSpecifierList '}' ';'
+    | 'export' '*' 'from' importPath ';'
+    ;
+
+exportSpecifier
+    : qualifiedName exportAlias?
+    ;
+
+exportAlias
+    : 'as' identifier
+    ;
+
+exportSpecifierList
+    : exportSpecifier (',' exportSpecifier)*
+    ;
+
+usingDeclaration
+    : 'use' qualifiedName ('as' identifier)? ';'
+    ;
+
+
+/* ============================================================================
+ * 4. VISIBILITY / MODIFIERS
+ * ========================================================================== */
+
+visibility
+    : 'pub'
+    | 'public'
+    | 'private'
+    | 'protected'
+    | 'internal'
+    ;
 
 modifier
-    : 'pub' | 'private' | 'protected' | 'static' | 'const' | 'async'
-    | 'unsafe' | 'inline' | 'override' | 'final' | 'abstract'
-    | 'mut' | 'sealed' | 'partial' | 'extern' | 'volatile'
-    | 'simd' | 'vectorized' | 'gpu' | 'parallel' | 'pure' | 'immutable'
+    : 'static'
+    | 'const'
+    | 'async'
+    | 'inline'
+    | 'override'
+    | 'final'
+    | 'abstract'
+    | 'mut'
+    | 'sealed'
+    | 'partial'
+    | 'extern'
+    | 'volatile'
+    | 'pure'
+    | 'immutable'
+    | 'parallel'
+    | 'vectorized'
+    | 'simd'
     ;
 
-modifiers: modifier+ ;
-
-// ==========================================================================
-// FUNCTION DECLARATIONS
-// ==========================================================================
-
-functionDecl
-    : visibilityModifier? modifier* 'fn' IDENTIFIER genericParameters? '(' parameterList? ')'
-      ('->' typeExpr)? effectClause? contractClause? block
+modifierList
+    : modifier+
     ;
 
-contractClause: 'contract' IDENTIFIER ('{' contractBody '}')?;
 
-contractBody
-    : ('requires' '(' expression ')' ';')*
-    ('ensures' '(' expression ')' ';')*
-    ('invariant' '(' expression ')' ';')*
+/* ============================================================================
+ * 5. DECLARATIONS
+ * ========================================================================== */
+
+declaration
+    : annotatedDeclaration
+    | functionDeclaration
+    | structDeclaration
+    | recordDeclaration
+    | enumDeclaration
+    | classDeclaration
+    | interfaceDeclaration
+    | traitDeclaration
+    | implementationDeclaration
+    | typeAliasDeclaration
+    | typeDeclaration
+    | constantDeclaration
+    | resourceDeclaration
+    | capabilityDeclaration
+    | effectDeclaration
+    | macroDeclaration
+    | foreignDeclaration
+    | domainDeclaration
+    | hardwareDeclaration
+    | modelDeclaration
+    | dataDeclaration
+    | hdlDeclaration
+    | quantumDeclaration
+    | dialectDeclaration
     ;
 
-effectClause: 'with' 'effects' '{' effectName (',' effectName)* '}' ;
-
-effectName: IDENTIFIER ;
-
-lambdaExpression: '|' parameterList? '|' ('->' typeExpr)? block ;
-
-asyncFunctionDecl: 'async' 'fn' IDENTIFIER genericParameters? '(' parameterList? ')'
-                   ('->' typeExpr)? block ;
-
-// ==========================================================================
-// VARIABLE DECLARATIONS
-// ==========================================================================
-
-variableDeclaration
-    : varKeyword IDENTIFIER (':' typeExpr)? '=' expression ';'
-    | varKeyword IDENTIFIER ':' typeExpr ';'
+annotatedDeclaration
+    : attribute+ declaration
     ;
 
-varKeyword: 'let' | 'const' | 'var' ;
 
-constDecl: 'const' IDENTIFIER ':' typeExpr '=' expression ';' ;
+/* ============================================================================
+ * 6. FUNCTIONS
+ * ========================================================================== */
 
-// ==========================================================================
-// CONTROL FLOW STATEMENTS
-// ==========================================================================
-
-statement
-    : variableDeclaration
-    | conditionalStatement
-    | loopStatement
-    | tryCatchFinally
-    | matchStatement
-    | throwStatement
-    | returnStatement
-    | breakStatement
-    | continueStatement
-    | blockStatement
-    | unsafeBlock
-    | effectHandleStmt
-    | quantumStmt
-    | nanoStmt
-    | mtsStmt
-    | sankofaStmt
-    | invokeStmt
-    | foreignFunctionCall
-    | dataStmt
-    | databaseOp
-    | webService
-    | mathStmt
-    | expression ';'
-    | ';'
+functionDeclaration
+    : visibility?
+      modifierList?
+      'fn'
+      identifier
+      genericParameterList?
+      '(' parameterList? ')'
+      returnTypeClause?
+      whereClause?
+      effectClause?
+      contractClause*
+      block
     ;
 
-blockStatement: block ;
-
-conditionalStatement
-    : 'if' expression block ('else' 'if' expression block)* ('else' block)?
+returnTypeClause
+    : '->' typeExpression
     ;
 
-loopStatement
-    : 'while' expression block
-    | 'do' block 'while' expression ';'
-    | 'for' IDENTIFIER 'in' expression block
-    | 'for' '(' varKeyword IDENTIFIER ':' typeExpr '=' expression ';' expression ';' expression ')' block
-    | 'forall' IDENTIFIER 'in' expression 'when' expression block  // Quantified loop
-    | 'foreach' IDENTIFIER 'in' expression 'parallel' block         // Parallel loop
-    | 'reduce' IDENTIFIER 'in' expression 'with' expression block   // Reduction loop
+parameterList
+    : parameter (',' parameter)* ','?
     ;
 
-loopControl: 'break' ';' | 'continue' ';' ;
-
-breakStatement: 'break' ';' ;
-
-continueStatement: 'continue' ';' ;
-
-returnStatement: 'return' expression? ';' ;
-
-throwStatement: 'throw' expression ';' ;
-
-matchStatement: 'match' expression '{' matchCase+ '}' ;
-
-matchCase: 'case' pattern ('when' expression)? '=>' (expression | block) ;
-
-pattern
-    : literal
-    | IDENTIFIER
-    | '_'
-    | tuplePattern
-    | arrayPattern
-    | listPattern
-    | orPattern
-    | typePattern
+parameter
+    : modifierList?
+      'self'
+    | modifierList?
+      identifier
+      (':' typeExpression)?
+      defaultValue?
     ;
 
-tuplePattern: '(' pattern (',' pattern)+ ')' ;
-
-arrayPattern: '[' pattern (',' pattern)* ']' ;
-
-listPattern: '[' pattern (',' pattern)* ']' ('...' pattern)? ;
-
-orPattern: pattern '|' pattern ;
-
-typePattern: IDENTIFIER ':' typeExpr ;
-
-unsafeBlock: 'unsafe' ('!' | block | '(' 'evas' ':' expression ')' block) ;
-
-tryCatchFinally
-    : 'try' block catchClause* finallyClause?
+defaultValue
+    : '=' expression
     ;
 
-catchClause: 'catch' '(' IDENTIFIER (':' typeExpr)? ')' block ;
-
-finallyClause: 'finally' block ;
-
-block: '{' statement* '}' ;
-
-// ==========================================================================
-// MATHEMATICAL STATEMENTS & OPERATIONS
-// ==========================================================================
-
-mathStmt
-    : vectorOp
-    | matrixOp
-    | tensorOp
-    | symbolicOp
-    | calcOp
-    | statisticalOp
-    | numericOp
-    | signalOp
-    | optimizationStmt
+genericParameterList
+    : '<' genericParameter (',' genericParameter)* ','? '>'
     ;
 
-// Vector Operations
-vectorOp
-    : 'vectorize' IDENTIFIER '(' argumentList? ')' ';'
-    | 'map' lambdaExpression 'over' IDENTIFIER ';'
-    | 'zip' IDENTIFIER 'with' IDENTIFIER 'using' lambdaExpression ';'
-    | 'reduce' IDENTIFIER 'with' lambdaExpression ';'
-    | 'scan' IDENTIFIER 'with' lambdaExpression ';'
-    | 'filter' IDENTIFIER 'by' lambdaExpression ';'
+genericParameter
+    : identifier genericBoundList?
+    | 'const' identifier ':' typeExpression
+    | 'type' identifier genericBoundList?
     ;
 
-// Matrix Operations
-matrixOp
-    : 'transpose' IDENTIFIER ';'
-    | 'inverse' IDENTIFIER ';'
-    | 'determinant' IDENTIFIER ';'
-    | 'rank' IDENTIFIER ';'
-    | 'eigenvalues' IDENTIFIER ';'
-    | 'eigenvectors' IDENTIFIER ';'
-    | 'svd' IDENTIFIER ';'
-    | 'qr' IDENTIFIER ';'
-    | 'lu' IDENTIFIER ';'
-    | 'cholesky' IDENTIFIER ';'
-    | 'norm' IDENTIFIER ('(' STRING ')')? ';'
-    | 'trace' IDENTIFIER ';'
-    | 'lu_solve' IDENTIFIER ',' IDENTIFIER ';'
-    | 'qr_solve' IDENTIFIER ',' IDENTIFIER ';'
+genericBoundList
+    : ':' typeBound ('+' typeBound)*
     ;
 
-// Tensor Operations
-tensorOp
-    : 'contract' IDENTIFIER (',' IDENTIFIER)+ ('over' IDENTIFIER (',' IDENTIFIER)*)? ';'
-    | 'einsum' STRING ('with' IDENTIFIER (',' IDENTIFIER)*)? ';'
-    | 'reshape' IDENTIFIER 'to' INTEGER (',' INTEGER)* ';'
-    | 'permute' IDENTIFIER 'axes' INTEGER (',' INTEGER)* ';'
-    | 'outer_product' IDENTIFIER ',' IDENTIFIER ';'
-    | 'inner_product' IDENTIFIER ',' IDENTIFIER ';'
-    | 'kronecker' IDENTIFIER ',' IDENTIFIER ';'
-    | 'hadamard' IDENTIFIER (',' IDENTIFIER)+ ';'  // Element-wise product
+typeBound
+    : qualifiedName
+    | lifetime
     ;
 
-// Symbolic Operations
-symbolicOp
-    : 'expand' expression ';'
-    | 'simplify' expression ';'
-    | 'factor' expression ';'
-    | 'collect' expression 'by' IDENTIFIER ';'
-    | 'substitute' IDENTIFIER 'with' expression 'in' expression ';'
-    | 'solve' expression ('for' IDENTIFIER)? ';'
-    | 'dsolve' expression ('for' IDENTIFIER)? ';'  // Differential equations
-    | 'series' expression 'around' expression 'order' INTEGER ';'  // Taylor series
-    | 'roots' expression ';'
-    | 'resultant' expression ',' expression ('wrt' IDENTIFIER)? ';'
-    | 'gcd' expression ',' expression ';'
-    | 'lcm' expression ',' expression ';'
+whereClause
+    : 'where' wherePredicate (',' wherePredicate)*
     ;
 
-// Calculus Operations
-calcOp
-    : 'diff' expression ('wrt' IDENTIFIER)? ';'
-    | 'integral' expression ('from' expression 'to' expression)? ';'
-    | 'limit' expression 'as' IDENTIFIER '->' expression ';'
-    | 'gradient' IDENTIFIER ';'
-    | 'jacobian' IDENTIFIER ';'
-    | 'hessian' IDENTIFIER ';'
-    | 'laplacian' IDENTIFIER ';'
-    | 'divergence' IDENTIFIER ';'
-    | 'curl' IDENTIFIER ';'
-    | 'directional_derivative' IDENTIFIER 'in' IDENTIFIER ';'
+wherePredicate
+    : typeExpression ':' typeBound ('+' typeBound)*
     ;
 
-// Statistical Operations
-statisticalOp
-    : 'mean' IDENTIFIER ';'
-    | 'median' IDENTIFIER ';'
-    | 'mode' IDENTIFIER ';'
-    | 'variance' IDENTIFIER ';'
-    | 'std_dev' IDENTIFIER ';'
-    | 'covariance' IDENTIFIER ',' IDENTIFIER ';'
-    | 'correlation' IDENTIFIER ',' IDENTIFIER ';'
-    | 'quantile' IDENTIFIER ',' DECIMAL ';'
-    | 'histogram' IDENTIFIER 'bins' INTEGER ';'
-    | 'pdf' IDENTIFIER 'dist' IDENTIFIER ';'
-    | 'cdf' IDENTIFIER 'dist' IDENTIFIER ';'
-    | 'sample' 'from' IDENTIFIER 'size' INTEGER ';'
-    | 'hypothesis_test' IDENTIFIER ',' IDENTIFIER 'test' STRING ';'
-    | 'anova' IDENTIFIER (',' IDENTIFIER)+ ';'
-    | 'regression' 'y' IDENTIFIER 'x' IDENTIFIER (',' IDENTIFIER)* ';'
-    | 'pca' IDENTIFIER 'components' INTEGER ';'
+effectClause
+    : 'with' 'effects' effectSet
     ;
 
-// Numeric Operations
-numericOp
-    : 'fft' IDENTIFIER ';'
-    | 'ifft' IDENTIFIER ';'
-    | 'rfft' IDENTIFIER ';'
-    | 'irfft' IDENTIFIER ';'
-    | 'convolve' IDENTIFIER ',' IDENTIFIER ';'
-    | 'correlate' IDENTIFIER ',' IDENTIFIER ';'
-    | 'interpolate' IDENTIFIER 'kind' STRING ';'
-    | 'differentiate' IDENTIFIER ('order' INTEGER)? ';'
-    | 'integrate' IDENTIFIER 'from' expression 'to' expression ';'
-    | 'quad' IDENTIFIER 'from' expression 'to' expression ';'
-    | 'quad_log' IDENTIFIER 'from' expression 'to' expression ';'
-    | 'quad_oscillatory' IDENTIFIER 'from' expression 'to' expression ';'
+effectSet
+    : '{' effectNameList? '}'
     ;
 
-// Signal Processing
-signalOp
-    : 'butter' 'order' INTEGER 'wn' DECIMAL ('btype' STRING)? ';'
-    | 'cheby1' 'order' INTEGER 'rp' DECIMAL 'wn' DECIMAL ';'
-    | 'cheby2' 'order' INTEGER 'rs' DECIMAL 'wn' DECIMAL ';'
-    | 'bessel' 'order' INTEGER 'wn' DECIMAL ';'
-    | 'ellip' 'order' INTEGER 'rp' DECIMAL 'rs' DECIMAL 'wn' DECIMAL ';'
-    | 'filter' IDENTIFIER 'signal' IDENTIFIER ';'
-    | 'welch' IDENTIFIER 'nperseg' INTEGER ';'
-    | 'spectrogram' IDENTIFIER ';'
+effectNameList
+    : effectName (',' effectName)*
     ;
 
-// Optimization Operations
-optimizationStmt
-    : 'minimize' expression ('subject' 'to' constraintList)? ('method' STRING)? ';'
-    | 'maximize' expression ('subject' 'to' constraintList)? ('method' STRING)? ';'
-    | 'gradient_descent' IDENTIFIER 'rate' DECIMAL 'iterations' INTEGER ';'
-    | 'newton_method' IDENTIFIER 'tolerance' DECIMAL ';'
-    | 'bisect' IDENTIFIER 'from' expression 'to' expression ';'
-    | 'secant' IDENTIFIER 'x0' expression 'x1' expression ';'
-    | 'brent' IDENTIFIER 'from' expression 'to' expression ';'
-    | 'linear_solve' IDENTIFIER ',' IDENTIFIER ';'
-    | 'least_squares' IDENTIFIER ',' IDENTIFIER ';'
-    | 'nonlinear_solve' expression ('initial' IDENTIFIER)? ';'
+effectName
+    : qualifiedName
     ;
 
-constraintList: constraintExpr (',' constraintExpr)* ;
-
-constraintExpr
-    : expression ('<=' | '>=' | '==' | '<' | '>') expression
+contractClause
+    : 'requires' expression ';'
+    | 'ensures' expression ';'
+    | 'invariant' expression ';'
     ;
 
-// ==========================================================================
-// MATHEMATICAL TYPE DECLARATIONS
-// ==========================================================================
 
-mathVectorDecl: 'vector' IDENTIFIER '<' typeExpr (',' INTEGER)? '>' ('=' vectorInit)? ';' ;
+/* ============================================================================
+ * 7. STRUCTS / RECORDS / ENUMS / CLASSES / TRAITS
+ * ========================================================================== */
 
-vectorInit
-    : '[' expression (',' expression)* ']'
-    | 'zeros' '(' INTEGER ')'
-    | 'ones' '(' INTEGER ')'
-    | 'range' '(' expression ',' expression (',' expression)? ')'
-    | 'linspace' '(' expression ',' expression ',' INTEGER ')'
-    | 'logspace' '(' expression ',' expression ',' INTEGER ')'
-    | 'random' '(' INTEGER ')'
-    | 'normal' '(' INTEGER ',' expression ',' expression ')'
+structDeclaration
+    : visibility?
+      'struct'
+      identifier
+      genericParameterList?
+      '{'
+      structField*
+      '}'
     ;
 
-mathMatrixDecl: 'matrix' IDENTIFIER '<' typeExpr (',' INTEGER ',' INTEGER)? '>' ('=' matrixInit)? ';' ;
-
-matrixInit
-    : '[[' (expression (',' expression)*)? (',' '[' (expression (',' expression)*)? ']')* ']]'
-    | 'zeros' '(' INTEGER ',' INTEGER ')'
-    | 'ones' '(' INTEGER ',' INTEGER ')'
-    | 'eye' '(' INTEGER (',' INTEGER)? ')'
-    | 'diag' '(' expression (',' INTEGER)? ')'
-    | 'random' '(' INTEGER ',' INTEGER ')'
-    | 'normal' '(' INTEGER ',' INTEGER ',' expression ',' expression ')'
-    | 'uniform' '(' INTEGER ',' INTEGER ',' expression ',' expression ')'
+structField
+    : visibility? identifier ':' typeExpression ','?
     ;
 
-mathTensorDecl: 'tensor' IDENTIFIER '<' typeExpr (',' INTEGER)+ '>' ('=' tensorInit)? ';' ;
-
-tensorInit
-    : 'zeros' '(' INTEGER (',' INTEGER)* ')'
-    | 'ones' '(' INTEGER (',' INTEGER)* ')'
-    | 'random' '(' INTEGER (',' INTEGER)* ')'
-    | 'normal' '(' INTEGER (',' INTEGER)* ',' expression ',' expression ')'
+recordDeclaration
+    : visibility?
+      'record'
+      identifier
+      genericParameterList?
+      '{'
+      structField*
+      '}'
     ;
 
-mathSymbolicDecl: 'sym' IDENTIFIER ('=' expression)? ';' ;
-
-// ==========================================================================
-// CLASS & OOP FEATURES
-// ==========================================================================
-
-classDecl
-    : modifier* 'class' IDENTIFIER genericParameters? extendsClause? implementsClause?
-      permitsClause? '{' classMember* '}'
+enumDeclaration
+    : visibility?
+      'enum'
+      identifier
+      genericParameterList?
+      '{'
+      enumVariant*
+      '}'
     ;
 
-extendsClause: 'extends' IDENTIFIER (',' IDENTIFIER)* ;
+enumVariant
+    : identifier
+    | identifier '(' typeList? ')'
+    | identifier '{' structField* '}'
+    ;
 
-implementsClause: 'implements' IDENTIFIER (',' IDENTIFIER)* ;
-
-permitsClause: 'permits' IDENTIFIER (',' IDENTIFIER)* ;
+classDeclaration
+    : visibility?
+      modifierList?
+      'class'
+      identifier
+      genericParameterList?
+      inheritanceClause?
+      interfaceClause?
+      '{'
+      classMember*
+      '}'
+    ;
 
 classMember
-    : propertyDef
-    | methodDef
-    | constructorDef
-    | destructorDef
-    | staticPropertyDef
-    | staticMethodDef
-    | innerClassDef
-    | eventDef
-    | indexerDef
-    | operatorOverload
-    | delegateDef
-    | initBlock
-    | staticBlock
+    : fieldDeclaration
+    | functionDeclaration
+    | constantDeclaration
+    | typeAliasDeclaration
+    | declaration
     ;
 
-propertyDef
-    : visibilityModifier? typeExpr IDENTIFIER ('{' propertyAccessor* '}' | '=' expression)? ';'
+fieldDeclaration
+    : visibility? modifierList? identifier ':' typeExpression ('=' expression)? ';'
     ;
 
-propertyAccessor
-    : 'get' ('(' ')' ('{' block '}' | '=>' expression))?
-    | 'set' ('(' IDENTIFIER ')' ('{' block '}' | '=>' expression))?
+inheritanceClause
+    : 'extends' typeExpression (',' typeExpression)*
     ;
 
-methodDef
-    : visibilityModifier? modifier* 'fn' IDENTIFIER genericParameters? '(' parameterList? ')'
-      ('->' typeExpr)? effectClause? block
+interfaceClause
+    : 'implements' typeExpression (',' typeExpression)*
     ;
 
-constructorDef: 'fn' IDENTIFIER '(' parameterList? ')' block ;
+interfaceDeclaration
+    : visibility?
+      'interface'
+      identifier
+      genericParameterList?
+      interfaceInheritanceClause?
+      '{'
+      interfaceMember*
+      '}'
+    ;
 
-destructorDef: 'destructor' '(' ')' block ;
-
-staticPropertyDef: 'static' visibilityModifier? typeExpr IDENTIFIER ('=' expression)? ';' ;
-
-staticMethodDef: 'static' visibilityModifier? 'fn' IDENTIFIER '(' parameterList? ')'
-                 ('->' typeExpr)? block ;
-
-innerClassDecl: 'class' IDENTIFIER '{' classMember* '}' ;
-
-eventDef: 'event' typeExpr IDENTIFIER ';' ;
-
-indexerDef: 'this' '[' parameterList? ']' '{' propertyAccessor+ '}' ;
-
-operatorOverload: 'operator' OPERATOR '(' parameterList? ')' block ;
-
-delegateDef: 'delegate' typeExpr? IDENTIFIER '(' parameterList? ')' ';' ;
-
-initBlock: 'init' '{' statement* '}' ;
-
-staticBlock: 'static' '{' statement* '}' ;
-
-// ==========================================================================
-// INTERFACE DECLARATIONS
-// ==========================================================================
-
-interfaceDecl
-    : modifier* 'interface' IDENTIFIER genericParameters? extendsClause? '{' interfaceMember* '}'
+interfaceInheritanceClause
+    : ':' typeExpression (',' typeExpression)*
     ;
 
 interfaceMember
-    : methodDef
-    | 'default' 'fn' IDENTIFIER '(' parameterList? ')' ('->' typeExpr)? block
-    | 'static' 'fn' IDENTIFIER '(' parameterList? ')' ('->' typeExpr)? block
-    | 'private' 'fn' IDENTIFIER '(' parameterList? ')' ('->' typeExpr)? block
-    | 'async' 'fn' IDENTIFIER '(' parameterList? ')' ('->' typeExpr)? block
+    : functionSignature
+    | associatedTypeDeclaration
+    | constantDeclaration
     ;
 
-// ==========================================================================
-// STRUCT & ENUM DECLARATIONS
-// ==========================================================================
-
-structDecl: 'struct' IDENTIFIER genericParameters? '{' structBody '}' ;
-
-structBody: (visibilityModifier? typeExpr IDENTIFIER ';')* ;
-
-enumDecl: 'enum' IDENTIFIER genericParameters? (':' typeExpr)? '{' enumBody '}' ;
-
-enumBody: enumMember (',' enumMember)* ;
-
-enumMember: IDENTIFIER ('(' argumentList? ')')? ;
-
-recordDecl: 'record' IDENTIFIER genericParameters? '(' parameterList? ')'
-            extendsClause? implementsClause? '{' recordBody? '}' ;
-
-recordBody: classMember* ;
-
-// ==========================================================================
-// TRAIT DECLARATIONS
-// ==========================================================================
-
-traitDecl: 'trait' IDENTIFIER genericParameters? '{' traitBody '}' ;
-
-traitBody: (methodDef | associatedType | constantDef)* ;
-
-associatedType: 'type' IDENTIFIER (':' typeConstraint)? ';' ;
-
-constantDef: 'const' IDENTIFIER ':' typeExpr '=' expression ';' ;
-
-implDecl: 'impl' genericParameters? IDENTIFIER ('for' typeExpr)? '{' implBody* '}' ;
-
-implBody: methodDef | constantDef | associatedType ;
-
-// ==========================================================================
-// TYPE ALIASES & ADVANCED TYPES
-// ==========================================================================
-
-typeAlias: 'type' IDENTIFIER genericParameters? '=' typeExpr ';' ;
-
-genericParameters: '<' genericParameter (',' genericParameter)* '>' ;
-
-genericParameter: IDENTIFIER ('extends' typeConstraint)? ;
-
-typeConstraint: typeExpr ('+' typeExpr)* ;
-
-// ==========================================================================
-// QUANTUM COMPUTING
-// ==========================================================================
-
-quantumCircuitDecl: 'quantum' 'circuit' IDENTIFIER '(' parameterList? ')' ('->' typeExpr)? block ;
-
-quantumStmt
-    : 'measure' IDENTIFIER ('->' IDENTIFIER)?
-    | 'reset' IDENTIFIER
-    | 'barrier' (IDENTIFIER (',' IDENTIFIER)*)?
-    | quantumGate
+functionSignature
+    : visibility?
+      'fn'
+      identifier
+      genericParameterList?
+      '(' parameterList? ')'
+      returnTypeClause?
+      effectClause?
+      ';'
     ;
 
-quantumGate
-    : ('Hadamard' | 'CNOT' | 'PauliX' | 'PauliY' | 'PauliZ' | 'T' | 'S' | 'Swap' | 'RX' | 'RY' | 'RZ' | 'Toffoli' | 'Fredkin')
-      '(' IDENTIFIER (',' IDENTIFIER)* (',' DECIMAL)? ')'
+associatedTypeDeclaration
+    : 'type' identifier genericParameterList? typeBoundClause? ';'
     ;
 
-// ==========================================================================
-// NANO-AGENTS
-// ==========================================================================
-
-nanoAgentDecl: 'nano' 'agent' IDENTIFIER '{' nanoAgentBody '}' ;
-
-nanoAgentBody: nanoCapability* nanoBehavior* nanoProtocol* ;
-
-nanoCapability: 'capability' IDENTIFIER '(' parameterList? ')' block ;
-
-nanoBehavior: 'behavior' IDENTIFIER '(' parameterList? ')' block ;
-
-nanoProtocol: 'protocol' IDENTIFIER '{' protocolRule* '}' ;
-
-protocolRule: 'on' IDENTIFIER '=>' block ;
-
-nanoStmt: 'assemble' '(' expression ')' | 'deploy' '(' expression ')' ;
-
-// ==========================================================================
-// MULTI-TIMELINE SYSTEM (MTS)
-// ==========================================================================
-
-mtsDecl: 'mts' 'timeline' IDENTIFIER '{' mtsBody '}' ;
-
-mtsBody: mtsSlice* mtsOperation* ;
-
-mtsSlice: 'slice' IDENTIFIER '[' INTEGER ']' block ;
-
-mtsOperation
-    : 'fork' '(' IDENTIFIER ')'
-    | 'merge' '(' IDENTIFIER ')'
-    | 'observe' '(' IDENTIFIER ')'
-    | 'rewind' '(' INTEGER ')'
+typeBoundClause
+    : ':' typeBound ('+' typeBound)*
     ;
 
-mtsStmt: 'parallel' '(' block ')' | 'speculative' '(' block ')'
-       | 'counterfactual' '(' expression ',' block ')' ;
-
-// ==========================================================================
-// SANKOFA MEMORY SYSTEM
-// ==========================================================================
-
-sankofaDecl: memoryDecl | wisdomDecl | historyDecl | consensusDecl | interMemoryDecl ;
-
-memoryDecl: 'remember' IDENTIFIER ':' typeExpr '=' expression ';' ;
-
-wisdomDecl: 'wisdom' IDENTIFIER '{' wisdomBody '}' ;
-
-wisdomBody: (premiseDecl | inferenceRule | wisdomStmt)* ;
-
-premiseDecl: 'premise' IDENTIFIER ':' typeExpr '=' expression ';' ;
-
-inferenceRule: 'rule' IDENTIFIER '(' parameterList? ')' '=>' block ;
-
-wisdomStmt: 'conclude' expression ';' ;
-
-sankofaStmt
-    : 'learn' 'from' expression ('with' 'weight' expression)? ';'
-    | 'recall' '(' expression ',' expression ')' ';'
-    | 'ancestral' IDENTIFIER '(' argumentList? ')' ';'
-    | 'consensus' '[' expressionList ']' 'vote' expression ';'
-    | 'zamani' '{' statement* '}'
-    | 'sasa' '{' statement* '}'
+traitDeclaration
+    : visibility?
+      'trait'
+      identifier
+      genericParameterList?
+      interfaceInheritanceClause?
+      '{'
+      traitMember*
+      '}'
     ;
 
-expressionList: expression (',' expression)* ;
-
-interMemoryDecl: 'intermemory' IDENTIFIER '<' IDENTIFIER ',' typeExpr '>' ';' ;
-
-// ==========================================================================
-// ALGEBRAIC EFFECTS
-// ==========================================================================
-
-effectDecl: 'effect' IDENTIFIER genericParameters? '(' parameterList? ')' ('->' typeExpr)? ';' ;
-
-effectHandleStmt: 'handle' expression '{' effectHandler* '}' ('with' '{' effectRecovery* '}')? ;
-
-effectHandler: 'case' effectName '(' parameterList? ')' '=>' block ;
-
-effectRecovery: '|' IDENTIFIER ':' typeExpr '|' '=>' block ;
-
-// ==========================================================================
-// META-PROGRAMMING & LANGUAGE FEATURES
-// ==========================================================================
-
-languageDecl: 'language' IDENTIFIER '=' STRING ('{' langBody '}')? ';' ;
-
-langBody: grammarRule* ;
-
-grammarRule: IDENTIFIER ':' STRING ';' ;
-
-invokeStmt: 'invoke' modulePath '(' argumentList? ')' ';' ;
-
-modulePath: IDENTIFIER ('::' IDENTIFIER)* ;
-
-foreignFunctionCall
-    : 'extern' STRING '{' externDecl* '}'
-    | 'foreign' IDENTIFIER '::' IDENTIFIER '(' argumentList? ')' ';'
+traitMember
+    : functionSignature
+    | associatedTypeDeclaration
+    | constantDeclaration
     ;
 
-externDecl
-    : visibilityModifier? 'fn' IDENTIFIER '(' parameterList? ')' ('->' typeExpr)? ';'
-    | visibilityModifier? 'type' IDENTIFIER '=' typeExpr ';'
+implementationDeclaration
+    : 'impl'
+      genericParameterList?
+      implementationTarget
+      implementationFor?
+      whereClause?
+      '{'
+      implementationMember*
+      '}'
     ;
 
-macroDecl: 'macro' IDENTIFIER '(' parameterList? ')' block ;
-
-macroCall: IDENTIFIER '!' '(' argumentList? ')' ;
-
-mopExpr
-    : 'reflect' '(' expression ')'
-    | 'introspect' '(' IDENTIFIER ')'
-    | 'meta_eval' '(' expression ')'
-    | 'quote' '{' statement* '}'
-    | 'unquote' '(' expression ')'
-    | 'splice' '(' expression ')'
+implementationTarget
+    : typeExpression
     ;
 
-// ==========================================================================
-// PLUGINS
-// ==========================================================================
-
-pluginDecl: 'plugin' IDENTIFIER '{' pluginDefinition* '}' ;
-
-pluginDefinition
-    : 'language' IDENTIFIER ';'
-    | 'transpiler' IDENTIFIER ';'
-    | 'hook' STRING ';'
-    | 'entry_point' STRING ';'
+implementationFor
+    : 'for' typeExpression
     ;
 
-// ==========================================================================
-// DATA & SERIALIZATION
-// ==========================================================================
-
-dataStmt
-    : 'serialize' expression 'to' dataFormat ';'
-    | 'deserialize' expression 'from' dataFormat ';'
+implementationMember
+    : functionDeclaration
+    | constantDeclaration
+    | typeAliasDeclaration
     ;
 
-dataFormat: 'json' | 'xml' | 'messagepack' | 'protobuf' | 'avro' | 'netcdf' | 'hdf5' ;
 
-// ==========================================================================
-// DATABASE & WEB SERVICES
-// ==========================================================================
+/* ============================================================================
+ * 8. TYPE DECLARATIONS
+ * ========================================================================== */
 
-databaseOp: 'db' '::' IDENTIFIER '(' argumentList? ')' ';' ;
-
-webService: 'http' '::' IDENTIFIER '(' argumentList? ')' ';' ;
-
-hdlModuleDecl: 'hdl' 'module' IDENTIFIER '{' hdlPort* hdlStatement* '}' ;
-
-hdlPort: 'port' IDENTIFIER ':' typeExpr ';' ;
-
-hdlStatement: statement ;
-
-// ==========================================================================
-// EXPRESSIONS
-// ==========================================================================
-
-expression
-    : primary
-    | expression '.' IDENTIFIER                                    // Property access
-    | expression '?.' IDENTIFIER                                   // Optional property access
-    | expression '[' expression ']'                                // Indexing
-    | expression '[' expression '..' expression ']'               // Range
-    | expression '(' argumentList? ')'                             // Function call
-    | expression '::' IDENTIFIER '(' argumentList? ')'            // Module invocation
-    | '...' expression                                              // Spread operator
-    | '++' expression | expression '++'                            // Increment
-    | '--' expression | expression '--'                            // Decrement
-    | expression '^' expression                                    // Power
-    | expression MATMUL expression                                 // Matrix multiplication
-    | expression '*' expression | expression '/' expression | expression '%' expression   // Mul
-    | expression '+' expression | expression '-' expression        // Add
-    | expression '<<' expression | expression '>>' expression | expression '>>>' expression // Shift
-    | expression '<' expression | expression '>' expression | expression '<=' expression | expression '>=' expression // Relational
-    | expression '==' expression | expression '!=' expression | expression '===' expression | expression '!==' expression // Equality
-    | expression '&' expression                                    // Bitwise AND
-    | expression '^' expression                                    // Bitwise XOR
-    | expression '|' expression                                    // Bitwise OR
-    | expression '&&' expression                                   // Logical AND
-    | expression '||' expression                                   // Logical OR
-    | expression '?' expression ':' expression                     // Ternary
-    | 'await' expression                                            // Await
-    | 'yield' expression                                            // Yield
-    | 'perform' effectName '(' expression? ')'                     // Effect
-    | lambdaExpression                                             // Lambda
-    | '(' expression ')'                                           // Grouping
-    | 'new' IDENTIFIER genericTypes? '(' argumentList? ')'        // New
-    | 'this'                                                       // This
-    | 'super' ('.' IDENTIFIER | '(' argumentList? ')')?           // Super
-    | '(' typeExpr ')' expression                                  // Cast
-    | expression 'instanceof' typeExpr                             // Instance check
-    | expression 'with' '{' (IDENTIFIER ':' expression ';')* '}'  // With expression
-    | mopExpr                                                      // Meta-object protocol
-    | macroCall                                                    // Macro call
-    | mathExpression                                               // Math expressions
+typeAliasDeclaration
+    : visibility? 'type' identifier genericParameterList? '=' typeExpression ';'
     ;
 
-// Mathematical expressions
-mathExpression
-    : mathFunctionCall
-    | mathConstant
-    | complexLiteral
-    | polynomialExpr
+typeDeclaration
+    : visibility? 'type' identifier genericParameterList? typeBoundClause? ';'
     ;
 
-mathFunctionCall
-    : MATH_FUNC '(' argumentList? ')'
-    | MATH_FUNC_ADVANCED '(' argumentList? ')'
-    | STATS_FUNC '(' argumentList? ')'
+constantDeclaration
+    : visibility?
+      'const'
+      identifier
+      (':' typeExpression)?
+      '=' expression
+      ';'
     ;
 
-MATH_FUNC: 'sin' | 'cos' | 'tan' | 'asin' | 'acos' | 'atan' | 'atan2'
-         | 'sinh' | 'cosh' | 'tanh' | 'asinh' | 'acosh' | 'atanh'
-         | 'exp' | 'log' | 'log10' | 'log2' | 'sqrt' | 'cbrt'
-         | 'abs' | 'ceil' | 'floor' | 'round' | 'trunc'
-         | 'gamma' | 'lgamma' | 'erf' | 'erfc'
-         | 'real' | 'imag' | 'conj' | 'arg' | 'abs'
-         ;
 
-MATH_FUNC_ADVANCED: 'besselj' | 'bessely' | 'besseli' | 'besselk'
-                  | 'legendre' | 'hermite' | 'laguerre'
-                  | 'chebyshev_t' | 'chebyshev_u'
-                  | 'jacobi' | 'gegenbauer'
-                  | 'zeta' | 'polylog' | 'dilog'
-                  | 'elliptic_k' | 'elliptic_e' | 'elliptic_pi'
-                  ;
+/* ============================================================================
+ * 9. TYPES
+ *
+ * Types describe semantics. They do not encode implementation limits.
+ * ========================================================================== */
 
-STATS_FUNC: 'norm_pdf' | 'norm_cdf' | 'norm_ppf' | 'norm_logpdf'
-          | 'uniform_pdf' | 'uniform_cdf'
-          | 'beta_pdf' | 'beta_cdf'
-          | 'gamma_pdf' | 'gamma_cdf'
-          | 'chi2_pdf' | 'chi2_cdf'
-          | 'student_t_pdf' | 'student_t_cdf'
-          | 'f_pdf' | 'f_cdf'
-          | 'poisson_pmf' | 'poisson_cdf'
-          | 'binomial_pmf' | 'binomial_cdf'
-          | 'multinomial_pmf'
-          | 'dirichlet_pdf'
-          ;
-
-mathConstant: 'π' | 'pi' | 'e' | 'φ' | 'phi' | 'γ' | 'gamma_euler' | 'i' ;
-
-complexLiteral: INTEGER_OR_FLOAT ('i' | 'j') | '(' expression ('+' | '-') expression ('i' | 'j') ')' ;
-
-polynomialExpr: 'poly' '(' argumentList? ')' | 'Poly' '[' expression (',' expression)* ']' ;
-
-primary
-    : IDENTIFIER
-    | literal
-    | templateString
-    | arrayLiteral
-    | mapLiteral
-    | tupleLiteral
-    | structLiteral
-    | quantumLiteral
-    | nanoLiteral
-    | mtsLiteral
-    | vectorLiteral
-    | matrixLiteral
-    ;
-
-templateString: '`' (templatePart | templateExpression)* '`' ;
-
-templatePart: ~[`$\\]+ | '\\' . ;
-
-templateExpression: '${' expression '}' ;
-
-arrayLiteral: '[' (expression (',' expression)*)? ']' ;
-
-mapLiteral: '{' (mapEntry (',' mapEntry)*)? '}' ;
-
-mapEntry: expression ':' expression ;
-
-tupleLiteral: '(' expression (',' expression)+ ')' ;
-
-structLiteral: IDENTIFIER '{' (IDENTIFIER ':' expression (',' IDENTIFIER ':' expression)*)? '}' ;
-
-quantumLiteral: '|' QUBIT_STATE 'rangle' ;
-
-QUBIT_STATE: ('0' | '1' | '+' | '-' | IDENTIFIER) ;
-
-nanoLiteral
-    : '@atom' '(' ELEMENT ':' ORBITAL ')'
-    | '@molecule' '(' FORMULA ')'
-    ;
-
-ELEMENT: IDENTIFIER ;
-
-ORBITAL: ('1s' | '2s' | '2p' | '3s' | '3p' | '3d' | '4s' | '4p' | '4d' | '4f') ;
-
-FORMULA: IDENTIFIER (DIGIT* IDENTIFIER)* ;
-
-mtsLiteral: 'mts' '[' INTEGER ']' ;
-
-vectorLiteral: '[' expression (',' expression)* ']' ;
-
-matrixLiteral: '[[' (expression (',' expression)*)? (',' '[' (expression (',' expression)*)? ']')* ']]' ;
-
-// ==========================================================================
-// TYPES
-// ==========================================================================
-
-typeExpr
-    : baseType
-    | genericType
+typeExpression
+    : functionType
+    | referenceType
+    | pointerType
+    | optionalType
+    | resultType
     | arrayType
+    | sliceType
     | tupleType
-    | functionType
-    | dependentType
-    | linearType
-    | affineType
-    | effectfulType
-    | universeType
+    | genericType
     | quantumType
-    | nanoType
-    | mtsType
-    | sankofaType
-    | cognitiveType
-    | nullableType
-    | refType
-    | boxedType
-    | unionType
-    | mathType
+    | tensorType
+    | resourceType
+    | capabilityType
+    | primitiveType
+    | namedType
+    | neverType
     ;
 
-baseType
-    : 'void' | 'int' | 'float' | 'bool' | 'string' | 'char' | 'bytes'
-    | 'i8' | 'i16' | 'i32' | 'i64' | 'i128'
-    | 'u8' | 'u16' | 'u32' | 'u64' | 'u128'
-    | 'f32' | 'f64' | 'usize' | 'isize'
-    | 'never' | 'null'
-    | IDENTIFIER
+functionType
+    : '(' typeList? ')' '->' typeExpression
     ;
 
-genericType: baseType '<' typeExpr (',' typeExpr)* '>' ;
+referenceType
+    : '&' lifetime? mutableMarker? typeExpression
+    ;
 
-genericTypes: '<' typeExpr (',' typeExpr)* '>' ;
+mutableMarker
+    : 'mut'
+    ;
 
-arrayType: typeExpr '[' expression? ']' ;
+pointerType
+    : '*' mutableMarker? typeExpression
+    ;
 
-tupleType: '(' typeExpr (',' typeExpr)+ ')' ;
+optionalType
+    : '?' typeExpression
+    ;
 
-functionType: '(' typeExpr (',' typeExpr)* ')' '->' typeExpr ;
+resultType
+    : 'Result' '<' typeExpression ',' typeExpression '>'
+    ;
 
-nullableType: typeExpr '?' ;
+arrayType
+    : '[' typeExpression ';' expression ']'
+    ;
 
-refType: ('ref' | '&') ('mut')? typeExpr ;
+sliceType
+    : '[' typeExpression ']'
+    ;
 
-boxedType: 'Box' '<' typeExpr '>' ;
+tupleType
+    : '(' typeList? ')'
+    ;
 
-unionType: typeExpr '|' typeExpr ;
+genericType
+    : qualifiedName '<' typeArgumentList '>'
+    ;
 
-// Dependent Types
-dependentType: piType | sigmaType | identityType ;
+typeArgumentList
+    : typeArgument (',' typeArgument)* ','?
+    ;
 
-piType: ('Pi' | '\u03A0') '(' IDENTIFIER ':' typeExpr ')' typeExpr ;
+typeArgument
+    : typeExpression
+    | expression
+    ;
 
-sigmaType: ('Sigma' | '\u03A3') '(' IDENTIFIER ':' typeExpr ')' typeExpr ;
-
-identityType: 'Id' '(' typeExpr ',' expression ',' expression ')' ;
-
-// Universe Hierarchy
-universeType: 'Type_0' | 'Type_1' | 'Type_2' | 'Type_N' | 'Kind' | 'Sort' | 'Prop' ;
-
-// Linear / Affine Types
-linearType: 'linear' typeExpr ;
-
-affineType: 'affine' typeExpr ;
-
-// Effectful Types
-effectfulType: typeExpr 'with' 'effects' '{' effectName (',' effectName)* '}' ;
-
-// Quantum Types
 quantumType
     : 'Qubit'
-    | 'QReg' '[' expression ']'
-    | 'Superposition' '<' typeExpr '>'
-    | 'Entangled' '<' typeExpr ',' typeExpr '>'
-    | 'QMeasured' '<' typeExpr '>'
-    | 'QArray' '<' typeExpr ',' expression '>'
+    | 'Qubit' '<' expression '>'
+    | 'QRegister' '<' expression '>'
+    | 'QState' '<' expression '>'
+    | 'QuantumRegister' '<' expression '>'
+    | 'LogicalQubit'
+    | 'LogicalRegister' '<' expression '>'
     ;
 
-// Nano Types
-nanoType
-    : 'Atom' '<' typeExpr '>'
-    | 'Molecule' '<' typeExpr '>'
-    | 'NanoAgent' '<' typeExpr '>'
-    | 'Archaeve' '<' typeExpr '>'
+tensorType
+    : 'Tensor' '<' typeExpression tensorShape? '>'
     ;
 
-// MTS Types
-mtsType: 'MtsSlice' '<' typeExpr '>' ;
-
-// Sankofa Types
-sankofaType
-    : 'History' '<' typeExpr ',' expression '>'
-    | 'ConsensusTrue' '<' typeExpr '>'
-    | 'InterMemory' '<' STRING ',' typeExpr '>'
+tensorShape
+    : ',' shapeExpressionList
     ;
 
-// Cognitive Types
-cognitiveType
-    : 'CognitiveState' '<' typeExpr '>'
-    | 'Consciousness' '<' typeExpr '>'
-    | 'Biological' '<' typeExpr '>'
-    | 'Neural' '<' typeExpr '>'
-    | 'MemoryBank' '<' typeExpr '>'
-    | 'AgentType'
-    | 'NarrowAI' | 'AGI' | 'ASI' | 'AESI' | 'ASESI'
+shapeExpressionList
+    : shapeExpression (',' shapeExpression)*
     ;
 
-// Mathematical Types
-mathType
-    : 'Complex' '<' typeExpr '>'
-    | 'Vector' '<' typeExpr (',' INTEGER)? '>'
-    | 'Matrix' '<' typeExpr (',' INTEGER ',' INTEGER)? '>'
-    | 'Tensor' '<' typeExpr (',' INTEGER)+ '>'
-    | 'Polynomial' '<' typeExpr '>'
-    | 'Rational' '<' typeExpr '>'
-    | 'Distribution' '<' typeExpr '>'
-    | 'Symbolic' '<' typeExpr '>'
-    | 'Expr'  // Symbolic expression
-    | 'Derivative' '<' typeExpr '>'
-    | 'Integral' '<' typeExpr '>'
+shapeExpression
+    : expression
+    | '_'
     ;
 
-// ==========================================================================
-// ARGUMENTS & PARAMETERS
-// ==========================================================================
+resourceType
+    : 'Resource' '<' typeExpression '>'
+    ;
+
+capabilityType
+    : 'Capability' '<' qualifiedName '>'
+    ;
+
+primitiveType
+    : 'bool'
+    | 'char'
+    | 'int'
+    | 'uint'
+    | 'float'
+    | 'f16'
+    | 'f32'
+    | 'f64'
+    | 'f128'
+    | 'str'
+    | 'String'
+    | 'byte'
+    | 'unit'
+    | 'void'
+    ;
+
+neverType
+    : 'never'
+    ;
+
+namedType
+    : qualifiedName
+    ;
+
+typeList
+    : typeExpression (',' typeExpression)*
+    ;
+
+
+/* ============================================================================
+ * 10. STATEMENTS
+ * ========================================================================== */
+
+statement
+    : variableDeclaration
+    | expressionStatement
+    | ifStatement
+    | whileStatement
+    | doWhileStatement
+    | forStatement
+    | quantifiedLoopStatement
+    | parallelLoopStatement
+    | reductionStatement
+    | matchStatement
+    | returnStatement
+    | breakStatement
+    | continueStatement
+    | throwStatement
+    | tryStatement
+    | blockStatement
+    | spawnStatement
+    | awaitStatement
+    | resourceStatement
+    | capabilityStatement
+    | requirementStatement
+    | constraintStatement
+    | preferenceStatement
+    | hintStatement
+    | effectStatement
+    | handleStatement
+    | performStatement
+    | quantumStatement
+    | hybridStatement
+    | hdlStatement
+    | hardwareStatement
+    | distributedStatement
+    | dataStatement
+    | aiStatement
+    | networkingStatement
+    | securityStatement
+    | compileStatement
+    | executionStatement
+    | memoryStatement
+    | timelineStatement
+    | rememberStatement
+    | recallStatement
+    | learnStatement
+    ;
+
+variableDeclaration
+    : modifierList?
+      ('let' | 'var')
+      identifier
+      (':' typeExpression)?
+      ('=' expression)?
+      ';'
+    ;
+
+expressionStatement
+    : expression ';'
+    ;
+
+ifStatement
+    : 'if' expression block ('else' 'if' expression block)* ('else' block)?
+    ;
+
+whileStatement
+    : 'while' expression block
+    ;
+
+doWhileStatement
+    : 'do' block 'while' expression ';'
+    ;
+
+forStatement
+    : 'for' identifier 'in' expression block
+    | 'for' '(' variableDeclaration expression ';' expression? ')' block
+    ;
+
+quantifiedLoopStatement
+    : 'forall' identifier 'in' expression ('when' expression)? block
+    ;
+
+parallelLoopStatement
+    : 'foreach' identifier 'in' expression 'parallel' block
+    ;
+
+reductionStatement
+    : 'reduce' identifier 'in' expression 'with' expression block
+    ;
+
+matchStatement
+    : 'match' expression '{' matchArm* '}'
+    ;
+
+matchArm
+    : 'case' pattern ('when' expression)? '=>' statementOrExpression
+    ;
+
+statementOrExpression
+    : statement
+    | expression
+    ;
+
+returnStatement
+    : 'return' expression? ';'
+    ;
+
+breakStatement
+    : 'break' ';'
+    ;
+
+continueStatement
+    : 'continue' ';'
+    ;
+
+throwStatement
+    : 'throw' expression ';'
+    ;
+
+tryStatement
+    : 'try' block catchClause* finallyClause?
+    ;
+
+catchClause
+    : 'catch' '(' identifier (':' typeExpression)? ')' block
+    ;
+
+finallyClause
+    : 'finally' block
+    ;
+
+blockStatement
+    : block
+    ;
+
+block
+    : '{' blockItem* '}'
+    ;
+
+blockItem
+    : declaration
+    | statement
+    ;
+
+spawnStatement
+    : 'spawn' expression ';'
+    ;
+
+awaitStatement
+    : 'await' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 11. PATTERNS
+ * ========================================================================== */
+
+pattern
+    : '_'
+    | identifier
+    | literal
+    | tuplePattern
+    | arrayPatternPattern
+    | rangePattern
+    | qualifiedPattern
+    | orPattern
+    ;
+
+tuplePattern
+    : '(' pattern (',' pattern)+ ')'
+    ;
+
+arrayPatternPattern
+    : '[' pattern (',' pattern)* ']'
+    ;
+
+rangePattern
+    : pattern ('..' | '..=') pattern
+    ;
+
+qualifiedPattern
+    : qualifiedName '(' patternList? ')'
+    ;
+
+orPattern
+    : pattern ('|' pattern)+
+    ;
+
+patternList
+    : pattern (',' pattern)*
+    ;
+
+
+/* ============================================================================
+ * 12. EXPRESSIONS
+ *
+ * The grammar provides generic expression machinery. Domain operations are
+ * represented as ordinary calls/operations rather than forcing every library
+ * algorithm into the language keyword set.
+ * ========================================================================== */
+
+expression
+    : assignmentExpression
+    ;
+
+assignmentExpression
+    : conditionalExpression
+      (
+          assignmentOperator
+          assignmentExpression
+      )?
+    ;
+
+conditionalExpression
+    : logicalOrExpression
+      ('?' expression ':' expression)?
+    ;
+
+logicalOrExpression
+    : logicalAndExpression ('||' logicalAndExpression)*
+    ;
+
+logicalAndExpression
+    : bitwiseOrExpression ('&&' bitwiseOrExpression)*
+    ;
+
+bitwiseOrExpression
+    : bitwiseXorExpression ('|' bitwiseXorExpression)*
+    ;
+
+bitwiseXorExpression
+    : bitwiseAndExpression ('^' bitwiseAndExpression)*
+    ;
+
+bitwiseAndExpression
+    : equalityExpression ('&' equalityExpression)*
+    ;
+
+equalityExpression
+    : comparisonExpression (('==' | '!=') comparisonExpression)*
+    ;
+
+comparisonExpression
+    : shiftExpression
+      (
+          ('<' | '<=' | '>' | '>=' | 'in' | 'is')
+          shiftExpression
+      )*
+    ;
+
+shiftExpression
+    : additiveExpression (('<<' | '>>') additiveExpression)*
+    ;
+
+additiveExpression
+    : multiplicativeExpression (('+' | '-') multiplicativeExpression)*
+    ;
+
+multiplicativeExpression
+    : powerExpression (('*' | '/' | '%') powerExpression)*
+    ;
+
+powerExpression
+    : unaryExpression ('**' powerExpression)?
+    ;
+
+unaryExpression
+    : ('+' | '-' | '!' | '~' | 'not' | 'await') unaryExpression
+    | postfixExpression
+    ;
+
+postfixExpression
+    : primaryExpression postfixOperation*
+    ;
+
+postfixOperation
+    : '(' argumentList? ')'
+    | '[' expression ']'
+    | '[' expression '..' expression ']'
+    | '[' expression '..=' expression ']'
+    | '.' identifier
+    | '::' identifier
+    | '?' 
+    ;
+
+primaryExpression
+    : literal
+    | identifier
+    | qualifiedName
+    | lambdaExpression
+    | ifExpression
+    | matchExpression
+    | blockExpression
+    | arrayExpression
+    | tupleExpression
+    | mapExpression
+    | structExpression
+    | quantumOperationExpression
+    | tensorExpression
+    | resourceExpression
+    | capabilityExpression
+    | macroInvocation
+    | '(' expression ')'
+    ;
+
+lambdaExpression
+    : '|' parameterList? '|' ('->' typeExpression)? expressionOrBlock
+    ;
+
+expressionOrBlock
+    : expression
+    | block
+    ;
+
+ifExpression
+    : 'if' expression block ('else' 'if' expression block)* 'else' block
+    ;
+
+matchExpression
+    : 'match' expression '{' matchArm* '}'
+    ;
+
+blockExpression
+    : block
+    ;
+
+arrayExpression
+    : '[' argumentList? ']'
+    ;
+
+tupleExpression
+    : '(' expression (',' expression)+ ','? ')'
+    ;
+
+mapExpression
+    : '{' mapEntryList? '}'
+    ;
+
+mapEntryList
+    : mapEntry (',' mapEntry)* ','?
+    ;
+
+mapEntry
+    : expression ':' expression
+    ;
+
+structExpression
+    : qualifiedName '{' structInitializerList? '}'
+    ;
+
+structInitializerList
+    : structInitializer (',' structInitializer)* ','?
+    ;
+
+structInitializer
+    : identifier ':' expression
+    ;
 
 argumentList
-    : argument (',' argument)*
-    | argument (',' argument)* ',' '...' IDENTIFIER
+    : argument (',' argument)* ','?
     ;
 
 argument
     : expression
-    | IDENTIFIER ':' expression
-    | '...' expression
+    | namedArgument
     ;
 
-parameterList: parameter (',' parameter)* ;
-
-parameter
-    : visibilityModifier? IDENTIFIER ':' typeExpr ('=' literal)?
-    | '...' IDENTIFIER ':' typeExpr
+namedArgument
+    : identifier '=' expression
     ;
 
-// ==========================================================================
-// LITERALS
-// ==========================================================================
+quantumOperationExpression
+    : 'apply'
+      qualifiedName
+      quantumArgumentList?
+      quantumModifierList?
+    ;
+
+quantumArgumentList
+    : 'to' quantumTargetList
+    | '(' argumentList? ')' 'to' quantumTargetList
+    ;
+
+quantumTargetList
+    : quantumTarget (',' quantumTarget)*
+    ;
+
+quantumTarget
+    : expression
+    | quantumTargetRange
+    ;
+
+quantumTargetRange
+    : expression '..' expression
+    ;
+
+quantumModifierList
+    : quantumModifier+
+    ;
+
+quantumModifier
+    : 'controlled'
+    | 'adjoint'
+    | 'inverse'
+    | 'power' '(' expression ')'
+    | 'with' '(' argumentList? ')'
+    ;
+
+tensorExpression
+    : 'tensor' '<' typeExpression '>' '(' argumentList? ')'
+    ;
+
+resourceExpression
+    : 'resource' '(' argumentList? ')'
+    ;
+
+capabilityExpression
+    : 'capability' '(' argumentList? ')'
+    ;
+
+macroInvocation
+    : identifier '!' '(' argumentList? ')'
+    ;
+
+assignmentOperator
+    : '='
+    | '+='
+    | '-='
+    | '*='
+    | '/='
+    | '%='
+    ;
+
+
+/* ============================================================================
+ * 13. LITERALS
+ *
+ * Numeric magnitude is intentionally unrestricted by this grammar.
+ * Semantic/backend representability is decided later.
+ * ========================================================================== */
 
 literal
-    : INTEGER
-    | DECIMAL
-    | STRING
-    | CHAR
-    | BOOLEAN
-    | 'null'
-    | 'undefined'
+    : INTEGER_LITERAL
+    | DECIMAL_LITERAL
+    | FLOAT_LITERAL
+    | STRING_LITERAL
+    | CHAR_LITERAL
+    | BOOLEAN_LITERAL
+    | NIL_LITERAL
+    | QUANTUM_LITERAL
+    | COMPLEX_LITERAL
+    | DURATION_LITERAL
     ;
 
-// ==========================================================================
-// LEXER
-// ==========================================================================
+complexLiteral
+    : DECIMAL_LITERAL ('+' | '-') DECIMAL_LITERAL 'i'
+    ;
 
-// Keywords
-IMPORT: 'import' ;
-INVOKE: 'invoke' ;
-TRANSCODE: 'transcode' ;
-OVERRIDE: 'override' ;
-LANG: 'lang' ;
-MODULE: 'module' ;
-EXPORT: 'export' ;
-TO: 'to' ;
-FROM: 'from' ;
-PLUGIN: 'plugin' ;
-LANGUAGE: 'language' ;
-TRANSPILER: 'transpiler' ;
-SELF: 'self' ;
-FOREIGN: 'foreign' ;
-INTEROP: 'interop' ;
-CDECL: 'cdecl' ;
-STDCALL: 'stdcall' ;
-JAVA: 'java' ;
-GC: 'gc' ;
-CAST: 'cast' ;
-CONVERT: 'convert' ;
-DATA: 'data' ;
-SERIALIZE: 'serialize' ;
-DESERIALIZE: 'deserialize' ;
-STREAM: 'stream' ;
-DATABASE: 'db' ;
-HTTP: 'http' ;
-INTERFACE: 'interface' ;
-NAMESPACE: 'namespace' ;
-FUNCTION: 'function' ;
-IF: 'if' ;
-ELSE: 'else' ;
-WHILE: 'while' ;
-DO: 'do' ;
-FOR: 'for' ;
-FORALL: 'forall' ;
-FOREACH: 'foreach' ;
-REDUCE: 'reduce' ;
-BREAK: 'break' ;
-CONTINUE: 'continue' ;
-MATCH: 'match' ;
-CASE: 'case' ;
-TRY: 'try' ;
-CATCH: 'catch' ;
-FINALLY: 'finally' ;
-ASYNC: 'async' ;
-AWAIT: 'await' ;
-YIELD: 'yield' ;
-THROW: 'throw' ;
-QUANTUM: 'quantum' ;
-CIRCUIT: 'circuit' ;
-NANO: 'nano' ;
-AGENT: 'agent' ;
-MTS: 'mts' ;
-SANKOFA: 'sankofa' ;
-REMEMBER: 'remember' ;
-LEARN: 'learn' ;
-RECALL: 'recall' ;
-CONSENSUS: 'consensus' ;
-EFFECT: 'effect' ;
-HANDLE: 'handle' ;
-PERFORM: 'perform' ;
-EXTERN: 'extern' ;
-UNSAFE: 'unsafe' ;
-CLASS: 'class' ;
-STRUCT: 'struct' ;
-ENUM: 'enum' ;
-TRAIT: 'trait' ;
-IMPL: 'impl' ;
-RECORD: 'record' ;
-EXTENDS: 'extends' ;
-IMPLEMENTS: 'implements' ;
-MACRO: 'macro' ;
-PACKAGE: 'package' ;
-TYPE: 'type' ;
-CONTRACT: 'contract' ;
-REQUIRES: 'requires' ;
-ENSURES: 'ensures' ;
-INVARIANT: 'invariant' ;
-VECTOR: 'vector' ;
-MATRIX: 'matrix' ;
-TENSOR: 'tensor' ;
-VECTORIZE: 'vectorize' ;
-MAP: 'map' ;
-ZIP: 'zip' ;
-ZIP2: 'zip' ;
-SCAN: 'scan' ;
-FILTER: 'filter' ;
-TRANSPOSE: 'transpose' ;
-INVERSE: 'inverse' ;
-DETERMINANT: 'determinant' ;
-RANK: 'rank' ;
-EIGENVALUES: 'eigenvalues' ;
-EIGENVECTORS: 'eigenvectors' ;
-SVD: 'svd' ;
-QR: 'qr' ;
-LU: 'lu' ;
-CHOLESKY: 'cholesky' ;
-NORM: 'norm' ;
-TRACE: 'trace' ;
-CONTRACT: 'contract' ;
-EINSUM: 'einsum' ;
-RESHAPE: 'reshape' ;
-PERMUTE: 'permute' ;
-EXPAND: 'expand' ;
-SIMPLIFY: 'simplify' ;
-FACTOR: 'factor' ;
-SOLVE: 'solve' ;
-DSOLVE: 'dsolve' ;
-SERIES: 'series' ;
-ROOTS: 'roots' ;
-RESULTANT: 'resultant' ;
-DIFF: 'diff' ;
-INTEGRAL: 'integral' ;
-LIMIT: 'limit' ;
-GRADIENT: 'gradient' ;
-JACOBIAN: 'jacobian' ;
-HESSIAN: 'hessian' ;
-LAPLACIAN: 'laplacian' ;
-DIVERGENCE: 'divergence' ;
-CURL: 'curl' ;
-MEAN: 'mean' ;
-MEDIAN: 'median' ;
-MODE: 'mode' ;
-VARIANCE: 'variance' ;
-STD_DEV: 'std_dev' ;
-COVARIANCE: 'covariance' ;
-CORRELATION: 'correlation' ;
-QUANTILE: 'quantile' ;
-HISTOGRAM: 'histogram' ;
-PDF: 'pdf' ;
-CDF: 'cdf' ;
-SAMPLE: 'sample' ;
-HYPOTHESIS_TEST: 'hypothesis_test' ;
-ANOVA: 'anova' ;
-REGRESSION: 'regression' ;
-PCA: 'pca' ;
-FFT: 'fft' ;
-IFFT: 'ifft' ;
-RFFT: 'rfft' ;
-IRFFT: 'irfft' ;
-CONVOLVE: 'convolve' ;
-CORRELATE: 'correlate' ;
-INTERPOLATE: 'interpolate' ;
-MINIMIZE: 'minimize' ;
-MAXIMIZE: 'maximize' ;
-SUBJECT: 'subject' ;
-METHOD: 'method' ;
-OPERATOR: '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '>' | '<=' | '>=' | '&&' | '||' | '&' | '|' | '^' | '~' | '<<' | '>>' | '[' | ']' | '(' | ')' ;
+durationLiteral
+    : INTEGER_LITERAL identifier
+    ;
 
-// Mathematical operators
-MATMUL: '@@' | '⊗' ;  // Matrix multiplication
+BOOLEAN_LITERAL
+    : 'true'
+    | 'false'
+    ;
 
-// Common tokens
-IDENTIFIER: [a-zA-Z_][a-zA-Z_0-9]* ;
-INTEGER: [0-9]+ | '0x' [0-9a-fA-F]+ | '0b' [0-1]+ | '0o' [0-7]+ ;
-DECIMAL: [0-9]+ '.' [0-9]+ ([eE] [+-]? [0-9]+)? ;
-INTEGER_OR_FLOAT: INTEGER | DECIMAL ;
-BOOLEAN: 'true' | 'false' ;
-CHAR: '\'' (ESC | ~['\\]) '\'' ;
+NIL_LITERAL
+    : 'nil'
+    | 'null'
+    ;
 
-// STRINGS
-STRING: '"' (ESC | ~["\\])* '"' ;
-TEMPLATE_STRING: '`' (ESC | ~[`\\])* '`' ;
-RAW_STRING: 'r' '#'* '"' ~["]* '"' '#'* ;
-UTF8_STRING: 'u8' '"' (ESC | ~["\\])* '"' ;
 
-// Escape sequences
-fragment ESC: '\\' (["\\/bfnrt] | 'u' [0-9a-fA-F]{4}) ;
+/* ============================================================================
+ * 14. QUANTUM COMPUTING
+ *
+ * No universal gate enumeration.
+ *
+ * The operation identifier is semantic data and is resolved after parsing.
+ * Therefore the grammar supports:
+ *
+ *   apply H to q
+ *   apply X to q
+ *   apply vendor.operation to q
+ *   apply custom_gate(theta) to q0, q1
+ *
+ * without modifying the grammar for every new gate, vendor operation,
+ * logical operation, or future quantum primitive.
+ * ========================================================================== */
 
-// Comments
-DOC_COMMENT: '///' ~[\r\n]* | '/**' .*? '*/' ;
-LINE_COMMENT: '//' ~[\r\n]* -> skip ;
-COMMENT: '/*' .*? '*/' -> skip ;
+quantumDeclaration
+    : quantumRegisterDeclaration
+    | quantumCircuitDeclaration
+    | quantumKernelDeclaration
+    | quantumOperationDeclaration
+    | quantumObservableDeclaration
+    | quantumChannelDeclaration
+    | quantumErrorModelDeclaration
+    ;
 
-// Operators and punctuation
-LPAREN: '(' ;
-RPAREN: ')' ;
-LBRACE: '{' ;
-RBRACE: '}' ;
-LBRACKET: '[' ;
-RBRACKET: ']' ;
-LT: '<' ;
-GT: '>' ;
-COMMA: ',' ;
-SEMI: ';' ;
-COLONCOLON: '::' ;
-COLON: ':' ;
-DOT: '.' ;
-QUESTION: '?' ;
-ARROW: '=>' ;
-FATARROW: '->' ;
-ELLIPSIS: '...' ;
-DOUBLESTAR: '**' ;
-CARET: '^' ;
-TILDE: '~' ;
-AMPERSAND: '&' ;
-PIPE: '|' ;
-AT: '@' ;
-DOLLAR: '$' ;
-BANG: '!' ;
-EQ: '=' ;
-PLUSEQ: '+=' ;
-MINUSEQ: '-=' ;
-STAREQ: '*=' ;
-SLASHEQ: '/=' ;
-PERCENTEQ: '%=' ;
-AMPEQ: '&=' ;
-PIPEEQ: '|=' ;
-CARETEQ: '^=' ;
-LSHIFT: '<<' ;
-RSHIFT: '>>' ;
-LSHIFTEQ: '<<=' ;
-RSHIFTEQ: '>>=' ;
-EQEQ: '==' ;
-BANGEQ: '!=' ;
-EQEQEQ: '===' ;
-BANGEQEQ: '!==' ;
-LTEQ: '<=' ;
-GTEQ: '>=' ;
-DOUBLEAND: '&&' ;
-DOUBLEOR: '||' ;
-PLUSPLUS: '++' ;
-MINUSMINUS: '--' ;
-DOTQUESTION: '?.' ;
-RANGLE: '>' ;
+quantumRegisterDeclaration
+    : visibility?
+      ('qubit' | 'qregister' | 'quantum')
+      identifier
+      (':' typeExpression)?
+      ('=' expression)?
+      ';'
+    ;
 
-// Whitespace
-WS: [ \t\r\n]+ -> skip ;
+quantumCircuitDeclaration
+    : visibility?
+      'circuit'
+      identifier
+      genericParameterList?
+      '(' parameterList? ')'
+      block
+    ;
 
-// Fragment for digits
-fragment DIGIT: [0-9] ;
+quantumKernelDeclaration
+    : visibility?
+      'kernel'
+      identifier
+      genericParameterList?
+      '(' parameterList? ')'
+      block
+    ;
+
+quantumOperationDeclaration
+    : visibility?
+      'operation'
+      qualifiedName
+      genericParameterList?
+      '(' parameterList? ')'
+      returnTypeClause?
+      block
+    ;
+
+quantumObservableDeclaration
+    : visibility?
+      'observable'
+      identifier
+      ':' typeExpression
+      ('=' expression)?
+      ';'
+    ;
+
+quantumChannelDeclaration
+    : visibility?
+      'channel'
+      identifier
+      ':' typeExpression
+      ('=' expression)?
+      ';'
+    ;
+
+quantumErrorModelDeclaration
+    : visibility?
+      'noise'
+      identifier
+      ('{' quantumErrorEntry* '}')?
+    ;
+
+quantumErrorEntry
+    : identifier ':' expression ';'
+    ;
+
+quantumStatement
+    : quantumApplyStatement
+    | quantumMeasureStatement
+    | quantumResetStatement
+    | quantumBarrierStatement
+    | quantumAllocateStatement
+    | quantumReleaseStatement
+    | quantumControlStatement
+    | quantumClassicalFeedForwardStatement
+    ;
+
+quantumApplyStatement
+    : 'apply'
+      qualifiedName
+      quantumInvocationArguments?
+      'to'
+      quantumTargetList
+      ';'
+    ;
+
+quantumInvocationArguments
+    : '(' argumentList? ')'
+    ;
+
+quantumMeasureStatement
+    : 'measure'
+      quantumTargetList
+      ('into' expression)?
+      ';'
+    ;
+
+quantumResetStatement
+    : 'reset' quantumTargetList ';'
+    ;
+
+quantumBarrierStatement
+    : 'barrier' quantumTargetList? ';'
+    ;
+
+quantumAllocateStatement
+    : 'allocate'
+      ('qubits' | 'qbits' | 'quantum')
+      '[' expression ']'
+      ('as' identifier)?
+      ';'
+    ;
+
+quantumReleaseStatement
+    : 'release'
+      ('qubits' | 'qbits' | 'quantum')
+      quantumTargetList
+      ';'
+    ;
+
+quantumControlStatement
+    : 'control'
+      '(' quantumTargetList ')'
+      quantumOperationExpression
+      ';'
+    ;
+
+quantumClassicalFeedForwardStatement
+    : 'if' expression quantumStatement
+    ;
+
+hybridStatement
+    : 'quantum' block
+    | 'classical' block
+    | 'host' block
+    | 'device' block
+    | 'feedforward' block
+    | 'synchronize' block
+    ;
+
+
+/* ============================================================================
+ * 15. RESOURCES / CAPABILITIES / PORTABILITY
+ *
+ * Requirement != constraint != capability != preference != hint != decision.
+ *
+ * These constructs express portable intent. They do not select a physical
+ * machine during parsing.
+ * ========================================================================== */
+
+resourceDeclaration
+    : visibility?
+      'resource'
+      identifier
+      resourceTypeClause?
+      resourcePropertyBlock?
+      ';'?
+    ;
+
+resourceTypeClause
+    : ':' typeExpression
+    ;
+
+resourcePropertyBlock
+    : '{' resourceProperty* '}'
+    ;
+
+resourceProperty
+    : identifier ':' expression ';'
+    ;
+
+capabilityDeclaration
+    : visibility?
+      'capability'
+      qualifiedName
+      capabilityPropertyBlock?
+      ';'?
+    ;
+
+capabilityPropertyBlock
+    : '{' capabilityProperty* '}'
+    ;
+
+capabilityProperty
+    : identifier ':' expression ';'
+    ;
+
+requirementStatement
+    : 'requires'
+      capabilityRequirementList?
+      resourceRequirementList?
+      requirementPropertyBlock?
+      ';'
+    ;
+
+capabilityRequirementList
+    : 'capability' '(' qualifiedName ')'
+      (',' 'capability' '(' qualifiedName ')')*
+    ;
+
+resourceRequirementList
+    : 'resource' '(' expression ')'
+      (',' 'resource' '(' expression ')')*
+    ;
+
+requirementPropertyBlock
+    : '{' requirementProperty* '}'
+    ;
+
+requirementProperty
+    : identifier ':' expression ';'
+    ;
+
+constraintStatement
+    : 'constrain'
+      expression
+      ';'
+    ;
+
+preferenceStatement
+    : 'prefer'
+      preferenceTarget
+      ';'
+    ;
+
+preferenceTarget
+    : qualifiedName
+    | expression
+    ;
+
+hintStatement
+    : 'hint'
+      identifier
+      (':' expression | '=' expression)
+      ';'
+    ;
+
+capabilityStatement
+    : 'requires' 'capability' '(' qualifiedName ')' ';'
+    ;
+
+
+/* ============================================================================
+ * 16. HARDWARE / TARGET-NEUTRAL HARDWARE INTENT
+ * ========================================================================== */
+
+hardwareDeclaration
+    : visibility?
+      'hardware'
+      identifier
+      hardwarePropertyBlock?
+      ';'?
+    ;
+
+hardwarePropertyBlock
+    : '{' hardwareProperty* '}'
+    ;
+
+hardwareProperty
+    : hardwareCapabilityProperty
+    | hardwareResourceProperty
+    | hardwareTopologyProperty
+    | hardwareTimingProperty
+    | hardwareReliabilityProperty
+    | hardwareDeploymentProperty
+    | propertyEntry
+    ;
+
+hardwareCapabilityProperty
+    : 'capability' ':' expression ';'
+    ;
+
+hardwareResourceProperty
+    : 'resource' ':' expression ';'
+    ;
+
+hardwareTopologyProperty
+    : 'topology' ':' expression ';'
+    ;
+
+hardwareTimingProperty
+    : 'timing' ':' expression ';'
+    ;
+
+hardwareReliabilityProperty
+    : 'reliability' ':' expression ';'
+    ;
+
+hardwareDeploymentProperty
+    : 'deployment' ':' expression ';'
+    ;
+
+hardwareStatement
+    : 'target' qualifiedName hardwareBlock?
+    | 'requires' 'hardware' expression ';'
+    ;
+
+hardwareBlock
+    : '{' hardwareProperty* '}'
+    ;
+
+
+/* ============================================================================
+ * 17. HDL / HARDWARE-SOFTWARE CO-DESIGN
+ * ========================================================================== */
+
+hdlDeclaration
+    : visibility?
+      'hdl'
+      identifier
+      hdlParameterList?
+      hdlBlock
+    ;
+
+hdlParameterList
+    : '<' hdlParameter (',' hdlParameter)* '>'
+    ;
+
+hdlParameter
+    : identifier ':' typeExpression
+    | identifier '=' expression
+    ;
+
+hdlBlock
+    : '{' hdlItem* '}'
+    ;
+
+hdlItem
+    : hdlPortDeclaration
+    | hdlSignalDeclaration
+    | hdlRegisterDeclaration
+    | hdlMemoryDeclaration
+    | hdlClockDeclaration
+    | hdlResetDeclaration
+    | hdlCombinationalBlock
+    | hdlSequentialBlock
+    | hdlGenerateBlock
+    | hdlStateMachine
+    | hdlPipeline
+    | hdlAssertion
+    | declaration
+    | statement
+    ;
+
+hdlPortDeclaration
+    : 'port'
+      identifier
+      ':' typeExpression
+      hdlDirection?
+      ';'
+    ;
+
+hdlDirection
+    : 'in'
+    | 'out'
+    | 'inout'
+    ;
+
+hdlSignalDeclaration
+    : 'signal' identifier ':' typeExpression ';'
+    ;
+
+hdlRegisterDeclaration
+    : 'register' identifier ':' typeExpression ('=' expression)? ';'
+    ;
+
+hdlMemoryDeclaration
+    : 'memory'
+      identifier
+      ':'
+      typeExpression
+      ('[' expression ']')?
+      ';'
+    ;
+
+hdlClockDeclaration
+    : 'clock' identifier
+      (':' typeExpression)?
+      ('=' expression)?
+      ';'
+    ;
+
+hdlResetDeclaration
+    : 'reset' identifier
+      ('=' expression)?
+      ';'
+    ;
+
+hdlCombinationalBlock
+    : 'combinational' block
+    ;
+
+hdlSequentialBlock
+    : 'sequential' block
+    ;
+
+hdlGenerateBlock
+    : 'generate'
+      '(' expression ')'
+      block
+    ;
+
+hdlStateMachine
+    : 'state' identifier
+      '{'
+      hdlState*
+      '}'
+    ;
+
+hdlState
+    : identifier
+      ('when' expression)?
+      block
+    ;
+
+hdlPipeline
+    : 'pipeline'
+      identifier?
+      ('stages' expression)?
+      block
+    ;
+
+hdlAssertion
+    : 'assert'
+      expression
+      ';'
+    ;
+
+hdlStatement
+    : 'drive' expression 'with' expression ';'
+    | 'sample' expression ';'
+    | 'clock' expression ';'
+    | 'synthesize' expression ';'
+    | 'simulate' expression ';'
+    | 'verify' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 18. CLASSICAL COMPUTING
+ *
+ * Mathematical algorithms remain available without making every algorithm a
+ * reserved keyword. The language supports generic calls such as:
+ *
+ *   fft(signal)
+ *   svd(matrix)
+ *   gradient(f, x)
+ *   optimize(problem)
+ *
+ * while domain libraries/intrinsics provide semantic resolution.
+ * ========================================================================== */
+
+domainDeclaration
+    : visibility?
+      'domain'
+      qualifiedName
+      domainBody?
+    ;
+
+domainBody
+    : '{' domainMember* '}'
+    ;
+
+domainMember
+    : capabilityDeclaration
+    | resourceDeclaration
+    | typeAliasDeclaration
+    | declaration
+    ;
+
+classicalOperation
+    : qualifiedName '(' argumentList? ')'
+    ;
+
+tensorExpressionStatement
+    : tensorExpression ';'
+    ;
+
+memoryStatement
+    : 'allocate' expression ';'
+    | 'deallocate' expression ';'
+    | 'move' expression ';'
+    | 'copy' expression ';'
+    | 'share' expression ';'
+    | 'borrow' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 19. EFFECTS
+ * ========================================================================== */
+
+effectDeclaration
+    : visibility?
+      'effect'
+      qualifiedName
+      effectBody?
+    ;
+
+effectBody
+    : '{'
+      effectOperation*
+      '}'
+    ;
+
+effectOperation
+    : 'perform' identifier
+      '(' parameterList? ')'
+      returnTypeClause?
+      ';'
+    ;
+
+effectStatement
+    : 'effect' qualifiedName ';'
+    ;
+
+handleStatement
+    : 'handle'
+      qualifiedName
+      block
+      ('with' block)?
+    ;
+
+performStatement
+    : 'perform'
+      qualifiedName
+      '(' argumentList? ')'
+      ';'
+    ;
+
+
+/* ============================================================================
+ * 20. DISTRIBUTED / PARALLEL COMPUTING
+ * ========================================================================== */
+
+distributedDeclaration
+    : 'distributed'
+      qualifiedName?
+      distributedBlock
+    ;
+
+distributedBlock
+    : '{' distributedItem* '}'
+    ;
+
+distributedItem
+    : nodeDeclaration
+    | serviceDeclaration
+    | processDeclaration
+    | channelDeclaration
+    | placementDeclaration
+    | replicationDeclaration
+    | consistencyDeclaration
+    | communicationDeclaration
+    | declaration
+    | statement
+    ;
+
+nodeDeclaration
+    : 'node' identifier
+      ('requires' expression)?
+      ';'
+    ;
+
+serviceDeclaration
+    : 'service' identifier
+      serviceBody?
+    ;
+
+serviceBody
+    : '{' declaration* '}'
+    ;
+
+processDeclaration
+    : 'process' identifier block
+    ;
+
+channelDeclaration
+    : 'channel' identifier
+      (':' typeExpression)?
+      ';'
+    ;
+
+placementDeclaration
+    : 'placement' identifier
+      'where'
+      expression
+      ';'
+    ;
+
+replicationDeclaration
+    : 'replicate' expression
+      ('factor' expression)?
+      ';'
+    ;
+
+consistencyDeclaration
+    : 'consistency' expression ';'
+    ;
+
+communicationDeclaration
+    : 'communicate' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 21. CONCURRENCY
+ * ========================================================================== */
+
+concurrencyStatement
+    : 'spawn' expression ';'
+    | 'await' expression ';'
+    | 'parallel' block
+    | 'task' block
+    | 'actor' identifier block
+    | 'channel' identifier ';'
+    | 'synchronize' block
+    ;
+
+parallelismExpression
+    : 'parallel' '(' expression ')'
+    ;
+
+
+/* ============================================================================
+ * 22. AI / ML
+ *
+ * Framework-neutral syntax. No framework or accelerator is part of the
+ * canonical grammar.
+ * ========================================================================== */
+
+modelDeclaration
+    : visibility?
+      'model'
+      identifier
+      genericParameterList?
+      modelBody
+    ;
+
+modelBody
+    : '{'
+      modelItem*
+      '}'
+    ;
+
+modelItem
+    : modelParameter
+    | modelInput
+    | modelOutput
+    | modelArchitecture
+    | modelTraining
+    | modelInference
+    | declaration
+    ;
+
+modelParameter
+    : 'parameter' identifier ':' typeExpression ('=' expression)? ';'
+    ;
+
+modelInput
+    : 'input' identifier ':' typeExpression ';'
+    ;
+
+modelOutput
+    : 'output' identifier ':' typeExpression ';'
+    ;
+
+modelArchitecture
+    : 'architecture' expression ';'
+    ;
+
+modelTraining
+    : 'training' block
+    ;
+
+modelInference
+    : 'inference' block
+    ;
+
+aiStatement
+    : 'train' expression ';'
+    | 'infer' expression ';'
+    | 'learn' expression ';'
+    | 'optimize' expression ';'
+    | 'predict' expression ';'
+    | 'agent' identifier block
+    ;
+
+
+/* ============================================================================
+ * 23. DATA
+ * ========================================================================== */
+
+dataDeclaration
+    : visibility?
+      'data'
+      identifier
+      dataSchema?
+      dataBody?
+    ;
+
+dataSchema
+    : ':' typeExpression
+    ;
+
+dataBody
+    : '{' dataItem* '}'
+    ;
+
+dataItem
+    : 'field' identifier ':' typeExpression ';'
+    | 'schema' expression ';'
+    | 'source' expression ';'
+    | 'transform' expression ';'
+    | 'pipeline' block
+    | declaration
+    ;
+
+dataStatement
+    : 'load' expression ';'
+    | 'save' expression ';'
+    | 'stream' expression ';'
+    | 'query' expression ';'
+    | 'transform' expression ';'
+    | 'serialize' expression ';'
+    | 'deserialize' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 24. NETWORKING
+ * ========================================================================== */
+
+networkingStatement
+    : 'connect' expression ';'
+    | 'listen' expression ';'
+    | 'send' expression ';'
+    | 'receive' expression ';'
+    | 'request' expression ';'
+    | 'respond' expression ';'
+    | 'stream' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 25. SECURITY / CRYPTOGRAPHY
+ * ========================================================================== */
+
+securityStatement
+    : 'authorize' expression ';'
+    | 'authenticate' expression ';'
+    | 'encrypt' expression ';'
+    | 'decrypt' expression ';'
+    | 'sign' expression ';'
+    | 'verify' expression ';'
+    | 'hash' expression ';'
+    | 'prove' expression ';'
+    | 'protect' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 26. COMPILATION / DEPLOYMENT / EXECUTION
+ *
+ * These describe intent and policies. They do not force a particular target.
+ * ========================================================================== */
+
+compileStatement
+    : 'compile' compileTarget? compileOptions? ';'
+    ;
+
+compileTarget
+    : expression
+    ;
+
+compileOptions
+    : '{' compileOption* '}'
+    ;
+
+compileOption
+    : identifier ':' expression ';'
+    ;
+
+executionStatement
+    : 'execute' expression ';'
+    | 'run' expression ';'
+    | 'deploy' expression ';'
+    | 'schedule' expression ';'
+    | 'checkpoint' expression ';'
+    | 'recover' expression ';'
+    | 'observe' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 27. RESILIENCE / QEC / FAULT SEMANTICS
+ *
+ * Syntax carries intent only.
+ *
+ * QEC implementation remains in the QEC subsystem.
+ * ZQN remains the canonical fault/noise semantic layer.
+ * HAL remains responsible for device capabilities/state.
+ * ========================================================================== */
+
+resilienceStatement
+    : 'requires' 'reliability' expression ';'
+    | 'requires' 'fault_tolerance' expression ';'
+    | 'requires' 'error_correction' expression ';'
+    | 'requires' 'noise_budget' expression ';'
+    ;
+
+timelineStatement
+    : 'timeline' identifier timelineBody
+    ;
+
+timelineBody
+    : '{' timelineItem* '}'
+    ;
+
+timelineItem
+    : 'fork' expression ';'
+    | 'merge' expression ';'
+    | 'observe' expression ';'
+    | 'rewind' expression ';'
+    | 'speculate' expression ';'
+    | declaration
+    | statement
+    ;
+
+
+/* ============================================================================
+ * 28. SANKOFA / LONG-LIVED COMPUTATION / PROVENANCE
+ * ========================================================================== */
+
+rememberStatement
+    : 'remember' expression ('as' identifier)? ';'
+    ;
+
+recallStatement
+    : 'recall' expression ';'
+    ;
+
+learnStatement
+    : 'learn' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 29. FOREIGN INTEROPERABILITY
+ * ========================================================================== */
+
+foreignDeclaration
+    : visibility?
+      'extern'
+      foreignLanguage?
+      'fn'
+      identifier
+      '(' parameterList? ')'
+      returnTypeClause?
+      ';'
+    | visibility?
+      'foreign'
+      qualifiedName
+      foreignBlock?
+    ;
+
+foreignLanguage
+    : 'c'
+    | 'cpp'
+    | 'python'
+    | 'rust'
+    | 'wasm'
+    | 'qasm'
+    | 'qir'
+    | 'hdl'
+    | identifier
+    ;
+
+foreignBlock
+    : '{' foreignItem* '}'
+    ;
+
+foreignItem
+    : declaration
+    | statement
+    ;
+
+
+/* ============================================================================
+ * 30. DIALECTS
+ *
+ * Dialects extend syntax/semantics explicitly. They are not separate
+ * languages and must eventually map back into the canonical AST/semantic model.
+ * ========================================================================== */
+
+dialectDeclaration
+    : visibility?
+      'dialect'
+      qualifiedName
+      dialectVersion?
+      dialectBody?
+    ;
+
+dialectVersion
+    : '@' versionLiteral
+    ;
+
+dialectBody
+    : '{'
+      dialectProperty*
+      '}'
+    ;
+
+dialectProperty
+    : 'syntax' ':' expression ';'
+    | 'semantics' ':' expression ';'
+    | 'capabilities' ':' expression ';'
+    | 'compatibility' ':' expression ';'
+    | 'feature' ':' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 31. MACROS / METAPROGRAMMING
+ *
+ * Macro expansion must still pass the normal AST, semantic and IR validation
+ * pipeline.
+ * ========================================================================== */
+
+macroDeclaration
+    : visibility?
+      'macro'
+      identifier
+      genericParameterList?
+      '(' macroParameterList? ')'
+      macroBody
+    ;
+
+macroParameterList
+    : macroParameter (',' macroParameter)*
+    ;
+
+macroParameter
+    : identifier
+    | '$' identifier
+    ;
+
+macroBody
+    : block
+    | '=>' expression ';'
+    ;
+
+metaprogrammingExpression
+    : 'quote' block
+    | 'quote' expression
+    | 'unquote' expression
+    | 'reflect' expression
+    | 'generate' expression
+    ;
+
+
+/* ============================================================================
+ * 32. SOURCE-LEVEL SECURITY / NO-UNSAFE POLICY
+ *
+ * There is intentionally NO `unsafe` production.
+ *
+ * Zamani source cannot bypass the semantic safety boundary through a grammar
+ * construct. Low-level implementation mechanisms, if ever required, belong
+ * outside the safe Zamani language and must not become a portable language
+ * escape hatch.
+ * ========================================================================== */
+
+
+/* ============================================================================
+ * 33. QUALIFIED NAMES
+ * ========================================================================== */
+
+qualifiedName
+    : identifier ('::' identifier)*
+    ;
+
+identifier
+    : IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * 34. PROPERTY / GENERIC HELPERS
+ * ========================================================================== */
+
+propertyEntry
+    : identifier ':' expression ';'
+    ;
+
+
+/* ============================================================================
+ * 35. LIFETIMES
+ * ========================================================================== */
+
+lifetime
+    : '\'' identifier
+    ;
+
+
+/* ============================================================================
+ * 36. LEXER
+ *
+ * This lexical layer is deliberately conservative:
+ * - identifiers may contain ASCII and broad Unicode code points;
+ * - numeric literals are lexically unbounded;
+ * - semantic validation decides representability;
+ * - no machine-size constants occur here.
+ *
+ * The Rust lexer must maintain lexical conformance with this vocabulary.
+ * ========================================================================== */
+
+DOC_COMMENT
+    : '///' ~[\r\n]*
+    | '/**' .*? '*/'
+    ;
+
+LINE_COMMENT
+    : '//' ~[\r\n]* -> channel(HIDDEN)
+    ;
+
+BLOCK_COMMENT
+    : '/*' .*? '*/' -> channel(HIDDEN)
+    ;
+
+QUANTUM_LITERAL
+    : '|' [01+\-] '⟩'
+    | '|' ~[|⟩\r\n]+ '⟩'
+    ;
+
+STRING_LITERAL
+    : '"' (ESCAPE_SEQUENCE | ~["\\\r\n])* '"'
+    | '\'' (ESCAPE_SEQUENCE | ~['\\\r\n])* '\''
+    ;
+
+CHAR_LITERAL
+    : '\'' (ESCAPE_SEQUENCE | ~['\\\r\n]) '\''
+    ;
+
+fragment ESCAPE_SEQUENCE
+    : '\\' [btnfr"\\'/]
+    | '\\' 'u' HEX_DIGIT HEX_DIGIT HEX_DIGIT HEX_DIGIT
+    | '\\' 'x' HEX_DIGIT HEX_DIGIT
+    ;
+
+COMPLEX_LITERAL
+    : DECIMAL_LITERAL [+-] DECIMAL_LITERAL 'i'
+    ;
+
+FLOAT_LITERAL
+    : DIGIT_SEQUENCE '.' DIGIT_SEQUENCE EXPONENT?
+    | DIGIT_SEQUENCE EXPONENT
+    ;
+
+DECIMAL_LITERAL
+    : DIGIT_SEQUENCE
+    ;
+
+INTEGER_LITERAL
+    : '0'
+    | [1-9] DIGIT*
+    | '0' [xX] HEX_DIGIT+
+    | '0' [bB] [01]+
+    | '0' [oO] [0-7]+
+    ;
+
+fragment DIGIT_SEQUENCE
+    : DIGIT+
+    ;
+
+fragment DIGIT
+    : [0-9]
+    ;
+
+fragment HEX_DIGIT
+    : [0-9a-fA-F]
+    ;
+
+fragment EXPONENT
+    : [eE] [+-]? DIGIT+
+    ;
+
+DURATION_LITERAL
+    : DIGIT_SEQUENCE [a-zA-Z]+
+    ;
+
+IDENTIFIER
+    : ID_START ID_CONTINUE*
+    ;
+
+fragment ID_START
+    : [a-zA-Z_]
+    | [\u0080-\uFFFF]
+    ;
+
+fragment ID_CONTINUE
+    : [a-zA-Z0-9_]
+    | [\u0080-\uFFFF]
+    ;
+
+WS
+    : [ \t\r\n\u000B\u000C]+ -> channel(HIDDEN)
+    ;
+
+
+/* ============================================================================
+ * 37. RESERVED / KEYWORD VOCABULARY
+ *
+ * ANTLR implicit literal tokens are used by parser rules above.
+ * Keeping the semantic vocabulary in parser rules prevents a second keyword
+ * registry from silently diverging from the language grammar.
+ *
+ * The Rust lexer must map the corresponding spellings to its TokenType values.
+ * Unknown/future domain names remain identifiers where semantics permit them.
+ * ========================================================================== */
