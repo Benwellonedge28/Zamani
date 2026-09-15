@@ -1,0 +1,1869 @@
+/*
+ * ============================================================================
+ * Zamani Programming Language
+ * ============================================================================
+ *
+ * File:
+ *     grammar/interoperability/interoperability.g4
+ *
+ * Status:
+ *     Production parser-composition grammar.
+ *
+ * Grammar technology:
+ *     ANTLR4 parser grammar
+ *
+ * Implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     Safe Rust only.
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This grammar defines the UNIVERSAL INTEROPERABILITY SYNTAX BOUNDARY of
+ * Zamani.
+ *
+ * Interoperability is the source-level mechanism through which Zamani can
+ * describe semantic boundaries between:
+ *
+ *     - Zamani and foreign languages;
+ *     - Zamani and foreign ABIs;
+ *     - Zamani and foreign calling conventions;
+ *     - Zamani and external symbols;
+ *     - Zamani and external source artifacts;
+ *     - Zamani and classical computation;
+ *     - Zamani and quantum computation;
+ *     - Zamani and HDL/hardware descriptions;
+ *     - Zamani and accelerators;
+ *     - Zamani and distributed services;
+ *     - Zamani and system interfaces;
+ *     - Zamani and future computational domains.
+ *
+ * This file is deliberately an INTEGRATION GRAMMAR.
+ *
+ * It does not attempt to become:
+ *
+ *     - the lexer;
+ *     - the type system;
+ *     - the expression grammar;
+ *     - the module grammar;
+ *     - the ordinary function grammar;
+ *     - the foreign-function grammar;
+ *     - the ABI implementation;
+ *     - the linker;
+ *     - the runtime loader;
+ *     - the hardware abstraction layer;
+ *     - the quantum IR;
+ *     - the classical IR;
+ *     - the HDL IR;
+ *     - the scheduler;
+ *     - the router;
+ *     - the optimizer.
+ *
+ * ============================================================================
+ * ARCHITECTURAL PIPELINE
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     parser composition
+ *          |
+ *          +--> Expressions
+ *          +--> Types
+ *          +--> QualifiedNames
+ *          +--> Interoperability <---- THIS FILE
+ *          |
+ *          v
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          +--> name resolution
+ *          +--> type checking
+ *          +--> ABI validation
+ *          +--> capability validation
+ *          +--> resource validation
+ *          +--> security validation
+ *          +--> compatibility validation
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          +--> classical IR
+ *          +--> quantum::ir
+ *          +--> HDL/hardware representation
+ *          +--> distributed representation
+ *          +--> data representation
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     lowering
+ *          |
+ *          +--> ABI lowering
+ *          +--> FFI lowering
+ *          +--> hardware lowering
+ *          +--> quantum lowering
+ *          +--> HDL lowering
+ *          |
+ *          v
+ *     routing / scheduling
+ *          |
+ *          v
+ *     runtime / deployment
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     - interoperability composition;
+ *     - semantic boundary declarations;
+ *     - symbolic foreign-source references;
+ *     - symbolic language references;
+ *     - symbolic ABI references;
+ *     - symbolic calling-convention references;
+ *     - interface adaptation declarations;
+ *     - representation-conversion declarations;
+ *     - data-transfer declarations;
+ *     - cross-domain invocation declarations;
+ *     - interoperability contracts;
+ *     - interoperability requirements;
+ *     - interoperability constraints;
+ *     - interoperability preferences;
+ *     - interoperability hints;
+ *     - extensible interoperability metadata.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     - lexical tokens;
+ *     - identifier spelling;
+ *     - qualified-name spelling;
+ *     - expressions;
+ *     - types;
+ *     - ordinary functions;
+ *     - foreign function declarations;
+ *     - function types;
+ *     - modules;
+ *     - packages;
+ *     - capabilities;
+ *     - requirements as a general language facility;
+ *     - resource allocation;
+ *     - hardware discovery;
+ *     - device selection;
+ *     - physical addresses;
+ *     - physical topology;
+ *     - quantum operations;
+ *     - quantum IR;
+ *     - QEC;
+ *     - ZQN;
+ *     - routing;
+ *     - scheduling;
+ *     - optimization;
+ *     - linking;
+ *     - dynamic loading;
+ *     - runtime dispatch.
+ *
+ * Foreign function declaration syntax remains owned by:
+ *
+ *     grammar/functions/foreign-functions.g4
+ *
+ * Function-type syntax remains owned by:
+ *
+ *     grammar/types/function-types.g4
+ *
+ * Canonical names remain owned by:
+ *
+ *     grammar/core/names.g4
+ *     grammar/core/qualified-names.g4
+ *
+ * Canonical expressions remain owned by:
+ *
+ *     grammar/expressions/
+ *
+ * Canonical types remain owned by:
+ *
+ *     grammar/types/
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Interoperability syntax describes a semantic boundary.
+ *
+ * It MUST NOT permanently bind portable Zamani source to:
+ *
+ *     - one CPU;
+ *     - one GPU;
+ *     - one FPGA;
+ *     - one ASIC;
+ *     - one QPU;
+ *     - one simulator;
+ *     - one node;
+ *     - one device;
+ *     - one memory address;
+ *     - one bus;
+ *     - one network path;
+ *     - one topology;
+ *     - one deployment location;
+ *     - one machine size.
+ *
+ * A source declaration such as:
+ *
+ *     language = "OpenQASM"
+ *
+ * identifies a language boundary.
+ *
+ * It does NOT select:
+ *
+ *     a particular QPU;
+ *     a physical qubit;
+ *     a pulse backend;
+ *     a topology;
+ *     a calibration record.
+ *
+ * Likewise:
+ *
+ *     abi = "C"
+ *
+ * identifies an ABI contract.
+ *
+ * It does NOT itself perform ABI lowering or select a physical library.
+ *
+ * ============================================================================
+ * OPEN-WORLD INTEROPERABILITY
+ * ============================================================================
+ *
+ * This grammar deliberately does NOT enumerate:
+ *
+ *     C
+ *     C++
+ *     Rust
+ *     Python
+ *     Fortran
+ *     Java
+ *     CUDA
+ *     OpenCL
+ *     OpenQASM
+ *     Verilog
+ *     SystemVerilog
+ *     VHDL
+ *     LLVM
+ *     WASM
+ *     vendor-specific languages
+ *
+ * as grammar-level closed categories.
+ *
+ * They are represented as symbolic language identifiers or strings.
+ *
+ * This allows future languages and formats to be introduced without changing
+ * the core interoperability grammar.
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * This grammar contains NO language-level limits on:
+ *
+ *     - number of interfaces;
+ *     - number of adapters;
+ *     - number of mappings;
+ *     - number of boundaries;
+ *     - number of source languages;
+ *     - number of ABI descriptions;
+ *     - number of parameters;
+ *     - number of values;
+ *     - number of transfers;
+ *     - number of interoperability domains;
+ *     - number of declarations;
+ *     - source-program size.
+ *
+ * Repetition is structural through ANTLR `*` and `+`.
+ *
+ * There is intentionally no:
+ *
+ *     MAX_INTERFACES
+ *     MAX_ADAPTERS
+ *     MAX_ABIS
+ *     MAX_LANGUAGES
+ *     MAX_TRANSFERS
+ *     MAX_ARGUMENTS
+ *     MAX_DEVICES
+ *     MAX_QUBITS
+ *     MAX_CORES
+ *     MAX_NODES
+ *
+ * or equivalent machine-size restriction.
+ *
+ * Practical parser limits belong to compiler/resource policy, not language
+ * semantics.
+ *
+ * ============================================================================
+ * HARDWARE INDEPENDENCE
+ * ============================================================================
+ *
+ * Interoperability MUST remain independent of physical realization.
+ *
+ * The following are intentionally NOT grammar concepts here:
+ *
+ *     device_id
+ *     cpu_id
+ *     gpu_id
+ *     qpu_id
+ *     physical_qubit
+ *     memory_address
+ *     bus_address
+ *     pci_slot
+ *     network_route
+ *     topology_node
+ *
+ * Such information belongs to:
+ *
+ *     hardware HAL
+ *     deployment
+ *     runtime
+ *     resource management
+ *     routing
+ *     scheduling
+ *
+ * when it is actually required.
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Quantum interoperability is source-level interoperability.
+ *
+ * This grammar MUST NOT define:
+ *
+ *     QubitId
+ *     PhysicalQubitId
+ *     QuantumGate
+ *     QuantumInstruction
+ *     QuantumCircuit
+ *     GateKind
+ *
+ * The canonical quantum semantic boundary remains:
+ *
+ *     quantum::ir
+ *
+ * Therefore the dependency is:
+ *
+ *     quantum syntax
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization / routing / scheduling
+ *          |
+ *          v
+ *     target realization
+ *
+ * Interoperability only describes the boundary through which quantum values,
+ * operations, or artifacts may cross into another semantic domain.
+ *
+ * ============================================================================
+ * HDL BOUNDARY
+ * ============================================================================
+ *
+ * HDL interoperability may refer to:
+ *
+ *     Verilog
+ *     SystemVerilog
+ *     VHDL
+ *     other HDL dialects
+ *     future hardware languages
+ *
+ * without making any of those implementations part of the core language.
+ *
+ * Hardware implementation semantics belong to:
+ *
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *     compiler hardware lowering
+ *
+ * ============================================================================
+ * FOREIGN FUNCTION BOUNDARY
+ * ============================================================================
+ *
+ * This grammar intentionally does not duplicate:
+ *
+ *     extern function declarations;
+ *     foreign parameters;
+ *     foreign return types;
+ *     foreign symbols;
+ *     variadic declarations;
+ *     callback metadata;
+ *
+ * Those belong to:
+ *
+ *     grammar/functions/foreign-functions.g4
+ *
+ * This file provides the higher-level interoperability boundary consumed by
+ * foreign-function infrastructure.
+ *
+ * ============================================================================
+ * ANTLR CONTRACT
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * The canonical lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Therefore:
+ *
+ *     tokenVocab = ZamaniLexer
+ *
+ * MUST remain the lexical contract.
+ *
+ * No lexer rules are defined here.
+ *
+ * No embedded Rust actions are defined here.
+ *
+ * No semantic predicates are defined here.
+ *
+ * No filesystem access is defined here.
+ *
+ * No network access is defined here.
+ *
+ * No runtime calls are defined here.
+ *
+ * ============================================================================
+ * IMPORT CONTRACT
+ * ============================================================================
+ *
+ * Expressions owns:
+ *
+ *     expression
+ *     expressionList
+ *
+ * Types owns:
+ *
+ *     typeExpression
+ *
+ * QualifiedNames owns:
+ *
+ *     qualifiedNameReference
+ *
+ * This grammar consumes those canonical rules rather than redefining them.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The frontend AST should preserve:
+ *
+ *     - source span;
+ *     - declaration kind;
+ *     - symbolic source identity;
+ *     - language identity;
+ *     - ABI identity;
+ *     - calling-convention identity;
+ *     - representation metadata;
+ *     - transfer direction;
+ *     - value expressions;
+ *     - type expressions;
+ *     - interface mapping;
+ *     - contract clauses;
+ *     - requirement/constraint structure;
+ *     - preference/hint metadata.
+ *
+ * It MUST NOT turn these syntactic declarations directly into:
+ *
+ *     device handles;
+ *     physical addresses;
+ *     runtime pointers;
+ *     hardware objects;
+ *     QPU identifiers;
+ *     physical qubit identifiers.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether the referenced interface exists;
+ *     - whether the language exists;
+ *     - whether the ABI exists;
+ *     - whether the calling convention is valid;
+ *     - whether representations are compatible;
+ *     - whether conversions are legal;
+ *     - whether values can cross the boundary;
+ *     - whether ownership is preserved;
+ *     - whether effects are permitted;
+ *     - whether capabilities are satisfied;
+ *     - whether requirements are satisfied;
+ *     - whether security policy permits the boundary;
+ *     - whether a lowering strategy exists.
+ *
+ * None of those decisions belong in this grammar.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * Interoperability syntax does not become an IR by itself.
+ *
+ * Instead:
+ *
+ *     source
+ *       |
+ *       v
+ *     interoperability AST
+ *       |
+ *       v
+ *     semantic interoperability model
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL/hardware representation
+ *       +--> distributed representation
+ *       |
+ *       v
+ *     target-specific lowering
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
+ * ============================================================================
+ *
+ * An interoperability declaration does not grant authority.
+ *
+ * It does not authorize:
+ *
+ *     arbitrary library loading;
+ *     arbitrary process execution;
+ *     arbitrary filesystem access;
+ *     arbitrary network access;
+ *     arbitrary device access.
+ *
+ * Security validation and runtime authorization remain external concerns.
+ *
+ * ============================================================================
+ */
+
+parser grammar Interoperability;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+/*
+ * ============================================================================
+ * CANONICAL DEPENDENCIES
+ * ============================================================================
+ *
+ * These imports provide existing repository-owned syntax.
+ *
+ * Expressions:
+ *     expression
+ *     expressionList
+ *
+ * Types:
+ *     typeExpression
+ *
+ * QualifiedNames:
+ *     qualifiedNameReference
+ *
+ * No local copies of those concepts are introduced.
+ */
+import Expressions,
+       Types,
+       QualifiedNames;
+
+
+/*
+ * ============================================================================
+ * 1. PUBLIC COMPOSITION ENTRY POINT
+ * ============================================================================
+ *
+ * This rule is intended to be exposed by the canonical parser composition
+ * layer.
+ *
+ * It may be consumed:
+ *
+ *     - as a declaration-level interoperability extension;
+ *     - by language/dialect composition;
+ *     - by execution/deployment grammar;
+ *     - by specialized interoperability grammars.
+ *
+ * It does not itself require a particular physical target.
+ */
+interoperability
+    : interoperabilityItem*
+    ;
+
+
+/*
+ * ============================================================================
+ * 2. INTEROPERABILITY ITEMS
+ * ============================================================================
+ */
+
+interoperabilityItem
+    : interoperabilityInterface
+    | interoperabilityBinding
+    | interoperabilityBridge
+    | interoperabilityTransfer
+    | interoperabilityConversion
+    | interoperabilitySource
+    | interoperabilityContract
+    ;
+
+
+/*
+ * ============================================================================
+ * 3. INTEROPERABILITY INTERFACE
+ * ============================================================================
+ *
+ * Defines a symbolic semantic interface boundary.
+ *
+ * Example:
+ *
+ *     extern interface math::linear {
+ *         language = "C";
+ *         abi = "c";
+ *     }
+ *
+ * The words `interface` and the metadata keys are intentionally represented
+ * through identifiers rather than introducing new lexer keywords.
+ *
+ * This keeps the lexical vocabulary open and avoids coupling the language to
+ * one fixed interoperability inventory.
+ */
+interoperabilityInterface
+    : EXTERN
+      interopInterfaceMarker
+      qualifiedNameReference
+      LBRACE
+      interoperabilityInterfaceMember*
+      RBRACE
+    ;
+
+interopInterfaceMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 4. INTEROPERABILITY INTERFACE MEMBERS
+ * ============================================================================
+ */
+
+interoperabilityInterfaceMember
+    : interoperabilityMetadata
+    | interoperabilityEndpoint
+    | interoperabilityMapping
+    | interoperabilityContractClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 5. ENDPOINT
+ * ============================================================================
+ *
+ * An endpoint describes a callable or invocable semantic boundary.
+ *
+ * It deliberately does not duplicate foreign-function declaration grammar.
+ *
+ * The endpoint name and signature are semantic references.
+ *
+ * A specialized owner such as foreign-functions.g4 may provide richer
+ * declaration syntax.
+ */
+interoperabilityEndpoint
+    : interopEndpointMarker
+      IDENTIFIER
+      interoperabilitySignature?
+      interoperabilityEndpointClause*
+      SEMICOLON
+    ;
+
+interopEndpointMarker
+    : IDENTIFIER
+    ;
+
+interoperabilitySignature
+    : LPAREN
+      interoperabilityParameterList?
+      RPAREN
+      interoperabilityReturnType?
+    ;
+
+interoperabilityParameterList
+    : interoperabilityParameter
+      (COMMA interoperabilityParameter)*
+      COMMA?
+    ;
+
+interoperabilityParameter
+    : IDENTIFIER
+      (COLON typeExpression)?
+    ;
+
+interoperabilityReturnType
+    : ARROW typeExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 6. ENDPOINT CLAUSES
+ * ============================================================================
+ */
+
+interoperabilityEndpointClause
+    : interoperabilityMetadata
+    | interoperabilityMapping
+    | interoperabilityContractClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 7. SYMBOLIC INTEROPERABILITY BINDING
+ * ============================================================================
+ *
+ * Binds a source-level interface to a symbolic implementation.
+ *
+ * Example:
+ *
+ *     bind math::linear to runtime::linear;
+ *
+ * The target is a symbolic name.
+ *
+ * It is NOT:
+ *
+ *     a device ID;
+ *     a memory address;
+ *     a physical accelerator;
+ *     a network endpoint;
+ *     a machine identifier.
+ */
+interoperabilityBinding
+    : interopBindingMarker
+      qualifiedNameReference
+      interopToMarker
+      qualifiedNameReference
+      interoperabilityBindingClause*
+      SEMICOLON
+    ;
+
+interopBindingMarker
+    : IDENTIFIER
+    ;
+
+interopToMarker
+    : IDENTIFIER
+    ;
+
+interoperabilityBindingClause
+    : interoperabilityMetadata
+    | interoperabilityContractClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 8. CROSS-DOMAIN BRIDGE
+ * ============================================================================
+ *
+ * A bridge represents a semantic transition between two named domains.
+ *
+ * Examples of possible semantic domains:
+ *
+ *     classical
+ *     quantum
+ *     hdl
+ *     hardware
+ *     distributed
+ *     accelerator
+ *     data
+ *     foreign
+ *     future
+ *
+ * These are NOT closed enumerations.
+ */
+interoperabilityBridge
+    : interopBridgeMarker
+      qualifiedNameReference
+      interopFromMarker
+      qualifiedNameReference
+      interopToMarker
+      qualifiedNameReference
+      interoperabilityBridgeClause*
+      SEMICOLON
+    ;
+
+interopBridgeMarker
+    : IDENTIFIER
+    ;
+
+interopFromMarker
+    : IDENTIFIER
+    ;
+
+interoperabilityBridgeClause
+    : interoperabilityMetadata
+    | interoperabilityMapping
+    | interoperabilityContractClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. VALUE TRANSFER
+ * ============================================================================
+ *
+ * Describes semantic movement of a value across an interoperability boundary.
+ *
+ * Example:
+ *
+ *     transfer quantum_result to classical_result;
+ *
+ * No physical mechanism is implied.
+ *
+ * The grammar does not specify:
+ *
+ *     DMA;
+ *     PCIe;
+ *     NVLink;
+ *     shared memory;
+ *     network transport;
+ *     quantum measurement hardware.
+ */
+interoperabilityTransfer
+    : interopTransferMarker
+      expression
+      interopToMarker
+      expression
+      interoperabilityTransferClause*
+      SEMICOLON
+    ;
+
+interopTransferMarker
+    : IDENTIFIER
+    ;
+
+interoperabilityTransferClause
+    : interoperabilityRepresentationClause
+    | interoperabilityConversionClause
+    | interoperabilityMetadata
+    | interoperabilityContractClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 10. REPRESENTATION CONVERSION
+ * ============================================================================
+ *
+ * Describes an explicitly declared semantic representation transition.
+ *
+ * Example:
+ *
+ *     convert value as foreign::representation;
+ *
+ * The conversion itself is not executed by the parser.
+ */
+interoperabilityConversion
+    : interopConversionMarker
+      expression
+      interopAsMarker
+      typeExpression
+      interoperabilityConversionClause*
+      SEMICOLON
+    ;
+
+interopConversionMarker
+    : IDENTIFIER
+    ;
+
+interopAsMarker
+    : IDENTIFIER
+    ;
+
+interoperabilityConversionClause
+    : interoperabilityMetadata
+    | interoperabilityContractClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 11. EXTERNAL SOURCE ARTIFACT
+ * ============================================================================
+ *
+ * Associates a semantic interoperability identity with an external language
+ * or representation.
+ *
+ * Example:
+ *
+ *     language OpenQASM source "program.qasm";
+ *
+ *     language SystemVerilog source "design.sv";
+ *
+ * The language identity is symbolic.
+ *
+ * The source string is opaque at grammar level.
+ *
+ * The parser does not access the file.
+ *
+ * The compiler/frontend is responsible for enforcing source-access policy.
+ */
+interoperabilitySource
+    : LANGUAGE
+      interoperabilityLanguage
+      interoperabilitySourceClause+
+      SEMICOLON
+    ;
+
+interoperabilityLanguage
+    : IDENTIFIER
+    | STRING
+    ;
+
+interoperabilitySourceClause
+    : interoperabilitySourceValue
+    | interoperabilityMetadata
+    ;
+
+interoperabilitySourceValue
+    : interopSourceMarker
+      STRING
+    ;
+
+interopSourceMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. INTEROPERABILITY METADATA
+ * ============================================================================
+ *
+ * Metadata is intentionally open-ended.
+ *
+ * This permits future properties such as:
+ *
+ *     language
+ *     abi
+ *     calling_convention
+ *     symbol
+ *     linkage
+ *     representation
+ *     protocol
+ *     version
+ *     encoding
+ *     ownership
+ *     lifetime
+ *     purity
+ *     effects
+ *     security
+ *     capability
+ *     requirement
+ *     constraint
+ *     preference
+ *     hint
+ *
+ * without turning every possible future concept into a reserved keyword.
+ */
+interoperabilityMetadata
+    : interopMetadataKey
+      ASSIGN
+      interoperabilityValue
+      SEMICOLON
+    ;
+
+interopMetadataKey
+    : IDENTIFIER
+    ;
+
+interoperabilityValue
+    : STRING
+    | IDENTIFIER
+    | qualifiedNameReference
+    | typeExpression
+    | expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. EXPLICIT REPRESENTATION
+ * ============================================================================
+ *
+ * Associates a semantic value with a symbolic representation.
+ *
+ * Example:
+ *
+ *     representation = "opaque";
+ *
+ *     representation = "pointer";
+ *
+ *     representation = "tensor";
+ *
+ * No finite representation inventory is imposed.
+ */
+interoperabilityRepresentationClause
+    : interopRepresentationMarker
+      ASSIGN
+      interoperabilityValue
+    ;
+
+interopRepresentationMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 14. EXPLICIT CONVERSION
+ * ============================================================================
+ *
+ * Conversion metadata describes a semantic conversion contract.
+ *
+ * It does not implement conversion.
+ */
+interoperabilityConversionClause
+    : interopConversionMarker
+      ASSIGN
+      interoperabilityValue
+    ;
+
+
+/*
+ * ============================================================================
+ * 15. INTEROPERABILITY CONTRACT
+ * ============================================================================
+ *
+ * A contract provides a semantic boundary that downstream analysis can
+ * validate.
+ *
+ * It does not perform validation during parsing.
+ */
+interoperabilityContract
+    : interopContractMarker
+      qualifiedNameReference?
+      LBRACE
+      interoperabilityContractClause*
+      RBRACE
+    ;
+
+interopContractMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 16. CONTRACT CLAUSES
+ * ============================================================================
+ *
+ * Requirements, constraints, preferences and hints remain semantically
+ * distinct.
+ *
+ * They are represented using open identifiers so new domains can be introduced
+ * without changing this grammar.
+ */
+interoperabilityContractClause
+    : interopContractKey
+      expression
+      SEMICOLON
+    ;
+
+interopContractKey
+    : REQUIRES
+    | IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 17. INTEROPERABILITY MAPPINGS
+ * ============================================================================
+ *
+ * A mapping describes correspondence between two symbolic semantic entities.
+ *
+ * Example:
+ *
+ *     map quantum::State to foreign::State;
+ *
+ * The mapping is not a physical memory mapping.
+ */
+interoperabilityMapping
+    : interopMappingMarker
+      qualifiedNameReference
+      interopToMarker
+      qualifiedNameReference
+      interoperabilityMappingClause*
+      SEMICOLON
+    ;
+
+interopMappingMarker
+    : IDENTIFIER
+    ;
+
+interoperabilityMappingClause
+    : interoperabilityMetadata
+    | interoperabilityContractClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 18. CALLING CONVENTION REFERENCE
+ * ============================================================================
+ *
+ * Calling-convention identity remains symbolic.
+ *
+ * This avoids a closed enumeration such as:
+ *
+ *     cdecl
+ *     stdcall
+ *     fastcall
+ *     system
+ *     vendor_x
+ *
+ * All such meanings are resolved by semantic/linking infrastructure.
+ */
+callingConventionReference
+    : interopCallingConventionMarker
+      (STRING | qualifiedNameReference)
+    ;
+
+interopCallingConventionMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 19. ABI REFERENCE
+ * ============================================================================
+ *
+ * ABI identity is symbolic.
+ *
+ * ABI lowering is owned by compiler/backend infrastructure.
+ */
+abiReference
+    : interopAbiMarker
+      (STRING | qualifiedNameReference)
+    ;
+
+interopAbiMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 20. LANGUAGE REFERENCE
+ * ============================================================================
+ *
+ * Language identity is symbolic and open-ended.
+ *
+ * This permits:
+ *
+ *     C
+ *     C++
+ *     Rust
+ *     Python
+ *     Fortran
+ *     OpenQASM
+ *     Verilog
+ *     SystemVerilog
+ *     VHDL
+ *     future languages
+ *
+ * without grammar modification.
+ */
+languageReference
+    : interopLanguageMarker
+      (STRING | qualifiedNameReference)
+    ;
+
+interopLanguageMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 21. FOREIGN SYMBOL REFERENCE
+ * ============================================================================
+ *
+ * The symbol is represented as an opaque source-level value.
+ *
+ * Symbol lookup belongs to linking/runtime infrastructure.
+ */
+foreignSymbolReference
+    : interopSymbolMarker
+      STRING
+    ;
+
+interopSymbolMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 22. PROTOCOL REFERENCE
+ * ============================================================================
+ *
+ * Protocols remain open-ended.
+ *
+ * This allows interoperability with:
+ *
+ *     serialization protocols;
+ *     RPC protocols;
+ *     messaging protocols;
+ *     hardware protocols;
+ *     accelerator interfaces;
+ *     quantum-control interfaces;
+ *     future protocols.
+ */
+protocolReference
+    : interopProtocolMarker
+      (STRING | qualifiedNameReference)
+    ;
+
+interopProtocolMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 23. DATA FORMAT REFERENCE
+ * ============================================================================
+ *
+ * A data format is a semantic identity, not a parser implementation.
+ */
+dataFormatReference
+    : interopFormatMarker
+      (STRING | qualifiedNameReference)
+    ;
+
+interopFormatMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 24. INTEROPERABILITY PARAMETER BINDING
+ * ============================================================================
+ *
+ * Associates a local semantic value with a boundary parameter.
+ */
+interoperabilityParameterBinding
+    : IDENTIFIER
+      ASSIGN
+      expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 25. INTEROPERABILITY ARGUMENT LIST
+ * ============================================================================
+ *
+ * No fixed arity is imposed.
+ */
+interoperabilityArgumentList
+    : interoperabilityParameterBinding
+      (COMMA interoperabilityParameterBinding)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 26. INTEROPERABILITY INVOCATION
+ * ============================================================================
+ *
+ * This is a semantic invocation boundary.
+ *
+ * It does not duplicate ordinary function-call expression syntax.
+ *
+ * It is useful to specialized interoperability grammars that need to attach
+ * explicit interoperability metadata to an invocation.
+ */
+interoperabilityInvocation
+    : qualifiedNameReference
+      LPAREN
+      interoperabilityArgumentList?
+      RPAREN
+      interoperabilityInvocationClause*
+    ;
+
+interoperabilityInvocationClause
+    : interoperabilityMetadata
+    | interoperabilityContractClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 27. SOURCE-LEVEL ADAPTER
+ * ============================================================================
+ *
+ * An adapter expresses a semantic relationship between two interfaces.
+ *
+ * It does not implement the adapter.
+ */
+interoperabilityAdapter
+    : interopAdapterMarker
+      qualifiedNameReference
+      interopToMarker
+      qualifiedNameReference
+      LBRACE
+      interoperabilityMapping*
+      RBRACE
+    ;
+
+interopAdapterMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 28. FOREIGN TYPE REFERENCE
+ * ============================================================================
+ *
+ * Foreign type identity remains symbolic.
+ *
+ * The actual representation is determined by semantic analysis and the
+ * selected interoperability backend.
+ */
+foreignTypeReference
+    : interopForeignTypeMarker
+      qualifiedNameReference
+    ;
+
+interopForeignTypeMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 29. OWNERSHIP / LIFETIME METADATA
+ * ============================================================================
+ *
+ * Ownership and lifetime are semantic contracts.
+ *
+ * They are not runtime instructions.
+ */
+interoperabilityOwnershipClause
+    : interopOwnershipMarker
+      interoperabilityValue
+    ;
+
+interopOwnershipMarker
+    : IDENTIFIER
+    ;
+
+interoperabilityLifetimeClause
+    : interopLifetimeMarker
+      interoperabilityValue
+    ;
+
+interopLifetimeMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 30. ERROR / FAILURE CONTRACT
+ * ============================================================================
+ *
+ * Interoperability failures are semantic/runtime concerns.
+ *
+ * The grammar only records an optional symbolic policy.
+ */
+interoperabilityFailureClause
+    : interopFailureMarker
+      interoperabilityValue
+    ;
+
+interopFailureMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 31. ASYNCHRONOUS INTEROPERABILITY
+ * ============================================================================
+ *
+ * Async is represented through the canonical lexer token.
+ *
+ * This grammar does not define an async runtime.
+ */
+interoperabilityAsyncMarker
+    : ASYNC
+    ;
+
+
+/*
+ * ============================================================================
+ * 32. PURE INTEROPERABILITY
+ * ============================================================================
+ *
+ * Purity is semantic metadata.
+ *
+ * The grammar records the marker only where a consuming grammar chooses to
+ * expose it.
+ */
+interoperabilityPurityMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 33. SECURITY BOUNDARY
+ * ============================================================================
+ *
+ * Security metadata is deliberately symbolic.
+ *
+ * This grammar does not grant permissions.
+ */
+interoperabilitySecurityClause
+    : interopSecurityMarker
+      interoperabilityValue
+    ;
+
+interopSecurityMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 34. VERSION REFERENCE
+ * ============================================================================
+ *
+ * Versions remain values/metadata.
+ *
+ * Version compatibility belongs to the versioning/semantic subsystem.
+ */
+interoperabilityVersionClause
+    : interopVersionMarker
+      interoperabilityValue
+    ;
+
+interopVersionMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 35. CAPABILITY / REQUIREMENT BOUNDARY
+ * ============================================================================
+ *
+ * Requirements are represented as expressions here rather than recreated as
+ * a competing requirement grammar.
+ *
+ * Canonical requirement semantics remain owned by grammar/core/requirements.g4.
+ */
+interoperabilityRequirementClause
+    : REQUIRES
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 36. GENERIC EXTENSION CLAUSE
+ * ============================================================================
+ *
+ * This is the primary future-proofing mechanism.
+ *
+ * New interoperability properties can be represented without changing this
+ * grammar, provided they remain syntactically:
+ *
+ *     identifier = value;
+ *
+ * and their semantics are registered elsewhere.
+ */
+interoperabilityExtensionClause
+    : IDENTIFIER
+      ASSIGN
+      interoperabilityValue
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 37. INTEROPERABILITY MEMBER LIST
+ * ============================================================================
+ *
+ * Convenience integration rule.
+ */
+interoperabilityMemberList
+    : interoperabilityInterfaceMember*
+    ;
+
+
+/*
+ * ============================================================================
+ * 38. OPTIONAL INTEROPERABILITY
+ * ============================================================================
+ */
+optionalInteroperability
+    : interoperability?
+    ;
+
+
+/*
+ * ============================================================================
+ * 39. INTEROPERABILITY VALUE LIST
+ * ============================================================================
+ */
+interoperabilityValueList
+    : interoperabilityValue
+      (COMMA interoperabilityValue)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 40. INTEROPERABILITY NAME LIST
+ * ============================================================================
+ *
+ * Uses canonical qualified names.
+ */
+interoperabilityNameList
+    : qualifiedNameReference
+      (COMMA qualifiedNameReference)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 41. INTEROPERABILITY TYPE MAPPING
+ * ============================================================================
+ *
+ * This is a semantic mapping boundary, not a second type system.
+ */
+interoperabilityTypeMapping
+    : typeExpression
+      interopToMarker
+      typeExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 42. INTEROPERABILITY SIGNATURE MAPPING
+ * ============================================================================
+ */
+interoperabilitySignatureMapping
+    : interoperabilityTypeMapping
+      (COMMA interoperabilityTypeMapping)*
+    ;
+
+
+/*
+ * ============================================================================
+ * 43. CROSS-DOMAIN VALUE CONTRACT
+ * ============================================================================
+ */
+interoperabilityValueContract
+    : expression
+      interopToMarker
+      typeExpression
+      interoperabilityContractClause*
+    ;
+
+
+/*
+ * ============================================================================
+ * 44. SOURCE ARTIFACT REFERENCE
+ * ============================================================================
+ *
+ * The path/source value is opaque.
+ *
+ * This grammar never opens, reads, downloads, executes, or validates it.
+ */
+sourceArtifactReference
+    : interopSourceArtifactMarker
+      STRING
+    ;
+
+interopSourceArtifactMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 45. SYMBOLIC TARGET REFERENCE
+ * ============================================================================
+ *
+ * Target identity remains symbolic.
+ *
+ * Physical target selection belongs downstream.
+ */
+interopTargetReference
+    : interopTargetMarker
+      qualifiedNameReference
+    ;
+
+interopTargetMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 46. INTEROPERABILITY POLICY
+ * ============================================================================
+ *
+ * Policy is metadata.
+ *
+ * Policy semantics belong to compiler/runtime/security/resilience systems.
+ */
+interoperabilityPolicy
+    : interopPolicyMarker
+      interoperabilityValue
+    ;
+
+interopPolicyMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 47. INTEROPERABILITY HINT
+ * ============================================================================
+ *
+ * Hints MUST remain distinguishable from requirements semantically.
+ */
+interoperabilityHint
+    : interopHintMarker
+      interoperabilityValue
+    ;
+
+interopHintMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 48. INTEROPERABILITY PREFERENCE
+ * ============================================================================
+ *
+ * Preferences are advisory and MUST NOT become hidden requirements.
+ */
+interoperabilityPreference
+    : interopPreferenceMarker
+      interoperabilityValue
+    ;
+
+interopPreferenceMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 49. INTEROPERABILITY CONSTRAINT
+ * ============================================================================
+ *
+ * Constraints are semantic restrictions on valid realization.
+ */
+interoperabilityConstraint
+    : interopConstraintMarker
+      expression
+    ;
+
+interopConstraintMarker
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 50. PUBLIC INTEGRATION WRAPPERS
+ * ============================================================================
+ *
+ * These wrappers allow future specialized grammars to consume the canonical
+ * interoperability concepts without duplicating their syntax.
+ *
+ * Specialized grammars MAY include:
+ *
+ *     - C interoperability;
+ *     - C++ interoperability;
+ *     - Python interoperability;
+ *     - OpenQASM interoperability;
+ *     - Verilog interoperability;
+ *     - SystemVerilog interoperability;
+ *     - VHDL interoperability;
+ *     - ABI interoperability;
+ *     - FFI interoperability;
+ *     - system-interface interoperability.
+ *
+ * Those grammars must consume these semantic boundaries rather than redefine
+ * the universal concepts.
+ */
+interopLanguage
+    : languageReference
+    ;
+
+interopAbi
+    : abiReference
+    ;
+
+interopCallingConvention
+    : callingConventionReference
+    ;
+
+interopProtocol
+    : protocolReference
+    ;
+
+interopFormat
+    : dataFormatReference
+    ;
+
+interopSymbol
+    : foreignSymbolReference
+    ;
+
+interopForeignType
+    : foreignTypeReference
+    ;
+
+interopSourceArtifact
+    : sourceArtifactReference
+    ;
+
+interopTarget
+    : interopTargetReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 51. COMPLETE INTEROPERABILITY CONTRACT
+ * ============================================================================
+ *
+ * This is the broad integration surface consumed by specialized grammars.
+ */
+interoperabilityContractSurface
+    : interoperabilityMetadata*
+      interoperabilityMapping*
+      interoperabilityContractClause*
+    ;
+
+
+/*
+ * ============================================================================
+ * 52. EMPTY-SAFE OPTIONAL SURFACES
+ * ============================================================================
+ *
+ * These are intentionally structural and do not impose fixed cardinalities.
+ */
+optionalInteroperabilityMetadata
+    : interoperabilityMetadata*
+    ;
+
+optionalInteroperabilityMappings
+    : interoperabilityMapping*
+    ;
+
+optionalInteroperabilityContracts
+    : interoperabilityContractClause*
+    ;
+
+
+/*
+ * ============================================================================
+ * 53. INTEGRATION GUARANTEES
+ * ============================================================================
+ *
+ * This grammar guarantees:
+ *
+ *     1. No lexer ownership duplication.
+ *     2. No type-system duplication.
+ *     3. No expression-system duplication.
+ *     4. No qualified-name duplication.
+ *     5. No foreign-function implementation.
+ *     6. No ABI implementation.
+ *     7. No linker implementation.
+ *     8. No runtime implementation.
+ *     9. No hardware discovery.
+ *    10. No physical resource limits.
+ *    11. No quantum IR duplication.
+ *    12. No QEC ownership.
+ *    13. No ZQN ownership.
+ *    14. No routing ownership.
+ *    15. No scheduling ownership.
+ *    16. No optimization ownership.
+ *
+ * ============================================================================
+ * 54. DETERMINISM
+ * ============================================================================
+ *
+ * The grammar has:
+ *
+ *     - no semantic predicates;
+ *     - no actions;
+ *     - no external state;
+ *     - no I/O;
+ *     - no randomness;
+ *     - no hardware dependency;
+ *     - no runtime dependency.
+ *
+ * Therefore parsing is a pure function of the source token stream and grammar.
+ *
+ * ============================================================================
+ * 55. SAFETY
+ * ============================================================================
+ *
+ * This file contains no Rust implementation code.
+ *
+ * Generated parser integration MUST remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and MUST use safe Rust only.
+ *
+ * No `unsafe` implementation is required or permitted by the Zamani compiler
+ * integration contract.
+ *
+ * ============================================================================
+ */
