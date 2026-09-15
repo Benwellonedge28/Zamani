@@ -1,171 +1,338 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Programming Language
  * ============================================================================
  *
  * File:
  *     grammar/metaprogramming/metaprogramming.g4
  *
+ * Grammar:
+ *     Metaprogramming
+ *
  * Status:
- *     Production parser component
+ *     Production parser-composition unit
  *
- * Ownership:
- *     SOURCE-LEVEL METAPROGRAMMING SYNTAX ONLY
+ * Rust implementation target:
+ *     Rust 1.97 / Rust 1.97.1
  *
- * Purpose:
- *     Define the syntax required for:
- *
- *       - macro declarations;
- *       - macro invocations;
- *       - macro parameters;
- *       - compile-time/meta expressions;
- *       - quotation;
- *       - splicing;
- *       - language declarations;
- *       - language-definition members;
- *       - compile-time declarations;
- *       - compile-time functions;
- *       - generated declarations;
- *       - generated expressions;
- *       - reflection requests;
- *       - specialization requests;
- *       - compile-time assertions;
- *       - compile-time configuration;
- *       - declarative compiler metadata.
+ * Safety:
+ *     This grammar contains no target-language actions and requires no Rust
+ *     `unsafe`. All compiler implementation code consuming this grammar MUST
+ *     remain safe Rust.
  *
  * ============================================================================
- *
- * ARCHITECTURAL BOUNDARY
+ * PURPOSE
  * ============================================================================
  *
- * This grammar owns syntax.
+ * This file defines the COMMON METAPROGRAMMING COMPOSITION BOUNDARY.
  *
- * It does NOT own:
+ * It does not attempt to implement the macro engine, evaluator, reflection
+ * engine, specialization engine, source generator, compiler, optimizer,
+ * scheduler, hardware layer, runtime, quantum IR, QEC, ZQN, or simulator.
  *
- *   - macro expansion;
- *   - macro resolution;
- *   - hygiene implementation;
- *   - compile-time execution;
- *   - filesystem access;
- *   - network access;
- *   - subprocess execution;
- *   - arbitrary host-language execution;
- *   - package downloading;
- *   - compiler configuration mutation;
- *   - backend selection;
+ * The grammar is responsible only for recognizing metaprogramming constructs
+ * and connecting them to the repository's canonical parser rules.
+ *
+ * The semantic pipeline remains:
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *       lexer
+ *          |
+ *          v
+ *       parser
+ *          |
+ *          v
+ *     canonical AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          +--> macro expansion
+ *          +--> compile-time evaluation
+ *          +--> reflection
+ *          +--> specialization
+ *          +--> generation
+ *          |
+ *          v
+ *     canonical semantic representation / IR
+ *          |
+ *          +--> classical IR
+ *          +--> quantum::ir
+ *          +--> HDL/hardware representation
+ *          +--> other domain IRs
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *     routing / scheduling / lowering
+ *          |
+ *     hardware abstraction
+ *          |
+ *     runtime
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *   - the metaprogramming composition entry point;
+ *   - the distinction between metaprogramming declaration and metaprogramming
+ *     expression/statement contexts;
+ *   - composition of macro syntax;
+ *   - composition of compile-time syntax;
+ *   - composition of generation syntax;
+ *   - composition of reflection syntax;
+ *   - composition of specialization syntax;
+ *   - the shared dispatch boundary used by the canonical parser.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *   - lexer tokens;
+ *   - identifiers;
+ *   - paths;
+ *   - expressions;
+ *   - statements;
+ *   - declarations;
+ *   - types;
+ *   - patterns;
+ *   - generic parameters;
+ *   - ordinary functions;
+ *   - macro expansion semantics;
+ *   - macro hygiene;
+ *   - compile-time evaluation;
+ *   - reflection semantics;
+ *   - specialization algorithms;
+ *   - generated-code semantics;
+ *   - resource discovery;
  *   - hardware discovery;
- *   - quantum-device selection;
- *   - qubit allocation;
- *   - routing;
- *   - scheduling;
- *   - optimization;
+ *   - backend selection;
+ *   - target selection;
+ *   - classical IR;
+ *   - quantum::ir;
  *   - QEC;
  *   - ZQN;
- *   - canonical IR construction.
- *
- * Those concerns belong to their respective compiler/runtime subsystems.
- *
- * ============================================================================
- *
- * COMPOSITION
- * ============================================================================
- *
- * This file is intentionally a PARSER grammar component.
- *
- * It is expected to be composed by the authoritative Zamani parser grammar.
- *
- * It therefore consumes shared parser rules rather than defining competing
- * copies of:
- *
- *   - identifier;
- *   - qualifiedName;
- *   - expression;
- *   - typeExpression;
- *   - genericParameters;
- *   - parameterList;
- *   - argumentList;
- *   - block;
- *   - attributes;
- *   - visibility;
- *   - declaration.
- *
- * The final composed parser MUST provide exactly one canonical owner for each
- * shared rule.
+ *   - optimization;
+ *   - routing;
+ *   - scheduling;
+ *   - runtime dispatch.
  *
  * ============================================================================
+ * CRITICAL ARCHITECTURAL RULE
+ * ============================================================================
  *
+ * This file MUST NOT become a second complete parser.
+ *
+ * Shared language constructs MUST be imported/composed from their canonical
+ * owners.
+ *
+ * In particular, this file MUST NOT define local replacements for:
+ *
+ *     identifier
+ *     qualifiedName
+ *     expression
+ *     statement
+ *     item
+ *     declaration
+ *     typeExpression
+ *     pattern
+ *     block
+ *     genericParameters
+ *     parameterList
+ *     argumentList
+ *     attribute
+ *     visibilityModifier
+ *
+ * The canonical parser composition layer owns those rules.
+ *
+ * ============================================================================
+ * SIBLING FILE OWNERSHIP
+ * ============================================================================
+ *
+ *     macros/
+ *         owns macro declaration/invocation syntax.
+ *
+ *     compile-time-execution.g4
+ *         owns explicit compile-time execution syntax.
+ *
+ *     generation.g4
+ *         owns source-generation syntax.
+ *
+ *     reflection.g4
+ *         owns reflection-request syntax.
+ *
+ *     specialization.g4
+ *         owns specialization-request syntax.
+ *
+ * This file composes those facilities.
+ *
+ * If one of those sibling files requires a new production, that production
+ * belongs in that sibling file rather than being copied here.
+ *
+ * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Metaprogramming MUST preserve:
+ * Metaprogramming must preserve:
  *
- *   Program Once
- *        ->
- *   Portable source semantics
- *        ->
- *   deterministic meta transformation
- *        ->
- *   canonical AST / semantic representation
- *        ->
- *   target-independent compilation
- *        ->
- *   target adaptation
+ *     Program Once
+ *          |
+ *          v
+ *     portable source semantics
+ *          |
+ *          v
+ *     deterministic / explicitly-authorized transformation
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          v
+ *     target adaptation
  *
- * A macro MUST NOT encode permanent assumptions about:
+ * Metaprogramming syntax MUST NOT require:
  *
- *   - CPU count;
- *   - GPU count;
- *   - FPGA count;
- *   - QPU count;
- *   - qubit count;
- *   - machine topology;
- *   - register count;
- *   - memory size;
- *   - device identifier;
- *   - vendor;
- *   - backend;
- *   - timing grid;
- *   - hardware address.
+ *     a fixed CPU count
+ *     a fixed GPU count
+ *     a fixed FPGA count
+ *     a fixed QPU count
+ *     a fixed qubit count
+ *     a fixed memory size
+ *     a fixed register count
+ *     a fixed topology
+ *     a fixed device ID
+ *     a fixed vendor
+ *     a fixed backend
+ *     a fixed timing grid
+ *     a fixed physical address
  *
- * Such information may be supplied through semantic capability/resource
- * mechanisms when required, but it is not owned by this grammar.
+ * Resource requirements and capabilities are expressed through the repository's
+ * resource/capability/target systems and resolved downstream.
  *
  * ============================================================================
- *
  * SCALABILITY
  * ============================================================================
  *
- * No finite language-level limits are imposed on:
+ * No language-level maximum is encoded here.
  *
- *   - macro parameters;
- *   - macro arguments;
- *   - quoted structures;
- *   - generated declarations;
- *   - generated expressions;
- *   - language members;
- *   - specialization dimensions;
- *   - metadata entries;
- *   - reflection paths.
+ * In particular, there is no:
  *
- * Implementations may impose configurable resource budgets. Those are compiler
- * policy and MUST NOT be encoded as grammar semantics.
+ *     MAX_MACROS
+ *     MAX_PARAMETERS
+ *     MAX_GENERATED_ITEMS
+ *     MAX_SPECIALIZATIONS
+ *     MAX_REFLECTION_DEPTH
+ *     MAX_COMPILE_TIME_OPERATIONS
+ *     MAX_TYPES
+ *     MAX_EXPRESSIONS
+ *     MAX_QUbits
+ *     MAX_DEVICES
+ *
+ * Compiler resource budgets, recursion protection, cancellation, timeouts,
+ * memory admission, expansion budgets, and execution limits are implementation
+ * policy. They MUST NOT become grammar semantics.
  *
  * ============================================================================
- *
- * SAFETY
+ * DETERMINISM
  * ============================================================================
  *
- * Rust implementation target:
+ * Parsing must be deterministic.
  *
- *   Rust 1.97
- *   Rust 1.97.1
+ * Whether a metaprogram executes deterministically is a semantic/compiler
+ * property.
  *
- * Rust implementation MUST use safe Rust.
+ * The grammar MUST NOT implicitly grant access to:
  *
- * This grammar contains no executable Rust actions.
+ *     filesystem
+ *     network
+ *     environment
+ *     credentials
+ *     subprocesses
+ *     hardware
+ *     devices
+ *     clocks
+ *     random sources
  *
- * A Zamani source-level `unsafe` construct, if supported elsewhere in the
- * language, does not authorize Rust `unsafe`.
+ * A compiler may expose explicitly authorized capabilities through semantic
+ * analysis, provenance, sandboxing, and policy.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Parsing a metaprogramming construct MUST NEVER execute it.
+ *
+ * Generated source MUST pass through normal:
+ *
+ *     parsing
+ *     validation
+ *     name resolution
+ *     type checking
+ *     capability checking
+ *     effect checking
+ *     semantic validation
+ *
+ * before entering the canonical compiler pipeline.
+ *
+ * A generated quantum construct must ultimately enter the same quantum semantic
+ * pipeline as handwritten quantum source. It must not create a parallel
+ * quantum representation.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Every metaprogramming construct must preserve:
+ *
+ *     source span
+ *     source ordering
+ *     syntactic identity
+ *     nesting
+ *     explicit meta intent
+ *     attributes
+ *     names/paths
+ *     argument structure
+ *
+ * The ANTLR parse tree is not the canonical AST.
+ *
+ * The frontend owns conversion from this parser representation to the
+ * repository's canonical AST.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO IR.
+ *
+ * In particular:
+ *
+ *     grammar/metaprogramming/
+ *
+ * MUST NOT create:
+ *
+ *     QuantumGate
+ *     Qubit
+ *     PhysicalQubit
+ *     ClassicalInstruction
+ *     HardwareInstruction
+ *     ScheduleOperation
+ *     ZQN fault
+ *     QEC operation
+ *
+ * Generated source is reintroduced into the normal semantic pipeline.
+ *
+ * Quantum generated source ultimately lowers through `quantum::ir`.
+ *
+ * ============================================================================
+ * RUST SAFETY
+ * ============================================================================
+ *
+ * This grammar has no embedded Rust actions.
+ *
+ * Rust 1.97 / 1.97.1 implementations consuming it MUST use safe Rust.
+ *
+ * The absence of `unsafe` in this grammar is intentional.
  *
  * ============================================================================
  */
@@ -173,1747 +340,818 @@
 parser grammar Metaprogramming;
 
 options {
-    /*
-     * The authoritative composed parser supplies the lexer vocabulary.
-     *
-     * Replace the token vocabulary name only if the repository's canonical
-     * parser architecture establishes a different lexer name.
-     */
     tokenVocab = ZamaniLexer;
 }
 
 
 /* ============================================================================
- * 1. METAPROGRAMMING DECLARATIONS
- * ========================================================================== */
-
-/**
- * Top-level metaprogramming declaration.
+ * 1. TOP-LEVEL METAPROGRAMMING DISPATCH
+ * ============================================================================
  *
- * This rule is intended to be consumed by the canonical declaration dispatcher.
+ * The canonical parser should invoke `metaprogrammingDeclaration`,
+ * `metaprogrammingExpression`, or `metaprogrammingStatement` at the
+ * appropriate syntactic locations.
+ *
+ * This file deliberately does not decide where those entry points are legal.
+ * The canonical parser owns that integration.
  */
+
 metaprogrammingDeclaration
     : macroDeclaration
-    | languageDeclaration
-    | compileTimeFunctionDeclaration
-    | compileTimeConstantDeclaration
-    ;
-
-
-/* ============================================================================
- * 2. MACRO DECLARATIONS
- * ========================================================================== */
-
-/**
- * Canonical macro declaration.
- *
- * Examples:
- *
- *     macro make_value(x) {
- *         ...
- *     }
- *
- *     public macro make_type(T) {
- *         ...
- *     }
- *
- * Visibility is deliberately shared with the ordinary declaration system.
- */
-macroDeclaration
-    : visibilityModifier?
-      MACRO
-      identifier
-      genericParameters?
-      LPAREN macroParameterList? RPAREN
-      macroReturnType?
-      macroAttributes*
-      macroBody
-    ;
-
-
-/**
- * Optional macro result category.
- *
- * The category is syntactic metadata only. Semantic validation determines
- * whether the declared category is valid for the macro body and call site.
- */
-macroReturnType
-    : ARROW macroResultType
-    ;
-
-
-macroResultType
-    : META
-    | TYPE
-    | TOKEN
-    | EXPRESSION
-    | STATEMENT
-    | DECLARATION
-    | identifier
-    ;
-
-
-/**
- * Macro parameter list.
- *
- * A trailing comma is accepted.
- */
-macroParameterList
-    : macroParameter (COMMA macroParameter)* COMMA?
-    ;
-
-
-/**
- * Macro parameters support explicit categories.
- *
- * The grammar does not hard-code a finite set of implementation-specific
- * compile-time types. Unknown/custom categories can be represented through
- * identifiers and are validated semantically.
- */
-macroParameter
-    : macroParameterKind?
-      identifier
-      macroParameterType?
-      macroParameterDefault?
-    ;
-
-
-macroParameterKind
-    : META
-    | TOKEN
-    | EXPRESSION
-    | STATEMENT
-    | DECLARATION
-    | TYPE
-    | PATTERN
-    | VALUE
-    ;
-
-
-macroParameterType
-    : COLON typeExpression
-    ;
-
-
-macroParameterDefault
-    : ASSIGN expression
-    ;
-
-
-/**
- * Macro body.
- *
- * A macro can return a source-level structure or a compile-time expression.
- *
- * The macro engine, not the parser, determines how the body is expanded.
- */
-macroBody
-    : block
-    | expression
-    ;
-
-
-/**
- * Optional macro attributes.
- *
- * The actual attribute syntax is owned by the common attribute grammar.
- */
-macroAttributes
-    : attribute
-    ;
-
-
-/* ============================================================================
- * 3. MACRO INVOCATION
- * ========================================================================== */
-
-/**
- * Statement/declaration-compatible macro invocation.
- *
- * Example:
- *
- *     make_value!(x);
- *
- * The canonical expression grammar may also use `macroExpression`.
- */
-macroInvocation
-    : macroPath BANG LPAREN macroArgumentList? RPAREN
-    ;
-
-
-/**
- * Macro invocation without parentheses is intentionally NOT accepted.
- *
- * Requiring explicit invocation punctuation prevents accidental ambiguity
- * between ordinary function calls and macro expansion.
- */
-macroPath
-    : identifier (DOUBLE_COLON identifier)*
-    ;
-
-
-/**
- * Macro argument list.
- *
- * Arguments are syntactic meta values and may therefore contain quotations,
- * splices, types, expressions, or token-oriented structures.
- */
-macroArgumentList
-    : macroArgument (COMMA macroArgument)* COMMA?
-    ;
-
-
-macroArgument
-    : macroArgumentValue
-    ;
-
-
-macroArgumentValue
-    : expression
-    | metaQuote
-    | metaSplice
-    | metaTokenTree
-    | metaType
-    | metaPattern
-    ;
-
-
-/* ============================================================================
- * 4. EXPRESSION-LEVEL MACROS
- * ========================================================================== */
-
-/**
- * Expression-level macro invocation.
- */
-macroExpression
-    : macroInvocation
-    ;
-
-
-/**
- * Explicit meta invocation.
- *
- * This form provides an unambiguous syntax for compile-time evaluation.
- */
-metaEvaluateExpression
-    : META LPAREN expression RPAREN
-    ;
-
-
-/* ============================================================================
- * 5. QUOTATION
- * ========================================================================== */
-
-/**
- * Quotation creates a source-level meta value.
- *
- * Supported forms:
- *
- *     quote { ... }
- *     quote(expression)
- *
- * Quotation is data at the source/AST level. It does not execute its contents.
- */
-metaQuote
-    : QUOTE metaQuoteBody
-    ;
-
-
-metaQuoteBody
-    : block
-    | LPAREN expression RPAREN
-    | LPAREN statementList? RPAREN
-    | LBRACE metaTokenTree? RBRACE
-    ;
-
-
-/**
- * Explicit quoted expression.
- */
-metaQuoteExpression
-    : QUOTE LPAREN expression RPAREN
-    ;
-
-
-/**
- * Explicit quoted block.
- */
-metaQuoteBlock
-    : QUOTE block
-    ;
-
-
-/**
- * Zero or more statements inside a meta quotation.
- */
-statementList
-    : statement*
-    ;
-
-
-/* ============================================================================
- * 6. SPLICING
- * ========================================================================== */
-
-/**
- * Splicing inserts a meta-produced source structure into a quotation.
- *
- * Example:
- *
- *     quote {
- *         let x = splice(value);
- *     }
- *
- * The grammar does not decide whether the resulting value is an expression,
- * statement, declaration, type, or token tree. That is a semantic property.
- */
-metaSplice
-    : SPLICE LPAREN expression RPAREN
-    ;
-
-
-/**
- * Short interpolation form.
- *
- * This is intentionally separate from `metaSplice` so tooling and semantic
- * analysis can distinguish explicit source splicing from ordinary interpolation.
- */
-metaInterpolation
-    : INTERPOLATE LPAREN expression RPAREN
-    ;
-
-
-/* ============================================================================
- * 7. TOKEN-TREE REPRESENTATION
- * ========================================================================== */
-
-/**
- * Token-tree syntax is deliberately structural.
- *
- * It provides a stable escape hatch for syntax-oriented macros without
- * embedding another programming language in the grammar.
- *
- * Token-tree parsing is still bounded by the source input and compiler policy;
- * there is no language-level maximum nesting or token count.
- */
-metaTokenTree
-    : metaTokenTreeElement+
-    ;
-
-
-metaTokenTreeElement
-    : metaToken
-    | metaTokenGroup
-    ;
-
-
-metaTokenGroup
-    : LPAREN metaTokenTree? RPAREN
-    | LBRACK metaTokenTree? RBRACK
-    | LBRACE metaTokenTree? RBRACE
-    ;
-
-
-metaToken
-    : identifier
-    | literal
-    | operatorToken
-    | punctuationToken
-    | keywordAsMetaToken
-    ;
-
-
-/**
- * Operators that can safely participate in a token tree.
- *
- * The token vocabulary remains authoritative.
- */
-operatorToken
-    : PLUS
-    | MINUS
-    | STAR
-    | SLASH
-    | MODULO
-    | EQUALS
-    | NOT_EQUALS
-    | LESS_THAN
-    | LESS_THAN_EQUAL
-    | GREATER_THAN
-    | GREATER_THAN_EQUAL
-    | BIT_AND
-    | BIT_OR
-    | CARET
-    | LOGICAL_AND
-    | LOGICAL_OR
-    | BANG
-    | QUESTION_MARK
-    | ARROW
-    | FAT_ARROW
-    ;
-
-
-/**
- * Punctuation available as meta tokens.
- */
-punctuationToken
-    : LPAREN
-    | RPAREN
-    | LBRACK
-    | RBRACK
-    | LBRACE
-    | RBRACE
-    | COMMA
-    | DOT
-    | COLON
-    | SEMI
-    | DOUBLE_COLON
-    ;
-
-
-/**
- * Language keywords can be represented as meta tokens when quoted.
- *
- * This avoids introducing a second lexer/token namespace.
- */
-keywordAsMetaToken
-    : FN
-    | LET
-    | CONST
-    | VAR
-    | TYPE
-    | MODULE
-    | IMPORT
-    | EXPORT
-    | IF
-    | ELSE
-    | FOR
-    | WHILE
-    | MATCH
-    | RETURN
-    | STRUCT
-    | ENUM
-    | TRAIT
-    | IMPLEMENTS
-    | CLASS
-    | INTERFACE
-    | MACRO
-    | LANGUAGE
-    | QUOTE
-    | SPLICE
-    | META
-    ;
-
-
-/* ============================================================================
- * 8. META TYPES
- * ========================================================================== */
-
-/**
- * Type quotation/reference for compile-time type manipulation.
- */
-metaType
-    : TYPE LPAREN typeExpression RPAREN
-    ;
-
-
-/**
- * Pattern quotation/reference.
- */
-metaPattern
-    : PATTERN LPAREN pattern RPAREN
-    ;
-
-
-/* ============================================================================
- * 9. LANGUAGE DECLARATIONS
- * ========================================================================== */
-
-/**
- * Language declaration.
- *
- * A language declaration describes a language artifact. It does not dynamically
- * replace the currently active Zamani lexer or parser.
- */
-languageDeclaration
-    : visibilityModifier?
-      LANGUAGE
-      identifier
-      languageVersion?
-      languageParameters?
-      languageAttributes*
-      languageBody
-    ;
-
-
-languageVersion
-    : VERSION versionExpression
-    ;
-
-
-versionExpression
-    : literal
-    | qualifiedName
-    | expression
-    ;
-
-
-languageParameters
-    : LPAREN parameterList? RPAREN
-    ;
-
-
-languageAttributes
-    : attribute
-    ;
-
-
-languageBody
-    : LBRACE languageMember* RBRACE
-    ;
-
-
-/* ============================================================================
- * 10. LANGUAGE MEMBERS
- * ========================================================================== */
-
-languageMember
-    : languageGrammarDeclaration
-    | languageLexerDeclaration
-    | languageParserDeclaration
-    | languageMacroDeclaration
-    | languageTypeDeclaration
-    | languageOperatorDeclaration
-    | languageAttributeDeclaration
-    | languageDirectiveDeclaration
-    | languageCapabilityDeclaration
-    | languageRequirementDeclaration
-    | languageExportDeclaration
-    | languageImportDeclaration
-    ;
-
-
-/* ============================================================================
- * 11. LANGUAGE GRAMMAR DESCRIPTORS
- * ========================================================================== */
-
-/**
- * Grammar descriptors are DATA.
- *
- * They do not embed ANTLR implementation syntax.
- */
-languageGrammarDeclaration
-    : GRAMMAR identifier languageDescriptorBody?
-      SEMI?
-    ;
-
-
-languageLexerDeclaration
-    : LEXER identifier languageDescriptorBody?
-      SEMI?
-    ;
-
-
-languageParserDeclaration
-    : PARSER identifier languageDescriptorBody?
-      SEMI?
-    ;
-
-
-languageDescriptorBody
-    : LBRACE languageDescriptorEntry* RBRACE
-    ;
-
-
-languageDescriptorEntry
-    : identifier
-      (COLON metaValue)?
-      SEMI?
-    ;
-
-
-/* ============================================================================
- * 12. LANGUAGE MACROS
- * ========================================================================== */
-
-/**
- * Macro exported by a language definition.
- *
- * This is distinct from an ordinary macro declaration so semantic analysis can
- * preserve language ownership.
- */
-languageMacroDeclaration
-    : MACRO
-      identifier
-      genericParameters?
-      LPAREN macroParameterList? RPAREN
-      macroReturnType?
-      macroBody
-    ;
-
-
-/* ============================================================================
- * 13. LANGUAGE TYPES
- * ========================================================================== */
-
-/**
- * Language-defined type descriptor.
- *
- * This does not create a second type system.
- */
-languageTypeDeclaration
-    : TYPE
-      identifier
-      genericParameters?
-      (ASSIGN typeExpression)?
-      languageDescriptorBody?
-      SEMI?
-    ;
-
-
-/* ============================================================================
- * 14. LANGUAGE OPERATORS
- * ========================================================================== */
-
-/**
- * User-defined operator descriptor.
- *
- * The grammar permits only the canonical operator token vocabulary or a named
- * operator identifier. It does not dynamically create lexer rules.
- */
-languageOperatorDeclaration
-    : OPERATOR
-      languageOperatorSymbol
-      operatorSignature?
-      operatorAttributes*
-      SEMI?
-    ;
-
-
-languageOperatorSymbol
-    : identifier
-    | operatorToken
-    ;
-
-
-operatorSignature
-    : COLON typeExpression
-    ;
-
-
-operatorAttributes
-    : attribute
-    ;
-
-
-/* ============================================================================
- * 15. LANGUAGE ATTRIBUTES
- * ========================================================================== */
-
-languageAttributeDeclaration
-    : ATTRIBUTE
-      identifier
-      languageAttributeParameters?
-      languageDescriptorBody?
-      SEMI?
-    ;
-
-
-languageAttributeParameters
-    : LPAREN parameterList? RPAREN
-    ;
-
-
-/* ============================================================================
- * 16. LANGUAGE DIRECTIVES
- * ========================================================================== */
-
-/**
- * Declarative directive.
- *
- * A directive is metadata, not an imperative command.
- */
-languageDirectiveDeclaration
-    : DIRECTIVE
-      identifier
-      (ASSIGN metaValue)?
-      SEMI?
-    ;
-
-
-/* ============================================================================
- * 17. LANGUAGE CAPABILITIES
- * ========================================================================== */
-
-/**
- * Language definitions can declare capabilities they provide or require.
- *
- * Capability semantics are resolved by the capability subsystem.
- */
-languageCapabilityDeclaration
-    : PROVIDES
-      capabilitySet
-      SEMI?
-    | REQUIRES
-      capabilitySet
-      SEMI?
-    ;
-
-
-capabilitySet
-    : capabilityExpression
-      (COMMA capabilityExpression)*
-      COMMA?
-    ;
-
-
-capabilityExpression
-    : capabilityPath
-      capabilityArguments?
-    ;
-
-
-capabilityPath
-    : identifier
-      (DOUBLE_COLON identifier)*
-    ;
-
-
-capabilityArguments
-    : LPAREN metaArgumentList? RPAREN
-    ;
-
-
-/* ============================================================================
- * 18. LANGUAGE REQUIREMENTS
- * ========================================================================== */
-
-languageRequirementDeclaration
-    : REQUIREMENT
-      requirementExpression
-      SEMI?
-    ;
-
-
-requirementExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * 19. LANGUAGE IMPORTS / EXPORTS
- * ========================================================================== */
-
-languageImportDeclaration
-    : IMPORT
-      languageImportTarget
-      SEMI?
-    ;
-
-
-languageImportTarget
-    : qualifiedName
-    | STRING
-    ;
-
-
-languageExportDeclaration
-    : EXPORT
-      languageExportTarget
-      SEMI?
-    ;
-
-
-languageExportTarget
-    : qualifiedName
-    | STAR
-    | LBRACE languageExportList? RBRACE
-    ;
-
-
-languageExportList
-    : languageExportSpecifier
-      (COMMA languageExportSpecifier)*
-      COMMA?
-    ;
-
-
-languageExportSpecifier
-    : identifier
-      (AS identifier)?
-    ;
-
-
-/* ============================================================================
- * 20. COMPILE-TIME FUNCTIONS
- * ========================================================================== */
-
-/**
- * Compile-time function.
- *
- * It is still a source-level declaration. Its execution model belongs to the
- * compiler's controlled meta-evaluation subsystem.
- */
-compileTimeFunctionDeclaration
-    : visibilityModifier?
-      COMPTIME
-      FN
-      identifier
-      genericParameters?
-      LPAREN parameterList? RPAREN
-      (ARROW typeExpression)?
-      compileTimeEffectClause?
-      block
-    ;
-
-
-compileTimeEffectClause
-    : WITH
-      EFFECTS
-      LBRACE effectNameList? RBRACE
-    ;
-
-
-effectNameList
-    : effectName
-      (COMMA effectName)*
-      COMMA?
-    ;
-
-
-effectName
-    : qualifiedName
-    | identifier
-    ;
-
-
-/* ============================================================================
- * 21. COMPILE-TIME CONSTANTS
- * ========================================================================== */
-
-compileTimeConstantDeclaration
-    : visibilityModifier?
-      COMPTIME
-      CONST
-      identifier
-      COLON typeExpression
-      ASSIGN metaValue
-      SEMI
-    ;
-
-
-/* ============================================================================
- * 22. COMPILE-TIME CONTROL
- * ========================================================================== */
-
-/**
- * Compile-time conditional.
- *
- * It expresses a compile-time decision but does not specify the compiler
- * implementation strategy.
- */
-compileTimeIf
-    : COMPTIME
-      IF
-      expression
-      block
-      (ELSE IF expression block)*
-      (ELSE block)?
-    ;
-
-
-/**
- * Compile-time iteration.
- *
- * Resource limits are compiler policy, not syntax.
- */
-compileTimeFor
-    : COMPTIME
-      FOR
-      identifier
-      IN
-      expression
-      block
-    ;
-
-
-/**
- * Compile-time assertion.
- */
-compileTimeAssert
-    : COMPTIME
-      ASSERT
-      LPAREN
-      expression
-      (COMMA expression)?
-      RPAREN
-      SEMI
-    ;
-
-
-/**
- * Compile-time error.
- *
- * The compiler turns this into a diagnostic. The grammar does not prescribe
- * diagnostic storage or formatting.
- */
-compileTimeError
-    : COMPTIME
-      ERROR
-      LPAREN
-      expression
-      RPAREN
-      SEMI
-    ;
-
-
-/**
- * Compile-time warning.
- */
-compileTimeWarning
-    : COMPTIME
-      WARNING
-      LPAREN
-      expression
-      RPAREN
-      SEMI
-    ;
-
-
-/* ============================================================================
- * 23. SPECIALIZATION
- * ========================================================================== */
-
-/**
- * Specialization request.
- *
- * Specialization is a compiler transformation, not a new runtime execution
- * model.
- */
-specializationDeclaration
-    : SPECIALIZE
-      specializationTarget
-      specializationArguments?
-      specializationWhereClause?
-      SEMI?
-    ;
-
-
-specializationTarget
-    : qualifiedName
-    ;
-
-
-specializationArguments
-    : LT
-      specializationArgument
-      (COMMA specializationArgument)*
-      COMMA?
-      GT
-    ;
-
-
-specializationArgument
-    : typeExpression
-    | expression
-    | metaValue
-    ;
-
-
-specializationWhereClause
-    : WHERE
-      expression
-    ;
-
-
-/* ============================================================================
- * 24. GENERATION DECLARATIONS
- * ========================================================================== */
-
-/**
- * Explicit generated declaration.
- *
- * Generation remains declarative and semantic. The compiler decides how and
- * when generated material becomes part of the compilation unit.
- */
-generateDeclaration
-    : GENERATE
-      generateTarget
-      ASSIGN
-      metaValue
-      SEMI?
-    ;
-
-
-generateTarget
-    : DECLARATION
-    | EXPRESSION
-    | TYPE
-    | STATEMENT
-    | TOKEN
-    | identifier
-    ;
-
-
-/* ============================================================================
- * 25. REFLECTION
- * ========================================================================== */
-
-/**
- * Compile-time reflection request.
- *
- * Reflection syntax only identifies the requested subject. It does not grant
- * access to arbitrary host resources.
- */
-reflectExpression
-    : REFLECT
-      LPAREN
-      reflectionTarget
-      RPAREN
-    ;
-
-
-reflectionTarget
-    : reflectionPath
-    | typeExpression
-    | expression
-    ;
-
-
-reflectionPath
-    : identifier
-      (DOUBLE_COLON identifier)*
-    ;
-
-
-/* ============================================================================
- * 26. META VALUES
- * ========================================================================== */
-
-/**
- * Canonical meta value.
- *
- * This is deliberately structural and domain-neutral.
- */
-metaValue
-    : metaQuote
-    | metaSplice
-    | metaInterpolation
-    | metaTokenTree
-    | metaType
-    | metaPattern
-    | expression
-    ;
-
-
-/**
- * Meta argument list.
- */
-metaArgumentList
-    : metaValue
-      (COMMA metaValue)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 27. META BLOCKS
- * ========================================================================== */
-
-/**
- * Meta block.
- *
- * A meta block is a source-level construct. Execution is controlled by the
- * compiler's meta evaluator.
- */
-metaBlock
-    : META
-      block
-    ;
-
-
-/**
- * Meta statement.
- *
- * The canonical statement dispatcher may import these alternatives.
- */
-metaStatement
-    : compileTimeIf
-    | compileTimeFor
-    | compileTimeAssert
-    | compileTimeError
-    | compileTimeWarning
-    | metaBlock
-    | generateDeclaration
+    | compileTimeDeclaration
+    | generationDeclaration
+    | reflectionDeclaration
     | specializationDeclaration
     ;
 
 
-/* ============================================================================
- * 28. MACRO EXPANSION BOUNDARY
- * ========================================================================== */
-
-/**
- * Explicit expansion request.
+/*
+ * Expression-level metaprogramming is intentionally a dispatcher.
  *
- * This does NOT perform expansion in the parser.
+ * Detailed syntax remains in its owning component.
  */
-expandExpression
-    : EXPAND
-      LPAREN
-      macroInvocation
-      RPAREN
-    ;
-
-
-/**
- * Explicit expansion target.
- */
-expansionTarget
-    : macroInvocation
-    | qualifiedName
-    ;
-
-
-/* ============================================================================
- * 29. META PATHS
- * ========================================================================== */
-
-/**
- * A meta path has no fixed namespace depth.
- */
-metaPath
-    : identifier
-      (DOUBLE_COLON identifier)*
-    ;
-
-
-/* ============================================================================
- * 30. META IDENTIFIERS
- * ========================================================================== */
-
-/**
- * Dedicated rule gives semantic tooling a stable place to recognize
- * identifiers used specifically at the meta level.
- */
-metaIdentifier
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 31. META MEMBER ACCESS
- * ========================================================================== */
-
-metaMemberAccess
-    : metaPath
-      (DOT identifier)*
-    ;
-
-
-/* ============================================================================
- * 32. META COLLECTIONS
- * ========================================================================== */
-
-/**
- * Collection literals useful for compile-time data.
- *
- * They intentionally reuse ordinary expression structures rather than creating
- * a second collection language.
- */
-metaCollection
-    : LBRACK metaArgumentList? RBRACK
-    | LBRACE metaArgumentList? RBRACE
-    ;
-
-
-/* ============================================================================
- * 33. META VALUE UNION
- * ========================================================================== */
-
-/**
- * Broad meta expression entry point.
- *
- * This rule is useful to semantic analysis and AST construction.
- */
-metaExpression
+metaprogrammingExpression
     : macroExpression
-    | metaEvaluateExpression
-    | metaQuoteExpression
-    | metaQuoteBlock
-    | metaSplice
-    | metaInterpolation
-    | reflectExpression
-    | expandExpression
-    | metaMemberAccess
-    | metaCollection
-    | metaValue
+    | compileTimeExpression
+    | generationExpression
+    | reflectionExpression
+    | specializationExpression
+    ;
+
+
+/*
+ * Statement-level metaprogramming is also a dispatcher.
+ */
+metaprogrammingStatement
+    : macroStatement
+    | compileTimeStatement
+    | generationStatement
+    | reflectionStatement
+    | specializationStatement
     ;
 
 
 /* ============================================================================
- * 34. EXTENSION DECLARATIONS
- * ========================================================================== */
-
-/**
- * Generic extension declaration.
+ * 2. MACRO COMPOSITION
+ * ============================================================================
  *
- * Extensions are namespaced and versionable.
+ * Macro syntax belongs to the macro grammar.
+ *
+ * This file only establishes the integration point.
  */
-extensionDeclaration
-    : visibilityModifier?
-      EXTENSION
-      extensionPath
-      extensionVersion?
-      extensionAttributes*
-      extensionBody
+
+macroDeclaration
+    : macroDeclarationCore
+    ;
+
+macroExpression
+    : macroInvocationCore
+    ;
+
+macroStatement
+    : macroInvocationStatementCore
     ;
 
 
-extensionPath
+/*
+ * These names are integration contracts for the canonical macro grammar.
+ *
+ * They prevent this file from copying macro syntax and thereby creating two
+ * competing definitions.
+ *
+ * The implementation of those rules belongs to grammar/macros/.
+ */
+
+
+/* ============================================================================
+ * 3. COMPILE-TIME EXECUTION COMPOSITION
+ * ============================================================================
+ *
+ * Compile-time execution syntax belongs to:
+ *
+ *     grammar/metaprogramming/compile-time-execution.g4
+ *
+ * That component must expose these semantic syntax categories.
+ */
+
+compileTimeDeclaration
+    : compileTimeDeclarationCore
+    ;
+
+compileTimeExpression
+    : compileTimeExpressionCore
+    ;
+
+compileTimeStatement
+    : compileTimeStatementCore
+    ;
+
+
+/* ============================================================================
+ * 4. SOURCE GENERATION COMPOSITION
+ * ============================================================================
+ *
+ * Generation syntax belongs to:
+ *
+ *     grammar/metaprogramming/generation.g4
+ */
+
+generationDeclaration
+    : generationDeclarationCore
+    ;
+
+generationExpression
+    : generationExpressionCore
+    ;
+
+generationStatement
+    : generationStatementCore
+    ;
+
+
+/* ============================================================================
+ * 5. REFLECTION COMPOSITION
+ * ============================================================================
+ *
+ * Reflection syntax belongs to:
+ *
+ *     grammar/metaprogramming/reflection.g4
+ *
+ * Runtime reflection and compile-time reflection remain semantically distinct.
+ * The grammar only preserves their explicit source form.
+ */
+
+reflectionDeclaration
+    : reflectionDeclarationCore
+    ;
+
+reflectionExpression
+    : reflectionExpressionCore
+    ;
+
+reflectionStatement
+    : reflectionStatementCore
+    ;
+
+
+/* ============================================================================
+ * 6. SPECIALIZATION COMPOSITION
+ * ============================================================================
+ *
+ * Specialization syntax belongs to:
+ *
+ *     grammar/metaprogramming/specialization.g4
+ *
+ * Specialization is an optimization/compilation concern after semantic
+ * validation. It must never change the source program's portable semantics.
+ */
+
+specializationDeclaration
+    : specializationDeclarationCore
+    ;
+
+specializationExpression
+    : specializationExpressionCore
+    ;
+
+specializationStatement
+    : specializationStatementCore
+    ;
+
+
+/* ============================================================================
+ * 7. CANONICAL METAPROGRAMMING VALUE
+ * ============================================================================
+ *
+ * A metaprogram may manipulate source structure, values, types, patterns,
+ * declarations, or metadata.
+ *
+ * This grammar does not invent a second type/value hierarchy.
+ *
+ * The canonical AST/semantic layer determines the actual meta-value category.
+ *
+ * The following rule exists only as a composition contract for components
+ * needing a shared meta-value boundary.
+ */
+
+metaValue
+    : expression
+    | typeExpression
+    | pattern
+    | qualifiedName
+    ;
+
+
+/* ============================================================================
+ * 8. SOURCE-STRUCTURE BOUNDARY
+ * ============================================================================
+ *
+ * Generated syntax must be represented using canonical Zamani syntax.
+ *
+ * No embedded ANTLR grammar language is accepted here.
+ *
+ * A language-definition facility may describe a grammar as data, but that
+ * description belongs to the language-definition/dialect subsystem.
+ */
+
+metaSource
+    : expression
+    | statement
+    | item
+    ;
+
+
+/* ============================================================================
+ * 9. QUOTED SOURCE BOUNDARY
+ * ============================================================================
+ *
+ * Quotation/splicing syntax is owned by the macro/generation subsystem.
+ *
+ * These aliases exist only as explicit integration contracts.
+ *
+ * They intentionally do not define another quotation language.
+ */
+
+metaQuote
+    : metaQuoteCore
+    ;
+
+metaSplice
+    : metaSpliceCore
+    ;
+
+
+/* ============================================================================
+ * 10. META IDENTIFIERS
+ * ============================================================================
+ *
+ * Names remain ordinary Zamani names.
+ *
+ * This is critical for:
+ *
+ *     hygiene
+ *     source maps
+ *     diagnostics
+ *     deterministic name resolution
+ *     IDE tooling
+ *     refactoring
+ *
+ * The grammar does not invent compiler-specific identifier syntax.
+ */
+
+metaName
     : identifier
-      (DOUBLE_COLON identifier)*
+    ;
+
+metaPath
+    : qualifiedName
     ;
 
 
-extensionVersion
-    : VERSION versionExpression
-    ;
+/* ============================================================================
+ * 11. META ATTRIBUTES
+ * ============================================================================
+ *
+ * Attributes are owned by the canonical attribute grammar.
+ *
+ * Metaprogramming may consume them, but does not redefine their syntax.
+ */
 
-
-extensionAttributes
+metaAttribute
     : attribute
     ;
 
 
-extensionBody
-    : LBRACE extensionMember* RBRACE
-    ;
+/* ============================================================================
+ * 12. META TYPE BOUNDARY
+ * ============================================================================
+ *
+ * Types remain owned by the canonical type grammar.
+ *
+ * This allows metaprogramming to manipulate types without establishing a
+ * second type system.
+ */
 
-
-extensionMember
-    : extensionRequires
-    | extensionProvides
-    | extensionDepends
-    | extensionCompatibility
-    | extensionSyntax
-    | extensionSemantics
-    | extensionLowering
-    | extensionExport
-    | extensionDirective
+metaType
+    : typeExpression
     ;
 
 
 /* ============================================================================
- * 35. EXTENSION REQUIREMENTS
- * ========================================================================== */
+ * 13. META PATTERN BOUNDARY
+ * ============================================================================
+ *
+ * Patterns remain owned by the canonical pattern grammar.
+ */
 
-extensionRequires
-    : REQUIRES
-      capabilitySet
-      SEMI?
-    ;
-
-
-extensionProvides
-    : PROVIDES
-      capabilitySet
-      SEMI?
-    ;
-
-
-extensionDepends
-    : DEPENDS
-      dependencyList
-      SEMI?
-    ;
-
-
-dependencyList
-    : dependency
-      (COMMA dependency)*
-      COMMA?
-    ;
-
-
-dependency
-    : qualifiedName
-      dependencyVersionConstraint?
-    ;
-
-
-dependencyVersionConstraint
-    : VERSION
-      versionExpression
+metaPattern
+    : pattern
     ;
 
 
 /* ============================================================================
- * 36. EXTENSION COMPATIBILITY
- * ========================================================================== */
+ * 14. META BLOCK BOUNDARY
+ * ============================================================================
+ *
+ * Blocks remain canonical language blocks.
+ *
+ * There is no separate "meta block language".
+ */
 
-extensionCompatibility
-    : COMPATIBILITY
-      compatibilityExpression
-      SEMI?
+metaBlock
+    : block
     ;
 
 
-compatibilityExpression
+/* ============================================================================
+ * 15. META EXPRESSION BOUNDARY
+ * ============================================================================
+ *
+ * Metaprogramming may consume ordinary expressions.
+ *
+ * Expression precedence and expression semantics remain owned by the
+ * canonical expression grammar.
+ */
+
+metaExpression
     : expression
     ;
 
 
 /* ============================================================================
- * 37. EXTENSION SYNTAX
- * ========================================================================== */
-
-extensionSyntax
-    : SYNTAX
-      metaValue
-      SEMI?
-    ;
-
-
-/* ============================================================================
- * 38. EXTENSION SEMANTICS
- * ========================================================================== */
-
-extensionSemantics
-    : SEMANTICS
-      metaValue
-      SEMI?
-    ;
-
-
-/* ============================================================================
- * 39. EXTENSION LOWERING
- * ========================================================================== */
-
-/**
- * Describes a lowering contract.
+ * 16. META STATEMENT BOUNDARY
+ * ============================================================================
  *
- * The grammar records the declaration; the compiler owns actual lowering.
+ * Statements remain canonical statements.
  */
-extensionLowering
-    : LOWERING
-      qualifiedName
-      SEMI?
+
+metaStatement
+    : statement
     ;
 
 
 /* ============================================================================
- * 40. EXTENSION EXPORTS
- * ========================================================================== */
-
-extensionExport
-    : EXPORT
-      qualifiedName
-      SEMI?
-    ;
-
-
-/* ============================================================================
- * 41. EXTENSION DIRECTIVES
- * ========================================================================== */
-
-extensionDirective
-    : DIRECTIVE
-      identifier
-      (ASSIGN metaValue)?
-      SEMI?
-    ;
-
-
-/* ============================================================================
- * 42. META DECLARATION DISPATCH
- * ========================================================================== */
-
-/**
- * Canonical metaprogramming declaration dispatcher.
+ * 17. META DECLARATION BOUNDARY
+ * ============================================================================
  *
- * The composed top-level grammar should import this rule rather than copying
- * its alternatives.
+ * Generated declarations must be canonical Zamani declarations/items.
  */
+
 metaDeclaration
-    : metaprogrammingDeclaration
-    | extensionDeclaration
-    | specializationDeclaration
-    | generateDeclaration
+    : item
     ;
 
 
 /* ============================================================================
- * 43. META EXPRESSION DISPATCH
- * ========================================================================== */
+ * 18. META GENERIC BOUNDARY
+ * ============================================================================
+ *
+ * Generic syntax remains owned by the canonical type/function/declaration
+ * grammar.
+ */
 
-metaPrimaryExpression
-    : metaExpression
-    | literal
-    | identifier
+metaGenericParameters
+    : genericParameters
     ;
 
 
 /* ============================================================================
- * 44. RESERVED META SPACE
- * ========================================================================== */
-
-/**
- * Reserved extension points are represented structurally rather than through
- * arbitrary parser fallbacks.
- *
- * This is important for deterministic parsing and diagnostics.
+ * 19. META PARAMETER BOUNDARY
+ * ============================================================================
  */
-metaExtensionPoint
-    : EXTENSION
-      extensionPath
-      extensionBody
+
+metaParameterList
+    : parameterList
     ;
 
 
 /* ============================================================================
- * 45. SEMANTIC BOUNDARY NOTES
- * ========================================================================== */
-
-/*
- * The following are intentionally NOT grammar rules:
- *
- *   macroExpansion
- *   macroResolution
- *   hygieneResolution
- *   compileTimeExecution
- *   resourceBudget
- *   expansionDepth
- *   generatedProgramSize
- *   backendSelection
- *   targetSelection
- *   hardwareSelection
- *   quantumMapping
- *   qecSelection
- *   zqnNoiseModel
- *   optimization
- *   scheduling
- *   routing
- *   runtimeDispatch
- *
- * These belong to later compiler stages.
- *
- * This prevents the metaprogramming grammar from becoming coupled to any
- * particular execution machine.
+ * 20. META ARGUMENT BOUNDARY
+ * ============================================================================
  */
+
+metaArgumentList
+    : argumentList
+    ;
 
 
 /* ============================================================================
- * 46. INTEGRATION CONTRACT
- * ========================================================================== */
-
-/*
- * REQUIRED COMPOSITION CONTRACT
+ * 21. PORTABLE RESOURCE BOUNDARY
+ * ============================================================================
  *
- * The canonical parser must integrate this grammar as follows:
+ * Metaprogramming may produce or inspect resource requirements only through
+ * the canonical resource/capability syntax.
  *
- *   source
- *      |
- *      v
- *   Zamani lexer
- *      |
- *      v
- *   canonical parser
- *      |
- *      +---- core declarations
- *      |
- *      +---- modules
- *      |
- *      +---- functions
- *      |
- *      +---- types
- *      |
- *      +---- statements
- *      |
- *      +---- macros
- *      |
- *      +---- metaprogramming
- *      |
- *      +---- domain grammar
- *      |
- *      v
- *   canonical AST
- *      |
- *      v
- *   semantic analysis
- *      |
- *      +---- name resolution
- *      +---- type checking
- *      +---- effect checking
- *      +---- capability checking
- *      +---- resource checking
- *      +---- macro resolution
- *      +---- compile-time evaluation
- *      |
- *      v
- *   canonical semantic representations
- *      |
- *      +---- classical IR
- *      +---- quantum::ir
- *      +---- HDL/hardware representations
- *      |
- *      v
- *   optimization
- *      |
- *      v
- *   routing
- *      |
- *      v
- *   scheduling
- *      |
- *      +---- ZQN
- *      +---- QEC
- *      |
- *      v
- *   hardware HAL
- *      |
- *      v
- *   runtime
+ * This grammar deliberately does NOT define:
  *
- * No reverse dependency is permitted.
+ *     qubit counts
+ *     CPU counts
+ *     GPU counts
+ *     FPGA counts
+ *     memory sizes
+ *     device identifiers
+ *     topology
+ *     addresses
+ *
+ * Those are owned by grammar/resources and grammar/hardware where appropriate.
  */
+
+metaResourceExpression
+    : expression
+    ;
 
 
 /* ============================================================================
- * 47. DOMAIN INTEGRATION CONTRACT
- * ========================================================================== */
+ * 22. TARGET-INDEPENDENT META INTENT
+ * ============================================================================
+ *
+ * A metaprogram may produce target-independent source.
+ *
+ * Target-specific specialization must remain an explicit downstream semantic
+ * operation and must not become an implicit parser-side machine dependency.
+ */
 
-/*
- * QUANTUM
+metaTargetIndependentSource
+    : metaSource
+    ;
+
+
+/* ============================================================================
+ * 23. GENERATED-SOURCE REENTRY CONTRACT
+ * ============================================================================
  *
- * Metaprogramming may generate quantum SOURCE SYNTAX.
+ * Generated source MUST re-enter the normal parser/semantic pipeline.
  *
- * It must not generate or directly manipulate physical machine state.
+ * There is intentionally no direct:
  *
- * Correct:
+ *     meta -> IR
  *
- *     macro make_circuit(...) { ... }
+ * production.
  *
- *       ->
- *     source/AST
+ * The required architecture is:
  *
- *       ->
+ *     meta syntax
+ *         |
+ *         v
+ *     canonical AST
+ *         |
+ *         v
+ *     semantic validation
+ *         |
+ *         v
+ *     generated canonical AST
+ *         |
+ *         v
+ *     semantic IR
+ *
+ * This preserves the same semantic guarantees for generated and handwritten
+ * source.
+ */
+
+generatedSource
+    : metaSource
+    ;
+
+
+/* ============================================================================
+ * 24. CROSS-DOMAIN CONTRACT
+ * ============================================================================
+ *
+ * Generated source may describe any domain supported by Zamani:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     distributed
+ *     AI
+ *     data
+ *     networking
+ *     security
+ *     future dialects
+ *
+ * This grammar does not introduce domain-specific duplicates.
+ *
+ * For example, generated quantum source must use the normal quantum grammar
+ * and ultimately lower through quantum::ir.
+ */
+
+crossDomainGeneratedSource
+    : generatedSource
+    ;
+
+
+/* ============================================================================
+ * 25. QUANTUM INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * This file deliberately contains no:
+ *
+ *     qubit
+ *     physical qubit
+ *     logical qubit
+ *     quantum gate
+ *     circuit
+ *     QEC
+ *     ZQN
+ *
+ * productions.
+ *
+ * A metaprogram may generate quantum source, but the generated source must
+ * enter the ordinary quantum frontend.
+ *
+ * Consequently:
+ *
+ *     metaprogramming
+ *          |
+ *          v
+ *     generated Zamani quantum syntax
+ *          |
+ *          v
+ *     quantum frontend
+ *          |
+ *          v
  *     quantum::ir
  *
- * Incorrect:
- *
- *     macro -> direct QPU API
- *     macro -> physical qubit allocation
- *     macro -> hardware topology
- *     macro -> scheduler
- *
- *
- * QEC
- *
- * Metaprogramming may generate source-level QEC intent.
- *
- * It does not implement decoders, stabilizer algorithms, code-distance
- * calculations, or correction procedures.
- *
- *
- * ZQN
- *
- * Metaprogramming may generate declarations that semantic analysis later maps
- * to ZQN-compatible concepts.
- *
- * It does not own the noise/fault model.
- *
- *
- * HARDWARE / HDL
- *
- * Metaprogramming may generate HDL/hardware SOURCE structures.
- *
- * It does not discover or select physical devices.
- *
- *
- * SCHEDULING
- *
- * Metaprogramming may generate timing/resource intent.
- *
- * Scheduling remains a later compiler subsystem.
- *
- *
- * OPTIMIZATION
- *
- * Metaprogramming can express specialization opportunities.
- *
- * It does not execute optimizer passes.
+ * No alternate quantum representation is permitted.
  */
 
 
 /* ============================================================================
- * 48. SCALABILITY CONTRACT
- * ========================================================================== */
-
-/*
- * The grammar intentionally contains no rules such as:
+ * 26. HARDWARE / HDL INTEGRATION CONTRACT
+ * ============================================================================
  *
- *     qubitCount: INTEGER { <= 32 }
- *     macroCount: INTEGER { <= 1024 }
- *     parameterCount: INTEGER { <= 64 }
- *     specializationCount: INTEGER { <= 256 }
+ * A metaprogram may generate HDL or hardware-oriented Zamani source.
  *
- * Such constructs would turn implementation limits into language semantics.
+ * This grammar does not define:
  *
- * Large programs remain representable until the parser/compiler implementation
- * reaches an explicitly configurable resource budget.
+ *     ports
+ *     wires
+ *     clocks
+ *     physical resources
+ *     topology
+ *     device IDs
  *
- * Resource budgets MUST be reported as implementation/resource diagnostics,
- * not as grammar-level language restrictions.
+ * Those remain owned by their respective grammar components.
  */
 
 
 /* ============================================================================
- * 49. DETERMINISM CONTRACT
- * ========================================================================== */
-
-/*
- * Parsing must be deterministic.
+ * 27. DISTRIBUTED INTEGRATION CONTRACT
+ * ============================================================================
  *
- * Extension resolution must NOT use:
+ * A metaprogram may generate distributed source.
  *
- *     "first loaded wins"
- *     "last loaded wins"
- *
- * semantics.
- *
- * If two extensions introduce conflicting syntax or semantics, the semantic
- * compiler layer must reject the program deterministically.
+ * Node count, deployment topology, placement, network resources, and runtime
+ * capacity are never encoded as grammar-level finite limits here.
  */
 
 
 /* ============================================================================
- * 50. SECURITY CONTRACT
- * ========================================================================== */
-
-/*
- * The presence of metaprogramming syntax MUST NOT imply permission to:
+ * 28. AI / DATA INTEGRATION CONTRACT
+ * ============================================================================
  *
- *     read arbitrary files;
- *     write arbitrary files;
- *     access arbitrary network resources;
- *     spawn arbitrary processes;
- *     inspect secrets;
- *     access credentials;
- *     access hardware;
- *     mutate compiler state.
+ * Generated AI/data source uses canonical:
  *
- * Any permitted compile-time capability must be explicitly granted by the
- * compiler's capability/security model.
+ *     types
+ *     expressions
+ *     functions
+ *     tensors
+ *     data
+ *     resource
+ *     accelerator
+ *
+ * grammars.
+ *
+ * No fixed tensor/resource/device maximum belongs here.
  */
 
 
 /* ============================================================================
- * 51. AST CONTRACT
- * ========================================================================== */
-
-/*
- * This grammar must lower into the repository's canonical AST infrastructure.
+ * 29. DIALECT INTEGRATION CONTRACT
+ * ============================================================================
  *
- * It MUST NOT introduce a parallel:
+ * Dialects extend Zamani through the dialect subsystem.
  *
- *     MetaAst
- *     MacroAst
- *     MetaIr
- *     MacroIr
+ * Metaprogramming MUST NOT silently create a dialect merely by generating
+ * source text.
  *
- * hierarchy merely because these constructs are syntactically special.
- *
- * Meta syntax should be represented by the canonical source AST's established
- * node/ID/span infrastructure.
- *
- * Macro nodes should retain:
- *
- *     source span
- *     macro path/name
- *     argument NodeIds
- *     attributes
- *     source identity
- *
- * Semantic expansion metadata belongs to later compiler stages.
+ * Dialect registration, versioning, capability declarations, compatibility,
+ * and vendor/experimental policy remain owned by grammar/dialects.
  */
 
 
 /* ============================================================================
- * 52. COMPLETION CRITERIA
- * ========================================================================== */
+ * 30. SECURITY INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * Meta operations that require effects are validated against the canonical
+ * effect/capability/security model.
+ *
+ * Syntax alone MUST NOT imply permission.
+ *
+ * In particular:
+ *
+ *     quote
+ *     generation
+ *     reflection
+ *     specialization
+ *     compile-time execution
+ *
+ * do not imply filesystem/network/process/device privileges.
+ */
 
-/*
- * This grammar component is complete only when:
+
+/* ============================================================================
+ * 31. RESOURCE INTEGRATION CONTRACT
+ * ============================================================================
  *
- * [ ] It composes with the canonical Zamani parser.
+ * The following distinction is mandatory:
  *
- * [ ] Every referenced token exists exactly once in the authoritative lexer.
+ *     semantic requirement
+ *     capability requirement
+ *     hard constraint
+ *     soft preference
+ *     implementation hint
  *
- * [ ] Every referenced shared parser rule has exactly one canonical owner.
+ * Metaprogramming MUST preserve those distinctions.
  *
- * [ ] No parser rule creates a second AST architecture.
+ * A generated resource request must remain portable unless the program
+ * explicitly declares a semantically meaningful target constraint.
+ */
+
+
+/* ============================================================================
+ * 32. COMPILER INTEGRATION CONTRACT
+ * ============================================================================
  *
- * [ ] Macro declarations parse deterministically.
+ * Compiler responsibilities after parsing:
  *
- * [ ] Macro invocations parse deterministically.
+ *     1. Build canonical AST.
+ *     2. Resolve names.
+ *     3. Resolve macro/meta constructs.
+ *     4. Validate permissions/effects.
+ *     5. Evaluate authorized compile-time computation.
+ *     6. Expand/generate source structures.
+ *     7. Revalidate generated structures.
+ *     8. Type-check generated structures.
+ *     9. Lower to canonical semantic IR.
+ *    10. Continue through normal optimization/lowering.
  *
- * [ ] Qualified macro paths have no fixed depth limit.
+ * No compiler phase may assume that parser acceptance means semantic validity.
+ */
+
+
+/* ============================================================================
+ * 33. RUNTIME INTEGRATION CONTRACT
+ * ============================================================================
  *
- * [ ] Quotation works for expressions and blocks.
+ * Runtime does not depend directly on this grammar.
  *
- * [ ] Splicing is structurally represented.
+ * Runtime receives compiled semantic artifacts.
  *
- * [ ] Token trees are structurally represented.
+ * This is essential to POCO-REAF:
  *
- * [ ] Language declarations are declarative.
+ *     source syntax
+ *         !=
+ *     runtime hardware configuration
  *
- * [ ] Compile-time declarations are syntactically distinct.
+ * The grammar therefore has no runtime hardware dependency.
+ */
+
+
+/* ============================================================================
+ * 34. TOOLING CONTRACT
+ * ============================================================================
  *
- * [ ] Reflection is syntactically represented without granting authority.
+ * IDEs, formatters, language servers, diagnostics, source maps, and
+ * documentation generators must be able to distinguish metaprogramming
+ * constructs by parse-tree context.
  *
- * [ ] Specialization has no fixed dimension limit.
+ * They must not need to execute metaprograms merely to parse or format them.
  *
- * [ ] Extensions are namespaced.
+ * Source locations must survive:
  *
- * [ ] Extension versioning is represented.
+ *     macro invocation
+ *     expansion
+ *     generation
+ *     specialization
+ *     reflection
  *
- * [ ] Capabilities and requirements are syntactically distinct.
+ * through compiler-generated provenance metadata.
+ */
+
+
+/* ============================================================================
+ * 35. ERROR-DIAGNOSTIC CONTRACT
+ * ============================================================================
  *
- * [ ] Backend/device selection is absent from the grammar.
+ * Syntax errors are owned by the parser/lexer.
  *
- * [ ] Hardware sizes are absent as language-level fixed limits.
+ * The semantic compiler owns:
  *
- * [ ] Quantum physical topology is absent from metaprogramming semantics.
+ *     unknown macro
+ *     invalid macro context
+ *     forbidden compile-time effect
+ *     unauthorized reflection
+ *     invalid specialization
+ *     generated-code type failure
+ *     generated-code capability failure
+ *     expansion-cycle failure
+ *     resource-policy violation
  *
- * [ ] No filesystem/network/process execution is encoded.
+ * The grammar MUST NOT encode these semantic errors as parser hacks.
+ */
+
+
+/* ============================================================================
+ * 36. SCALABILITY CONTRACT
+ * ============================================================================
  *
- * [ ] No Rust action is embedded in ANTLR.
+ * This grammar intentionally contains no finite:
  *
- * [ ] No Rust unsafe requirement exists.
+ *     arity limits
+ *     nesting limits
+ *     generated-item limits
+ *     specialization limits
+ *     reflection limits
+ *     macro-count limits
+ *     domain-count limits
+ *     resource-count limits
  *
- * [ ] Positive parser tests exist.
+ * The parser implementation may of course be constrained by available memory,
+ * input size, stack strategy, cancellation, and compiler policy.
  *
- * [ ] Negative parser tests exist.
+ * Such operational limits are not language semantics.
+ */
+
+
+/* ============================================================================
+ * 37. DETERMINISM CONTRACT
+ * ============================================================================
  *
- * [ ] Boundary/scalability tests exist.
+ * Given identical source bytes, lexer configuration, grammar version, and
+ * parser configuration, parsing must produce the same syntactic structure.
  *
- * [ ] Cross-domain tests exist.
+ * Any nondeterminism introduced by:
  *
- * [ ] Determinism tests exist.
+ *     macro evaluation
+ *     reflection
+ *     external resources
+ *     compilation environment
  *
- * [ ] AST mapping tests exist.
+ * must be handled after parsing by explicit semantic/effect/provenance policy.
+ */
+
+
+/* ============================================================================
+ * 38. VERSIONING CONTRACT
+ * ============================================================================
  *
- * [ ] Macro-to-quantum integration tests exist.
+ * This grammar must evolve through the language-version and compatibility
+ * mechanisms rather than silently changing the meaning of an existing
+ * production.
  *
- * [ ] Macro-to-HDL integration tests exist.
+ * New metaprogramming facilities should normally be introduced by:
  *
- * [ ] Macro-to-classical integration tests exist.
+ *     sibling grammar component
+ *         ->
+ *     explicit composition rule
+ *         ->
+ *     semantic implementation
+ *         ->
+ *     compatibility tests
  *
- * [ ] Macro-to-hardware-capability integration tests exist.
+ * rather than by adding unrelated behavior here.
+ */
+
+
+/* ============================================================================
+ * 39. COMPLETION CONTRACT
+ * ============================================================================
  *
- * [ ] Macro-to-distributed-program integration tests exist.
+ * This file is complete only when:
  *
- * [ ] Documentation matches the authoritative grammar.
+ *   [ ] It contains no duplicate canonical language rules.
+ *   [ ] It contains no machine-size constants.
+ *   [ ] It contains no hardware assumptions.
+ *   [ ] It contains no quantum-machine assumptions.
+ *   [ ] It contains no Rust actions.
+ *   [ ] It contains no unsafe implementation requirement.
+ *   [ ] It contains no compile-time execution implementation.
+ *   [ ] It contains no macro-expansion implementation.
+ *   [ ] It contains no reflection implementation.
+ *   [ ] It contains no specialization algorithm.
+ *   [ ] It composes all metaprogramming sibling grammars.
+ *   [ ] All referenced shared rules have exactly one canonical owner.
+ *   [ ] Generated source re-enters the normal semantic pipeline.
+ *   [ ] Quantum output ultimately uses quantum::ir.
+ *   [ ] Resource constraints remain separate from syntax.
+ *   [ ] Parser behavior remains deterministic.
+ *   [ ] Negative tests exist for invalid composition.
+ *   [ ] Cross-domain tests exist.
+ *   [ ] POCO-REAF scalability tests exist.
  *
- * [ ] No accidental duplicate ownership remains in legacy Meta.g4/macros rules.
+ * ============================================================================
  */
