@@ -1,359 +1,452 @@
-
-
-grammar/spec/lexical.md
-
 Zamani Lexical Specification
 
 Path: "grammar/spec/lexical.md"
 Language: Zamani
-Specification status: Production lexical architecture
-Compiler baseline: Rust 1.97 / Rust 1.97.1
-Rust safety: "unsafe" Rust prohibited
-Scalability: No artificial language-level machine-size limits
-Primary execution principle: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+Specification role: Normative lexical contract
+Status: Production architecture
+Specification version: 1.0
+Implementation baseline: Rust 1.97 / Rust 1.97.1
+Compiler safety: Safe Rust only; Rust "unsafe" is prohibited
+Portability principle: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+Scalability principle: No artificial language-level resource or hardware limits
+Canonical semantic quantum boundary: "quantum::ir"
 
 ---
 
-1. Purpose
+0. Purpose
 
-This document defines the normative lexical architecture of the Zamani programming language.
+This document defines the normative lexical contract of the Zamani programming language.
 
-Lexical analysis converts Zamani source text into a deterministic stream of source tokens.
+Lexical analysis converts source text into a deterministic sequence of lexical tokens and structured lexical diagnostics.
 
-Source Text
-    │
-    ▼
-Source Map
-    │
-    ▼
-Lexical Scanner
-    │
-    ├── Tokens
-    └── Lexical Diagnostics
-         │
-         ▼
-     Parser
-         │
-         ▼
-       AST
+The lexical layer establishes:
 
-The lexical layer is responsible for:
-
-- Unicode-aware source processing where specified;
-- whitespace handling;
-- comment handling;
+- source encoding;
+- Unicode handling;
 - identifiers;
 - keywords;
+- contextual keywords;
 - literals;
 - operators;
 - punctuation;
+- comments;
+- whitespace;
+- source positions;
 - source spans;
 - lexical diagnostics;
-- deterministic tokenization.
+- token precedence;
+- longest-match behavior;
+- lexical configuration;
+- language-version behavior;
+- token preservation;
+- deterministic recovery;
+- implementation conformance.
 
-The lexical layer is not responsible for:
+The lexical layer does not establish:
 
-- type checking;
+- type semantics;
 - name resolution;
 - ownership;
+- borrowing;
 - effects;
 - quantum semantics;
-- hardware capabilities;
-- optimization;
+- QEC;
+- ZQN;
+- routing;
 - scheduling;
-- package resolution;
+- calibration;
+- hardware topology;
+- resource allocation;
+- target selection;
+- backend selection;
+- optimization strategy;
 - runtime behavior;
-- target selection.
+- deployment;
+- physical device identity.
+
+The fundamental boundary is:
+
+source bytes
+    ↓
+source decoding
+    ↓
+Unicode scalar values
+    ↓
+lexical scanning
+    ↓
+tokens + lexical diagnostics
+    ↓
+parser
+    ↓
+frontend AST
+    ↓
+structural validation
+    ↓
+semantic analysis
+    ↓
+canonical semantic model
+    ↓
+canonical IR
+    ↓
+optimization / lowering / routing / scheduling / resilience
+    ↓
+target realization
 
 ---
 
-2. Lexical Authority
+1. Architectural Authority
 
-Zamani must have one canonical lexical specification.
+Zamani must have one normative lexical contract.
 
-The following implementations/documentation must conform to it:
+The authority relationship is:
 
 grammar/spec/lexical.md
         │
         ├───────────────┐
+        │               │
         ▼               ▼
-src/lexer.rs       ZamaniLexer.g4
+src/lexer.rs       grammar/antlr/ZamaniLexer.g4
         │               │
         └───────┬───────┘
                 ▼
-        Canonical Token Model
+       canonical token model
                 │
                 ▼
-           src/parser.rs
+          src/parser.rs
+                │
+                ▼
+        frontend AST
 
-"src/lexer.rs" is the reference executable lexer.
+The authority order for lexical behavior is:
 
-"ZamaniLexer.g4" is the ANTLR representation.
+1. "grammar/spec/lexical.md"
+2. the canonical language/version policy
+3. canonical token definitions
+4. "src/lexer.rs"
+5. "grammar/antlr/ZamaniLexer.g4"
+6. parser grammar
+7. frontend AST
+8. semantic implementation
+9. "grammar/grammar.md"
+10. "grammar/Zamani-Grammar.md"
 
-Neither implementation is permitted to silently define lexical behavior that is absent from the canonical specification.
+"grammar/grammar.md" describes current implementation conformance.
 
-The implementation-conformance document "grammar/grammar.md" must describe what the reference implementation currently accepts, while this document defines the intended lexical contract.
+"grammar/Zamani-Grammar.md" describes broader language design, historical material, proposals, and future features.
+
+Neither may silently override this document.
 
 ---
 
-3. Lexical Invariants
+2. File Ownership
 
-Every production lexer MUST satisfy these invariants.
+2.1 This file owns
 
-3.1 Determinism
+This file owns:
 
-For the same:
+- lexical categories;
+- token identity;
+- token spelling;
+- token precedence;
+- lexical ambiguity resolution;
+- identifier syntax;
+- keyword classification;
+- literal lexical forms;
+- comments;
+- whitespace;
+- source encoding;
+- source spans;
+- lexical errors;
+- lexical recovery;
+- lexical versioning;
+- lexical configuration;
+- lexical scalability requirements.
 
-source bytes
-language version
-lexical configuration
+2.2 This file does not own
 
-the lexer must produce the same token sequence and diagnostics.
+This file does not own:
 
-Lexing must not depend on:
+- AST node definitions;
+- type checking;
+- semantic interpretation;
+- resource allocation;
+- target-specific implementation;
+- quantum operation semantics;
+- QEC;
+- ZQN;
+- scheduling;
+- routing;
+- HAL behavior;
+- compiler optimization;
+- runtime behavior.
+
+---
+
+3. Integration Contract
+
+The lexical contract integrates with the repository as follows.
+
+Component| Responsibility
+"grammar/spec/lexical.md"| normative lexical behavior
+"grammar/spec/syntax.md"| parser-visible syntax
+"grammar/spec/type-system.md"| type interpretation
+"grammar/antlr/ZamaniLexer.g4"| ANTLR lexical implementation
+"grammar/Zamani.g4"| root grammar composition
+"src/lexer.rs"| executable Rust lexer
+"src/parser.rs"| parser and syntax interpretation
+"src/ast/"| target-independent source AST
+"grammar/grammar.md"| implementation-conformance reference
+"grammar/Zamani-Grammar.md"| broader design/history/proposals
+"grammar/tests/"| lexical conformance
+semantic layer| semantic meaning
+canonical IR| language-independent computational representation
+"quantum::ir"| canonical quantum semantic boundary
+
+No downstream component may require the lexer to know machine topology, physical resources, or backend details.
+
+---
+
+4. Production Invariants
+
+Every conforming Zamani lexer MUST satisfy all of the following.
+
+4.1 Determinism
+
+For identical:
+
+- source bytes;
+- language version;
+- lexical configuration;
+- compatibility mode;
+
+the lexer MUST produce identical:
+
+- token kinds;
+- token order;
+- token source spans;
+- literal source representations;
+- diagnostics;
+- diagnostic ordering.
+
+Lexing MUST NOT depend on:
 
 - CPU architecture;
-- operating system;
-- available RAM;
-- number of CPU cores;
-- QPU;
+- CPU count;
 - GPU;
-- network;
+- QPU;
+- FPGA;
+- operating system locale;
 - wall-clock time;
-- hash-map iteration order;
-- random state.
+- random state;
+- hash iteration order;
+- network state;
+- hardware topology;
+- available device count.
 
 ---
 
-3.2 Source preservation
+5. Safety
 
-Every token that originates from source must have sufficient source-location information to support diagnostics.
+The reference compiler implementation MUST use safe Rust.
 
-The repository's lexer already associates tokens with "Span" information.
+The lexical implementation MUST NOT use:
 
-The lexical architecture therefore requires:
+unsafe
 
-Token
-├── token kind
-├── source span
-└── source representation/value
+or:
 
-The exact internal representation may evolve, but source locations must remain available.
+unsafe { ... }
 
----
+or unsafe traits, unsafe functions, unsafe blocks, or unsafe mutable aliasing.
 
-3.3 No silent corruption
+The lexical architecture MUST NOT require unsafe Rust.
 
-The lexer MUST NOT:
+This applies to:
 
-- silently discard an invalid character;
-- silently reinterpret malformed literals;
-- silently merge unrelated tokens;
-- silently truncate source;
-- silently normalize meaningful characters;
-- silently change numeric values.
+- UTF-8 processing;
+- source slicing;
+- token construction;
+- diagnostics;
+- buffering;
+- incremental lexing;
+- streaming lexing;
+- parallel lexing;
+- Unicode processing.
 
-Invalid source must produce a structured lexical diagnostic.
-
----
-
-3.4 Progress guarantee
-
-For every non-EOF input position:
-
-lexer iteration
-    ↓
-consume input
-or
-emit diagnostic and consume/recover
-
-The lexer must never repeatedly inspect the same invalid input position forever.
+Safe Rust abstractions must be used instead.
 
 ---
 
-4. Character Model
+6. Scalability and POCO-REAF
 
-Zamani source is fundamentally a sequence of Unicode scalar values represented in source encoding.
+Lexical syntax MUST NOT encode hardware limits.
 
-The implementation must distinguish:
+The lexer MUST NOT contain language-level limits such as:
+
+MAX_TOKENS
+MAX_SOURCE_SIZE
+MAX_IDENTIFIER_LENGTH
+MAX_INTEGER_WIDTH
+MAX_STRING_LENGTH
+MAX_QUANTUM_STATE_SIZE
+MAX_QUBITS
+MAX_CPUS
+MAX_GPUS
+MAX_FPGAS
+MAX_NODES
+MAX_THREADS
+MAX_MEMORY
+
+A compiler may have explicit resource policies.
+
+Such policies are not lexical-language limits.
+
+For example:
+
+compiler resource budget:
+    maximum source bytes
+    maximum diagnostics
+    maximum memory
+    maximum compilation time
+
+is an implementation/resource policy.
+
+It is not:
+
+Zamani identifiers may contain at most N characters
+
+as a language rule unless that restriction is genuinely required for language semantics.
+
+---
+
+7. Resource-Bounded Lexing
+
+Production implementations may operate under resource budgets.
+
+A resource exhaustion condition MUST be distinguishable from invalid source.
+
+Examples:
+
+source-too-large
+lexical-memory-budget-exceeded
+diagnostic-budget-exceeded
+compilation-time-budget-exceeded
+
+must not be reported as:
+
+invalid-token
+invalid-identifier
+invalid-number
+
+Resource limits MUST be:
+
+- explicit;
+- observable;
+- configurable where appropriate;
+- deterministic;
+- documented;
+- separate from language validity.
+
+A larger machine may process a larger source program without changing the language semantics.
+
+---
+
+8. Source Encoding
+
+The canonical source encoding is UTF-8.
+
+The pipeline is:
 
 source bytes
-Unicode decoding
-characters
-lexical tokens
-
-A malformed source encoding must produce a lexical error rather than being interpreted as arbitrary text.
-
-Identifiers and keywords have their own normalization rules defined by this specification.
-
----
-
-5. Unicode Normalization
-
-Zamani MUST NOT silently normalize identifiers in a way that changes program identity.
-
-For the initial stable language:
-
-- ASCII letters remain the normative identifier alphabet unless a future language version explicitly expands it;
-- Unicode may be permitted inside strings, characters, comments, and other explicitly Unicode-capable literals;
-- visually similar identifiers must not automatically be considered identical;
-- Unicode normalization must not silently alter an identifier's semantic identity.
-
-If full Unicode identifiers are introduced later, the language specification must define:
-
-- allowed Unicode categories;
-- normalization form;
-- combining-character rules;
-- confusable handling;
-- identifier comparison;
-- keyword recognition.
-
-That change must be versioned.
-
----
-
-6. Source Encoding
-
-The reference compiler should consume UTF-8 source.
-
-The lexical pipeline is:
-
-UTF-8 bytes
-   ↓
-Unicode validation
-   ↓
-character stream
-   ↓
+    ↓
+UTF-8 validation
+    ↓
+Unicode scalar values
+    ↓
 lexical scanning
 
-Invalid UTF-8 is a lexical/source-encoding error.
+Invalid UTF-8 MUST produce a source-encoding diagnostic.
 
-The compiler must not reinterpret invalid bytes according to host-specific encodings.
+The compiler MUST NOT reinterpret invalid bytes using:
 
----
+- operating-system locale;
+- host code page;
+- platform-specific encoding;
+- implicit replacement characters.
 
-7. Whitespace
-
-Whitespace separates lexical units but is otherwise insignificant unless a future language feature explicitly assigns semantic meaning to it.
-
-The baseline whitespace set includes:
-
-space
-tab
-carriage return
-line feed
-
-Additional Unicode whitespace characters should not automatically become syntax-significant.
-
-If Unicode whitespace is accepted in a future version, it must be explicitly specified and tested.
+Invalid UTF-8 MUST NOT silently become U+FFFD.
 
 ---
 
-8. Newlines
+9. Unicode Scalar Model
 
-Zamani does not make newline placement intrinsically semantic in the baseline grammar.
+The lexical layer operates on Unicode scalar values.
 
-Therefore:
+A Unicode scalar value is a Unicode code point excluding surrogate code points.
 
-let x = 1;
-let y = 2;
+The lexer MUST distinguish:
 
-and equivalent whitespace-separated forms should tokenize consistently.
+raw bytes
+Unicode scalar values
+source characters
+tokens
 
-Newlines may nevertheless be preserved in source spans for:
-
-- diagnostics;
-- formatting;
-- IDE tooling;
-- source mapping;
-- documentation;
-- debugging.
-
-The lexer must not discard information needed by those systems merely because the parser does not use newlines as syntax.
+The lexer MUST NOT treat UTF-16 surrogate halves as valid standalone source characters.
 
 ---
 
-9. Comments
+10. Unicode Normalization
 
-Zamani supports line and block comments.
+The lexer MUST NOT silently normalize source identifiers.
 
-9.1 Line comments
+In particular, it MUST NOT silently apply:
 
-A line comment begins with:
+- NFC;
+- NFD;
+- NFKC;
+- NFKD;
 
-//
+to identifiers unless a future version explicitly adopts such behavior.
 
-and continues until the end of the logical source line.
+Normalization policy belongs to the language name-resolution specification.
 
-Example:
+If Zamani later adopts normalized identifiers, the language version MUST explicitly define:
 
-let x = 42; // explanation
+- normalization form;
+- normalization timing;
+- keyword comparison;
+- identifier comparison;
+- combining-character rules;
+- confusable policy;
+- source preservation;
+- diagnostic behavior.
 
----
-
-9.2 Block comments
-
-A block comment begins with:
-
-/*
-
-and terminates with:
-
-*/
-
-The baseline form is non-nesting.
-
-Example:
-
-/*
-   multi-line comment
-*/
-
-Nested block comments must not be silently accepted unless explicitly added to the language specification.
-
-An unterminated block comment is a lexical error.
+The lexer must preserve the original source spelling.
 
 ---
 
-10. Comment Ownership
+11. Identifier Policy
 
-Comments are lexically recognized but normally do not become ordinary parser tokens.
+Zamani supports Unicode-aware identifiers.
 
-The implementation may preserve comment information for:
+The canonical identifier policy is:
 
-- documentation generation;
-- formatting;
-- IDE tooling;
-- source transformation;
-- macro tooling.
+IDENTIFIER
+    = IDENTIFIER_START IDENTIFIER_CONTINUE*
 
-If comments are discarded from the parser token stream, their source spans must still remain recoverable by tooling that requires them.
+"IDENTIFIER_START" may contain:
 
----
+- ASCII letters;
+- underscore;
+- Unicode identifier-start characters defined by the canonical Unicode identifier profile.
 
-11. Identifiers
+"IDENTIFIER_CONTINUE" may additionally contain:
 
-The baseline identifier grammar is:
+- decimal digits;
+- Unicode identifier-continue characters;
+- explicitly permitted combining marks.
 
-IDENTIFIER =
-    IDENTIFIER_START
-    { IDENTIFIER_CONTINUE } ;
-
-IDENTIFIER_START =
-    ASCII_LETTER
-    | "_" ;
-
-IDENTIFIER_CONTINUE =
-    ASCII_LETTER
-    | DIGIT
-    | "_" ;
-
-ASCII_LETTER =
-    "a".."z"
-    | "A".."Z" ;
-
-DIGIT =
-    "0".."9" ;
+Digits MUST NOT begin an identifier.
 
 Examples:
 
@@ -361,226 +454,453 @@ x
 value
 _result
 qubit_count
-Patient
 QuantumState
+π
+résultat
+状態
+данные
 
-Invalid examples:
+Invalid:
 
 1value
 42abc
 
----
-
-12. Identifier and Keyword Resolution
-
-The lexer must recognize keywords before producing an ordinary identifier token.
-
-For example:
-
-fn
-let
-quantum
-struct
-
-must be classified according to the active Zamani language version.
-
-A keyword must not simultaneously become an identifier token in the same lexical context unless the language explicitly defines contextual keywords.
+Unicode support MUST NOT introduce a machine-size limitation.
 
 ---
 
-13. Reserved vs Contextual Keywords
+12. Unicode Identifier Security
 
-Zamani should distinguish:
+Unicode identifiers MUST preserve source identity.
 
-Reserved keyword
+The compiler SHOULD provide diagnostics or tooling for:
 
-A word that cannot be used as an ordinary identifier.
+- mixed scripts;
+- confusable identifiers;
+- invisible characters;
+- bidi-control characters;
+- suspicious identifier sequences.
 
-Contextual keyword
+Such tooling MUST NOT silently rename source identifiers.
 
-A word that receives special meaning only in specific grammar positions.
-
-This distinction is important because Zamani has a very broad keyword inventory.
-
-New functionality should prefer contextual keywords when doing so avoids unnecessary source incompatibility.
+Security diagnostics belong to validation/tooling, not lexical reinterpretation.
 
 ---
 
-14. Canonical Keyword Registry
+13. Keyword Model
 
-The keyword mapping must have one authoritative implementation.
+Zamani has two keyword categories.
 
-Conceptually:
+13.1 Reserved keywords
+
+A reserved keyword is never available as an ordinary identifier in the corresponding language version.
+
+13.2 Contextual keywords
+
+A contextual keyword is interpreted specially only in a grammar context that requires it.
+
+The preferred strategy is:
+
+identifier
+    ↓
+parser context
+    ↓
+contextual meaning
+
+rather than continuously expanding the reserved keyword set.
+
+This preserves source compatibility and allows Zamani to scale across future computing domains.
+
+---
+
+14. Keyword Registry
+
+There MUST be one canonical keyword registry.
+
+The registry must define:
 
 lexeme
-   ↓
-Keyword Registry
-   ↓
-TokenType
+token identity
+keyword class
+language version
+feature status
+context
+compatibility status
 
-The Rust lexer, ANTLR lexer, documentation, formatter, LSP, and syntax highlighter should derive or validate against the same canonical keyword set.
+The registry is shared conceptually by:
 
-The repository currently contains a large "TokenType" keyword inventory, including core, OOP, quantum, temporal, mathematical, and advanced-system keywords.
+- Rust lexer;
+- ANTLR lexer;
+- parser;
+- formatter;
+- syntax highlighter;
+- LSP;
+- documentation generator;
+- compatibility tooling;
+- conformance tests.
 
-That inventory must be audited before additional keywords are added.
+No subsystem may invent an independent keyword list.
 
 ---
 
 15. Keyword Explosion Prevention
 
-The lexer must not become a dumping ground for every future Zamani capability.
+A domain concept MUST NOT become a keyword merely because the concept exists.
 
-A new concept should become a keyword only when it genuinely requires lexical recognition.
+The preferred form is:
 
-Prefer:
-
-generic identifier
+identifier
 +
 compositional syntax
 +
 semantic resolution
 
-over:
+rather than:
 
-one keyword for every operation
+one keyword per operation
 
-This is particularly important for:
+This is especially important for:
 
 - quantum gates;
-- mathematical operations;
-- hardware capabilities;
-- AI operations;
+- mathematical functions;
+- AI operators;
+- accelerator operations;
+- hardware devices;
+- vendor APIs;
 - optimization algorithms;
-- device names.
+- cryptographic algorithms;
+- networking protocols.
+
+For example, these SHOULD normally remain identifiers:
+
+H
+X
+CNOT
+custom_gate
+vendor_operation
+fft
+svd
+adam
+cuda_kernel
+tensor_contract
+
+unless a specific spelling has genuine language-level lexical significance.
 
 ---
 
-16. Boolean Literals
+16. Core Reserved Vocabulary
 
-The baseline boolean literals are:
+The exact stable keyword inventory is maintained by the canonical keyword registry.
+
+The following categories are language-level concepts and may contain reserved or contextual keywords:
+
+fn
+let
+var
+mut
+const
+
+return
+if
+else
+for
+in
+while
+loop
+break
+continue
+match
+case
+when
+yield
+
+module
+import
+export
+use
+from
+as
+package
+
+type
+struct
+enum
+trait
+impl
+class
+interface
+record
+
+public
+pub
+private
+protected
+internal
+
+static
+override
+virtual
+abstract
+final
+extends
+implements
+
+this
+self
+super
+new
+
+where
+
+async
+await
+spawn
+parallel
+
+try
+catch
+finally
+throw
+handle
+
+effect
+effects
+with
+
+requires
+ensures
+invariant
+
+quantum
+circuit
+Qubit
+
+apply
+measure
+reset
+barrier
+control
+adjoint
+inverse
+observe
+
+This list is a compatibility baseline, not a license to make every domain vocabulary word reserved.
+
+---
+
+17. "unsafe"
+
+The Zamani language is designed around safe computation.
+
+The production language MUST NOT provide an "unsafe" escape hatch that permits the source program to bypass the language safety model.
+
+Therefore:
+
+unsafe
+
+is reserved in the lexical compatibility layer but MUST NOT introduce a valid executable language construct.
+
+This allows the compiler to produce a deterministic, explicit diagnostic rather than treating "unsafe" as an ordinary identifier.
+
+A stable parser MUST reject an "unsafe" construct with a dedicated diagnostic such as:
+
+ZMN-SAFETY-UNSAFE-DISALLOWED
+
+The lexical layer itself does not enforce semantic safety; it only guarantees that the spelling is recognized consistently.
+
+No Rust "unsafe" implementation is permitted.
+
+---
+
+18. Boolean Literals
+
+The canonical boolean literals are:
 
 true
 false
 
-They are lexed as boolean/keyword tokens according to the canonical token model.
+They are literal tokens.
 
-They must not also be emitted as ordinary identifiers.
+They MUST NOT also be emitted as ordinary identifiers.
+
+Their semantic type is established by the type system.
 
 ---
 
-17. Nil Literals
+19. Null-Like Literals
 
-The baseline null-like literals are:
+The canonical stable null literal is:
 
 nil
-null
 
-Whether both remain stable language forms must be determined by the canonical semantic specification.
+"null" may remain reserved for compatibility if already present in the implementation.
 
-If both are retained, they must have one explicitly defined semantic relationship.
+If both spellings are retained, their semantic relationship MUST be explicitly defined.
 
-The lexer must not assign them different meanings accidentally.
+The lexer MUST NOT give them accidentally different meanings.
+
+If "null" is deprecated, the lexer should continue recognizing it according to the active compatibility version and the parser/diagnostic layer should issue the appropriate deprecation diagnostic.
 
 ---
 
-18. Integer Literals
+20. Integer Literals
 
-The baseline integer form is:
+Zamani supports arbitrary lexical integer magnitude.
 
-INTEGER =
-    DIGIT { DIGIT } ;
-
-Example:
+Canonical forms include:
 
 0
-1
 42
-1000000
+1_000_000
+0xFF
+0b1010
+0o755
 
-The lexer must preserve the source representation sufficiently for later semantic processing.
+The lexical representation is:
 
-Numeric interpretation belongs to semantic/literal processing rather than being coupled to machine word size.
+INTEGER
+    = DECIMAL_INTEGER
+    | HEX_INTEGER
+    | BINARY_INTEGER
+    | OCTAL_INTEGER
+
+Digit separators may be permitted between digits.
+
+Leading/trailing separators MUST be rejected.
+
+Examples:
+
+1_000       valid
+0xFF_A0     valid
+0b1010_0101 valid
+
+_100        invalid
+100_        invalid
+0x_FF       invalid
+
+The lexer MUST preserve the literal spelling.
 
 ---
 
-19. Integer Scalability
+21. Integer Scalability
 
-The lexer must not assume that an integer fits in:
+The lexer MUST NOT parse an integer directly into:
 
 u32
 u64
 usize
+i32
 i64
 
-merely because the host compiler uses those types internally.
+merely because those are convenient host representations.
 
 For example:
 
-999999999999999999999999999999999999
+999999999999999999999999999999999999999999999999999999
 
-must not be lexically rejected solely because it exceeds the host machine's native integer width.
+is lexically valid.
 
-The lexical layer should identify it as an integer literal.
-
-Semantic analysis determines whether its value is valid for the selected type/context.
-
-Where arbitrary-precision semantics are required, the implementation should use a safe representation capable of preserving the literal without overflow.
-
----
-
-20. Floating-Point Literals
-
-The baseline floating form is:
-
-FLOAT =
-    DIGIT { DIGIT }
-    "."
-    DIGIT { DIGIT } ;
-
-Example:
-
-0.0
-1.5
-3.14159
-
-The lexer must not silently round a floating literal to the host machine's floating-point representation during lexical scanning.
-
-Lexing identifies the literal.
+The lexical representation must remain available to later literal semantics.
 
 Semantic analysis determines:
 
-- precision;
+- signedness;
+- width;
+- arbitrary precision;
 - range;
-- representation;
-- constant evaluation;
-- target compatibility.
+- target representation;
+- constant-evaluation rules.
+
+No host integer overflow may corrupt the source literal.
 
 ---
 
-21. Future Numeric Literal Extensions
+22. Floating-Point Literals
 
-Future versions may introduce:
+Zamani supports decimal floating-point syntax.
 
-scientific notation
-hexadecimal
-binary
-octal
-digit separators
-arbitrary precision
-decimal
-rational
-complex
-fixed point
-quantum numeric literals
-symbolic numeric literals
+Examples:
 
-Each extension must be explicitly specified and must not make existing literals ambiguous.
+1.0
+0.5
+3.14159
+1e9
+1.5e-9
+1_000.25
+.5
+
+The canonical forms are:
+
+DIGIT_SEQUENCE "." DIGIT_SEQUENCE EXPONENT?
+"." DIGIT_SEQUENCE EXPONENT?
+DIGIT_SEQUENCE EXPONENT
+
+where:
+
+EXPONENT = ("e" | "E") ("+" | "-")? DIGIT_SEQUENCE
+
+The lexer identifies syntax only.
+
+It MUST NOT silently convert the value to:
+
+f32
+f64
+
+during lexical scanning.
+
+Precision and representation belong to the type and semantic layers.
 
 ---
 
-22. String Literals
+23. Numeric Literal Preservation
 
-The baseline string literal begins and ends with:
+For every numeric literal the implementation must preserve enough source information to determine:
+
+- original base;
+- digit sequence;
+- separator positions if required for diagnostics;
+- sign where syntactically represented;
+- exponent;
+- suffix if a future version introduces suffixes;
+- source span.
+
+Numeric parsing MUST NOT depend on target hardware width.
+
+---
+
+24. Future Numeric Forms
+
+Zamani may support:
+
+- hexadecimal floating point;
+- decimal floating point;
+- rational literals;
+- complex literals;
+- fixed-point literals;
+- arbitrary-precision literals;
+- symbolic numeric literals;
+- physical-unit literals;
+- probability literals;
+- quantum-specific numeric notation.
+
+Each new form requires:
+
+1. lexical specification;
+2. ambiguity analysis;
+3. token identity;
+4. parser integration;
+5. AST contract;
+6. semantic contract;
+7. tests;
+8. compatibility classification.
+
+No extension may silently change an existing literal's meaning.
+
+---
+
+25. String Literals
+
+A normal string literal begins and ends with:
 
 "
 
@@ -588,49 +908,107 @@ Example:
 
 "Hello, Zamani"
 
-The lexer must recognize escape sequences according to a single canonical escape table.
+A string may contain Unicode scalar values and supported escape sequences.
 
 An unterminated string is a lexical error.
 
----
-
-23. Escape Sequences
-
-The canonical escape specification must define each supported escape explicitly.
-
-At minimum, the architecture must distinguish:
-
-escaped quote
-escaped backslash
-newline
-carriage return
-tab
-Unicode/code-point escape forms, if supported
-
-Unknown escape sequences must not silently become arbitrary characters.
+A raw string facility may be introduced as a separate lexical form rather than overloading ordinary strings.
 
 ---
 
-24. Character Literals
+26. Escape Sequences
+
+The canonical escape table includes:
+
+\"    quotation mark
+\\    backslash
+\b    backspace
+\f    form feed
+\n    line feed
+\r    carriage return
+\t    horizontal tab
+
+Unicode escapes must use a separately specified canonical syntax.
+
+At minimum, if "\u" is supported, the exact grammar must define:
+
+- number of hexadecimal digits;
+- scalar-value validation;
+- surrogate rejection;
+- escape normalization;
+- diagnostic behavior.
+
+Unknown escapes MUST be rejected.
+
+For example:
+
+"\q"
+
+must not silently become:
+
+q
+
+---
+
+27. Character Literals
 
 Character literals use:
 
 '
 
-Example:
+Examples:
 
 'a'
 '\n'
+'λ'
 
-A character literal must represent exactly one valid character/code point according to the language's character model.
+A character literal represents exactly one Unicode scalar value after escape interpretation.
 
-An unterminated or multi-character literal must produce a lexical diagnostic unless a future version explicitly defines a different character-literal model.
+Invalid:
+
+''
+'ab'
+'abc'
+
+Surrogate values are invalid.
+
+Unterminated character literals are lexical errors.
 
 ---
 
-25. Punctuation
+28. Raw Strings
 
-The canonical punctuation inventory includes:
+If raw strings are enabled, they must have a delimiter system that allows embedded quotation marks without ambiguous termination.
+
+The raw-string grammar must be independently specified.
+
+Raw strings MUST preserve their payload without interpreting ordinary escape sequences.
+
+The source representation must remain available for diagnostics and tooling.
+
+---
+
+29. Byte and Binary Literals
+
+Byte-oriented literals must remain distinct from Unicode character literals.
+
+If introduced, the language must distinguish:
+
+character
+string
+byte
+byte-string
+binary data
+
+without relying on host encoding.
+
+Binary data literals may represent arbitrary octets and therefore MUST NOT be interpreted as Unicode text.
+
+---
+
+30. Punctuation
+
+Canonical punctuation includes:
 
 (
 )
@@ -642,14 +1020,18 @@ The canonical punctuation inventory includes:
 .
 ;
 :
+@
+#
 
-and other syntactically significant punctuation described below.
+and lexical operator symbols.
 
-Each punctuation sequence must have one lexical interpretation at a given source position.
+Each spelling has exactly one canonical lexical identity.
+
+Parser context determines meaning.
 
 ---
 
-26. Operators
+31. Operators
 
 The baseline operator families include:
 
@@ -668,7 +1050,7 @@ The baseline operator families include:
 >
 ?
 
-and compound/multi-character operators:
+and:
 
 ==
 !=
@@ -682,1731 +1064,3283 @@ and compound/multi-character operators:
 -=
 *=
 /=
-..
+.. 
 ..=
 ::
 ->
 =>
 
-The lexer must use longest-valid-token matching where operators overlap.
-
-For example:
-
->=
-
-must not become:
-
->
-=
-
-when ">=" is a valid token.
+Future operators must be introduced through the operator registry and precedence specification.
 
 ---
 
-27. Operator Token Canonicalization
+32. Longest-Match Rule
 
-The current Rust lexer contains overlapping token concepts such as:
+The lexer MUST use longest-valid-token matching.
 
-BitAnd / Ampersand
-BitOr / Pipe
-Question / QuestionMark
+Examples:
 
-These must not remain semantically ambiguous.
+>=  → GE
+>   → GT
 
-The production token model should establish a single canonical token identity for each lexical spelling.
+>>  → SHIFT_RIGHT
+>   → GT
+
+::  → DOUBLE_COLON
+:   → COLON
+
+..= → RANGE_INCLUSIVE
+..  → RANGE
+
+->  → ARROW
+-   → MINUS
+
+=>  → FAT_ARROW
+=   → ASSIGN
+
+A valid longer token MUST always win over its valid shorter prefix.
+
+---
+
+33. Canonical Operator Identity
+
+A source spelling MUST have one canonical token identity.
 
 For example:
 
 &
 
-must have one canonical lexical token.
+must not simultaneously be:
 
-Whether that token is later interpreted as:
+BitAnd
+Ampersand
+ReferenceOperator
 
-- bitwise AND;
-- reference operator;
-- another semantic operation;
+at the lexical layer.
 
-is determined by parser context and semantic analysis.
+Instead:
+
+&
+    ↓
+AMPERSAND
+    ↓
+parser context
+    ↓
+AST meaning
+    ↓
+semantic meaning
 
 The same principle applies to:
 
 |
 ?
+*
+-
++
 
-and other overloaded syntax.
-
----
-
-28. Overloaded Lexemes
-
-One lexical spelling may have multiple grammatical or semantic meanings.
-
-This does not require multiple lexer token types.
-
-Example:
-
-&
-
-can participate in different constructs.
-
-The preferred architecture is:
-
-source lexeme
-     ↓
-canonical token
-     ↓
-parser context
-     ↓
-AST meaning
-     ↓
-semantic meaning
-
-not:
-
-same source spelling
-     ↓
-many competing lexer token kinds
-
-unless there is a genuine lexical distinction.
+and other overloaded operators.
 
 ---
 
-29. Arrow Tokens
+34. Arrow Operators
 
-Zamani currently uses arrow-like forms including:
+The following are distinct:
 
 ->
 =>
 
-These must remain distinct canonical tokens.
+"->" may be used for type/function relationships.
 
-Typical uses include:
+"=>" may be used for match arms or other grammar-defined constructs.
 
-function return types
-match arms
-
-but semantic ownership belongs to the parser/AST rather than the lexer.
+Their semantic meaning belongs to parser/AST layers.
 
 ---
 
-30. Range Tokens
+35. Range Operators
 
-The range operators are:
+The canonical range operators are:
 
 ..
 ..=
 
-The lexer must recognize them as complete operators.
+They MUST be lexed as complete tokens.
 
-They must not be confused with two consecutive "." tokens.
+They MUST NOT become:
+
+.
+.
+
+when the two-dot sequence forms a valid range token.
 
 ---
 
-31. Question Mark
+36. Question Mark
 
-The question-mark spelling:
+The canonical token for:
 
 ?
 
-must have one canonical token.
+is "QUESTION".
 
-Its meaning may include expression-level propagation or future type syntax depending on grammar context.
+The lexer does not decide whether it means:
 
-The lexer must not decide whether "?" means:
+- propagation;
+- optionality;
+- a future type construct;
+- another grammar-defined feature.
 
-try propagation
-optional type
-other future syntax
-
-That belongs to the parser and semantic system.
+That decision belongs to parser and semantic layers.
 
 ---
 
-32. Hash and Attributes
+37. Attributes
 
-The hash character:
+The hash symbol:
 
 #
 
-is lexically significant because Zamani supports attribute-style syntax.
+is punctuation.
 
-For example:
+An attribute such as:
 
-#[attribute]
+#[inline]
 
-The lexer recognizes the punctuation.
+is parsed by the attribute grammar.
 
-The parser and AST determine the structure.
+The lexer MUST NOT resolve:
 
-The semantic system determines whether the attribute exists and what it means.
+inline
+
+to its semantic meaning.
+
+Attribute validation belongs downstream.
 
 ---
 
-33. At Sign and Annotations
+38. Annotations
 
 The at sign:
 
 @
 
-supports annotation-oriented syntax.
+is punctuation unless the canonical grammar explicitly defines a complete lexical token for an annotation.
 
-Examples include concepts such as:
+The preferred architecture is:
+
+@
++
+identifier
++
+optional arguments
+
+rather than a separate lexical token for every annotation.
+
+For example:
 
 @atom
 @molecule(...)
+@hardware(...)
+@capability(...)
 
-The lexer may produce a dedicated "NanoAnnotation" token when the lexical form is unambiguously defined.
+remain compositional syntax.
 
-However, annotation semantics belong downstream.
-
-An annotation must never directly alter hardware behavior during lexical scanning.
+The lexer MUST NOT execute or interpret annotations.
 
 ---
 
-34. Quantum Literals
+39. Quantum Lexical Boundary
 
-Zamani supports quantum-oriented literal concepts such as:
+Quantum source is ordinary Zamani source.
+
+The lexical layer MUST NOT contain a fixed hardware gate vocabulary.
+
+These are normally identifiers:
+
+H
+X
+Y
+Z
+CNOT
+CZ
+SWAP
+U
+custom_gate
+vendor_operation
+logical_operation
+
+This allows:
+
+apply H to q;
+apply CNOT to q0, q1;
+apply custom_gate to q;
+apply vendor.operation to q;
+
+without requiring the lexer to know the available target hardware.
+
+---
+
+40. Quantum Literals
+
+The baseline quantum state literal forms are:
 
 |0⟩
 |1⟩
 |+⟩
 |-⟩
 
-The current lexical model includes a "QuantumLiteral" token.
+These are lexical source values.
 
-The lexer should recognize only the formally specified literal language.
+They do not imply:
 
-It must not attempt to:
+- physical qubit allocation;
+- a particular QPU;
+- a simulator;
+- a physical qubit index;
+- a hardware topology;
+- fixed numerical precision.
 
-- simulate a quantum state;
-- allocate a qubit;
-- determine physical qubit count;
-- select a backend;
-- determine hardware topology.
-
-A quantum literal is source data.
-
-Its computational meaning is established later.
+The lexer MUST NOT allocate quantum resources.
 
 ---
 
-35. Quantum Literal Scalability
+41. Quantum Literal Extension
 
-Quantum literals must not encode an implicit finite machine.
+Future versions may permit richer quantum state notation.
+
+Examples could include:
+
+|ψ⟩
+|φ⟩
+|n⟩
+|α⟩
+
+or structured state expressions.
+
+Such forms must be introduced through a formal grammar extension.
+
+The lexer must not guess whether an arbitrary sequence between "|" and "⟩" is a quantum state.
+
+Ambiguous notation must be handled by the canonical syntax specification.
+
+---
+
+42. Quantum Pipeline
+
+Quantum lexical constructs flow through:
+
+source
+  ↓
+lexer
+  ↓
+parser
+  ↓
+generic frontend AST
+  ↓
+semantic quantum model
+  ↓
+quantum::ir
+  ↓
+optimization
+  ↓
+decomposition
+  ↓
+routing
+  ↓
+scheduling
+  ↓
+QEC / resilience
+  ↓
+ZQN
+  ↓
+HAL
+  ↓
+target
+
+The lexical layer must never create a competing quantum IR.
+
+---
+
+43. Domain Operations
+
+The same principle applies outside quantum computing.
+
+Operations belonging to:
+
+- classical mathematics;
+- AI;
+- machine learning;
+- networking;
+- cryptography;
+- HDL;
+- accelerator programming;
+- distributed computing;
+- scientific computing;
+
+should normally remain identifiers.
 
 For example:
 
-|0⟩
+fft
+matmul
+attention
+encrypt
+hash
+reduce
+broadcast
+synthesize
+kernel
+pipeline
 
-is a semantic value.
+must not automatically become keywords.
 
-It is not:
-
-physical_qubit_0
-
-Likewise, lexing a quantum construct must never allocate:
-
-QPU resources
-physical qubits
-memory
-hardware registers
-
----
-
-36. Quantum Operations Are Not Lexical Hardware Definitions
-
-The lexer must not define a permanent vocabulary such as:
-
-IBM_H
-IBM_CX
-DEVICE_17_GATE
-PHYSICAL_QUBIT_42
-
-Quantum source should use compositional language constructs.
-
-The mapping to native gates belongs downstream:
-
-Quantum Source
-      ↓
-Quantum AST
-      ↓
-Quantum Semantic IR
-      ↓
-Decomposition
-      ↓
-Synthesis
-      ↓
-Routing
-      ↓
-Scheduling
-      ↓
-Target
-
-This is required for POCO-REAF.
+A word becomes a keyword only when the language itself needs lexical distinction.
 
 ---
 
-37. Nano Annotations
+44. Hardware Vocabulary
 
-The lexer currently supports a dedicated nano annotation concept.
+Hardware-specific names MUST NOT become universal keywords.
 
-The lexical layer should recognize the syntactic boundary only.
+The lexer must not require permanent lexical identities for:
+
+gpu0
+qpu0
+fpga0
+cpu0
+device17
+core7
+physical_qubit42
+memory_bank3
+node8
+
+These are target/resource information.
+
+They belong to:
+
+resources/
+hardware/
+compile/
+execution/
+semantic analysis
+target lowering
+
+as appropriate.
+
+---
+
+45. POCO-REAF Lexical Requirement
+
+A valid Zamani source program MUST NOT need to change merely because the target changes from:
+
+small machine
+→ workstation
+→ server
+→ cluster
+→ supercomputer
+→ GPU system
+→ FPGA system
+→ QPU
+→ heterogeneous system
+→ future computational substrate
+
+Lexical behavior remains unchanged.
+
+Target realization happens after semantic analysis and canonical IR formation.
+
+---
+
+46. HDL Lexical Boundary
+
+HDL constructs must describe hardware intent.
+
+The lexer must not hard-code:
+
+- bus widths;
+- register counts;
+- device counts;
+- FPGA families;
+- ASIC families;
+- clock frequencies;
+- memory capacities.
 
 For example:
 
-@atom
-@molecule(x)
+signal data: Bits<N>;
 
-must not cause the lexer to determine:
+contains a program parameter.
 
-- physical dimensions;
-- chemistry;
-- biological behavior;
-- hardware;
-- simulation method.
-
-Those are semantic/domain concerns.
+It does not establish a universal hardware maximum.
 
 ---
 
-38. MTS Literals
+47. AI Lexical Boundary
 
-The current token model contains:
+AI-related concepts such as:
 
-MTSLiteral
+model
+dataset
+train
+infer
+agent
+tensor
+gradient
+parameter
 
-but the implementation-conformance grammar documents that the lexer does not currently emit the literal form and that "mts[...]" can currently be lexed as ordinary identifier/punctuation sequences.
+may be language keywords only where language-level syntax requires them.
 
-This is a production specification issue.
+Framework-specific identifiers remain identifiers.
 
-The repository must not simultaneously claim:
+The lexer must not contain permanent vocabularies for:
 
-MTS literal is implemented
+PyTorch
+TensorFlow
+JAX
+CUDA
+ROCm
+vendor-specific accelerator APIs
+
+unless a future compatibility dialect explicitly requires lexical treatment.
+
+---
+
+48. Networking Lexical Boundary
+
+Networking syntax must remain independent of:
+
+- fixed node counts;
+- fixed interface counts;
+- fixed packet sizes;
+- fixed topology;
+- fixed IP formats where abstract addressing is intended.
+
+Network protocol names should normally be identifiers or semantic capability names.
+
+---
+
+49. Security Lexical Boundary
+
+Cryptographic algorithms should normally remain semantic identifiers.
+
+The lexer must not become a cryptographic algorithm registry.
+
+For example:
+
+hash
+sign
+verify
+encrypt
+decrypt
+prove
+verify_proof
+
+may be semantic operations.
+
+Specific algorithms may be library/domain identifiers.
+
+Secret material must never be interpreted by the lexer as executable behavior.
+
+---
+
+50. Comments
+
+Zamani supports:
+
+// line comments
 
 and:
 
-MTS literal is not emitted
+/*
+   block comments
+*/
 
-The correct status model is:
+A line comment terminates at a logical line boundary.
 
-MTSLiteral
-    ↓
-Specified: YES
-    ↓
-Token enum: YES
-    ↓
-Reference lexer emission: VERIFY/IMPLEMENT
-    ↓
-Parser: VERIFY/IMPLEMENT
-    ↓
-AST: VERIFY/IMPLEMENT
-    ↓
-Semantic model: VERIFY/IMPLEMENT
-    ↓
-Tests: REQUIRED
+A block comment terminates at:
 
-Until that pipeline is complete, "MTSLiteral" must be marked experimental/unimplemented, not stable.
+*/
+
+An unterminated block comment is a lexical error.
 
 ---
 
-39. Keyword "mts"
+51. Nested Block Comments
 
-The lexical status of:
+The stable lexical language does not require nested block comments.
 
-mts
+Therefore:
 
-must also be clarified.
+/*
+    /*
+        nested
+    */
+*/
 
-If it is:
+must not be silently treated as a valid nested-comment construct.
 
-reserved keyword
-
-then it must be lexed consistently as such.
-
-If it is:
-
-contextual keyword
-
-then its special meaning belongs to specific grammar contexts.
-
-If it is merely the prefix of a literal syntax:
-
-mts[...]
-
-the lexer may recognize the complete literal when the grammar formally defines it.
-
-There must not be three simultaneous interpretations.
+If nested comments are introduced later, they require a language-versioned lexical rule and conformance tests.
 
 ---
 
-40. Quantum, Nano and MTS Lexical Boundaries
+52. Documentation Comments
 
-Domain-specific lexical constructs must follow this architecture:
+Documentation comments are lexically distinguishable from ordinary comments:
 
-Lexical identity
-        ↓
-Source representation
-        ↓
-AST
-        ↓
-Domain semantics
+///
+/// /** ... */
 
-The lexer must not become a domain interpreter.
+They MUST NOT become ordinary semantic parser tokens.
 
-This ensures that adding a future computational domain does not require rewriting the fundamental lexer architecture.
+They may be retained on a hidden/documentation channel for:
+
+- documentation generation;
+- IDEs;
+- LSP;
+- symbol indexing;
+- formatting;
+- source transformation.
+
+Their existence must not alter program semantics.
 
 ---
 
-41. Strings vs Domain Literals
+53. Comment Preservation
 
-Domain syntax must not accidentally consume string contents.
+The lexer implementation may discard ordinary comments from the parser-facing token stream.
+
+However, source spans must allow tooling to recover comments where required.
+
+The implementation should therefore conceptually maintain:
+
+semantic token stream
++
+trivia/source metadata
+
+rather than forcing comments into the AST.
+
+---
+
+54. Whitespace
+
+Whitespace is normally insignificant.
+
+The baseline whitespace includes:
+
+space
+tab
+carriage return
+line feed
+vertical tab
+form feed
+
+Unicode whitespace is not automatically syntax-significant.
+
+If additional Unicode whitespace is accepted, the rule must be explicitly specified.
+
+---
+
+55. Newlines
+
+Newlines are not semantic in the baseline language.
+
+Therefore:
+
+let x = 1;
+let y = 2;
+
+and equivalent whitespace arrangements must tokenize consistently unless the parser grammar explicitly requires a delimiter.
+
+Newlines must remain available through source spans for:
+
+- diagnostics;
+- formatting;
+- IDE tooling;
+- documentation;
+- debugging;
+- source mapping.
+
+---
+
+56. Significant Whitespace
+
+If a future dialect requires significant indentation or whitespace, it must be an explicit dialect/version feature.
+
+The base language lexer must not accidentally become indentation-sensitive.
+
+---
+
+57. EOF
+
+The lexer MUST emit a deterministic EOF marker.
+
+EOF has a valid source position.
+
+EOF must not consume additional source.
+
+Repeated requests after EOF must have deterministic behavior.
+
+---
+
+58. Invalid Characters
+
+An unrecognized character MUST produce a structured lexical diagnostic.
+
+The lexer MUST NOT:
+
+- silently discard it;
+- replace it;
+- skip arbitrarily far;
+- reinterpret it as another token.
+
+Recovery may consume the offending scalar value and continue.
+
+---
+
+59. Lexical Recovery
+
+Recovery must guarantee progress.
+
+For every invalid input position:
+
+detect error
+    ↓
+emit diagnostic
+    ↓
+consume a well-defined unit
+    ↓
+continue or terminate according to policy
+
+The lexer must never repeatedly inspect the same invalid position indefinitely.
+
+---
+
+60. Diagnostic Requirements
+
+A lexical diagnostic should contain:
+
+diagnostic code
+severity
+source span
+message
+optional explanation
+optional suggested correction
+language version
+
+Diagnostics must be deterministic.
+
+Example categories:
+
+invalid-character
+invalid-utf8
+unterminated-string
+unterminated-character
+unterminated-comment
+invalid-escape
+invalid-number
+invalid-identifier
+invalid-unicode-scalar
+reserved-keyword
+lexical-resource-exhausted
+
+---
+
+61. Diagnostic Stability
+
+Diagnostic identifiers should remain stable across compatible releases.
+
+Human-readable wording may improve without changing the diagnostic identity.
+
+Tools must use diagnostic codes rather than matching complete diagnostic strings.
+
+---
+
+62. Source Spans
+
+Every source-derived token MUST have a source span.
+
+A span must be capable of representing:
+
+source identity
+start position
+end position
+
+The implementation may additionally expose:
+
+line
+column
+byte offset
+Unicode scalar offset
+UTF-16 position
+
+for tooling.
+
+The canonical internal representation must avoid ambiguity between byte offsets and character positions.
+
+---
+
+63. Byte and Character Positions
+
+Because source is UTF-8, byte offsets and Unicode scalar offsets are different concepts.
+
+The lexer MUST define which coordinate system is canonical internally.
+
+Tooling adapters may provide:
+
+- UTF-8 byte offsets;
+- Unicode scalar offsets;
+- UTF-16 offsets;
+- line/column.
+
+Conversion must be deterministic.
+
+---
+
+64. Token Value Preservation
+
+A token may carry:
+
+token kind
+source span
+raw source representation
+decoded value
+
+The implementation must not require semantic interpretation during lexing.
+
+For literals, preserving raw spelling is particularly important.
+
+Example:
+
+1_000
+
+must remain distinguishable from:
+
+1000
+
+at least to tooling/diagnostic layers if source preservation requires it.
+
+---
+
+65. Token Precedence
+
+The conceptual lexical precedence is:
+
+1. source decoding;
+2. whitespace/comments;
+3. documentation comments;
+4. longest multi-character operators;
+5. complete domain literals;
+6. ordinary literals;
+7. identifiers and keyword classification;
+8. single-character operators;
+9. punctuation;
+10. invalid characters;
+11. EOF.
+
+The concrete scanner implementation may use a different internal algorithm provided the observable behavior is identical.
+
+---
+
+66. Domain Literal Isolation
+
+Domain-specific literals must never consume content that belongs to ordinary strings.
 
 For example:
 
-"mts[123]"
+"mts[...]"
 
-is a string.
-
-It must never become an "MTSLiteral".
+is always a string.
 
 Likewise:
 
 "|0⟩"
 
-is a string rather than a quantum literal.
+is a string.
 
-Lexical context must be unambiguous.
-
----
-
-42. Token Precedence
-
-When lexical forms overlap, the lexer must follow a deterministic priority.
-
-Recommended order:
-
-1. whitespace/comments
-2. multi-character operators
-3. domain-specific complete literals
-4. literals
-5. identifiers/keywords
-6. single-character punctuation/operators
-7. invalid characters
-8. EOF
-
-The exact implementation may differ, but the result must be deterministic.
+The lexer must identify the opening quotation mark before considering domain literal syntax inside the string.
 
 ---
 
-43. Longest-Match Rule
+67. MTS Lexical Contract
 
-Where multiple tokens share a prefix, the longest valid token must be selected.
+The existing repository contains MTS terminology and an "MTSLiteral" concept.
+
+The production lexical rule is:
+
+mts[ ... ]
+
+is a complete MTS lexical literal only if the active language version enables MTS literal syntax.
+
+The payload remains source text at the lexical layer.
+
+The lexer MUST NOT:
+
+- parse timestamps;
+- create timelines;
+- allocate timelines;
+- evaluate temporal semantics;
+- create branches;
+- manipulate history.
+
+Those belong downstream.
+
+---
+
+68. MTS Ambiguity
+
+The word:
+
+mts
+
+must have exactly one status for each language version:
+
+1. reserved keyword;
+2. contextual keyword;
+3. ordinary identifier;
+4. literal prefix.
+
+It must not simultaneously have multiple incompatible lexical interpretations.
+
+If "mts[...]" is the literal syntax, the parser and lexical specification must agree on whether:
+
+mts
+
+alone is an identifier or reserved word.
+
+---
+
+69. MTS Scalability
+
+MTS syntax must not impose:
+
+MAX_TIMELINES
+MAX_BRANCHES
+MAX_HISTORY
+MAX_TIMESTAMP
+MAX_EVENTS
+
+A program may request or construct as many temporal structures as available semantic/runtime resources permit.
+
+Resource exhaustion remains an implementation/runtime condition, not lexical invalidity.
+
+---
+
+70. Nano Syntax
+
+Nano-domain annotations are lexical syntax only.
 
 Examples:
 
->=  → GreaterThanEqual
->   → GreaterThan
+@atom
+@molecule(...)
 
->>  → RightShift
->   → GreaterThan
+The lexer MUST NOT determine:
 
-::  → DoubleColon
-:   → Colon
+- physical dimensions;
+- chemistry;
+- molecular behavior;
+- biological behavior;
+- material properties;
+- hardware implementation.
 
-->  → Arrow/ThinArrow canonical token
--   → Minus
-
-=>  → FatArrow
-=   → Assign
-
-The repository currently contains both "Arrow" and "ThinArrow"; this is another token-model duplication that must be resolved into one canonical lexical identity unless there is a documented reason for both.
+Those belong to domain semantics.
 
 ---
 
-44. Token Model
+71. Identifier-Like Domain Names
 
-The production token representation should conceptually contain:
-
-Token {
-    kind
-    span
-    source/value
-}
-
-The current implementation already follows this general model.
-
-The token kind must describe lexical identity.
-
-The token payload must preserve the source value or safely represent its decoded value as appropriate.
-
----
-
-45. Token Values
-
-Token values must not be prematurely converted to machine-specific representations.
-
-For example, an integer token should not necessarily become:
-
-u64
-
-during lexing.
-
-Likewise, a floating literal should not automatically become:
-
-f64
-
-unless the semantic contract explicitly requires that representation.
-
-The lexer identifies syntax.
-
-Literal interpretation belongs to a later stage.
-
----
-
-46. Source Spans
-
-Every emitted source token must have a valid span.
-
-A span must identify:
-
-file
-start
-end
-
-according to the repository's source-map model.
-
-The lexer already uses source-map types including:
-
-BytePos
-FileId
-SourceFile
-Span
-
-and attaches spans to tokens.
-
-Span handling must remain independent of target architecture.
-
----
-
-47. Span Correctness
-
-For every token:
-
-start <= end
-
-and the span must correspond to the source region that produced the token.
-
-The lexer must never report:
-
-- negative positions;
-- reversed spans;
-- spans belonging to another file;
-- positions beyond the source;
-- inconsistent byte/character offsets.
-
----
-
-48. Multi-Byte Unicode
-
-When Unicode characters occur in source, the implementation must distinguish:
-
-byte offsets
-character positions
-display columns
-
-A byte-based internal source map is acceptable and generally preferable for compiler infrastructure, provided diagnostics correctly translate positions for user-facing display.
-
----
-
-49. Lexical Errors
-
-A lexical error must contain at least:
-
-message
-span
-
-The current "LexerError" already follows this basic model.
-
-Production diagnostics should additionally support structured error codes where the compiler diagnostic framework provides them.
-
-Examples:
-
-ZLEX001 invalid character
-ZLEX002 unterminated string
-ZLEX003 invalid escape
-ZLEX004 unterminated block comment
-ZLEX005 malformed character literal
-ZLEX006 malformed domain literal
-
-The final error-code registry should be centralized rather than duplicated in every lexer branch.
-
----
-
-50. Illegal Token
-
-An "Illegal" token may be useful for parser recovery and tooling, but its meaning must be explicit.
-
-An illegal token represents:
-
-«Input that the lexer could not classify as valid Zamani lexical syntax.»
-
-It must not be treated as valid program semantics.
-
-A production compiler should normally report the lexical diagnostic immediately while retaining enough token structure for controlled recovery.
-
----
-
-51. EOF
-
-The lexer must emit exactly one logical EOF token for a successfully scanned source unit.
-
-EOF must have a valid zero-width span at the end of the source.
-
-No source text follows EOF.
-
----
-
-52. Lexer State
-
-The lexer should not rely on hidden global mutable state.
-
-State should be associated with the lexer/source instance.
-
-The current implementation stores source-related information in the lexer structure and uses an explicit keyword mapping.
-
-Any shared immutable tables may be safely shared.
-
-Compilation-specific mutable state must remain isolated.
-
----
-
-53. Thread Safety
-
-The lexical architecture should support independent compilation units being lexed concurrently.
-
-This means:
-
-Source A → Lexer A
-Source B → Lexer B
-Source C → Lexer C
-
-must not require shared mutable lexical state.
-
-Parallel compilation must not alter lexical results.
-
----
-
-54. Memory Scalability
-
-The lexer must be designed for source files ranging from:
-
-tiny source files
-
-to:
-
-very large generated programs
-
-subject to available resources.
-
-It must not define artificial limits such as:
-
-MAX_TOKENS = 1_000_000
-MAX_SOURCE = 10MB
-MAX_IDENTIFIERS = 100_000
-
-unless such values are explicit configurable resource policies rather than language rules.
-
----
-
-55. Resource-Bounded Compilation
-
-Production compilers may impose resource budgets.
-
-Examples:
-
-memory budget
-time budget
-diagnostic budget
-token budget
-source-size policy
-
-Such limits must be:
-
-- explicit;
-- configurable where appropriate;
-- observable;
-- documented;
-- distinguishable from lexical invalidity.
-
-For example:
-
-source is lexically valid
-but compilation budget was exceeded
-
-must not be reported as:
-
-invalid Zamani syntax
-
----
-
-56. No Host-Machine Assumptions
-
-Lexical behavior must not depend on:
-
-usize width
-pointer width
-CPU endianess
-CPU instruction set
-host operating system
-native integer size
-native floating-point size
-
-This is essential for POCO-REAF.
-
-A Zamani source file must have the same lexical meaning regardless of whether it is compiled on:
-
-x86-64
-ARM
-RISC-V
-GPU-hosted environment
-distributed compiler
-quantum development system
-future architecture
-
----
-
-57. Rust Implementation Requirements
-
-The repository declares Rust 2021 and a Rust version requirement of 1.97/1.97.1.
-
-The reference lexer must therefore remain compatible with the selected Rust baseline.
-
-The lexical implementation must use safe Rust.
-
-The following are prohibited in Zamani compiler source:
-
-unsafe { ... }
-unsafe fn ...
-unsafe impl ...
-unsafe trait ...
-
-The lexer must not require unsafe memory access for performance.
-
-Performance optimization must use safe mechanisms such as:
-
-- slices;
-- iterators where appropriate;
-- indexing with validated bounds;
-- owned/borrowed strings;
-- "Arc" where sharing is appropriate;
-- explicit buffers;
-- deterministic data structures.
-
----
-
-58. Source-Level "unsafe" Keyword
-
-The existence of a Zamani source-level keyword named:
-
-unsafe
-
-must not be confused with Rust implementation safety.
-
-The current language grammar includes an "unsafe" source construct.
-
-If Zamani retains this source-level concept, its semantics must be defined independently.
-
-The Rust compiler implementation itself must remain safe.
-
-If the final Zamani language policy prohibits unsafe source semantics as well, the keyword must eventually be removed/deprecated through a versioned grammar change.
-
-The lexical specification must not silently conflate these two meanings.
-
----
-
-59. Keyword Inventory Audit
-
-The current token inventory contains a very large number of keywords, including:
-
-core/control
-OOP
-modules
-effects
-concurrency
-quantum
-nano
-Sankofa
-temporal
-dependent types
-omniversal/system concepts
-business/payment concepts
-graphics/video concepts
-
-as visible in "src/lexer.rs".
-
-This must be audited before declaring the complete keyword set stable.
-
-Every keyword must have:
-
-lexical purpose
-parser usage
-AST representation
-semantic meaning
-tests
-compatibility status
-
-An unused keyword should not automatically become part of the stable language.
-
----
-
-60. Keyword Status Table
-
-The production documentation should maintain a generated or validated table:
-
-Lexeme| Token| Status| Parser| Semantic owner
-"fn"| "KeywordFn"| Stable| Function declaration| Semantic/IR
-"let"| "KeywordLet"| Stable| Binding| Semantic/IR
-"quantum"| "KeywordQuantum"| Domain| Quantum parser| Quantum semantic layer
-"nano"| "KeywordNano"| Domain| Nano parser| Nano semantic layer
-"mts"| "KeywordMts"| Verify| Verify| Temporal/MTS
-"unsafe"| "KeywordUnsafe"| Policy-dependent| Safety parser| Safety semantics
-...| ...| ...| ...| ...
-
-The table should eventually be generated from the canonical keyword registry to prevent documentation drift.
-
----
-
-61. Contextual Interpretation
-
-The lexer should remain as simple as possible.
-
-For example:
-
-quantum
-
-should be recognized as the canonical quantum keyword if it is reserved.
-
-But the lexer should not determine whether the following construct is:
-
-quantum circuit
-quantum operation
-quantum type
-quantum expression
-
-That belongs to the parser and semantic layers.
-
----
-
-62. Lexical vs Semantic Names
-
-An identifier such as:
+The following remain identifiers unless specifically reserved:
 
 H
 CNOT
-U
+FFT
+CUDA
+QPU
+GPU
+FPGA
 Tensor
-Patient
-Machine
+Agent
+Molecule
+Material
+Device
 
-must not receive special lexical meaning merely because a library, backend, or domain currently recognizes it.
-
-This is especially important for quantum computing.
-
-User-defined operations and mathematical abstractions must remain possible.
+This prevents the lexer from becoming an ever-growing dictionary of computational concepts.
 
 ---
 
-63. Hardware Independence
+72. Qualified Names
 
-The lexer must never encode:
+Qualified names are parsed from ordinary identifiers and punctuation.
 
-physical qubit identifiers
-QPU topology
-gate availability
-coupling maps
-pulse names
-device-specific registers
-device-specific memory
-CPU registers
-GPU blocks
+For example:
 
-Hardware information belongs downstream.
+vendor.operation
+module::symbol
+namespace::type
 
-This guarantees that lexical syntax does not become the limiting factor for future computational substrates.
+The lexer recognizes:
 
----
+IDENTIFIER
+DOT
+DOUBLE_COLON
 
-64. Domain Extensibility
-
-Adding a new Zamani computational domain should normally require:
-
-new semantic constructs
-possibly new parser productions
-possibly new contextual syntax
-
-but should not require redesigning the fundamental lexical engine.
-
-The lexer must provide generic building blocks:
-
-identifier
-literal
-operator
-punctuation
-annotation
-delimiter
-
-from which new domains can be composed.
+and does not resolve ownership or namespace semantics.
 
 ---
 
-65. ANTLR Synchronization
+73. Numeric Suffixes
 
-"Zamani.g4" and any future:
-
-grammar/ANTLR/ZamaniLexer.g4
-
-must implement the same lexical contract.
-
-ANTLR is not an alternative language.
-
-It is an alternative representation/tooling implementation.
-
-The conformance suite must compare:
-
-Rust lexer
-vs
-ANTLR lexer
-
-using the same corpus.
-
----
-
-66. Lexer Conformance Tests
-
-The lexical test suite must include:
-
-grammar/tests/lexical/
-├── whitespace/
-├── comments/
-├── identifiers/
-├── keywords/
-├── integers/
-├── floats/
-├── strings/
-├── chars/
-├── operators/
-├── punctuation/
-├── quantum/
-├── nano/
-├── mts/
-├── unicode/
-├── invalid/
-├── spans/
-└── compatibility/
-
----
-
-67. Positive Lexical Tests
-
-Every stable token must have positive tests.
+If numeric suffixes are introduced, they must be explicitly specified.
 
 Examples:
 
-let
-fn
-quantum
-struct
-123
-3.14
-"hello"
-'a'
-|0⟩
-@atom
+42u64
+3.14f32
+10ms
+5GHz
 
-Each test should verify:
+must not be partially consumed into unrelated tokens.
+
+The specification must define:
+
+- suffix registry;
+- ambiguity rules;
+- case sensitivity;
+- semantic ownership.
+
+Units belong to the type/unit system, not the hardware lexer.
+
+---
+
+74. Physical Units
+
+Physical-unit literals may eventually support:
+
+time
+frequency
+distance
+mass
+energy
+power
+temperature
+memory quantities
+quantum durations
+
+The lexical layer only recognizes their syntax.
+
+The semantic system determines dimensional validity.
+
+No physical unit may imply a specific machine.
+
+---
+
+75. Case Sensitivity
+
+Zamani identifiers are case-sensitive.
+
+Therefore:
+
+value
+Value
+VALUE
+
+are distinct identifiers.
+
+Keywords are recognized according to their exact canonical spelling unless the language specification explicitly defines another form.
+
+The lexer MUST NOT silently case-fold identifiers.
+
+---
+
+76. Keyword Case
+
+Canonical keywords use their specified spelling.
+
+For example:
+
+fn
+let
+quantum
+measure
+
+do not automatically imply:
+
+FN
+LET
+QUANTUM
+MEASURE
+
+as equivalent keywords.
+
+Case-insensitive keyword behavior would require an explicit versioned lexical change.
+
+---
+
+77. Reserved Built-In Type Names
+
+Existing implementation vocabulary may reserve type names such as:
+
+void
+int
+float
+bool
+str
+string
+char
+Result
+Never
+
+However, the lexical reservation does not determine the complete type system.
+
+Type meaning belongs to:
+
+grammar/spec/type-system.md
+
+and downstream semantic analysis.
+
+---
+
+78. Generic Built-In Operations
+
+Names such as:
+
+print
+println
+assert
+panic
+len
+sizeof
+
+may be reserved if the stable language requires them as built-in syntax.
+
+Library functionality should normally remain ordinary identifiers.
+
+The lexer must not encode the entire standard library.
+
+---
+
+79. Resource and Capability Vocabulary
+
+Words describing resource intent may be reserved only where syntax requires it.
+
+Examples:
+
+requires
+capability
+resource
+prefer
+constraint
+hint
+target
+
+The important distinction is:
+
+lexical recognition
+
+versus:
+
+resource semantics
+
+The lexer only performs the former.
+
+---
+
+80. Requirements vs Hardware Decisions
+
+Lexical syntax must permit semantic distinctions such as:
+
+requires capability("quantum.measurement")
+
+versus:
+
+map ...
+
+The lexer must not decide whether a requirement can be satisfied.
+
+It merely recognizes:
+
+requires
+capability
+string
+parentheses
+
+and other tokens.
+
+---
+
+81. No Physical Resource Tokenization
+
+The lexer must not create universal tokens such as:
+
+QUBIT_0
+CPU_0
+GPU_0
+FPGA_0
+NODE_0
+MEMORY_BANK_0
+
+unless they occur as ordinary identifiers.
+
+Physical identity belongs downstream.
+
+---
+
+82. No Fixed Widths
+
+Lexical rules must not assume:
+
+8-bit
+16-bit
+32-bit
+64-bit
+128-bit
+256-bit
+
+as universal machine widths.
+
+A numeric literal may be larger than any host-native integer.
+
+A type may later constrain its representation.
+
+---
+
+83. Source Size Scalability
+
+The language places no artificial lexical source-size limit.
+
+Implementations may stream or chunk source input.
+
+The lexer must be capable of operating over:
+
+tiny source
+large source
+generated source
+very large source
+
+subject only to available resources and explicitly configured implementation budgets.
+
+---
+
+84. Token Count Scalability
+
+No universal token-count limit is part of the language.
+
+A compiler may impose a resource budget.
+
+Such a condition must be reported as resource exhaustion, not malformed source.
+
+---
+
+85. Identifier Length Scalability
+
+No artificial language-level identifier-length limit is specified.
+
+An implementation may enforce resource budgets.
+
+Such enforcement must be documented and must not alter the language's semantic model.
+
+---
+
+86. Literal Length Scalability
+
+The same principle applies to:
+
+- strings;
+- byte strings;
+- identifiers;
+- comments;
+- numeric literals;
+- domain literals.
+
+No artificial universal language limits are introduced merely for implementation convenience.
+
+---
+
+87. Streaming Lexing
+
+The lexer architecture SHOULD support incremental or streaming input.
+
+Streaming must preserve the same observable lexical result as lexing the complete source.
+
+Chunk boundaries must not affect tokenization.
+
+For example:
+
+"qua" + "ntum"
+
+received as separate input chunks must produce the same result as:
+
+"quantum"
+
+when the stream represents the same source.
+
+---
+
+88. Incremental Lexing
+
+Incremental lexing must preserve deterministic token identity after edits.
+
+An incremental implementation may reuse unaffected lexical regions.
+
+It must not alter lexical semantics because a source file is processed incrementally.
+
+---
+
+89. Parallel Lexing
+
+Independent source units may be lexed concurrently.
+
+For:
+
+Source A
+Source B
+Source C
+
+parallel execution must produce the same individual lexical results as sequential execution.
+
+The lexer must not rely on shared mutable global lexical state.
+
+---
+
+90. Thread Safety
+
+The lexical implementation should prefer immutable configuration.
+
+Keyword registries, operator registries, and language-version tables should be immutable after construction.
+
+Global mutable lexer state is prohibited where it can affect deterministic results.
+
+---
+
+91. Configuration
+
+Lexical configuration may include:
+
+language version
+compatibility mode
+enabled lexical dialects
+diagnostic mode
+resource budget
+trivia retention
+documentation retention
+
+Configuration must be explicit.
+
+The lexer must not silently inspect:
+
+- environment variables;
+- hardware;
+- current time;
+- current directory;
+- network state;
+
+to determine lexical meaning.
+
+---
+
+92. Language Versions
+
+Lexical behavior is versioned.
+
+A language version may change:
+
+- keyword sets;
+- literal forms;
+- operator sets;
+- Unicode policies;
+- comment forms;
+- escape sequences.
+
+Such changes require explicit compatibility rules.
+
+Old source must not silently acquire a different lexical meaning under an incompatible version.
+
+---
+
+93. Dialects
+
+A dialect may extend lexical behavior only through an explicit dialect declaration.
+
+A dialect must specify:
+
+dialect name
+dialect version
+base language version
+new tokens
+changed lexical rules
+compatibility behavior
+AST mapping
+semantic mapping
+
+Dialects must not silently redefine core Zamani tokens.
+
+---
+
+94. Interoperability Formats
+
+Interoperability formats such as:
+
+OpenQASM
+QIR
+HDL
+C
+C++
+Rust
+WASM
+
+are not separate lexical definitions of the Zamani core language.
+
+Their parsers belong under:
+
+grammar/interoperability/
+
+or their corresponding frontend modules.
+
+The Zamani lexer must not absorb foreign-language lexical syntax merely because Zamani can interoperate with that language.
+
+---
+
+95. Macro Lexical Boundary
+
+Macros may operate on:
+
+- tokens;
+- token trees;
+- syntax structures.
+
+Macro expansion must not bypass lexical validity.
+
+Generated tokens must conform to the same canonical token model before parser consumption.
+
+Macro systems must not create hidden token kinds unavailable to the canonical grammar.
+
+---
+
+96. Metaprogramming Boundary
+
+Compile-time reflection and code generation may generate source or AST structures.
+
+The generated representation must pass through the canonical validation pipeline.
+
+Metaprogramming must not create a second lexical language.
+
+---
+
+97. Lexer-to-Parser Contract
+
+The lexer guarantees:
 
 token kind
-token value
 source span
-token ordering
-EOF behavior
+source representation
+deterministic ordering
+lexical validity
+
+The parser guarantees:
+
+grammar structure
+precedence
+associativity
+construct formation
+syntax diagnostics
+
+The lexer MUST NOT perform parser work.
+
+The parser MUST NOT depend on undocumented lexer side effects.
 
 ---
 
-68. Negative Lexical Tests
+98. Lexer-to-AST Contract
 
-Negative tests must include:
+The lexer must expose enough information for the AST layer to construct target-independent syntax.
 
-unterminated string
-unterminated character
-unterminated block comment
-invalid escape
-invalid numeric literal
-invalid UTF-8
-illegal character
-malformed quantum literal
-malformed annotation
-malformed future-domain literal
+For literals:
 
-Negative tests must verify that the lexer fails deterministically and makes progress.
+raw spelling
+source span
+token kind
+
+must be sufficient to preserve source meaning.
+
+The AST must not depend on:
+
+- hardware;
+- quantum device identity;
+- compiler backend;
+- vendor SDK;
+- physical topology.
 
 ---
 
-69. Ambiguity Tests
+99. Quantum AST Contract
 
-The test suite must explicitly test overlapping tokens.
+Quantum lexical tokens may lower into generic frontend structures.
+
+For example:
+
+apply H to q
+
+should conceptually become:
+
+Operation {
+    name: H,
+    operands: [q],
+    parameters: ...,
+    attributes: ...,
+    modifiers: ...,
+    source: ...
+}
+
+rather than requiring:
+
+enum QuantumGate {
+    H,
+    X,
+    Y,
+    ...
+}
+
+in the lexical layer.
+
+The semantic quantum layer subsequently maps this into the canonical "quantum::ir".
+
+---
+
+100. Classical AST Contract
+
+Classical operators and literals similarly lower into generic AST structures.
+
+The lexer must not know whether:
+
++
+
+will ultimately become:
+
+- integer addition;
+- floating-point addition;
+- vector addition;
+- matrix addition;
+- tensor addition;
+- symbolic addition;
+- another overloaded semantic operation.
+
+That is a type/semantic question.
+
+---
+
+101. HDL AST Contract
+
+HDL lexical tokens describe source syntax.
+
+The lexer does not determine:
+
+- synthesis strategy;
+- FPGA family;
+- ASIC process;
+- clock implementation;
+- placement;
+- routing;
+- physical timing closure.
+
+Those belong to HDL semantics and downstream compilation.
+
+---
+
+102. AI AST Contract
+
+AI-related lexical constructs must lower to target-independent AST representations.
+
+The lexer does not determine:
+
+- training backend;
+- GPU;
+- accelerator;
+- numerical kernel;
+- framework;
+- distributed strategy.
+
+Those are semantic/compiler/runtime concerns.
+
+---
+
+103. Resource AST Contract
+
+Resource-related words describe source-level intent.
+
+The semantic model distinguishes:
+
+requirement
+constraint
+capability
+preference
+hint
+implementation decision
+
+The lexer only recognizes their syntax.
+
+---
+
+104. Error Recovery and Parser Synchronization
+
+The lexer should produce enough recovery information for the parser to continue where safe.
+
+Recovery must not manufacture arbitrary valid tokens.
+
+For example, an invalid character:
+
+§
+
+must not silently become:
+
+;
+
+or:
+
+identifier
+
+---
+
+105. Invalid UTF-8 Recovery
+
+Invalid UTF-8 must be reported before semantic tokenization.
+
+The implementation may recover by consuming an invalid byte sequence according to its configured source-recovery policy, but the recovery must never silently convert it into valid source text.
+
+---
+
+106. Invalid Unicode Scalar Values
+
+Surrogate code points and invalid Unicode scalar values are rejected.
+
+A Unicode escape that represents a surrogate must produce a lexical/literal diagnostic.
+
+---
+
+107. Comments and Strings
+
+Comment markers inside strings are ordinary string content.
 
 Examples:
 
->
->=
+"// not a comment"
+"/* not a comment */"
 
-<
-<=
+Similarly, quote characters inside comments are comment content.
 
-=
-==
+The lexical state must be unambiguous.
 
-!
-!=
+---
 
-&
-&&
+108. Operators Inside Strings
 
-|
-||
+Operators inside strings are not operators.
 
+Example:
+
+">="
+
+is a string.
+
+The lexer must not emit "GE" for the contents.
+
+---
+
+109. Operators Inside Comments
+
+Operators inside comments are comment text.
+
+Example:
+
+// >= && || quantum
+
+produces no semantic operator tokens.
+
+---
+
+110. Comment Termination
+
+Line comments terminate before or at the logical line ending.
+
+Block comments terminate at the first valid:
+
+*/
+
+unless a future version explicitly defines nesting.
+
+---
+
+111. Empty Input
+
+Empty source is lexically valid.
+
+The lexer emits:
+
+EOF
+
+with a valid source position.
+
+---
+
+112. Whitespace-Only Input
+
+Whitespace-only source is lexically valid.
+
+The parser may subsequently determine whether an empty program is syntactically valid.
+
+The lexer does not reject whitespace-only source.
+
+---
+
+113. Comment-Only Input
+
+Comment-only source is lexically valid.
+
+The parser receives no semantic tokens other than EOF, while documentation/trivia tooling may retain the comments.
+
+---
+
+114. Identifier Followed by Number
+
+The lexer must distinguish:
+
+value42
+
+as one identifier from:
+
+value 42
+
+as two tokens.
+
+A digit may continue an identifier but may not begin one.
+
+---
+
+115. Number Followed by Identifier
+
+Malformed adjacency must not be silently merged.
+
+For example:
+
+42abc
+
+must not become:
+
+INTEGER(42)
+IDENTIFIER(abc)
+
+if the language's lexical rules define the sequence as an invalid numeric/identifier adjacency.
+
+The diagnostic policy must be explicit and tested.
+
+---
+
+116. Numeric Separator Validation
+
+Separators are permitted only where the numeric grammar allows them.
+
+Invalid examples include:
+
+1_
+_1
+1__0
+0x_FF
+0b_101
+
+unless a future version explicitly changes the grammar.
+
+---
+
+117. Leading Zeroes
+
+Decimal leading-zero policy must be explicit.
+
+Unless a base prefix is present:
+
+0123
+
+is a decimal integer according to the canonical lexical grammar.
+
+It must not silently become octal.
+
+Octal requires:
+
+0o123
+
+---
+
+118. Hexadecimal Case
+
+Hexadecimal digits are case-insensitive:
+
+0xFF
+0xff
+0xFf
+
+are lexically equivalent numeric forms.
+
+The original spelling remains available to tooling.
+
+---
+
+119. Binary and Octal Case
+
+The prefixes:
+
+0b
+0B
+0o
+0O
+
+are accepted if the corresponding literal forms are enabled.
+
+Their semantic value is determined downstream.
+
+---
+
+120. Floating Ambiguity
+
+The lexer must distinguish:
+
+1.
+
+from:
+
+1.0
+
+according to the canonical floating/range/member-access rules.
+
+Likewise:
+
+1..10
+
+must not accidentally become a floating-point literal followed by a dot if the grammar intends a range.
+
+The lexical priority must preserve range tokens.
+
+---
+
+121. Dot and Range
+
+The priority is:
+
+..=
+.. 
 .
-..
 
-:
-::
+Therefore:
 
--
-->
+a..=b
 
-=
-=>
-?
-
-This prevents accidental changes to longest-match behavior.
+must tokenize deterministically.
 
 ---
 
-70. Keyword/Identifier Tests
+122. Negative Numbers
 
-Every reserved keyword must be tested against an identifier that resembles it.
+The minus sign is an operator.
+
+Therefore:
+
+-42
+
+is lexically:
+
+MINUS
+INTEGER
+
+not necessarily a single signed-integer token.
+
+Semantic constant folding determines whether the expression is a negative literal value.
+
+This avoids duplicating unary semantics inside the lexer.
+
+---
+
+123. Positive Numbers
+
+Likewise:
+
++42
+
+is:
+
+PLUS
+INTEGER
+
+unless a future numeric suffix grammar explicitly defines otherwise.
+
+---
+
+124. String Escapes and Unicode
+
+Unicode source characters may occur directly inside strings.
+
+For example:
+
+"Zamani 世界 λ"
+
+is valid.
+
+Unicode escapes, where supported, must represent valid scalar values.
+
+---
+
+125. Character Escapes
+
+Character escapes must resolve to exactly one scalar value.
 
 Examples:
 
-fn
-fn_value
+'\n'
+'\t'
+'\\'
+'\''
 
-quantum
-quantum_state
-
-let
-letter
-
-The test suite must verify that only the exact reserved spelling receives keyword treatment.
+where supported by the canonical escape table.
 
 ---
 
-71. Literal Boundary Tests
+126. Token Registry
 
-Test boundaries such as:
+The production token registry must map each lexical spelling to one canonical token identity.
 
-123abc
-1.2.3
-"abc"
-"abc
-'a'
-'ab'
-|0⟩
-|0
-@atom
-@atom(...)
+Conceptually:
 
-The purpose is to ensure the lexer does not accidentally consume too much or too little input.
+TokenKind
+├── keyword
+├── identifier
+├── literal
+├── operator
+├── punctuation
+├── trivia
+├── diagnostic/recovery
+└── EOF
 
----
+The internal Rust representation may differ.
 
-72. Property-Based Testing
-
-Where practical, the lexical layer should use property-based testing.
-
-Useful properties include:
-
-lexer always terminates
-lexer always makes progress
-all token spans are valid
-tokens preserve source ordering
-EOF occurs exactly once
-valid generated identifiers round-trip
-valid operators tokenize deterministically
-
-Property-based tests must remain bounded by explicit test resources rather than hard-coding language limits.
+The observable token contract must not.
 
 ---
 
-73. Fuzzing
+127. Duplicate Token Elimination
 
-The lexer should be fuzz-tested with arbitrary byte and Unicode inputs.
+The following kinds of duplication are prohibited:
 
-Required properties:
+BitAnd / Ampersand
+BitOr / Pipe
+Question / QuestionMark
+Arrow / ThinArrow
 
-never undefined-behave
-never hang
-never infinite-loop
-never panic on ordinary malformed input
-never produce invalid source spans
+when they represent the same source spelling.
 
-The implementation should convert malformed input into diagnostics rather than crashing.
+Each source spelling gets one canonical token.
 
----
-
-74. Parser Integration
-
-The lexical contract ends at tokens.
-
-The parser owns grammar.
-
-Therefore the lexer must not attempt to parse:
-
-functions
-types
-quantum circuits
-match arms
-modules
-effects
-
-beyond whatever lexical grouping is required to identify a token.
+The semantic interpretation happens after tokenization.
 
 ---
 
-75. AST Integration
+128. ANTLR Integration
 
-The lexer has no direct knowledge of AST structure.
+"grammar/antlr/ZamaniLexer.g4" must implement this specification.
 
-The flow remains:
+Its responsibility is lexical implementation.
 
-Token
- ↓
-Parser
- ↓
-AST
+It must not become an independent language specification.
 
-This separation prevents lexical implementation changes from unnecessarily coupling to semantic representation.
+The ANTLR grammar must not introduce tokens absent from this specification unless they are explicitly classified as:
 
----
+experimental
+proposed
+dialect
+compatibility
 
-76. IR Integration
-
-The lexer must never emit target-specific IR.
-
-The correct architecture is:
-
-Lexical Token
-    ↓
-Parser
-    ↓
-AST
-    ↓
-Semantic Analysis
-    ↓
-Canonical IR
-
-This is particularly important for quantum computing.
+and are not silently treated as stable.
 
 ---
 
-77. Quantum IR Integration
+129. Rust Lexer Integration
 
-Quantum lexical forms eventually reach:
+"src/lexer.rs" is the executable Rust implementation.
+
+It must conform to:
+
+- this lexical specification;
+- canonical token identities;
+- source-span requirements;
+- deterministic behavior;
+- safe Rust;
+- language-version rules.
+
+It must not silently introduce lexical behavior not specified here.
+
+---
+
+130. Parser Integration
+
+"src/parser.rs" consumes canonical lexical tokens.
+
+The parser owns:
+
+- precedence;
+- associativity;
+- grammar context;
+- contextual keyword interpretation;
+- syntax structure.
+
+The parser must not depend on duplicate lexical identities for overloaded operators.
+
+---
+
+131. AST Integration
+
+"src/ast/mod.rs" and related frontend AST files own syntactic structure.
+
+The AST must remain domain-neutral where possible.
+
+The lexical layer must not require AST changes merely because a new backend or hardware target is added.
+
+---
+
+132. Canonical Quantum IR Integration
+
+Quantum syntax must eventually map into:
 
 quantum::ir
 
-through the frontend and semantic/lowering layers.
+The lexer does not own that representation.
 
-The lexer must not know:
+The lexical layer must not introduce:
 
-gate decomposition
-routing
-scheduling
-noise
-calibration
-physical qubits
-backend instructions
+QuantumGateIR
+HardwareQuantumIR
+BackendQuantumIR
 
-This separation enables target-independent quantum programs.
+as competing semantic models.
 
 ---
 
-78. Diagnostics and Recovery
+133. Compiler Integration
 
-Lexical recovery must be conservative.
+Compiler stages consume semantic representations after parsing.
 
-If the lexer encounters:
+The lexer must not:
 
-@
-
-without enough information to determine a valid annotation, it should report a diagnostic according to the lexical contract.
-
-It must not invent:
-
-Identifier("...")
-
-merely to keep parsing alive.
-
-Recovery should preserve as much source structure as possible without falsely claiming semantic validity.
+- select a target;
+- choose a backend;
+- select a gate decomposition;
+- perform routing;
+- schedule operations;
+- perform QEC;
+- perform calibration;
+- query HAL.
 
 ---
 
-79. Documentation Synchronization
+134. Runtime Integration
 
-The following documents must remain synchronized:
+The lexer has no runtime dependency.
 
-grammar/README.md
-grammar/DESIGN.md
-grammar/spec/lexical.md
-grammar/grammar.md
-grammar/Zamani.g4
-grammar/Zamani-Grammar.md
+Runtime state must never influence tokenization.
 
-But their roles differ:
+The lexer must not query:
 
-README.md
-    architecture
-
-DESIGN.md
-    detailed design/invariants
-
-spec/lexical.md
-    normative lexical specification
-
-grammar.md
-    current implementation behavior
-
-Zamani.g4
-    ANTLR grammar representation
-
-Zamani-Grammar.md
-    broader language design/history/proposals
-
-No document may silently override the normative lexical specification.
+- devices;
+- network;
+- memory availability;
+- hardware;
+- runtime configuration.
 
 ---
 
-80. Feature Lifecycle
+135. Hardware Integration
 
-A lexical feature should progress through:
+Hardware information belongs downstream.
+
+The lexical language remains invariant across:
+
+CPU
+GPU
+FPGA
+ASIC
+QPU
+photonic hardware
+neuromorphic systems
+future substrates
+
+---
+
+136. Resource Integration
+
+Resources are semantic constraints.
+
+The lexer recognizes the syntax but does not evaluate:
+
+requires memory >= ...
+requires qubits >= ...
+requires capability(...)
+
+Resource analysis determines feasibility.
+
+---
+
+137. Diagnostics Integration
+
+Diagnostics must carry source spans from the lexical layer.
+
+The diagnostic subsystem may enrich errors with:
+
+- source excerpts;
+- suggestions;
+- feature status;
+- compatibility guidance.
+
+The lexer itself remains deterministic.
+
+---
+
+138. Formatting Integration
+
+A formatter may use token/trivia information to reconstruct source layout.
+
+The formatter must not change semantic token identity.
+
+Formatting is not lexical interpretation.
+
+---
+
+139. LSP Integration
+
+The lexer must support tooling that needs:
+
+- token ranges;
+- diagnostics;
+- identifier boundaries;
+- comments;
+- documentation comments;
+- incremental updates.
+
+LSP coordinate conversions must be deterministic.
+
+---
+
+140. Syntax Highlighting
+
+Syntax highlighters may derive token classes from the canonical token model.
+
+They must not maintain a competing keyword registry.
+
+---
+
+141. Documentation Generation
+
+Documentation comments may be preserved independently of parser semantics.
+
+Documentation generators may inspect:
+
+/// ...
+/** ... */
+
+without modifying the language's semantic model.
+
+---
+
+142. Security Requirements
+
+The lexer must defend against:
+
+- malformed UTF-8;
+- invalid Unicode;
+- pathological literal sizes;
+- unterminated constructs;
+- tokenization ambiguity;
+- non-progress loops;
+- resource exhaustion;
+- denial-of-service inputs.
+
+Resource-bounded operation must remain distinguishable from invalid source.
+
+---
+
+143. Deterministic Ordering
+
+When multiple diagnostics are generated, their order must be deterministic.
+
+The preferred ordering is source order, followed by stable diagnostic priority when multiple diagnostics have identical spans.
+
+---
+
+144. No Environment Dependence
+
+Lexical behavior must not depend on:
+
+LANG
+LC_ALL
+TZ
+OS locale
+current directory
+environment variables
+host architecture
+host endianess
+device availability
+
+unless explicitly supplied as part of a documented lexical configuration.
+
+---
+
+145. No Network Dependence
+
+The lexer must operate without network access.
+
+Keyword definitions, lexical rules, Unicode policy, and tokenization cannot be fetched dynamically from a server.
+
+---
+
+146. No Runtime Hardware Dependence
+
+Lexical behavior must be identical whether the compiler runs on:
+
+tiny machine
+laptop
+server
+cluster
+supercomputer
+GPU system
+QPU system
+embedded system
+future machine
+
+subject only to explicit resource exhaustion.
+
+---
+
+147. No Fixed Quantum Limits
+
+The lexer must never contain:
+
+MAX_QUBITS
+MAX_QREGS
+MAX_QUBIT_INDEX
+
+or equivalent universal lexical limits.
+
+Quantum resource constraints belong to semantic/resource analysis.
+
+---
+
+148. No Fixed Classical Limits
+
+The lexer must never contain:
+
+MAX_REGISTERS
+MAX_VECTOR_WIDTH
+MAX_TENSOR_DIM
+MAX_THREADS
+MAX_CORES
+
+as language rules.
+
+---
+
+149. No Fixed HDL Limits
+
+The lexer must never impose:
+
+MAX_SIGNAL_WIDTH
+MAX_PORTS
+MAX_MODULES
+MAX_REGISTERS
+MAX_MEMORY_BANKS
+
+as universal language limits.
+
+---
+
+150. No Fixed Distributed Limits
+
+The lexer must never impose:
+
+MAX_NODES
+MAX_PROCESSES
+MAX_SERVICES
+MAX_CHANNELS
+MAX_PARTITIONS
+
+as language limits.
+
+---
+
+151. No Fixed AI Limits
+
+The lexer must never impose:
+
+MAX_TENSOR_RANK
+MAX_MODEL_SIZE
+MAX_LAYERS
+MAX_PARAMETERS
+MAX_BATCH_SIZE
+
+as language limits.
+
+---
+
+152. No Fixed Networking Limits
+
+The lexer must not impose:
+
+MAX_ENDPOINTS
+MAX_CONNECTIONS
+MAX_NODES
+MAX_ROUTES
+MAX_MESSAGES
+
+as language rules.
+
+---
+
+153. Lexical Feature Lifecycle
+
+Every lexical feature follows:
 
 PROPOSED
-   ↓
+    ↓
 SPECIFIED
-   ↓
+    ↓
 IMPLEMENTED
-   ↓
+    ↓
 TESTED
-   ↓
+    ↓
 CONFORMANT
-   ↓
+    ↓
 STABLE
 
-It must not be described as stable merely because its enum variant exists.
+A token enum variant does not prove implementation.
 
-For example:
+A grammar rule does not prove implementation.
 
-TokenType::MTSLiteral
+A documentation example does not prove implementation.
 
-does not by itself prove that:
-
-mts[...]
-
-is implemented end-to-end.
+A feature is stable only when the complete integration contract exists.
 
 ---
 
-81. No Duplicate Token Authorities
+154. Feature Completion Contract
 
-There must eventually be one canonical mapping for:
+For every lexical feature, completion requires:
 
-lexeme → token kind
+File
+Purpose
+Owns
+Does Not Own
+Inputs
+Outputs
+Dependencies
+Upstream Contracts
+Downstream Consumers
+Token Contract
+Source-Span Contract
+Parser Contract
+AST Contract
+Semantic Contract
+IR Integration
+Compiler Integration
+Runtime Integration
+Tooling Integration
+Cross-Domain Integration
+Positive Tests
+Negative Tests
+Boundary Tests
+Scalability Tests
+Compatibility Tests
+Diagnostics
+Security Review
+Hard-Coding Audit
+Completion Criteria
 
-Duplicated mappings in:
-
-Rust lexer
-ANTLR lexer
-documentation
-formatter
-LSP
-syntax highlighter
-
-should either be generated or continuously validated.
-
-This prevents drift.
-
----
-
-82. Generated Artifacts
-
-Where generated lexer/parser artifacts are used, the source grammar remains authoritative.
-
-Generated files must not be manually modified as the primary language-definition mechanism.
-
-The build process should make it possible to determine:
-
-which grammar generated this artifact
-which language version it implements
-which generator version was used
-
----
-
-83. Reproducibility
-
-Lexical generation must be reproducible.
-
-Given the same:
-
-canonical grammar
-generator version
-language version
-tool configuration
-
-the resulting generated artifacts should be reproducible wherever the generator guarantees deterministic output.
+This ensures that a lexical feature can be completed independently without later redesign merely because another downstream file was completed.
 
 ---
 
-84. Compatibility
+155. Lexical Conformance Tests
 
-A lexical change can be breaking even when the parser would otherwise understand the resulting token.
+The repository must maintain lexical tests under:
 
-Examples:
+grammar/tests/lexical/
 
-identifier → keyword
-one token → two tokens
-two tokens → one token
-operator reassignment
-literal syntax change
-escape syntax change
-comment syntax change
+Tests must cover:
 
-Therefore every lexical change requires compatibility analysis.
-
----
-
-85. Adding a Keyword
-
-Before adding a keyword:
-
-1. Search existing source usage.
-2. Determine whether contextual syntax is sufficient.
-3. Determine whether an identifier must become reserved.
-4. Update the canonical keyword registry.
-5. Update Rust lexer.
-6. Update ANTLR lexer.
-7. Update parser.
-8. Update documentation.
-9. Add compatibility tests.
-10. Add positive/negative lexical tests.
+- UTF-8;
+- Unicode identifiers;
+- keywords;
+- contextual keywords;
+- numbers;
+- strings;
+- characters;
+- escapes;
+- comments;
+- documentation comments;
+- operators;
+- punctuation;
+- quantum literals;
+- MTS literals;
+- annotations;
+- invalid source;
+- EOF;
+- source spans.
 
 ---
 
-86. Removing a Keyword
+156. Positive Tests
 
-Removing a keyword requires determining whether existing source can now use it as an identifier.
+Positive tests must include:
 
-The change must be versioned where necessary.
-
-A deprecated keyword should not silently change meaning without a migration path.
-
----
-
-87. Adding an Operator
-
-Before adding an operator:
-
-1. Check lexical prefix collisions.
-2. Check longest-match behavior.
-3. Check parser precedence.
-4. Check AST representation.
-5. Check semantic meaning.
-6. Check ANTLR conformance.
-7. Add ambiguity tests.
-8. Check source compatibility.
-
----
-
-88. Adding a Domain Literal
-
-Before adding a domain-specific literal:
-
-new_literal
-
-must have:
-
-lexical grammar
-token representation
-parser production
-AST representation
-semantic representation
-error rules
-span rules
-conformance tests
-compatibility policy
-
-A token enum addition alone is insufficient.
-
----
-
-89. Resource Scaling
-
-Lexical processing must scale with source size.
-
-The implementation should avoid unnecessary:
-
-O(source_size²)
-
-behavior.
-
-Preferred behavior is approximately:
-
-O(source_size)
-
-for ordinary lexing, subject to Unicode decoding and diagnostics.
-
-Memory use should scale with the information actually required by the compiler pipeline.
-
-Streaming or incremental lexing may be introduced for very large sources.
-
----
-
-90. Incremental Lexing
-
-The lexical architecture should permit incremental compilation.
-
-A source edit should not require re-lexing unrelated files unnecessarily.
-
-The design should therefore preserve:
-
-file identity
-source ranges
-token spans
-stable source-map relationships
-
-where practical.
-
-Incremental lexing must produce results equivalent to complete lexing of the resulting source.
-
----
-
-91. Parallel Lexing
-
-Independent source files may be lexed concurrently.
-
-The lexical result for a file must not depend on whether another file is being compiled simultaneously.
-
-This enables scalable compilation for large Zamani projects.
-
----
-
-92. Modules
-
-Lexing a module must not require reading imported modules.
-
-For example:
-
-import quantum::foo;
-
-is lexed locally.
-
-Dependency resolution occurs later.
-
-The lexer must not perform filesystem or network operations.
-
----
-
-93. Security
-
-The lexer must treat source as untrusted input.
-
-It must not:
-
-- execute source;
-- evaluate arbitrary expressions;
-- access secrets;
-- access the network;
-- invoke subprocesses;
-- open arbitrary files;
-- perform package resolution.
-
-Parsing source must remain an isolated compiler operation.
-
----
-
-94. Source Size and Denial-of-Service Protection
-
-Very large or adversarial source must not cause uncontrolled resource consumption.
-
-The compiler may provide explicit resource budgets.
-
-However, such limits must be distinguished from language rules.
-
-For example:
-
-Zamani language:
-    valid
-
-Compiler invocation:
-    rejected because memory budget = 512 MB
-
-is preferable to:
-
-invalid Zamani
-
-when the program is lexically valid.
-
----
-
-95. Diagnostics Must Be Resource-Aware
-
-If a diagnostic budget is exhausted, the compiler should report a resource diagnostic rather than silently dropping errors.
-
-The lexer should avoid generating unbounded duplicate diagnostics from one malformed construct.
-
----
-
-96. Stable Lexical Contract
-
-The stable lexical contract consists of:
-
-source encoding
+empty source
 whitespace
 comments
-identifier rules
-keyword rules
-literal rules
-operator rules
-punctuation
-domain literal rules
-token spans
-error behavior
-EOF behavior
-
-Everything else belongs downstream.
-
----
-
-97. What the Lexer Must Never Know
-
-The lexer must never need to know:
-
-number of qubits
-number of CPU cores
-RAM size
-GPU model
-QPU model
-QPU topology
-native gate set
-pulse duration
-calibration
-noise model
-optimization level
-scheduler policy
-package registry
-runtime environment
-operating system
-ABI
-
-Those are compiler, semantic, runtime, or backend concerns.
+identifiers
+Unicode identifiers
+keywords
+integer literals
+floating literals
+strings
+characters
+operators
+ranges
+qualified names
+quantum literals
+MTS literals
+annotations
+generic syntax
+domain-independent operations
 
 ---
 
-98. POCO-REAF Lexical Requirement
+157. Negative Tests
 
-For POCO-REAF:
+Negative tests must include:
 
-Program Once
-    ↓
+invalid UTF-8
+invalid identifier starts
+invalid escapes
+unterminated strings
+unterminated characters
+unterminated block comments
+invalid numbers
+invalid numeric separators
+invalid Unicode scalar escapes
+invalid operators
+invalid domain literals
+forbidden unsafe constructs
+
+---
+
+158. Boundary Tests
+
+Boundary tests must cover:
+
+- empty input;
+- one-character source;
+- one-token source;
+- very long identifier;
+- very long numeric literal;
+- very long string;
+- very long comment;
+- Unicode at source boundaries;
+- token at EOF;
+- multi-byte UTF-8 adjacent to ASCII;
+- operator prefixes;
+- nested lexical-looking constructs inside strings/comments.
+
+---
+
+159. Scalability Tests
+
+Scalability tests must prove that the language does not impose artificial limits.
+
+They should cover progressively larger:
+
+source files
+identifier lengths
+numeric literals
+strings
+comments
+token streams
+module inputs
+generated programs
+
+The tests must distinguish:
+
+language rejection
+
+from:
+
+implementation resource exhaustion
+
+---
+
+160. Determinism Tests
+
+The same source must be lexically identical when processed:
+
+- sequentially;
+- repeatedly;
+- incrementally;
+- from different input chunk boundaries;
+- on different supported host platforms.
+
+---
+
+161. Parallelism Tests
+
+Independent source units may be lexed in parallel.
+
+The result must equal sequential lexing.
+
+Tests must ensure there is no shared mutable state that changes lexical output.
+
+---
+
+162. Compatibility Tests
+
+Compatibility tests must compare:
+
+language version
+token stream
+diagnostics
+reserved words
+literal behavior
+operator behavior
+Unicode behavior
+
+A compatible release must not silently change lexical identity.
+
+---
+
+163. Cross-Repository Conformance
+
+Lexical conformance must eventually be checked across:
+
+grammar/spec/lexical.md
+grammar/antlr/ZamaniLexer.g4
+src/lexer.rs
+src/parser.rs
+src/ast/
+grammar/Zamani.g4
+grammar/grammar.md
+grammar/tests/
+
+A feature is conformant only when all relevant representations agree.
+
+---
+
+164. "grammar/grammar.md" Integration
+
+"grammar/grammar.md" must report implementation status against this document.
+
+It must distinguish:
+
+SPECIFIED
+IMPLEMENTED
+TESTED
+CONFORMANT
+EXPERIMENTAL
+DEPRECATED
+UNIMPLEMENTED
+
+It must never present an enum variant as proof that a lexical feature is implemented.
+
+---
+
+165. "grammar/Zamani-Grammar.md" Integration
+
+"grammar/Zamani-Grammar.md" remains a broad design/history/proposal document.
+
+Features described there are not automatically stable language features.
+
+A feature becomes stable only after:
+
+proposal
+→ specification
+→ lexical contract
+→ syntax contract
+→ AST contract
+→ semantic contract
+→ IR contract
+→ implementation
+→ tests
+→ compatibility validation
+
+---
+
+166. "grammar/Zamani.g4" Integration
+
+"grammar/Zamani.g4" is the composition root.
+
+It must not redefine lexical behavior independently.
+
+Its parser rules consume the canonical token model.
+
+---
+
+167. "grammar/antlr/ZamaniLexer.g4" Integration
+
+The existing "grammar/antlr/ZamaniLexer.g4" must be brought into exact conformance with this document.
+
+In particular, its implementation must be audited for:
+
+- "UNSAFE";
+- Unicode identifiers;
+- keyword inventory;
+- duplicate tokens;
+- numeric forms;
+- escape rules;
+- comments;
+- documentation comments;
+- MTS literals;
+- quantum literals;
+- annotation tokenization;
+- operator precedence at lexical level;
+- token ordering.
+
+No second lexical authority may remain.
+
+---
+
+168. "src/lexer.rs" Integration
+
+"src/lexer.rs" must be audited against every token category here.
+
+The implementation must:
+
+- use safe Rust;
+- preserve source spans;
+- preserve literal source representation;
+- avoid native-width overflow;
+- guarantee progress;
+- emit deterministic diagnostics;
+- avoid hardware/environment dependencies;
+- avoid duplicate lexical token identities.
+
+---
+
+169. "src/parser.rs" Integration
+
+"src/parser.rs" must consume canonical tokens.
+
+It must interpret overloaded tokens according to grammar context.
+
+It must not require lexical variants such as:
+
+BitAnd
+Ampersand
+
+for the same spelling.
+
+---
+
+170. "src/ast/mod.rs" Integration
+
+The AST remains target-independent.
+
+It should preserve:
+
+- source spans;
+- generic operations;
+- names;
+- literals;
+- attributes;
+- modifiers;
+- effects;
+- capabilities;
+- resource intent.
+
+The lexical layer must not encode backend-specific AST variants.
+
+---
+
+171. Type-System Integration
+
+"grammar/spec/type-system.md" owns semantic interpretation of:
+
+- integer widths;
+- floating precision;
+- quantum types;
+- resource types;
+- capability types;
+- references;
+- ownership;
+- generic types.
+
+Lexical syntax must remain representation-neutral.
+
+---
+
+172. Semantic Integration
+
+The semantic layer determines whether a syntactically valid literal or identifier is semantically valid.
+
+For example:
+
+999999999999999999999999
+
+is lexically valid.
+
+Whether it fits a selected type is a semantic question.
+
+---
+
+173. Canonical IR Integration
+
+The lexical layer terminates before canonical semantic IR.
+
+No lexical token is itself an IR instruction.
+
+The chain is:
+
+token
+→ AST
+→ semantic model
+→ canonical IR
+
+---
+
+174. Quantum IR Integration
+
+Quantum syntax eventually reaches:
+
+quantum::ir
+
+without the lexer creating a parallel semantic representation.
+
+This preserves the repository's canonical quantum boundary.
+
+---
+
+175. QEC Integration
+
+QEC is not lexical.
+
+The lexer does not:
+
+- encode correction strategies;
+- allocate logical qubits;
+- select codes;
+- determine distances;
+- schedule correction.
+
+Those belong downstream.
+
+---
+
+176. ZQN Integration
+
+ZQN is not lexical.
+
+Lexical constructs may describe source-level fault/noise intent, but the lexer does not determine:
+
+- noise models;
+- fault semantics;
+- probabilities;
+- calibration;
+- physical error behavior.
+
+---
+
+177. Routing Integration
+
+Routing is downstream.
+
+The lexer must not encode:
+
+physical_qubit_0
+physical_qubit_1
+
+as special universal tokens.
+
+They remain ordinary identifiers unless a target-specific dialect explicitly defines otherwise.
+
+---
+
+178. Scheduling Integration
+
+Scheduling is downstream.
+
+Lexical syntax does not determine:
+
+- execution time;
+- instruction duration;
+- resource conflicts;
+- hardware timing;
+- pulse scheduling.
+
+---
+
+179. HAL Integration
+
+HAL is downstream.
+
+The lexer must never query or encode actual device capabilities.
+
+---
+
+180. Calibration Integration
+
+Calibration is downstream.
+
+Lexical source may contain declarative calibration intent, but calibration data and physical device state do not belong to lexical analysis.
+
+---
+
+181. Benchmarking Integration
+
+Benchmark syntax may exist as domain syntax, but the lexer does not execute benchmarks or inspect hardware.
+
+---
+
+182. Resource Manager Integration
+
+Resource managers operate after semantic analysis.
+
+The lexer does not reserve:
+
+- memory;
+- CPUs;
+- GPUs;
+- QPUs;
+- FPGA resources;
+- network resources.
+
+---
+
+183. Provenance
+
+Lexical diagnostics and token streams may contribute source provenance.
+
+The lexer must preserve enough information to trace syntax back to source.
+
+Generated source must be distinguishable from original source through the source-management layer, not by changing token semantics.
+
+---
+
+184. Reproducibility
+
+Given identical:
+
+source
+language version
+lexical configuration
+
+lexical output must be reproducible.
+
+No external state may alter the result.
+
+---
+
+185. Build Reproducibility
+
+The lexer implementation must not embed:
+
+- timestamps;
+- host paths;
+- machine IDs;
+- device IDs;
+- random values;
+
+into lexical output.
+
+---
+
+186. Internationalization
+
+User-facing diagnostics may eventually support multiple languages.
+
+Diagnostic identity must remain language-independent.
+
+The token model must not change based on diagnostic locale.
+
+---
+
+187. Source Preservation
+
+Where practical, the frontend should preserve:
+
+raw source
+tokens
+trivia
+spans
+
+to enable:
+
+- formatter stability;
+- refactoring;
+- IDE support;
+- diagnostics;
+- source-to-source transformations.
+
+---
+
+188. No Silent Semantic Normalization
+
+The lexer must never silently transform:
+
+identifier
+number
+string
+character
+quantum literal
+MTS literal
+
+into a different semantic value.
+
+Lexical decoding must be explicit and deterministic.
+
+---
+
+189. Lexical Purity
+
+The lexer is conceptually a pure transformation:
+
+(source, version, lexical configuration)
+    →
+(tokens, diagnostics)
+
+No hidden mutable global state may alter the result.
+
+---
+
+190. Forbidden Lexical Dependencies
+
+The lexer MUST NOT depend on:
+
+quantum hardware
+classical hardware
+GPU drivers
+FPGA tools
+network services
+runtime state
+device discovery
+calibration state
+compiler cache contents
+current time
+randomness
+
+---
+
+191. Feature-Gated Lexical Extensions
+
+Experimental lexical features must be explicitly gated.
+
+For example:
+
+experimental
+unstable
+dialect(...)
+compatibility(...)
+
+must not silently become stable syntax.
+
+---
+
+192. Backward Compatibility
+
+When a previously ordinary identifier becomes a reserved keyword, the language version must classify that change as source-incompatible.
+
+The compatibility system must provide migration information.
+
+---
+
+193. Deprecation
+
+Deprecated keywords/literals may continue to lex normally while generating downstream deprecation diagnostics.
+
+Deprecation must not create duplicate token kinds.
+
+---
+
+194. Removed Features
+
+Removed lexical features must not be silently reinterpreted as another valid token.
+
+The compiler should provide an explicit compatibility diagnostic where appropriate.
+
+---
+
+195. Token Naming
+
+Token names in implementations should describe lexical identity, not semantic meaning.
+
+Prefer:
+
+AMPERSAND
+PIPE
+QUESTION
+ARROW
+IDENTIFIER
+INTEGER
+FLOAT
+
+over semantic names such as:
+
+REFERENCE_OPERATOR
+BITWISE_AND
+QUANTUM_GATE
+
+when one spelling can have multiple semantic meanings.
+
+---
+
+196. Token Metadata
+
+The implementation may associate metadata with tokens.
+
+Useful metadata includes:
+
+kind
+span
+raw text
+decoded value
+trivia relationship
+language version
+
+The metadata must remain deterministic.
+
+---
+
+197. Token Equality
+
+Token equality for parser purposes should be based on canonical token identity and relevant value data.
+
+Source positions should not accidentally change semantic token equality.
+
+---
+
+198. Source Identity
+
+If multiple source files are lexed, source identity must remain distinguishable.
+
+A span from:
+
+module A
+
+must never be confused with an identical offset from:
+
+module B
+
+---
+
+199. Include / Import Boundaries
+
+Lexical analysis of imported modules remains independent.
+
+The lexer does not resolve imports.
+
+Module resolution belongs to the module/package subsystem.
+
+---
+
+200. Generated Source
+
+Generated source must pass through the same lexical contract unless it is represented directly as canonical AST/IR by an explicitly specified compiler interface.
+
+Generated code cannot silently introduce private token kinds.
+
+---
+
+201. Macro-Generated Tokens
+
+Macro expansion must use canonical tokens.
+
+A macro cannot invent a new semantic token by changing the token's internal enum without updating the language specification and compatibility model.
+
+---
+
+202. Domain Extensibility
+
+A new computing domain must not require rewriting the lexical architecture.
+
+A domain may add:
+
+syntax
+keywords
+contextual keywords
+literals
+dialect extensions
+
+only when genuinely required.
+
+The preferred extension model remains:
+
+existing lexical primitives
++
+existing compositional grammar
++
+semantic vocabulary
+
+---
+
+203. Future Computational Paradigms
+
+The lexical architecture must remain usable for future:
+
+- quantum paradigms;
+- photonic computing;
+- neuromorphic computing;
+- molecular computing;
+- biological computing;
+- optical computing;
+- reversible computing;
+- analog computing;
+- distributed substrates;
+- unknown future computational models.
+
+The lexer must not encode today's hardware as the permanent shape of Zamani.
+
+---
+
+204. POCO-REAF Definition at Lexical Layer
+
+POCO-REAF means that the source lexical form describes the program independently of the machine that ultimately realizes it.
+
+Lexical compatibility therefore requires:
+
+same source
++
+same language version
++
+same lexical configuration
+=
 same lexical meaning
-    ↓
-Compile Once
-    ↓
-target-independent semantics
-    ↓
-Run Everywhere
-    ↓
-target-specific realization
 
-Lexical syntax must therefore remain stable across machines.
-
-A program must not need different lexical syntax merely because it is targeting:
-
-small machine
-large machine
-distributed machine
-quantum computer
-simulator
-future computational substrate
+regardless of target hardware.
 
 ---
 
-99. Definition of Done
+205. Tiny-to-Large Principle
 
-"grammar/spec/lexical.md" and its implementation are production-ready when:
+The same lexical language must support:
 
-- one canonical lexical specification exists;
-- the Rust lexer conforms to it;
-- ANTLR conforms to it;
-- token duplication has been eliminated or explicitly justified;
-- keyword ownership is explicit;
-- contextual keywords are distinguished from reserved keywords;
-- literals have deterministic boundaries;
-- numeric lexing does not impose host-width limits;
-- Unicode behavior is defined;
-- comments are defined;
-- source spans are correct;
-- lexical diagnostics are structured;
-- malformed input cannot hang the lexer;
-- EOF behavior is deterministic;
-- MTS lexical status is resolved;
-- quantum literals are target-independent;
-- nano annotations are target-independent;
-- hardware vocabulary is not embedded in lexing;
-- lexer behavior is deterministic;
-- incremental lexing remains possible;
-- parallel lexing remains possible;
-- large sources are supported subject to resources;
-- explicit resource limits are distinguishable from language validity;
-- fuzzing exists;
-- positive tests exist;
-- negative tests exist;
-- ambiguity tests exist;
-- ANTLR conformance tests exist;
-- compatibility tests exist;
-- Rust 1.97/1.97.1 compatibility is maintained;
-- compiler implementation contains no Rust "unsafe".
+single expression
+
+through:
+
+large software system
+large scientific program
+large quantum program
+large HDL/software co-design
+large distributed program
+large AI workload
+large generated program
+
+without introducing separate lexical languages merely because the program is larger.
 
 ---
 
-100. Required Repository Integration
+206. Infinity Principle
 
-The production implementation should converge toward:
+“Infinity” means:
 
-grammar/
-├── README.md
-├── DESIGN.md
-├── spec/
-│   ├── lexical.md          ← this specification
-│   ├── syntax.md
-│   ├── semantics.md
-│   ├── type-system.md
-│   ├── effects.md
-│   ├── quantum.md
-│   ├── modules.md
-│   ├── compatibility.md
-│   └── conformance.md
-│
-├── antlr/
-│   ├── ZamaniLexer.g4
-│   └── ZamaniParser.g4
-│
-├── Zamani.g4              ← compatibility/legacy entry point as appropriate
-├── grammar.md              ← implementation-conformance snapshot
-├── Zamani-Grammar.md       ← broader design/specification history
-│
-└── tests/
-    ├── lexical/
-    ├── valid/
-    ├── invalid/
-    ├── quantum/
-    ├── mathematics/
-    ├── types/
-    ├── effects/
-    ├── scaling/
-    └── compatibility/
+«the language does not impose artificial finite limits where the underlying semantic model can remain abstract and the actual limit is determined by available resources.»
 
-The exact migration should be performed incrementally so that existing compiler functionality is not broken unnecessarily.
+It does not mean that a finite machine can physically store an infinite source.
+
+Therefore the specification distinguishes:
+
+unbounded language model
+
+from:
+
+finite implementation resources
 
 ---
 
-101. Final Lexical Architecture
+207. Hard-Coding Audit
 
-The production lexical architecture is:
+Every lexical implementation change must be checked for hard-coded:
 
-                       ZAMANI SOURCE
-                            │
-                            ▼
-                    UTF-8 Source Input
-                            │
-                            ▼
-                     Source Validation
-                            │
-                            ▼
-                    Comment / Whitespace
-                       Recognition
-                            │
-                            ▼
-                    Longest-Match Lexer
-                            │
-            ┌───────────────┼────────────────┐
-            ▼               ▼                ▼
-       Identifiers       Literals        Operators
-            │               │                │
-            └───────────────┼────────────────┘
-                            ▼
-                    Canonical Tokens
-                            │
-                            ▼
-                     Source Spans
-                            │
-                            ▼
-                 Lexical Diagnostics
-                            │
-                            ▼
-                         Parser
-                            │
-                            ▼
-                           AST
-                            │
-                            ▼
-                   Semantic Analysis
-                            │
-                            ▼
-                     Canonical IR
-                            │
-                ┌───────────┴───────────┐
-                ▼                       ▼
-          Classical IR             Quantum IR
-                │                       │
-                └───────────┬───────────┘
-                            ▼
-                    Target-independent
-                       compilation
-                            │
-                            ▼
-                 Target-specific lowering
-                            │
-                            ▼
-             Any supported computational target
+hardware counts
+resource counts
+machine widths
+device IDs
+topology
+vendor names
+backend names
+fixed tensor dimensions
+fixed qubit counts
+fixed node counts
+fixed thread counts
+fixed memory capacities
+
+If such a value is necessary for lexical syntax, it must be justified explicitly as language syntax rather than an implementation limit.
 
 ---
 
-102. Governing Principle
+208. Production Acceptance Criteria
 
-The Zamani lexer must remain small, deterministic, compositional, target-independent, resource-aware, and mechanically verifiable.
+"grammar/spec/lexical.md" is considered implemented only when:
 
-It should recognize the language without attempting to become the language.
+- [ ] "src/lexer.rs" conforms;
+- [ ] "grammar/antlr/ZamaniLexer.g4" conforms;
+- [ ] token duplicates are removed;
+- [ ] keyword authority is centralized;
+- [ ] Unicode policy is consistent;
+- [ ] numeric literals are representation-safe;
+- [ ] strings and characters have canonical escapes;
+- [ ] comments are deterministic;
+- [ ] documentation comments are recoverable;
+- [ ] longest-match behavior is tested;
+- [ ] source spans are preserved;
+- [ ] invalid UTF-8 is diagnosed;
+- [ ] lexical recovery guarantees progress;
+- [ ] "unsafe" language constructs are rejected;
+- [ ] Rust implementation uses no "unsafe";
+- [ ] quantum literals are target-independent;
+- [ ] MTS status is unambiguous;
+- [ ] domain operations are not hard-coded as exhaustive keywords;
+- [ ] hardware limits are absent from lexical rules;
+- [ ] resource exhaustion is distinct from invalid source;
+- [ ] incremental lexing is deterministic;
+- [ ] parallel lexing is deterministic;
+- [ ] compatibility tests exist;
+- [ ] negative tests exist;
+- [ ] boundary tests exist;
+- [ ] scalability tests exist;
+- [ ] parser conformance exists;
+- [ ] AST mapping exists;
+- [ ] canonical IR integration is documented;
+- [ ] "quantum::ir" remains the canonical quantum semantic boundary.
 
-The fundamental rule is:
+---
 
-«Lex source syntax once. Preserve its meaning. Defer semantics, resources, optimization, quantum realization, and hardware decisions to the appropriate downstream layers.»
+209. Final Lexical Architecture
 
-That is the lexical foundation required for Zamani to scale:
+The production architecture is:
 
-from atom → everywhere,
+                         SOURCE
+                           │
+                           ▼
+                    UTF-8 validation
+                           │
+                           ▼
+                  Unicode scalar stream
+                           │
+                           ▼
+                    lexical scanner
+                           │
+          ┌────────────────┼────────────────┐
+          │                │                │
+       tokens           trivia          diagnostics
+          │                │                │
+          └────────────────┼────────────────┘
+                           ▼
+                       parser
+                           │
+                           ▼
+                    frontend AST
+                           │
+                           ▼
+              structural validation
+                           │
+                           ▼
+                  semantic analysis
+                           │
+          ┌────────────────┼─────────────────┐
+          │                │                 │
+        types           effects          resources
+          │                │                 │
+          └────────────────┼─────────────────┘
+                           ▼
+                 canonical semantic model
+                           │
+                           ▼
+                     canonical IR
+                           │
+          ┌────────────────┼──────────────────┐
+          │                │                  │
+     classical IR      quantum::ir       HDL/other IR
+          │                │                  │
+          └────────────────┼──────────────────┘
+                           ▼
+                     optimization
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+           routing     scheduling    resilience
+              │            │            │
+              └────────────┼────────────┘
+                           ▼
+                          ZQN
+                           │
+                          HAL
+                           │
+                           ▼
+                 target realization
+                           │
+          ┌────────────────┼───────────────────┐
+          │                │                   │
+         CPU              GPU                 FPGA
+          │                │                   │
+         QPU        accelerator          future target
+          └────────────────┴───────────────────┘
 
-while preserving:
+The lexical layer therefore has one job:
 
-Program Once → Compile Once → Run Everywhere → Anywhere → Forever.
+«Convert portable Zamani source text into a deterministic, source-preserving, versioned token stream without embedding machine limits, backend assumptions, quantum hardware assumptions, or runtime behavior.»
+
+Everything beyond that boundary belongs to the parser, AST, semantic system, canonical IR, compiler, runtime, and target realization layers.
+
+---
+
+210. Normative Summary
+
+The following rules are mandatory.
+
+1. UTF-8 is the canonical source encoding.
+2. Invalid UTF-8 is diagnosed.
+3. Unicode identifiers are supported according to the canonical identifier profile.
+4. Identifiers are case-sensitive.
+5. Identifier normalization is not silently performed.
+6. Keywords have one canonical registry.
+7. Contextual keywords are preferred where possible.
+8. Domain operations are not exhaustively encoded as keywords.
+9. Operators have one canonical lexical identity per spelling.
+10. Longest valid token wins.
+11. Integer literals are not constrained by host integer width.
+12. Floating literals are not silently rounded during lexing.
+13. Numeric source representation is preserved.
+14. Strings have a canonical escape system.
+15. Character literals represent exactly one Unicode scalar value.
+16. Comments never become semantic tokens.
+17. Documentation comments remain recoverable for tooling.
+18. Invalid source never becomes silently valid source.
+19. Lexical recovery must guarantee progress.
+20. Every source token has a source span.
+21. Lexical behavior is deterministic.
+22. Lexical behavior is independent of hardware.
+23. Lexical behavior is independent of network state.
+24. Lexical behavior is independent of wall-clock time.
+25. Lexical behavior is independent of host locale.
+26. Lexical behavior is independent of machine size.
+27. No artificial universal source/token/identifier limits are defined.
+28. Implementation resource limits are separate from language validity.
+29. "unsafe" Rust is prohibited.
+30. The Zamani language does not provide an unsafe execution escape hatch.
+31. Quantum gates are not a fixed lexical vocabulary.
+32. Quantum literals do not allocate hardware.
+33. MTS literals do not allocate timelines.
+34. Nano annotations do not execute domain behavior.
+35. Hardware identities remain ordinary data/identifiers.
+36. Resource requirements remain semantic intent.
+37. The lexer does not perform QEC.
+38. The lexer does not perform ZQN processing.
+39. The lexer does not route.
+40. The lexer does not schedule.
+41. The lexer does not calibrate.
+42. The lexer does not select a backend.
+43. The lexer does not query HAL.
+44. "src/lexer.rs" and "grammar/antlr/ZamaniLexer.g4" implement this contract.
+45. "src/parser.rs" interprets canonical tokens.
+46. The frontend AST remains target-independent.
+47. "quantum::ir" remains the canonical quantum semantic boundary.
+48. "grammar/grammar.md" reports implementation conformance.
+49. "grammar/Zamani-Grammar.md" remains broader design/history/proposal material.
+50. Every lexical feature requires specification, implementation, tests, conformance, compatibility, scalability, and hard-coding validation before becoming stable.
+
+This is the complete normative lexical boundary for production Zamani.
