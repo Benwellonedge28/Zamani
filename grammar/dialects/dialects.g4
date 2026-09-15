@@ -7,54 +7,78 @@
  *     grammar/dialects/dialects.g4
  *
  * Role:
- *     Canonical parser grammar for Zamani's universal source-level dialect
- *     system.
+ *     Canonical public parser entry point for Zamani source-level dialects.
+ *
+ * Status:
+ *     Production architecture.
  *
  * Baseline:
+ *     ANTLR4
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *     safe Rust only
- *     no unsafe Rust
+ *     Generated compiler/runtime integration MUST use safe Rust only.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     source
- *       |
- *       v
- *     ZamaniLexer
- *       |
- *       v
- *     parser
- *       |
- *       +--> core::Names
- *       |
- *       +--> Dialects                    <-- THIS FILE
- *       |
- *       v
- *     frontend AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       +--> dialect registry
- *       +--> version compatibility
- *       +--> capability resolution
- *       +--> effect/type analysis
- *       +--> resource/requirement analysis
- *       |
- *       v
- *     canonical semantic representation
- *       |
- *       +--> classical IR
- *       +--> quantum::ir
- *       +--> HDL/hardware semantic model
- *       +--> control/data/temporal IR
- *       |
- *       v
- *     optimization / routing / scheduling / QEC / ZQN /
- *     resilience / hardware HAL / runtime
+ *                         Zamani source
+ *                              |
+ *                              v
+ *                         ZamaniLexer
+ *                              |
+ *                              v
+ *                         Root Parser
+ *                              |
+ *                              v
+ *                       dialectDeclaration
+ *                              |
+ *                              v
+ *                    +---------------------+
+ *                    |     Dialects        |
+ *                    |      THIS FILE      |
+ *                    +---------------------+
+ *                              |
+ *                              v
+ *                    DialectRegistration
+ *                              |
+ *              +---------------+----------------+
+ *              |               |                |
+ *              v               v                v
+ *        capabilities     namespaces       versioning
+ *              |               |                |
+ *              +---------------+----------------+
+ *                              |
+ *                              v
+ *                       dialect AST/model
+ *                              |
+ *                              v
+ *                       semantic analysis
+ *                              |
+ *             +----------------+----------------+
+ *             |                |                |
+ *             v                v                v
+ *       capability       compatibility      requirement
+ *       resolution          analysis          analysis
+ *             |                |                |
+ *             +----------------+----------------+
+ *                              |
+ *                              v
+ *                   canonical semantic model
+ *                              |
+ *            +-----------------+-----------------+
+ *            |                 |                 |
+ *            v                 v                 v
+ *       classical IR      quantum::ir       HDL/hardware IR
+ *                              |
+ *                              v
+ *             optimization / routing / scheduling
+ *                              |
+ *                              v
+ *                 QEC / ZQN / resilience
+ *                              |
+ *                              v
+ *                     hardware HAL / runtime
  *
  * ============================================================================
  * OWNERSHIP
@@ -62,153 +86,195 @@
  *
  * THIS FILE OWNS:
  *
- *   - universal dialect declaration syntax;
- *   - dialect identity syntax;
- *   - dialect imports;
- *   - dialect aliases;
- *   - dialect composition;
- *   - dialect extension declarations;
- *   - dialect feature declarations;
- *   - capability declarations/references;
- *   - semantic requirement declarations;
- *   - compatibility declarations;
- *   - version constraints as structural syntax;
- *   - dialect namespaces;
- *   - dialect-scoped attributes;
- *   - implementation-neutral dialect metadata;
- *   - source-level dialect activation.
+ *   - the canonical parser-level dialect entry rule;
+ *   - the public dialect grammar boundary;
+ *   - integration of dialect registration into the root parser;
+ *   - stable delegation from the public Dialects grammar to the canonical
+ *     dialect-registration grammar;
+ *   - the architectural boundary preventing dialect syntax from being
+ *     duplicated across the repository.
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - lexical identifiers;
- *   - lexical keywords;
+ *   - lexical keyword definitions;
+ *   - identifiers;
+ *   - qualified names;
  *   - semantic version comparison;
+ *   - version solving;
+ *   - capability discovery;
+ *   - capability resolution;
  *   - package resolution;
  *   - filesystem resolution;
  *   - plugin loading;
- *   - capability discovery;
- *   - hardware discovery;
- *   - hardware topology;
- *   - physical qubit identifiers;
- *   - resource allocation;
- *   - scheduling;
- *   - routing;
- *   - optimization;
+ *   - vendor implementation;
+ *   - experimental feature policy;
+ *   - namespace semantics;
+ *   - compatibility algorithms;
+ *   - migration algorithms;
+ *   - AST implementation;
+ *   - canonical IR;
+ *   - classical IR;
+ *   - quantum::ir;
  *   - QEC;
  *   - ZQN;
  *   - resilience;
- *   - simulation;
- *   - runtime execution;
- *   - canonical IR;
- *   - quantum::ir;
- *   - vendor implementation code.
+ *   - optimization;
+ *   - routing;
+ *   - scheduling;
+ *   - hardware discovery;
+ *   - calibration;
+ *   - target selection;
+ *   - resource allocation;
+ *   - runtime execution.
  *
  * ============================================================================
- * FUNDAMENTAL RULE
+ * CRITICAL DESIGN RULE
  * ============================================================================
  *
- * A dialect is a SOURCE-LEVEL LANGUAGE/SEMANTIC EXTENSION CONTRACT.
+ * `dialects.g4` MUST NOT become a second implementation of:
  *
- * A dialect MUST NOT inherently select:
+ *     registration.g4
+ *     capabilities.g4
+ *     namespaces.g4
+ *     versioning.g4
+ *     compatibility.g4
+ *     vendor.g4
+ *     experimental.g4
  *
- *   - a machine;
- *   - a processor;
- *   - a QPU;
- *   - a GPU;
- *   - an FPGA;
- *   - an ASIC;
- *   - a device;
- *   - a physical qubit;
- *   - a topology;
- *   - a backend;
- *   - a calibration;
- *   - a scheduler;
- *   - a runtime.
+ * Those files have their own ownership boundaries.
  *
- * A dialect can state semantic requirements and capabilities.
+ * This file is deliberately small.
  *
- * The actual realization is determined later by:
+ * Small does NOT mean incomplete.
  *
- *   semantic analysis
- *   capability resolution
- *   resource analysis
- *   compilation
- *   optimization
- *   routing
- *   scheduling
- *   hardware abstraction
- *   runtime
+ * It means that the public dialect boundary has one owner and delegates
+ * detailed dialect semantics to the appropriate grammar component.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Dialects must preserve:
+ * Dialect syntax is source-level language information.
  *
- *   Program Once
- *   Compile Once
- *   Run Everywhere
- *   Run Anywhere
- *   Run Forever
+ * It MUST NOT select:
  *
- * Therefore the grammar contains NO finite machine/resource limits.
+ *     - CPU count;
+ *     - GPU count;
+ *     - FPGA count;
+ *     - ASIC count;
+ *     - QPU;
+ *     - physical qubit;
+ *     - topology;
+ *     - memory capacity;
+ *     - device identifier;
+ *     - backend;
+ *     - scheduler;
+ *     - calibration;
+ *     - runtime;
+ *     - deployment topology.
  *
- * There is no:
+ * Dialect declarations may express semantic requirements and capabilities.
  *
- *   MAX_DIALECTS
- *   MAX_FEATURES
- *   MAX_CAPABILITIES
- *   MAX_EXTENSIONS
- *   MAX_TARGETS
- *   MAX_NODES
- *   MAX_QUBITS
- *   MAX_DEVICES
+ * Concrete realization is resolved downstream.
  *
- * Practical limits are imposed only by available resources and implementation
- * policy, never by this grammar.
+ * Therefore this grammar contains no:
+ *
+ *     MAX_DIALECTS
+ *     MAX_FEATURES
+ *     MAX_CAPABILITIES
+ *     MAX_EXTENSIONS
+ *     MAX_TARGETS
+ *     MAX_DEVICES
+ *     MAX_QUBITS
+ *     MAX_NODES
+ *     MAX_RESOURCES
+ *
+ * Repetition and nesting are determined by source input and implementation
+ * resource limits rather than language-level machine constants.
  *
  * ============================================================================
- * OPEN-WORLD MODEL
+ * OPEN-WORLD PRINCIPLE
  * ============================================================================
  *
- * Dialect names are arbitrary qualified names.
+ * A dialect identity is a symbolic qualified name.
  *
  * Examples:
  *
- *   quantum::standard
- *   quantum::openqasm
- *   quantum::future::dynamic
- *   hardware::fpga
- *   hardware::future::reconfigurable
- *   ai::tensor
- *   distributed::consensus
- *   vendor::example::quantum
- *   organization::domain::extension
+ *     quantum::standard
+ *     quantum::openqasm
+ *     classical::numeric
+ *     hdl::rtl
+ *     hardware::fpga
+ *     distributed::messaging
+ *     ai::tensor
+ *     vendor::domain::extension
+ *     future::computing::dialect
  *
- * No closed enumeration of dialects is permitted here.
+ * This grammar MUST NOT enumerate known dialect names.
  *
- * Adding a new dialect MUST NOT require modifying this grammar.
+ * Adding a new dialect MUST NOT require modifying this file.
  *
  * ============================================================================
- * QUANTUM IR BOUNDARY
+ * QUANTUM BOUNDARY
  * ============================================================================
  *
  * This grammar MUST NOT define:
  *
- *   QubitId
- *   PhysicalQubitId
- *   GateKind
- *   QuantumOperation
- *   QuantumCircuit
- *   topology
- *   calibration
- *   pulse schedule
+ *     QubitId
+ *     PhysicalQubitId
+ *     GateKind
+ *     QuantumOperation
+ *     QuantumCircuit
+ *     topology
+ *     calibration
+ *     pulse schedule
  *
- * It only describes source syntax.
+ * Quantum syntax is eventually lowered by semantic/frontend infrastructure
+ * into the canonical quantum representation.
  *
- * Quantum dialect constructs that represent actual computation are lowered
- * later into the canonical quantum semantic representation and, where
- * appropriate, quantum::ir.
+ * `quantum::ir` remains the canonical quantum semantic boundary.
+ *
+ * This grammar MUST NEVER become a second quantum IR.
+ *
+ * ============================================================================
+ * CLASSICAL / HDL / HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * Dialects may identify language extensions for:
+ *
+ *     classical computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL
+ *     hardware
+ *     distributed computation
+ *     AI/ML
+ *     data computation
+ *     networking
+ *     cryptography
+ *     accelerators
+ *     future computational domains
+ *
+ * The dialect grammar does not implement those domains.
+ *
+ * Domain-specific semantics belong to their owning grammar and semantic
+ * subsystem.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * This grammar performs no:
+ *
+ *     - filesystem lookup;
+ *     - network access;
+ *     - plugin discovery;
+ *     - hardware discovery;
+ *     - runtime execution;
+ *     - capability probing;
+ *     - target selection.
+ *
+ * The same token stream must therefore receive the same syntactic treatment.
  *
  * ============================================================================
  * ANTLR CONTRACT
@@ -218,13 +284,157 @@
  *
  * It contains:
  *
- *   - no embedded Rust;
- *   - no semantic predicates;
- *   - no filesystem access;
- *   - no network access;
- *   - no hardware access;
- *   - no runtime calls;
- *   - no unsafe code.
+ *     - no embedded Rust;
+ *     - no semantic predicates;
+ *     - no actions;
+ *     - no filesystem operations;
+ *     - no network operations;
+ *     - no runtime callbacks;
+ *     - no hardware callbacks;
+ *     - no unsafe code.
+ *
+ * The generated parser is an implementation artifact.
+ *
+ * It is NOT the canonical AST.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * Canonical lexical ownership:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Canonical name ownership:
+ *
+ *     grammar/core/names.g4
+ *
+ * Canonical dialect registration ownership:
+ *
+ *     grammar/dialects/registration.g4
+ *
+ * Dialect capability ownership:
+ *
+ *     grammar/dialects/capabilities.g4
+ *
+ * Dialect namespace ownership:
+ *
+ *     grammar/dialects/namespaces.g4
+ *
+ * Dialect version ownership:
+ *
+ *     grammar/dialects/versioning.g4
+ *
+ * Dialect compatibility ownership:
+ *
+ *     grammar/dialects/compatibility.g4
+ *
+ * Vendor extensions:
+ *
+ *     grammar/dialects/vendor.g4
+ *
+ * Experimental extensions:
+ *
+ *     grammar/dialects/experimental.g4
+ *
+ * The root parser consumes:
+ *
+ *     dialectDeclaration
+ *
+ * and therefore does not need to know the internal implementation details of
+ * dialect registration.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The parser must preserve enough source structure for the frontend AST to
+ * represent:
+ *
+ *     - dialect identity;
+ *     - source ordering;
+ *     - imports;
+ *     - aliases;
+ *     - composition;
+ *     - requirements;
+ *     - provisions/capabilities;
+ *     - extensions;
+ *     - syntax/semantic/lowering descriptors;
+ *     - metadata;
+ *     - compatibility declarations;
+ *     - source spans.
+ *
+ * No machine-specific object is created by this grammar.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing establishes syntax only.
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     - dialect existence;
+ *     - registration lookup;
+ *     - duplicate registration;
+ *     - import resolution;
+ *     - alias resolution;
+ *     - inheritance cycles;
+ *     - requirement satisfaction;
+ *     - capability satisfaction;
+ *     - version compatibility;
+ *     - extension conflicts;
+ *     - deprecation;
+ *     - vendor/experimental policy;
+ *     - semantic validity.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This file produces no IR.
+ *
+ * The intended flow is:
+ *
+ *     source
+ *       |
+ *       v
+ *     lexer
+ *       |
+ *       v
+ *     parser
+ *       |
+ *       v
+ *     AST
+ *       |
+ *       v
+ *     semantic dialect model
+ *       |
+ *       v
+ *     canonical semantic representation
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL/hardware representation
+ *       +--> control/data/temporal representations
+ *
+ * Downstream compilation must consume canonical semantic representations,
+ * never this parser grammar directly.
+ *
+ * ============================================================================
+ * IMPLEMENTATION INDEPENDENCE
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     1. the canonical lexer supplies the required dialect tokens;
+ *     2. DialectRegistration is available to the parser;
+ *     3. the root parser exposes dialectDeclaration;
+ *     4. no dialect semantics are duplicated here;
+ *     5. generated ANTLR parser generation succeeds;
+ *     6. parser tests succeed;
+ *     7. cross-domain tests succeed;
+ *     8. scalability tests contain no artificial machine-size restriction.
  *
  * ============================================================================
  */
@@ -235,644 +445,381 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names;
+/*
+ * --------------------------------------------------------------------------
+ * Canonical dependency
+ * --------------------------------------------------------------------------
+ *
+ * DialectRegistration owns the actual registration grammar.
+ *
+ * This file deliberately delegates instead of duplicating registration rules.
+ */
+import DialectRegistration;
 
-
-/* ============================================================================
- * 1. TOP-LEVEL DIALECT DECLARATION
- * ========================================================================== */
 
 /*
- * Canonical form:
+ * ============================================================================
+ * PUBLIC DIALECT ENTRY POINT
+ * ============================================================================
  *
- *     dialect quantum::standard {
- *         ...
- *     }
+ * This is the stable rule consumed by the root Zamani parser.
  *
- * Version and metadata are optional and remain implementation-neutral.
+ * The internal registration grammar may evolve behind this boundary without
+ * forcing every consumer of the root parser to change its dialect entry rule.
+ *
+ * This is especially important for POCO-REAF:
+ *
+ *     source program
+ *          |
+ *          v
+ *     stable language syntax
+ *          |
+ *          v
+ *     dialect registration
+ *          |
+ *          v
+ *     semantic resolution
+ *          |
+ *          v
+ *     target-independent representation
+ *          |
+ *          v
+ *     target-specific realization
+ *
+ * The dialect name remains symbolic.
  */
 dialectDeclaration
-    : DIALECT qualifiedName dialectHeader? LBRACE dialectMember* RBRACE
+    : dialectRegistration
     ;
 
-
-/* ============================================================================
- * 2. DIALECT HEADER
- * ========================================================================== */
-
-dialectHeader
-    : dialectHeaderItem*
-    ;
-
-dialectHeaderItem
-    : dialectVersionDeclaration
-    | dialectAttribute
-    | dialectStatusDeclaration
-    | dialectMetadataDeclaration
-    ;
-
-
-/* ============================================================================
- * 3. DIALECT MEMBERS
- * ========================================================================== */
-
-dialectMember
-    : dialectImportDeclaration
-    | dialectUseDeclaration
-    | dialectExtendsDeclaration
-    | dialectFeatureDeclaration
-    | dialectCapabilityDeclaration
-    | dialectRequirementDeclaration
-    | dialectExtensionDeclaration
-    | dialectCompatibilityDeclaration
-    | dialectConflictDeclaration
-    | dialectNamespaceDeclaration
-    | dialectMetadataDeclaration
-    | dialectAttribute
-    ;
-
-
-/* ============================================================================
- * 4. IMPORT
- * ========================================================================== */
 
 /*
- * Imports another dialect contract.
+ * ============================================================================
+ * EXPLICIT DIALECT REFERENCE
+ * ============================================================================
  *
- * This does not load:
+ * This rule is provided as the canonical parser-level reference boundary for
+ * other grammar components that need to refer to a dialect.
  *
- *   hardware
- *   runtime
- *   plugins
- *   devices
+ * It intentionally reuses the canonical name rule from the imported
+ * registration/name grammar.
  *
- * Resolution is semantic/toolchain responsibility.
+ * It does not resolve the reference.
  */
-dialectImportDeclaration
-    : IMPORT qualifiedName dialectAlias? SEMICOLON
-    ;
-
-dialectAlias
-    : AS identifier
-    ;
-
-
-/* ============================================================================
- * 5. USE / ACTIVATION
- * ========================================================================== */
-
-/*
- * Activates a dialect for the enclosing source context.
- *
- * The grammar does not decide whether the dialect exists.
- */
-dialectUseDeclaration
-    : USE qualifiedName dialectAlias? dialectVersionConstraint? SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 6. COMPOSITION / INHERITANCE
- * ========================================================================== */
-
-/*
- * Dialects may compose other dialect contracts.
- *
- * There is no finite depth limit.
- *
- * Semantic analysis must detect:
- *
- *   - cycles;
- *   - incompatible inherited features;
- *   - conflicting definitions;
- *   - capability conflicts.
- */
-dialectExtendsDeclaration
-    : EXTENDS dialectReferenceList SEMICOLON
-    ;
-
-dialectReferenceList
-    : dialectReference (COMMA dialectReference)*
-    ;
-
 dialectReference
-    : qualifiedName dialectVersionConstraint?
-    ;
-
-
-/* ============================================================================
- * 7. VERSION DECLARATION
- * ========================================================================== */
-
-/*
- * Version syntax is structural.
- *
- * Semantic version interpretation belongs to the compatibility subsystem.
- *
- * Examples:
- *
- *     version "1.0.0";
- *     version "2026.1";
- *
- * A dialect version is metadata, not a hardware version.
- */
-dialectVersionDeclaration
-    : VERSION STRING SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 8. VERSION CONSTRAINT
- * ========================================================================== */
-
-/*
- * The grammar accepts an open structural constraint expression.
- *
- * Examples:
- *
- *     version >= "1.0.0"
- *     version ^ "2.0.0"
- *     version ~ "3.1"
- *     version "1.2.3"
- *
- * Exact comparison semantics are owned by semantic compatibility analysis.
- */
-dialectVersionConstraint
-    : VERSION dialectVersionOperator STRING
-    ;
-
-dialectVersionOperator
-    : ASSIGN
-    | EQ
-    | NEQ
-    | LT
-    | LTE
-    | GT
-    | GTE
-    | CARET
-    | TILDE
-    ;
-
-
-/* ============================================================================
- * 9. DIALECT STATUS
- * ========================================================================== */
-
-/*
- * Status is descriptive metadata only.
- *
- * It does not determine whether a dialect can execute.
- */
-dialectStatusDeclaration
-    : STATUS dialectStatus SEMICOLON
-    ;
-
-dialectStatus
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 10. DIALECT FEATURES
- * ========================================================================== */
-
-/*
- * A feature describes a language/semantic facility.
- *
- * It must not be confused with a physical hardware feature.
- *
- * Examples:
- *
- *     feature dynamic_circuits;
- *     feature mid_circuit_measurement;
- *     feature tensor_operations;
- *     feature hardware_description;
- */
-dialectFeatureDeclaration
-    : FEATURE identifier dialectFeatureType?
-      dialectFeatureConstraint*
-      SEMICOLON
-    ;
-
-dialectFeatureType
-    : COLON qualifiedName
-    ;
-
-dialectFeatureConstraint
-    : WHERE dialectPredicate
-    ;
-
-
-/* ============================================================================
- * 11. CAPABILITIES
- * ========================================================================== */
-
-/*
- * Capabilities describe what a dialect contract exposes or expects.
- *
- * They do not perform capability discovery.
- */
-dialectCapabilityDeclaration
-    : CAPABILITY qualifiedName dialectCapabilityBody? SEMICOLON
-    ;
-
-dialectCapabilityBody
-    : LBRACE dialectCapabilityMember* RBRACE
-    ;
-
-dialectCapabilityMember
-    : dialectAttribute
-    | dialectRequirementDeclaration
-    | dialectMetadataDeclaration
-    ;
-
-
-/* ============================================================================
- * 12. REQUIREMENTS
- * ========================================================================== */
-
-/*
- * Requirements are semantic prerequisites.
- *
- * They are NOT target selections.
- *
- * Example:
- *
- *     requires quantum::dynamic_control;
- *
- * does not mean:
- *
- *     use device X;
- *
- * It only states a semantic requirement.
- */
-dialectRequirementDeclaration
-    : REQUIRES dialectRequirementExpression SEMICOLON
-    ;
-
-dialectRequirementExpression
-    : dialectRequirementTerm
-      (dialectLogicalOperator dialectRequirementTerm)*
-    ;
-
-dialectRequirementTerm
-    : dialectRequirementAtom
-    | LPAREN dialectRequirementExpression RPAREN
-    ;
-
-dialectRequirementAtom
-    : qualifiedName dialectVersionConstraint?
-    | dialectCapabilityReference
-    ;
-
-dialectCapabilityReference
-    : CAPABILITY qualifiedName
-    ;
-
-dialectLogicalOperator
-    : AND
-    | OR
-    ;
-
-
-/* ============================================================================
- * 13. EXTENSIONS
- * ========================================================================== */
-
-/*
- * A dialect extension introduces a source-level semantic construct.
- *
- * The declaration is intentionally structural.
- *
- * The extension's meaning is defined by the dialect registry/semantic layer,
- * not by this universal grammar.
- */
-dialectExtensionDeclaration
-    : EXTENSION qualifiedName
-      dialectExtensionSignature?
-      dialectExtensionConstraint*
-      dialectExtensionBody?
-      SEMICOLON?
-    ;
-
-dialectExtensionSignature
-    : LPAREN dialectParameterList? RPAREN
-    ;
-
-dialectParameterList
-    : dialectParameter (COMMA dialectParameter)*
-    ;
-
-dialectParameter
-    : identifier dialectParameterType?
-      dialectDefaultValue?
-    ;
-
-dialectParameterType
-    : COLON qualifiedName
-    ;
-
-dialectDefaultValue
-    : ASSIGN dialectValue
-    ;
-
-dialectExtensionConstraint
-    : WHERE dialectPredicate
-    ;
-
-dialectExtensionBody
-    : LBRACE dialectExtensionMember* RBRACE
-    ;
-
-dialectExtensionMember
-    : dialectFeatureDeclaration
-    | dialectCapabilityDeclaration
-    | dialectRequirementDeclaration
-    | dialectMetadataDeclaration
-    | dialectAttribute
-    ;
-
-
-/* ============================================================================
- * 14. COMPATIBILITY
- * ========================================================================== */
-
-/*
- * Compatibility declarations describe relationships.
- *
- * They do not implement compatibility checking.
- *
- * Semantic analysis owns:
- *
- *   - version comparison;
- *   - feature compatibility;
- *   - migration;
- *   - deprecation;
- *   - conflict handling.
- */
-dialectCompatibilityDeclaration
-    : COMPATIBLE WITH dialectReferenceList SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 15. CONFLICTS
- * ========================================================================== */
-
-/*
- * Explicit conflict declarations allow a dialect to state that two semantic
- * contracts cannot be simultaneously selected.
- *
- * The grammar does not decide whether the conflict actually exists.
- */
-dialectConflictDeclaration
-    : CONFLICTS WITH dialectReferenceList SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 16. NAMESPACES
- * ========================================================================== */
-
-/*
- * Namespace nesting is unbounded by grammar design.
- */
-dialectNamespaceDeclaration
-    : NAMESPACE qualifiedName
-      LBRACE
-      dialectMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 17. METADATA
- * ========================================================================== */
-
-/*
- * Metadata is intentionally open.
- *
- * Unknown metadata is syntactically representable and semantically validated
- * by the dialect registry.
- */
-dialectMetadataDeclaration
-    : METADATA identifier
-      (ASSIGN dialectValue)?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 18. ATTRIBUTES
- * ========================================================================== */
-
-dialectAttribute
-    : AT identifier
-      dialectAttributeArguments?
-    ;
-
-dialectAttributeArguments
-    : LPAREN dialectValueList? RPAREN
-    ;
-
-
-/* ============================================================================
- * 19. PREDICATES
- * ========================================================================== */
-
-/*
- * Predicate syntax is deliberately structural.
- *
- * It must not execute code.
- *
- * It must not inspect hardware.
- */
-dialectPredicate
-    : dialectPredicateAtom
-    | LPAREN dialectPredicate RPAREN
-    | NOT dialectPredicate
-    | dialectPredicate AND dialectPredicate
-    | dialectPredicate OR dialectPredicate
-    ;
-
-dialectPredicateAtom
     : qualifiedName
-    | qualifiedName comparisonOperator dialectValue
     ;
 
-comparisonOperator
-    : EQ
-    | NEQ
-    | LT
-    | LTE
-    | GT
-    | GTE
-    ;
-
-
-/* ============================================================================
- * 20. VALUES
- * ========================================================================== */
 
 /*
- * Values remain syntactic.
+ * ============================================================================
+ * DIALECT QUALIFICATION
+ * ============================================================================
  *
- * Their semantic type is determined later.
- */
-dialectValue
-    : identifier
-    | qualifiedName
-    | STRING
-    | INTEGER
-    | FLOAT
-    | TRUE
-    | FALSE
-    | NIL
-    | NULL
-    | dialectListValue
-    | dialectMapValue
-    ;
-
-dialectListValue
-    : LBRACKET dialectValueList? RBRACKET
-    ;
-
-dialectValueList
-    : dialectValue (COMMA dialectValue)* COMMA?
-    ;
-
-dialectMapValue
-    : LBRACE dialectMapEntry* RBRACE
-    ;
-
-dialectMapEntry
-    : identifier COLON dialectValue COMMA?
-    ;
-
-
-/* ============================================================================
- * 21. DIALECT EXTENSION PARAMETERS
- * ========================================================================== */
-
-dialectExtensionParameterList
-    : dialectParameter (COMMA dialectParameter)*
-    ;
-
-
-/* ============================================================================
- * 22. UNIVERSAL DIALECT DECLARATION LIST
- * ========================================================================== */
-
-/*
- * Reusable list for parser integration.
- */
-dialectDeclarationList
-    : dialectDeclaration*
-    ;
-
-
-/* ============================================================================
- * 23. OPTIONAL DIALECT DECLARATION
- * ========================================================================== */
-
-optionalDialectDeclaration
-    : dialectDeclaration?
-    ;
-
-
-/* ============================================================================
- * 24. DIALECT REFERENCE LIST
- * ========================================================================== */
-
-dialectNameList
-    : qualifiedName (COMMA qualifiedName)*
-    ;
-
-
-/* ============================================================================
- * 25. TARGET-NEUTRAL REQUIREMENT GROUP
- * ========================================================================== */
-
-/*
- * This rule deliberately models requirements rather than target selection.
+ * A dialect identity is always a source-level qualified name.
  *
- * Example:
+ * The actual interpretation of the namespace belongs to semantic analysis.
  *
- *     requires {
- *         quantum::measurement;
- *         quantum::dynamic_control;
- *     }
+ * Examples:
  *
- * The actual machine capable of satisfying those requirements is selected
- * later.
+ *     quantum::standard
+ *     hardware::rtl
+ *     vendor::example::quantum
+ *     future::computing::dialect
+ *
+ * No finite namespace depth is imposed here.
  */
-dialectRequirementGroup
-    : REQUIRES LBRACE dialectRequirementItem* RBRACE
+dialectName
+    : qualifiedName
     ;
 
-dialectRequirementItem
-    : qualifiedName dialectVersionConstraint? SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 26. PROVIDES
- * ========================================================================== */
 
 /*
- * `provides` describes semantic capabilities supplied by a dialect.
+ * ============================================================================
+ * DIALECT INTEGRATION BOUNDARY
+ * ============================================================================
  *
- * It does not mean that a physical machine currently provides them.
+ * The following conceptual responsibilities intentionally remain OUTSIDE
+ * this file:
+ *
+ *     registration      -> registration.g4
+ *     capability       -> capabilities.g4
+ *     namespace        -> namespaces.g4
+ *     version          -> versioning.g4
+ *     compatibility    -> compatibility.g4
+ *     vendor           -> vendor.g4
+ *     experimental     -> experimental.g4
+ *
+ * Those grammars may be composed by the canonical parser assembly.
+ *
+ * This file must not copy their rules.
  */
-dialectProvidesDeclaration
-    : PROVIDES dialectQualifiedNameList SEMICOLON
-    ;
 
-dialectQualifiedNameList
-    : qualifiedName (COMMA qualifiedName)*
-    ;
-
-
-/* ============================================================================
- * 27. DIALECT CONTRACT
- * ========================================================================== */
 
 /*
- * A reusable contract can state both requirements and provided capabilities.
+ * ============================================================================
+ * ROOT-PARSER INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * The root Zamani parser should expose this rule through its source-item or
+ * declaration dispatcher.
+ *
+ * Conceptually:
+ *
+ *     sourceItem
+ *         : declaration
+ *         | statement
+ *         | dialectDeclaration
+ *         | ...
+ *         ;
+ *
+ * The exact declaration dispatcher remains owned by the root parser.
+ *
+ * `dialects.g4` does not redefine `sourceItem`, `declaration`, or `statement`.
  */
-dialectContract
-    : dialectContractItem*
-    ;
 
-dialectContractItem
-    : dialectVersionDeclaration
-    | dialectExtendsDeclaration
-    | dialectRequirementDeclaration
-    | dialectRequirementGroup
-    | dialectCapabilityDeclaration
-    | dialectProvidesDeclaration
-    | dialectCompatibilityDeclaration
-    | dialectConflictDeclaration
-    ;
-
-
-/* ============================================================================
- * 28. RESERVED EXTENSION POINT
- * ========================================================================== */
 
 /*
- * This rule exists so future dialect metadata can be introduced through
- * dialect-specific semantic registration without modifying this grammar for
- * every new domain.
+ * ============================================================================
+ * SEMANTIC LOWERING CONTRACT
+ * ============================================================================
+ *
+ * dialectDeclaration
+ *       |
+ *       v
+ * frontend AST
+ *       |
+ *       v
+ * dialect semantic model
+ *       |
+ *       +--> requirements
+ *       +--> capabilities
+ *       +--> compatibility
+ *       +--> extension identity
+ *       +--> namespace identity
+ *       |
+ *       v
+ * semantic analysis
+ *       |
+ *       +----------------------+----------------------+
+ *       |                      |                      |
+ *       v                      v                      v
+ * classical semantics   quantum semantics       HDL semantics
+ *       |                      |                      |
+ *       v                      v                      v
+ * classical IR          quantum::ir          HDL/hardware IR
+ *
+ * No dialect parser rule may directly instantiate:
+ *
+ *     QuantumGate
+ *     QubitId
+ *     PhysicalQubitId
+ *     Schedule
+ *     Route
+ *     Calibration
+ *     QecCode
+ *     NoiseModel
+ *     Backend
+ *     Device
+ *
+ * Those concepts belong to downstream owners.
  */
-dialectCustomMember
-    : identifier dialectCustomArguments? dialectCustomBody? SEMICOLON?
-    ;
 
-dialectCustomArguments
-    : LPAREN dialectValueList? RPAREN
-    ;
 
-dialectCustomBody
-    : LBRACE dialectMember* RBRACE
-    ;
+/*
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar uses recursive/repeating parser constructs rather than
+ * machine-sized constants.
+ *
+ * There is no source-language ceiling for:
+ *
+ *     dialect count
+ *     dialect members
+ *     namespace depth
+ *     extension count
+ *     capability count
+ *     requirement count
+ *     dependency count
+ *     composition count
+ *
+ * Actual limits are determined by:
+ *
+ *     - available memory;
+ *     - parser/runtime implementation policy;
+ *     - compilation resource limits;
+ *     - deployment policy.
+ *
+ * Those are NOT language semantics.
+ */
+
+
+/*
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Forbidden in this file:
+ *
+ *     MAX_DIALECTS
+ *     MAX_EXTENSIONS
+ *     MAX_CAPABILITIES
+ *     MAX_REQUIREMENTS
+ *     MAX_NAMESPACE_DEPTH
+ *     MAX_TARGETS
+ *     MAX_DEVICES
+ *     MAX_QUBITS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *
+ * No physical target is named by syntax.
+ *
+ * No vendor is enumerated.
+ *
+ * No quantum processor is enumerated.
+ *
+ * No accelerator is enumerated.
+ *
+ * No hardware topology is represented.
+ *
+ * No deployment size is encoded.
+ */
+
+
+/*
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Required parser tests:
+ *
+ * POSITIVE
+ * --------
+ *
+ * dialect quantum::standard { }
+ *
+ * dialect quantum::openqasm { }
+ *
+ * dialect hardware::rtl { }
+ *
+ * dialect hardware::fpga { }
+ *
+ * dialect distributed::messaging { }
+ *
+ * dialect ai::tensor { }
+ *
+ * dialect future::computing::dialect { }
+ *
+ *
+ * SCALABILITY
+ * -----------
+ *
+ * Generate dialect identities with:
+ *
+ *     many namespace segments
+ *     many members
+ *     many requirements
+ *     many capabilities
+ *     many extensions
+ *
+ * No grammar-level fixed cardinality may reject them.
+ *
+ *
+ * CROSS-DOMAIN
+ * ------------
+ *
+ * Test dialects representing:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     distributed
+ *     AI
+ *     data
+ *     networking
+ *     security
+ *     future domains
+ *
+ *
+ * NEGATIVE
+ * --------
+ *
+ * Reject:
+ *
+ *     missing dialect name
+ *     malformed qualified name
+ *     unterminated dialect body
+ *     malformed registration
+ *     invalid delimiter structure
+ *
+ *
+ * SEMANTIC-BOUNDARY
+ * -----------------
+ *
+ * Parser tests must NOT require:
+ *
+ *     hardware discovery
+ *     QPU discovery
+ *     capability discovery
+ *     backend selection
+ *     scheduling
+ *     routing
+ *     QEC
+ *     ZQN
+ *     runtime execution
+ *
+ *
+ * DETERMINISM
+ * -----------
+ *
+ * Identical source/token streams must produce equivalent parse trees.
+ */
+
+
+/*
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is COMPLETE when:
+ *
+ * [x] It has one authoritative dialect entry point.
+ *
+ * [x] It does not duplicate registration syntax.
+ *
+ * [x] It does not duplicate capability syntax.
+ *
+ * [x] It does not duplicate namespace syntax.
+ *
+ * [x] It does not duplicate version semantics.
+ *
+ * [x] It does not duplicate compatibility semantics.
+ *
+ * [x] It does not define hardware or quantum resources.
+ *
+ * [x] It contains no machine-size constants.
+ *
+ * [x] It contains no backend selection.
+ *
+ * [x] It contains no runtime behavior.
+ *
+ * [x] It contains no embedded Rust.
+ *
+ * [x] It remains safe-Rust compatible.
+ *
+ * [x] It preserves the `quantum::ir` semantic boundary.
+ *
+ * [x] It provides a stable integration point for the root parser.
+ *
+ * [x] Future dialects can be introduced without modifying this file.
+ *
+ * [x] Dialect implementation can evolve behind the registration boundary.
+ *
+ * ============================================================================
+ */
