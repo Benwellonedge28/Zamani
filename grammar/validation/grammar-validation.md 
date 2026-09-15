@@ -1,0 +1,3888 @@
+Zamani Grammar Validation
+
+Path: "grammar/validation/grammar-validation.md"
+Status: Normative production specification
+Language: Zamani
+Grammar technology: ANTLR4
+Compiler implementation target: Rust 1.97 / Rust 1.97.1
+Safety requirement: "unsafe" Rust is prohibited
+Scope: Repository-wide grammar validation and integration contract
+
+---
+
+1. Purpose
+
+This document defines the production validation contract for the Zamani grammar.
+
+It governs validation of:
+
+- lexical correctness;
+- syntactic correctness;
+- grammar determinism;
+- ambiguity;
+- semantic boundaries;
+- type-independent syntax;
+- type-dependent validation;
+- resource expressions;
+- capability expressions;
+- quantum syntax;
+- classical syntax;
+- HDL syntax;
+- hardware syntax;
+- hybrid computation;
+- distributed computation;
+- AI/data syntax;
+- compilation directives;
+- interoperability;
+- dialects;
+- macros;
+- metaprogramming;
+- versioning;
+- compatibility;
+- scalability;
+- diagnostics;
+- source locations;
+- generated parser integration;
+- AST construction;
+- IR lowering;
+- repository integration;
+- negative testing;
+- determinism testing;
+- round-trip testing.
+
+This document is normative for the validation architecture.
+
+It does not redefine Zamani's canonical IRs.
+
+---
+
+2. Fundamental Rule
+
+Zamani source code describes computation, semantics, intent, capabilities, constraints, and requirements.
+
+It must not accidentally describe the accidental limitations of the machine on which it happens to execute.
+
+The core rule is:
+
+SOURCE PROGRAM
+     |
+     v
+SYNTAX
+     |
+     v
+AST / SOURCE SEMANTICS
+     |
+     v
+SEMANTIC VALIDATION
+     |
+     v
+CANONICAL IR
+     |
+     +----------------+
+     |                |
+     v                v
+CLASSICAL IR      quantum::ir
+     |                |
+     +--------+-------+
+              |
+              v
+       OPTIMIZATION
+              |
+              v
+       ROUTING / PLACEMENT
+              |
+              v
+        SCHEDULING
+              |
+              v
+     HARDWARE / TARGET
+              |
+              v
+          RUNTIME
+
+Grammar validation must never bypass this architecture.
+
+---
+
+3. Repository Integration Contract
+
+The grammar is a frontend concern.
+
+It owns:
+
+- source syntax;
+- lexical structure;
+- parse-tree structure;
+- syntax diagnostics;
+- source spans;
+- grammar-level version recognition;
+- syntactic feature availability.
+
+It does not own:
+
+- hardware discovery;
+- calibration;
+- machine topology;
+- physical qubit allocation;
+- physical scheduling;
+- optimization algorithms;
+- QEC algorithms;
+- noise models;
+- runtime resource accounting;
+- backend execution;
+- simulation;
+- canonical quantum IR semantics.
+
+In particular:
+
+"quantum::ir" remains the canonical semantic quantum boundary.
+
+The grammar must lower quantum syntax into the repository's semantic frontend representation and subsequently into "quantum::ir".
+
+The grammar must not introduce a competing quantum gate, qubit, circuit, or operation representation.
+
+---
+
+4. Rust Safety Contract
+
+All Rust code supporting grammar validation must compile with:
+
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+No validation component may require:
+
+unsafe
+unsafe fn
+unsafe { ... }
+
+No FFI boundary may be introduced merely to make grammar validation work.
+
+If a future dependency requires unsafe internally, that dependency must not cause Zamani's own validation layer to expose or require unsafe Rust.
+
+The public validation API must remain safe Rust.
+
+---
+
+5. Rust Version Contract
+
+The repository currently declares Rust compatibility as:
+
+Rust 1.97 / Rust 1.97.1
+
+The final "Cargo.toml" value must be normalized to one valid Rust version requirement.
+
+This is a repository issue that must not remain represented as:
+
+rust-version = "1.97" or "1.97.1"
+
+because that is not valid Cargo version syntax.
+
+The final repository must choose:
+
+rust-version = "1.97"
+
+or:
+
+rust-version = "1.97.1"
+
+according to the repository's actual minimum-supported compiler policy.
+
+The grammar validation implementation must compile on that exact MSRV.
+
+---
+
+6. Grammar Authority
+
+There must be exactly one normative ANTLR grammar authority.
+
+The production relationship is:
+
+grammar/Zamani.g4
+        |
+        +--> generated lexer/parser
+        |
+        +--> grammar documentation
+        |
+        +--> parser tests
+        |
+        +--> compatibility tests
+
+"grammar/Zamani.g4" is the authoritative grammar source unless the repository explicitly establishes another grammar file as the canonical source.
+
+"Zamani-Grammar.md" and "grammar.md" must never silently become competing grammars.
+
+Documentation may describe grammar.
+
+Documentation must not independently define a conflicting grammar.
+
+---
+
+7. Documentation Consistency
+
+Every documented production must belong to one of:
+
+1. implemented;
+2. planned;
+3. deprecated;
+4. removed;
+5. intentionally reserved.
+
+Documentation must never claim a construct is implemented when the parser does not accept it.
+
+Likewise, a production must not exist in the grammar without being classified.
+
+Required consistency states:
+
+DOCUMENTED + IMPLEMENTED
+DOCUMENTED + PLANNED
+DOCUMENTED + DEPRECATED
+DOCUMENTED + RESERVED
+
+Forbidden state:
+
+DOCUMENTED + NONEXISTENT + PRESENTED AS IMPLEMENTED
+
+---
+
+8. Existing Grammar Problems That Must Be Rejected
+
+The current grammar contains several patterns that cannot survive production validation.
+
+These include:
+
+- duplicated declaration alternatives;
+- duplicated operators;
+- malformed operator alternatives;
+- inconsistent naming conventions;
+- fixed hardware assumptions;
+- fixed quantum gate sets;
+- fixed tensor dimensions;
+- fixed matrix/vector dimensions;
+- syntax that mixes target semantics with source semantics;
+- grammar-level "unsafe" despite the repository's no-unsafe requirement;
+- multiple competing documentation grammars;
+- feature families without explicit semantic ownership;
+- target-specific concepts embedded directly into universal source syntax;
+- constructs that cannot be deterministically lowered;
+- constructs with no semantic validation owner;
+- constructs with no compatibility policy.
+
+Validation must prevent these patterns from reappearing.
+
+---
+
+9. Duplicate Production Rule
+
+No grammar production may have duplicate alternatives with identical meaning.
+
+For example, a rule equivalent to:
+
+assignmentExpr
+    : logicalOrExpr
+      (
+          '='
+        | '+='
+        | '-='
+        | '='
+        | '/='
+      )
+      expression
+    ;
+
+is invalid because "=" appears twice.
+
+The production must contain each operator exactly once.
+
+---
+
+10. Empty Operator Rule
+
+No operator production may contain an accidental empty literal.
+
+For example:
+
+multiplicativeExpr
+    : unaryExpr (('' | '/' | '%') unaryExpr)*
+    ;
+
+is invalid.
+
+An empty operator is indistinguishable from concatenation and can introduce catastrophic ambiguity.
+
+The production must use an explicit operator set such as:
+
+multiplicativeExpr
+    : unaryExpr (('*' | '/' | '%') unaryExpr)*
+    ;
+
+unless the language deliberately defines another operator.
+
+Every operator must have:
+
+- token identity;
+- precedence;
+- associativity;
+- semantic meaning;
+- diagnostics;
+- tests.
+
+---
+
+11. Duplicate Declaration Rule
+
+A declaration must not be included multiple times in the same alternative set.
+
+For example:
+
+declaration
+    : moduleDecl
+    | ...
+    | moduleDecl
+    ;
+
+is invalid.
+
+Every declaration kind must have exactly one syntactic ownership point.
+
+---
+
+12. Expression Precedence
+
+Expression precedence must be explicit.
+
+The grammar must define a deterministic hierarchy.
+
+The recommended conceptual hierarchy is:
+
+assignment
+logical-or
+logical-and
+bitwise-or
+bitwise-xor
+bitwise-and
+equality
+relational
+shift
+additive
+multiplicative
+power
+unary
+postfix
+primary
+
+The exact set may evolve, but precedence must never depend on parser accident.
+
+Each operator must have:
+
+- precedence;
+- associativity;
+- parse-tree behavior;
+- semantic category;
+- diagnostic behavior;
+- round-trip representation.
+
+---
+
+13. Assignment Validation
+
+Assignment operators must be unique.
+
+At minimum distinguish:
+
+=
++=
+-=
+*=
+/=
+%=
+&=
+|=
+^=
+<<=
+>>=
+
+Additional operators may be added only through the language specification.
+
+Assignment syntax must not imply that every value is mutable.
+
+Mutability belongs to semantic/type validation.
+
+---
+
+14. Identifier Validation
+
+Identifiers must have exactly one canonical lexical representation.
+
+There must not be competing:
+
+ID
+IDENTIFIER
+NAME
+IDENT
+
+tokens representing the same lexical concept unless one is explicitly an alias outside the lexer.
+
+The parser should consume one canonical identifier token.
+
+Identifier rules must specify:
+
+- Unicode policy;
+- ASCII compatibility;
+- normalization policy;
+- reserved words;
+- contextual keywords;
+- escape policy;
+- case sensitivity;
+- identifier length/resource policy.
+
+Identifier size must not be restricted by an arbitrary small grammar constant.
+
+---
+
+15. Keyword Validation
+
+Keywords must be centrally classified.
+
+Every keyword must belong to:
+
+- reserved keyword;
+- contextual keyword;
+- soft keyword;
+- future reserved keyword.
+
+A keyword must not accidentally lex as an identifier where that changes program meaning.
+
+Keyword additions require:
+
+- grammar update;
+- compatibility review;
+- documentation;
+- positive test;
+- negative test;
+- migration consideration.
+
+---
+
+16. Literal Validation
+
+Literal syntax must be deterministic.
+
+The grammar must separately define:
+
+- integer literals;
+- floating-point literals;
+- boolean literals;
+- character literals;
+- string literals;
+- byte literals;
+- duration literals;
+- size/quantity literals;
+- quantum literals where required;
+- hardware literals only where they represent language semantics.
+
+Literal parsing must not impose artificial maximum values.
+
+For example, the grammar may parse an arbitrarily large integer literal.
+
+Its representability is a semantic/compiler/backend concern.
+
+---
+
+17. Numeric Literal Rule
+
+Numeric literal validation must separate:
+
+lexical form
+
+from:
+
+representable numeric type
+
+A source literal must not be rejected merely because the host compiler's native integer type cannot immediately represent it.
+
+The semantic layer may later diagnose overflow or require an arbitrary-precision representation.
+
+---
+
+18. String Validation
+
+String syntax must define:
+
+- ordinary strings;
+- escaped strings;
+- raw strings;
+- Unicode;
+- byte strings;
+- interpolation if supported.
+
+Escape processing belongs to lexical/AST processing.
+
+Filesystem/network access must never be triggered by parsing a string.
+
+A string that resembles:
+
+file://...
+http://...
+device://...
+qpu://...
+
+is still merely source data unless a later semantic construct explicitly gives it meaning.
+
+---
+
+19. Resource-Independent Validation
+
+Grammar validation must never contain:
+
+MAX_QUBITS
+MAX_CORES
+MAX_THREADS
+MAX_GPUS
+MAX_DEVICES
+MAX_NODES
+MAX_MEMORY
+MAX_TENSOR_RANK
+MAX_MATRIX_SIZE
+
+as language syntax limits.
+
+A grammar may have parser implementation safeguards against denial-of-service conditions, but such safeguards are:
+
+parser security limits
+
+not:
+
+language semantic limits
+
+They must therefore be configurable and clearly separated.
+
+---
+
+20. Infinite-Scale Principle
+
+"Infinite" scalability means:
+
+no language-defined artificial finite machine limit
+
+It does not mean:
+
+physical execution without finite resources
+
+Therefore the validator must allow programs whose requirements exceed the current target.
+
+For example:
+
+requires qubits(count)
+
+may be semantically valid even if the currently selected backend has insufficient qubits.
+
+The compiler/runtime may then report:
+
+target cannot satisfy requirement
+
+rather than:
+
+invalid Zamani program
+
+unless the requirement itself is semantically contradictory.
+
+---
+
+21. Requirement vs Capability
+
+These must never be conflated.
+
+A requirement states:
+
+what the program needs
+
+A capability states:
+
+what a target can provide
+
+A preference states:
+
+what the developer would prefer
+
+A constraint states:
+
+what must not be violated
+
+A hint states:
+
+what the compiler may consider
+
+The grammar must preserve these distinctions.
+
+---
+
+22. Target Independence
+
+Source syntax must not require a concrete hardware target unless hardware targeting is explicitly part of the program's semantics.
+
+Invalid universal-language design:
+
+run_on_qubit_0
+run_on_gpu_3
+use_cpu_core_7
+device = "specific-qpu"
+
+Preferred abstraction:
+
+requires quantum;
+requires capability("entanglement");
+requires resource(qubits, count);
+
+Target mapping occurs later.
+
+---
+
+23. Quantum Validation
+
+Quantum grammar must remain backend independent.
+
+The grammar may express:
+
+- qubits;
+- logical qubits;
+- registers;
+- quantum operations;
+- parameterized operations;
+- controlled operations;
+- measurement;
+- reset;
+- barriers;
+- dynamic control;
+- classical conditions;
+- observables;
+- quantum state expressions;
+- quantum resources;
+- QEC intent;
+- quantum capabilities.
+
+It must not hard-code a physical topology.
+
+---
+
+24. Quantum Gate Rule
+
+A fixed list such as:
+
+Hadamard
+CNOT
+PauliX
+PauliY
+PauliZ
+T
+S
+Swap
+
+must not be the architectural ceiling of Zamani.
+
+Those may be recognized built-in operations, but the grammar must support extensible operation identifiers or a formally extensible operation namespace.
+
+The semantic layer determines whether an operation exists and whether a target can implement it.
+
+---
+
+25. Quantum Index Rule
+
+Syntax must never silently introduce:
+
+q[0]
+q[1]
+
+as universal assumptions.
+
+A qubit reference is a semantic reference.
+
+Physical allocation is a later compilation responsibility.
+
+The grammar may parse:
+
+q[i]
+q[index]
+register[index]
+logical_qubit
+
+without assigning physical identity.
+
+---
+
+26. Quantum Resource Rule
+
+Quantum resource requirements must be expressions.
+
+The grammar must not encode:
+
+QReg[32]
+
+as a maximum.
+
+A declaration such as:
+
+QReg[n]
+
+means a program-level resource whose size is determined by "n".
+
+Target feasibility is checked later.
+
+---
+
+27. Logical vs Physical Qubits
+
+The language must distinguish:
+
+logical qubit
+
+from:
+
+physical qubit
+
+where the distinction has semantic meaning.
+
+A source-level logical qubit must not become a physical qubit merely because the first available backend has one.
+
+Physical mapping belongs to:
+
+routing
+placement
+hardware abstraction
+scheduling
+
+not grammar validation.
+
+---
+
+28. Quantum IR Integration
+
+The validation pipeline is:
+
+Zamani quantum syntax
+        |
+        v
+parse tree
+        |
+        v
+validated source AST
+        |
+        v
+quantum semantic lowering
+        |
+        v
+quantum::ir
+
+"quantum::ir" owns canonical semantic quantum operations.
+
+The grammar must not define a second:
+
+QuantumGate
+QubitId
+QuantumCircuit
+QuantumOperation
+
+representation if equivalent canonical types already exist.
+
+---
+
+29. QEC Integration
+
+Grammar validation may validate the syntax of QEC intent.
+
+It must not implement:
+
+- syndrome extraction;
+- decoding;
+- MWPM;
+- Union-Find;
+- stabilizer algebra;
+- correction algorithms.
+
+Those remain owned by QEC.
+
+The grammar can express intent such as:
+
+use qec ...
+requires fault_tolerance ...
+
+but semantic lowering must connect that intent to the QEC subsystem.
+
+---
+
+30. ZQN Integration
+
+ZQN owns quantum noise/fault semantics.
+
+Grammar validation must not create a competing noise model.
+
+The grammar may express:
+
+noise-aware
+fault model
+error channel requirement
+fault tolerance requirement
+
+only where those are genuine Zamani language concepts.
+
+Actual:
+
+- channel definitions;
+- fault classification;
+- correlated faults;
+- leakage;
+- loss;
+- erasure;
+- calibration-dependent noise
+
+remain ZQN concerns.
+
+---
+
+31. Scheduling Integration
+
+The grammar may express scheduling intent.
+
+It must not encode physical scheduling decisions.
+
+For example:
+
+schedule intent
+timing requirement
+ordering constraint
+latency constraint
+synchronization requirement
+
+may be valid source semantics.
+
+But:
+
+execute gate X at hardware cycle 17
+
+must not become a universal semantic requirement unless explicitly declared as hardware-specific source intent.
+
+The scheduler consumes the resulting semantic representation.
+
+---
+
+32. Optimization Integration
+
+Grammar syntax may express optimization preferences or constraints.
+
+It must not implement optimization.
+
+Examples of acceptable source concepts:
+
+optimize for energy
+prefer low latency
+preserve numerical tolerance
+prefer portability
+
+The optimization subsystem decides how to satisfy them.
+
+---
+
+33. Hardware Integration
+
+Hardware grammar must describe hardware semantics when hardware description is explicitly being written.
+
+It must not silently contaminate ordinary application code with target-specific assumptions.
+
+Hardware declarations must distinguish:
+
+interface
+capability
+resource
+timing
+implementation
+placement
+target
+
+A hardware description may contain concrete implementation details.
+
+A portable program must not acquire those details merely by using a hardware-capable feature.
+
+---
+
+34. HDL Validation
+
+HDL validation must support:
+
+- modules;
+- ports;
+- signals;
+- wires;
+- registers;
+- clocks;
+- combinational logic;
+- sequential logic;
+- state machines;
+- processes;
+- memories;
+- pipelines;
+- interfaces;
+- timing;
+- parameterization.
+
+Widths, depths, counts, and topology should normally be parameterized.
+
+For example:
+
+WIDTH
+DEPTH
+LANES
+CHANNELS
+
+must be semantic parameters rather than grammar constants.
+
+---
+
+35. Hardware Parameter Rule
+
+Hardware parameters must be evaluated semantically.
+
+The grammar may parse:
+
+parameter WIDTH
+parameter DEPTH
+parameter LANES
+
+without imposing maximums.
+
+Target synthesis may reject an infeasible configuration.
+
+---
+
+36. Classical Validation
+
+Classical syntax must support scalable:
+
+- scalar computation;
+- structured data;
+- vectors;
+- matrices;
+- tensors;
+- generic functions;
+- concurrency;
+- parallelism;
+- numerical computation;
+- symbolic computation.
+
+A grammar construct must not assume a host architecture such as:
+
+64-bit only
+x86 only
+ARM only
+little-endian only
+
+unless explicitly represented as target-specific source intent.
+
+---
+
+37. Tensor Validation
+
+Tensor dimensions must be expressions or type-level values.
+
+Invalid:
+
+tensor T<32,32,32>
+
+as an implicit language limit.
+
+Valid:
+
+tensor T<D0,D1,D2>
+
+where dimensions are semantic values.
+
+The grammar must not restrict tensor rank to a small fixed number merely for convenience.
+
+---
+
+38. Matrix and Vector Validation
+
+Matrix/vector syntax must distinguish:
+
+element type
+shape
+storage
+layout
+target implementation
+
+Shape belongs to program semantics.
+
+Storage layout and hardware realization belong to later compilation unless explicitly requested.
+
+---
+
+39. Generic Programming
+
+Generic constructs must be syntactically unbounded except for implementation resource limits.
+
+The grammar must support:
+
+- generic types;
+- generic functions;
+- constraints;
+- associated requirements;
+- parameterized resources;
+- type-level values where supported.
+
+Generic syntax must not encode a fixed number of type parameters.
+
+---
+
+40. Type Validation Boundary
+
+The grammar validates type syntax.
+
+The semantic/type checker validates:
+
+- type existence;
+- compatibility;
+- ownership;
+- mutability;
+- generic constraints;
+- resource semantics;
+- quantum/classical separation;
+- effect compatibility.
+
+The grammar must not duplicate the type checker.
+
+---
+
+41. Effects
+
+Effects must be syntactically explicit when the language requires them.
+
+Examples:
+
+io
+network
+quantum
+hardware
+distributed
+security
+
+Effects are semantic declarations.
+
+The grammar must not determine whether a backend can actually perform an effect.
+
+That is capability checking.
+
+---
+
+42. Capability Validation
+
+Capabilities are not devices.
+
+A source program may require:
+
+capability("quantum")
+capability("fpga")
+capability("distributed")
+
+without identifying a device.
+
+The capability resolver later determines whether a target satisfies the requirement.
+
+---
+
+43. Resource Expressions
+
+Resource syntax must support symbolic resource requirements.
+
+Conceptually:
+
+resource(name, quantity)
+
+where quantity may depend on:
+
+- program parameters;
+- input sizes;
+- compile-time values;
+- runtime values where permitted.
+
+The grammar must not require concrete machine counts.
+
+---
+
+44. Constraints
+
+Constraints must express program correctness or execution requirements.
+
+Examples:
+
+latency <= L
+energy <= E
+error_rate <= R
+memory >= M
+fidelity >= F
+
+Threshold values must not be hard-coded into the grammar.
+
+Policy defaults belong to policy/configuration layers.
+
+---
+
+45. Preferences
+
+Preferences are non-binding unless explicitly upgraded to constraints.
+
+Examples:
+
+prefer low_energy
+prefer low_latency
+prefer portability
+prefer quantum
+
+A backend may choose another implementation if semantics remain valid.
+
+---
+
+46. Hints
+
+Hints must never silently become requirements.
+
+A hint must be distinguishable from:
+
+requirement
+constraint
+preference
+
+This distinction is essential for portability.
+
+---
+
+47. Compilation Directives
+
+Compilation constructs may express:
+
+- optimization intent;
+- target requirements;
+- feature selection;
+- conditional compilation;
+- lowering preferences;
+- code generation requirements.
+
+They must not force a backend-specific implementation unless explicitly target-scoped.
+
+---
+
+48. Runtime Directives
+
+Runtime constructs may express:
+
+- execution context;
+- dynamic resource requirements;
+- dispatch;
+- synchronization;
+- deployment intent.
+
+Runtime behavior must remain semantically separate from parser syntax.
+
+---
+
+49. Interoperability
+
+Foreign-function and interoperability syntax must be explicit.
+
+Supported interfaces may include:
+
+- C;
+- C++;
+- Rust;
+- Python;
+- OpenQASM;
+- HDL;
+- ABI;
+- FFI.
+
+However, interoperability syntax must not cause the core language grammar to depend on the complete grammar of every foreign language.
+
+Foreign languages should have adapters/importers/exporters.
+
+---
+
+50. OpenQASM Integration
+
+OpenQASM is an interoperability language, not Zamani's canonical semantic model.
+
+The architecture should be:
+
+OpenQASM
+   |
+   v
+OpenQASM frontend
+   |
+   v
+Zamani semantic representation
+   |
+   v
+quantum::ir
+
+rather than:
+
+Zamani grammar
+   |
+   v
+OpenQASM grammar semantics
+
+OpenQASM timing and pulse constructs may be imported where supported, but target-specific timing must not become a universal Zamani assumption.
+
+---
+
+51. Macro Validation
+
+Macros must have deterministic parsing boundaries.
+
+Macro expansion must not:
+
+- bypass validation;
+- introduce invalid syntax silently;
+- change source semantics invisibly;
+- create undeclared capabilities;
+- bypass security boundaries.
+
+Expansion should be:
+
+source
+ -> parse
+ -> macro validation
+ -> expansion
+ -> parse/validate expanded syntax
+
+as appropriate for the macro model.
+
+---
+
+52. Metaprogramming
+
+Compile-time execution must be distinguishable from runtime execution.
+
+The grammar must not make compile-time code capable of silently modifying unrelated compiler state.
+
+Metaprogramming must have:
+
+- deterministic inputs;
+- declared capabilities;
+- explicit outputs;
+- bounded compiler resources;
+- diagnostics;
+- reproducibility requirements.
+
+---
+
+53. Dialects
+
+Dialect syntax must be namespace-aware.
+
+A dialect must not silently redefine a core Zamani keyword.
+
+Dialect registration requires:
+
+- name;
+- version;
+- namespace;
+- ownership;
+- compatibility;
+- feature set;
+- semantic lowering contract.
+
+Unknown dialect constructs must produce diagnostics rather than parser corruption.
+
+---
+
+54. Version Validation
+
+Every source unit must have an unambiguous language-version interpretation.
+
+Version syntax must support:
+
+- explicit version;
+- default version;
+- compatibility policy;
+- deprecation;
+- migration.
+
+A parser must never silently reinterpret an old program under incompatible new syntax.
+
+---
+
+55. Backward Compatibility
+
+Grammar evolution must follow:
+
+add
+  |
+  v
+document
+  |
+  v
+test
+  |
+  v
+deprecate if necessary
+  |
+  v
+migration
+  |
+  v
+remove only under declared policy
+
+Breaking grammar changes require:
+
+- versioning;
+- migration documentation;
+- negative tests for old invalid forms;
+- compatibility tests for preserved forms.
+
+---
+
+56. Error Recovery
+
+Parser error recovery must not fabricate semantic success.
+
+Recovered parse trees must be marked as invalid/incomplete where necessary.
+
+The compiler must never lower a malformed program into a valid executable representation merely because ANTLR recovered from a syntax error.
+
+---
+
+57. Diagnostics
+
+Every syntax error should provide, where possible:
+
+- source location;
+- offending token;
+- expected syntax;
+- actual syntax;
+- stable diagnostic category;
+- actionable explanation.
+
+Diagnostics must not expose internal implementation details unnecessarily.
+
+Diagnostics must remain deterministic.
+
+---
+
+58. Source Spans
+
+Every AST node that can produce a user-facing diagnostic should retain source span information.
+
+At minimum:
+
+file
+start offset
+end offset
+line
+column
+
+The grammar layer owns source positions.
+
+Semantic layers consume them.
+
+---
+
+59. Error Categories
+
+Grammar diagnostics should distinguish:
+
+lexical error
+syntax error
+unsupported syntax
+version error
+ambiguity error
+invalid annotation
+invalid dialect
+invalid macro syntax
+
+Semantic diagnostics belong to the semantic layer.
+
+Resource feasibility errors belong to resource/target validation.
+
+---
+
+60. Parser Determinism
+
+The same source bytes must produce the same:
+
+tokens
+parse tree
+diagnostic ordering
+source spans
+AST
+
+independent of:
+
+- machine size;
+- CPU count;
+- backend;
+- hardware;
+- network;
+- runtime state.
+
+---
+
+61. Deterministic Diagnostic Ordering
+
+When multiple diagnostics exist, ordering must be deterministic.
+
+Recommended ordering:
+
+1. source location;
+2. severity;
+3. stable diagnostic code;
+4. secondary location;
+5. message tie-breaker.
+
+Do not depend on hash-map iteration order.
+
+Use deterministic collections where ordering affects externally observable results.
+
+---
+
+62. Resource Limits vs Language Limits
+
+Parser safety limits are permitted.
+
+They must be represented as configurable infrastructure limits, not language semantics.
+
+For example:
+
+maximum parser nesting depth
+maximum source byte count
+maximum diagnostic count
+maximum macro expansion depth
+
+may exist for denial-of-service protection.
+
+But:
+
+maximum qubits = 64
+
+must not exist as a grammar semantic restriction.
+
+---
+
+63. Resource Exhaustion
+
+Resource exhaustion must produce a distinct failure category.
+
+It must not be reported as:
+
+invalid syntax
+
+when the syntax is valid.
+
+For example:
+
+valid program
++
+insufficient target memory
+=
+target/resource failure
+
+not:
+
+syntax error
+
+---
+
+64. Compile-Time Resource Validation
+
+Compile-time resource checks may determine whether the compiler can process a program.
+
+They must not change the language's semantic validity.
+
+A compiler unable to process an enormous valid program due to finite host resources must report an implementation/resource failure.
+
+---
+
+65. Runtime Resource Validation
+
+Runtime resource validation belongs outside grammar validation.
+
+Examples:
+
+- available memory;
+- number of CPUs;
+- available GPUs;
+- available QPUs;
+- available FPGA resources;
+- network capacity.
+
+The grammar remains independent of those values.
+
+---
+
+66. Quantum Scalability Tests
+
+The grammar test suite must test symbolic quantum sizes.
+
+Examples must cover:
+
+1 qubit
+2 qubits
+many qubits
+parameterized qubit counts
+symbolic register sizes
+nested quantum resources
+
+Tests must specifically verify that no hidden small maximum exists.
+
+The test suite must not pretend that "infinity" can be physically instantiated.
+
+Instead it validates:
+
+absence of language-level artificial limits
+
+---
+
+67. Classical Scalability Tests
+
+Equivalent tests must cover:
+
+- vectors;
+- matrices;
+- tensors;
+- generic collections;
+- loops;
+- nested scopes;
+- functions;
+- modules;
+- concurrency;
+- distributed resources.
+
+The parser must remain independent of physical resource counts.
+
+---
+
+68. HDL Scalability Tests
+
+Test parameterized:
+
+- widths;
+- depths;
+- lanes;
+- channels;
+- ports;
+- pipeline stages;
+- memories;
+- modules.
+
+No production grammar test may define a hidden architecture maximum.
+
+---
+
+69. Distributed Scalability
+
+Distributed syntax must represent:
+
+node requirements
+service requirements
+communication requirements
+replication intent
+placement constraints
+
+without hard-coding node counts.
+
+A source program must not require:
+
+node0
+node1
+node2
+
+unless these are explicitly declared semantic identities.
+
+---
+
+70. Cross-Domain Validation
+
+Required integration tests include:
+
+classical + quantum
+classical + HDL
+quantum + HDL
+quantum + hardware
+quantum + distributed
+AI + quantum
+AI + hardware
+classical + quantum + distributed
+classical + quantum + HDL + hardware
+
+Each combination must have:
+
+- positive syntax test;
+- negative syntax test;
+- semantic boundary test;
+- lowering integration test where implemented.
+
+---
+
+71. AST Boundary
+
+The parser produces syntax.
+
+The AST represents validated source structure.
+
+The AST must not become a replacement for canonical IRs.
+
+For quantum:
+
+parser
+  -> AST
+  -> semantic validation
+  -> quantum::ir
+
+For other domains, equivalent canonical IR boundaries must be respected.
+
+---
+
+72. No Duplicate Domain Types
+
+Validation must reject architecture that introduces duplicate domain identities.
+
+Examples include independently defined:
+
+QubitId
+PhysicalQubitId
+Gate
+QuantumGate
+QuantumOperation
+ResourceId
+DeviceId
+
+where canonical repository types already exist.
+
+The grammar may define syntax names, but canonical domain types belong to their owning subsystem.
+
+---
+
+73. Semantic Ownership Matrix
+
+Concern| Grammar| Semantic Layer| Canonical Subsystem
+Tokens| Owns| —| —
+Syntax| Owns| —| —
+Source spans| Owns| Consumes| —
+Types| Parses| Owns meaning| Type system
+Quantum syntax| Owns| Validates| "quantum::ir"
+QEC algorithms| No| No| QEC
+Noise| No| Interprets references| ZQN
+Scheduling| Syntax only| Intent| Scheduling
+Optimization| Syntax only| Intent| Optimization
+Hardware discovery| No| No| Hardware HAL
+Routing| No| No| Routing
+Runtime execution| No| No| Runtime
+Resources| Syntax| Validity| Resource manager
+Capabilities| Syntax| Validity| Capability layer
+FFI| Syntax| ABI semantics| Interop
+Diagnostics| Syntax diagnostics| Semantic diagnostics| Compiler
+
+---
+
+74. Grammar Must Not Execute Code
+
+Parsing and grammar validation must not:
+
+- execute user programs;
+- contact hardware;
+- contact networks;
+- access arbitrary files;
+- submit QPU jobs;
+- query calibration;
+- modify machine state;
+- invoke arbitrary foreign code.
+
+The grammar frontend is a pure source-processing boundary.
+
+---
+
+75. Security
+
+Grammar validation must treat source code as untrusted input.
+
+Required protections include:
+
+- bounded parser recursion where technically required;
+- controlled macro expansion;
+- diagnostic count limits;
+- source-size limits as infrastructure controls;
+- no arbitrary filesystem access;
+- no network access;
+- no command execution;
+- no unsafe Rust;
+- deterministic processing.
+
+Security controls must not alter language semantics.
+
+---
+
+76. Reproducibility
+
+Parsing the same source with the same grammar version must produce identical results.
+
+Build metadata must not influence syntax.
+
+Environment variables must not silently change grammar semantics.
+
+Hardware must not influence parsing.
+
+---
+
+77. Environment Independence
+
+The parser must not behave differently because:
+
+- GPU count changed;
+- QPU changed;
+- CPU architecture changed;
+- memory size changed;
+- machine topology changed;
+- runtime backend changed.
+
+Target selection occurs after semantic parsing.
+
+---
+
+78. Test Classification
+
+Every grammar feature must have at least:
+
+Positive
+
+Valid syntax.
+
+Negative
+
+Invalid syntax.
+
+Boundary
+
+Minimum and large symbolic structures.
+
+Regression
+
+Previously discovered bugs.
+
+Compatibility
+
+Version behavior.
+
+Determinism
+
+Repeated parsing.
+
+Round-trip
+
+Parse/print/parse where supported.
+
+Integration
+
+Interaction with downstream semantic layers.
+
+---
+
+79. Golden Tests
+
+Stable source examples should have expected:
+
+- token streams where appropriate;
+- parse trees where appropriate;
+- diagnostics;
+- AST serialization;
+- semantic representation.
+
+Golden outputs must be versioned.
+
+Changes must be reviewed rather than silently regenerated.
+
+---
+
+80. Fuzz Testing
+
+The grammar frontend should be fuzz-tested for:
+
+- crashes;
+- hangs;
+- excessive memory growth;
+- infinite recovery;
+- non-determinism;
+- malformed Unicode;
+- deeply nested expressions;
+- malformed comments;
+- malformed strings;
+- malformed numeric literals;
+- malformed quantum syntax;
+- malformed HDL syntax.
+
+Fuzzing must not require unsafe Rust in Zamani.
+
+---
+
+81. Property Testing
+
+Properties should include:
+
+parse(source) is deterministic
+valid(source) => parse succeeds
+invalid(source) => diagnostic exists
+parse(print(parse(source))) preserves structure
+
+where the printer is defined for that representation.
+
+---
+
+82. Round-Trip Validation
+
+For supported syntax:
+
+source
+  -> parse
+  -> AST
+  -> canonical printer
+  -> parse
+
+must preserve semantic structure.
+
+Whitespace and formatting need not be preserved.
+
+Meaning must be preserved.
+
+---
+
+83. Canonical Formatting
+
+Formatting must not change semantics.
+
+Formatting must not:
+
+- select a hardware target;
+- change qubit allocation;
+- change scheduling;
+- alter resource requirements;
+- alter capability requirements.
+
+---
+
+84. Versioned Grammar Artifacts
+
+Generated parser artifacts must never be treated as hand-maintained source.
+
+The source of truth remains the grammar specification.
+
+Generated artifacts must contain provenance identifying:
+
+- grammar version;
+- generator version;
+- generation mode;
+- source grammar;
+- generation timestamp if useful for diagnostics, but not for semantic determinism.
+
+---
+
+85. ANTLR Integration
+
+The ANTLR grammar must be validated in CI.
+
+Required checks:
+
+ANTLR grammar generation succeeds
+lexer generation succeeds
+parser generation succeeds
+generated sources compile
+parser tests pass
+negative tests pass
+
+Grammar generation failures are production failures.
+
+---
+
+86. Generated Code Boundary
+
+Generated ANTLR code must not be manually patched.
+
+If generated code is wrong:
+
+fix grammar
+
+rather than:
+
+patch generated parser
+
+Generated files should be reproducible.
+
+---
+
+87. Rust Integration
+
+The Rust frontend should expose a stable abstraction similar in responsibility to:
+
+source
+  -> lexer
+  -> parser
+  -> diagnostics
+  -> AST
+  -> semantic validation
+
+The exact repository module names may differ.
+
+The grammar validation document does not require a particular Rust AST implementation.
+
+---
+
+88. No Unsafe Rust
+
+The entire grammar frontend integration must compile with:
+
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+CI must verify this.
+
+---
+
+89. Error API
+
+Grammar errors should have a stable category boundary.
+
+Conceptually:
+
+LexError
+ParseError
+GrammarVersionError
+RecoveryError
+DiagnosticError
+
+These must not be confused with:
+
+TypeError
+CapabilityError
+ResourceError
+TargetError
+RuntimeError
+
+---
+
+90. Error Conversion
+
+Conversions between error layers must preserve the original cause.
+
+For example:
+
+lexer error
+    ->
+frontend error
+
+must not become a generic:
+
+compiler failed
+
+without preserving source context.
+
+---
+
+91. No Backend Leakage
+
+Grammar validation must not import:
+
+QPU backend
+GPU backend
+FPGA backend
+CPU backend
+cloud backend
+
+merely to parse source code.
+
+Backend dependencies belong downstream.
+
+---
+
+92. No Scheduler Leakage
+
+Grammar validation must not depend on scheduler implementation details.
+
+The grammar may parse:
+
+schedule
+timing
+ordering
+latency
+
+but must not depend on scheduler algorithms.
+
+---
+
+93. No Optimization Leakage
+
+Grammar validation must not invoke:
+
+- peephole optimization;
+- cancellation;
+- T-gate reduction;
+- routing optimization;
+- circuit optimization.
+
+Those happen after semantic lowering.
+
+---
+
+94. No QEC Leakage
+
+Grammar validation must not instantiate:
+
+- decoders;
+- syndrome graphs;
+- QEC schedules;
+- stabilizer algorithms.
+
+The grammar only establishes syntax and intent.
+
+---
+
+95. No ZQN Leakage
+
+Grammar validation must not instantiate noise channels.
+
+ZQN semantics are downstream.
+
+---
+
+96. Capability Resolution
+
+Capability expressions must be represented independently of the current machine.
+
+For example:
+
+requires quantum;
+requires capability("entanglement");
+
+must remain valid even when the current compilation target lacks the capability.
+
+The target resolver later reports feasibility.
+
+---
+
+97. Portability Rule
+
+A source program should remain semantically portable unless it explicitly opts into target-specific semantics.
+
+Portability must be the default.
+
+---
+
+98. Target-Specific Escape Hatch
+
+Target-specific constructs are allowed where necessary, but they must be explicit.
+
+Conceptually:
+
+target-specific {
+    ...
+}
+
+or an equivalent namespaced mechanism.
+
+Such code must be clearly marked as non-portable.
+
+---
+
+99. Portability Diagnostics
+
+When target-specific constructs occur in a supposedly portable compilation unit, diagnostics should identify:
+
+- construct;
+- target dependency;
+- portability consequence;
+- possible portable alternative if known.
+
+---
+
+100. Resource Availability
+
+The language must distinguish:
+
+program requires resource
+
+from:
+
+resource is currently available
+
+This is fundamental to POCO-REAF.
+
+---
+
+101. POCO-REAF Validation
+
+The grammar passes the POCO-REAF validation requirement if:
+
+1. source semantics do not require a fixed machine;
+2. resource quantities can remain symbolic;
+3. target details are separated;
+4. canonical IR preserves semantics;
+5. downstream compilation can adapt implementation;
+6. hardware feasibility is checked after parsing;
+7. syntax does not impose artificial physical limits.
+
+---
+
+102. Compile-Once Semantics
+
+"Compile once" must not mean that one physical binary can execute unchanged on every architecture.
+
+It means the semantic compilation artifact must preserve enough target-independent information for downstream realization.
+
+The grammar must therefore preserve:
+
+- semantic intent;
+- requirements;
+- constraints;
+- capabilities;
+- provenance;
+- version information.
+
+---
+
+103. Run-Everywhere Semantics
+
+The validator must never reject a program solely because:
+
+current_target != future_target
+
+unless the source explicitly requires that target.
+
+---
+
+104. Future Hardware
+
+The grammar must be extensible to hardware that does not yet exist.
+
+Do not make the core grammar exhaustive over all possible future machines.
+
+Use extensible:
+
+capabilities
+dialects
+resource expressions
+target descriptions
+operations
+interfaces
+
+instead.
+
+---
+
+105. Future Computing Models
+
+The same principle applies to future computation paradigms.
+
+A future domain should be integrable without rewriting unrelated:
+
+- lexical rules;
+- expressions;
+- statements;
+- types;
+- modules;
+- classical constructs.
+
+---
+
+106. Extension Contract
+
+Every new grammar domain must specify:
+
+syntax owner
+semantic owner
+canonical IR
+resource model
+capability model
+target integration
+diagnostics
+compatibility
+tests
+
+No domain may be added without these contracts.
+
+---
+
+107. Domain Isolation
+
+The following domains must remain independently testable:
+
+classical
+quantum
+hybrid
+HDL
+hardware
+distributed
+AI
+data
+networking
+security
+
+Cross-domain syntax may compose them without forcing their implementations to depend cyclically on each other.
+
+---
+
+108. Dependency Direction
+
+The intended dependency direction is:
+
+specification
+    |
+    v
+lexer
+    |
+    v
+core syntax
+    |
+    v
+types
+    |
+    v
+expressions
+    |
+    v
+statements
+    |
+    v
+domain syntax
+    |
+    v
+AST
+    |
+    v
+semantic validation
+    |
+    v
+canonical IR
+    |
+    v
+compiler
+
+The reverse direction is forbidden.
+
+---
+
+109. Circular Dependency Rule
+
+Forbidden:
+
+grammar -> runtime -> grammar
+grammar -> hardware -> grammar
+grammar -> quantum::ir -> grammar
+
+Allowed:
+
+grammar -> semantic lowering -> quantum::ir
+
+and:
+
+grammar -> resource intent -> resource validation
+
+---
+
+110. File Completion Contract
+
+Each validation-related file must be independently completable.
+
+Before implementation, every file must define:
+
+Purpose
+Owns
+Does Not Own
+Inputs
+Outputs
+Dependencies
+Upstream Contracts
+Downstream Consumers
+AST Contract
+Semantic Contract
+IR Integration
+Compiler Integration
+Runtime Integration
+Tests
+Negative Tests
+Boundary Tests
+Compatibility
+Scalability
+Hard-Coding Audit
+Completion Criteria
+
+No file may rely on an unspecified future redesign.
+
+---
+
+111. Validation Files
+
+The validation directory should contain, where justified:
+
+grammar-validation.md
+semantic-boundaries.md
+ambiguity-rules.md
+scalability-rules.md
+compatibility-rules.md
+naming-rules.md
+hardcoding-audit.md
+
+"grammar-validation.md" is the primary validation contract.
+
+The other documents refine specialized areas and must not contradict this document.
+
+---
+
+112. Hard-Coding Audit
+
+Every grammar change must be checked for:
+
+fixed counts
+fixed dimensions
+fixed device IDs
+fixed topology
+fixed qubit IDs
+fixed core counts
+fixed GPU counts
+fixed node counts
+fixed memory
+fixed register sizes
+fixed timing
+fixed architecture
+
+Every occurrence must be classified.
+
+---
+
+113. Hard-Coding Classification
+
+Each discovered constant must be classified as:
+
+A. Language semantic constant
+
+Required by the language itself.
+
+B. Lexical constant
+
+Required for parsing.
+
+C. Security limit
+
+Protects compiler infrastructure.
+
+D. Representation limit
+
+Required by a particular serialized representation.
+
+E. Target constraint
+
+Belongs to hardware/target validation.
+
+F. Test fixture
+
+Only exists in tests.
+
+G. Accidental hard-code
+
+Must be removed.
+
+---
+
+114. Fixed Mathematical Examples
+
+A rule such as:
+
+matrixDecl
+    : ... INTEGER INTEGER ...
+
+is not automatically a scalability violation.
+
+The question is whether those integers are:
+
+source-provided dimensions
+
+or:
+
+grammar-imposed dimensions
+
+Only the latter is prohibited.
+
+---
+
+115. Fixed Quantum Examples
+
+A rule that accepts:
+
+q[0]
+
+is syntactically valid.
+
+It becomes a scalability violation only if the language itself assumes:
+
+there are exactly q[0] ... q[N]
+
+with an arbitrary fixed "N".
+
+Indices are program data.
+
+Hardware mapping is downstream.
+
+---
+
+116. Fixed Gate Examples
+
+Built-in gates may be defined as standard vocabulary.
+
+But the grammar must permit extension through:
+
+- declarations;
+- namespaces;
+- libraries;
+- dialects;
+- operation identifiers.
+
+The language must not become permanently limited to today's gate vocabulary.
+
+---
+
+117. Validation of Annotations
+
+Annotations must be validated according to ownership.
+
+Core annotations belong to core language semantics.
+
+Domain annotations belong to their domain.
+
+Unknown annotations may be permitted only under an explicit extension policy.
+
+An annotation must not silently change semantics without a declared semantic owner.
+
+---
+
+118. Metadata
+
+Metadata must remain distinct from executable semantics unless explicitly declared semantic.
+
+Compiler metadata may include:
+
+source provenance
+documentation
+optimization hints
+diagnostic information
+tooling information
+
+Metadata must not silently become hardware requirements.
+
+---
+
+119. Comments
+
+Comments are non-semantic unless explicitly designated as structured documentation or directives.
+
+A comment must never be used as a substitute for an actual AST/IR operation.
+
+In particular, a backend must never emit an unimplemented operation as a comment and claim semantic correctness.
+
+---
+
+120. Missing Feature Rule
+
+A syntax feature is not production-ready merely because ANTLR accepts it.
+
+It is production-ready only when:
+
+grammar
++
+AST
++
+semantic validation
++
+IR/lowering
++
+diagnostics
++
+tests
++
+documentation
+
+are complete for that feature.
+
+---
+
+121. Unsupported Feature Rule
+
+If syntax is recognized but semantics are not implemented, the compiler must produce a clear unsupported-feature diagnostic.
+
+It must not silently:
+
+- ignore the construct;
+- turn it into a comment;
+- delete it;
+- approximate it without permission;
+- change its meaning.
+
+---
+
+122. Semantic Preservation
+
+Every lowering must preserve observable program semantics.
+
+For quantum programs, this includes where applicable:
+
+- operation ordering;
+- qubit identity at the logical level;
+- measurement semantics;
+- classical control;
+- reset semantics;
+- parameter values;
+- resource requirements;
+- declared constraints.
+
+---
+
+123. Classical/Quantum Boundary
+
+Classical values and quantum values must have explicit semantic boundaries.
+
+A grammar must not allow ambiguous constructs where the compiler cannot determine whether an identifier refers to:
+
+classical data
+quantum resource
+hardware resource
+runtime resource
+
+without semantic context.
+
+---
+
+124. Hybrid Programs
+
+Hybrid programs must preserve:
+
+quantum -> classical
+classical -> quantum
+measurement -> control
+classical parameter -> quantum operation
+
+relationships explicitly.
+
+The grammar must not require a particular execution architecture.
+
+---
+
+125. Dynamic Quantum Programs
+
+Dynamic circuits must be represented without assuming a fixed runtime implementation.
+
+The language may express:
+
+measure
+if measured condition
+apply operation
+repeat
+while condition
+
+while the backend decides whether and how those operations can execute.
+
+---
+
+126. Timing
+
+Timing syntax must distinguish:
+
+timing intent
+
+from:
+
+physical calibrated duration
+
+The grammar must not assume universal gate durations.
+
+This is particularly important for quantum and HDL programs.
+
+---
+
+127. Duration Literals
+
+Duration literals are semantic values.
+
+Examples:
+
+1 ns
+10 us
+2 ms
+
+must not imply that every backend supports those exact timings.
+
+Target validation determines feasibility.
+
+---
+
+128. Scheduling Constraints
+
+A scheduling constraint may express:
+
+before
+after
+within
+deadline
+latency
+alignment
+synchronization
+
+but must not force a scheduler algorithm.
+
+---
+
+129. Memory Semantics
+
+Memory syntax must distinguish:
+
+logical memory
+physical memory
+allocation policy
+placement
+
+The language may express ownership and lifetime.
+
+Physical allocation belongs downstream.
+
+---
+
+130. Concurrency
+
+Concurrency syntax must not assume:
+
+N threads
+N cores
+
+The number of execution resources is a target/runtime property.
+
+The program describes concurrency semantics.
+
+---
+
+131. Parallelism
+
+Parallel syntax must express:
+
+parallel intent
+data parallelism
+task parallelism
+independent work
+reduction
+
+without imposing physical worker counts.
+
+---
+
+132. Distributed Execution
+
+Distributed syntax must remain independent of the number of nodes.
+
+A program may describe:
+
+replicate
+partition
+shard
+communicate
+place
+migrate
+
+without hard-coding a cluster size.
+
+---
+
+133. Networking
+
+Network syntax must distinguish:
+
+protocol
+endpoint
+message
+transport
+capability
+security requirement
+
+from a concrete machine address.
+
+Addresses may be valid application data but must not become universal hardware assumptions.
+
+---
+
+134. Security Validation
+
+Security syntax must be validated without executing cryptographic operations during parsing.
+
+The grammar may parse:
+
+capability
+permission
+identity
+trust
+cryptographic requirement
+
+but actual cryptographic implementation belongs to the security subsystem.
+
+---
+
+135. Deterministic Hashing and Maps
+
+Where validation needs maps or sets whose iteration affects:
+
+- diagnostics;
+- AST serialization;
+- test output;
+
+deterministic ordering must be used.
+
+Do not expose randomized map iteration in compiler outputs.
+
+---
+
+136. Unicode
+
+Unicode handling must be deterministic.
+
+The grammar must define:
+
+- valid identifier characters;
+- normalization policy;
+- invalid sequences;
+- source encoding assumptions.
+
+Normalization must not change identifier meaning unexpectedly.
+
+---
+
+137. Comments and Documentation
+
+Comment handling must not interfere with tokenization.
+
+Nested block comments must be explicitly specified if supported.
+
+Documentation comments must be distinguishable from ordinary comments if tooling consumes them.
+
+---
+
+138. Whitespace
+
+Whitespace must be insignificant unless explicitly defined as syntax.
+
+If indentation becomes significant in a future dialect, it must be an explicit dialect feature rather than an accidental parser behavior.
+
+---
+
+139. Semicolon Policy
+
+If semicolons are optional in some contexts, insertion rules must be deterministic.
+
+The grammar must never rely on host-language parser assumptions.
+
+---
+
+140. Empty Programs
+
+The grammar must define whether:
+
+EOF
+
+is a valid program.
+
+If an empty source is valid, that must be intentional and tested.
+
+---
+
+141. Maximum Nesting
+
+Parser nesting limits may exist for security.
+
+They must be:
+
+- implementation-level;
+- configurable;
+- documented;
+- independent from source semantics.
+
+A valid program must not become semantically invalid merely because one compiler invocation has an insufficient parser budget.
+
+---
+
+142. Large Source Files
+
+Large source programs must be supported subject only to infrastructure resources.
+
+Tests should use generated large inputs to detect:
+
+- quadratic parsing;
+- exponential ambiguity;
+- memory leaks;
+- catastrophic recovery.
+
+---
+
+143. Complexity
+
+Grammar rules should avoid unnecessary exponential ambiguity.
+
+Particular attention must be given to:
+
+- expression parsing;
+- nested patterns;
+- generic/type parsing;
+- macro syntax;
+- dialect syntax;
+- annotations;
+- interpolation.
+
+---
+
+144. Ambiguity Policy
+
+An ambiguity must be resolved through:
+
+1. grammar restructuring;
+2. explicit precedence;
+3. lexical distinction;
+4. contextual parsing only where justified.
+
+Do not rely on undocumented parser-generator precedence behavior.
+
+---
+
+145. Left Recursion
+
+Left recursion may be used only where ANTLR's supported mechanisms make the resulting grammar deterministic and maintainable.
+
+Expression precedence should be explicit and tested.
+
+---
+
+146. Parser Performance
+
+Production validation must benchmark:
+
+- small programs;
+- medium programs;
+- very large programs;
+- deeply nested programs;
+- large quantum programs;
+- large HDL programs;
+- cross-domain programs.
+
+Performance tests must detect asymptotic regressions.
+
+---
+
+147. No Host-Architecture Assumptions
+
+Grammar validation must not assume:
+
+usize == 64 bits
+pointer == 64 bits
+little endian
+specific CPU
+specific OS
+specific filesystem
+
+Host representation belongs to the compiler/runtime.
+
+---
+
+148. Integer Index Validation
+
+A source index is not automatically a machine address.
+
+Semantic validation determines whether an index is valid for a particular object.
+
+Hardware addressing is separate.
+
+---
+
+149. Memory Address Syntax
+
+Raw addresses, if supported, must be explicitly unsafe/low-level language semantics.
+
+However, the repository requirement is:
+
+Zamani Rust implementation uses no unsafe Rust
+
+This does not prohibit a Zamani language feature named "unsafe"; it means the compiler implementation itself must remain safe Rust.
+
+The distinction must be documented.
+
+---
+
+150. Existing "unsafe" Grammar
+
+The current grammar includes an "unsafe" modifier/block.
+
+This must be reviewed as a Zamani language construct, not confused with Rust's implementation safety.
+
+If retained, its semantic contract must be explicit.
+
+The Rust compiler implementation must still use no Rust "unsafe".
+
+---
+
+151. Mathematical Operations
+
+Math syntax must not hard-code algorithm implementations.
+
+For example:
+
+fft
+svd
+qr
+
+may be language-level operations.
+
+Their implementation may vary by target.
+
+The semantic meaning must remain stable.
+
+---
+
+152. Optimization Algorithms
+
+Named optimization algorithms should not imply that the compiler must implement one specific numerical algorithm in the grammar layer.
+
+Prefer semantic operations plus explicit algorithm selection when algorithm choice itself is meaningful.
+
+---
+
+153. Numerical Tolerances
+
+Numerical tolerances must be values expressed by the program or policy.
+
+The grammar must not embed arbitrary defaults such as:
+
+tolerance = 0.000001
+
+as universal semantics.
+
+---
+
+154. AI/ML Validation
+
+AI syntax must remain portable.
+
+Model dimensions, tensor shapes, device placement, accelerator choice, and batch sizes should be parameterizable.
+
+GPU/TPU/NPU availability belongs to capability resolution.
+
+---
+
+155. Data Validation
+
+Data syntax must distinguish:
+
+logical schema
+physical storage
+deployment
+transport
+
+A schema must not implicitly require a particular database or filesystem.
+
+---
+
+156. Deployment
+
+Deployment syntax may describe intent.
+
+The compiler/runtime decides actual placement.
+
+Deployment syntax must not leak into ordinary computation semantics unless deployment is itself part of the program.
+
+---
+
+157. Plugin Validation
+
+Plugins must have explicit boundaries.
+
+A plugin must not silently modify the core grammar.
+
+Grammar extension must go through declared dialect/extension mechanisms.
+
+---
+
+158. Grammar Extension
+
+Any grammar extension must specify:
+
+namespace
+version
+lexer impact
+parser impact
+AST impact
+semantic owner
+IR impact
+diagnostics
+tests
+compatibility
+
+Extensions that modify core lexical meaning require especially strict review.
+
+---
+
+159. Reserved Syntax
+
+Unused syntax may be reserved explicitly.
+
+Reserved syntax must not accidentally parse as a different valid construct.
+
+---
+
+160. Deprecation
+
+Deprecated syntax must produce a deterministic warning where appropriate.
+
+Deprecation must specify:
+
+- since version;
+- replacement;
+- removal policy;
+- migration path.
+
+---
+
+161. Compatibility Matrix
+
+Every grammar release must be testable against:
+
+previous valid programs
+current valid programs
+known-invalid programs
+deprecated programs
+reserved syntax
+
+---
+
+162. Source Compatibility
+
+A new compiler should preserve semantics of supported source programs.
+
+If syntax changes but semantics remain equivalent, a migration tool may transform old source.
+
+---
+
+163. Binary/IR Compatibility
+
+Grammar validation itself does not own binary compatibility.
+
+However, the source version must be retained sufficiently for downstream IR/artifact compatibility.
+
+---
+
+164. Provenance
+
+The frontend should preserve:
+
+source language version
+grammar version
+dialect versions
+source origin
+
+where required by the compiler architecture.
+
+---
+
+165. Reproducible Compilation
+
+Grammar validation must not depend on:
+
+- current time;
+- random values;
+- machine ID;
+- network;
+- backend state.
+
+If source code contains nondeterministic semantics, that nondeterminism must be explicit.
+
+---
+
+166. Test Corpus
+
+The grammar test corpus must contain:
+
+minimal program
+classical program
+generic program
+concurrent program
+distributed program
+quantum program
+hybrid program
+HDL program
+hardware program
+AI program
+accelerator program
+full-stack program
+POCO-REAF program
+
+---
+
+167. Regression Corpus
+
+Every grammar bug becomes a permanent regression test.
+
+The regression test must document:
+
+bug
+root cause
+correct behavior
+incorrect behavior
+
+---
+
+168. Negative Corpus
+
+Negative tests must cover:
+
+- duplicate operators;
+- malformed literals;
+- invalid declarations;
+- missing delimiters;
+- invalid nesting;
+- ambiguous syntax;
+- malformed generics;
+- malformed quantum operations;
+- malformed HDL;
+- malformed resource expressions;
+- invalid annotations;
+- invalid dialect declarations.
+
+---
+
+169. Cross-Domain Negative Tests
+
+Examples:
+
+classical operation on quantum value
+quantum operation on classical-only resource
+hardware-only construct in portable context
+invalid resource requirement
+unknown capability
+invalid dialect version
+
+These should be distinguished between syntax and semantic errors.
+
+---
+
+170. Semantic Error Boundary
+
+A syntactically valid but semantically invalid program must parse successfully.
+
+For example:
+
+use_unknown_type;
+
+may be syntactically valid but semantically invalid.
+
+The parser must not pretend semantic errors are syntax errors.
+
+---
+
+171. Target Error Boundary
+
+A program requiring more resources than a selected target provides may still be a valid Zamani program.
+
+Example:
+
+program requirement = 1000 logical qubits
+target capacity = 128 physical qubits
+
+This is a target feasibility problem.
+
+It is not necessarily a grammar error.
+
+---
+
+172. Capability Error Boundary
+
+Similarly:
+
+requires capability X
+target lacks X
+
+is a capability/target error, not a grammar error.
+
+---
+
+173. Scheduling Error Boundary
+
+A valid timing requirement that cannot be satisfied by a target is a scheduling/target feasibility issue.
+
+It is not a syntax error.
+
+---
+
+174. Optimization Failure Boundary
+
+Failure to find a desired optimization is not a grammar error.
+
+The original semantic program must remain available.
+
+---
+
+175. QEC Failure Boundary
+
+Inability to satisfy a requested QEC strategy is not a syntax failure.
+
+It is a QEC/capability/resource issue.
+
+---
+
+176. ZQN Failure Boundary
+
+An unavailable noise model or unsupported fault channel is not automatically a grammar failure.
+
+The source must be parsed first.
+
+---
+
+177. Validation Pipeline
+
+The complete frontend validation pipeline should be:
+
+source bytes
+    |
+    v
+encoding validation
+    |
+    v
+lexer
+    |
+    v
+tokens
+    |
+    v
+parser
+    |
+    v
+parse tree
+    |
+    v
+AST construction
+    |
+    v
+AST structural validation
+    |
+    v
+name validation
+    |
+    v
+type validation
+    |
+    v
+effect validation
+    |
+    v
+capability/resource validation
+    |
+    v
+domain semantic validation
+    |
+    v
+canonical IR lowering
+
+The exact Rust module boundaries may vary, but these responsibilities must remain distinguishable.
+
+---
+
+178. Validation Does Not Mean Execution
+
+No validation stage should execute the user's actual computation.
+
+Compile-time evaluation is permitted only where the language explicitly defines compile-time semantics.
+
+---
+
+179. Compile-Time Evaluation
+
+Compile-time evaluation must have:
+
+- deterministic semantics;
+- resource accounting;
+- explicit failure;
+- no arbitrary external effects unless explicitly authorized.
+
+---
+
+180. Source Security
+
+The frontend must treat all input as hostile.
+
+It must not trust:
+
+- identifiers;
+- strings;
+- annotations;
+- dialect metadata;
+- macro input;
+- foreign-language payloads.
+
+---
+
+181. Foreign Source
+
+Foreign source embedded in Zamani must have explicit boundaries.
+
+For example:
+
+foreign "C" { ... }
+
+must not be interpreted as Zamani grammar.
+
+---
+
+182. Hardware Descriptions
+
+HDL source must have an explicit syntactic domain.
+
+A hardware module must not accidentally parse as an ordinary software module with different meaning.
+
+---
+
+183. Quantum/HDL Integration
+
+Quantum control hardware may combine:
+
+quantum semantics
++
+hardware semantics
+
+but ownership must remain explicit.
+
+Quantum semantic meaning belongs to quantum IR.
+
+Hardware implementation belongs to hardware/HDL layers.
+
+---
+
+184. No Semantic Duplication
+
+If two grammar constructs mean the same thing, they should not create two incompatible AST concepts.
+
+Aliases should converge to the same semantic representation.
+
+---
+
+185. Naming Consistency
+
+Names must use one canonical naming policy.
+
+Do not create accidental alternatives such as:
+
+quantumCircuit
+quantum_circuit
+QuantumCircuit
+qCircuit
+
+unless they intentionally represent different language concepts.
+
+---
+
+186. Reserved Identifiers
+
+Core keywords must be reserved consistently.
+
+Domain-specific identifiers should preferably use namespaces rather than continuously expanding the global keyword set.
+
+This reduces lexical collisions and improves long-term extensibility.
+
+---
+
+187. Namespace Design
+
+Namespaces must support future domain expansion.
+
+A quantum dialect must not need to reserve hundreds of globally unique keywords.
+
+---
+
+188. Extensibility Principle
+
+Prefer:
+
+namespace::operation
+
+over continuously adding:
+
+GLOBAL_KEYWORD_1
+GLOBAL_KEYWORD_2
+GLOBAL_KEYWORD_3
+
+when the construct is domain-extensible.
+
+---
+
+189. Grammar Size
+
+Grammar size itself is not a production-quality metric.
+
+A smaller grammar is not automatically better.
+
+The priorities are:
+
+1. unambiguous semantics;
+2. maintainability;
+3. extensibility;
+4. deterministic parsing;
+5. clear ownership;
+6. repository integration.
+
+---
+
+190. Generated Grammar Organization
+
+If "Zamani.g4" becomes too large, it may be split into lexer/parser grammar components.
+
+Any split must preserve:
+
+one canonical grammar authority
+
+and deterministic generation.
+
+ANTLR imports must be explicit.
+
+---
+
+191. Modular Grammar Rule
+
+If grammar modules are introduced, each module must document:
+
+purpose
+tokens
+productions
+dependencies
+exports
+semantic owner
+tests
+
+---
+
+192. No Empty Grammar Files
+
+A grammar file must not exist merely because a future feature might use it.
+
+Create a file only when it has an implemented, testable responsibility.
+
+---
+
+193. Validation Document Completion
+
+"grammar/validation/grammar-validation.md" is complete when:
+
+- every validation boundary is defined;
+- no machine-size assumptions remain;
+- syntax/semantic/resource/target errors are separated;
+- quantum integration is defined;
+- IR ownership is defined;
+- no unsafe Rust requirement exists;
+- Rust 1.97/1.97.1 compatibility is defined;
+- diagnostics are deterministic;
+- testing requirements are defined;
+- extension rules are defined;
+- compatibility rules are defined.
+
+---
+
+194. Required Companion Documents
+
+This document integrates with:
+
+grammar/validation/semantic-boundaries.md
+grammar/validation/ambiguity-rules.md
+grammar/validation/scalability-rules.md
+grammar/validation/compatibility-rules.md
+grammar/validation/naming-rules.md
+grammar/validation/hardcoding-audit.md
+
+Each companion document must refine this specification rather than contradict it.
+
+---
+
+195. Integration With "grammar/Zamani.g4"
+
+"Zamani.g4" must be audited against this document.
+
+At minimum the audit must identify and correct:
+
+- duplicated productions;
+- duplicated operators;
+- empty operator alternatives;
+- inconsistent identifiers;
+- duplicated declaration alternatives;
+- target-specific assumptions;
+- fixed quantum gate limitations;
+- fixed resource limitations;
+- ambiguous constructs;
+- unsupported advertised constructs.
+
+The grammar must not be considered production-ready until this audit passes.
+
+---
+
+196. Integration With "grammar/Zamani-Grammar.md"
+
+"Zamani-Grammar.md" must be reconciled with "Zamani.g4".
+
+Any construct appearing only in documentation must be classified as:
+
+implemented
+planned
+deprecated
+reserved
+removed
+
+It must not be represented as currently implemented if it is not accepted by the authoritative grammar.
+
+---
+
+197. Integration With "grammar/grammar.md"
+
+"grammar.md" must serve as documentation/index material rather than a competing grammar authority.
+
+If it contains grammar productions, those productions must either:
+
+- be generated;
+- be explicitly illustrative;
+- or be synchronized against "Zamani.g4".
+
+---
+
+198. Integration With "src/quantum/frontend"
+
+Quantum frontend adapters must consume validated syntax and lower it toward the canonical quantum semantic boundary.
+
+OpenQASM support must remain an adapter/import format.
+
+The frontend must not create a second permanent quantum representation.
+
+---
+
+199. Integration With "src/quantum/ir"
+
+The canonical boundary is:
+
+Zamani syntax
+      |
+      v
+validated quantum AST
+      |
+      v
+quantum::ir
+
+All downstream quantum components consume the canonical IR.
+
+---
+
+200. Integration With QEC
+
+QEC consumes semantic quantum operations and QEC intent.
+
+Grammar validation does not implement QEC algorithms.
+
+---
+
+201. Integration With ZQN
+
+ZQN consumes fault/noise semantics after parsing.
+
+Grammar validation does not own physical noise behavior.
+
+---
+
+202. Integration With Scheduling
+
+Scheduling consumes:
+
+- operation dependencies;
+- resource requirements;
+- timing intent;
+- ordering constraints.
+
+It does not consume grammar syntax directly as its permanent representation.
+
+---
+
+203. Integration With Optimization
+
+Optimization consumes canonical IR.
+
+Grammar-level optimization annotations become semantic optimization metadata.
+
+---
+
+204. Integration With Hardware
+
+Hardware abstraction consumes:
+
+- capabilities;
+- resource requirements;
+- target constraints.
+
+It must not require grammar knowledge.
+
+---
+
+205. Integration With Runtime
+
+Runtime consumes compiled artifacts and execution plans.
+
+Runtime must not parse Zamani source as its normal execution model.
+
+---
+
+206. Integration With Resilience
+
+Resilience may consume:
+
+- semantic execution metadata;
+- capabilities;
+- resource requirements;
+- provenance;
+- recovery intent.
+
+Grammar validation must not implement resilience policy.
+
+---
+
+207. Integration With Provenance
+
+The frontend should preserve enough source identity and semantic provenance to allow later:
+
+diagnostics
+replay
+verification
+debugging
+audit
+recovery
+
+without making provenance itself part of machine-specific semantics.
+
+---
+
+208. Integration With Determinism
+
+Parsing and validation must be deterministic.
+
+The same:
+
+source
+grammar version
+dialect versions
+compiler version
+
+must produce equivalent frontend output.
+
+---
+
+209. Integration With Compatibility
+
+Grammar version changes must be reflected in:
+
+source compatibility
+AST compatibility
+IR compatibility
+tooling compatibility
+documentation
+migration
+
+where applicable.
+
+---
+
+210. CI Requirements
+
+CI must execute at least:
+
+grammar generation
+parser compilation
+unit tests
+positive tests
+negative tests
+regression tests
+boundary tests
+cross-domain tests
+determinism tests
+round-trip tests
+scalability tests
+hard-coding audit
+Rust no-unsafe check
+MSRV build
+
+---
+
+211. Rust CI
+
+The grammar-supporting Rust code must pass:
+
+cargo check
+cargo test
+cargo clippy
+
+under the declared Rust 1.97/1.97.1 MSRV.
+
+CI must reject unsafe Rust.
+
+---
+
+212. No Unsafe Check
+
+A production CI job should enforce:
+
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+on the grammar/frontend crates/modules where practical.
+
+---
+
+213. Dependency Audit
+
+Grammar validation dependencies must be checked for:
+
+- MSRV;
+- security;
+- licensing;
+- deterministic behavior;
+- unnecessary unsafe exposure;
+- reproducibility.
+
+---
+
+214. Dependency Minimization
+
+The grammar frontend should not depend on:
+
+- hardware SDKs;
+- QPU SDKs;
+- GPU runtimes;
+- cloud clients;
+- network clients;
+
+merely to parse source.
+
+This keeps parsing portable and independently testable.
+
+---
+
+215. Completion Criteria for Production
+
+The grammar validation subsystem is production-ready only when all of the following are true:
+
+[ ] One authoritative grammar exists
+[ ] Documentation is reconciled
+[ ] Lexer is deterministic
+[ ] Parser is deterministic
+[ ] Duplicate productions removed
+[ ] Empty operators removed
+[ ] Expression precedence is explicit
+[ ] Identifier policy is canonical
+[ ] Keyword policy is canonical
+[ ] Diagnostics are deterministic
+[ ] Source spans are preserved
+[ ] Syntax/semantic errors are separated
+[ ] Resource/target errors are separated
+[ ] No artificial machine-size limits exist
+[ ] Quantum syntax is backend independent
+[ ] Quantum syntax lowers toward quantum::ir
+[ ] QEC is not duplicated
+[ ] ZQN is not duplicated
+[ ] Scheduling is not duplicated
+[ ] Optimization is not duplicated
+[ ] Hardware discovery is not duplicated
+[ ] HDL is parameterized
+[ ] Classical computation is scalable
+[ ] Distributed computation is scalable
+[ ] AI/data constructs are extensible
+[ ] Dialects are namespaced
+[ ] Macros are validated
+[ ] Metaprogramming has explicit boundaries
+[ ] Versioning is defined
+[ ] Compatibility is defined
+[ ] Hard-coding audit passes
+[ ] Positive tests pass
+[ ] Negative tests pass
+[ ] Boundary tests pass
+[ ] Cross-domain tests pass
+[ ] Determinism tests pass
+[ ] Round-trip tests pass
+[ ] Fuzz tests pass
+[ ] Performance tests pass
+[ ] Rust MSRV passes
+[ ] Rust unsafe code is forbidden
+[ ] No parser stage executes external code
+[ ] No parser stage accesses hardware
+[ ] No parser stage accesses arbitrary network resources
+[ ] Generated parser artifacts are reproducible
+[ ] POCO-REAF requirements are satisfied
+
+---
+
+216. Final Validation Principle
+
+The grammar must validate:
+
+"What does this program mean?"
+
+not:
+
+"Can this particular machine execute it right now?"
+
+Those are different questions.
+
+The final architecture must therefore preserve:
+
+SOURCE SEMANTICS
+       |
+       v
+PORTABLE MEANING
+       |
+       v
+RESOURCE REQUIREMENTS
+       |
+       v
+TARGET CAPABILITIES
+       |
+       v
+IMPLEMENTATION
+       |
+       v
+EXECUTION
+
+and never reverse that dependency.
+
+---
+
+217. POCO-REAF Acceptance Criterion
+
+A grammar implementation satisfies POCO-REAF when the following statement is true:
+
+«A valid Zamani source program expresses a stable computation whose semantic meaning does not depend on the accidental size, topology, vendor, architecture, calibration, device identifier, or current availability of the machine on which it will eventually execute.»
+
+The compiler may choose different implementations.
+
+The scheduler may choose different schedules.
+
+The router may choose different physical mappings.
+
+The optimizer may choose different implementations.
+
+The hardware layer may select different resources.
+
+The runtime may execute in different environments.
+
+The program's semantic meaning remains the same.
+
+That is the required foundation for:
+
+Program_Once
+Compile_Once
+Run_Everywhere
+Run_Anywhere
+Run_Forever
+
+and therefore for:
+
+Zamani
+From Atom to Everywhere
