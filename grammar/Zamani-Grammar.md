@@ -1,893 +1,4139 @@
-Grammar File: NIMBUS Grammar v3.0 — UNIVERSAL TRINITY EDITION — ANTLR4 format
-Inherits all 847 original NIMBUS rules PLUS absorbs ALL Zamani features PLUS adds Sankofa memory features PLUS integrates AI/Cognitive, OOP, Meta-Programming, HDL, Cloud, and Cybersecurity grammar rules.
-=============================================================================== SECTION 1: CORE LANGUAGE FOUNDATION (NIMBUS Original Rules)
-// --- Program Structure --- program: declaration* EOF; declaration: moduleDecl | importDecl | exportDecl | functionDecl | structDecl | enumDecl | traitDecl | implDecl | typeAlias | constDecl | quantumCircuitDecl | nanoAgentDecl | languageDecl | effectDecl | classDecl | interfaceDecl | recordDecl | moduleDecl | globalUsing | attributeDecl | hdlModuleDecl | cloudDecl | agentDecl | cognitiveBlock | metaBlock | sankofaDecl;
+Zamani Extended Language Grammar and Language Design Reference
+
+Path: "grammar/Zamani-Grammar.md"
+Language: Zamani
+Repository: "Benwellonedge28/Zamani"
+Primary branch: "main"
+Edition: Universal Computational Language
+Rust implementation baseline: Rust 2021, Rust 1.97.1
+Implementation safety policy: Safe Rust only; "unsafe" is prohibited
+Primary portability objective: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+Scalability objective: From the smallest meaningful computation to arbitrarily large computations subject only to program semantics, representational limits, declared constraints, implementation resource availability, target capabilities, and explicitly selected policies.
+
+---
+
+1. Status and Authority
+
+This file is the extended Zamani language-design and grammar reference.
+
+It preserves and integrates the broad language concepts historically associated with:
+
+- Zamani;
+- NIMBUS;
+- Universal Trinity;
+- Sankofa;
+- temporal and multi-timeline computation;
+- classical computation;
+- quantum computation;
+- hybrid quantum-classical computation;
+- hardware description;
+- hardware/software co-design;
+- AI and machine learning;
+- distributed computing;
+- networking;
+- scientific computing;
+- data and tensor computation;
+- security and cryptography;
+- metaprogramming;
+- interoperability;
+- nano-oriented computation;
+- future computational paradigms.
+
+However:
+
+«The presence of a construct in this document does not by itself make that construct legal Zamani syntax.»
+
+The authoritative promotion path is:
+
+language design
+    ↓
+normative specification
+    ↓
+feature contract
+    ↓
+lexical contract
+    ↓
+canonical Zamani.g4
+    ↓
+Rust lexer/parser
+    ↓
+domain-neutral AST
+    ↓
+semantic analysis
+    ↓
+canonical semantic model
+    ↓
+canonical IR
+    ↓
+compiler integration
+    ↓
+runtime/backend integration
+    ↓
+conformance tests
+    ↓
+stable language feature
+
+The authority hierarchy is:
+
+1. User-visible normative language specification
+2. grammar/specification/
+3. grammar/spec/
+4. grammar/specification/features/
+5. grammar/Zamani.g4
+6. Rust lexer/parser/AST/semantic implementation
+7. grammar/grammar.md
+8. grammar/Zamani-Grammar.md
+9. historical/proposal material
+
+The ordering above requires an important interpretation:
+
+- the normative specification defines intended language semantics;
+- "Zamani.g4" defines the canonical ANTLR syntax representation;
+- Rust frontend implementation establishes executable implementation conformance;
+- "grammar.md" records implementation reality;
+- this file records the complete extended design space and feature contracts;
+- historical or proposed material must never silently become accepted syntax.
+
+Where two artifacts disagree, the discrepancy is a conformance defect and must be resolved explicitly.
+
+---
+
+2. Fundamental Language Identity
+
+Zamani is one programming language.
+
+It is not a collection of unrelated:
+
+- classical languages;
+- quantum languages;
+- HDL languages;
+- AI languages;
+- distributed languages;
+- networking languages;
+- accelerator languages;
+- scientific languages;
+- embedded languages.
+
+All domains share the same foundational language model.
+
+The shared foundation includes:
+
+- source units;
+- Unicode and lexical rules;
+- identifiers;
+- literals;
+- names and paths;
+- modules;
+- imports and exports;
+- declarations;
+- types;
+- expressions;
+- statements;
+- functions;
+- effects;
+- ownership;
+- resource semantics;
+- capabilities;
+- diagnostics;
+- source locations;
+- versioning;
+- compatibility;
+- semantic validation;
+- interoperability.
+
+Domains extend the common language rather than replacing it.
+
+---
+
+3. POCO-REAF
+
+3.1 Definition
+
+POCO-REAF means:
+
+«A programmer should be able to express the stable semantics of a computation once without rewriting the algorithm merely because the computation is later realized on a different size, architecture, device class, topology, deployment environment, or generation of hardware.»
+
+The intended lifecycle is:
+
+Program Once
+     ↓
+Compile Once
+     ↓
+Discover available capabilities/resources
+     ↓
+Select legal realization
+     ↓
+Optimize
+     ↓
+Lower
+     ↓
+Execute
+
+POCO-REAF does not mean that every program is executable on every machine.
+
+For example:
+
+program requires capability X
+target does not provide capability X
+
+must produce a clear incompatibility result unless an explicitly permitted semantic-preserving alternative exists.
+
+The compiler must never silently change program meaning merely to fit a target.
+
+---
+
+4. Scale From Atom to Everywhere
+
+Zamani must support the same semantic language model across scales such as:
+
+single value
+    ↓
+single operation
+    ↓
+function
+    ↓
+process
+    ↓
+thread/task
+    ↓
+device
+    ↓
+accelerator
+    ↓
+node
+    ↓
+cluster
+    ↓
+distributed system
+    ↓
+heterogeneous system
+    ↓
+planetary/cloud-scale system
+    ↓
+future computational environments
+
+The language does not define an artificial maximum at any level.
+
+The actual feasible scale is determined by:
+
+- program semantics;
+- type representation;
+- compiler resources;
+- runtime resources;
+- target capabilities;
+- explicitly declared constraints;
+- resource availability;
+- security policy;
+- deployment policy;
+- numerical representation;
+- physical feasibility.
 
-// --- Module System --- moduleDecl: 'module' IDENTIFIER ('::' IDENTIFIER)* '{' declaration* '}'; importDecl: 'import' modulePath ('as' IDENTIFIER)? ';'; exportDecl: 'export' IDENTIFIER ('to' IDENTIFIER)? ';'; modulePath: IDENTIFIER ('::' IDENTIFIER)*; globalUsing: 'global' 'using' IDENTIFIER ';'; usingDirective: 'using' IDENTIFIER ';';
+---
 
-// --- Functions --- functionDecl: modifiers? 'fn' IDENTIFIER typeParams? '(' parameterList? ')' returnType? ('with' effectList)? block; returnType: '->' typeExpr; parameterList: parameter (',' parameter); parameter: typeExpr IDENTIFIER ('=' defaultExpr)? | '...' typeExpr IDENTIFIER; defaultExpr: expression; modifiers: ('pub' | 'private' | 'protected' | 'static' | 'const' | 'async' | 'unsafe' | 'inline' | 'override' | 'final' | 'abstract'); effectList: '[' effectName (',' effectName)* ']'; effectName: IDENTIFIER; block: '{' statement* '}';
+5. No Artificial Universal Hardware Limits
 
-// --- Control Flow --- statement: letStmt | constStmt | returnStmt | ifStmt | whileStmt | forStmt | matchStmt | breakStmt | continueStmt | exprStmt | block | unsafeBlock | throwStmt | tryCatchStmt | quantumStmt | nanoStmt | mtsStmt | sankofaStmt | learnStmt | rememberStmt | recallStmt | wisdomStmt | ancestorCall | consensusStmt | zamaniBlock | sasaBlock | invokeStmt | transcodeStmt | overrideStmt | pluginStmt | foreignFunctionCall | dataStmt | databaseOp | webService | cloudPlatform | container | devOpsTool | cognitiveStmt | assertStmt | retractStmt | adaptStmt | inferStmt | deduceStmt | selfAdjustStmt | effectHandleStmt | langStmt;
+The language must not define universal constants such as:
 
-letStmt: 'let' 'mut'? IDENTIFIER (':' typeExpr)? '=' expression ';'; constStmt: 'const' IDENTIFIER ':' typeExpr '=' expression ';'; returnStmt: 'return' expression? ';'; ifStmt: 'if' expression block ('else' (ifStmt | block))?; whileStmt: 'while' expression block; forStmt: 'for' IDENTIFIER 'in' expression block; matchStmt: 'match' expression '{' matchCase* '}'; matchCase: 'case' pattern ('when' expression)? '->' block; breakStmt: 'break' ';'; continueStmt: 'continue' ';'; exprStmt: expression ';'; unsafeBlock: 'unsafe' '!'? '(' 'evas' ':' expression ')' block | 'unsafe' block; throwStmt: 'throw' expression ';'; tryCatchStmt: 'try' block catchClause* finallyClause?; catchClause: 'catch' '(' parameter ')' block; finallyClause: 'finally' block;
+MAX_QUBITS
+MAX_CPUS
+MAX_CORES
+MAX_THREADS
+MAX_GPUS
+MAX_FPGAS
+MAX_QPUS
+MAX_NODES
+MAX_MEMORY
+MAX_STORAGE
+MAX_REGISTERS
+MAX_REGISTER_WIDTH
+MAX_VECTOR_WIDTH
+MAX_TENSOR_RANK
+MAX_TENSOR_DIMENSION
+MAX_ACCELERATORS
+MAX_DEVICES
+MAX_TIMELINES
+MAX_PROCESSES
+MAX_AGENTS
+MAX_NETWORK_LINKS
+MAX_GATE_COUNT
 
-// --- Expressions --- expression: assignmentExpr; assignmentExpr: logicalOrExpr (('=' | '+=' | '-=' | '=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=') expression)?; logicalOrExpr: logicalAndExpr ('||' logicalAndExpr); logicalAndExpr: equalityExpr ('&&' equalityExpr); equalityExpr: relationalExpr (('==' | '!=' | '===' | '!==') relationalExpr); relationalExpr: bitwiseOrExpr (('<' | '>' | '<=' | '>=' | 'instanceof' | 'is' | 'has') bitwiseOrExpr); bitwiseOrExpr: bitwiseXorExpr ('|' bitwiseXorExpr); bitwiseXorExpr: bitwiseAndExpr ('^' bitwiseAndExpr); bitwiseAndExpr: shiftExpr ('&' shiftExpr); shiftExpr: additiveExpr (('<<' | '>>' | '>>>') additiveExpr); additiveExpr: multiplicativeExpr (('+' | '-') multiplicativeExpr); multiplicativeExpr: unaryExpr (('' | '/' | '%') unaryExpr); unaryExpr: ('!' | '-' | '+' | '~' | '&' | '' | '++' | '--') unaryExpr | postfixExpr; postfixExpr: primaryExpr ('.' IDENTIFIER | '[' expression ']' | '(' argumentList? ')'); primaryExpr: literal | IDENTIFIER | '(' expression ')' | arrayLit | tupleLit | structLit | mapLit | lambdaExpr | quantumExpr | nanoExpr | mtsExpr | recallExpr | consensusExpr | invokeExpr | newExpr | thisExpr | superExpr | memberAccess | indexExpr | interpolatedString | rawStringLit | withExpr;
+The same prohibition applies to hidden equivalents such as:
 
-argumentList: expression (',' expression); arrayLit: '[' (expression (',' expression))? ']'; tupleLit: '(' (expression (',' expression)+) ')'; structLit: IDENTIFIER '{' (IDENTIFIER ':' expression (',' IDENTIFIER ':' expression))? '}'; mapLit: 'map' '{' (expression '=>' expression (',' expression '=>' expression))? '}'; lambdaExpr: '|' parameterList? '|' (typeExpr)? block | '|' parameterList? '|' '->' expression;
+only 1024 qubits
+only 64 CPUs
+only 32 GPUs
+only 8 FPGA devices
+only 4096 nodes
+only 64 tensor dimensions
+only 32-bit registers
 
-// --- Literals --- literal: INTEGER | DECIMAL | STRING | CHAR | BOOLEAN | 'null' | quantumLit | nanoLit | mtsLit | interpolatedString | rawStringLit | utf8StringLit; BOOLEAN: 'true' | 'false'; INTEGER: DIGIT+ | '0x' HEX_DIGIT+ | '0b' BIN_DIGIT+ | '0o' OCT_DIGIT+; DECIMAL: DIGIT+ '.' DIGIT+ ('e' ('+' | '-')? DIGIT+)?; STRING: '"' (ESC | ~["])* '"'; CHAR: ''' (ESC | ~[']) '''; interpolatedString: '$' STRING; rawStringLit: 'r' '#'* STRING; utf8StringLit: 'u8' STRING;
+unless such a number is explicitly part of a particular target profile or particular type/program value, rather than a universal Zamani limitation.
 
-// --- Types --- typeExpr: baseType | genericType | arrayType | tupleType | functionType | dependentType | linearType | affineType | effectfulType | universeType | quantumType | nanoType | mtsType | sankofaType | cognitiveType | nullableType | refType | boxedType; baseType: 'void' | 'int' | 'float' | 'bool' | 'string' | 'char' | 'bytes' | 'i8' | 'i16' | 'i32' | 'i64' | 'i128' | 'u8' | 'u16' | 'u32' | 'u64' | 'u128' | 'f32' | 'f64' | 'usize' | 'isize' | IDENTIFIER; genericType: baseType '<' typeExpr (',' typeExpr)* '>'; arrayType: typeExpr '[' expression? ']'; tupleType: '(' typeExpr (',' typeExpr)+ ')'; functionType: '(' typeExpr (',' typeExpr)* ')' '->' typeExpr; nullableType: typeExpr '?'; refType: 'ref' typeExpr | '&' 'mut'? typeExpr; boxedType: 'Box' '<' typeExpr '>'; typeParams: '<' typeParam (',' typeParam)* '>'; typeParam: IDENTIFIER (':' typeConstraint)?; typeConstraint: typeExpr ('+' typeExpr)*; typeAlias: 'type' IDENTIFIER typeParams? '=' typeExpr ';'; typeConstraintClause: 'where' IDENTIFIER ':' typeConstraint;
+---
 
-=============================================================================== SECTION 2: QUANTUM COMPUTING RULES
-// --- Quantum Declarations --- quantumCircuitDecl: 'quantum' 'circuit' IDENTIFIER '(' parameterList? ')' block; quantumStmt: quantumGate | quantumMeasure | quantumReset | quantumBarrier; quantumGate: ('Hadamard' | 'CNOT' | 'PauliX' | 'PauliY' | 'PauliZ' | 'T' | 'S' | 'Swap') '(' IDENTIFIER (',' IDENTIFIER)* ')'; quantumMeasure: 'measure' IDENTIFIER ('->' IDENTIFIER)?; quantumReset: 'reset' IDENTIFIER; quantumBarrier: 'barrier' (IDENTIFIER (',' IDENTIFIER)*)?;
+6. Program Constants Are Not Language Limits
 
-// --- Quantum Literals --- quantumLit: '|' QUBIT_STATE 'rangle'; // Dirac notation: |0>, |1>, |+>, |->, |psi> QUBIT_STATE: ('0' | '1' | '+' | '-' | IDENTIFIER); quantumExpr: quantumLit | 'superpose' '(' expression (',' expression)* ')' | 'entangle' '(' IDENTIFIER ',' IDENTIFIER ')';
+This is valid:
 
-// --- Quantum Types --- quantumType: 'Qubit' | 'QReg' '[' expression ']' | 'Superposition' '<' typeExpr '>' | 'Entangled' '<' typeExpr ',' typeExpr '>' | 'QMeasured' '<' typeExpr '>' | 'QArray' '<' typeExpr ',' expression '>';
+let n = 1024;
 
-=============================================================================== SECTION 3: NANO-AGENT COMPUTING RULES
-// --- Nano-Agent Declarations --- nanoAgentDecl: 'nano' 'agent' IDENTIFIER '{' nanoAgentBody '}'; nanoAgentBody: nanoCapability* nanoBehavior* nanoProtocol*; nanoCapability: 'capability' IDENTIFIER '(' parameterList? ')' block; nanoBehavior: 'behavior' IDENTIFIER '(' parameterList? ')' block; nanoProtocol: 'protocol' IDENTIFIER '{' protocolRule* '}'; protocolRule: 'on' IDENTIFIER '->' block;
+This is also valid:
 
-// --- Nano Literals --- nanoLit: '@atom' '(' ELEMENT ':' ORBITAL ')' | '@molecule' '(' FORMULA ')'; ELEMENT: IDENTIFIER; // H, He, Li, etc. ORBITAL: ('1s' | '2s' | '2p' | '3s' | '3p' | '3d' | '4s' | '4p' | '4d' | '4f'); FORMULA: IDENTIFIER (DIGIT* IDENTIFIER)*; nanoExpr: nanoLit | 'assemble' '(' expression ')' | 'deploy' '(' expression ')';
+let matrix = Matrix<1024, 1024>;
 
-// --- Nano Types --- nanoType: 'Atom' '<' typeExpr '>' | 'Molecule' '<' typeExpr '>' | 'NanoAgent' '<' typeExpr '>' | 'Archaeve' '<' typeExpr '>';
+if those values are program semantics.
 
-=============================================================================== SECTION 4: MULTI-TIMELINE SYSTEM (MTS) RULES
-// --- MTS Declarations --- mtsDecl: 'mts' 'timeline' IDENTIFIER '{' mtsBody '}'; mtsBody: mtsSlice* mtsOperation*; mtsSlice: 'slice' IDENTIFIER '[' INTEGER ']' block; mtsOperation: 'fork' '(' IDENTIFIER ')' | 'merge' '(' IDENTIFIER ')' | 'observe' '(' IDENTIFIER ')' | 'rewind' '(' INTEGER ')';
+What is prohibited is a compiler/language architecture equivalent to:
 
-// --- MTS Literals --- mtsLit: 'mts' '[' INTEGER ']'; mtsExpr: mtsLit | 'parallel' '(' block ')' | 'speculative' '(' block ')' | 'counterfactual' '(' expression ',' block ')';
+Zamani only supports matrices <= 1024 × 1024.
 
-// --- MTS Types --- mtsType: 'MtsSlice' '<' expression '>';
+Similarly:
 
-=============================================================================== SECTION 5: SANKOFA MEMORY SYSTEM RULES
-// --- Sankofa Declarations --- sankofaDecl: memoryDecl | wisdomDecl | historyDecl | consensusDecl | interMemoryDecl; memoryDecl: 'remember' IDENTIFIER ':' typeExpr '=' expression ';'; wisdomDecl: 'wisdom' IDENTIFIER '{' wisdomBody '}'; wisdomBody: (premiseDecl | inferenceRule | wisdomStmt)*; premiseDecl: 'premise' IDENTIFIER ':' typeExpr '=' expression ';'; inferenceRule: 'rule' IDENTIFIER '(' parameterList? ')' '->' block; wisdomStmt: 'conclude' expression ';';
+allocate qubits[n]
 
-// --- Sankofa Statements --- learnStmt: 'learn' 'from' expression ('with' 'weight' expression)? ';'; recallStmt: 'recall' '(' domainExpr ',' contextExpr ')' ';'; ancestorCall: 'ancestral' IDENTIFIER '(' argumentList? ')' ';'; consensusStmt: consensusExpr ';'; consensusExpr: 'consensus' '[' exprList ']' 'vote' expression; zamaniBlock: 'zamani' '{' statement* '}'; sasaBlock: 'sasa' '{' statement* '}'; domainExpr: expression; contextExpr: expression; exprList: expression (',' expression)*;
+is valid when "n" is program data.
 
-// --- Sankofa Annotations --- sankofaObserve: '@observe' '(' scope ')'; sankofaLivingDoc: '@living_doc' '(' updatePolicy ')'; sankofaTemporalLearn: '@temporal_learn' '(' span ')'; scope: IDENTIFIER ('.' IDENTIFIER)*; updatePolicy: 'continuous' | 'manual' | 'versioned'; span: 'span' '(' expression ',' expression ')';
+A universal:
 
-// --- Sankofa Types --- historyType: 'History' '<' typeExpr ',' yearsExpr '>'; consensusType: 'ConsensusTrue' '<' typeExpr '>'; interMemoryType: 'InterMemory' '<' langId ',' typeExpr '>'; yearsExpr: expression; langId: STRING; sankofaType: historyType | consensusType | interMemoryType;
+MAX_QUBITS = 1024
 
-=============================================================================== SECTION 6: ADVANCED TYPE SYSTEM RULES
-// --- Dependent Types --- dependentType: piType | sigmaType | identityType; piType: (PI_SYMBOL | 'Pi') '(' IDENTIFIER ':' typeExpr ')' typeExpr; sigmaType: (SIGMA_SYMBOL | 'Sigma') '(' IDENTIFIER ':' typeExpr ')' typeExpr; identityType: 'Id' '(' typeExpr ',' expression ',' expression ')'; PI_SYMBOL: '\u03A0'; // Pi SIGMA_SYMBOL: '\u03A3'; // Sigma
+is not.
 
-// --- Universe Hierarchy --- universeType: 'Type_0' | 'Type_1' | 'Type_2' | 'Type_N' | 'Kind' | 'Sort' | 'Prop';
+---
 
-// --- Linear / Affine Types --- linearType: 'linear' typeExpr; affineType: 'affine' typeExpr;
+7. Semantic Intent vs Target Realization
 
-// --- Effectful Types --- effectfulType: typeExpr 'with' 'effects' '{' effectName (',' effectName)* '}';
+Zamani separates:
 
-// --- Session Types --- sessionType: 'session' '{' sessionOp* '}'; sessionOp: 'send' typeExpr | 'recv' typeExpr | 'offer' '{' sessionBranch* '}' | 'choice' '{' sessionBranch* '}' | 'close'; sessionBranch: IDENTIFIER '->' sessionType;
+semantic requirement
+capability requirement
+constraint
+preference
+hint
+implementation decision
+physical realization
 
-// --- Cognitive and Biological Types --- cognitiveType: 'CognitiveState' '<' typeExpr '>' | 'Consciousness' '<' typeExpr '>' | 'Biological' '<' typeExpr '>' | 'Neural' '<' typeExpr '>' | 'MemoryBank' '<' typeExpr '>' | 'AgentType';
+These concepts must never be conflated.
 
-// --- Agent Types --- agentType: 'NarrowAI' | 'AGI' | 'ASI' | 'AESI' | 'ASESI';
+7.1 Requirement
 
-=============================================================================== SECTION 7: ALGEBRAIC EFFECTS RULES
-// --- Effect Declarations --- effectDecl: 'effect' IDENTIFIER typeParams? '(' parameterList? ')' returnType? ';'; effectHandleStmt: 'handle' expression '{' effectHandler* '}'; effectHandler: 'case' effectName '(' parameterList? ')' '->' block;
+A program requires a property.
 
-// --- Effect Expressions --- withExpr: expression 'with' '[' effectList ']';
+Example:
 
-=============================================================================== SECTION 8: META-COMPILATION AND LANGUAGE DEFINITION RULES
-// --- Language Declaration --- languageDecl: 'language' IDENTIFIER '=' STRING ('{' langBody '}')?; langBody: grammarRule*; grammarRule: IDENTIFIER ':' STRING ';';
+requires qubits >= n
 
-// --- Meta-Programming Statements --- invokeStmt: 'invoke' modulePath '(' argumentList? ')' ';'; transcodeStmt: 'transcode' IDENTIFIER '::' STRING 'to' IDENTIFIER ';'; overrideStmt: 'override' IDENTIFIER '::' IDENTIFIER '(' parameterList? ')' block; langStmt: 'lang' IDENTIFIER block; pluginStmt: 'plugin' IDENTIFIER '{' pluginDefinition* '}'; pluginDefinition: ('language' | 'transpiler') IDENTIFIER ';'; metaBlock: 'meta' '{' statement* '}';
+7.2 Capability
 
-// --- Meta-Object Protocol (MOP) --- mopExpr: 'reflect' '(' expression ')' | 'introspect' '(' IDENTIFIER ')' | 'meta_eval' '(' expression ')' | 'quote' '{' statement* '}' | 'unquote' '(' expression ')' | 'splice' '(' expression ')';
+A target must expose a capability.
 
-// --- Macros --- macroDecl: 'macro' IDENTIFIER '(' parameterList? ')' block; macroCall: IDENTIFIER '!' '(' argumentList? ')';
+Example:
+
+requires capability("quantum.mid_circuit_measurement")
+
+7.3 Constraint
+
+A property must satisfy a bound.
 
-=============================================================================== SECTION 9: OOP FEATURES (COMPREHENSIVE)
-// --- Class Definitions --- classDecl: modifiers? 'class' IDENTIFIER typeParams? extendsClause? implementsClause? permitsClause? '{' classBody '}'; extendsClause: 'extends' IDENTIFIER (',' IDENTIFIER); implementsClause: 'implements' IDENTIFIER (',' IDENTIFIER); permitsClause: 'permits' IDENTIFIER (',' IDENTIFIER); classBody: classMember; classMember: propertyDef | methodDef | constructorDef | staticPropertyDef | staticMethodDef | innerClassDef | eventDef | indexerDef | operatorOverload | delegateDef;
+Example:
 
-// --- Properties and Methods --- propertyDef: modifiers? typeExpr IDENTIFIER ('=' expression)? ';'; methodDef: modifiers? 'fn' IDENTIFIER typeParams? '(' parameterList? ')' returnType? ('with' effectList)? block; constructorDef: 'fn' IDENTIFIER '(' parameterList? ')' block; staticPropertyDef: 'static' modifiers? typeExpr IDENTIFIER ('=' expression)? ';'; staticMethodDef: 'static' modifiers? 'fn' IDENTIFIER '(' parameterList? ')' returnType? block;
+requires latency <= budget
 
-// --- Abstraction --- abstractClassDecl: 'abstract' 'class' IDENTIFIER '{' classBody '}'; abstractMethodDef: 'abstract' 'fn' IDENTIFIER '(' parameterList? ')' returnType? ';'; abstractPropertyDef: 'abstract' modifiers? typeExpr IDENTIFIER ';';
+7.4 Preference
 
-// --- Inheritance --- finalClassDecl: 'final' 'class' IDENTIFIER extendsClause? '{' classBody '}'; finalMethodDef: 'final' modifiers? 'fn' IDENTIFIER '(' parameterList? ')' returnType? block; sealedClassDecl: 'sealed' 'class' IDENTIFIER extendsClause? permitsClause? '{' classBody '}'; staticClassDecl: 'static' 'class' IDENTIFIER '{' classBody '}'; innerClassDecl: 'class' IDENTIFIER '{' classBody '}'; anonymousClassDecl: 'new' IDENTIFIER '(' argumentList? ')' '{' classBody '}'; partialClassDecl: 'partial' 'class' IDENTIFIER '{' classBody '}';
+A realization is preferred but not mandatory.
 
-// --- Interfaces --- interfaceDecl: 'interface' IDENTIFIER typeParams? extendsClause? '{' interfaceBody '}'; interfaceBody: interfaceMember*; interfaceMember: methodDef | defaultInterfaceMethod | staticInterfaceMethod | privateInterfaceMethod | asyncInterfaceMethod; defaultInterfaceMethod: 'default' 'fn' IDENTIFIER '(' parameterList? ')' returnType? block; staticInterfaceMethod: 'static' 'fn' IDENTIFIER '(' parameterList? ')' returnType? block; privateInterfaceMethod: 'private' 'fn' IDENTIFIER '(' parameterList? ')' returnType? block; asyncInterfaceMethod: 'async' 'fn' IDENTIFIER '(' parameterList? ')' returnType? block; sealedInterfaceDecl: 'sealed' 'interface' IDENTIFIER '{' interfaceBody '}'; nestedInterfaceDecl: 'interface' IDENTIFIER '{' interfaceBody '}';
+Example:
 
-// --- Enums --- enumDecl: 'enum' IDENTIFIER typeParams? (':' typeExpr)? '{' enumBody '}'; enumBody: enumMember*; enumMember: IDENTIFIER ('(' argumentList? ')')?;
+prefer accelerator("quantum")
 
-// --- Records --- recordDecl: 'record' IDENTIFIER typeParams? '(' parameterList? ')' extendsClause? implementsClause? '{' recordBody? '}'; recordBody: classMember*; recordStructDecl: 'record' 'struct' IDENTIFIER '(' parameterList? ')' '{' recordBody? '}';
+7.5 Hint
 
-// --- Structs --- structDecl: 'struct' IDENTIFIER typeParams? '{' structBody '}'; structBody: (modifiers? typeExpr IDENTIFIER ';')*;
+Information is supplied to optimization.
 
-// --- Traits --- traitDecl: 'trait' IDENTIFIER typeParams? '{' traitBody '}'; traitBody: (methodDef | associatedType | constantDef); associatedType: 'type' IDENTIFIER (':' typeConstraint)? ';'; constantDef: 'const' IDENTIFIER ':' typeExpr '=' expression ';'; implDecl: 'impl' typeParams? IDENTIFIER ('for' typeExpr)? '{' implBody '}'; implBody: methodDef | constantDef | associatedType;
+A hint may improve implementation but must not alter semantic correctness.
+
+7.6 Implementation Decision
+
+A compiler or deployment layer may eventually decide:
+
+logical resource
+    ↓
+physical resource
+
+For example:
+
+logical qubit
+    ↓
+physical qubit 17
+
+Physical placement is not the portable semantic identity of the logical qubit.
+
+---
+
+8. Canonical Compilation Architecture
+
+The language architecture is:
+
+Zamani Source
+     ↓
+Source map
+     ↓
+Lexer
+     ↓
+Token stream
+     ↓
+Parser
+     ↓
+Domain-neutral AST
+     ↓
+Structural validation
+     ↓
+Name/module resolution
+     ↓
+Type analysis
+     ↓
+Effect analysis
+     ↓
+Ownership/resource analysis
+     ↓
+Capability analysis
+     ↓
+Portability analysis
+     ↓
+Semantic validation
+     ↓
+Canonical semantic model
+     ↓
+Canonical IR
+     ├── Classical semantics
+     ├── quantum::ir
+     └── HDL/Hardware semantics
+     ↓
+Optimization
+     ↓
+Lowering
+     ├── routing
+     ├── scheduling
+     ├── resilience
+     ├── QEC
+     └── other domain lowering
+     ↓
+ZQN
+     ↓
+HAL
+     ↓
+Target realization
+     ├── CPU
+     ├── GPU
+     ├── FPGA
+     ├── QPU
+     ├── embedded device
+     ├── distributed system
+     └── future target
+
+The grammar exists at the beginning of this pipeline.
+
+It must not absorb responsibilities belonging to later layers.
+
+---
+
+9. Grammar Boundary
+
+The grammar describes:
+
+- source structure;
+- source-level relationships;
+- portable program intent;
+- declarations;
+- expressions;
+- statements;
+- types;
+- domain constructs;
+- resource intent;
+- capability requirements;
+- compile/execution intent;
+- interoperability declarations.
+
+The grammar does not implement:
+
+- optimization;
+- scheduling;
+- routing;
+- calibration;
+- physical qubit allocation;
+- QEC algorithms;
+- ZQN execution;
+- HAL behavior;
+- device discovery;
+- runtime scheduling;
+- physical placement;
+- machine learning training;
+- hardware synthesis;
+- network routing;
+- distributed consensus.
+
+Those systems consume the semantic information produced after parsing.
+
+---
+
+10. Canonical Quantum Boundary
+
+"quantum::ir" is the canonical quantum semantic boundary.
+
+The grammar must never create a competing quantum semantic IR.
+
+The intended path is:
+
+Zamani quantum syntax
+       ↓
+generic AST operation
+       ↓
+semantic quantum operation
+       ↓
+quantum::ir
+       ↓
+optimization
+       ↓
+decomposition
+       ↓
+routing
+       ↓
+scheduling
+       ↓
+QEC/resilience
+       ↓
+ZQN
+       ↓
+HAL
+       ↓
+QPU realization
+
+The grammar is therefore allowed to describe quantum syntax but must not become the owner of quantum execution semantics.
+
+---
+
+11. Generic Quantum Operations
+
+Zamani must not make the language's future depend on an exhaustive enumeration such as:
+
+H
+X
+Y
+Z
+T
+S
+CNOT
+SWAP
+...
+
+A finite gate list cannot be the universal semantic model.
+
+The preferred abstraction is:
+
+operation name
+operation namespace
+parameters
+operands
+results
+modifiers
+attributes
+effects
+capabilities
+source location
+
+Conceptually:
+
+apply operation to targets
+
+where the operation may be:
+
+H
+X
+vendor.operation
+custom.operation
+logical.operation
+future.operation
+
+The semantic layer resolves whether the operation exists, is valid, and can be realized.
+
+This allows future quantum operations without rewriting the grammar.
+
+---
+
+12. Quantum Domain
+
+The quantum language must support, where implemented:
+
+- qubits;
+- logical qubits;
+- quantum registers;
+- dynamically sized quantum collections;
+- quantum states;
+- amplitudes;
+- observables;
+- operations;
+- parameterized operations;
+- controlled operations;
+- adjoint operations;
+- measurement;
+- reset;
+- barriers;
+- dynamic control;
+- classical feed-forward;
+- mid-circuit measurement;
+- quantum channels;
+- noise descriptions;
+- error-correction intent;
+- logical operations;
+- fault-tolerance requirements;
+- resource requirements;
+- pulse intent;
+- circuits;
+- kernels;
+- hybrid computation;
+- quantum interoperability.
 
-// --- OOP Expressions --- newExpr: 'new' IDENTIFIER typeArgs? '(' argumentList? ')'; thisExpr: 'this'; superExpr: 'super' ('.' IDENTIFIER | '(' argumentList? ')')?; memberAccess: expression '.' IDENTIFIER; indexExpr: expression '[' expression ']'; typeCheck: expression 'instanceof' typeExpr; typeCast: '(' typeExpr ')' expression; withExprObj: expression 'with' '{' (IDENTIFIER ':' expression ';')* '}';
+Quantum grammar must not impose a maximum number of qubits.
 
-// --- Operator Overloading --- operatorOverload: 'operator' OPERATOR '(' parameterList? ')' block; explicitOperatorOverload: 'explicit' 'operator' typeExpr '(' parameterList? ')' block; implicitOperatorOverload: 'implicit' 'operator' typeExpr '(' parameterList? ')' block; extensionOperatorDef: 'extension' 'operator' OPERATOR '(' parameterList? ')' block; userDefinedConversion: 'operator' typeExpr '(' parameterList? ')' block;
+---
 
-// --- Indexers --- indexerDef: 'this' '[' parameterList? ']' '{' getter ';' setter? ';'}'; getter: 'get' block; setter: 'set' block; staticIndexerDef: 'static' 'this' '[' parameterList? ']' '{' getter ';' setter? ';'}'; asyncIndexerDef: 'async' 'this' '[' parameterList? ']' '{' getter ';' setter? ';'}';
+13. Quantum Types
 
-// --- Events --- eventDef: 'event' typeExpr IDENTIFIER ';'; extensionEventDef: 'extension' typeExpr IDENTIFIER '{' eventDef '}';
+Quantum types are semantic abstractions.
 
-// --- Delegates --- delegateDef: 'delegate' returnType? IDENTIFIER '(' parameterList? ')' ';';
+Examples include:
 
-// --- Extension Methods --- extensionMethodDef: 'extension' 'fn' IDENTIFIER '(' parameterList? ')' returnType? block; extensionPropertyDef: 'extension' typeExpr IDENTIFIER '{' getter ';' setter? ';'}'; extensionIndexerDef: 'extension' typeExpr 'this' '[' parameterList? ']' '{' getter ';' setter? ';'}';
+Qubit
+Qubit<n>
+QRegister<n>
+QState<T>
+QuantumRegister<T>
+LogicalQubit
+LogicalRegister<n>
 
-// --- Async Members --- asyncMethodDef: 'async' modifiers? 'fn' IDENTIFIER '(' parameterList? ')' returnType? block; asyncPropertyDef: 'async' modifiers? typeExpr IDENTIFIER ';'; asyncMainMethod: 'async' 'fn' 'main' '(' parameterList? ')' returnType? block; asyncStream: 'async' 'stream' typeExpr ';'; asyncIterator: 'async' 'iterator' typeExpr ';'; asyncDispose: 'async' 'dispose' block;
+The value of "n" is program semantics.
 
-// --- Pattern Matching --- pattern: IDENTIFIER | literal | tuplePattern | arrayPattern | listPattern | slicePattern | wildcardPattern | orPattern | typePattern; tuplePattern: '(' pattern (',' pattern)* ')'; arrayPattern: '[' pattern (',' pattern)* ']'; listPattern: '[' pattern (',' pattern)* ']' ('...' pattern)?; slicePattern: '[' pattern (',' pattern)* '...' pattern ']'; wildcardPattern: '_'; orPattern: pattern '|' pattern; typePattern: IDENTIFIER ':' typeExpr; patternGuard: 'when' expression;
+It is not a universal hardware maximum.
 
-// --- Named/Optional Arguments --- namedArgument: IDENTIFIER '=' expression; optionalParameter: typeExpr IDENTIFIER '=' defaultExpr;
+The semantic layer must distinguish:
 
-// --- Expression-Bodied Members --- exprBodiedMember: '=>' expression;
+logical qubit count
+physical qubit availability
+encoded qubit count
+ancilla requirements
+error-correction overhead
+device capacity
 
-// --- Tuples with Named Elements --- namedTupleElement: IDENTIFIER ':' typeExpr;
+Those are different concepts.
 
-// --- Deconstruction --- deconstructionStmt: '(' variableList ')' '=' expression ';'; variableList: IDENTIFIER (',' IDENTIFIER)*;
+---
+
+14. Quantum Measurements
 
-// --- Init-Only Properties --- initOnlyProperty: 'init' modifiers? typeExpr IDENTIFIER ';'; initOnlySetter: 'init' '{' setter '}';
+Measurement must support:
 
-// --- Required Properties --- requiredProperty: 'required' modifiers? typeExpr IDENTIFIER ';';
+- single-qubit measurement;
+- multi-qubit measurement;
+- observable measurement;
+- basis specification;
+- measurement results;
+- classical destinations;
+- repeated sampling;
+- mid-circuit measurement;
+- conditional execution.
 
-// --- File-Scoped Types --- fileScopedType: 'file' 'class' IDENTIFIER '{' classBody '}';
+Measurement semantics belong to the quantum semantic model.
 
-// --- Member Hiding --- memberHiding: 'new' modifiers? typeExpr IDENTIFIER ';';
+The grammar must not decide how a target QPU physically performs measurement.
 
-// --- Ref Returns --- refReturn: 'ref' returnType;
+---
 
-// --- Tuple Equality --- tupleEquality: tupleLit '==' tupleLit; tupleInequality: tupleLit '!=' tupleLit;
+15. Quantum Control Flow
 
-// --- Global Alias --- globalAlias: 'global' 'alias' IDENTIFIER '=' typeExpr ';';
+Quantum-classical control may include:
 
-// --- Multidimensional and Jagged Arrays --- multidimArray: typeExpr '[' ','+ ']'; jaggedArray: typeExpr '[' ']' '[' ']';
+measurement
+    ↓
+classical result
+    ↓
+conditional
+    ↓
+quantum operation
+
+This must integrate with ordinary Zamani control flow.
+
+Quantum and classical control are therefore not separate programming languages.
+
+---
+
+16. Quantum Error Correction
+
+Grammar may express intent such as:
+
+requires error_correction(...)
+requires fault_tolerance(...)
+requires reliability(...)
 
-// --- Covariant / Contravariant --- covariantTypeParam: 'out' typeParam; contravariantTypeParam: 'in' typeParam;
+but grammar does not implement QEC.
 
-// --- Local Static Variables --- localStaticVar: 'static' typeExpr IDENTIFIER '=' expression ';';
+The ownership boundary is:
 
-// --- Local Functions --- localFunctionDef: 'fn' IDENTIFIER '(' parameterList? ')' returnType? block;
+Grammar
+    → expresses intent
 
-// --- Varargs --- varargParameter: '...' typeExpr IDENTIFIER;
+Semantic analysis
+    → validates intent
 
-// --- Type-Safe Enums --- typeSafeEnum: 'enum' IDENTIFIER ':' typeExpr '{' enumBody '}';
+quantum::ir
+    → represents canonical quantum semantics
+
+QEC
+    → detects/corrects errors and performs encoding/decoding responsibilities
+
+ZQN
+    → represents fault/noise semantics
+
+HAL
+    → exposes target capability/state
+
+Routing
+    → realizes logical connectivity
 
-// --- Primary Constructors --- primaryConstructor: '(' parameterList ')';
+Scheduling
+    → realizes temporal/resource order
 
-=============================================================================== SECTION 10: AI / COGNITIVE GRAMMAR RULES
-// --- AI Cognition Keywords --- inferStmt: 'infer' expression 'from' exprList ';'; deduceStmt: 'deduce' expression ('via' expression)? ';'; assertStmt: 'assert' expression ';'; retractStmt: 'retract' expression ';'; adaptStmt: 'adapt' expression ('to' expression)? ';'; selfAdjustStmt: 'self_adjust' '(' expression ')' block;
+No QEC algorithm may be embedded in the grammar.
 
-// --- Cognitive Architecture Blocks --- cognitiveBlock: cognitiveDecl '{' statement* '}'; cognitiveDecl: 'cognitive_architecture' IDENTIFIER;
+---
 
-// --- AI/AGI Domain Blocks --- aiDomainBlock: aiDomain IDENTIFIER '{' statement* '}'; aiDomain: 'machine_learning' | 'deep_learning' | 'neural_network' | 'graph_based_deep_learning' | 'causal_discovery' | 'causal_reasoning' | 'probabilistic_modeling' | 'advanced_computer_vision' | 'predictive_analytics' | 'prescriptive_analytics' | 'data_visualization' | 'human_ai_collaboration' | 'advanced_human_ai_collaboration' | 'explainability_and_transparency' | 'safety_and_security' | 'ethics_and_governance' | 'quantum_machine_learning' | 'cognitive_architectures' | 'human_computer_interaction' | 'data_analytics' | 'time_series_ml' | 'time_series_forecasting' | 'time_series_analysis' | 'text_generation' | 'sentiment_analysis' | 'language_translation' | 'object_detection' | 'object_recognition' | 'image_classification' | 'autonomous_navigation' | 'autonomous_robotics' | 'autonomous_systems' | 'model_explainability' | 'ai_safety_and_security' | 'ai_ethics_and_governance' | 'quantum_optimization' | 'recommendation_systems' | 'quantum_computing' | 'blockchain_technology' | 'iot' | 'cybersecurity' | 'data_science' | 'natural_language_generation' | 'nl_generation' | 'advanced_robotics' | 'transfer_learning' | 'explainable_reinforcement_learning' | 'graph_neural_network' | 'advanced_natural_language_processing' | 'advanced_natural_language_generation' | 'advanced_computer_vision_for_object_recognition' | 'advanced_computer_vision_for_object_detection' | 'advanced_computer_vision_for_image_classification' | 'advanced_robotics_for_autonomous_systems' | 'advanced_robotics_for_autonomous_navigation' | 'advanced_explainability_and_transparency_for_ai_models' | 'advanced_safety_and_security_for_ai_systems' | 'advanced_ethics_and_governance_for_ai_development' | 'advanced_quantum_computing_for_optimization_problems' | 'advanced_quantum_computing_for_machine_learning' | 'advanced_causal_reasoning_for_decision_making' | 'advanced_cognitive_architectures_for_human_ai_collaboration' | 'advanced_machine_learning_for_recommendation_systems' | 'advanced_nlp_for_sentiment_analysis' | 'advanced_nlp_for_text_generation' | 'advanced_nlp_for_language_translation' | 'advanced_machine_learning_for_time_series_data' | 'advanced_machine_learning_for_time_series_forecasting' | 'advanced_machine_learning_for_time_series_analysis';
+17. Classical Computing
 
-// --- Agent System --- agentDecl: 'agent' IDENTIFIER (':' agentType)? '{' agentBody '}'; agentBody: (agentCapability | agentBehavior | agentGoal | agentConstraint)*; agentCapability: 'capability' IDENTIFIER '(' parameterList? ')' block; agentBehavior: 'behavior' IDENTIFIER '(' parameterList? ')' block; agentGoal: 'goal' expression ';'; agentConstraint: 'constraint' expression ';';
+The classical domain includes:
 
-// --- Human-AGI Teaming --- humanAgiCollaboration: 'human_ai_collaboration' IDENTIFIER '{' statement* '}';
+- scalar computation;
+- integer computation;
+- floating-point computation;
+- arbitrary supported numeric representations;
+- vectors;
+- matrices;
+- tensors;
+- linear algebra;
+- numerical analysis;
+- symbolic mathematics;
+- calculus;
+- statistics;
+- optimization;
+- signal processing;
+- scientific computing;
+- control systems;
+- high-performance computing;
+- parallel computation.
+
+The grammar should express language-level semantics.
+
+Large libraries of mathematical functions should generally be represented through:
+
+typed operation
++
+intrinsic
++
+standard library
++
+semantic capability
 
-=============================================================================== SECTION 11: SAFETY / SECURITY / ETHICS ATTRIBUTES
-// --- EVAS Certification --- evasCert: 'unsafe' '!' '(' 'evas' ':' expression ')' block;
+rather than turning every mathematical function into a keyword.
 
-// --- Safety Attributes --- safetyAttr: '#safety' '(' attrArgs ')'; securityAttr: '#security' '(' attrArgs ')'; ethicsAttr: '#ethics' '(' attrArgs ')'; governanceAttr: '#governance' '(' attrArgs ')'; attrArgs: attrArg (',' attrArg)*; attrArg: IDENTIFIER '=' expression;
+---
 
-// --- Attribute Declaration --- attributeDecl: '@' IDENTIFIER '(' annotationArgs? ')'; annotationArgs: annotationArg (',' annotationArg)*; annotationArg: IDENTIFIER '=' expression; genericAttribute: '[' typeExpr ']';
+18. Mathematical Semantics
 
-// --- Compliance Attributes --- complianceAttr: '#compliance' '(' 'standard' '=' STRING ',' 'certified_by' '=' STRING ')';
+Zamani may represent:
 
-=============================================================================== SECTION 12: HDL (HARDWARE DESCRIPTION LANGUAGE) RULES
-// --- HDL Module Declaration --- hdlModuleDecl: 'hdl' 'module' IDENTIFIER '{' hdlBody '}'; hdlBody: hdlPort* hdlComponent* hdlLogicGate* hdlSignal* hdlAssignment*; hdlPort: 'port' hdlPortDirection IDENTIFIER ':' hdlPortType; hdlPortDirection: 'input' | 'output' | 'inout'; hdlPortType: 'wire' | 'reg' | 'logic' | 'quantum' | 'nano' | typeExpr; hdlComponent: 'component' IDENTIFIER '{' hdlPort* '}'; hdlLogicGate: 'gate' hdlLogicGateType '(' IDENTIFIER (',' IDENTIFIER)* ')'; hdlLogicGateType: 'AND' | 'OR' | 'NOT' | 'XOR' | 'NAND' | 'NOR' | 'MUX' | 'DEMUX'; quantumGateType: 'Hadamard' | 'CNOT' | 'Toffoli' | 'Fredkin' | 'PauliX' | 'PauliY' | 'PauliZ'; hdlSignal: 'signal' IDENTIFIER ':' hdlPortType; hdlAssignment: 'assign' IDENTIFIER '=' hdlExpression ';'; hdlExpression: IDENTIFIER | hdlLogicGate | '(' hdlExpression ')' | hdlExpression ('&' | '|' | '^' | '~') hdlExpression;
+- arithmetic;
+- algebra;
+- vectors;
+- matrices;
+- tensors;
+- symbolic expressions;
+- differentiation;
+- integration;
+- transforms;
+- optimization;
+- probability;
+- statistics;
+- numerical methods;
+- signal processing.
 
-// --- External HDL Import --- externalHdlImport: 'import_hdl' '(' STRING ',' IDENTIFIER ')'; externalHdlLink: 'link_hdl' '(' IDENTIFIER ',' IDENTIFIER ')';
+The language must distinguish:
 
-=============================================================================== SECTION 13: DISTRIBUTED COMPUTING RULES
-// --- Distributed Declarations --- distributedDecl: 'distributed' 'node' IDENTIFIER '{' distributedBody '}'; distributedBody: (serviceHandle | remoteCall | distributedOperation)*; serviceHandle: 'service' IDENTIFIER 'at' STRING; remoteCall: 'remote' IDENTIFIER '::' IDENTIFIER '(' argumentList? ')' ';'; distributedOperation: 'teleport' '(' IDENTIFIER ',' STRING ')' // Quantum teleportation | 'migrate' '(' IDENTIFIER ',' STRING ')' // Nano-agent swarm migration | 'dsm' '(' IDENTIFIER ',' STRING ')' // Distributed shared memory | 'dmts' '(' IDENTIFIER ',' STRING ')'; // Distributed MTS
+syntax
+semantic operation
+library operation
+implementation intrinsic
 
-=============================================================================== SECTION 14: CLOUD / NETWORK COMPUTING RULES
-// --- Cloud Platform Integration --- cloudDecl: cloudPlatform; cloudPlatform: 'AWS' '::' IDENTIFIER '(' argumentList? ')' ';' | 'Azure' '::' IDENTIFIER '(' argumentList? ')' ';' | 'GCP' '::' IDENTIFIER '(' argumentList? ')' ';';
+For example, FFT implementation belongs to a library/intrinsic/semantic capability unless FFT itself acquires language-level semantics requiring dedicated syntax.
 
-// --- Container and DevOps --- container: 'Docker' '::' IDENTIFIER '(' argumentList? ')' ';'; devOpsTool: 'Jenkins' '::' IDENTIFIER '(' argumentList? ')' ';';
+---
 
-// --- Database Operations --- databaseOp: 'Database' '::' IDENTIFIER '(' argumentList? ')' ';';
+19. Tensor and Shape Semantics
 
-// --- Web Services --- webService: 'HTTP' '::' IDENTIFIER '(' argumentList? ')' ';';
+Tensor syntax must support:
 
-// --- Data Serialization --- dataStmt: ('serialize' | 'deserialize') expression ('to' | 'from') dataFormat ';'; dataFormat: 'json' | 'xml' | 'messagepack' | 'protobuf' | 'cbor';
+- symbolic shapes;
+- runtime shapes where semantically valid;
+- compile-time shapes;
+- parameterized shapes;
+- shape constraints;
+- broadcasting;
+- indexing;
+- slicing;
+- transformations;
+- reductions;
+- contraction;
+- layout intent.
 
-// --- Streaming Data --- streamingData: 'stream' expression 'pipe' expression ';';
+No universal tensor-rank or tensor-dimension maximum may be embedded in the language.
 
-// --- Foreign Function Interface --- foreignFunctionCall: 'foreign' IDENTIFIER '::' IDENTIFIER '(' argumentList? ')' ';';
+---
 
-=============================================================================== SECTION 15: ADVANCED CRYPTOGRAPHY RULES
-// --- Encryption Expressions --- cryptoExpr: 'encrypt' '(' expression ',' cryptoAlgo ')' | 'decrypt' '(' expression ',' cryptoAlgo ')' | 'encrypt_homomorphic' '(' expression ',' cryptoKey ')' | 'decrypt_homomorphic' '(' expression ',' cryptoKey ')' | 'encrypt_layered' '(' expression ',' cryptoAlgoList ')' | 'encrypt_quantum_safe' '(' expression ',' cryptoKey ')'; cryptoAlgo: 'AES256' | 'ChaCha20' | 'RSA4096' | 'Kyber' | 'Dilithium' | 'SPHINCS+'; cryptoAlgoList: '[' cryptoAlgo (',' cryptoAlgo)* ']'; cryptoKey: 'key' IDENTIFIER | 'generate_key' '(' typeExpr ')';
+20. HDL
 
-// --- Zero-Knowledge Proofs --- zkExpr: 'generate_zk_proof' '(' expression ',' expression ')' | 'verify_zk_proof' '(' expression ',' expression ')';
+HDL is a first-class Zamani domain.
 
-// --- Secure Multi-Party Computation --- smcExpr: 'secure_multi_party_compute' '(' exprList ')';
+It must support, as implemented:
 
-// --- Key Management --- keyManagement: 'request_key' '(' typeExpr ')' | 'rotate_key' '(' IDENTIFIER ')' | 'revoke_key' '(' IDENTIFIER ')';
+- modules;
+- ports;
+- signals;
+- nets;
+- registers;
+- combinational logic;
+- sequential logic;
+- clocks;
+- resets;
+- timing;
+- assertions;
+- interfaces;
+- protocols;
+- state machines;
+- pipelines;
+- memories;
+- parameters;
+- generate constructs;
+- simulation;
+- synthesis;
+- verification;
+- physical intent;
+- hardware/software co-design.
 
-=============================================================================== SECTION 16: ON-DEVICE AI / EDGE COMPUTING RULES
-// --- On-Device Agent Declaration --- onDeviceAgentDecl: 'on_device' 'agent' IDENTIFIER '{' onDeviceAgentBody '}'; onDeviceAgentBody: (agentCapability | agentBehavior | deviceConstraint | selfPreservationProtocol | offlineProtocol); deviceConstraint: 'requires' (deviceSpec (',' deviceSpec)) ';'; deviceSpec: 'memory' '>=' expression | 'power' '>=' expression | 'storage' '>=' expression | 'processor' '=' typeExpr; selfPreservationProtocol: 'self_preserve' block; offlineProtocol: 'offline' block;
+Existing HDL grammar files, including:
 
-=============================================================================== SECTION 17: SELF-EVOLVING / AUTONOMOUS FEATURES
-// --- Self-Evolution --- selfEvolveDecl: 'self_evolve' '{' evolveBody '}'; evolveBody: (monitorRule | optimizeRule | patchRule | verifyRule)*; monitorRule: 'monitor' expression '->' block; optimizeRule: 'optimize' expression '->' block; patchRule: 'patch' expression '->' block; verifyRule: 'verify' expression '->' block;
+grammar/hdl/memories.g4
 
-// --- Autonomous Code Generation --- autoCodeGen: 'autonomously_generate' '(' expression ')' '->' block; autoOptimize: 'autonomously_optimize' '(' expression ')' '->' block; autoVerify: 'autonomously_verify' '(' expression ')' '->' block;
+must be retained where they remain valid and integrated rather than unnecessarily renamed or duplicated.
 
-=============================================================================== SECTION 18: OPTIMIZATION STRATEGY RULES
-// --- Optimization Passes --- optPassDecl: 'optimization' 'pass' IDENTIFIER '{' optPassBody '}'; optPassBody: ('target' optTarget ';')* ('strategy' optStrategy ';')* block; optTarget: 'classical' | 'quantum' | 'nano' | 'neuromorphic' | 'GPU' | 'FPGA' | 'SIMD' | 'WASM' | 'USSD' | 'edge' | 'stellar'; optStrategy: 'DCE' | 'CSE' | 'inlining' | 'loop_unroll' | 'constant_fold' | 'quantum_gate_opt' | 'nano_atp_efficiency' | 'ai_quantization' | 'thermal_throttle_prevention' | 'simd_vectorization' | 'gpu_offloading' | 'quantum_error_correction';
+---
 
-=============================================================================== SECTION 19: COMPILATION TARGET RULES
-// --- Target Platform Specification --- targetPlatform: 'target' platformSpec; platformSpec: 'x86_64' | 'ARM64' | 'RISC-V' | 'WASM' | 'LLVM_IR' | 'bare_metal' | 'Android' | 'iOS' | 'cloud' | 'IoT' | 'USSD' | 'FPGA' | 'quantum' | 'nano' | 'neuromorphic' | 'stellar' | 'Tariro_Runtime' | 'Z_MMP';
+21. HDL Scalability
 
-=============================================================================== SECTION 20: RUNTIME FEATURES (POCO-REAF)
-// --- Runtime Declarations --- runtimeDecl: 'runtime' 'configure' '{' runtimeConfig* '}'; runtimeConfig: 'gc' '=' ('enabled' | 'disabled' | 'hybrid') ';' | 'self_heal' '=' BOOLEAN ';' | 'quantum_sim' '=' BOOLEAN ';' | 'nano_orchestration' '=' BOOLEAN ';' | 'effect_dispatch' '=' ('eager' | 'lazy' | 'batched') ';' | 'scheduler' '=' ('preemptive' | 'cooperative' | 'quantum') ';';
+HDL must not encode an artificial universal hardware size.
 
-// --- Spawn / Channel / Select --- spawnExpr: 'spawn' block; channelExpr: 'channel' '<' typeExpr '>'; selectStmt: 'select' '{' selectCase* '}'; selectCase: 'case' expression '->' block;
+For example:
 
-=============================================================================== SECTION 21: KEYWORDS (140 TOTAL)
-// --- Core Keywords (95 NIMBUS Original) --- // fn, let, const, if, else, return, while, for, in, break, continue, // match, case, struct, enum, trait, impl, pub, use, mod, type, // true, false, null, unsafe, async, await, channel, spawn, select, // import, export, module, this, super, new, operator, event, // delegate, static, const, abstract, final, override, virtual, // extends, implements, permits, sealed, partial, record, // get, set, init, required, file, global, where, as, is, has, // ref, mut, move, box, external, throw, try, catch, finally, // typeof, sizeof, alignof, offsetof, instanceof, when, // private, protected, public, inline, out, in, default, // void, int, float, bool, string, char, bytes, // i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, f32, f64, usize, isize
+width = 32
 
-// --- Zamani-Specific Keywords (25) --- // quantum, quantum_circuit, nano, nano_agent, mts, // effect, handle, language, type (universe), kind, sort, prop, // linear, affine, with, invoke, transcode, override, // plugin, lang, meta, macro, reflect, introspect, assert
+may be a particular signal's declared width.
 
-// --- Sankofa-Specific Keywords (20) --- // remember, recall, learn, wisdom, ancestral, consensus, observe, // zamani, sasa, living_doc, temporal_learn, History, ConsensusTrue, // InterMemory, Superposition, Entangled, QMeasured, Archaeve, // infer, deduce, adapt, retract
+But:
 
-=============================================================================== SECTION 22: OPERATORS AND SPECIAL SYMBOLS
-// --- Operators --- OPERATOR: '+' | '-' | '' | '/' | '%' | '**' | '==' | '!=' | '===' | '!==' | '<' | '>' | '<=' | '>=' | '<<' | '>>' | '>>>' | '&' | '|' | '^' | '~' | '&&' | '||' | '!' | '=' | '+=' | '-=' | '=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=' | '=>' | '->' | '..' | '...' | '?' | '|' | 'rangle' | '@' | '#';
+Zamani hardware signals can never exceed 32 bits
 
-// --- Special Symbols --- LBRACE: '{'; RBRACE: '}'; LBRACKET: '['; RBRACKET: ']'; LPAREN: '('; RPAREN: ')'; SEMICOLON: ';'; COLON: ':'; COMMA: ','; DOT: '.'; DOUBLE_COLON: '::'; ARROW: '->'; FAT_ARROW: '=>'; PIPE: '|'; BANG: '!'; AT: '@'; HASH: '#';
+is not acceptable as a universal language restriction.
 
-=============================================================================== SECTION 23: COMMENTS AND WHITESPACE
-// --- Comments --- LINE_COMMENT: '//' ~[\r\n]* -> skip; BLOCK_COMMENT: '/' .? '/' -> skip; DOC_COMMENT: '///' ~[\r\n] -> skip;
+Widths, array dimensions, pipeline stages, memories, ports, channels, and hardware resources must be parameterizable where their semantics permit.
 
-// --- Whitespace --- WS: [ \t\r\n\u000C]+ -> skip;
+---
 
-// --- Unicode Support --- IDENTIFIER: XID_START XID_CONTINUE*; XID_START: [\p{XID_Start}]; XID_CONTINUE: [\p{XID_Continue}];
+22. Hardware/Software Co-Design
 
-=============================================================================== TOTAL RULES: ~1,400 (NIMBUS v3.0 Universal Trinity Edition) KEYWORDS: 140 total (95 original + 25 Zamani + 20 Sankofa) ALL PARADIGMS: 80+ (original 71 + 9 Sankofa + additional AI/Cognitive/Edge paradigms) TARGET PLATFORMS: x86_64, ARM64, RISC-V, WASM, LLVM IR, bare metal, Android, iOS, cloud, IoT, USSD, FPGA, quantum, nano, neuromorphic, stellar, Z-MMP, Tariro Runtime COMPILER: ZUTC (Zamani Unified Toolchain Compiler) - preserved FILE EXTENSION: .zn (preserved) RUNTIME: POCO-REAF (Persistent, Omni-Cognitive, Reactive, Event-driven, Adaptive, Self-healing)
-=============================================================================== SECTION 24: UBUNTU-INTEGRATED GRAMMAR RULES (Actor, Explain, Version, etc.)
-// --- Actor Model --- actorDecl: 'actor' IDENTIFIER '{' actorBody '}'; actorBody: (actorMessage | actorBehavior | actorState)*; actorMessage: 'message' IDENTIFIER '(' parameterList? ')' block; actorBehavior: 'behavior' IDENTIFIER block; actorState: 'state' IDENTIFIER ':' typeExpr '=' expression ';'; concurrentExpr: 'concurrent' expression block;
+Zamani may describe both:
 
-// --- Explainability and Transparency --- explainStmt: 'explain' expression ';'; transparentStmt: 'transparent' expression ';'; decisionLog: 'log' 'decision' IDENTIFIER '{' decisionLogBody '}'; decisionLogBody: decisionLogEntry*; decisionLogEntry: 'decision' IDENTIFIER 'made' 'by' IDENTIFIER 'with' 'reason' expression ';';
+software algorithm
 
-// --- Self-Adjustment (Full) --- selfAdjustDecl: 'self_adjust' IDENTIFIER '{' selfAdjustBody '}'; selfAdjustBody: (adjustmentRule | adjustmentLogic); adjustmentRule: 'rule' IDENTIFIER '{' 'when' expression 'then' expression '}'; adjustmentLogic: 'logic' IDENTIFIER '{' statement '}';
+and:
 
-// --- Self-Versioning --- selfVersioningDecl: 'version' IDENTIFIER '{' versioningBody '}'; versioningBody: (versionRecord | versionChangelog); versionRecord: 'record' IDENTIFIER '{' versionRecordEntry '}'; versionRecordEntry: 'version' IDENTIFIER 'created' 'by' IDENTIFIER 'at' TIMESTAMP ';'; versionChangelog: 'changelog' IDENTIFIER '{' changelogEntry* '}'; changelogEntry: 'change' IDENTIFIER 'made' 'by' IDENTIFIER 'at' TIMESTAMP ';'; TIMESTAMP: STRING;
+hardware realization intent
 
-// --- Type Check and Interop --- typeCheckStmt: 'type_check' typeExpr IDENTIFIER ';'; interopStmt: 'interop' IDENTIFIER '{' statement* '}'; testStmt: 'test' expression '{' statement* '}'; validateStmt: 'validate' expression ';';
+in a common semantic framework.
 
-// --- Higher-Order Functions --- higherOrderFunction: 'function' '(' parameterList? ')' block; higherOrderFunctionWithClosure: 'function' '(' parameterList? ')' 'captures' '[' identifierList ']' block;
+The compiler may later derive:
 
-// --- Domain-Specific Features --- domainDataType: 'domain_data_type' IDENTIFIER ';'; domainOperation: 'domain_operation' IDENTIFIER ';';
+CPU execution
+GPU kernel
+FPGA accelerator
+ASIC realization
+QPU realization
+distributed realization
 
-// --- Hybrid Approaches --- hybridApproach: 'hybrid' IDENTIFIER '{' statement* '}'; hybridQuantumClassical: 'hybrid_quantum_classical' IDENTIFIER '{' statement* '}'; neuralSymbolicIntegration: 'neural_symbolic' IDENTIFIER '{' statement* '}'; advancedReasoning: 'advanced_reasoning' IDENTIFIER '{' statement* '}';
+without forcing the source algorithm to be rewritten solely because the implementation target changed.
 
-// --- Uncertainty Quantification --- uncertaintyQuantification: 'uncertainty' expression ';';
+---
 
-// --- Advanced AI Domain Blocks (from UBUNTU) --- quantumMlBlock: 'quantum_ml' IDENTIFIER '{' statement* '}'; explainableRlBlock: 'explainable_rl' IDENTIFIER '{' statement* '}'; explainableDeepLearningBlock: 'explainable_deep_learning' IDENTIFIER '{' statement* '}'; knowledgeGraphBlock: 'knowledge_graph' IDENTIFIER '{' statement* '}'; probabilisticGraphicalModelBlock: 'probabilistic_graphical_model' IDENTIFIER '{' statement* '}'; transferLearningBlock: 'transfer_learning' IDENTIFIER '{' statement* '}'; multiAgentBlock: 'multi_agent' IDENTIFIER '{' statement* '}'; autonomousSystemBlock: 'autonomous' IDENTIFIER '{' statement* '}'; graphModelingBlock: 'graph' IDENTIFIER '{' statement* '}'; advancedNlpBlock: 'nlp' expression ';'; cognitiveArchitectureBlock: 'cognitive' IDENTIFIER '{' statement* '}'; aiForBusinessBlock: 'ai_for_business' IDENTIFIER '{' statement* '}'; vrArInteractionBlock: 'vr_ar_interaction' IDENTIFIER '{' statement* '}'; imageVideoAnalysisBlock: 'image_video_analysis' IDENTIFIER '{' statement* '}';
+23. Hardware Intent
 
-=============================================================================== SECTION 25: AGI GOVERNANCE AND ADMINISTRATION GRAMMAR RULES
-// --- AI System Declarations --- aiSystemDecl: 'ai' IDENTIFIER '{' aiSystemBody '}'; aiSystemBody: (aiTypeDef | aiCapabilityDef | explainStmt | transparentStmt | selfVersioningDecl)*; aiTypeDef: 'type' IDENTIFIER '=' ('narrow' | 'general' | 'super') ';';
+The hardware domain may express:
 
-// --- AGI System --- agiSystemDecl: 'agi' IDENTIFIER '{' agiSystemBody '}'; agiSystemBody: (agiCapabilityDef | agiLearningDef); agiCapabilityDef: 'capability' IDENTIFIER '{' statement '}'; agiLearningDef: 'learning' IDENTIFIER '{' statement* '}';
+- target capabilities;
+- compute capabilities;
+- memory capabilities;
+- communication capabilities;
+- acceleration capabilities;
+- quantum-device capabilities;
+- timing properties;
+- power constraints;
+- thermal constraints;
+- reliability requirements;
+- calibration requirements;
+- deployment requirements;
+- topology constraints;
+- negotiation policies.
 
-// --- ASI System --- asiSystemDecl: 'asi' IDENTIFIER '{' asiSystemBody '}'; asiSystemBody: (asiCapabilityDef | asiSelfImprovementDef); asiSelfImprovementDef: 'self_improvement' IDENTIFIER '{' statement '}';
+It must not confuse capability declaration with physical placement.
 
-// --- AESI System --- aesiSystemDecl: 'aesi' IDENTIFIER '{' aesiSystemBody '}'; aesiSystemBody: (aesiCapabilityDef | aesiTransformationDef); aesiTransformationDef: 'transformation' IDENTIFIER '{' statement '}';
+---
 
-// --- ASESI System --- asesiSystemDecl: 'asesi' IDENTIFIER '{' aseiSystemBody '}'; aseiSystemBody: (asesiCapabilityDef | asesomnipotenceDef); asesomnipotenceDef: 'omnipotence' IDENTIFIER '{' statement '}';
+24. Resource Model
 
-// --- Administration Interface --- adminInterfaceDecl: 'admin' IDENTIFIER '{' adminInterfaceBody '}'; adminInterfaceBody: (changeLogDisplay | suggestionInput | hybridDef | interfaceDef); changeLogDisplay: 'display' 'changes' '{' changeLogBody '}'; changeLogBody: changeLogEntry; suggestionInput: 'input' 'suggestions' '{' suggestionBody '}'; suggestionBody: suggestionEntry*; suggestionEntry: 'suggestion' IDENTIFIER 'from' IDENTIFIER ';';
+Resources are represented abstractly.
 
-// --- Payment Gateway --- paymentGatewayDecl: 'payment' IDENTIFIER '{' paymentGatewayBody '}'; paymentGatewayBody: (paymentMethodDef | paymentVerificationDef); paymentMethodDef: 'method' IDENTIFIER '{' statement '}'; paymentVerificationDef: 'verify' IDENTIFIER '{' statement* '}';
+Examples:
 
-// --- User Feedback --- userFeedbackDecl: 'feedback' IDENTIFIER '{' userFeedbackBody '}'; userFeedbackBody: (feedbackInputDef | feedbackValidationDef); feedbackInputDef: 'input' 'feedback' '{' statement '}'; feedbackValidationDef: 'validate' 'feedback' '{' statement* '}';
+compute
+memory
+storage
+communication
+quantum
+accelerator
+energy
+time
+bandwidth
+latency
+precision
+reliability
 
-// --- Copyright and Ownership --- copyrightNoticeDecl: 'copyright' IDENTIFIER '{' copyrightNoticeBody '}'; copyrightNoticeBody: copyrightNoticeStatement*; copyrightNoticeStatement: 'copyright' IDENTIFIER 'owned' 'by' IDENTIFIER ';';
+Resource expressions must be composable and parameterized.
 
-// --- Tailor-Made Features --- tailorMadeFeatureDecl: 'feature' IDENTIFIER '{' tailorMadeFeatureBody '}'; tailorMadeFeatureBody: (featureDef | featureCustomizationDef); featureDef: 'define' 'feature' IDENTIFIER '{' statement '}'; featureCustomizationDef: 'customize' 'feature' IDENTIFIER '{' statement* '}';
+No fixed number of resource instances is built into the grammar.
 
-// --- Program-Once Systems --- programOnceDecl: 'program_once' IDENTIFIER '{' programOnceBody '}'; programOnceBody: (systemConfigDef | systemLogicDef); systemConfigDef: 'config' IDENTIFIER '{' statement '}'; systemLogicDef: 'logic' IDENTIFIER '{' statement* '}';
+---
 
-// --- Malicious Idea Detection --- maliciousIdeaDetection: 'malicious' 'idea' 'detection' '{' maliciousIdeaBody '}'; maliciousIdeaBody: (ideaAnalysisDef | ideaBlockingDef); ideaAnalysisDef: 'analyze' 'idea' IDENTIFIER '{' statement '}'; ideaBlockingDef: 'block' 'idea' IDENTIFIER '{' statement* '}';
+25. Resource Requirements
 
-// --- User Blocking --- userBlockingDecl: 'block' 'user' IDENTIFIER '{' userBlockingBody '}'; userBlockingBody: (userIdentificationDef | userBlockingActionDef); userIdentificationDef: 'identify' 'user' IDENTIFIER '{' statement '}'; userBlockingActionDef: 'block' 'user' IDENTIFIER '{' statement* '}';
+A program may express:
 
-// --- Legal Action --- legalActionDecl: 'legal' 'action' IDENTIFIER '{' legalActionBody '}'; legalActionBody: (legalProceedingDef | legalNoticeDef); legalProceedingDef: 'proceeding' 'legal' IDENTIFIER '{' statement '}'; legalNoticeDef: 'notice' 'legal' IDENTIFIER '{' statement* '}';
+requires resource(...)
 
-// --- Sandbox Environment --- sandboxDecl: 'sandbox' IDENTIFIER '{' sandboxBody '}'; sandboxBody: (simulationDef | testingDef); simulationDef: 'simulate' IDENTIFIER '{' statement '}'; testingDef: 'test' IDENTIFIER '{' statement* '}';
+The compiler/runtime may determine how to satisfy that requirement.
 
-=============================================================================== SECTION 26: OMNIVERSAL SYSTEM GRAMMAR RULES
-// --- Omniversal Simulation --- omniversalSimulationDecl: 'omniversal_simulate' IDENTIFIER '{' statement* '}';
+A requirement must remain separate from:
 
-// --- Omniversal Autonomous Code System Synthesis --- omniversalCodeSynthDecl: 'omniversal_synthesize' IDENTIFIER '{' statement* '}';
+physical resource identifier
 
-// --- Omniversal Deployment Orchestration --- omniversalDeployDecl: 'omniversal_deploy' IDENTIFIER '{' statement* '}';
+and:
 
-// --- Omniversal Rogue Prevention / AGI Alignment --- omniversalAlignmentDecl: 'omniversal_alignment' IDENTIFIER '{' statement* '}'; omniversalContainmentDecl: 'omniversal_containment' IDENTIFIER '{' statement* '}';
+physical placement
 
-// --- Omniversal Trust and Identity --- omniversalTrustDecl: 'omniversal_trust' IDENTIFIER '{' statement* '}';
+---
 
-// --- Omniversal Knowledge and Semantic Reasoning --- omniversalKnowledgeDecl: 'omniversal_knowledge' IDENTIFIER '{' statement* '}';
+26. Capability Model
 
-// --- Omniversal Generative AI --- omniversalGenerativeDecl: 'omniversal_generate' IDENTIFIER '{' statement* '}';
+Capabilities represent what a target can do.
 
-// --- Omniversal Self-Sovereignty --- omniversalSovereigntyDecl: 'omniversal_sovereignty' IDENTIFIER '{' statement* '}';
+Examples:
 
-// --- Omniversal Strategic Goal Management --- omniversalGoalDecl: 'omniversal_goal' IDENTIFIER '{' statement* '}';
+quantum.measure
+quantum.mid_circuit_measurement
+quantum.dynamic_control
+tensor.acceleration
+fpga.synthesis
+distributed.communication
+secure.execution
 
-// --- Omniversal Bio-Nano OS --- omniversalBioNanoDecl: 'omniversal_bionano' IDENTIFIER '{' statement* '}';
+Capabilities must be namespaced and versionable.
 
-// --- Omniversal Reality/Metaphysical Engineering --- omniversalRealityDecl: 'omniversal_reality' IDENTIFIER '{' statement* '}';
+Capability names must not become an exhaustive list of all future hardware.
 
-// --- Omniversal NLP --- omniversalNlpDecl: 'omniversal_nlp' IDENTIFIER '{' statement* '}';
+Unknown capabilities may be represented semantically and rejected only when the program requires them and no compatible implementation exists.
 
-=============================================================================== SECTION 27: CONVERSATIONAL CODE SYNTHESIS GRAMMAR RULES
-// --- Chat Architect Agent --- chatArchitectDecl: 'chat_agent' IDENTIFIER '{' chatAgentBody '}'; chatAgentBody: (chatCapability | chatContext | chatSynthesis)*; chatCapability: 'capability' IDENTIFIER block; chatContext: 'context' IDENTIFIER block; chatSynthesis: 'synthesize' expression '->' block;
+---
 
-// --- Natural Language Code Generation --- nlCodeGenExpr: 'nl_generate' expression 'as' typeExpr; nlInterpretExpr: 'nl_interpret' expression; nlTranslateExpr: 'nl_translate' expression 'to' typeExpr;
+27. Constraints
 
-=============================================================================== SECTION 28: GREEN COMPUTING / DATA CENTRE OPTIMIZATION RULES
-// --- Power/Thermal/Water Optimization --- greenComputingAttr: '#green' '(' greenArgs ')'; greenArgs: 'minimize_power' '=' expression | 'minimize_heat' '=' expression | 'minimize_water' '=' expression | 'maximize_efficiency' '=' expression;
+Constraints express conditions that must hold.
 
-// --- Thermal Throttling Prevention --- thermalOptDecl: 'thermal_optimize' '{' thermalOptBody '}'; thermalOptBody: ('threshold' expression ';')* ('strategy' optStrategy ';')* block;
+Examples:
 
-// --- Resource Conservation --- resourceConserveDecl: 'conserve' '(' resourceType (',' resourceType)* ')' block; resourceType: 'power' | 'water' | 'heat' | 'compute' | 'memory' | 'storage' | 'network';
+latency
+bandwidth
+precision
+reliability
+energy
+memory
+communication
+topology
+security
+fault tolerance
 
-=============================================================================== SECTION 29: DEVELOPER RELATIONS / SELF-DISCOVERY RULES
-// --- Self-Discovery in IDE --- selfDiscoverDecl: 'self_discover' '{' discoverConfig* '}'; discoverConfig: 'ide_detect' STRING ';' | 'language_server' '=' BOOLEAN ';' | 'auto_suggest' '=' BOOLEAN ';' | 'context_aware' '=' BOOLEAN ';' | 'proactive_assist' '=' BOOLEAN ';';
+Constraints must remain distinct from requirements and preferences.
 
-// --- Developer Analytics --- developerAnalyticsDecl: 'developer_analytics' '{' analyticsConfig* '}'; analyticsConfig: 'track_developers' '=' BOOLEAN ';' | 'track_companies' '=' BOOLEAN ';' | 'track_countries' '=' BOOLEAN ';' | 'track_licenses' '=' BOOLEAN ';' | 'track_usage' '=' BOOLEAN ';';
+---
 
-// --- License Tracking --- licenseTrackingDecl: 'license' IDENTIFIER '{' licenseBody '}'; licenseBody: ('developer' IDENTIFIER ';')* ('company' IDENTIFIER ';')* ('country' STRING ';')* ('type' STRING ';')* ('expires' TIMESTAMP ';')?;
+28. Preferences
 
-=============================================================================== SECTION 30: HIGHER-KINDED TYPES AND TYPE CLASSES
-// --- Higher-Kinded Types --- higherKindedType: 'hkt' '<' typeParam '.' typeExpr '>'; typeClassDecl: 'typeclass' IDENTIFIER typeParams? '{' typeClassBody '}'; typeClassBody: (typeClassMethod | typeClassAssocType); typeClassMethod: 'fn' IDENTIFIER '(' parameterList? ')' returnType? ';'; typeClassAssocType: 'associated' 'type' IDENTIFIER (':' typeConstraint)? ';'; typeClassInstance: 'instance' typeParams? IDENTIFIER 'for' typeExpr '{' typeClassInstanceBody '}'; typeClassInstanceBody: (methodDef);
+Preferences guide implementation selection.
 
-// --- Type Bounds --- typeBound: 'extends' typeExpr; typeBoundList: typeBound ('+' typeBound)*;
+A preference:
 
-=============================================================================== SECTION 31: ADDITIONAL UBUNTU DOMAIN BLOCKS
-// --- Additional AI domain blocks not yet covered --- advancedAiForBusiness: 'ai_for_business' IDENTIFIER '{' statement* '}'; advancedVrAr: 'vr_ar_interaction' IDENTIFIER '{' statement* '}'; advancedImageVideo: 'image_video_analysis' IDENTIFIER '{' statement* '}'; advancedExplainableDeepLearning: 'explainable_deep_learning' IDENTIFIER '{' statement* '}'; advancedKnowledgeGraph: 'knowledge_graph' IDENTIFIER '{' statement* '}'; advancedProbabilisticModel: 'probabilistic_graphical_model' IDENTIFIER '{' statement* '}'; advancedTransferLearning: 'transfer_learning' IDENTIFIER '{' statement* '}'; advancedMultiAgent: 'multi_agent' IDENTIFIER '{' statement* '}'; advancedAutonomousSystem: 'autonomous_system' IDENTIFIER '{' statement* '}'; advancedGraphModeling: 'graph' IDENTIFIER '{' statement* '}';
+- must not change semantic meaning;
+- may be ignored if infeasible;
+- should be visible to optimization/placement;
+- should be deterministic when determinism is required.
 
-=============================================================================== UPDATED TOTALS
-TOTAL RULES: ~1,600 (NIMBUS v3.0 Universal Trinity Edition + UBUNTU Integration) KEYWORDS: 160+ total (95 original + 25 Zamani + 20 Sankofa + 20 UBUNTU/AGI Governance) ALL PARADIGMS: 90+ (original 71 + 9 Sankofa + 10+ AI/Cognitive/Edge/Omniversal paradigms) TARGET PLATFORMS: x86_64, ARM64, RISC-V, WASM, LLVM IR, bare metal, Android, iOS, cloud, IoT, USSD, FPGA, quantum, nano, neuromorphic, stellar, Z-MMP, Tariro Runtime COMPILER: ZUTC (Zamani Unified Toolchain Compiler) FILE EXTENSION: .zn (preserved) RUNTIME: POCO-REAF (Persistent, Omni-Cognitive, Reactive, Event-driven, Adaptive, Self-healing)
+---
 
-=============================================================================== SECTION 32: COMPLETE UBUNTU GRAMMAR RULES (Verbatim from Document)
-// UBUNTU Grammar File // Defines the syntax and structure of the UBUNTU programming language. // UBUNTU is a hybrid language combining symbolic and connectionist AI approaches // for building AGI systems.
+29. Hints
 
-// --- Modules --- MODULE : 'module' IDENTIFIER '{' MODULE_BODY '}' ; MODULE_BODY : STATEMENT MODULE_BODY | /* epsilon */ ;
+Hints are optional implementation guidance.
 
-// --- Statements --- STATEMENT : DECLARATION | ASSIGNMENT | REASONING_STATEMENT | LEARNING_STATEMENT | CONCURRENCY_STATEMENT | EXCEPTION_HANDLING_STATEMENT | TYPE_CHECK | DOCSTRING | TEST_STATEMENT | INTEROPERABILITY_STATEMENT ; DECLARATION : TYPE IDENTIFIER ';' ; ASSIGNMENT : IDENTIFIER ASSIGN EXPRESSION ';' ; REASONING_STATEMENT : REASONING_KEYWORD EXPRESSION ';' ; LEARNING_STATEMENT : LEARNING_KEYWORD EXPRESSION ';' ; CONCURRENCY_STATEMENT : 'concurrent' EXPRESSION '{' STATEMENT '}' ; EXCEPTION_HANDLING_STATEMENT : 'try' '{' STATEMENT '}' 'catch' '{' STATEMENT '}' ; TYPE_CHECK : 'type_check' TYPE IDENTIFIER ';' ; DOCSTRING : '"""' ~["]* '"""' ; TEST_STATEMENT : 'test' EXPRESSION '{' STATEMENT '}' ; INTEROPERABILITY_STATEMENT : 'interop' IDENTIFIER '{' STATEMENT '}' ;
+A hint:
 
-// --- Expressions --- EXPRESSION : TERM EXPRESSION_TAIL ; EXPRESSION_TAIL : ADD_OP TERM EXPRESSION_TAIL | /* epsilon / ; TERM : FACTOR TERM_TAIL ; TERM_TAIL : MUL_OP FACTOR TERM_TAIL | / epsilon */ ; FACTOR : NUMBER | IDENTIFIER | LPAREN EXPRESSION RPAREN | HIGHER_ORDER_FUNCTION ; HIGHER_ORDER_FUNCTION : 'function' '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ; HIGHER_ORDER_FUNCTION_WITH_CLOSURE : 'function' '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ;
+- does not establish semantic correctness;
+- does not guarantee physical realization;
+- must not override safety rules;
+- must not bypass semantic validation.
 
-// --- Types --- TYPE : BASIC_TYPE | COMPLEX_TYPE ; BASIC_TYPE : 'int' | 'float' | 'string' ; COMPLEX_TYPE : 'list' OF TYPE | 'map' OF TYPE TO TYPE ; DEPENDENT_TYPE : TYPE '(' PARAMETER_LIST ')' ; LINEAR_TYPE : TYPE '[' EXPRESSION ']' ;
+---
 
-// --- Reasoning and Learning --- REASONING_KEYWORD : 'infer' | 'deduce' ; LEARNING_KEYWORD : 'learn' | 'adapt' ;
+30. Memory Model
 
-// --- Knowledge Representation --- KNOWLEDGE_STATEMENT : KNOWLEDGE_KEYWORD EXPRESSION ';' ; KNOWLEDGE_KEYWORD : 'assert' | 'retract' ;
+Zamani's memory model may support:
 
-// --- Advanced Pattern Matching --- PATTERN_MATCHING : 'match' EXPRESSION '{' PATTERN_CASES '}' ; PATTERN_CASES : PATTERN_CASE PATTERN_CASES | /* epsilon */ ; PATTERN_CASE : 'case' PATTERN '=>' STATEMENT ;
+- ownership;
+- borrowing;
+- references;
+- allocation;
+- deallocation;
+- regions;
+- shared memory;
+- distributed memory;
+- accelerator memory;
+- persistent memory;
+- address spaces;
+- memory capabilities;
+- quantum memory abstractions.
 
-// --- Concurrency with Actors --- CONCURRENCY_WITH_ACTORS : 'actor' IDENTIFIER '{' STATEMENT '}' ;
+Memory syntax must remain independent of a particular machine's RAM or VRAM size.
 
-// --- Effect Systems --- EFFECT_SYSTEM : 'effect' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// --- Domain-Specific Features --- DOMAIN_SPECIFIC_DATA_TYPE : 'domain_data_type' IDENTIFIER ; DOMAIN_SPECIFIC_OPERATION : 'domain_operation' IDENTIFIER ;
+31. Ownership and Safety
 
-// --- Hybrid Quantum-Classical Computing --- HYBRID_QUANTUM_CLASSICAL_COMPUTING : 'hybrid_quantum_classical' IDENTIFIER '{' STATEMENT '}' ;
+Ownership and borrowing must be represented semantically.
 
-// --- Advanced Causal Reasoning --- ADVANCED_CAUSAL_REASONING : 'causal_reasoning' EXPRESSION ;
+The compiler must be able to reason about:
 
-// --- Explainable AI (XAI) --- EXPLAINABLE_AI : 'explain' EXPRESSION ;
+- lifetime;
+- aliasing;
+- mutation;
+- ownership transfer;
+- resource ownership;
+- concurrency safety;
+- distributed ownership where supported.
 
-// --- Transfer Learning --- TRANSFER_LEARNING : 'transfer_learning' IDENTIFIER '{' STATEMENT '}' ;
+Unsafe physical memory operations must not become implicit merely because a target provides them.
 
-// --- Multi-Agent Systems --- MULTI_AGENT_SYSTEM : 'multi_agent' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// --- Cognitive Architectures for Decision Making --- COGNITIVE_ARCHITECTURE_FOR_DECISION_MAKING : 'cognitive_architecture' IDENTIFIER '{' STATEMENT '}' ;
+32. Concurrency
 
-// --- Advanced Natural Language Processing --- ADVANCED_NATURAL_LANGUAGE_PROCESSING : 'nlp' EXPRESSION ;
+Zamani may support:
 
-// --- Graph-Based Modeling --- GRAPH_BASED_MODELING : 'graph' IDENTIFIER '{' STATEMENT '}' ;
+- asynchronous execution;
+- tasks;
+- futures;
+- spawn;
+- await;
+- actors;
+- channels;
+- synchronization;
+- parallel loops;
+- data parallelism;
+- task parallelism;
+- pipelines;
+- reductions;
+- deterministic parallelism;
+- distributed concurrency.
 
-// --- Uncertainty Quantification --- UNCERTAINTY_QUANTIFICATION : 'uncertainty' EXPRESSION ;
+The language must not encode a fixed thread count.
 
-// --- Autonomous Systems --- AUTONOMOUS_SYSTEM : 'autonomous' IDENTIFIER '{' STATEMENT '}' ;
+This is valid:
 
-// --- Quantum Machine Learning --- QUANTUM_MACHINE_LEARNING : 'quantum_ml' IDENTIFIER '{' STATEMENT '}' ;
+parallel
 
-// --- Explainable Reinforcement Learning --- EXPLAINABLE_REINFORCEMENT_LEARNING : 'explainable_rl' IDENTIFIER '{' STATEMENT '}' ;
+A target may realize it using:
 
-// --- Cognitive Architectures for Human-AI Collaboration --- COGNITIVE_ARCHITECTURE_FOR_HUMAN_AI_COLLABORATION : 'cognitive_architecture' IDENTIFIER '{' STATEMENT '}' ;
+1 thread
+8 threads
+1000 threads
+GPU execution
+distributed execution
+future hardware
 
-// --- Advanced Knowledge Graphs --- ADVANCED_KNOWLEDGE_GRAPH : 'knowledge_graph' IDENTIFIER '{' STATEMENT '}' ;
+subject to semantics and capabilities.
 
-// --- Probabilistic Graphical Models --- PROBABILISTIC_GRAPHICAL_MODEL : 'probabilistic_graphical_model' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// --- Transfer Learning for AGI --- TRANSFER_LEARNING_FOR_AGI : 'transfer_learning' IDENTIFIER '{' STATEMENT '}' ;
+33. Determinism
 
-// --- Autonomous Systems for Complex Environments --- AUTONOMOUS_SYSTEM_FOR_COMPLEX_ENVIRONMENT : 'autonomous_system' IDENTIFIER '{' STATEMENT '}' ;
+Where deterministic semantics are promised, implementation choices must not silently alter observable program behavior.
 
-// --- Advanced Natural Language Generation --- ADVANCED_NATURAL_LANGUAGE_GENERATION : 'nl_generation' IDENTIFIER '{' STATEMENT '}' ;
+The language must distinguish:
 
-// --- Graph Neural Networks --- GRAPH_NEURAL_NETWORK : 'graph_neural_network' IDENTIFIER '{' STATEMENT '}' ;
+deterministic
+nondeterministic
+implementation-defined
+unspecified
+target-dependent
 
-// --- Causal Reasoning for Decision Making --- CAUSAL_REASONING_FOR_DECISION_MAKING : 'causal_reasoning' IDENTIFIER '{' STATEMENT '}' ;
+These categories must be explicitly documented.
 
-// --- Validation and Error Handling --- VALIDATION : 'validate' EXPRESSION ; ERROR_HANDLING : 'try' '{' STATEMENT '}' 'catch' '{' STATEMENT '}' ;
+---
 
-// --- Type Hints --- TYPE_HINT : 'int' | 'float' | 'string' ;
+34. Distributed Computing
 
-// --- Additional Features ---
+Distributed semantics may include:
 
-// Hybrid Approaches HYBRID_APPROACH : 'hybrid' IDENTIFIER '{' STATEMENT '}' ;
+- nodes;
+- processes;
+- actors;
+- services;
+- messages;
+- channels;
+- replication;
+- partitioning;
+- consistency;
+- transactions;
+- collectives;
+- fault tolerance;
+- placement;
+- deployment;
+- distributed resources.
 
-// Advanced Reasoning Mechanisms ADVANCED_REASONING_MECHANISM : 'advanced_reasoning' IDENTIFIER '{' STATEMENT '}' ;
+There is no universal maximum number of nodes.
 
-// Cognitive Architectures COGNITIVE_ARCHITECTURE : 'cognitive' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// Neural-Symbolic Integration NEURAL_SYMBOLIC_INTEGRATION : 'neural_symbolic' IDENTIFIER '{' STATEMENT '}' ;
+35. Networking
 
-// Explainability and Transparency EXPLAINABILITY : 'explain' EXPRESSION ; TRANSPARENCY : 'transparent' EXPRESSION ;
+Networking syntax may represent:
 
-// Safety and Security SAFETY : 'safety' IDENTIFIER '{' STATEMENT '}' ; SECURITY : 'security' IDENTIFIER '{' STATEMENT '}' ;
+- endpoints;
+- abstract addresses;
+- protocols;
+- channels;
+- sockets;
+- requests;
+- responses;
+- streams;
+- service discovery;
+- communication requirements;
+- network capabilities.
 
-// Ethics and Governance ETHICS : 'ethics' IDENTIFIER '{' STATEMENT '}' ; GOVERNANCE : 'governance' IDENTIFIER '{' STATEMENT '}' ;
+The grammar must not force physical addresses into portable program semantics unless the programmer explicitly requests target-specific behavior.
 
-// Advanced Time Series Analysis ADVANCED_TIME_SERIES_ANALYSIS : 'time_series_analysis' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// Explainable Deep Learning EXPLAINABLE_DEEP_LEARNING : 'explainable_deep_learning' IDENTIFIER '{' STATEMENT '}' ;
+36. Data
 
-// Cognitive Architectures for Autonomous Systems COGNITIVE_ARCHITECTURE_FOR_AUTONOMOUS_SYSTEMS : 'cognitive_architecture' IDENTIFIER '{' STATEMENT '}' ;
+The data domain may support:
 
-// Human-AI Collaboration HUMAN_AI_COLLABORATION : 'human_ai_collaboration' IDENTIFIER '{' STATEMENT '}' ;
+- collections;
+- records;
+- tables;
+- schemas;
+- streams;
+- datasets;
+- tensors;
+- transformations;
+- queries;
+- pipelines;
+- serialization;
+- persistence;
+- provenance.
 
-// Advanced Robotics ADVANCED_ROBOTICS : 'advanced_robotics' IDENTIFIER '{' STATEMENT '}' ;
+Data semantics must remain independent of a particular storage vendor.
 
-// Natural Language Generation NATURAL_LANGUAGE_GENERATION : 'nl_generation' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// Graph-Based Deep Learning GRAPH_BASED_DEEP_LEARNING : 'graph_based_deep_learning' IDENTIFIER '{' STATEMENT '}' ;
+37. AI and Machine Learning
 
-// Causal Discovery CAUSAL_DISCOVERY : 'causal_discovery' IDENTIFIER '{' STATEMENT '}' ;
+Zamani may represent:
 
-// Probabilistic Modeling PROBABILISTIC_MODELING : 'probabilistic_modeling' IDENTIFIER '{' STATEMENT '}' ;
+- models;
+- tensors;
+- datasets;
+- training;
+- inference;
+- optimization;
+- automatic differentiation;
+- probabilistic computation;
+- neural computation;
+- symbolic computation;
+- agents;
+- pipelines;
+- distributed training;
+- deployment;
+- model capabilities.
 
-// Advanced Computer Vision ADVANCED_COMPUTER_VISION : 'advanced_computer_vision' IDENTIFIER '{' STATEMENT '}' ;
+The grammar must not make:
 
-// Advanced Predictive Analytics ADVANCED_PREDICTIVE_ANALYTICS : 'predictive_analytics' IDENTIFIER '{' STATEMENT '}' ;
+PyTorch
+TensorFlow
+JAX
+CUDA
+ROCm
+vendor-specific framework
 
-// Advanced Prescriptive Analytics ADVANCED_PRESCRIPTIVE_ANALYTICS : 'prescriptive_analytics' IDENTIFIER '{' STATEMENT '}' ;
+part of the core language semantics.
 
-// Advanced Data Visualization ADVANCED_DATA_VISUALIZATION : 'data_visualization' IDENTIFIER '{' STATEMENT '}' ;
+Framework integration belongs under interoperability and compiler/backend layers.
 
-// Advanced Human-AI Collaboration ADVANCED_HUMAN_AI_COLLABORATION : 'advanced_human_ai_collaboration' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// Advanced Explainability and Transparency ADVANCED_EXPLAINABILITY_AND_TRANSPARENCY : 'explainability_and_transparency' IDENTIFIER '{' STATEMENT '}' ;
+38. AI Agent Semantics
 
-// Advanced Safety and Security ADVANCED_SAFETY_AND_SECURITY : 'safety_and_security' IDENTIFIER '{' STATEMENT '}' ;
+Agent syntax may describe:
 
-// Advanced Ethics and Governance ADVANCED_ETHICS_AND_GOVERNANCE : 'ethics_and_governance' IDENTIFIER '{' STATEMENT '}' ;
+- agent identity;
+- capabilities;
+- goals;
+- observations;
+- actions;
+- policies;
+- memory;
+- planning;
+- learning;
+- inference;
+- communication.
 
-// Advanced Quantum Machine Learning ADVANCED_QUANTUM_MACHINE_LEARNING : 'quantum_machine_learning' IDENTIFIER '{' STATEMENT '}' ;
+Runtime cognition must remain outside the grammar.
 
-// Advanced Causal Reasoning (duplicate rule name, same syntax) // ADVANCED_CAUSAL_REASONING : 'causal_reasoning' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// Advanced Cognitive Architectures ADVANCED_COGNITIVE_ARCHITECTURES : 'cognitive_architectures' IDENTIFIER '{' STATEMENT '}' ;
+39. Sankofa
 
-// Advanced Human-Computer Interaction ADVANCED_HUMAN_COMPUTER_INTERACTION : 'human_computer_interaction' IDENTIFIER '{' STATEMENT '}' ;
+Sankofa concepts are retained as a language-design domain.
 
-// Advanced Data Analytics ADVANCED_DATA_ANALYTICS : 'data_analytics' IDENTIFIER '{' STATEMENT '}' ;
+They may include:
 
-// Advanced Machine Learning for Time Series Data ADVANCED_MACHINE_LEARNING_FOR_TIME_SERIES_DATA : 'time_series_ml' IDENTIFIER '{' STATEMENT '}' ;
+- remember;
+- recall;
+- learn;
+- history;
+- provenance;
+- temporal knowledge;
+- wisdom;
+- inference;
+- consensus;
+- inter-memory;
+- ancestral/reference information.
 
-// Advanced Computer Vision for Object Recognition ADVANCED_COMPUTER_VISION_FOR_OBJECT_RECOGNITION : 'object_recognition' IDENTIFIER '{' STATEMENT '}' ;
+The grammar describes the intent and syntax.
 
-// Advanced Robotics for Autonomous Systems ADVANCED_ROBOTICS_FOR_AUTONOMOUS_SYSTEMS : 'autonomous_robotics' IDENTIFIER '{' STATEMENT '}' ;
+It does not implement memory storage.
 
-// Advanced Quantum Computing ADVANCED_QUANTUM_COMPUTING : 'quantum_computing' IDENTIFIER '{' STATEMENT '}' ;
+For example:
 
-// Advanced Blockchain Technology ADVANCED_BLOCKCHAIN_TECHNOLOGY : 'blockchain_technology' IDENTIFIER '{' STATEMENT '}' ;
+remember x
 
-// Advanced Internet of Things (IoT) ADVANCED_INTERNET_OF_THINGS : 'iot' IDENTIFIER '{' STATEMENT '}' ;
+must lower into semantic memory operations.
 
-// Advanced Cybersecurity ADVANCED_CYBERSECURITY : 'cybersecurity' IDENTIFIER '{' STATEMENT '}' ;
+The parser must never itself maintain persistent memory.
 
-// Advanced Data Science ADVANCED_DATA_SCIENCE : 'data_science' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// Advanced Artificial Intelligence for Business ADVANCED_ARTIFICIAL_INTELLIGENCE_FOR_BUSINESS : 'ai_for_business' IDENTIFIER '{' STATEMENT '}' ;
+40. Temporal Computation
 
-// Advanced Human-Computer Interaction for VR and AR ADVANCED_HUMAN_COMPUTER_INTERACTION_FOR_VR_AND_AR : 'vr_ar_interaction' IDENTIFIER '{' STATEMENT '}' ;
+Temporal semantics may represent:
 
-// Advanced Machine Learning for Recommendation Systems ADVANCED_MACHINE_LEARNING_FOR_RECOMMENDATION_SYSTEMS : 'recommendation_systems' IDENTIFIER '{' STATEMENT '}' ;
+- time;
+- intervals;
+- temporal values;
+- temporal constraints;
+- event ordering;
+- temporal state;
+- history;
+- provenance;
+- temporal queries.
 
-// Advanced NLP for Sentiment Analysis ADVANCED_NLP_FOR_SENTIMENT_ANALYSIS : 'sentiment_analysis' IDENTIFIER '{' STATEMENT '}' ;
+No fixed timestamp width or finite temporal universe should be imposed by the grammar.
 
-// Advanced Computer Vision for Image and Video Analysis ADVANCED_COMPUTER_VISION_FOR_IMAGE_AND_VIDEO_ANALYSIS : 'image_video_analysis' IDENTIFIER '{' STATEMENT '}' ;
+---
 
-// Advanced Machine Learning for Time Series Forecasting ADVANCED_MACHINE_LEARNING_FOR_TIME_SERIES_FORECASTING : 'time_series_forecasting' IDENTIFIER '{' STATEMENT '}' ;
+41. Multi-Timeline System
 
-// Advanced NLP for Text Generation ADVANCED_NLP_FOR_TEXT_GENERATION : 'text_generation' IDENTIFIER '{' STATEMENT '}' ;
+MTS concepts are retained as an optional advanced semantic domain.
 
-// Advanced Computer Vision for Object Detection ADVANCED_COMPUTER_VISION_FOR_OBJECT_DETECTION : 'object_detection' IDENTIFIER '{' STATEMENT '}' ;
+They may include:
 
-// Advanced Robotics for Autonomous Navigation ADVANCED_ROBOTICS_FOR_AUTONOMOUS_NAVIGATION : 'autonomous_navigation' IDENTIFIER '{' STATEMENT '}' ;
+- timelines;
+- slices;
+- fork;
+- merge;
+- observe;
+- rewind;
+- speculative computation;
+- counterfactual computation;
+- fork/merge semantics;
+- temporal observation.
 
-// Advanced Explainability and Transparency for AI Models ADVANCED_EXPLAINABILITY_AND_TRANSPARENCY_FOR_AI_MODELS : 'explainability_and_transparency' IDENTIFIER '{' STATEMENT '}' ;
+There is no fixed number of timelines.
 
-// Advanced Cognitive Architectures for Human-AI Collaboration ADVANCED_COGNITIVE_ARCHITECTURES_FOR_HUMAN_AI_COLLABORATION : 'human_ai_collaboration' IDENTIFIER '{' STATEMENT '}' ;
+The runtime is responsible for actual timeline management.
 
-=============================================================================== SECTION 33: COMPLETE OOP GRAMMAR RULES (Verbatim from Document)
-// --- Class Definition --- CLASS_DEFINITION : 'class' IDENTIFIER EXTENDS_CLAUSE '{' CLASS_BODY '}' ; EXTENDS_CLAUSE : 'extends' IDENTIFIER | /* epsilon / ; CLASS_BODY : CLASS_MEMBER CLASS_BODY | / epsilon */ ; CLASS_MEMBER : PROPERTY_DEFINITION | METHOD_DEFINITION | CONSTRUCTOR_DEFINITION ;
+The grammar only describes source intent.
 
-// --- Properties and Methods --- PROPERTY_DEFINITION : ACCESS_MODIFIER TYPE IDENTIFIER ';' ; METHOD_DEFINITION : ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; ACCESS_MODIFIER : 'public' | 'private' | 'protected' ; RETURN_TYPE : TYPE | /* epsilon */ ;
+---
 
-// --- Constructors --- CONSTRUCTOR_DEFINITION : 'function' IDENTIFIER '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ;
+42. Nano Computing
 
-// --- Static Members --- STATIC_PROPERTY_DEFINITION : 'static' ACCESS_MODIFIER TYPE IDENTIFIER ';' ; STATIC_METHOD_DEFINITION : 'static' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ;
+Nano-oriented concepts may include:
 
-// --- Abstraction --- ABSTRACT_CLASS_DEFINITION : 'abstract' 'class' IDENTIFIER '{' CLASS_BODY '}' ; ABSTRACT_METHOD_DEFINITION : 'abstract' 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE ';' ; ABSTRACT_PROPERTY_DEFINITION : 'abstract' ACCESS_MODIFIER TYPE IDENTIFIER ';' ;
+- atoms;
+- molecules;
+- materials;
+- nano-agents;
+- interactions;
+- capabilities;
+- protocols;
+- assembly;
+- deployment.
 
-// --- Polymorphism --- PARAMETER_LIST : PARAMETER PARAMETER_LIST_TAIL ; PARAMETER_LIST_TAIL : ',' PARAMETER PARAMETER_LIST_TAIL | /* epsilon */ ;
+The grammar must not embed an immutable physical chemistry implementation.
 
-// --- Interface Definition --- INTERFACE_DEFINITION : 'interface' IDENTIFIER '{' INTERFACE_BODY '}' ; INTERFACE_BODY : INTERFACE_MEMBER INTERFACE_BODY | /* epsilon */ ; INTERFACE_MEMBER : METHOD_DEFINITION ; INTERFACE_INHERITANCE : 'interface' IDENTIFIER 'extends' IDENTIFIER_LIST '{' INTERFACE_BODY '}' ;
+For example, element names and orbital models belong to semantic libraries/domain models rather than forcing the parser to contain every future scientific entity.
 
-// --- Final Classes and Methods --- FINAL_CLASS_DEFINITION : 'final' 'class' IDENTIFIER EXTENDS_CLAUSE '{' CLASS_BODY '}' ; FINAL_METHOD_DEFINITION : 'final' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ;
+---
 
-// --- Method Overriding with @Override --- METHOD_DEFINITION : '@Override' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; METHOD_HIDING_WITH_NEW_MODIFIER : 'new' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ;
+43. Dependent Types
 
-// --- Static Classes --- STATIC_CLASS_DEFINITION : 'static' 'class' IDENTIFIER '{' CLASS_BODY '}' ;
+The language may support dependent type concepts such as:
 
-// --- Inner Classes --- INNER_CLASS_DEFINITION : 'class' IDENTIFIER '{' CLASS_BODY '}' ;
+Pi
+Sigma
+identity
 
-// --- Anonymous Classes --- ANONYMOUS_CLASS_DEFINITION : 'new' IDENTIFIER '(' PARAMETER_LIST ')' '{' CLASS_BODY '}' ;
+but the syntax must be mapped into the common type system.
 
-// --- Enum Classes --- ENUM_DEFINITION : 'enum' IDENTIFIER '{' ENUM_BODY '}' ; ENUM_BODY : ENUM_MEMBER ENUM_BODY | /* epsilon */ ; ENUM_MEMBER : IDENTIFIER ; ENUM_TYPE_PARAMETER : 'enum' IDENTIFIER '[' TYPE_PARAMETER ']' ; ENUM_OPERATOR_OVERLOAD_DEFINITION : 'operator' OPERATOR '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ;
+Dependent types must integrate with:
 
-// --- Sealed Classes --- SEALED_CLASS_DEFINITION : 'sealed' 'class' IDENTIFIER EXTENDS_CLAUSE PERMITS_CLAUSE '{' CLASS_BODY '}' ; PERMITS_CLAUSE : 'permits' IDENTIFIER_LIST ; SEALED_CLASS_WITH_PERMITS : 'sealed' 'class' IDENTIFIER 'permits' IDENTIFIER_LIST '{' CLASS_BODY '}' ; SEALED_INTERFACE_DEFINITION : 'sealed' 'interface' IDENTIFIER '{' INTERFACE_BODY '}' ;
+- type checking;
+- generic parameters;
+- const expressions;
+- shape expressions;
+- resource expressions;
+- capability constraints.
 
-// --- Record Classes --- RECORD_DEFINITION : 'record' IDENTIFIER '(' PARAMETER_LIST ')' '{' RECORD_BODY '}' ; RECORD_BODY : RECORD_MEMBER RECORD_BODY | /* epsilon */ ; RECORD_MEMBER : PROPERTY_DEFINITION ; RECORD_INHERITANCE : 'record' IDENTIFIER '(' PARAMETER_LIST ')' 'extends' IDENTIFIER '{' RECORD_BODY '}' ; RECORD_CLASS_INHERITANCE : 'record' IDENTIFIER '(' PARAMETER_LIST ')' 'extends' IDENTIFIER '{' RECORD_BODY '}' ; RECORD_INTERFACE_INHERITANCE : 'record' IDENTIFIER '(' PARAMETER_LIST ')' 'implements' IDENTIFIER '{' RECORD_BODY '}' ; RECORD_STRUCT_DEFINITION : 'record' 'struct' IDENTIFIER '(' PARAMETER_LIST ')' '{' RECORD_BODY '}' ;
+They must not create a second type system.
 
-// --- Pattern Matching --- PATTERN_MATCHING_STATEMENT : 'match' '(' EXPRESSION ')' '{' PATTERN_CASES '}' ; PATTERN_CASES : PATTERN_CASE PATTERN_CASES | /* epsilon */ ; PATTERN_CASE : 'case' PATTERN '=>' EXPRESSION ';' ; PATTERN_GUARD : 'when' EXPRESSION ;
+---
 
-// --- Type Parameters and Arguments --- TYPE_PARAMETER : IDENTIFIER ; TYPE_ARGUMENT : TYPE ; TYPE_PARAMETER_CONSTRAINT : 'where' IDENTIFIER ':' TYPE ; TYPE_BOUND : 'extends' TYPE ;
+44. Linear and Affine Types
 
-// --- Wildcard Types --- WILDCARD_TYPE : '?' ('extends' | 'super') TYPE ;
+Linear and affine concepts may be used for:
 
-// --- Type Inference --- VARIABLE_DECLARATION : 'var' IDENTIFIER '=' EXPRESSION ';' ; INFERRED_COMPLEX_TYPE : IDENTIFIER '=' EXPRESSION ';' ; INFERRED_GLOBAL_VARIABLE : 'var' IDENTIFIER '=' EXPRESSION ';' ; INFERRED_LAMBDA_TYPE : 'var' IDENTIFIER '=' LAMBDA_EXPRESSION ';' ; INFERRED_PROPERTY_TYPE : 'var' IDENTIFIER '=' EXPRESSION ';' ; INFERRED_RECORD_PROPERTY : IDENTIFIER '=' EXPRESSION ';' ; INFERRED_RETURN_TYPE : 'var' IDENTIFIER '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ; INFERRED_TYPE_FIELD : IDENTIFIER '=' EXPRESSION ';' ;
+- resources;
+- capabilities;
+- quantum values;
+- ownership;
+- unique handles;
+- communication endpoints.
 
-// --- Lambda Expressions --- LAMBDA_EXPRESSION : '(' PARAMETER_LIST ')' '=>' EXPRESSION ;
+The semantic analyzer, not the grammar, determines whether the constraints are satisfied.
 
-// --- Method References --- METHOD_REFERENCE : IDENTIFIER '::' IDENTIFIER ;
+---
 
-// --- Functional Interfaces --- FUNCTIONAL_INTERFACE_DEFINITION : 'interface' IDENTIFIER '{' FUNCTIONAL_INTERFACE_BODY '}' ; FUNCTIONAL_INTERFACE_BODY : FUNCTIONAL_INTERFACE_MEMBER FUNCTIONAL_INTERFACE_BODY | /* epsilon */ ; FUNCTIONAL_INTERFACE_MEMBER : METHOD_DEFINITION ;
+45. Effect System
 
-// --- Default Methods --- DEFAULT_METHOD_DEFINITION : 'default' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; DEFAULT_INTERFACE_METHOD : 'default' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ;
+Effects may represent:
 
-// --- Static Methods in Interfaces --- STATIC_METHOD_DEFINITION_IN_INTERFACE : 'static' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; STATIC_INTERFACE_METHOD : 'static' 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ;
+- I/O;
+- allocation;
+- mutation;
+- concurrency;
+- quantum execution;
+- networking;
+- randomness;
+- persistence;
+- security;
+- external calls;
+- hardware interaction.
 
-// --- Private Methods in Interfaces --- PRIVATE_INTERFACE_METHOD : 'private' 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; PRIVATE_METHOD_DEFINITION_IN_INTERFACE : 'private' 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ;
+Effects must be compositional.
 
-// --- Operator Overloading --- OPERATOR_OVERLOAD_DEFINITION : 'operator' OPERATOR '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ; EXPLICIT_OPERATOR_OVERLOAD_DEFINITION : 'explicit' 'operator' OPERATOR '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ; IMPLICIT_OPERATOR_OVERLOAD_DEFINITION : 'implicit' 'operator' OPERATOR '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ;
+Effect syntax must map to the semantic effect system.
 
-// --- Indexers --- INDEXER_DEFINITION : 'this' '[' PARAMETER_LIST ']' '{' GETTER ';' SETTER ';' '}' ; INDEXER_OVERLOAD_DEFINITION : 'operator' '[' PARAMETER_LIST ']' '{' GETTER ';' SETTER ';' '}' ; STATIC_INDEXER_DEFINITION : 'static' 'this' '[' PARAMETER_LIST ']' '{' GETTER ';' SETTER ';' '}' ; INIT_ONLY_INDEXER : 'init' 'this' '[' PARAMETER_LIST ']' '{' GETTER ';' INIT_ONLY_SETTER ';' '}' ; GLOBAL_INDEXER_DEFINITION : 'global' 'this' '[' PARAMETER_LIST ']' '{' GETTER ';' SETTER ';' '}' ;
+---
 
-// --- Events --- EVENT_DEFINITION : 'event' TYPE IDENTIFIER ';' ; EXTENSION_EVENT_DEFINITION : 'extension' 'event' TYPE IDENTIFIER '{' ADD_HANDLER ';' REMOVE_HANDLER ';' '}' ; EXTENSION_EVENT_WITH_CONSTRAINTS : 'extension' 'event' TYPE IDENTIFIER 'where' TYPE_CONSTRAINT '{' ADD_HANDLER ';' REMOVE_HANDLER ';' '}' ; EXTENSION_EVENT_WITH_PARAMETERS : 'extension' 'event' TYPE IDENTIFIER '(' PARAMETER_LIST ')' '{' ADD_HANDLER ';' REMOVE_HANDLER ';' '}' ;
+46. Contracts
 
-// --- Delegates --- DELEGATE_DEFINITION : 'delegate' RETURN_TYPE IDENTIFIER '(' PARAMETER_LIST ')' ';' ;
+The language may support:
 
-// --- Type Checking and Casting --- TYPE_CHECK : 'instanceof' EXPRESSION TYPE ; TYPE_CAST : '(' TYPE ')' EXPRESSION ;
+requires
+ensures
+invariant
 
-// --- Nullability --- NULLABILITY_ANNOTATION : '?' | /* epsilon */ ; NULLABLE_REFERENCE_TYPE : TYPE '?' ; NULL_SAFE_TYPE : TYPE '?' ;
+Contracts are semantic constraints.
 
-// --- Tuple Types --- TUPLE_TYPE : '(' TYPE_LIST ')' ; TYPE_LIST : TYPE TYPE_LIST_TAIL ; TYPE_LIST_TAIL : ',' TYPE TYPE_LIST_TAIL | /* epsilon */ ; NAMED_TUPLE_ELEMENT : IDENTIFIER ':' TYPE ; TUPLE_EQUALITY : EXPRESSION '==' EXPRESSION ; TUPLE_INEQUALITY : EXPRESSION '!=' EXPRESSION ;
+They must integrate with:
 
-// --- Async/Await --- ASYNC_METHOD_DEFINITION : 'async' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; ASYNC_ITERATOR : 'async' 'iterator' 'function' IDENTIFIER '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ; ASYNC_MAIN_METHOD : 'async' 'function' 'main' '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ; ASYNC_PROPERTY_DEFINITION : 'async' ACCESS_MODIFIER TYPE IDENTIFIER '{' GETTER ';' '}' ; ASYNC_INDEXER_DEFINITION : 'async' 'this' '[' PARAMETER_LIST ']' '{' GETTER ';' '}' ; ASYNC_EXTENSION_METHOD : 'async' 'extension' 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; ASYNC_GLOBAL_METHOD : 'async' 'global' 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; ASYNC_INTERFACE_METHOD : 'async' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; ASYNC_STREAM : 'async' 'stream' TYPE ';' ; ASYNC_DISPOSE : 'async' 'function' 'dispose' '(' ')' '{' FUNCTION_BODY '}' ;
+- type checking;
+- verification;
+- optimization safety;
+- diagnostics;
+- runtime checks where explicitly requested.
 
-// --- Extension Methods --- EXTENSION_METHOD_DEFINITION : 'extension' 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; EXTENSION_METHOD_WITH_CONSTRAINTS : 'extension' 'function' IDENTIFIER '(' PARAMETER_LIST ')' 'where' TYPE_CONSTRAINT RETURN_TYPE '{' FUNCTION_BODY '}' ; EXTENSION_PROPERTY_DEFINITION : 'extension' TYPE IDENTIFIER '{' GETTER ';' SETTER ';' '}' ; EXTENSION_PROPERTY_WITH_CONSTRAINTS : 'extension' TYPE IDENTIFIER 'where' TYPE_CONSTRAINT '{' GETTER ';' SETTER ';' '}' ; EXTENSION_OPERATOR_DEFINITION : 'extension' 'operator' OPERATOR '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ; EXTENSION_OPERATOR_WITH_CONSTRAINTS : 'extension' 'operator' OPERATOR '(' PARAMETER_LIST ')' 'where' TYPE_CONSTRAINT '{' FUNCTION_BODY '}' ;
+A contract must never be treated as a mere comment.
 
-// --- Local Functions --- LOCAL_FUNCTION_DEFINITION : 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; LOCAL_STATIC_VARIABLE : 'static' TYPE IDENTIFIER '=' EXPRESSION ';' ;
+---
 
-// --- Varargs --- VARARG_PARAMETER : '...' TYPE IDENTIFIER ;
+47. Compile-Time Computation
 
-// --- Throwing Exceptions --- THROW_STATEMENT : 'throw' EXPRESSION ';' ;
+Compile-time computation may include:
 
-// --- Try-Catch-Finally --- TRY_CATCH_FINALLY_STATEMENT : 'try' '{' BLOCK '}' CATCH_CLAUSE* FINALLY_CLAUSE? ; CATCH_CLAUSE : 'catch' '(' PARAMETER ')' '{' BLOCK '}' ; FINALLY_CLAUSE : 'finally' '{' BLOCK '}' ; EXCEPTION_HANDLING_STATEMENT : 'try' '{' STATEMENT '}' 'catch' '{' STATEMENT '}' ;
+- constant evaluation;
+- type-level computation;
+- shape computation;
+- code generation;
+- metaprogramming;
+- reflection.
 
-// --- Annotations --- ANNOTATION : '@' IDENTIFIER '(' ANNOTATION_ARGUMENTS ')' ; ANNOTATION_ARGUMENTS : ANNOTATION_ARGUMENT ANNOTATION_ARGUMENTS_TAIL ; ANNOTATION_ARGUMENTS_TAIL : ',' ANNOTATION_ARGUMENT ANNOTATION_ARGUMENTS_TAIL | /* epsilon */ ; ANNOTATION_ARGUMENT : IDENTIFIER '=' EXPRESSION ; GENERIC_ATTRIBUTE : '[' TYPE_ARGUMENT ']' ;
+Compile-time computation must have explicit evaluation boundaries.
 
-// --- Reflection --- REFLECTION_API : 'class' IDENTIFIER '.' REFLECTION_METHOD ; REFLECTION_METHOD : 'getMethods' | 'getFields' | 'newInstance' ; REFLECTION : 'reflect' IDENTIFIER '.' REFLECTION_METHOD ;
+It must not silently become an unrestricted escape hatch around language safety.
 
-// --- Named Arguments --- NAMED_ARGUMENT : IDENTIFIER '=' EXPRESSION ;
+---
 
-// --- Optional Parameters --- OPTIONAL_PARAMETER : TYPE IDENTIFIER '=' DEFAULT_VALUE ;
+48. Macros
 
-// --- Expression-Bodied Members --- EXPRESSION_BODIED_MEMBER : '=>' EXPRESSION ;
+Macros may manipulate:
 
-// --- Deconstruction --- DECONSTRUCTION_STATEMENT : '(' VARIABLE_LIST ')' '=' EXPRESSION ';' ;
+- tokens;
+- syntax trees;
+- declarations;
+- expressions;
+- generated code.
 
-// --- Init-Only Properties --- INIT_ONLY_PROPERTY_DEFINITION : 'init' ACCESS_MODIFIER TYPE IDENTIFIER ';' ; INIT_ONLY_SETTER : 'init' '{' SETTER '}' ;
+Macros must be hygienic where hygiene is promised.
 
-// --- Global Using Directives --- GLOBAL_USING_DIRECTIVE : 'global' 'using' IDENTIFIER ';' ;
+Macro expansion must still undergo:
 
-// --- File-Scoped Types --- FILE_SCOPED_TYPE_DEFINITION : 'file' 'class' IDENTIFIER '{' CLASS_BODY '}' ;
+parsing
+↓
+AST validation
+↓
+semantic analysis
+↓
+type/effect/resource checking
 
-// --- Required Properties --- REQUIRED_PROPERTY_DEFINITION : 'required' ACCESS_MODIFIER TYPE IDENTIFIER ';' ;
+Macros must not bypass the semantic model.
 
-// --- Interpolated Strings --- INTERPOLATED_STRING : '$' STRING_LITERAL ; INTERPOLATED_STRING_HANDLER : 'handler' IDENTIFIER '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ;
+---
 
-// --- Raw String Literals --- RAW_STRING_LITERAL : '"""' ~["]* '"""' ;
+49. Metaprogramming
 
-// --- List Patterns --- LIST_PATTERN : '[' PATTERN_LIST ']' ;
+Metaprogramming may support:
 
-// --- Slice Patterns --- SLICE_PATTERN : '[' PATTERN_LIST '...' PATTERN ']' ;
+- reflection;
+- introspection;
+- quotation;
+- unquotation;
+- code generation;
+- compile-time evaluation;
+- type-level programming;
+- schema generation.
 
-// --- UTF-8 String Literals --- UTF8_STRING_LITERAL : 'u8' STRING_LITERAL ;
+It must not create a hidden second compiler.
 
-// --- Primary Constructors --- PRIMARY_CONSTRUCTOR : '(' PARAMETER_LIST ')' ;
+---
 
-// --- With Expressions --- WITH_EXPRESSION : 'with' '{' PROPERTY_ASSIGNMENTS '}' ;
+50. Interoperability
 
-// --- Record Structs --- // RECORD_STRUCT_DEFINITION : 'record' 'struct' IDENTIFIER '(' PARAMETER_LIST ')' '{' RECORD_BODY '}' ; (defined above)
+Zamani may interoperate with:
 
-// --- Global Aliases --- GLOBAL_ALIAS : 'global' 'alias' IDENTIFIER '=' TYPE ;
+- C;
+- C++;
+- Rust;
+- Python;
+- WebAssembly;
+- OpenQASM;
+- QIR;
+- HDL formats;
+- serialization formats;
+- foreign ABIs.
 
-// --- Target-Typed Conditional Expressions --- TARGET_TYPED_CONDITIONAL_EXPRESSION : EXPRESSION '?' EXPRESSION ':' EXPRESSION ;
+Interoperability formats are not the canonical Zamani semantic model.
 
-// --- Covariant Returns --- COVARIANT_RETURN : 'override' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ; COVARIANT_TYPE_PARAMETER : 'out' TYPE_PARAMETER ; CONTRAVARIANT_TYPE_PARAMETER : 'in' TYPE_PARAMETER ;
+For example:
 
-// --- Static Abstract Members --- STATIC_ABSTRACT_MEMBER : 'static' 'abstract' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE ';' ;
+OpenQASM
 
-// --- Module System --- MODULE_DEFINITION : 'module' IDENTIFIER '{' MODULE_BODY '}' ;
+is an input/output/interoperability format.
 
-// --- Type Aliases --- TYPE_ALIAS : 'type' IDENTIFIER '=' TYPE ';' ;
+It is not the owner of Zamani's quantum semantics.
 
-// --- Using Directives --- USING_DIRECTIVE : 'using' IDENTIFIER ';' ;
+Likewise:
 
-// --- Implicit/Explicit Interface Implementation --- IMPLICIT_INTERFACE_IMPLEMENTATION : INTERFACE_MEMBER ; EXPLICIT_INTERFACE_IMPLEMENTATION : INTERFACE_NAME '.' INTERFACE_MEMBER ;
+QIR
+LLVM
+MLIR
 
-// --- Nested Interfaces --- NESTED_INTERFACE_DEFINITION : 'interface' IDENTIFIER '{' INTERFACE_BODY '}' ;
+may be downstream/interoperability representations but must not replace "quantum::ir".
 
-// --- Member Hiding --- MEMBER_HIDING : 'new' ACCESS_MODIFIER TYPE IDENTIFIER ';' ;
+---
 
-// --- Partial Classes/Methods --- PARTIAL_CLASS_DEFINITION : 'partial' 'class' IDENTIFIER '{' CLASS_BODY '}' ; PARTIAL_METHOD_DEFINITION : 'partial' ACCESS_MODIFIER 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE '{' FUNCTION_BODY '}' ;
+51. Dialects
 
-// --- Multiple Inheritance --- MULTIPLE_INHERITANCE : 'class' IDENTIFIER 'extends' IDENTIFIER_LIST '{' CLASS_BODY '}' ; MULTILEVEL_INHERITANCE : 'class' IDENTIFIER 'extends' IDENTIFIER '{' CLASS_BODY '}' ; HIERARCHICAL_INHERITANCE : 'class' IDENTIFIER 'extends' IDENTIFIER '{' CLASS_BODY '}' ; HYBRID_INHERITANCE : 'class' IDENTIFIER 'extends' IDENTIFIER 'implements' IDENTIFIER_LIST '{' CLASS_BODY '}' ; MULTIPLE_INTERFACE_IMPLEMENTATION : 'class' IDENTIFIER 'implements' IDENTIFIER_LIST '{' CLASS_BODY '}' ;
+A dialect is an explicit extension of Zamani.
 
-// --- Mixin Classes --- MIXIN_CLASS : 'mixin' IDENTIFIER '{' CLASS_BODY '}' ;
+Every dialect must define:
 
-// --- Traits --- TRAIT : 'trait' IDENTIFIER '{' TRAIT_BODY '}' ;
+name
+version
+owner
+purpose
+syntax extensions
+semantic extensions
+AST mapping
+semantic mapping
+IR mapping
+capabilities
+feature gates
+compatibility
+diagnostics
+tests
 
-// --- Self Type --- SELF_TYPE : 'self' TYPE ; SELF : 'self' ;
+A dialect must not silently redefine:
 
-// --- Abstract Class Constructors --- ABSTRACT_CLASS_CONSTRUCTOR : 'abstract' 'class' IDENTIFIER '(' PARAMETER_LIST ')' '{' CLASS_BODY '}' ;
+- identifier syntax;
+- type semantics;
+- ownership;
+- quantum semantics;
+- resource semantics;
+- source locations;
+- diagnostics.
 
-// --- Type Classes --- TYPE_CLASS : 'class' TYPE_PARAMETER '{' TYPE_CLASS_BODY '}' ; TYPE_CLASS_BODY : TYPE_CLASS_MEMBER TYPE_CLASS_BODY | /* epsilon */ ; TYPE_CLASS_MEMBER : METHOD_DEFINITION | PROPERTY_DEFINITION ;
+Dialects must remain interoperable with the canonical language.
 
-// --- Dependent Types --- DEPENDENT_TYPE : TYPE '[' EXPRESSION ']' ; DEPENDENT_METHOD_TYPE : 'method' IDENTIFIER '[' PARAMETER_LIST ']' ':' RETURN_TYPE ; DEPENDENT_OBJECT_TYPE : 'object' IDENTIFIER '{' DEPENDENT_OBJECT_BODY '}' ; DEPENDENT_OBJECT_BODY : DEPENDENT_OBJECT_MEMBER DEPENDENT_OBJECT_BODY | /* epsilon */ ; DEPENDENT_OBJECT_MEMBER : METHOD_DEFINITION | PROPERTY_DEFINITION ;
+---
 
-// --- Type Families --- TYPE_FAMILY : 'type' IDENTIFIER '[' TYPE_PARAMETER ']' ; TYPE_FAMILY_WITH_ASSOCIATED_TYPE : 'type' IDENTIFIER '[' TYPE_PARAMETER ']' '=' TYPE ; ASSOCIATED_TYPE_DEFINITION : 'associated' 'type' IDENTIFIER '=' TYPE ';' ;
+52. Security
 
-// --- Singleton Types --- SINGLETON_TYPE : 'singleton' TYPE ;
+Security constructs may represent:
 
-// --- Path-Dependent Types --- PATH_DEPENDENT_TYPE : TYPE '.' IDENTIFIER ;
+- identity;
+- authentication;
+- authorization;
+- capabilities;
+- policies;
+- secrets;
+- key management;
+- signatures;
+- hashes;
+- cryptography;
+- secure computation;
+- zero-knowledge computation;
+- provenance;
+- trust.
 
-// --- Existential Types --- EXISTENTIAL_TYPE : 'exists' TYPE_PARAMETER '.' TYPE ;
+The grammar should represent security semantics, not turn every cryptographic algorithm into a keyword.
 
-// --- Higher-Kinded Types --- HIGHER_KINDED_TYPE : TYPE '[' TYPE_PARAMETER ']' ; HIGHER_ORDER_TYPE : TYPE '(' TYPE_PARAMETER ')' ; HIGHER_ORDER_FUNCTION : 'function' '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ; HIGHER_ORDER_FUNCTION_WITH_CLOSURE : 'function' '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ;
+---
 
-// --- Type Constructors --- TYPE_CONSTRUCTOR : 'type' IDENTIFIER '[' TYPE_PARAMETER ']' ;
+53. Capability Security
 
-// --- Kinds --- KIND : 'kind' IDENTIFIER ; HIGHER_ORDER_KIND : KIND '(' KIND_PARAMETER ')' ; HIGHER_ORDER_KIND_WITH_TYPE_SAFETY : KIND '(' KIND_PARAMETER ')' TYPE_SAFE_KIND_BODY ; HIGHER_ORDER_KIND_WITH_MODULARITY : KIND '(' KIND_PARAMETER ')' 'module' IDENTIFIER ; HIGHER_ORDER_KIND_WITH_MODULARITY_AND_TYPE_SAFETY : KIND '(' KIND_PARAMETER ')' 'module' IDENTIFIER TYPE_SAFE_KIND_BODY ; HIGHER_ORDER_KIND_WITH_HIGHER_ORDER_KIND_CHECKING : KIND '(' KIND_PARAMETER ')' HIGHER_ORDER_KIND_CHECKING ; HIGHER_ORDER_KIND_WITH_HIGHER_ORDER_KIND_INFERENCE : KIND '(' KIND_PARAMETER ')' INFERRED_HIGHER_ORDER_KIND ; HIGHER_ORDER_KIND_WITH_HIGHER_ORDER_KIND_TYPE_PROVIDERS : KIND '(' KIND_PARAMETER ')' TYPE_PROVIDER ;
+Security-sensitive operations should be capability-controlled where appropriate.
 
-// --- Type-Level Functions and Computation --- TYPE_LEVEL_FUNCTION : 'type' IDENTIFIER '[' TYPE_PARAMETER ']' '=' TYPE ; TYPE_LEVEL_COMPUTATION : 'type' IDENTIFIER '=' EXPRESSION ;
+A capability must identify an allowed semantic operation.
 
-// --- Linearization --- LINEARIZATION : 'linearization' IDENTIFIER ;
+Possession of a capability is not automatically equivalent to possession of physical machine authority.
 
-// --- Type Variance --- VARIANT_TYPE : 'in' | 'out' | '' ; VARIANCE_ANNOTATION : 'in' | 'out' | '' ;
+The runtime must enforce actual security boundaries.
 
-// --- Self-Recursive Types --- SELF_RECURSIVE_TYPE : 'self' TYPE ; SELF_RECURSIVE_TYPE_WITH_BOUNDED_RECURSION : 'self' TYPE BOUNDED_RECURSION_ANNOTATION ; SELF_RECURSIVE_TYPE_WITH_MEMOIZATION : 'self' TYPE 'memoize' IDENTIFIER ; SELF_RECURSIVE_TYPE_WITH_BOUNDED_RECURSION_AND_MEMOIZATION : 'self' TYPE BOUNDED_RECURSION_ANNOTATION 'memoize' IDENTIFIER ; SELF_RECURSIVE_TYPE_WITH_SELF_RECURSIVE_TYPE_CHECKING : 'self' TYPE SELF_RECURSIVE_TYPE_CHECKING ; SELF_RECURSIVE_TYPE_WITH_SELF_RECURSIVE_TYPE_INFERENCE : 'self' TYPE INFERRED_SELF_RECURSIVE_TYPE ; SELF_RECURSIVE_TYPE_WITH_SELF_RECURSIVE_TYPE_PROVIDERS : 'self' TYPE TYPE_PROVIDER ;
+---
 
-// --- Meta-Programming --- META_PROGRAMMING : 'meta' IDENTIFIER '(' PARAMETER_LIST ')' '{' META_PROGRAM_BODY '}' ;
+54. Embedded Computing
 
-// --- Aspect-Oriented Programming --- ASPECT : 'aspect' IDENTIFIER '{' ASPECT_BODY '}' ; ASPECT_ORIENTED_PROGRAMMING_WITH_ANNOTATIONS : '@' IDENTIFIER ASPECT_DEFINITION ; ASPECT_ORIENTED_PROGRAMMING_WITH_INHERITANCE : 'aspect' IDENTIFIER 'extends' IDENTIFIER '{' ASPECT_BODY '}' ; ASPECT_ORIENTED_PROGRAMMING_WITH_ASPECT_INHERITANCE : 'aspect' IDENTIFIER 'extends' IDENTIFIER 'depends' IDENTIFIER '{' ASPECT_BODY '}' ; ASPECT_ORIENTED_PROGRAMMING_WITH_ASPECT_COMPOSITION : 'aspect' IDENTIFIER 'compose' IDENTIFIER '{' ASPECT_BODY '}' ; ASPECT_ORIENTED_PROGRAMMING_WITH_ASPECT_WEAVING : 'aspect' IDENTIFIER 'weave' IDENTIFIER '{' ASPECT_BODY '}' ; ASPECT_ORIENTED_PROGRAMMING_WITH_ASPECT_ORIENTED_DOMAIN_SPECIFIC_LANGUAGES : 'aspect' IDENTIFIER 'domain' IDENTIFIER '{' ASPECT_BODY '}' ;
+Embedded programs must be able to describe:
 
-// --- Domain-Specific Languages --- DOMAIN_SPECIFIC_LANGUAGE : 'domain' IDENTIFIER '{' DOMAIN_SPECIFIC_LANGUAGE_BODY '}' ; DOMAIN_SPECIFIC_LANGUAGE_WITH_TYPE_SAFETY : 'domain' IDENTIFIER ':' TYPE '{' DOMAIN_SPECIFIC_LANGUAGE_BODY '}' ; DOMAIN_SPECIFIC_LANGUAGE_WITH_MODULARITY : 'domain' IDENTIFIER 'module' IDENTIFIER '{' DOMAIN_SPECIFIC_LANGUAGE_BODY '}' ; DOMAIN_SPECIFIC_LANGUAGE_WITH_MODULARITY_AND_TYPE_SAFETY : 'domain' IDENTIFIER 'module' IDENTIFIER ':' TYPE '{' DOMAIN_SPECIFIC_LANGUAGE_BODY '}' ; DOMAIN_SPECIFIC_LANGUAGE_WITH_DOMAIN_SPECIFIC_TYPE_SYSTEM : 'domain' IDENTIFIER 'type' TYPE '{' DOMAIN_SPECIFIC_LANGUAGE_BODY '}' ; DOMAIN_SPECIFIC_LANGUAGE_WITH_DOMAIN_SPECIFIC_COMPILER_PLUGIN : 'domain' IDENTIFIER 'plugin' IDENTIFIER '{' DOMAIN_SPECIFIC_LANGUAGE_BODY '}' ; DOMAIN_SPECIFIC_LANGUAGE_WITH_DOMAIN_SPECIFIC_TYPE_PROVIDERS : 'domain' IDENTIFIER 'provider' IDENTIFIER '{' DOMAIN_SPECIFIC_LANGUAGE_BODY '}' ;
+- resources;
+- timing;
+- memory;
+- peripherals;
+- communication;
+- power;
+- reliability;
+- hardware interfaces;
+- deployment intent.
 
-// --- Type Providers --- TYPE_PROVIDER : 'provider' IDENTIFIER '{' TYPE_PROVIDER_BODY '}' ; TYPE_PROVIDER_WITH_CACHING : 'provider' IDENTIFIER '(' PARAMETER_LIST ')' '{' TYPE_PROVIDER_BODY '}' 'cache' IDENTIFIER ; TYPE_PROVIDER_WITH_DEPENDENCY_INJECTION : 'provider' IDENTIFIER '(' PARAMETER_LIST ')' '{' TYPE_PROVIDER_BODY '}' ; TYPE_PROVIDER_WITH_DEPENDENCY_INJECTION_AND_CACHING : 'provider' IDENTIFIER '(' PARAMETER_LIST ')' '{' TYPE_PROVIDER_BODY '}' 'cache' IDENTIFIER 'inject' IDENTIFIER ; TYPE_PROVIDER_WITH_TYPE_SAFE_DEPENDENCY_INJECTION : 'provider' IDENTIFIER '(' TYPE_PARAMETER_LIST ')' '{' TYPE_PROVIDER_BODY '}' ; TYPE_PROVIDER_WITH_TYPE_SAFE_METADATA : 'provider' IDENTIFIER '(' TYPE_PARAMETER_LIST ')' '{' TYPE_PROVIDER_BODY '}' 'metadata' TYPE_SAFE_METADATA ; TYPE_PROVIDER_WITH_TYPE_SAFE_ASPECT_WEAVING : 'provider' IDENTIFIER '(' TYPE_PARAMETER_LIST ')' '{' TYPE_PROVIDER_BODY '}' 'aspect' ASPECT ;
+The source program should remain portable whenever the semantics permit.
 
-// --- Context-Dependent Types --- CONTEXT_DEPENDENT_TYPE : TYPE '[' CONTEXT ']' ; CONTEXT_DEPENDENT_TYPE_WITH_VARIANCE : TYPE '[' CONTEXT ']' VARIANCE_ANNOTATION ; CONTEXT_DEPENDENT_TYPE_WITH_DEPENDENCY_INJECTION : TYPE '[' CONTEXT ']' '(' PARAMETER_LIST ')' ; CONTEXT_DEPENDENT_TYPE_WITH_VARIANCE_AND_DEPENDENCY_INJECTION : TYPE '[' CONTEXT ']' VARIANCE_ANNOTATION '(' PARAMETER_LIST ')' ; CONTEXT_DEPENDENT_TYPE_WITH_CONTEXT_AWARE_VARIANCE : TYPE '[' CONTEXT ']' VARIANCE_ANNOTATION CONTEXT_AWARE_VARIANCE ; CONTEXT_DEPENDENT_TYPE_WITH_CONTEXT_DEPENDENT_TYPE_CHECKING : TYPE '[' CONTEXT ']' CONTEXT_DEPENDENT_TYPE_CHECKING ;
+Target-specific peripheral addresses belong in target/deployment configuration rather than being universal language assumptions.
 
-// --- Functional Dependencies --- FUNCTIONAL_DEPENDENCY : TYPE_PARAMETER '->' TYPE_PARAMETER ; FUNCTIONAL_DEPENDENCY_WITH_TYPE_INFERENCE : TYPE_PARAMETER '->' TYPE_PARAMETER INFERRED_TYPE ; FUNCTIONAL_DEPENDENCY_WITH_CACHING : TYPE_PARAMETER '->' TYPE_PARAMETER 'cache' IDENTIFIER ; FUNCTIONAL_DEPENDENCY_WITH_TYPE_INFERENCE_AND_CACHING : TYPE_PARAMETER '->' TYPE_PARAMETER INFERRED_TYPE 'cache' IDENTIFIER ; FUNCTIONAL_DEPENDENCY_WITH_FUNCTIONAL_DEPENDENCY_INFERENCE : TYPE_PARAMETER '->' TYPE_PARAMETER INFERRED_FUNCTIONAL_DEPENDENCY ; FUNCTIONAL_DEPENDENCY_WITH_FUNCTIONAL_DEPENDENCY_RESOLUTION : TYPE_PARAMETER '->' TYPE_PARAMETER FUNCTIONAL_DEPENDENCY_RESOLUTION ;
+---
 
-// --- Type Constraints --- TYPE_CONSTRAINT : 'where' TYPE_PARAMETER ':' TYPE ;
+55. Scientific Computing
 
-// --- Multi-Dimensional Arrays --- MULTIDIMENSIONAL_ARRAY : TYPE '[' INTEGER ']' '[' INTEGER ']' ; MULTIDIMENSIONAL_ARRAY_WITH_DYNAMIC_LENGTH : TYPE '[' ']' '[' ']' ; JAGGED_ARRAY : TYPE '[' ']' '[' ']' ;
+Scientific computation may include:
 
-// --- User-Defined Operators --- USER_DEFINED_OPERATOR : 'operator' OPERATOR '(' PARAMETER ')' '{' FUNCTION_BODY '}' ; USER_DEFINED_OPERATOR_WITH_PARAMETERS : 'operator' OPERATOR '(' PARAMETER ')' '{' FUNCTION_BODY '}' ; USER_DEFINED_OPERATOR_WITH_MULTIPLE_PARAMETERS : 'operator' OPERATOR '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ; USER_DEFINED_CONVERSION : 'operator' TYPE '(' PARAMETER ')' '{' FUNCTION_BODY '}' ; USER_DEFINED_CONVERSION_WITH_CONSTRAINTS : 'operator' TYPE '(' PARAMETER ')' 'where' TYPE_CONSTRAINT '{' FUNCTION_BODY '}' ; USER_DEFINED_LITERAL : 'literal' OPERATOR '(' PARAMETER ')' '{' FUNCTION_BODY '}' ;
+- numerical methods;
+- symbolic computation;
+- differential equations;
+- linear algebra;
+- tensor computation;
+- statistics;
+- optimization;
+- simulation;
+- signal processing;
+- physical models.
 
-// --- Type-Safe Metaprogramming --- TYPE_SAFE_METAPROGRAMMING : 'meta' IDENTIFIER '(' PARAMETER_LIST ')' '{' TYPE_SAFE_METAPROGRAM_BODY '}' ; TYPE_SAFE_METAPROGRAMMING_WITH_REFLECTION : 'meta' IDENTIFIER '(' PARAMETER_LIST ')' '{' TYPE_SAFE_METAPROGRAM_BODY '}' 'reflect' IDENTIFIER ; TYPE_SAFE_METAPROGRAMMING_WITH_REFLECTION_AND_TYPE_INFERENCE : 'meta' IDENTIFIER '(' PARAMETER_LIST ')' '{' TYPE_SAFE_METAPROGRAM_BODY '}' 'reflect' IDENTIFIER INFERRED_TYPE ; TYPE_SAFE_METAPROGRAMMING_WITH_TYPE_SAFE_METAPROGRAMMING_INFERENCE : 'meta' IDENTIFIER '(' TYPE_PARAMETER_LIST ')' '{' TYPE_SAFE_METAPROGRAM_BODY '}' INFERRED_TYPE_SAFE_METAPROGRAM ; TYPE_SAFE_METAPROGRAMMING_WITH_TYPE_SAFE_ASPECT_ORIENTED_PROGRAMMING : 'meta' IDENTIFIER '(' PARAMETER_LIST ')' '{' TYPE_SAFE_METAPROGRAM_BODY '}' 'aspect' ASPECT ; TYPE_SAFE_METAPROGRAMMING_WITH_TYPE_SAFE_CODE_GENERATION : 'meta' IDENTIFIER '(' PARAMETER_LIST ')' '{' TYPE_SAFE_METAPROGRAM_BODY '}' 'generate' EXPRESSION ;
+Scientific libraries must remain extensible without requiring grammar changes for every new algorithm.
 
-// --- Type-Safe SQL --- TYPE_SAFE_SQL : 'sql' STRING ';' ; SQL_STATEMENT : 'sql' STRING ';' ;
+---
 
-// --- Type-Safe Enum --- TYPE_SAFE_ENUM : 'enum' IDENTIFIER ':' TYPE '{' ENUM_BODY '}' ;
+56. Resource Negotiation
 
-// --- Immutable and Memory-Safe Definitions --- IMMUTABLE_DEFINITION : 'immutable' TYPE IDENTIFIER '=' EXPRESSION ';' ; MEMORY_SAFE_DEFINITION : 'safe' TYPE IDENTIFIER '=' EXPRESSION ';' ;
+A program may express a resource requirement without determining its physical realization.
 
-// --- Pointer Definition --- POINTER_DEFINITION : 'pointer' TYPE IDENTIFIER ';' ;
+Conceptually:
 
-// --- Value Type Definition --- VALUE_TYPE_DEFINITION : 'value' TYPE IDENTIFIER ';' ;
+require capability
+require resource
+prefer resource
+constrain resource
+hint resource
 
-// --- Data Structure Definition --- DATA_STRUCTURE_DEFINITION : 'data' 'structure' IDENTIFIER '{' CLASS_BODY '}' ;
+A compiler/runtime may negotiate:
 
-// --- Data Parallelism --- DATA_PARALLELISM_DEFINITION : 'parallel' 'data' IDENTIFIER '{' PARALLELISM_BODY '}' ; PARALLELISM_DEFINITION : 'parallel' IDENTIFIER '{' PARALLELISM_BODY '}' ; PARALLELISM_BODY : PARALLELISM_MEMBER PARALLELISM_BODY | /* epsilon */ ; PARALLELISM_MEMBER : VARIABLE_DECLARATION | METHOD_DEFINITION ;
+available capabilities
+available resources
+cost
+latency
+energy
+reliability
+security
+topology
 
-// --- Concurrent Data Structure --- CONCURRENT_DATA_STRUCTURE : 'concurrent' 'data' IDENTIFIER '{' CLASS_BODY '}' ;
+The result must preserve program semantics.
 
-// --- Message Handler --- MESSAGE_HANDLER_DEFINITION : 'handler' IDENTIFIER '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ;
+---
 
-// --- Function Composition --- FUNCTION_COMPOSITION : EXPRESSION '.' EXPRESSION ;
+57. Compilation and Deployment
 
-// --- Ref Return --- REF_RETURN : 'ref' RETURN_TYPE ;
+Compilation syntax may express:
 
-// --- Data Interchange Format --- DATA_INTERCHANGE_FORMAT : 'format' IDENTIFIER '{' FORMAT_BODY '}' ;
+- target intent;
+- optimization profiles;
+- specialization;
+- reproducibility;
+- cross-compilation;
+- artifact generation;
+- deployment;
+- provenance;
+- deterministic builds;
+- caching.
 
-// --- Foreign Function Interface --- FOREIGN_FUNCTION_INTERFACE : 'foreign' 'function' IDENTIFIER '(' PARAMETER_LIST ')' RETURN_TYPE ';' ;
+The program should not have to name a physical CPU/GPU/QPU unless the programmer deliberately requests a target-specific realization.
 
-// --- Serialize/Deserialize --- SERIALIZE : 'serialize' EXPRESSION 'to' DATA_FORMAT ';' ; DESERIALIZE : 'deserialize' EXPRESSION 'from' DATA_FORMAT ';' ;
+---
 
-=============================================================================== SECTION 34: COMPLETE META-PROGRAMMING & INTEROP GRAMMAR (Verbatim from Document)
-// --- Lexical Keywords for Meta-Programming --- IMPORT : 'import' ; INVOKE : 'invoke' ; TRANSCODE : 'transcode' ; OVERRIDE : 'override' ; LANG : 'lang' ; MODULE : 'module' ; EXPORT : 'export' ; TO : 'to' ; PLUGIN : 'plugin' ; LANGUAGE : 'language' ; TRANSPILER : 'transpiler' ; SELF : 'self' ; FOREIGN : 'foreign' ; INTEROP : 'interop' ; CDECL : 'cdecl' ; STDCALL : 'stdcall' ; JAVA : 'java' ; GC : 'gc' ; CAST : 'cast' ; CONVERT : 'convert' ; DATA : 'data' ; SERIALIZE : 'serialize' ; DESERIALIZE : 'deserialize' ; STREAM : 'stream' ; DATABASE : 'db' ; HTTP : 'http' ; AWS : 'aws' ; AZURE : 'azure' ; GCP : 'gcp' ; DOCKER : 'docker' ; JENKINS : 'jenkins' ; GIT : 'git' ; ANSIBLE : 'ansible' ; INTERFACE : 'interface' ;
+58. Execution
 
-// --- Import Statement --- importStatement : IMPORT IDENTIFIER ';' ; invokeStatement : INVOKE IDENTIFIER '::' IDENTIFIER '(' argumentList? ')' ';' ; transcodeStatement : TRANSCODE IDENTIFIER '::' STRING TO IDENTIFIER ';' ; overrideStatement : OVERRIDE IDENTIFIER '::' IDENTIFIER '(' parameterList? ')' block ; langStatement : LANG IDENTIFIER block ; moduleStatement : MODULE IDENTIFIER '::' IDENTIFIER ';' ; exportStatement : EXPORT IDENTIFIER TO IDENTIFIER ';' ; pluginStatement : PLUGIN IDENTIFIER '{' pluginDefinition* '}' ; pluginDefinition : LANGUAGE IDENTIFIER ';' | TRANSPILER IDENTIFIER ';' ; foreignFunctionCall : FOREIGN IDENTIFIER '::' IDENTIFIER '(' argumentList? ')' ';' ; dataStatement : SERIALIZE expression TO dataFormat ';' | DESERIALIZE expression FROM dataFormat ';' ; dataFormat : 'json' | 'xml' | 'messagepack' ; streamingData : STREAM expression 'pipe' expression ';' ; databaseOperation : DATABASE '::' IDENTIFIER '(' argumentList? ')' ';' ; webService : HTTP '::' IDENTIFIER '(' argumentList? ')' ';' ; cloudPlatform : AWS '::' IDENTIFIER '(' argumentList? ')' ';' | AZURE '::' IDENTIFIER '(' argumentList? ')' ';' | GCP '::' IDENTIFIER '(' argumentList? ')' ';' ; container : DOCKER '::' IDENTIFIER '(' argumentList? ')' ';' ; devOpsTool : JENKINS '::' IDENTIFIER '(' argumentList? ')' ';' ; interfaceStatement : INTERFACE IDENTIFIER '{' interfaceDefinition* '}' ; interfaceDefinition : 'method' IDENTIFIER '(' parameterList? ')' ';' | 'property' IDENTIFIER type ';' ; error : 'error' STRING ';' ;
+Execution intent may include:
 
-=============================================================================== SECTION 35: SELF-ADJUSTMENT, SELF-VERSIONING & ADMINISTRATION (Verbatim)
-// --- Self-Adjustment Mechanism --- SELF_ADJUSTMENT : 'self_adjust' IDENTIFIER '{' SELF_ADJUSTMENT_BODY '}' ; SELF_ADJUSTMENT_BODY : SELF_ADJUSTMENT_MEMBER SELF_ADJUSTMENT_BODY | /* epsilon / ; SELF_ADJUSTMENT_MEMBER : ADJUSTMENT_RULE_DEFINITION | ADJUSTMENT_LOGIC_DEFINITION ; ADJUSTMENT_RULE_DEFINITION : 'rule' IDENTIFIER '{' RULE_BODY '}' ; RULE_BODY : RULE_CONDITION RULE_ACTION ; RULE_CONDITION : 'when' EXPRESSION ; RULE_ACTION : 'then' EXPRESSION ; ADJUSTMENT_LOGIC_DEFINITION : 'logic' IDENTIFIER '{' LOGIC_BODY '}' ; LOGIC_BODY : LOGIC_STATEMENT LOGIC_BODY | / epsilon */ ;
+- entry points;
+- runtime environments;
+- scheduling policies;
+- placement policies;
+- resilience;
+- recovery;
+- checkpointing;
+- tracing;
+- profiling;
+- observability;
+- lifecycle.
 
-// --- Self-Versioning --- SELF_VERSIONING : 'self_version' IDENTIFIER '{' SELF_VERSIONING_BODY '}' ; SELF_VERSIONING_BODY : VERSION_RECORD SELF_VERSIONING_BODY | /* epsilon / ; VERSION_RECORD : 'version' IDENTIFIER 'created' 'by' IDENTIFIER 'on' EXPRESSION ; VERSION_CHANGELOG : 'changelog' '{' CHANGELOG_ENTRY '}' ; CHANGELOG_ENTRY : 'change' IDENTIFIER 'made' 'by' IDENTIFIER ;
+Execution constructs describe policy.
 
-// --- Administration Interface --- ADMIN_INTERFACE : 'admin' IDENTIFIER '{' ADMIN_INTERFACE_BODY '}' ; ADMIN_INTERFACE_BODY : ADMIN_INTERFACE_MEMBER ADMIN_INTERFACE_BODY | /* epsilon / ; ADMIN_INTERFACE_MEMBER : CHANGE_LOG_DISPLAY | SUGGESTION_INPUT ; CHANGE_LOG_DISPLAY : 'display' 'changes' '{' CHANGE_LOG_BODY '}' ; CHANGE_LOG_BODY : CHANGE_LOG_ENTRY CHANGE_LOG_BODY | / epsilon / ; CHANGE_LOG_ENTRY : 'change' IDENTIFIER 'made' 'by' IDENTIFIER ; SUGGESTION_INPUT : 'input' 'suggestions' '{' SUGGESTION_BODY '}' ; SUGGESTION_BODY : SUGGESTION_ENTRY SUGGESTION_BODY | / epsilon */ ; SUGGESTION_ENTRY : 'suggestion' IDENTIFIER 'from' IDENTIFIER ;
+They do not implement the runtime.
 
-// --- Payment Gateway --- PAYMENT_GATEWAY : 'payment' IDENTIFIER '{' PAYMENT_GATEWAY_BODY '}' ; PAYMENT_GATEWAY_BODY : PAYMENT_GATEWAY_MEMBER PAYMENT_GATEWAY_BODY | /* epsilon / ; PAYMENT_GATEWAY_MEMBER : PAYMENT_METHOD_DEFINITION | PAYMENT_VERIFICATION_DEFINITION ; PAYMENT_METHOD_DEFINITION : 'method' IDENTIFIER '{' PAYMENT_METHOD_BODY '}' ; PAYMENT_METHOD_BODY : PAYMENT_METHOD_STATEMENT PAYMENT_METHOD_BODY | / epsilon / ; PAYMENT_VERIFICATION_DEFINITION : 'verify' IDENTIFIER '{' PAYMENT_VERIFICATION_BODY '}' ; PAYMENT_VERIFICATION_BODY : PAYMENT_VERIFICATION_STATEMENT PAYMENT_VERIFICATION_BODY | / epsilon */ ;
+---
 
-// --- User Feedback --- USER_FEEDBACK : 'feedback' IDENTIFIER '{' USER_FEEDBACK_BODY '}' ; USER_FEEDBACK_BODY : USER_FEEDBACK_MEMBER USER_FEEDBACK_BODY | /* epsilon / ; USER_FEEDBACK_MEMBER : FEEDBACK_INPUT_DEFINITION | FEEDBACK_VALIDATION_DEFINITION ; FEEDBACK_INPUT_DEFINITION : 'input' 'feedback' '{' FEEDBACK_INPUT_BODY '}' ; FEEDBACK_INPUT_BODY : FEEDBACK_INPUT_STATEMENT FEEDBACK_INPUT_BODY | / epsilon / ; FEEDBACK_VALIDATION_DEFINITION : 'validate' 'feedback' '{' FEEDBACK_VALIDATION_BODY '}' ; FEEDBACK_VALIDATION_BODY : FEEDBACK_VALIDATION_STATEMENT FEEDBACK_VALIDATION_BODY | / epsilon */ ;
+59. Resilience
 
-// --- Copyright and Ownership --- COPYRIGHT_NOTICE : 'copyright' IDENTIFIER '{' COPYRIGHT_NOTICE_BODY '}' ; COPYRIGHT_NOTICE_BODY : COPYRIGHT_NOTICE_STATEMENT COPYRIGHT_NOTICE_BODY | /* epsilon */ ; COPYRIGHT_NOTICE_STATEMENT : 'copyright' IDENTIFIER 'owned' 'by' IDENTIFIER ;
+Resilience semantics may describe:
 
-// --- Tailor-Made Features --- TAILOR_MADE_FEATURE : 'feature' IDENTIFIER '{' TAILOR_MADE_FEATURE_BODY '}' ; TAILOR_MADE_FEATURE_BODY : TAILOR_MADE_FEATURE_MEMBER TAILOR_MADE_FEATURE_BODY | /* epsilon / ; TAILOR_MADE_FEATURE_MEMBER : FEATURE_DEFINITION | FEATURE_CUSTOMIZATION_DEFINITION ; FEATURE_DEFINITION : 'define' 'feature' IDENTIFIER '{' FEATURE_BODY '}' ; FEATURE_BODY : FEATURE_STATEMENT FEATURE_BODY | / epsilon */ ; FEATURE_CUSTOMIZATION_DEFINITION : 'customize' 'feature' IDENTIFIER '{' FEATURE_CUSTOMIZATION_BODY '}' ;
+retry
+recover
+checkpoint
+degrade
+failover
+escalate
+reject
 
-// --- Program-Once Systems --- PROGRAM_ONCE_SYSTEM : 'program_once' IDENTIFIER '{' PROGRAM_ONCE_SYSTEM_BODY '}' ; PROGRAM_ONCE_SYSTEM_BODY : PROGRAM_ONCE_SYSTEM_MEMBER PROGRAM_ONCE_SYSTEM_BODY | /* epsilon / ; PROGRAM_ONCE_SYSTEM_MEMBER : SYSTEM_CONFIG_DEFINITION | SYSTEM_LOGIC_DEFINITION ; SYSTEM_CONFIG_DEFINITION : 'config' IDENTIFIER '{' SYSTEM_CONFIG_BODY '}' ; SYSTEM_CONFIG_BODY : SYSTEM_CONFIG_STATEMENT SYSTEM_CONFIG_BODY | / epsilon / ; SYSTEM_LOGIC_DEFINITION : 'logic' IDENTIFIER '{' SYSTEM_LOGIC_BODY '}' ; SYSTEM_LOGIC_BODY : SYSTEM_LOGIC_STATEMENT SYSTEM_LOGIC_BODY | / epsilon */ ;
+The existing resilience subsystem remains responsible for actual orchestration.
 
-=============================================================================== SECTION 36: AGI GOVERNANCE SYSTEMS (Verbatim from Document)
-// --- AI System --- AI_SYSTEM : 'ai' IDENTIFIER '{' AI_SYSTEM_BODY '}' ; AI_SYSTEM_BODY : AI_SYSTEM_MEMBER AI_SYSTEM_BODY | /* epsilon / ; AI_SYSTEM_MEMBER : AI_TYPE_DEFINITION | AI_CAPABILITY_DEFINITION ; AI_TYPE_DEFINITION : 'type' IDENTIFIER '=' 'narrow' | 'general' | 'super' ; AI_CAPABILITY_DEFINITION : 'capability' IDENTIFIER '{' AI_CAPABILITY_BODY '}' ; AI_CAPABILITY_BODY : AI_CAPABILITY_STATEMENT AI_CAPABILITY_BODY | / epsilon */ ;
+The grammar must not duplicate the resilience state machine implementation.
 
-// --- AGI System --- AGI_SYSTEM : 'agi' IDENTIFIER '{' AGI_SYSTEM_BODY '}' ; AGI_SYSTEM_BODY : AGI_SYSTEM_MEMBER AGI_SYSTEM_BODY | /* epsilon / ; AGI_SYSTEM_MEMBER : AGI_CAPABILITY_DEFINITION | AGI_LEARNING_DEFINITION ; AGI_CAPABILITY_DEFINITION : 'capability' IDENTIFIER '{' AGI_CAPABILITY_BODY '}' ; AGI_CAPABILITY_BODY : AGI_CAPABILITY_STATEMENT AGI_CAPABILITY_BODY | / epsilon / ; AGI_LEARNING_DEFINITION : 'learning' IDENTIFIER '{' AGI_LEARNING_BODY '}' ; AGI_LEARNING_BODY : AGI_LEARNING_STATEMENT AGI_LEARNING_BODY | / epsilon */ ;
+---
 
-// --- ASI (Artificial Super Intelligence) System --- ASI_SYSTEM : 'asi' IDENTIFIER '{' ASI_SYSTEM_BODY '}' ; ASI_SYSTEM_BODY : ASI_SYSTEM_MEMBER ASI_SYSTEM_BODY | /* epsilon / ; ASI_SYSTEM_MEMBER : ASI_CAPABILITY_DEFINITION | ASI_SELF_IMPROVEMENT_DEFINITION ; ASI_CAPABILITY_DEFINITION : 'capability' IDENTIFIER '{' ASI_CAPABILITY_BODY '}' ; ASI_CAPABILITY_BODY : ASI_CAPABILITY_STATEMENT ASI_CAPABILITY_BODY | / epsilon / ; ASI_SELF_IMPROVEMENT_DEFINITION : 'self_improvement' IDENTIFIER '{' ASI_SELF_IMPROVEMENT_BODY '}' ; ASI_SELF_IMPROVEMENT_BODY : ASI_SELF_IMPROVEMENT_STATEMENT ASI_SELF_IMPROVEMENT_BODY | / epsilon */ ;
+60. Quantum Resilience Integration
 
-// --- AESI System --- AESI_SYSTEM : 'aesi' IDENTIFIER '{' AESI_SYSTEM_BODY '}' ; AESI_SYSTEM_BODY : AESI_SYSTEM_MEMBER AESI_SYSTEM_BODY | /* epsilon / ; AESI_SYSTEM_MEMBER : AESI_CAPABILITY_DEFINITION | AESI_TRANSFORMATION_DEFINITION ; AESI_CAPABILITY_DEFINITION : 'capability' IDENTIFIER '{' AESI_CAPABILITY_BODY '}' ; AESI_CAPABILITY_BODY : AESI_CAPABILITY_STATEMENT AESI_CAPABILITY_BODY | / epsilon / ; AESI_TRANSFORMATION_DEFINITION : 'transformation' IDENTIFIER '{' AESI_TRANSFORMATION_BODY '}' ; AESI_TRANSFORMATION_BODY : AESI_TRANSFORMATION_STATEMENT AESI_TRANSFORMATION_BODY | / epsilon */ ;
+Quantum resilience must preserve the established ownership model:
 
-// --- ASESI System --- ASESI_SYSTEM : 'asesi' IDENTIFIER '{' ASESI_SYSTEM_BODY '}' ; ASESI_SYSTEM_BODY : ASESI_SYSTEM_MEMBER ASESI_SYSTEM_BODY | /* epsilon / ; ASESI_SYSTEM_MEMBER : ASESI_CAPABILITY_DEFINITION | ASESI_OMNIPOTENCE_DEFINITION ; ASESI_CAPABILITY_DEFINITION : 'capability' IDENTIFIER '{' ASESI_CAPABILITY_BODY '}' ; ASESI_CAPABILITY_BODY : ASESI_CAPABILITY_STATEMENT ASESI_CAPABILITY_BODY | / epsilon / ; ASESI_OMNIPOTENCE_DEFINITION : 'omnipotence' IDENTIFIER '{' ASESI_OMNIPOTENCE_BODY '}' ; ASESI_OMNIPOTENCE_BODY : ASESI_OMNIPOTENCE_STATEMENT ASESI_OMNIPOTENCE_BODY | / epsilon */ ;
+Quantum grammar
+    ↓
+quantum::ir
+    ↓
+optimization
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+QEC
+    ↓
+ZQN
+    ↓
+HAL
 
-// --- Sandbox Environment --- SANDBOX_ENVIRONMENT : 'sandbox' IDENTIFIER '{' SANDBOX_ENVIRONMENT_BODY '}' ; SANDBOX_ENVIRONMENT_BODY : SANDBOX_ENVIRONMENT_MEMBER SANDBOX_ENVIRONMENT_BODY | /* epsilon / ; SANDBOX_ENVIRONMENT_MEMBER : SIMULATION_DEFINITION | TESTING_DEFINITION ; SIMULATION_DEFINITION : 'simulate' IDENTIFIER '{' SIMULATION_BODY '}' ; SIMULATION_BODY : SIMULATION_STATEMENT SIMULATION_BODY | / epsilon / ; TESTING_DEFINITION : 'test' IDENTIFIER '{' TESTING_BODY '}' ; TESTING_BODY : TESTING_STATEMENT TESTING_BODY | / epsilon */ ;
+The grammar may express:
 
-// --- Malicious Idea Detection --- MALICIOUS_IDEA_DETECTION : 'malicious' 'idea' 'detection' '{' MALICIOUS_IDEA_DETECTION_BODY '}' ; MALICIOUS_IDEA_DETECTION_BODY : MALICIOUS_IDEA_DETECTION_MEMBER MALICIOUS_IDEA_DETECTION_BODY | /* epsilon / ; MALICIOUS_IDEA_DETECTION_MEMBER : IDEA_ANALYSIS_DEFINITION | IDEA_BLOCKING_DEFINITION ; IDEA_ANALYSIS_DEFINITION : 'analyze' 'idea' IDENTIFIER '{' IDEA_ANALYSIS_BODY '}' ; IDEA_ANALYSIS_BODY : IDEA_ANALYSIS_STATEMENT IDEA_ANALYSIS_BODY | / epsilon / ; IDEA_BLOCKING_DEFINITION : 'block' 'idea' IDENTIFIER '{' IDEA_BLOCKING_BODY '}' ; IDEA_BLOCKING_BODY : IDEA_BLOCKING_STATEMENT IDEA_BLOCKING_BODY | / epsilon */ ;
+requires fault tolerance
+requires error correction
+requires reliability
+requires noise tolerance
 
-// --- User Blocking --- USER_BLOCKING : 'block' 'user' IDENTIFIER '{' USER_BLOCKING_BODY '}' ; USER_BLOCKING_BODY : USER_BLOCKING_MEMBER USER_BLOCKING_BODY | /* epsilon / ; USER_BLOCKING_MEMBER : USER_IDENTIFICATION_DEFINITION | USER_BLOCKING_ACTION_DEFINITION ; USER_IDENTIFICATION_DEFINITION : 'identify' 'user' IDENTIFIER '{' USER_IDENTIFICATION_BODY '}' ; USER_IDENTIFICATION_BODY : USER_IDENTIFICATION_STATEMENT USER_IDENTIFICATION_BODY | / epsilon / ; USER_BLOCKING_ACTION_DEFINITION : 'block' 'user' IDENTIFIER '{' USER_BLOCKING_ACTION_BODY '}' ; USER_BLOCKING_ACTION_BODY : USER_BLOCKING_ACTION_STATEMENT USER_BLOCKING_ACTION_BODY | / epsilon */ ;
+but does not execute these mechanisms.
 
-// --- Legal Action --- LEGAL_ACTION : 'legal' 'action' IDENTIFIER '{' LEGAL_ACTION_BODY '}' ; LEGAL_ACTION_BODY : LEGAL_ACTION_MEMBER LEGAL_ACTION_BODY | /* epsilon / ; LEGAL_ACTION_MEMBER : LEGAL_PROCEEDING_DEFINITION | LEGAL_NOTICE_DEFINITION ; LEGAL_PROCEEDING_DEFINITION : 'proceeding' 'legal' IDENTIFIER '{' LEGAL_PROCEEDING_BODY '}' ; LEGAL_PROCEEDING_BODY : LEGAL_PROCEEDING_STATEMENT LEGAL_PROCEEDING_BODY | / epsilon / ; LEGAL_NOTICE_DEFINITION : 'notice' 'legal' IDENTIFIER '{' LEGAL_NOTICE_BODY '}' ; LEGAL_NOTICE_BODY : LEGAL_NOTICE_STATEMENT LEGAL_NOTICE_BODY | / epsilon */ ;
+---
 
-=============================================================================== SECTION 37: CONVERSATIONAL CODE SYNTHESIS & DOCUMENTATION GRAMMAR
-// --- Chat Architect Agent: Natural Language Code Generation --- // Allows natural language prompts in a chat interface to generate Zamani code nl_code_generation : 'generate_code' IDENTIFIER '{' nl_code_body '}' ; nl_code_body : nl_spec_block nl_code_body | /* epsilon */ ; nl_spec_block : nl_type_spec | nl_endpoint_spec | nl_encryption_spec | nl_governance_spec | nl_target_spec ; nl_type_spec : 'type' '=' STRING ; nl_endpoint_spec : 'endpoints' '=' INTEGER ; nl_encryption_spec : 'encryption' '=' STRING ; nl_governance_spec : '#governance' '(' 'compliance' '=' STRING ')' ; nl_target_spec : 'latency_target' '=' STRING ;
+61. HAL Boundary
 
-// --- Documentation System --- // Generates documents, books, articles, reports, journals, news, and // multi-modal content explaining Zamani and its ecosystem documentation_generation : 'document' IDENTIFIER '{' documentation_body '}' ; documentation_body : doc_format_spec | doc_content_spec | doc_modal_spec ; doc_format_spec : 'format' '=' ('document' | 'book' | 'article' | 'report' | 'journal' | 'news' | 'interactive_web') ; doc_content_spec : 'content' '=' STRING ; doc_modal_spec : 'multimodal' '=' ('text' | 'diagrams' | 'images' | 'video' | 'interactive') ;
+HAL owns:
 
-=============================================================================== SECTION 38: ON-DEVICE AI/AGI AGENTS GRAMMAR
-// --- On-Device Agent Blueprint --- on_device_agent : 'on_device_agent' IDENTIFIER '{' on_device_body '}' ; on_device_body : agent_blueprint_spec on_device_body | /* epsilon / ; agent_blueprint_spec : core_logic_spec | ml_model_spec | capability_spec | device_spec | preservation_spec ; core_logic_spec : 'core_logic' '=' STRING ; ml_model_spec : 'ml_model' '=' IDENTIFIER ; capability_spec : 'capabilities' '=' '[' IDENTIFIER_LIST ']' ; device_spec : 'min_device' '{' device_constraint '}' ; device_constraint : ('power' | 'memory' | 'processor' | 'storage') '=' EXPRESSION ; preservation_spec : 'self_preservation' '{' preservation_protocol* '}' ; preservation_protocol : 'protocol' STRING ;
+- device capabilities;
+- device state;
+- available resources;
+- target interfaces;
+- target-specific operations;
+- calibration state;
+- target execution.
 
-// --- Offline Autonomy --- offline_agent : 'offline' 'agent' IDENTIFIER '{' offline_body '}' ; offline_body : local_resource_spec | mts_local_spec | lifecycle_spec ; local_resource_spec : 'local_resources' '=' '[' IDENTIFIER_LIST ']' ; mts_local_spec : 'local_mts' '=' 'true' ; lifecycle_spec : 'lifecycle' '{' lifecycle_action* '}' ; lifecycle_action : ('monitor' | 'update' | 'manage') IDENTIFIER ;
+The grammar does not own physical device identity.
 
-=============================================================================== SECTION 39: GREEN COMPUTING & ENERGY OPTIMIZATION GRAMMAR
-// --- Energy-Aware Compilation --- energy_aware : 'energy_aware' '{' energy_body '}' ; energy_body : energy_goal | energy_strategy | dvfs_hint ; energy_goal : 'goal' '=' ('minimize_power' | 'minimize_heat' | 'minimize_water' | 'minimize_carbon' | 'maximize_efficiency') ; energy_strategy : 'strategy' '=' ('AOT' | 'JIT' | 'nano_compile' | 'edge_compile') ; dvfs_hint : 'dvfs' '(' 'clock' '=' EXPRESSION ',' 'voltage' '=' EXPRESSION ')' ;
+A portable program should not require:
 
-// --- Thermal Optimization --- thermal_optimization : 'thermal' '{' thermal_body '}' ; thermal_body : thermal_goal | throttle_prevention ; thermal_goal : 'max_temp' '=' EXPRESSION ; throttle_prevention : 'prevent_throttling' '=' 'true' ;
+QPU_17
+GPU_3
+CPU_SOCKET_2
+FPGA_4
 
-// --- Resource Conservation --- resource_conservation : 'conserve' '{' conserve_body '}' ; conserve_body : conserve_target ; conserve_target : ('power' | 'water' | 'carbon_footprint' | 'heat') '=' EXPRESSION ;
+unless the program is explicitly target-specific.
 
-// --- Cloud Energy Selection --- cloud_energy : 'cloud_energy' '{' cloud_energy_body '}' ; cloud_energy_body : ('renewable' '=' 'true') | ('pue' '=' EXPRESSION) | ('data_center' '=' STRING) ;
+---
 
-// --- Heterogeneous Resource Matching --- resource_matching : 'match_resources' '{' resource_match_body '}' ; resource_match_body : ('parallel' '=>' 'GPU') | ('numerical' '=>' 'FPGA') | ('quantum' '=>' 'QPU') | ('nano' '=> ' 'NACU') ;
+62. Routing Boundary
 
-=============================================================================== SECTION 40: OMNIVERSAL SIMULATION GRAMMAR
-// --- Omniversal Simulation & Sandbox Environment --- omniversal_simulation : 'omniversal_simulation' IDENTIFIER '{' simulation_body '}' ; simulation_body : simulation_scenario | simulation_timeline | simulation_agent | safety_constraint ; simulation_scenario : 'scenario' STRING ; simulation_timeline : 'timeline' '=' INTEGER ; simulation_agent : 'agent' IDENTIFIER '{' agent_behavior '}' ; agent_behavior : 'behavior' STRING ; safety_constraint : '#safety' '(' 'level' '=' STRING ')' ;
+Routing owns physical realization.
 
-// --- Multiverse Simulation --- multiverse_simulation : 'multiverse' '{' multiverse_body '}' ; multiverse_body : universe_count | universe_params ; universe_count : 'universes' '=' INTEGER ; universe_params : 'universe' IDENTIFIER '{' universe_body '}' ; universe_body : 'physics' '=' STRING | 'rules' '=' STRING | 'initial_state' '=' STRING ;
+For quantum computation this includes:
 
-=============================================================================== SECTION 41: HUMAN INTERFACE DEVICES GRAMMAR
-// --- HID Manager --- hid_manager : 'hid' IDENTIFIER '{' hid_body '}' ; hid_body : hid_device_spec | hid_gesture | hid_bci | hid_eye_tracking | hid_touch | hid_haptic ; hid_device_spec : 'device' '=' ('GUI' | 'CLI' | 'VCI' | 'GESTURE' | 'BCI' | 'EYE_TRACKING' | 'TOUCH' | 'HAPTIC') ; hid_gesture : 'gesture' '{' gesture_body '}' ; gesture_body : 'sign_language' '=' ('ASL' | 'BSL' | 'CSL') | 'tracking' '=' STRING ; hid_bci : 'bci' '{' bci_body '}' ; bci_body : 'neural_command' '=' STRING | 'neural_feedback' '=' STRING ; hid_eye_tracking : 'eye_tracking' '{' eye_body '}' ; eye_body : 'gaze_point' '=' EXPRESSION | 'dwell_time' '=' EXPRESSION ; hid_touch : 'touch' '{' touch_body '}' ; touch_body : 'multi_touch' '=' 'true' | 'pressure' '=' EXPRESSION ; hid_haptic : 'haptic' '{' haptic_body '}' ; haptic_body : 'pattern' '=' STRING | 'intensity' '=' EXPRESSION ;
+logical connectivity
+    ↓
+physical connectivity
+    ↓
+mapping
+    ↓
+movement/decomposition
 
-=============================================================================== SECTION 42: DEVELOPER RELATIONS & SELF-DISCOVERY GRAMMAR
-// --- Self-Discovery in IDE --- self_discovery : 'self_discover' '{' discovery_body '}' ; discovery_body : ide_detection | proactive_intro | contextual_assist ; ide_detection : 'detect_ide' '=' ('VSCode' | 'IntelliJ' | 'Vim' | 'Emacs' | 'Eclipse' | 'ZBE') ; proactive_intro : 'introduce' STRING ; contextual_assist : 'assist' '{' assist_body '}' ; assist_body : 'trigger' '=' ('file_type' | 'language_server' | 'project_structure') | 'action' '=' STRING ;
+The grammar must not encode physical qubit topology as the universal program model.
 
-// --- Developer Analytics --- developer_analytics : 'analytics' '{' analytics_body '}' ; analytics_body : developer_count | company_count | country_list | license_data | version_data ; developer_count : 'developers' '=' INTEGER ; company_count : 'companies' '=' INTEGER ; country_list : 'countries' '=' '[' STRING_LIST ']' ; license_data : 'licenses' '{' license_entry* '}' ; license_entry : 'license' IDENTIFIER '=' STRING ; version_data : 'versions' '{' version_entry* '}' ; version_entry : 'version' IDENTIFIER 'deployed' 'by' IDENTIFIER ;
+---
 
-// --- Deployment & Version Release --- deployment : 'deploy' IDENTIFIER '{' deployment_body '}' ; deployment_body : ('target' '=' STRING) | ('version' '=' STRING) | ('release' '=' 'true') ; version_release : 'release' IDENTIFIER '{' release_body '}' ; release_body : ('version' '=' STRING) | ('changelog' '=' STRING) | ('rollback' '=' 'true') ;
+63. Scheduling Boundary
 
-// --- LSP Server --- lsp_server : 'lsp' '{' lsp_body '}' ; lsp_body : ('completion' '=' 'true') | ('diagnostics' '=' 'true') | ('go_to_def' '=' 'true') | ('refactoring' '=' 'true') | ('hover' '=' 'true') ;
+Scheduling owns:
 
-=============================================================================== SECTION 43: REMAINING KEYWORDS FROM DOCUMENT
-// Keywords found in the document that were not in the grammar file: // 'add', 'divide', 'multiply', 'subtract' - arithmetic operations // 'delete', 'insert', 'update' - database operations // 'resume', 'connect', 'coordinate' - concurrency/coordination // 'dimension', 'dimensions', 'dim' - tensor/matrix dimensions // 'point', 'shape', 'layer', 'frame', 'element' - data structure // 'perform', 'task', 'operation' - task execution // 'model', 'train', 'transform' - ML operations // 'tensor', 'matrix', 'vector', 'vector_space', 'high_dimensional' - math types // 'music', 'melody', 'harmony' - music language // 'object', 'property', 'handler' - OOP concepts // 'error', 'safe', 'immutable' - safety concepts // 'infinity', 'literal', 'generation' - language concepts // 'dl' (deep learning), 'nn' (neural network), 'qc' (quantum computing) // 'quantum_teleport', 'qubit', 'video', 'graphics' // 'zenith_compiler' - self-reference // 'robot', 'robotics' - robotics // 'domain', 'basis', 'compose', 'weave', 'depends', 'cache', 'memoize', // 'metadata', 'inject', 'mixin', 'singleton', 'linearization', // 'exists', 'dependent', 'kind', 'self', 'public', 'var', 'array', 'list'
+- operation ordering;
+- timing;
+- resource conflicts;
+- dependency graphs;
+- ASAP/ALAP decisions;
+- resource-aware scheduling;
+- dynamic scheduling;
+- distributed scheduling.
 
-// --- Arithmetic Operation Keywords --- arithmetic_op : 'add' | 'subtract' | 'multiply' | 'divide' ;
+Grammar expresses constraints/preferences where needed.
 
-// --- Database CRUD Operations --- crud_operation : 'insert' | 'delete' | 'update' EXPRESSION ';' ;
+Scheduling decides realization.
 
-// --- Coordination Keywords --- coordination : 'connect' IDENTIFIER 'to' IDENTIFIER ';' ; resume_operation : 'resume' IDENTIFIER ';' ; coordinate_task : 'coordinate' IDENTIFIER '{' coordinate_body '}' ;
+---
 
-// --- Tensor/Matrix Operations --- tensor_type : 'tensor' '[' dimension_list ']' ; dimension_list : dimension (',' dimension)* ; dimension : 'dim' '=' INTEGER | 'dimension' '=' INTEGER | 'dimensions' '=' '[' INTEGER_LIST ']' ; matrix_type : 'matrix' '[' INTEGER 'x' INTEGER ']' ; vector_type : 'vector' '[' INTEGER ']' ; vector_space : 'vector_space' '{' vector_space_body '}' ; high_dimensional : 'high_dimensional' TYPE ;
+64. Optimization Boundary
 
-// --- ML Model Operations --- ml_model_decl : 'model' IDENTIFIER '{' ml_model_body '}' ; ml_model_body : 'train' 'on' EXPRESSION | 'transform' 'with' EXPRESSION | 'evaluate' 'with' EXPRESSION ;
+Optimization may transform a program while preserving semantics.
 
-// --- Music Language --- music_decl : 'music' IDENTIFIER '{' music_body '}' ; music_body : 'melody' '=' STRING | 'harmony' '=' STRING | 'tempo' '=' INTEGER | 'key' '=' STRING ;
+It owns:
 
-// --- Robotics --- robotics_decl : 'robot' IDENTIFIER '{' robotics_body '}' ; robotics_body : 'actuator' '=' STRING | 'sensor' '=' STRING | 'control_loop' '=' STRING ;
+- simplification;
+- fusion;
+- decomposition;
+- common-subexpression elimination;
+- vectorization;
+- tensor optimization;
+- quantum optimization;
+- hardware-aware optimization.
 
-// --- Deep Learning / Neural Network --- deep_learning_decl : 'dl' IDENTIFIER '{' dl_body '}' ; dl_body : 'nn' IDENTIFIER '{' nn_body '}' ; nn_body : 'layer' IDENTIFIER '{' layer_body '}' ; layer_body : 'activation' '=' STRING | 'neurons' '=' INTEGER | 'dropout' '=' EXPRESSION ;
+Optimization must not redefine source semantics.
 
-// --- Quantum Computing --- quantum_computing_decl : 'qc' IDENTIFIER '{' qc_body '}' ; qc_body : 'qubit' '=' INTEGER | 'circuit' '=' STRING | 'gate' '=' STRING ; quantum_teleport : 'quantum_teleport' 'from' IDENTIFIER 'to' IDENTIFIER ';' ;
+---
 
-// --- Graphics & Video --- graphics_decl : 'graphics' IDENTIFIER '{' graphics_body '}' ; graphics_body : 'render' '=' STRING | 'shader' '=' STRING | 'frame' '=' INTEGER ; video_decl : 'video' IDENTIFIER '{' video_body '}' ; video_body : 'codec' '=' STRING | 'resolution' '=' STRING | 'fps' '=' INTEGER ;
+65. Source Spans
 
-// --- Zamani Compiler Self-Reference --- zenith_compiler_ref : 'zenith_compiler' '{' compiler_body '}' ; compiler_body : 'version' '=' STRING | 'target' '=' STRING | 'optimize' '=' STRING ;
+Every grammar construct that can produce an AST node must have a source-span strategy.
 
-// --- Performance & Task --- perform_task : 'perform' 'task' IDENTIFIER '{' task_body '}' ; task_body : 'operation' '=' STRING | 'priority' '=' EXPRESSION | 'deadline' '=' EXPRESSION ;
+Source spans must support:
 
-// --- Generation --- generation_decl : 'generation' IDENTIFIER '{' generation_body '}' ; generation_body : 'generate' 'code' 'from' STRING | 'target' '=' STRING ;
+- file identity;
+- byte/character range;
+- line/column information where required;
+- diagnostics;
+- macro-origin tracking where applicable;
+- generated-source mapping where applicable.
 
-// --- Infinity Concept --- infinity_decl : 'infinity' '{' infinity_body '}' ; infinity_body : 'iterations' '=' 'infinite' | 'precision' '=' 'infinite' | 'scale' '=' 'infinite' ;
+Source spans must survive lowering where diagnostics require them.
 
-// --- Literal --- literal_decl : 'literal' IDENTIFIER '=' EXPRESSION ';' ;
+---
 
-// --- Error Handling --- error_decl : 'error' STRING ';' ;
+66. Diagnostics
 
-// --- Immutable --- immutable_decl : 'immutable' 'var' IDENTIFIER '=' EXPRESSION ';' ;
+Diagnostics are part of the language contract.
 
-// --- Safe --- safe_decl : 'safe' 'var' IDENTIFIER '=' EXPRESSION ';' ;
+Every production feature must define:
 
-// --- Self --- self_ref : 'self' '.' IDENTIFIER ;
+diagnostic category
+error condition
+source span
+message
+expected information
+recovery behavior
+related locations
+suggested correction where appropriate
 
-// --- Public --- public_access : 'public' TYPE IDENTIFIER ';' ;
+Diagnostics must be deterministic.
 
-// --- Var (Type Inference) --- var_decl : 'var' IDENTIFIER '=' EXPRESSION ';' ;
+The grammar must not rely on arbitrary parser recovery to define language semantics.
 
-// --- Array and List Types --- array_type : 'array' '<' TYPE '>' ; list_type : 'list' '<' TYPE '>' ;
+---
 
-// --- Object --- object_decl : 'object' IDENTIFIER '{' object_body '}' ; object_body : 'property' TYPE IDENTIFIER ';' | 'method' IDENTIFIER '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ;
+67. Error Recovery
 
-// --- Property --- property_decl : 'property' TYPE IDENTIFIER '{' property_body '}' ; property_body : 'get' '{' FUNCTION_BODY '}' | 'set' '{' FUNCTION_BODY '}' ;
+Parser recovery must:
 
-// --- Handler --- handler_decl : 'handler' IDENTIFIER '(' PARAMETER_LIST ')' '{' FUNCTION_BODY '}' ;
+- preserve valid later syntax where possible;
+- avoid cascading diagnostics where possible;
+- never silently reinterpret invalid source as a different valid program;
+- preserve source locations;
+- terminate deterministically.
 
-// --- Point --- point_decl : 'point' '{' 'x' '=' EXPRESSION ',' 'y' '=' EXPRESSION '}' ;
+Error recovery is not semantic acceptance.
 
-// --- Frame --- frame_decl : 'frame' IDENTIFIER '{' frame_body '}' ; frame_body : 'data' '=' EXPRESSION | 'timestamp' '=' EXPRESSION ;
+---
 
-// --- Element --- element_decl : 'element' IDENTIFIER '=' EXPRESSION ';' ;
+68. Lexical Rules
 
-// --- Domain --- domain_decl : 'domain' IDENTIFIER '{' domain_body '}' ; domain_body : 'operation' IDENTIFIER | 'data_type' IDENTIFIER ;
+The canonical lexical contract lives under:
 
-// --- Basis --- basis_decl : 'basis' IDENTIFIER '{' basis_body '}' ; basis_body : 'vector' IDENTIFIER | 'function' IDENTIFIER ;
+grammar/lexer/
+grammar/spec/lexical.md
 
-=============================================================================== SECTION 44: FINAL MISSING RULES (Verbatim from Document)
-// --- Actor Definition (Full) --- ACTOR_DEFINITION : 'actor' IDENTIFIER '{' ACTOR_BODY '}' ; ACTOR_BODY : ACTOR_MEMBER ACTOR_BODY | /* epsilon */ ; ACTOR_MEMBER : MESSAGE_HANDLER_DEFINITION | PROPERTY_DEFINITION | METHOD_DEFINITION ;
+The implementation lives in:
 
-// --- Nested Enum --- NESTED_ENUM_DEFINITION : 'enum' IDENTIFIER '{' ENUM_BODY '}' ;
+src/lexer.rs
 
-// --- Type Class Definition (Full) --- TYPE_CLASS_DEFINITION : 'class' TYPE_PARAMETER '{' TYPE_CLASS_BODY '}' ;
+The grammar and lexer must agree on:
 
-// --- Context-Dependent Type with Aspect Weaving --- CONTEXT_DEPENDENT_TYPE_WITH_CONTEXT_DEPENDENT_ASPECT_WEAVING : TYPE '[' CONTEXT ']' 'aspect' ASPECT ;
+- identifiers;
+- keywords;
+- literals;
+- comments;
+- Unicode;
+- operators;
+- delimiters;
+- interpolation;
+- numeric syntax;
+- quantum literals;
+- source locations.
 
-// --- Functional Dependency with Type Providers --- FUNCTIONAL_DEPENDENCY_WITH_FUNCTIONAL_DEPENDENCY_TYPE_PROVIDERS : TYPE_PARAMETER '->' TYPE_PARAMETER 'provider' TYPE_PROVIDER ;
+---
 
-// --- Extension Indexer --- EXTENSION_INDEXER_DEFINITION : 'extension' 'this' '[' PARAMETER_LIST ']' '{' GETTER ';' SETTER ';' '}' ;
+69. Token Identity
 
-// --- IO (used in effect system) --- IO : 'io' '(' EXPRESSION ')' ;
+Equivalent lexical concepts must not be duplicated without justification.
 
-// --- Comments --- COMMENT : '//' ~[\n]* '\n' -> skip ;
+Potentially overlapping tokens such as:
 
-// --- Transition (state machine) --- transition : 'transition' 'from' IDENTIFIER 'to' IDENTIFIER 'on' EXPRESSION ';' ;
+Ampersand / BitAnd
+Pipe / BitOr
+Question / QuestionMark
+
+must be audited.
+
+A lexical spelling should have one canonical token identity unless contextual distinction is genuinely required.
+
+---
+
+70. Operators
+
+Operator definitions must specify:
+
+- spelling;
+- token;
+- precedence;
+- associativity;
+- operand categories;
+- AST mapping;
+- semantic meaning;
+- overload rules;
+- diagnostics.
+
+The same operator must not accidentally acquire incompatible meanings in unrelated domains.
+
+---
+
+71. Literals
+
+Literal support must cover:
+
+- integers;
+- floating-point values;
+- strings;
+- characters;
+- booleans;
+- bytes;
+- raw strings;
+- interpolated strings;
+- structured literals;
+- quantum literals;
+- domain-specific literals where justified.
+
+Literal representation must not introduce artificial hardware limits.
+
+---
+
+72. Quantum Literals
+
+Quantum notation may support Dirac-style state notation.
+
+Examples:
+
+|0⟩
+|1⟩
+|+⟩
+|-⟩
+|ψ⟩
+
+The parser recognizes structure.
+
+The semantic layer determines whether the state is valid.
+
+The grammar must not enumerate every possible future quantum state.
+
+---
+
+73. Names and Namespaces
+
+Names must support:
+
+- identifiers;
+- qualified names;
+- namespaces;
+- modules;
+- packages;
+- imports;
+- aliases;
+- generic names;
+- dialect-qualified names;
+- capability-qualified names.
+
+Names must not depend on target hardware identifiers.
+
+---
+
+74. Modules
+
+Modules must support:
+
+- declarations;
+- imports;
+- exports;
+- namespaces;
+- aliases;
+- visibility;
+- dependencies;
+- versions;
+- package metadata.
+
+There is no fixed maximum module nesting depth or dependency count.
+
+---
+
+75. Functions
+
+Functions may support:
+
+- parameters;
+- generic parameters;
+- return types;
+- effects;
+- contracts;
+- asynchronous execution;
+- generators;
+- closures;
+- lambdas;
+- calling conventions.
+
+Calling conventions are semantic/ABI metadata and must not leak arbitrary backend assumptions into core syntax.
+
+---
+
+76. Types
+
+The type system may contain:
+
+primitive
+named
+generic
+tuple
+array
+slice
+function
+reference
+pointer
+optional
+result
+never
+dependent
+linear
+affine
+effectful
+resource
+capability
+quantum
+tensor
+hardware
+
+All must map into one coherent semantic type system.
+
+---
+
+77. Genericity
+
+Genericity must be preferred over domain-specific duplication.
+
+Instead of:
+
+QuantumMatrix
+ClassicalMatrix
+GPUMatrix
+FPgaMatrix
+
+where the semantics do not require separate types, use common generic abstractions with capabilities and constraints.
+
+Domain-specific types remain valid where their semantics genuinely differ.
+
+---
+
+78. Expressions
+
+Expressions must support, as applicable:
+
+- literals;
+- names;
+- calls;
+- indexing;
+- member access;
+- unary operators;
+- binary operators;
+- assignment;
+- ranges;
+- tuples;
+- arrays;
+- maps;
+- conditionals;
+- matches;
+- lambdas;
+- closures;
+- blocks;
+- async expressions;
+- effect expressions;
+- quantum expressions;
+- metaprogramming expressions.
+
+Expression precedence must be centralized.
+
+---
+
+79. Statements
+
+Statements may include:
+
+- declarations;
+- expressions;
+- conditionals;
+- loops;
+- matches;
+- returns;
+- exceptions;
+- assertions;
+- blocks;
+- concurrency;
+- resource operations;
+- capability operations;
+- quantum operations;
+- hybrid operations;
+- HDL operations;
+- distributed operations;
+- AI/data/network/security operations;
+- compile/execution directives;
+- memory operations;
+- temporal operations;
+- Sankofa operations.
+
+Every statement must have an explicit semantic owner.
+
+---
+
+80. No Domain-Specific Parser Islands
+
+Quantum, HDL, AI, networking, and other domains must not become independent parser languages.
+
+The correct model is:
+
+common Zamani syntax
+        +
+domain extension
+        ↓
+common AST
+        ↓
+domain semantic model
+
+not:
+
+Zamani
+ ├── classical parser
+ ├── quantum parser
+ ├── HDL parser
+ └── AI parser
+
+unless a separate interoperability format explicitly requires a separate parser.
+
+---
+
+81. AST Contract
+
+Every grammar production that contributes semantic structure must define:
+
+grammar rule
+    ↓
+AST node
+    ↓
+semantic representation
+    ↓
+IR representation
+
+The AST must remain domain-neutral where the syntax is structurally generic.
+
+For operations, the preferred conceptual model is:
+
+Operation {
+    name
+    namespace
+    operands
+    parameters
+    results
+    attributes
+    modifiers
+    effects
+    capabilities
+    source
+}
+
+Do not create a universal AST enum containing every possible future hardware or quantum operation.
+
+---
+
+82. AST Independence
+
+The AST must not depend on:
+
+- LLVM;
+- QIR;
+- MLIR;
+- vendor SDKs;
+- vendor hardware;
+- physical qubit maps;
+- calibration data;
+- routing algorithms;
+- scheduling algorithms;
+- QEC implementation;
+- target topology.
+
+Those belong downstream.
+
+---
+
+83. Canonical IR
+
+Canonical IR is where validated semantics become executable compiler representation.
+
+The grammar does not define every IR instruction.
+
+The semantic layer must establish the mapping.
+
+The architecture permits:
+
+Classical IR
+quantum::ir
+HDL/Hardware IR
+
+without requiring three unrelated source languages.
+
+---
+
+84. Quantum IR
+
+"quantum::ir" remains authoritative for quantum semantics.
+
+No:
+
+grammar quantum IR
+frontend quantum IR
+secondary quantum IR
+vendor quantum IR
+
+may replace it.
+
+Interoperability representations may be translated to and from "quantum::ir".
+
+---
+
+85. HDL/Hardware IR
+
+HDL syntax must lower into the appropriate canonical hardware semantic representation.
+
+The source grammar should not become an implementation of synthesis.
+
+---
+
+86. Inter-Domain Integration
+
+A feature that crosses domains must define all participating contracts.
+
+For example:
+
+AI
+ ↓
+Tensor
+ ↓
+Classical computation
+ ↓
+Quantum kernel
+ ↓
+Measurement
+ ↓
+Classical control
+
+must remain one semantic program.
+
+The integration must define:
+
+- types;
+- ownership;
+- effects;
+- resource requirements;
+- capability requirements;
+- data representation;
+- source spans;
+- lowering;
+- runtime behavior;
+- diagnostics;
+- tests.
+
+---
+
+87. Security and Safety Invariants
+
+Production Zamani implementation must be safe by construction where possible.
+
+Rust implementation requirements:
+
+Rust 2021
+Rust 1.97.1
+no unsafe
+
+No production source may introduce:
+
+unsafe
+unsafe fn
+unsafe impl
+unsafe trait
+unsafe { ... }
+
+The Rust implementation must use safe abstractions.
+
+---
+
+88. Zamani "unsafe"
+
+A source-language construct named "unsafe" must not be confused with Rust implementation safety.
+
+If Zamani retains an "unsafe" language construct, it must have:
+
+- a formal specification;
+- semantic meaning;
+- capability restrictions;
+- security model;
+- diagnostics;
+- compiler implementation;
+- runtime implementation;
+- tests;
+- compatibility policy.
+
+An incomplete "unsafe" syntax is not acceptable as a production feature.
+
+If Zamani is intended to provide a safe-only language, such a construct must be removed or explicitly restricted through the compatibility process.
+
+---
+
+89. Resource Feasibility
+
+Compilation must distinguish:
+
+syntactically valid
+semantically valid
+target-compatible
+resource-feasible
+
+For example:
+
+requires 1,000,000 qubits
+
+may be perfectly valid source.
+
+A target with only 100 qubits may reject execution as infeasible.
+
+That does not mean the language only supports 100 qubits.
+
+---
+
+90. Infinite-Scale Interpretation
+
+“Scale to infinity” means:
+
+«No artificial finite language ceiling is introduced where the underlying semantics can remain parameterized.»
+
+It does not claim that physical hardware, memory, execution time, storage, or mathematical representation is literally infinite.
+
+Therefore:
+
+language scalability
+
+is distinct from:
+
+physical resource availability
+
+and:
+
+mathematical representability
+
+---
+
+91. Resource-Aware Compilation
+
+The compiler may discover:
+
+available memory
+available processors
+available accelerators
+available QPUs
+available communication
+available bandwidth
+available storage
+available capabilities
+available precision
+available reliability
+
+and select a realization.
+
+The source program should not need rewriting solely because these values change.
+
+---
+
+92. Portability Profiles
+
+Target profiles may be defined externally.
+
+A profile can specify:
+
+capabilities
+resources
+constraints
+ABI
+available libraries
+deployment policy
+security policy
+
+A profile is not the Zamani language itself.
+
+This keeps target-specific information out of the portable grammar.
+
+---
+
+93. Target-Specific Extensions
+
+Target-specific constructs must be explicit.
+
+They should:
+
+- identify the target domain;
+- identify their compatibility requirements;
+- define fallback behavior;
+- declare portability impact;
+- avoid contaminating universal semantics.
+
+Target-specific syntax must never silently become a universal requirement.
+
+---
+
+94. Compatibility
+
+Every stable feature must define:
+
+introduced version
+semantic status
+syntax status
+AST status
+IR status
+compiler status
+runtime status
+deprecation status
+migration path
+
+Compatibility must be tested at:
+
+source
+lexer
+parser
+AST
+semantic
+IR
+compiler
+runtime
+
+---
+
+95. Feature Lifecycle
+
+Every feature has one of:
+
+PROPOSED
+EXPERIMENTAL
+IMPLEMENTED
+STABLE
+DEPRECATED
+REMOVED
+HISTORICAL
+NOT_IMPLEMENTED
+
+A feature may not be marked "STABLE" merely because it appears in this document.
+
+---
+
+96. Feature Completion Contract
+
+Every feature must define:
+
+File
+Purpose
+Status
+Owns
+Does Not Own
+Inputs
+Outputs
+Dependencies
+Upstream Contracts
+Downstream Consumers
+Public Grammar Contract
+AST Contract
+Semantic Contract
+IR Integration
+Compiler Integration
+Runtime Integration
+Tooling Integration
+Cross-Domain Integration
+Positive Tests
+Negative Tests
+Boundary Tests
+Scalability Tests
+Compatibility Tests
+Determinism Tests
+Hard-Coding Audit
+Diagnostics
+Security
+Performance
+Completion Criteria
+
+This is mandatory.
+
+It exists specifically so that a feature/file can be completed independently without later architectural rework.
+
+---
+
+97. Feature Manifests
+
+Machine-readable feature contracts belong under:
+
+grammar/specification/features/
+
+Each manifest should identify:
+
+id
+name
+status
+version
+syntax
+grammar
+lexer_tokens
+ast_nodes
+semantic_rules
+ir_mapping
+compiler_consumers
+runtime_consumers
+domain
+capabilities
+resource_requirements
+negative_tests
+boundary_tests
+scalability_tests
+compatibility
+hard_coding_policy
+diagnostics
+security
+performance
+
+A feature is not complete until its manifest is complete.
+
+---
+
+98. Independent-First Development
+
+The recommended implementation order is:
+
+1. language authority
+2. specification contracts
+3. lexical contracts
+4. core grammar
+5. expression grammar
+6. type grammar
+7. declaration grammar
+8. statement grammar
+9. functions
+10. modules
+11. effects
+12. memory
+13. concurrency
+14. classical
+15. quantum
+16. hybrid
+17. HDL
+18. hardware
+19. resources
+20. distributed
+21. AI
+22. data
+23. networking
+24. security
+25. interoperability
+26. dialects
+27. macros
+28. metaprogramming
+29. Sankofa
+30. temporal/MTS
+31. nano
+32. canonical Zamani.g4 composition
+33. implementation-conformance reference
+34. validation
+35. complete test matrix
+
+The root grammar is finalized only after its component contracts exist.
+
+---
+
+99. Existing File Preservation
+
+Existing filenames should not be unnecessarily renamed.
+
+In particular:
+
+grammar/Zamani.g4
+grammar/Zamani-Grammar.md
+grammar/grammar.md
+grammar/DESIGN.md
+grammar/README.md
+
+remain.
+
+Existing domain files should be retained when their concepts remain valid.
+
+Files are removed only when:
+
+1. they are demonstrably obsolete;
+2. nothing consumes them;
+3. their functionality is represented elsewhere;
+4. compatibility impact has been assessed;
+5. removal is explicitly documented.
+
+---
+
+100. "grammar/antlr/"
+
+The repository may contain an "antlr/" directory.
+
+It must not become a second authoritative grammar root.
+
+The preferred architecture is:
+
+grammar/Zamani.g4
+
+as the canonical composition root.
+
+"grammar/antlr/" may remain temporarily if tooling genuinely consumes it.
+
+It should be removed only after repository-wide reference analysis proves it is obsolete.
+
+No duplicate:
+
+grammar/antlr/Zamani.g4
+grammar/Zamani.g4
+
+may simultaneously claim authority.
+
+---
+
+101. Generated Files
+
+Generated artifacts must be identifiable.
+
+A generated file must state:
+
+generated from
+generator version
+source contract
+generation command
+do not edit manually
+
+Generated documentation must not become an accidental source of truth.
+
+---
+
+102. "grammar/grammar.md"
+
+"grammar.md" is the implementation-conformance reference.
+
+It should be generated/validated against:
+
+normative specification
++
+Zamani.g4
++
+lexer
++
+parser
++
+AST
+
+It must distinguish:
+
+SPECIFIED
+IMPLEMENTED
+PARTIALLY_IMPLEMENTED
+PLANNED
+DEPRECATED
+
+This prevents future design from being confused with currently executable syntax.
+
+---
+
+103. Testing Contract
+
+The grammar test suite must include:
+
+lexical
+syntax
+expressions
+types
+declarations
+control flow
+functions
+modules
+effects
+memory
+concurrency
+classical
+quantum
+hybrid
+HDL
+hardware
+resources
+distributed
+AI
+data
+networking
+security
+interoperability
+dialects
+macros
+metaprogramming
+Sankofa
+temporal
+MTS
+nano
+compatibility
+diagnostics
+negative
+boundary
+scalability
+determinism
+portability
+
+---
+
+104. Positive Tests
+
+Positive tests demonstrate legal programs.
+
+Every stable feature must have representative positive tests.
+
+Tests must include both:
+
+minimal valid program
+
+and:
+
+realistic composed program
+
+---
+
+105. Negative Tests
+
+Negative tests must prove that invalid programs are rejected.
+
+Examples include:
+
+- malformed syntax;
+- invalid types;
+- impossible constraints;
+- missing capabilities;
+- invalid resource expressions;
+- illegal ownership;
+- illegal quantum operations;
+- invalid effect usage;
+- invalid HDL constructs;
+- incompatible interoperability declarations.
+
+---
+
+106. Boundary Tests
+
+Boundary tests test semantic edges rather than artificial universal maxima.
+
+Examples:
+
+empty collection
+single element
+single qubit
+single operation
+zero-length valid construct where permitted
+large symbolic value
+nested generic types
+deep module paths
+large expression trees
+large generated structures
+
+Boundary tests must never establish arbitrary hardware ceilings.
+
+---
+
+107. Scalability Tests
+
+Scalability tests must verify that the implementation does not accidentally introduce fixed limits.
+
+They should exercise progressively larger:
+
+- source files;
+- declarations;
+- expressions;
+- modules;
+- tensors;
+- data;
+- quantum registers;
+- distributed nodes;
+- concurrent tasks;
+- hardware structures.
+
+The expected outcome is:
+
+resource exhaustion
+
+rather than:
+
+language-defined artificial maximum
+
+when the implementation reaches resource limits.
+
+---
+
+108. Determinism Tests
+
+Where deterministic behavior is promised, tests must verify:
+
+same source
++
+same language version
++
+same semantic inputs
++
+same compilation policy
+=
+same observable result
+
+where deterministic semantics apply.
+
+---
+
+109. Compatibility Tests
+
+Compatibility tests must compare:
+
+version N
+version N+1
+
+for:
+
+- syntax;
+- semantics;
+- AST;
+- diagnostics;
+- IR;
+- interoperability;
+- migration behavior.
+
+---
+
+110. Hard-Coding Audit
+
+Every grammar and compiler feature must be audited for artificial limits.
+
+Search targets include:
+
+MAX_
+LIMIT_
+CAPACITY_
+QUANTUM_COUNT
+CPU_COUNT
+GPU_COUNT
+FPGA_COUNT
+NODE_COUNT
+THREAD_COUNT
+TENSOR_MAX
+REGISTER_MAX
+DEVICE_COUNT
+
+But the audit must also detect hidden hard-coding such as:
+
+if qubits > 1024
+if nodes == 8
+physical_qubit(17)
+gpu_0
+cpu_7
+
+unless the value is explicitly part of a target-specific realization.
+
+---
+
+111. Domain Integration Matrix
+
+Every domain must define:
+
+syntax
+tokens
+AST
+semantic model
+resource model
+capability model
+canonical IR
+compiler consumers
+runtime consumers
+tests
+compatibility
+
+Domains must never be considered complete solely because their ".g4" files parse.
+
+---
+
+112. Classical Integration
+
+classical syntax
+    ↓
+common AST
+    ↓
+classical semantic model
+    ↓
+Classical IR
+    ↓
+optimization
+    ↓
+target lowering
+
+---
+
+113. Quantum Integration
+
+quantum syntax
+    ↓
+common AST Operation
+    ↓
+quantum semantic validation
+    ↓
+quantum::ir
+    ↓
+optimization
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+QEC/resilience
+    ↓
+ZQN
+    ↓
+HAL
+
+---
+
+114. HDL Integration
+
+HDL syntax
+    ↓
+common AST
+    ↓
+hardware semantic model
+    ↓
+HDL/Hardware IR
+    ↓
+optimization
+    ↓
+synthesis/simulation/verification
+    ↓
+target
+
+---
+
+115. Hybrid Integration
+
+Hybrid programs may cross:
+
+classical
+↔
+quantum
+↔
+AI
+↔
+data
+↔
+accelerator
+↔
+distributed
+
+The same source program remains one semantic unit.
+
+---
+
+116. AI/Quantum Integration
+
+A valid future pipeline may be:
+
+dataset
+ ↓
+tensor/model
+ ↓
+classical preprocessing
+ ↓
+quantum kernel
+ ↓
+measurement
+ ↓
+classical optimization
+ ↓
+training
+
+No second language is required.
+
+---
+
+117. Hardware/Quantum Integration
+
+Quantum hardware requirements must be expressed through:
+
+capabilities
+resources
+constraints
+preferences
+
+rather than universal physical identifiers.
+
+---
+
+118. Distributed/Quantum Integration
+
+Distributed quantum programs may express:
+
+distributed quantum computation
+communication requirements
+entanglement/communication capabilities
+resource requirements
+fault tolerance
+
+Physical network realization remains downstream.
+
+---
+
+119. Networking/Distributed Integration
+
+Networking syntax represents communication semantics.
+
+Distributed execution determines:
+
+node placement
+routing
+replication
+failure handling
+
+The source language should not require a fixed number of nodes.
+
+---
+
+120. Security/Distributed Integration
+
+Security policies may constrain:
+
+identity
+authorization
+communication
+data placement
+execution
+secrets
+trust
+
+The runtime must enforce actual security.
+
+---
+
+121. Compiler Integration
+
+Every stable syntax feature must specify its compiler consumer.
+
+A feature is incomplete if:
+
+parser accepts it
+
+but:
+
+compiler does not know what it means
+
+Compiler lowering must be deterministic where required and semantics-preserving.
+
+---
+
+122. Runtime Integration
+
+Runtime consumers must be identified for features involving:
+
+- execution;
+- resources;
+- concurrency;
+- networking;
+- distributed computation;
+- resilience;
+- persistence;
+- hardware;
+- quantum execution.
+
+Grammar must never silently imply runtime behavior that has no implementation.
+
+---
+
+123. Tooling Integration
+
+Tooling must eventually consume the same contracts for:
+
+- syntax highlighting;
+- formatting;
+- diagnostics;
+- IDE completion;
+- refactoring;
+- documentation;
+- static analysis;
+- language servers.
+
+Tooling must not maintain a separate unofficial grammar.
+
+---
+
+124. Documentation Integration
+
+Documentation must distinguish:
+
+normative
+informative
+experimental
+historical
+implementation-specific
+
+A code example must not imply stability if its feature is experimental.
+
+---
+
+125. Production Acceptance Rule
+
+A domain or feature is production-ready only when all applicable conditions hold:
+
+[ ] specification exists
+[ ] ownership defined
+[ ] syntax defined
+[ ] lexer contract defined
+[ ] parser contract defined
+[ ] AST mapping defined
+[ ] semantic mapping defined
+[ ] IR mapping defined
+[ ] compiler consumer defined
+[ ] runtime consumer defined
+[ ] source spans defined
+[ ] diagnostics defined
+[ ] positive tests exist
+[ ] negative tests exist
+[ ] boundary tests exist
+[ ] scalability tests exist
+[ ] compatibility tests exist
+[ ] determinism tests exist where applicable
+[ ] hard-coding audit passes
+[ ] security audit passes
+[ ] performance expectations defined
+[ ] cross-domain integration defined
+[ ] feature manifest complete
+[ ] implementation status verified
+
+---
+
+126. What Must Never Happen
+
+Zamani must never evolve into:
+
+one grammar for classical
++
+another grammar for quantum
++
+another grammar for HDL
++
+another grammar for AI
+
+nor:
+
+one AST for classical
++
+one quantum AST
++
+one hardware AST
+
+nor:
+
+source
+ ↓
+vendor-specific representation
+
+as the universal architecture.
+
+The language must remain unified.
+
+---
+
+127. What May Be Specialized
+
+Specialization is permitted after the canonical semantic boundary.
+
+Examples:
+
+Classical IR
+quantum::ir
+HDL/Hardware IR
+vendor backend
+target runtime
+
+Specialization is an implementation concern.
+
+It must not fragment the source language.
+
+---
+
+128. Future-Proofing
+
+Future computational domains must be addable without redesigning the entire language.
+
+A future domain should be able to define:
+
+domain name
+syntax extensions
+semantic model
+capabilities
+resources
+AST mapping
+IR mapping
+compiler integration
+runtime integration
+tests
+compatibility
+
+without changing the fundamental language architecture.
+
+---
+
+129. Extensibility Rule
+
+New features should prefer:
+
+generic syntax
++
+typed semantics
++
+capabilities
++
+resources
++
+operations
+
+over:
+
+new keyword for every feature
+
+This prevents the language from becoming an unmaintainable dictionary of technologies.
+
+---
+
+130. Stable Core
+
+The most stable parts of Zamani should be:
+
+lexical model
+identifiers
+source locations
+modules
+types
+expressions
+statements
+functions
+effects
+ownership
+resource model
+capability model
+diagnostics
+semantic model
+interoperability boundaries
+
+Domains should build upon this foundation.
+
+---
+
+131. Technology-Neutral Principle
+
+The language should describe computation independently of today's:
+
+- CPU vendors;
+- GPU vendors;
+- FPGA vendors;
+- QPU vendors;
+- accelerator APIs;
+- AI frameworks;
+- network vendors;
+- cloud vendors;
+- compiler backends.
+
+Vendor integration belongs downstream.
+
+---
+
+132. Representation-Neutral Principle
+
+The same semantic concept may be represented differently by different targets.
+
+For example:
+
+parallel computation
+
+may become:
+
+CPU threads
+GPU lanes
+FPGA pipelines
+distributed tasks
+quantum operations
+future execution units
+
+without changing source semantics.
+
+---
+
+133. Resource-Neutral Principle
+
+The source program describes what it needs.
+
+The compiler discovers what is available.
+
+The runtime manages what is actually present.
+
+The target realizes the computation.
+
+Therefore:
+
+source semantics
+≠
+resource inventory
+
+---
+
+134. Topology-Neutral Principle
+
+Topology belongs downstream.
+
+A portable program must not require:
+
+8-node cluster
+4-GPU topology
+specific QPU connectivity
+specific FPGA routing
+
+unless explicitly target-specific.
+
+---
+
+135. Calibration-Neutral Principle
+
+Calibration data belongs to target/runtime infrastructure.
+
+It must not become part of universal source grammar.
+
+Quantum programs may express requirements such as:
+
+requires fidelity >= threshold
+
+but the actual calibration state belongs to HAL/backend infrastructure.
+
+---
+
+136. Physical-Qubit-Neutral Principle
+
+A logical quantum program operates on logical identities.
+
+Physical mapping is downstream.
+
+This ensures:
+
+same source
++
+different QPU
+=
+different legal physical mapping
+
+without source rewriting.
+
+---
+
+137. Compiler Discovery
+
+The compiler may discover:
+
+resources
+capabilities
+libraries
+accelerators
+topology
+timing
+memory
+precision
+security
+
+and choose an implementation.
+
+The choice must respect semantic requirements.
+
+---
+
+138. Runtime Discovery
+
+Runtime may discover changing conditions such as:
+
+resource availability
+device state
+load
+faults
+network state
+calibration
+thermal state
+power state
+
+where the language/runtime contract permits dynamic adaptation.
+
+Adaptation must preserve stated semantics.
+
+---
+
+139. Resilience and Recovery
+
+Where resilience is declared, runtime may use:
+
+checkpoint
+retry
+recover
+migrate
+failover
+degrade
+escalate
+
+The grammar describes policy/intent.
+
+The runtime implements recovery.
+
+---
+
+140. Observability
+
+Execution constructs may support:
+
+- logs;
+- traces;
+- metrics;
+- profiling;
+- provenance;
+- diagnostics.
+
+Observability must not change program semantics unless explicitly specified.
+
+---
+
+141. Provenance
+
+Provenance may record:
+
+source version
+compiler version
+language version
+dependencies
+target profile
+optimization profile
+artifact identity
+runtime environment
+execution identity
+
+Provenance belongs to the build/execution ecosystem and should be accessible without becoming embedded into every language construct.
+
+---
+
+142. Reproducibility
+
+Reproducible builds require:
+
+stable source
+stable dependencies
+defined compiler
+defined language version
+defined configuration
+defined optimization policy
+
+When nondeterminism is permitted, its source must be explicit.
+
+---
+
+143. Deterministic Compilation
+
+Where required:
+
+same input
++
+same compiler
++
+same configuration
+=
+same semantic artifact
+
+Target-specific lowerings may differ while preserving canonical semantics.
+
+---
+
+144. Error Semantics
+
+Errors must be classified consistently.
+
+Possible categories include:
+
+lexical error
+syntax error
+name error
+type error
+effect error
+ownership error
+resource error
+capability error
+semantic error
+target incompatibility
+resource infeasibility
+runtime error
+security error
+
+The grammar is responsible primarily for lexical/syntax structure.
+
+---
+
+145. Versioning
+
+Language versions must be explicit.
+
+Version changes must identify:
+
+grammar changes
+semantic changes
+AST changes
+IR changes
+compiler changes
+runtime changes
+compatibility impact
+migration path
+
+---
+
+146. Deprecation
+
+Deprecated constructs must remain documented until their removal policy permits removal.
+
+Deprecation must include:
+
+reason
+replacement
+first deprecated version
+planned removal
+migration guidance
+compatibility behavior
+
+---
+
+147. Historical Features
+
+Historical NIMBUS, Universal Trinity, Sankofa, MTS, nano, and other concepts may remain documented for continuity.
+
+Historical status must never imply implementation.
+
+---
+
+148. Experimental Features
+
+Experimental features must be explicitly marked.
+
+They must not silently become stable merely because they appear in "Zamani-Grammar.md".
+
+Experimental syntax requires:
+
+- feature identifier;
+- feature gate;
+- status;
+- semantic contract;
+- tests;
+- compatibility policy.
+
+---
+
+149. Grammar Composition Rule
+
+"grammar/Zamani.g4" is the canonical ANTLR composition root.
+
+The modular files under:
+
+grammar/core/
+grammar/types/
+grammar/expressions/
+grammar/statements/
+grammar/classical/
+grammar/quantum/
+grammar/hdl/
+...
+
+provide contracts and modular grammar components.
+
+The root grammar must compose them consistently.
+
+There must be no second authoritative root.
+
+---
+
+150. Grammar Modularity
+
+Subdirectories should be created when they improve:
+
+- ownership;
+- maintainability;
+- testability;
+- discoverability;
+- independent completion;
+- integration traceability.
+
+Directories must not be created merely to split files artificially.
+
+Every directory must have a documented purpose.
+
+---
+
+151. File Independence
+
+Each implementation/specification file must be independently completable.
+
+Before implementation begins, it must know:
+
+upstream contracts
+downstream consumers
+AST target
+semantic target
+IR target
+tests
+diagnostics
+compatibility
+hard-coding policy
+
+This prevents:
+
+finish file A
+→ modify A after file B
+→ modify A again after file C
+→ modify A again after IR
+
+The contracts must be decided first.
+
+---
+
+152. Integration Before Implementation
+
+The preferred process is:
+
+contract
+ ↓
+ownership
+ ↓
+interfaces
+ ↓
+AST
+ ↓
+semantic mapping
+ ↓
+IR mapping
+ ↓
+tests
+ ↓
+implementation
+
+not:
+
+write grammar
+ ↓
+discover AST later
+ ↓
+discover IR later
+ ↓
+rewrite grammar
+
+---
+
+153. Repository-Wide Traceability
+
+Every stable feature must be traceable:
+
+feature ID
+ ↓
+specification
+ ↓
+grammar
+ ↓
+lexer
+ ↓
+parser
+ ↓
+AST
+ ↓
+semantic analyzer
+ ↓
+IR
+ ↓
+compiler
+ ↓
+runtime
+ ↓
+tests
+
+A missing link means the feature is incomplete.
+
+---
+
+154. Canonical Example: Portable Quantum Program
+
+The source-level intent is conceptually:
+
+allocate a logical quantum register
+apply operations
+measure
+use classical result
+
+The implementation may become:
+
+logical qubits
+ ↓
+encoded qubits
+ ↓
+physical qubits
+ ↓
+routed operations
+ ↓
+scheduled pulses
+ ↓
+QEC
+ ↓
+ZQN
+ ↓
+HAL
+ ↓
+QPU
+
+The programmer should not need to rewrite the algorithm merely because the QPU changes.
+
+---
+
+155. Canonical Example: Portable Parallel Program
+
+Source:
+
+parallel computation
+
+Target A:
+
+CPU threads
+
+Target B:
+
+GPU
+
+Target C:
+
+distributed cluster
+
+Target D:
+
+future accelerator
+
+The semantic contract remains the same.
+
+---
+
+156. Canonical Example: Hardware Co-Design
+
+A program may describe:
+
+algorithm
++
+parallelism
++
+memory requirements
++
+latency constraints
++
+accelerator capability
+
+The compiler may produce:
+
+software implementation
+
+or:
+
+hardware accelerator
+
+or:
+
+hybrid implementation
+
+depending on available capabilities and policies.
+
+---
+
+157. Canonical Example: AI
+
+A model program may describe:
+
+model
+dataset
+training
+inference
+tensor operations
+
+The compiler may select:
+
+CPU
+GPU
+TPU-like accelerator
+FPGA
+distributed accelerator
+future accelerator
+
+without requiring the source algorithm to become vendor-specific.
+
+---
+
+158. Canonical Example: HDL
+
+A hardware description may specify:
+
+parameterized datapath
+pipeline
+memory
+interface
+timing requirement
+verification property
+
+A target-specific synthesis flow later determines:
+
+FPGA
+ASIC
+simulation
+emulation
+future hardware
+
+---
+
+159. Production Invariants
+
+The following invariants are mandatory:
+
+Invariant 1
+
+One Zamani language.
+
+Invariant 2
+
+One canonical ANTLR composition root.
+
+Invariant 3
+
+One domain-neutral AST architecture.
+
+Invariant 4
+
+One canonical quantum semantic boundary: "quantum::ir".
+
+Invariant 5
+
+No universal hardware limits in grammar.
+
+Invariant 6
+
+Requirements, capabilities, constraints, preferences, hints, and realizations remain distinct.
+
+Invariant 7
+
+Domain implementations remain downstream from source semantics.
+
+Invariant 8
+
+Every feature has a complete traceability contract.
+
+Invariant 9
+
+Experimental syntax cannot silently become stable syntax.
+
+Invariant 10
+
+Generated documentation cannot become an accidental source of truth.
+
+Invariant 11
+
+Target-specific realization cannot redefine portable semantics.
+
+Invariant 12
+
+Rust implementation is Rust 2021 / Rust 1.97.1 / safe Rust only.
+
+---
+
+160. Production Readiness Checklist
+
+"grammar/Zamani-Grammar.md" is integrated correctly only when:
+
+[ ] no competing grammar authority exists
+[ ] Zamani.g4 remains canonical ANTLR root
+[ ] grammar.md is implementation-conformance documentation
+[ ] this file is extended design/reference material
+[ ] normative specification is authoritative
+[ ] feature manifests exist
+[ ] lexical authority is defined
+[ ] token identity is deterministic
+[ ] AST mapping exists for stable syntax
+[ ] semantic mapping exists for stable syntax
+[ ] IR mapping exists for stable syntax
+[ ] quantum::ir remains canonical
+[ ] quantum grammar does not hard-code gate lists
+[ ] physical qubit mapping is downstream
+[ ] QEC remains downstream
+[ ] ZQN remains downstream
+[ ] HAL remains downstream
+[ ] routing remains downstream
+[ ] scheduling remains downstream
+[ ] optimization remains downstream
+[ ] HDL remains target-independent
+[ ] hardware resources remain abstract
+[ ] AI remains framework-neutral
+[ ] distributed computing has no fixed node limit
+[ ] concurrency has no fixed thread limit
+[ ] tensors have no artificial universal dimension limit
+[ ] timelines have no artificial universal count
+[ ] resource/capability semantics are separated
+[ ] diagnostics have source spans
+[ ] negative tests exist
+[ ] boundary tests exist
+[ ] scalability tests exist
+[ ] compatibility tests exist
+[ ] determinism tests exist where applicable
+[ ] hard-coding audit passes
+[ ] security audit passes
+[ ] cross-domain integration is defined
+[ ] Rust baseline is Rust 1.97.1
+[ ] production Rust contains no unsafe
+
+---
+
+161. Final Architecture
+
+The complete Zamani language architecture is:
+
+                         ZAMANI SOURCE
+                              │
+                              ▼
+                    ┌──────────────────┐
+                    │ Lexical Contract │
+                    └────────┬─────────┘
+                             ▼
+                          Lexer
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │ Canonical Grammar│
+                    │    Zamani.g4     │
+                    └────────┬─────────┘
+                             ▼
+                           Parser
+                             │
+                             ▼
+                     Domain-Neutral AST
+                             │
+             ┌───────────────┼────────────────┐
+             │               │                │
+             ▼               ▼                ▼
+        Name/Module       Type System      Effects
+        Resolution
+             │               │                │
+             └───────────────┼────────────────┘
+                             ▼
+                  Ownership / Resources
+                             │
+                             ▼
+                    Capabilities
+                             │
+                             ▼
+                 Portability Analysis
+                             │
+                             ▼
+                  Semantic Validation
+                             │
+                             ▼
+                Canonical Semantic Model
+                             │
+             ┌───────────────┼────────────────┐
+             │               │                │
+             ▼               ▼                ▼
+       Classical          quantum::ir       HDL /
+          IR                                Hardware IR
+             │               │                │
+             └───────────────┼────────────────┘
+                             ▼
+                       Optimization
+                             │
+             ┌───────────────┼────────────────┐
+             │               │                │
+             ▼               ▼                ▼
+          Routing        Scheduling       Resilience
+             │               │                │
+             └───────────────┼────────────────┘
+                             ▼
+                            QEC
+                             │
+                             ▼
+                            ZQN
+                             │
+                             ▼
+                            HAL
+                             │
+                             ▼
+                     Target Realization
+                             │
+       ┌─────────────┬───────┼───────┬─────────────┐
+       │             │       │       │             │
+       ▼             ▼       ▼       ▼             ▼
+      CPU           GPU     FPGA    QPU       Distributed /
+                                             Future Targets
+
+---
+
+162. Final POCO-REAF Principle
+
+The central Zamani rule is:
+
+«The source program describes computation, semantics, correctness, capabilities, resources, constraints, preferences, and policies. It does not unnecessarily describe the physical machine on which those semantics will eventually be realized.»
+
+Therefore:
+
+PROGRAM ONCE
+     ↓
+SEMANTICALLY DEFINE ONCE
+     ↓
+COMPILE ONCE
+     ↓
+DISCOVER CAPABILITIES
+     ↓
+SELECT RESOURCES
+     ↓
+OPTIMIZE
+     ↓
+LOWER
+     ↓
+ROUTE
+     ↓
+SCHEDULE
+     ↓
+RESOLVE RESILIENCE/QEC/ZQN
+     ↓
+REALIZE THROUGH HAL
+     ↓
+RUN
+
+The same source-level semantics can therefore scale from:
+
+atom
+
+through:
+
+single device
+single machine
+heterogeneous machine
+accelerator
+quantum processor
+embedded system
+cluster
+cloud
+distributed system
+
+and toward future computational environments, limited only by the actual semantics, representation, capabilities, policies, and resources involved.
+
+---
+
+163. Final Non-Negotiable Rule
+
+Zamani must never solve today's hardware limitations by turning them into tomorrow's language limitations.
+
+Do not encode:
+
+today's maximum qubits
+today's maximum CPUs
+today's maximum GPUs
+today's maximum FPGA resources
+today's maximum tensor size
+today's maximum memory
+today's maximum network size
+today's maximum nodes
+today's maximum accelerators
+
+as permanent language rules.
+
+Instead encode:
+
+semantic intent
++
+capability requirements
++
+resource requirements
++
+constraints
++
+preferences
++
+hints
+
+and let:
+
+compiler
++
+optimizer
++
+router
++
+scheduler
++
+resilience
++
+QEC
++
+ZQN
++
+HAL
++
+runtime
++
+target backend
+
+determine the physical realization.
+
+That is the architecture required for:
+
+«Program Once → Compile Once → Run Everywhere → Anywhere → Forever.»
