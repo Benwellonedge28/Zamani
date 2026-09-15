@@ -1,213 +1,377 @@
-
-
 Zamani Language — Canonical Syntax Specification
 
 Path: "grammar/spec/syntax.md"
 Language: Zamani
-Specification role: Canonical source-language syntax contract
-Status: Production architecture
+Status: Normative / Production Architecture
 Specification version: 1.0
-Minimum Rust implementation baseline: Rust 1.97 / 1.97.1
-Safety requirement: No "unsafe" Rust is permitted in the Zamani compiler implementation.
+Minimum Rust implementation: Rust 1.97 / Rust 1.97.1
+Implementation safety requirement: No "unsafe" Rust.
+Language safety requirement: The stable Zamani language provides no unrestricted "unsafe" escape hatch.
+Primary goal: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF).
 
 ---
 
-0. Purpose
+0. Document Contract
 
-This document defines the canonical syntax of the Zamani programming language.
+0.1 Purpose
 
-It exists to establish a single, implementation-verifiable syntax contract between:
+This document defines the canonical source-language syntax contract for Zamani.
 
-source
-  │
-  ▼
-lexer
-  │
-  ▼
-parser
-  │
-  ▼
-frontend AST
-  │
-  ▼
-semantic analysis
-  │
-  ▼
+It establishes the boundary between:
+
+source text
+    ↓
+lexical analysis
+    ↓
+tokens + spans
+    ↓
+parsing
+    ↓
+domain-neutral AST
+    ↓
+structural validation
+    ↓
+semantic/type/effect/resource analysis
+    ↓
+canonical semantic model
+    ↓
 canonical IR
-  │
-  ▼
+    ↓
+domain IR
+    ↓
 optimization
-  │
-  ▼
-target-independent lowering
-  │
-  ▼
-target-specific realization
-  │
-  ├── CPU
-  ├── GPU
-  ├── FPGA
-  ├── accelerator
-  ├── simulator
-  ├── emulator
-  ├── QPU
-  ├── photonic quantum hardware
-  ├── fault-tolerant quantum hardware
-  └── future computational substrates
+    ↓
+routing / scheduling / resilience / QEC / ZQN
+    ↓
+HAL / target realization
+    ↓
+execution
 
-The specification deliberately separates:
+The syntax specification defines what source forms are legal.
 
-1. lexical syntax;
-2. concrete syntax;
-3. AST structure;
-4. semantic rules;
-5. type rules;
-6. resource requirements;
-7. quantum semantics;
-8. optimization;
-9. scheduling;
-10. target realization.
+It does not define:
 
-The grammar must not encode hardware assumptions.
-
-In particular, the syntax must not require:
-
-- a fixed number of qubits;
-- a fixed number of classical registers;
-- a fixed gate set;
-- a fixed topology;
-- a fixed CPU architecture;
-- a fixed word size;
-- a fixed memory capacity;
-- a fixed accelerator;
-- a fixed quantum architecture;
-- a fixed simulator;
-- a fixed execution provider.
-
-Zamani source describes computational intent.
-
-The compiler determines how that intent can be realized.
+- machine limits;
+- physical topology;
+- compiler implementation algorithms;
+- runtime implementation;
+- quantum routing;
+- scheduling algorithms;
+- QEC algorithms;
+- ZQN implementation;
+- calibration;
+- physical device identifiers;
+- vendor-specific hardware behavior;
+- backend-specific IR;
+- resource availability;
+- execution-provider internals.
 
 ---
 
-1. Canonical-specification rule
+0.2 Ownership
 
-Zamani previously contained several overlapping language descriptions.
+This file owns:
 
-These are not equivalent:
+- source grammar;
+- syntactic composition;
+- syntax categories;
+- grammar-level ambiguity rules;
+- syntactic precedence;
+- syntactic associativity;
+- syntactic extension points;
+- syntax-to-AST requirements;
+- syntax-to-semantic-model requirements;
+- syntax-to-IR integration requirements;
+- syntax-level portability requirements.
 
-grammar/grammar.md
-grammar/Zamani.g4
-grammar/Zamani-Grammar.md
-src/lexer.rs
-src/parser.rs
-src/ast/
+This file does not own:
 
-The production architecture therefore defines the following authority order.
+- individual Unicode code-point tables;
+- tokenization;
+- comment recognition;
+- whitespace recognition;
+- keyword token implementation;
+- type checking;
+- ownership checking;
+- effect checking;
+- resource feasibility;
+- quantum physical realization;
+- hardware capability discovery;
+- scheduling;
+- routing;
+- QEC;
+- ZQN;
+- optimization algorithms.
 
-1.1 Authority hierarchy
-
-1. This canonical language specification
-2. Canonical lexical specification
-3. Canonical parser implementation
-4. Canonical AST representation
-5. Canonical semantic/type rules
-6. Canonical IR
-7. Target-specific implementations
-8. Historical/aspirational documents
-
-No historical grammar may silently introduce syntax.
-
-No backend may introduce source-language syntax.
-
-No hardware backend may modify the meaning of source syntax.
-
-If an implementation disagrees with this document, one of the following must happen:
-
-SPEC_CHANGE
-IMPLEMENTATION_FIX
-EXPLICIT_COMPATIBILITY_RULE
-
-A divergence must never be silently accepted.
+Those belong to their respective contracts.
 
 ---
 
-2. Scope
+0.3 Related authoritative files
 
-Zamani is a general computational language.
+The production architecture is:
 
-Its syntax is capable of representing:
+grammar/DESIGN.md
+        │
+        ├── architecture
+        │
+        ▼
+grammar/spec/syntax.md
+        │
+        ├── source syntax
+        │
+        ├── grammar/Zamani.g4
+        ├── src/parser.rs
+        └── src/ast/
+        
+grammar/spec/lexical.md
+        │
+        └── lexer contract
 
-- ordinary computation;
+grammar/spec/type-system.md
+        │
+        └── type contract
+
+grammar/spec/semantics.md
+        │
+        └── semantic contract
+
+grammar/spec/resources.md
+        │
+        └── resource/capability contract
+
+grammar/spec/quantum.md
+        │
+        └── quantum semantic contract
+
+"grammar/Zamani.g4" is an implementation/tooling representation of this specification.
+
+It is not a competing authority.
+
+---
+
+0.4 Authority rule
+
+The authority hierarchy is:
+
+1. canonical language specification;
+2. canonical lexical specification;
+3. canonical semantic/type specifications;
+4. canonical AST contracts;
+5. canonical IR contracts;
+6. implementation;
+7. generated/documentation representations;
+8. historical or aspirational material.
+
+"grammar/Zamani-Grammar.md" may contain proposals and historical designs.
+
+"grammar/grammar.md" describes implementation conformance.
+
+Neither may silently introduce source syntax.
+
+---
+
+0.5 Feature-completion rule
+
+A syntax production does not make a feature implemented.
+
+A feature is production-ready only when:
+
+LEXED
+  ↓
+PARSED
+  ↓
+AST REPRESENTED
+  ↓
+STRUCTURALLY VALIDATED
+  ↓
+SEMANTICALLY VALIDATED
+  ↓
+DIAGNOSTICS
+  ↓
+CANONICAL IR LOWERING
+  ↓
+IR VERIFICATION
+  ↓
+COMPILER INTEGRATION
+  ↓
+RUNTIME/TARGET INTEGRATION
+  ↓
+POSITIVE TESTS
+  ↓
+NEGATIVE TESTS
+  ↓
+BOUNDARY TESTS
+  ↓
+SCALABILITY TESTS
+  ↓
+DETERMINISM TESTS
+  ↓
+COMPATIBILITY TESTS
+
+A keyword alone is not a feature.
+
+A grammar rule alone is not a feature.
+
+An AST variant alone is not a feature.
+
+---
+
+1. Fundamental Language Model
+
+Zamani is one language with multiple computational domains.
+
+The domains include:
+
+- classical computing;
 - systems programming;
 - functional programming;
 - object-oriented programming;
 - generic programming;
-- algebraic data types;
-- pattern matching;
-- concurrency;
-- asynchronous computation;
-- algebraic effects;
-- temporal computation;
-- quantum computation;
-- numerical computation;
-- symbolic computation;
+- numerical computing;
+- symbolic computing;
+- scientific computing;
+- quantum computing;
+- hybrid quantum-classical computing;
+- hardware description;
+- hardware/software co-design;
+- distributed computing;
+- parallel computing;
+- HPC;
+- AI/ML;
+- data processing;
+- networking;
+- cryptography;
+- security;
+- embedded computing;
+- accelerator computing;
+- edge computing;
+- cloud computing;
+- temporal computing;
+- Sankofa constructs;
 - nano computation;
-- distributed computation;
-- hardware-oriented descriptions;
-- metaprogramming;
-- AI/agent-oriented computation;
-- Sankofa temporal-memory constructs;
-- resource-aware computation.
+- future computational models.
 
-These are language domains.
+These are not separate languages.
 
-They are not separate languages.
+They share:
 
-The same lexical, syntactic, semantic, type, diagnostic, and IR infrastructure must be reused.
+- lexical rules;
+- expressions;
+- types;
+- declarations;
+- control flow;
+- modules;
+- diagnostics;
+- source spans;
+- semantic analysis;
+- resource/capability concepts;
+- canonical AST;
+- canonical semantic representation;
+- canonical IR boundaries.
 
 ---
 
-3. Core design principle: Program Once
+2. POCO-REAF
 
-Zamani is designed around:
+Zamani source expresses computational intent.
 
-POCO-REAF
+The intended model is:
+
 Program Once
+      ↓
 Compile Once
+      ↓
 Run Everywhere
-Anywhere
-Forever
+      ↓
+Run Anywhere
+      ↓
+Run Forever
 
-This means that portable source code describes what computation means, rather than assuming where it will execute.
+Subject to:
 
-For example, source code may describe:
+- semantic validity;
+- target capability;
+- available resources;
+- explicit portability policy;
+- compiler policy;
+- runtime feasibility;
+- future compatibility rules.
 
-quantum {
-    apply H to q[0];
-    apply controlled(X) from q[0] to q[1];
-}
+The source language must not require a particular:
 
-without declaring:
-
-IBM
-IonQ
-Rigetti
-CUDA
-x86_64
-ARM64
-AVX
-GPU count
-QPU topology
-physical qubit identifiers
-
-The semantic and lowering layers determine an appropriate realization.
+- CPU;
+- GPU;
+- FPGA;
+- QPU;
+- accelerator;
+- simulator;
+- operating system;
+- memory capacity;
+- network size;
+- node count;
+- register width;
+- vector width;
+- quantum topology;
+- physical qubit mapping.
 
 ---
 
-4. Formal notation
+3. Scalability Contract
 
-This document uses EBNF-style notation.
+The language has no artificial universal upper bound on:
+
+- source-file size;
+- number of declarations;
+- number of statements;
+- number of functions;
+- number of modules;
+- number of parameters;
+- number of generic parameters;
+- array dimensions;
+- tensor dimensions;
+- tensor rank;
+- number of classical values;
+- number of quantum values;
+- number of logical qubits;
+- number of quantum operations;
+- number of hardware resources;
+- number of nodes;
+- number of processes;
+- number of tasks;
+- number of timelines;
+- number of agents;
+- number of channels;
+- number of ports;
+- number of HDL instances.
+
+An implementation may impose external resource or safety budgets.
+
+Such a budget is not part of the language semantics.
+
+For example:
+
+language validity:
+    valid
+
+compiler policy:
+    maximum parser memory = configured policy
+
+execution:
+    insufficient resources
+
+must not become:
+
+syntax error:
+    program is too large
+
+unless the source violates an actual syntactic rule.
+
+---
+
+4. Formal Grammar Notation
+
+This specification uses EBNF-style notation.
 
 A ::= B
 
@@ -229,596 +393,219 @@ means zero or more occurrences.
 
 groups productions.
 
-Terminal literals appear in double quotes.
+Terminal strings are written in double quotes.
+
+Lexical classes are uppercase.
 
 Examples:
-
-"fn"
-"("
-")"
-
-Lexical classes appear in uppercase:
 
 IDENT
 INTEGER
+FLOAT
 STRING
+CHAR
 
-Semantic constraints are written separately from syntax.
-
----
-
-5. Source file
-
-A Zamani source file is a sequence of declarations/statements followed by EOF.
-
-Program ::= { Attribute | Item | Statement } EOF ;
-
-A source file may be empty.
-
-
-
-is valid.
-
-A source file may contain arbitrary supported Unicode in comments and string literals.
-
-Identifiers follow the canonical identifier rules defined below.
+Semantic constraints are explicitly marked as semantic constraints and are not silently encoded as grammar restrictions.
 
 ---
 
-6. Lexical grammar
+5. Lexical Boundary
 
-6.1 Unicode model
+Lexical syntax is defined by:
 
-Zamani source is UTF-8.
+grammar/spec/lexical.md
 
-The compiler must treat source positions consistently as byte offsets for internal source mapping while preserving Unicode character boundaries for lexical interpretation.
+This syntax specification consumes canonical tokens.
 
-The language specification must never assume that:
+It must not redefine:
 
-1 character == 1 byte
+- identifier character classes;
+- Unicode classification;
+- keyword tables;
+- escape sequences;
+- numeric-token internals;
+- comment syntax.
 
-Source spans therefore identify source ranges through the compiler's canonical "Span" representation.
+The syntax specification may refer to:
 
----
+IDENT
+INTEGER
+FLOAT
+STRING
+CHAR
+BOOL
 
-7. Whitespace
-
-Whitespace is insignificant except where it separates lexical tokens.
-
-SPACE
-TAB
-CR
-LF
-
-may appear between tokens.
-
-Whitespace must not alter program semantics.
-
----
-
-8. Comments
-
-8.1 Line comments
-
-// comment
-
-A line comment extends to the end of the line.
-
-8.2 Block comments
-
-/* comment */
-
-Block comments are non-nesting unless a future language revision explicitly introduces nesting.
-
-Unterminated block comments are lexical errors.
-
-Comments do not produce AST nodes.
+and canonical operator/delimiter tokens.
 
 ---
 
-9. Identifiers
+6. Source Unit
 
-The canonical identifier grammar is:
+A source unit is:
 
-IDENT ::= IDENT_START { IDENT_CONTINUE } ;
+Program ::= { Attribute | Item } EOF ;
 
-IDENT_START ::= LETTER | "_" ;
+An empty source file is valid.
 
-IDENT_CONTINUE ::= LETTER | DIGIT | "_" ;
+An implementation may represent a program internally as a list/vector or another scalable collection.
 
-LETTER ::= ASCII_LETTER | UNICODE_LETTER ;
-
-DIGIT ::= "0".."9" ;
-
-The implementation may internally support Unicode identifier classification, but the accepted character policy must be centralized in the lexer.
-
-Identifiers must not be silently truncated.
-
-Identifier comparison is case-sensitive.
-
-Therefore:
-
-foo
-Foo
-FOO
-
-are distinct identifiers.
+No source-level maximum is permitted.
 
 ---
 
-10. Keywords
+7. Items
 
-Keywords are reserved.
+Item ::=
+      Declaration
+    | Statement
+    | ModuleDeclaration
+    | ImportDeclaration
+    | ExportDeclaration
+    | Attribute ;
 
-They cannot be used as ordinary identifiers unless a future explicit escape mechanism is standardized.
+The exact AST representation is implementation-defined only below the canonical semantic boundary.
 
-The current canonical keyword families are:
-
-10.1 Core
-
-let
-var
-mut
-const
-fn
-return
-if
-else
-while
-for
-in
-loop
-break
-continue
-match
-case
-when
-
-10.2 Types and declarations
-
-struct
-enum
-trait
-impl
-class
-interface
-record
-type
-module
-import
-export
-use
-from
-as
-where
-
-10.3 Visibility and object model
-
-public
-pub
-private
-protected
-static
-virtual
-override
-abstract
-extends
-implements
-new
-this
-self
-super
-
-10.4 Functions and concurrency
-
-async
-await
-spawn
-yield
-
-10.5 Error/effect handling
-
-try
-catch
-finally
-throw
-effect
-perform
-handle
-
-10.6 Quantum
-
-quantum
-qubit
-circuit
-entangle
-noise
-fidelity
-surface
-logical
-parity
-
-10.7 Nano/agent
-
-nano
-agent
-
-10.8 Sankofa/temporal
-
-remember
-recall
-learn
-infer
-wisdom
-zamani
-sasa
-ancestor
-
-10.9 Type-system qualifiers
-
-linear
-affine
-
-10.10 Language/meta facilities
-
-language
-model
-macro
-
-10.11 Built-in primitive vocabulary
-
-void
-int
-float
-bool
-str
-String
-char
-nil
-null
-
-10.12 Built-in operations
-
-print
-println
-assert
-panic
-len
-sizeof
-
-Additional keywords already represented by the implementation lexer may only become canonical language constructs after their parser, AST, semantic, diagnostic, and test contracts are defined.
-
-They must not be treated as semantically meaningful merely because they exist as lexer tokens.
+Every semantically meaningful item must retain its source span.
 
 ---
 
-11. Literals
+8. Attributes
 
-11.1 Boolean
-
-BooleanLiteral ::= "true" | "false" ;
-
-11.2 Null
-
-NullLiteral ::= "nil" | "null" ;
-
-Both spellings represent the same null semantic value.
-
-The AST must normalize them to one canonical representation.
-
----
-
-12. Integer literals
-
-The minimum decimal form is:
-
-IntegerLiteral ::= DIGIT { DIGIT } ;
-
-The language may later add explicit radix forms:
-
-0b...
-0o...
-0x...
-
-but such forms must not be claimed as implemented until lexer, parser, AST, semantic checking, diagnostics, tests, and code generation support them.
-
-Integer literal magnitude must not be restricted by a machine-specific integer width during lexing.
-
-Literal range checking belongs to semantic/type analysis.
-
----
-
-13. Floating-point literals
-
-The canonical decimal floating form is:
-
-FloatLiteral ::= DIGIT { DIGIT } "." DIGIT { DIGIT } ;
-
-Floating-point representation is determined by the type system.
-
-The parser must not assume that every floating literal is necessarily "f64".
-
----
-
-14. String literals
-
-StringLiteral ::= '"' { StringChar | EscapeSequence } '"' ;
-
-The lexer must reject unterminated strings.
-
-Escape processing is performed by the lexical layer.
-
-The AST receives the decoded semantic string value together with its source span.
-
----
-
-15. Character literals
-
-CharLiteral ::= "'" CharChar "'" ;
-
-Exactly one semantic character is required after escape processing.
-
-Invalid or unterminated character literals are lexical errors.
-
----
-
-16. Quantum literals
-
-The existing quantum literal form is:
-
-QuantumLiteral ::= "|" QuantumBasis "⟩" ;
-
-QuantumBasis ::= "0"
-                | "1"
-                | "+"
-                | "-" ;
-
-Examples:
-
-|0⟩
-|1⟩
-|+⟩
-|-⟩
-
-Quantum literals are source-level values.
-
-They do not identify physical qubits.
-
----
-
-17. Nano annotations
-
-Nano annotations use:
-
-NanoAnnotation ::= "@" IDENT [ "(" ArgumentList? ")" ] ;
-
-Examples:
-
-@atom
-@molecule(x)
-
-Annotations are syntactic metadata.
-
-Their meaning is assigned by semantic analysis.
-
----
-
-18. MTS literals
-
-The reserved temporal literal form is:
-
-MTSLiteral ::= "mts" "[" Expression "]" ;
-
-The lexer currently contains an MTS token category, but implementation support must not be considered complete until the lexer emits it and the parser/AST/semantic layers consume it consistently.
-
-Until then, an implementation must not claim full MTS literal conformance.
-
----
-
-19. Punctuation
-
-Canonical punctuation includes:
-
-(
-)
-{
-}
-[
-]
-,
-.
-;
-:
-::
-@
-#
-~
-?
-!
-
----
-
-20. Operators
-
-20.1 Assignment
-
-=
-+=
--=
-*=
-/=
-
-20.2 Arithmetic
-
-+
--
-*
-/
-%
-
-20.3 Comparison
-
-==
-!=
-<
->
-<=
->=
-
-20.4 Logical
-
-&&
-||
-
-and the keyword forms:
-
-and
-or
-
-may be supported where defined by the parser and semantic layer.
-
-20.5 Bitwise
-
-&
-|
-^
-~
-<<
->>
-
-20.6 Range
-
-..
-..=
-
-20.7 Other
-
-?
-!
-->
-=>
-::
-
----
-
-21. Operator precedence
-
-The canonical precedence ordering is:
-
-Lowest
-│
-├── assignment
-├── range
-├── logical OR
-├── logical AND
-├── bitwise OR
-├── bitwise XOR
-├── bitwise AND
-├── equality
-├── comparison
-├── shift
-├── additive
-├── multiplicative
-├── prefix
-├── call
-├── index
-└── member
-Highest
-
-The parser uses precedence-driven parsing.
-
-The exact precedence table is:
-
-Level| Category
-1| Assignment
-2| Range
-3| Logical OR
-4| Logical AND
-5| Bitwise OR
-6| Bitwise XOR
-7| Bitwise AND
-8| Equality
-9| Comparison
-10| Shift
-11| Sum
-12| Product
-13| Prefix
-14| Call
-15| Index
-16| Member
-
-Associativity must be explicitly defined by the parser rather than inferred by a backend.
-
----
-
-22. Attributes
-
-Attributes precede a declaration or statement:
+Attributes are syntactic metadata.
 
 Attribute ::= "#[" AttributeBody "]" ;
 
-The body is intentionally extensible.
+AttributeBody ::=
+      AttributePath
+    | AttributePath "(" [ ArgumentList ] ")"
+    | AttributePath "=" Expression ;
 
-Attributes may be used for:
+AttributePath ::= Path ;
 
-- compilation directives;
-- optimization hints;
+Examples:
+
+#[inline]
+#[deprecated]
+#[experimental]
+#[target(...)]
+#[requires(...)]
+#[capability(...)]
+
+Attributes may express:
+
+- compilation policy;
+- optimization intent;
 - diagnostics;
-- ABI annotations;
-- target constraints;
-- resource declarations;
-- generated code;
-- experimental features.
+- interoperability metadata;
+- resource requirements;
+- capabilities;
+- portability metadata;
+- experimental status;
+- domain metadata.
 
 Attributes must not directly mutate compiler global state.
 
-Unknown attributes must produce a deterministic diagnostic according to the active language/compatibility policy.
+Unknown attributes are handled by semantic/compatibility policy.
 
 ---
 
-23. Statements
+9. Names and Paths
 
-Statement ::=
-      LetStatement
-    | VarStatement
-    | ConstStatement
+Name ::= IDENT ;
+
+Path ::= PathSegment { "::" PathSegment } ;
+
+PathSegment ::= IDENT ;
+
+A path is semantic naming syntax.
+
+It may identify:
+
+- modules;
+- types;
+- functions;
+- operations;
+- capabilities;
+- resources;
+- namespaces;
+- dialect members;
+- interoperability symbols.
+
+The parser must not resolve a path.
+
+Name resolution is a later phase.
+
+---
+
+10. Visibility
+
+Visibility ::=
+      "pub"
+    | "public"
+    | "private"
+    | "protected" ;
+
+Visibility semantics belong to the module/type system.
+
+No backend may reinterpret visibility.
+
+---
+
+11. Modifiers
+
+Modifiers are syntactic metadata attached to constructs that explicitly permit them.
+
+Modifier ::=
+      "mut"
+    | "static"
+    | "virtual"
+    | "override"
+    | "abstract"
+    | "async"
+    | "linear"
+    | "affine" ;
+
+A modifier is valid only where the corresponding declaration grammar permits it.
+
+The existence of a token does not make the modifier universally legal.
+
+---
+
+12. Declarations
+
+Declaration ::=
+      VariableDeclaration
+    | ConstantDeclaration
     | FunctionDeclaration
-    | ReturnStatement
-    | BreakStatement
-    | ContinueStatement
-    | WhileStatement
-    | ForStatement
-    | MatchStatement
     | StructDeclaration
     | EnumDeclaration
     | TraitDeclaration
     | ImplDeclaration
     | ClassDeclaration
     | InterfaceDeclaration
-    | ModuleDeclaration
-    | ImportStatement
-    | UseStatement
     | TypeAliasDeclaration
-    | QuantumDeclaration
-    | NanoAgentDeclaration
-    | RememberStatement
+    | ModuleDeclaration
+    | ResourceDeclaration
+    | CapabilityDeclaration
+    | DomainDeclaration
     | EffectDeclaration
-    | HandleStatement
-    | UnsafeDeclaration
-    | WisdomStatement
-    | LanguageDeclaration
-    | ExpressionStatement
-    ;
+    | QuantumDeclaration
+    | HDLDeclaration
+    | ModelDeclaration
+    | AgentDeclaration
+    | DialectDeclaration
+    | MacroDeclaration
+    | InteropDeclaration ;
 
-A future implementation may introduce additional declarations without changing the fundamental compilation architecture.
+A declaration introduces syntax-level structure.
+
+Name binding occurs later.
 
 ---
 
-24. Variable bindings
+13. Variable Declarations
 
-24.1 "let"
-
-LetStatement ::=
+VariableDeclaration ::=
     "let"
     ["mut"]
     IDENT
@@ -827,15 +614,9 @@ LetStatement ::=
     Expression
     [";"] ;
 
-Example:
+Optional compatibility form:
 
-let x = 42;
-let y: Int = 100;
-let mut state = initial_state;
-
-24.2 "var"
-
-VarStatement ::=
+MutableVariableDeclaration ::=
     "var"
     IDENT
     [":" TypeExpression]
@@ -843,11 +624,13 @@ VarStatement ::=
     Expression
     [";"] ;
 
-"var" is syntactically distinct but may share semantic implementation with "let" according to the language's mutability rules.
+Whether "var" remains stable or compatibility-only is controlled by the version/compatibility contract.
 
-24.3 Constants
+---
 
-ConstStatement ::=
+14. Constants
+
+ConstantDeclaration ::=
     "const"
     IDENT
     [":" TypeExpression]
@@ -855,112 +638,204 @@ ConstStatement ::=
     Expression
     [";"] ;
 
-Constant validity is a semantic property.
+Constancy is semantic.
+
+The parser must not attempt compile-time evaluation.
 
 ---
 
-25. Functions
+15. Functions
 
 FunctionDeclaration ::=
+    [Visibility]
     ["async"]
     "fn"
     IDENT
     [GenericParameters]
     "(" [ParameterList] ")"
-    ["->" TypeExpression]
+    [ReturnType]
     [WhereClause]
-    BlockExpression ;
+    FunctionBody ;
 
-Examples:
+FunctionBody ::=
+      BlockExpression
+    | ";" ;
 
-fn add(a: Int, b: Int) -> Int {
-    a + b
-}
+ReturnType ::= "->" TypeExpression ;
 
-async fn compute(input: Data) -> Result {
-    ...
-}
+Functions are target-independent.
+
+Calling conventions, ABI details, and backend lowering are not determined by the core syntax.
 
 ---
 
-26. Parameters
+16. Parameters
 
 ParameterList ::= Parameter { "," Parameter } ;
 
 Parameter ::=
     ["mut"]
-    IDENT
+    Pattern
     [":" TypeExpression]
     ["=" Expression] ;
 
-A parameter without a type annotation is syntactically valid.
+The number of parameters is not globally bounded.
 
-Its semantic interpretation must be determined by type inference.
+Semantic analysis determines:
 
-The compiler must not silently treat missing type annotations as an unlimited dynamic type unless the active type-system policy explicitly enables dynamic typing.
+- binding validity;
+- type validity;
+- default-value validity;
+- ownership;
+- effects;
+- calling semantics.
 
 ---
 
-27. Generic parameters
+17. Generic Parameters
 
 GenericParameters ::=
     "<"
-    TypeParameter { "," TypeParameter }
+    GenericParameter { "," GenericParameter }
     ">" ;
+
+GenericParameter ::=
+      TypeParameter
+    | ValueParameter
+    | ResourceParameter
+    | CapabilityParameter ;
 
 TypeParameter ::=
     IDENT
     { TypeBound } ;
 
-TypeBound ::=
-    ":" TypeExpression ;
+ValueParameter ::=
+    IDENT
+    ":"
+    TypeExpression ;
 
-Generic constraints belong to semantic/type analysis.
+ResourceParameter ::=
+    IDENT
+    ":"
+    ResourceType ;
+
+CapabilityParameter ::=
+    IDENT
+    ":"
+    CapabilityType ;
+
+TypeBound ::= ":" TypeExpression ;
+
+Generic parameters may be:
+
+- type-level;
+- value-level;
+- resource-level;
+- capability-level.
+
+Their semantic interpretation belongs to the type/resource systems.
 
 ---
 
-28. Where clauses
+18. Where Clauses
 
 WhereClause ::=
     "where"
-    WherePredicate
-    { "," WherePredicate } ;
+    WherePredicate { "," WherePredicate } ;
 
 WherePredicate ::=
-    IDENT ":" TypeExpression ;
+      IDENT ":" TypeExpression
+    | Expression ;
 
-A parser must preserve where-clause information.
+Constraints must be preserved in the AST.
 
-It must never discard constraints merely to reach a block.
+The parser must never discard constraints to simplify parsing.
 
 ---
 
-29. Return
+19. Return
 
 ReturnStatement ::= "return" [Expression] [";"] ;
 
-A bare return represents the unit value.
+A bare return represents the function's unit/implicit-return semantic according to the type-system contract.
 
 ---
 
-30. Control flow
+20. Blocks
 
-30.1 If
+BlockExpression ::= "{" { Statement } [TrailingExpression] "}" ;
 
-IfExpression ::=
+TrailingExpression ::= Expression [";"] ;
+
+A block may be an expression.
+
+Block result semantics belong to semantic analysis.
+
+Block depth is not a language-level machine limit.
+
+---
+
+21. Statements
+
+Statement ::=
+      Declaration
+    | ExpressionStatement
+    | ReturnStatement
+    | BreakStatement
+    | ContinueStatement
+    | WhileStatement
+    | ForStatement
+    | LoopStatement
+    | IfStatement
+    | MatchStatement
+    | TryStatement
+    | ThrowStatement
+    | EffectStatement
+    | ResourceStatement
+    | ConcurrencyStatement
+    | QuantumStatement
+    | HDLStatement
+    | ExecutionStatement
+    | EmptyStatement ;
+
+---
+
+22. Expression Statements
+
+ExpressionStatement ::= Expression [";"] ;
+
+---
+
+23. Empty Statements
+
+EmptyStatement ::= ";" ;
+
+---
+
+24. If
+
+IfStatement ::=
     "if"
     Expression
     BlockExpression
-    ["else" (IfExpression | BlockExpression)] ;
+    [ "else" (IfStatement | BlockExpression) ] ;
 
-30.2 While
+The condition must be semantically valid for conditional control flow.
+
+---
+
+25. While
 
 WhileStatement ::=
     "while"
     Expression
     BlockExpression ;
 
-30.3 For
+No iteration count is encoded in the grammar.
+
+---
+
+26. For
 
 ForStatement ::=
     "for"
@@ -969,15 +844,28 @@ ForStatement ::=
     Expression
     BlockExpression ;
 
-The parser must not constrain iteration to a fixed collection size.
+The iterable may be:
 
-30.4 Loop
+- finite;
+- dynamically sized;
+- lazily produced;
+- distributed;
+- streamed;
+- target-generated.
 
-LoopExpression ::= "loop" BlockExpression ;
+The grammar imposes no fixed iteration count.
 
 ---
 
-31. Break and continue
+27. Infinite/Unbounded Loop
+
+LoopStatement ::= "loop" BlockExpression ;
+
+Termination is semantic/runtime behavior.
+
+---
+
+28. Break and Continue
 
 BreakStatement ::= "break" [";"] ;
 
@@ -985,9 +873,9 @@ ContinueStatement ::= "continue" [";"] ;
 
 ---
 
-32. Match
+29. Match
 
-MatchExpression ::=
+MatchStatement ::=
     "match"
     Expression
     "{"
@@ -1001,25 +889,24 @@ MatchArm ::=
     (Expression | BlockExpression)
     ["," ] ;
 
-The AST already supports structured patterns including wildcard, identifier, literal, tuple, struct, enum, OR, range, and reference patterns.
-
-Therefore the production grammar must define patterns structurally rather than pretending that match arms are arbitrary expressions.
-
 ---
 
-33. Patterns
+30. Patterns
 
 Pattern ::=
-      "_"
-    | IDENT
+      WildcardPattern
+    | IdentifierPattern
     | LiteralPattern
     | TuplePattern
     | StructPattern
     | EnumPattern
     | OrPattern
     | RangePattern
-    | ReferencePattern
-    ;
+    | ReferencePattern ;
+
+WildcardPattern ::= "_" ;
+
+IdentifierPattern ::= IDENT ;
 
 LiteralPattern ::= Literal ;
 
@@ -1035,56 +922,202 @@ StructPattern ::=
     "}" ;
 
 StructPatternField ::=
-    IDENT
-    [":" Pattern] ;
+    IDENT [":" Pattern] ;
 
 EnumPattern ::=
     Path
-    "("
-    [ Pattern { "," Pattern } ]
-    ")" ;
+    [ "(" [ Pattern { "," Pattern } ] ")" ]
+    [ "{" [ StructPatternField { "," StructPatternField } ] "}" ] ;
 
 OrPattern ::=
-    Pattern
-    "|"
-    Pattern
-    { "|" Pattern } ;
+    Pattern "|" Pattern { "|" Pattern } ;
 
 RangePattern ::=
-    Pattern (".." | "..=") Pattern ;
+    Literal (".." | "..=") Literal ;
 
-ReferencePattern ::=
-    "&" Pattern ;
+ReferencePattern ::= "&" Pattern ;
 
-Semantic validation determines whether a pattern is legal for the matched value.
-
----
-
-34. Blocks
-
-BlockExpression ::= "{" { Statement } "}" ;
-
-A block is an expression.
-
-Its resulting value is determined by its final expression according to semantic rules.
-
-A block must never depend on a machine-specific stack size.
-
-Resource exhaustion is an execution/resource-management concern, not a grammar rule.
+Pattern semantics are defined by the type system.
 
 ---
 
-35. Expressions
+31. Expressions
 
-Expression ::=
+The canonical expression model is precedence-based.
+
+Expression ::= AssignmentExpression ;
+
+AssignmentExpression ::=
+    ConditionalExpression
+    [ AssignmentOperator AssignmentExpression ] ;
+
+AssignmentOperator ::=
+      "="
+    | "+="
+    | "-="
+    | "*="
+    | "/=" ;
+
+The parser must implement right-associative assignment.
+
+---
+
+32. Conditional Expressions
+
+ConditionalExpression ::=
+    LogicalOrExpression
+    [ "?" Expression ":" Expression ] ;
+
+If the implementation reserves "?" for error propagation, conditional expressions must use a distinct versioned grammar form rather than creating lexical ambiguity.
+
+The canonical implementation must choose one meaning per syntactic context.
+
+---
+
+33. Logical Expressions
+
+LogicalOrExpression ::=
+    LogicalAndExpression
+    { LogicalOrOperator LogicalAndExpression } ;
+
+LogicalOrOperator ::= "||" | "or" ;
+
+LogicalAndExpression ::=
+    BitwiseOrExpression
+    { LogicalAndOperator BitwiseOrExpression } ;
+
+LogicalAndOperator ::= "&&" | "and" ;
+
+The parser must normalize equivalent spellings into one semantic operator where compatibility permits.
+
+---
+
+34. Bitwise Expressions
+
+BitwiseOrExpression ::=
+    BitwiseXorExpression
+    { "|" BitwiseXorExpression } ;
+
+BitwiseXorExpression ::=
+    BitwiseAndExpression
+    { "^" BitwiseAndExpression } ;
+
+BitwiseAndExpression ::=
+    EqualityExpression
+    { "&" EqualityExpression } ;
+
+"|", "&", and related spellings have one canonical lexical token each.
+
+Their semantic interpretation is determined by operand types.
+
+---
+
+35. Equality
+
+EqualityExpression ::=
+    ComparisonExpression
+    { EqualityOperator ComparisonExpression } ;
+
+EqualityOperator ::= "==" | "!=" ;
+
+---
+
+36. Comparison
+
+ComparisonExpression ::=
+    ShiftExpression
+    { ComparisonOperator ShiftExpression } ;
+
+ComparisonOperator ::=
+      "<"
+    | ">"
+    | "<="
+    | ">=" ;
+
+---
+
+37. Shift
+
+ShiftExpression ::=
+    AdditiveExpression
+    { ShiftOperator AdditiveExpression } ;
+
+ShiftOperator ::= "<<" | ">>" ;
+
+---
+
+38. Additive
+
+AdditiveExpression ::=
+    MultiplicativeExpression
+    { ("+" | "-") MultiplicativeExpression } ;
+
+---
+
+39. Multiplicative
+
+MultiplicativeExpression ::=
+    PrefixExpression
+    { ("*" | "/" | "%") PrefixExpression } ;
+
+---
+
+40. Prefix
+
+PrefixExpression ::=
+      PostfixExpression
+    | PrefixOperator PrefixExpression ;
+
+PrefixOperator ::=
+      "+"
+    | "-"
+    | "!"
+    | "~"
+    | "&" ;
+
+---
+
+41. Postfix Expressions
+
+PostfixExpression ::=
     PrimaryExpression
-    { PostfixOrInfixExpression } ;
+    { PostfixOperation } ;
 
-The parser's Pratt/precedence implementation determines the concrete association.
+PostfixOperation ::=
+      CallSuffix
+    | IndexSuffix
+    | MemberSuffix
+    | TrySuffix ;
+
+CallSuffix ::= "(" [ArgumentList] ")" ;
+
+IndexSuffix ::= "[" Expression "]" ;
+
+MemberSuffix ::= "." IDENT ;
+
+TrySuffix ::= "?" ;
+
+"?" is postfix error propagation.
+
+A conditional operator, if retained, must be disambiguated through the canonical parser contract.
 
 ---
 
-36. Primary expressions
+42. Calls
+
+ArgumentList ::= Argument { "," Argument } ;
+
+Argument ::=
+      Expression
+    | NamedArgument ;
+
+NamedArgument ::= IDENT ":" Expression ;
+
+There is no universal maximum number of arguments.
+
+---
+
+43. Primary Expressions
 
 PrimaryExpression ::=
       IDENT
@@ -1092,6 +1125,7 @@ PrimaryExpression ::=
     | "(" Expression ")"
     | TupleExpression
     | ArrayExpression
+    | MapExpression
     | BlockExpression
     | LambdaExpression
     | AnonymousFunctionExpression
@@ -1102,19 +1136,17 @@ PrimaryExpression ::=
     | AwaitExpression
     | SpawnExpression
     | NewExpression
-    | TryExpression
-    | RecallExpression
-    | LearnExpression
-    | PerformExpression
-    | ZamaniExpression
-    | SasaExpression
+    | StructLiteral
     | QuantumExpression
-    | NanoExpression
-    ;
+    | HDLExpression
+    | ResourceExpression
+    | EffectExpression
+    | TemporalExpression
+    | MetaExpression ;
 
 ---
 
-37. Tuple expressions
+44. Tuple Expressions
 
 TupleExpression ::=
     "("
@@ -1123,24 +1155,37 @@ TupleExpression ::=
     [ Expression { "," Expression } ]
     ")" ;
 
-A single parenthesized expression without a comma is not a tuple.
+A parenthesized expression without a comma is not a tuple.
 
 ---
 
-38. Arrays
+45. Arrays
 
 ArrayExpression ::=
     "["
     [ Expression { "," Expression } ]
     "]" ;
 
-Array length is semantic/runtime information.
+Array size is semantic data.
 
-The syntax must not impose a maximum array size.
+No universal maximum is permitted.
 
 ---
 
-39. Lambdas
+46. Maps
+
+MapExpression ::=
+    "{"
+    [ MapEntry { "," MapEntry } ]
+    "}" ;
+
+MapEntry ::= Expression ":" Expression ;
+
+The parser must distinguish a map literal from a block according to contextual grammar.
+
+---
+
+47. Lambdas
 
 LambdaExpression ::=
     "|"
@@ -1154,114 +1199,38 @@ let square = |x: Int| x * x;
 
 ---
 
-40. Anonymous functions
+48. Anonymous Functions
 
 AnonymousFunctionExpression ::=
     "fn"
-    "("
-    [ParameterList]
-    ")"
-    ["->" TypeExpression]
+    "(" [ParameterList] ")"
+    [ReturnType]
     BlockExpression ;
 
 ---
 
-41. Calls
+49. If Expressions
 
-CallExpression ::=
+IfExpression ::=
+    "if"
     Expression
-    "("
-    [ArgumentList]
-    ")" ;
-
-ArgumentList ::= Expression { "," Expression } ;
-
-The number of arguments is not constrained by a global machine constant.
-
-Semantic checking determines whether a call matches its declaration.
+    BlockExpression
+    [ "else" (IfExpression | BlockExpression) ] ;
 
 ---
 
-42. Indexing
+50. Match Expressions
 
-IndexExpression ::=
+MatchExpression ::=
+    "match"
     Expression
-    "["
-    Expression
-    "]" ;
-
-Index width and container capacity are semantic/runtime concerns.
+    "{"
+    { MatchArm }
+    "}" ;
 
 ---
 
-43. Member access
-
-MemberExpression ::=
-    Expression
-    "."
-    IDENT ;
-
-Method calls are represented as member access followed by invocation.
-
----
-
-44. Assignment
-
-AssignmentExpression ::=
-    Expression
-    "="
-    Expression ;
-
-CompoundAssignmentExpression ::=
-    Expression
-    ("+=" | "-=" | "*=" | "/=")
-    Expression ;
-
-Assignment validity is determined semantically.
-
-The left-hand side must be assignable.
-
----
-
-45. Type casts and ascription
-
-CastExpression ::=
-    Expression
-    "as"
-    TypeExpression ;
-
-TypeAscriptionExpression ::=
-    Expression
-    ":"
-    TypeExpression ;
-
----
-
-46. Try propagation
-
-TryPropagationExpression ::= Expression "?" ;
-
-Its semantics are type-dependent.
-
-The grammar does not assume a particular error type.
-
----
-
-47. Try/catch
-
-TryExpression ::=
-    "try"
-    Expression
-    {
-        "catch"
-        ["(" [IDENT ":"] TypeExpression ")"]
-        BlockExpression
-    }
-    ["finally" BlockExpression] ;
-
----
-
-48. Async computation
+51. Async
 
 AsyncExpression ::= "async" Expression ;
 
@@ -1269,13 +1238,15 @@ AwaitExpression ::= "await" Expression ;
 
 SpawnExpression ::= "spawn" Expression ;
 
-The runtime decides how asynchronous work is scheduled.
+Scheduling is not syntax.
 
-The language does not assume a particular thread count.
+Thread count is not syntax.
+
+Core count is not syntax.
 
 ---
 
-49. Object construction
+52. Object Construction
 
 NewExpression ::=
     "new"
@@ -1284,7 +1255,7 @@ NewExpression ::=
 
 ---
 
-50. Struct literals
+53. Struct Literals
 
 StructLiteral ::=
     Path
@@ -1292,72 +1263,67 @@ StructLiteral ::=
     [ StructFieldInitializer { "," StructFieldInitializer } ]
     "}" ;
 
-StructFieldInitializer ::=
-    IDENT ":" Expression ;
+StructFieldInitializer ::= IDENT ":" Expression ;
 
 ---
 
-51. Paths
+54. Type Expressions
 
-Path ::= PathSegment { ("::" | ".") PathSegment } ;
+The full type contract belongs to:
 
-PathSegment ::= IDENT ;
+grammar/spec/type-system.md
 
-Special path keywords such as "self" and "super" are semantically interpreted.
+The syntax entry point is:
 
----
+TypeExpression ::= TypePrimary { TypeSuffix } ;
 
-52. Type expressions
-
-The canonical type grammar is:
-
-TypeExpression ::=
-      TypePath
+TypePrimary ::=
+      Path
+    | PrimitiveType
     | GenericType
     | TupleType
+    | FunctionType
     | ArrayType
     | SliceType
-    | FunctionType
     | ReferenceType
-    | PointerType
     | OptionalType
     | ResultType
+    | NeverType
     | QuantumType
-    | LinearType
-    | AffineType
+    | ResourceType
+    | CapabilityType
     | TemporalType
     | DependentType
-    | IdentityType
-    | SelfType
-    | UnitType
-    | NeverType
-    ;
+    | ParenthesizedType ;
 
 ---
 
-53. Named types
-
-TypePath ::= Path ;
-
----
-
-54. Generic types
+55. Generic Types
 
 GenericType ::=
-    TypePath
+    Path
     "<"
-    TypeExpression
-    { "," TypeExpression }
+    TypeArgument { "," TypeArgument }
     ">" ;
 
-Example:
+TypeArgument ::=
+      TypeExpression
+    | Expression ;
 
-Vector<Float>
-Result<Value, Error>
+The number of generic arguments is not machine-limited.
 
 ---
 
-55. Tuple types
+56. Function Types
+
+FunctionType ::=
+    "(" [TypeExpression { "," TypeExpression }] ")"
+    "->"
+    TypeExpression ;
+
+---
+
+57. Tuple Types
 
 TupleType ::=
     "("
@@ -1368,178 +1334,142 @@ TupleType ::=
 
 ---
 
-56. Unit type
-
-UnitType ::= "(" ")" ;
-
----
-
-57. Array types
-
-The language must distinguish semantic array size from syntax.
+58. Array and Slice Types
 
 ArrayType ::=
-    "["
     TypeExpression
-    [ ";" Expression ]
+    "["
+    Expression
     "]" ;
 
-A dynamic/unspecified size must not be encoded as a hard-coded sentinel.
+SliceType ::=
+    TypeExpression
+    "[]" ;
 
-The semantic representation must use an explicit optional/unknown size.
+The expression in an array type may be:
 
-The implementation must not use:
+- constant;
+- symbolic;
+- generic;
+- dependent;
+- resource-derived,
 
-0 == unknown
-
-because zero is a legitimate semantic size.
-
----
-
-58. Slice types
-
-SliceType ::= "&" ["mut"] "[" TypeExpression "]" ;
+subject to the type-system rules.
 
 ---
 
-59. Reference types
+59. References
 
-ReferenceType ::= "&" ["mut"] TypeExpression ;
+ReferenceType ::=
+    "&"
+    ["mut"]
+    TypeExpression ;
 
----
-
-60. Pointer types
-
-PointerType ::= "*" ["mut"] TypeExpression ;
-
-Pointer semantics are target-dependent.
-
-The syntax does not guarantee that raw pointers exist on every target.
+Ownership and lifetime semantics belong to semantic analysis.
 
 ---
 
-61. Function types
-
-FunctionType ::=
-    "fn"
-    "("
-    [ TypeExpression { "," TypeExpression } ]
-    ")"
-    ["->" TypeExpression] ;
-
----
-
-62. Optional types
+60. Optional and Result
 
 OptionalType ::= TypeExpression "?" ;
 
-The parser must distinguish expression-level "?" from type-level "?".
+ResultType ::=
+    "Result"
+    "<"
+    TypeExpression
+    ["," TypeExpression]
+    ">" ;
 
-The semantic representation is:
-
-Optional<T>
-
----
-
-63. Result types
-
-ResultType ::= "Result" "<" TypeExpression "," TypeExpression ">" ;
+NeverType ::= "Never" ;
 
 ---
 
-64. Never type
+61. Quantum Types
 
-NeverType ::= "!" ;
+Quantum syntax must remain target-independent.
 
-The semantic type represents computations that do not return normally.
+QuantumType ::=
+      "Qubit"
+    | "Qubit" "[" Expression "]"
+    | "Quantum" "<" TypeExpression ">"
+    | Path ;
 
----
+The actual quantum type semantics belong to:
 
-65. Self type
+grammar/spec/quantum.md
 
-SelfType ::= "Self" | "self" ;
+and the canonical quantum semantic boundary.
 
----
-
-66. Quantum types
-
-Quantum types describe computational quantum resources, not physical hardware identifiers.
-
-A canonical semantic quantum type is:
-
-Quantum<T>
-
-The syntax may use:
-
-QuantumType ::= "Quantum" "<" TypeExpression ">" ;
-
-or the implementation's established "quantum" type form where supported.
-
-The semantic representation must preserve:
-
-- logical dimensionality;
-- ownership;
-- linearity;
-- entanglement relationships;
-- measurement state;
-- resource requirements.
-
-It must not embed:
-
-physical qubit number
-device-specific index
-vendor-specific gate identifier
+The grammar must not impose a maximum qubit count.
 
 ---
 
-67. Linear types
+62. Resource Types
 
-LinearType ::= "linear" TypeExpression ;
+ResourceType ::=
+    "Resource"
+    "<"
+    TypeExpression
+    ">" ;
 
-A linear value must obey the language's linear ownership rules.
+Resource quantities may be:
 
-This is especially important for quantum resources.
-
----
-
-68. Affine types
-
-AffineType ::= "affine" TypeExpression ;
-
-An affine value may be consumed at most once.
-
----
-
-69. Temporal types
-
-TemporalType ::= "Temporal" "<" TypeExpression ">" ;
-
-Temporal semantics are defined outside the grammar.
+- concrete;
+- symbolic;
+- inferred;
+- runtime-dependent;
+- target-dependent.
 
 ---
 
-70. Dependent types
+63. Capability Types
 
-Zamani may represent dependent type constructs using:
+CapabilityType ::=
+    "Capability"
+    "<"
+    Path
+    ">" ;
 
-Π
-Σ
+Capabilities are semantic declarations.
 
-and their keyword forms where implemented.
+They are not vendor-specific machine identifiers.
 
-Conceptually:
+---
+
+64. Temporal Types
+
+TemporalType ::=
+    "Temporal"
+    "<"
+    TypeExpression
+    ">" ;
+
+Temporal semantics belong outside the parser.
+
+---
+
+65. Dependent Types
 
 DependentType ::=
-      "Π" IDENT ":" TypeExpression "." TypeExpression
-    | "Pi" IDENT ":" TypeExpression "." TypeExpression
-    | "Σ" IDENT ":" TypeExpression "." TypeExpression
-    | "Sigma" IDENT ":" TypeExpression "." TypeExpression ;
+      "Pi"
+      IDENT
+      ":"
+      TypeExpression
+      "."
+      TypeExpression
 
-The exact dependent-type semantics belong to the type checker.
+    | "Sigma"
+      IDENT
+      ":"
+      TypeExpression
+      "."
+      TypeExpression ;
+
+Unicode aliases may be provided by the lexical/version contract if explicitly standardized.
 
 ---
 
-71. Identity types
+66. Identity Types
 
 IdentityType ::=
     "Identity"
@@ -1551,10 +1481,10 @@ IdentityType ::=
 
 ---
 
-72. Struct declarations
+67. Struct Declarations
 
 StructDeclaration ::=
-    ["public"]
+    [Visibility]
     "struct"
     IDENT
     [GenericParameters]
@@ -1566,13 +1496,15 @@ StructField ::=
     [Visibility]
     IDENT
     [":" TypeExpression]
+    ["=" Expression]
     ["," | ";"] ;
 
 ---
 
-73. Enumerations
+68. Enum Declarations
 
 EnumDeclaration ::=
+    [Visibility]
     "enum"
     IDENT
     [GenericParameters]
@@ -1584,15 +1516,18 @@ EnumVariant ::=
     IDENT
     [
         "(" [TypeExpression { "," TypeExpression }] ")"
-      | "{" { StructField } "}"
+      | "{"
+        { StructField }
+        "}"
     ]
-    ["," ] ;
+    ["," | ";"] ;
 
 ---
 
-74. Traits
+69. Traits
 
 TraitDeclaration ::=
+    [Visibility]
     "trait"
     IDENT
     [GenericParameters]
@@ -1602,128 +1537,53 @@ TraitDeclaration ::=
     "}" ;
 
 TraitItem ::=
-      TraitMethod
-    | TraitAssociatedType
-    | TraitConstant ;
-
-TraitMethod ::=
-    "fn"
-    IDENT
-    [GenericParameters]
-    "(" [ParameterList] ")"
-    ["->" TypeExpression]
-    (BlockExpression | ";") ;
-
-TraitAssociatedType ::=
-    "type"
-    IDENT
-    [":" TypeExpression]
-    ";" ;
-
-TraitConstant ::=
-    "const"
-    IDENT
-    ":"
-    TypeExpression
-    ["=" Expression]
-    ";" ;
+      FunctionDeclaration
+    | TypeDeclaration
+    | ConstantDeclaration ;
 
 ---
 
-75. Implementations
+70. Interfaces
+
+InterfaceDeclaration ::=
+    [Visibility]
+    "interface"
+    IDENT
+    [GenericParameters]
+    "{"
+    { InterfaceItem }
+    "}" ;
+
+InterfaceItem ::=
+      FunctionDeclaration
+    | TypeDeclaration
+    | ConstantDeclaration ;
+
+---
+
+71. Implementations
 
 ImplDeclaration ::=
     "impl"
     [GenericParameters]
+    [Path "for"]
     TypeExpression
-    ["for" TypeExpression]
+    [WhereClause]
     "{"
     { ImplItem }
     "}" ;
 
----
-
-76. Classes
-
-ClassDeclaration ::=
-    [Visibility]
-    "class"
-    IDENT
-    [GenericParameters]
-    [InheritanceClause]
-    "{"
-    { ClassMember }
-    "}" ;
-
-InheritanceClause ::=
-    ("extends" TypeExpression)
-    |
-    ("implements" TypeExpression { "," TypeExpression })
-    |
-    ("extends" TypeExpression
-     "implements" TypeExpression { "," TypeExpression }) ;
+ImplItem ::=
+      FunctionDeclaration
+    | ConstantDeclaration
+    | TypeDeclaration ;
 
 ---
 
-77. Interfaces
-
-InterfaceDeclaration ::=
-    "interface"
-    IDENT
-    [GenericParameters]
-    [":" TypeExpression { "," TypeExpression }]
-    "{"
-    { InterfaceMember }
-    "}" ;
-
----
-
-78. Modules
-
-ModuleDeclaration ::=
-    "module"
-    IDENT
-    (";" | BlockExpression) ;
-
-Nested module paths are semantic entities.
-
-The language must not impose a fixed maximum module depth.
-
----
-
-79. Imports
-
-ImportStatement ::=
-    "import"
-    Path
-    ["as" IDENT]
-    [";"] ;
-
----
-
-80. Use declarations
-
-UseStatement ::=
-    "use"
-    UsePath
-    [";"] ;
-
-UsePath ::=
-      Path
-    | Path "::" "*"
-    | Path "::" "{"
-        IDENT { "," IDENT }
-      "}" ;
-
-Filesystem/network resolution is not grammar behavior.
-
-Import resolution must be policy-controlled.
-
----
-
-81. Type aliases
+72. Type Aliases
 
 TypeAliasDeclaration ::=
+    [Visibility]
     "type"
     IDENT
     [GenericParameters]
@@ -1733,258 +1593,1168 @@ TypeAliasDeclaration ::=
 
 ---
 
-82. Quantum computing
+73. Modules
 
-Quantum syntax is intentionally semantic.
-
-The language must not define the universe of quantum operations as a closed list such as:
-
-H
-X
-Y
-Z
-T
-S
-CNOT
-SWAP
-
-Those are operations that may be available in particular target dialects.
-
-The source language instead describes operations by semantic identity.
-
----
-
-83. Quantum declarations
-
-A canonical quantum region is:
-
-QuantumDeclaration ::=
-    "quantum"
+ModuleDeclaration ::=
+    [Visibility]
+    "module"
+    Path
     (
-        "circuit" IDENT [QuantumParameterList] BlockExpression
-      | BlockExpression
-      | IDENT BlockExpression
+        BlockExpression
+        | ";"
     ) ;
 
-Compatibility syntax may include:
-
-circuit Name { ... }
-quantum circuit Name { ... }
-
-but all forms normalize into the same semantic AST representation.
+Modules may be arbitrarily nested subject to resources.
 
 ---
 
-84. Quantum resources
+74. Imports
 
-Quantum resources may be declared abstractly.
+ImportDeclaration ::=
+    "import"
+    ImportPath
+    ["as" IDENT]
+    [";"] ;
 
-Conceptually:
+ImportPath ::= Path | STRING ;
 
-let q = qubit();
-let register = qubit[1024];
-
-The source must not require the physical system to contain exactly 1024 qubits.
-
-If a target has fewer resources, the compiler may:
-
-- reject the target;
-- partition the computation;
-- transform the computation;
-- time-multiplex resources;
-- invoke a simulator;
-- invoke a distributed execution strategy;
-
-according to semantic and compilation policy.
-
-The source program itself remains unchanged.
+Package resolution is not parser responsibility.
 
 ---
 
-85. Quantum operation syntax
+75. Exports
 
-The canonical conceptual form is:
+ExportDeclaration ::=
+    "export"
+    ExportTarget
+    [";"] ;
 
-QuantumOperation ::=
-    "apply"
-    QuantumOperator
-    QuantumOperands
-    [QuantumModifiers] ;
-
-The operator is an extensible semantic operation identifier.
-
-QuantumOperator ::=
-    Path
-    | IdentifierExpression ;
-
-Operands may identify logical quantum values:
-
-QuantumOperands ::=
-    "to" QuantumValueList
-    |
-    "from" QuantumValueList "to" QuantumValueList
-    |
-    QuantumValueList ;
-
-This allows semantic operations such as:
-
-apply H to q[0];
-apply controlled(X) from q[0] to q[1];
-apply U(theta, phi, lambda) to q[0];
-
-without making the grammar dependent on any vendor gate library.
+ExportTarget ::=
+      Path
+    | "{"
+      [Path { "," Path }]
+      "}" ;
 
 ---
 
-86. Quantum measurement
+76. Effects
 
-Measurement is a semantic operation.
+EffectDeclaration ::=
+    "effect"
+    IDENT
+    [GenericParameters]
+    [WhereClause]
+    (
+        BlockExpression
+        | ";"
+    ) ;
 
-Conceptually:
+EffectExpression ::= "perform" Expression ;
 
-QuantumMeasureExpression ::=
-    "measure"
-    QuantumValue ;
-
-The compiler must preserve measurement semantics and dependencies.
-
-It must not automatically insert measurements merely because a target backend needs them.
-
----
-
-87. Entanglement
-
-The lexer and AST already recognize entanglement-related constructs.
-
-The canonical semantic form is:
-
-EntangleExpression ::=
-    "entangle"
+HandleExpression ::=
+    "handle"
     Expression
     "with"
-    Expression ;
-
-Entanglement is a semantic relationship.
-
-It is not synonymous with a particular two-qubit gate.
-
----
-
-88. Quantum noise
-
-Noise is represented as an explicit semantic concern.
-
-Conceptually:
-
-NoiseDeclaration ::=
-    "noise"
-    IDENT
     BlockExpression ;
 
-or another explicitly standardized noise declaration form.
-
-Noise models must not be hard-coded into source syntax.
-
-The noise subsystem determines:
-
-- channel model;
-- stochastic parameters;
-- calibration data;
-- fault model;
-- execution context.
+Effect semantics belong to "grammar/spec/effects.md".
 
 ---
 
-89. Fidelity
+77. Error Handling
 
-Fidelity analysis is a semantic/verification operation.
+TryExpression ::=
+    "try"
+    Expression
+    { CatchClause }
+    [FinallyClause] ;
 
-A source construct such as:
+CatchClause ::=
+    "catch"
+    ["(" [IDENT ":"] TypeExpression ")"]
+    BlockExpression ;
 
-fidelity
+FinallyClause ::= "finally" BlockExpression ;
 
-must not imply a particular algorithm.
+ThrowStatement ::= "throw" Expression [";"] ;
 
-The compiler and quantum subsystem determine the appropriate fidelity calculation.
+TryPropagationExpression ::= Expression "?" ;
 
 ---
 
-90. Surface-code and logical quantum computation
+78. Concurrency
 
-The source language may describe logical quantum computation without requiring a specific physical error-correction implementation.
+Concurrency syntax describes intent.
 
-Conceptually:
+ConcurrencyStatement ::=
+      SpawnStatement
+    | ParallelStatement
+    | ChannelDeclaration
+    | SendStatement
+    | ReceiveStatement
+    | SynchronizeStatement ;
+
+SpawnStatement ::= "spawn" Expression [";"] ;
+
+ParallelStatement ::=
+    "parallel"
+    BlockExpression ;
+
+ChannelDeclaration ::=
+    "channel"
+    IDENT
+    [":" TypeExpression]
+    [";"] ;
+
+SendStatement ::=
+    Expression
+    "!"
+    Expression
+    [";"] ;
+
+ReceiveStatement ::=
+    Expression
+    "?"
+    [";"] ;
+
+SynchronizeStatement ::=
+    "synchronize"
+    Expression
+    [";"] ;
+
+No fixed number of:
+
+- threads;
+- cores;
+- workers;
+- tasks;
+- actors.
+
+---
+
+79. Parallelism
+
+Parallelism may be expressed as:
+
+parallel { ... }
+
+or through semantic constructs such as:
+
+map(...)
+reduce(...)
+pipeline(...)
+spawn(...)
+
+The language must not require:
+
+parallel_on_8_cores
+parallel_on_128_threads
+
+unless such syntax exists in an explicitly target-specific dialect.
+
+---
+
+80. Resource Intent
+
+Resource syntax is target-independent.
+
+ResourceStatement ::=
+      RequirementStatement
+    | CapabilityRequirement
+    | PreferenceStatement
+    | ConstraintStatement
+    | ResourceBinding ;
+
+RequirementStatement ::=
+    "requires"
+    Requirement
+    [";"] ;
+
+Requirement ::=
+      ResourceRequirement
+    | CapabilityRequirement
+    | PropertyRequirement ;
+
+---
+
+81. Resource Requirements
+
+ResourceRequirement ::=
+    ResourceKind
+    ComparisonOperator
+    Expression ;
+
+ResourceKind ::= Path ;
+
+Examples:
+
+requires qubits >= n;
+requires memory >= required_memory;
+requires nodes >= workers;
+requires tensor.rank >= rank;
+
+These are semantic requirements.
+
+They are not compiler hard limits.
+
+---
+
+82. Capability Requirements
+
+CapabilityRequirement ::=
+    "capability"
+    "("
+    Path
+    [ArgumentList]
+    ")" ;
+
+Examples:
+
+requires capability("quantum.measurement");
+requires capability("quantum.mid_circuit_measurement");
+requires capability("tensor.compute");
+requires capability("distributed.communication");
+
+Capability resolution belongs to target/resource analysis.
+
+---
+
+83. Preferences
+
+PreferenceStatement ::=
+    "prefer"
+    Preference
+    [";"] ;
+
+Preference ::=
+    Path
+    [ArgumentList] ;
+
+A preference is not a requirement.
+
+The compiler may ignore it when doing so preserves program semantics.
+
+---
+
+84. Constraints
+
+ConstraintStatement ::=
+    "constrain"
+    Expression
+    [";"] ;
+
+Constraints may be:
+
+- timing;
+- memory;
+- reliability;
+- energy;
+- communication;
+- precision;
+- fidelity;
+- power;
+- thermal;
+- placement;
+- portability.
+
+---
+
+85. Resource Bindings
+
+A portable program may describe abstract resource relationships:
+
+ResourceBinding ::=
+    "bind"
+    IDENT
+    "="
+    ResourceExpression
+    [";"] ;
+
+Physical binding is not part of the portable core language.
+
+---
+
+86. Hardware/Software Co-Design
+
+Hardware intent is represented separately from physical realization.
+
+HDLDeclaration ::=
+      HardwareModuleDeclaration
+    | SignalDeclaration
+    | PortDeclaration
+    | ClockDeclaration
+    | InterfaceDeclaration
+    | HardwareProcessDeclaration
+    | HardwareAssertion
+    | HardwareGenerate ;
+
+---
+
+87. Hardware Modules
+
+HardwareModuleDeclaration ::=
+    [Visibility]
+    "hardware"
+    "module"
+    IDENT
+    [GenericParameters]
+    "{"
+    { HDLDeclaration | Statement }
+    "}" ;
+
+---
+
+88. Ports
+
+PortDeclaration ::=
+    "port"
+    IDENT
+    ":"
+    PortType
+    ["=" Expression]
+    [";"] ;
+
+PortType ::=
+      "input"
+    | "output"
+    | "inout" ;
+
+Where richer direction/type syntax is required, the type-system/HDL contracts extend "PortType".
+
+---
+
+89. Signals
+
+SignalDeclaration ::=
+    "signal"
+    IDENT
+    [":" TypeExpression]
+    [";"] ;
+
+---
+
+90. Registers
+
+RegisterDeclaration ::=
+    "register"
+    IDENT
+    ":"
+    TypeExpression
+    [";"] ;
+
+Register width is determined by the declared type.
+
+The language must not impose a universal register width.
+
+---
+
+91. Clocking
+
+ClockDeclaration ::=
+    "clock"
+    IDENT
+    [":" TypeExpression]
+    [";"] ;
+
+Timing semantics belong to HDL analysis.
+
+---
+
+92. Hardware Processes
+
+HardwareProcessDeclaration ::=
+    "process"
+    [ProcessSensitivity]
+    BlockExpression ;
+
+ProcessSensitivity ::=
+    "("
+    [Expression { "," Expression }]
+    ")" ;
+
+---
+
+93. Hardware Assertions
+
+HardwareAssertion ::=
+    "assert"
+    Expression
+    [";"] ;
+
+The semantic domain determines whether the assertion is:
+
+- simulation-time;
+- synthesis-time;
+- formal verification;
+- runtime verification.
+
+---
+
+94. Hardware Generation
+
+HardwareGenerate ::=
+    "generate"
+    IDENT
+    "in"
+    Expression
+    BlockExpression ;
+
+Generation counts are semantic.
+
+No fixed instance count exists.
+
+---
+
+95. Quantum Computing
+
+Quantum syntax is part of Zamani's common language.
+
+It does not create a separate quantum language.
+
+The canonical quantum semantic boundary is:
+
+Zamani AST
+   ↓
+quantum semantic model
+   ↓
+quantum::ir
+   ↓
+optimization
+   ↓
+routing
+   ↓
+scheduling
+   ↓
+QEC / resilience / ZQN
+   ↓
+HAL
+   ↓
+target
+
+---
+
+96. Quantum Declarations
+
+QuantumDeclaration ::=
+      QuantumCircuitDeclaration
+    | QuantumRegisterDeclaration
+    | QuantumOperationDeclaration
+    | QuantumObservableDeclaration
+    | QuantumNoiseDeclaration
+    | QuantumErrorCorrectionDeclaration ;
+
+---
+
+97. Quantum Circuits
+
+QuantumCircuitDeclaration ::=
+    "quantum"
+    "circuit"
+    IDENT
+    [GenericParameters]
+    [ParameterList]
+    BlockExpression ;
+
+Compatibility syntax may allow:
+
+circuit Name { ... }
+
+if explicitly enabled by the compatibility policy.
+
+All forms normalize to one semantic representation.
+
+---
+
+98. Quantum Registers
+
+QuantumRegisterDeclaration ::=
+    "qubit"
+    IDENT
+    [":" TypeExpression]
+    ["=" Expression]
+    [";"] ;
+
+Parameterized allocation may use:
+
+qubit q[n];
+
+provided the type/resource contract defines the form.
+
+There is no maximum "n" in the language.
+
+---
+
+99. Quantum States
+
+Quantum state values may use the canonical literal forms defined by the lexical contract.
+
+They are values, not physical identifiers.
+
+Example:
+
+let zero = |0⟩;
+let plus = |+⟩;
+
+---
+
+100. Quantum Operations
+
+The core quantum grammar must not enumerate gates.
+
+The canonical form is generic:
+
+QuantumOperationExpression ::=
+    "apply"
+    QuantumOperationSpecifier
+    QuantumTargetClause
+    [";"] ;
+
+QuantumOperationSpecifier ::=
+      Path
+    | Path "(" [ArgumentList] ")"
+    | ControlledOperation
+    | AdjointOperation
+    | PoweredOperation ;
+
+---
+
+101. Quantum Targets
+
+QuantumTargetClause ::=
+      "to" QuantumTargetList
+    | "from" QuantumTargetList "to" QuantumTargetList
+    | "on" QuantumTargetList ;
+
+QuantumTargetList ::=
+    QuantumTarget { "," QuantumTarget } ;
+
+QuantumTarget ::=
+      Expression
+    | RangeExpression ;
+
+---
+
+102. Controlled Operations
+
+ControlledOperation ::=
+    "controlled"
+    "("
+    QuantumOperationSpecifier
+    ")"
+    [ "by" QuantumTargetList ] ;
+
+---
+
+103. Adjoint Operations
+
+AdjointOperation ::=
+    "adjoint"
+    "("
+    QuantumOperationSpecifier
+    ")" ;
+
+---
+
+104. Powered Operations
+
+PoweredOperation ::=
+    "power"
+    "("
+    QuantumOperationSpecifier
+    ","
+    Expression
+    ")" ;
+
+---
+
+105. Custom Quantum Operations
+
+Any syntactically valid operation identifier may represent a quantum operation:
+
+apply H to q;
+apply vendor.operation(theta) to q;
+apply custom_namespace.CustomGate(a, b) to q0, q1;
+
+The parser must not require the operation to be in a fixed built-in gate list.
+
+Semantic analysis determines whether it exists and whether the target can realize it.
+
+This is essential for future hardware and POCO-REAF.
+
+---
+
+106. Measurement
+
+QuantumMeasurementStatement ::=
+    "measure"
+    QuantumTargetList
+    [ "into" Expression ]
+    [";"] ;
+
+Measurement semantics belong to quantum semantic analysis.
+
+---
+
+107. Reset
+
+QuantumResetStatement ::=
+    "reset"
+    QuantumTargetList
+    [";"] ;
+
+---
+
+108. Barrier
+
+QuantumBarrierStatement ::=
+    "barrier"
+    QuantumTargetList
+    [";"] ;
+
+A barrier is semantic intent.
+
+It does not directly assign hardware cycles.
+
+---
+
+109. Classical Feed-Forward
+
+Quantum operations may depend on classical expressions:
+
+QuantumConditionalStatement ::=
+    "if"
+    Expression
+    QuantumStatement ;
+
+This permits:
+
+if result == 1 {
+    apply correction to q;
+}
+
+No fixed number of classical measurement bits is assumed.
+
+---
+
+110. Quantum Noise
+
+QuantumNoiseDeclaration ::=
+    "noise"
+    IDENT
+    [GenericParameters]
+    BlockExpression ;
+
+Noise semantics belong to ZQN/quantum semantic infrastructure.
+
+The grammar does not implement a noise model.
+
+---
+
+111. Quantum Error Correction
+
+QuantumErrorCorrectionDeclaration ::=
+    "error_correction"
+    IDENT
+    [GenericParameters]
+    BlockExpression ;
+
+Source syntax may describe intent such as:
+
+requires capability("quantum.error_correction");
+
+QEC implementation remains outside syntax.
+
+---
+
+112. Logical Quantum Computation
+
+The language may express:
 
 logical
 surface
 parity
 
-are semantic domain constructs.
+through semantic constructs.
 
-The compiler may lower them through:
+They must not become hard-coded physical layouts.
 
-logical IR
-    ↓
-QEC planning
-    ↓
-physical realization
-
-The source syntax must never hard-code:
+No:
 
 MAX_QUBITS
 MAX_CODE_DISTANCE
 MAX_STABILIZERS
 
-or equivalent constants.
+may be language-level limits.
 
 ---
 
-91. Quantum scalability contract
+113. Quantum Resource Requirements
 
-Zamani quantum programs must scale from:
+QuantumResourceRequirement ::=
+    "requires"
+    QuantumResourceProperty
+    ComparisonOperator
+    Expression
+    [";"] ;
 
-one logical qubit
+QuantumResourceProperty ::=
+      "qubits"
+    | "logical_qubits"
+    | "fidelity"
+    | "coherence"
+    | "measurement"
+    | "connectivity"
+    | "error_rate"
+    | Path ;
 
-through:
-
-small registers
-
-through:
-
-large registers
-
-through:
-
-distributed quantum systems
-
-subject only to:
-
-available resources
-semantic validity
-target capability
-compiler policy
-execution feasibility
-
-No source-level constant may artificially establish an upper limit.
+These are requirements, not physical mappings.
 
 ---
 
-92. Nano agents
+114. Quantum Routing Boundary
 
-The canonical nano-agent declaration is:
+Routing is not grammar responsibility.
 
-NanoAgentDeclaration ::=
-    ("nano" "agent" | "agent" | "nano")
+The source may state:
+
+apply controlled(U) from control to target;
+
+The routing layer may decide to use:
+
+- swaps;
+- teleportation;
+- remapping;
+- movement;
+- decomposition;
+- ancillas;
+- target-specific operations.
+
+The source does not change merely because the target topology changes.
+
+---
+
+115. Quantum Scheduling Boundary
+
+The grammar must not encode:
+
+cycle 0
+cycle 1
+physical_slot 7
+qubit 13 at time 4
+
+in the portable core language.
+
+Explicit low-level scheduling syntax may exist only inside a target-specific dialect.
+
+---
+
+116. Hybrid Quantum-Classical Computation
+
+Hybrid computation is represented using the same language.
+
+Example structure:
+
+classical expression
+    ↓
+quantum operation
+    ↓
+measurement
+    ↓
+classical condition
+    ↓
+quantum operation
+
+The syntax therefore permits quantum statements inside ordinary control flow.
+
+No separate parser is required for hybrid programs.
+
+---
+
+117. Classical Computing
+
+Classical computation uses the universal syntax:
+
+- variables;
+- functions;
+- loops;
+- conditionals;
+- patterns;
+- types;
+- generics;
+- collections;
+- mathematical expressions;
+- concurrency;
+- resources.
+
+Specialized numerical operations should normally be expressed as:
+
+generic operation
++
+typed arguments
++
+capability/intrinsic/library semantics
+
+rather than as an ever-growing keyword list.
+
+---
+
+118. Mathematical Operations
+
+Operations such as:
+
+- FFT;
+- SVD;
+- gradient;
+- optimization;
+- matrix multiplication;
+- tensor contraction;
+- statistics;
+- symbolic differentiation;
+
+should not automatically become reserved keywords.
+
+For example:
+
+fft(signal)
+gradient(loss)
+svd(matrix)
+
+can be ordinary calls.
+
+The semantic/type system and libraries determine their meaning.
+
+This keeps the grammar extensible.
+
+---
+
+119. Tensor Syntax
+
+Tensor types may be represented through generic types:
+
+Tensor<T>
+Tensor<T, Shape>
+Tensor<T, shape>
+
+or another canonical type-system representation.
+
+Shape expressions may be:
+
+- static;
+- symbolic;
+- generic;
+- dependent;
+- runtime-derived.
+
+The grammar must not impose a maximum tensor rank.
+
+---
+
+120. Data Processing
+
+Data constructs use generic declarations, types, expressions, functions, and resource capabilities.
+
+Optional dedicated syntax may include:
+
+DatasetDeclaration ::=
+    "dataset"
     IDENT
-    (BlockExpression | Expression) ;
+    [GenericParameters]
+    [":" TypeExpression]
+    [ "=" Expression ]
+    [";"] ;
 
-The semantics of nano computation are not encoded into lexical rules.
+StreamDeclaration ::=
+    "stream"
+    IDENT
+    [":" TypeExpression]
+    [";"] ;
 
 ---
 
-93. Sankofa constructs
+121. AI/ML
 
-93.1 Remember
+AI/ML syntax is part of the universal language.
+
+Optional first-class declarations:
+
+ModelDeclaration ::=
+    "model"
+    IDENT
+    [GenericParameters]
+    BlockExpression ;
+
+AgentDeclaration ::=
+    "agent"
+    IDENT
+    [GenericParameters]
+    BlockExpression ;
+
+The grammar does not encode:
+
+- PyTorch;
+- TensorFlow;
+- JAX;
+- CUDA;
+- ROCm;
+- vendor-specific model formats.
+
+Those belong to libraries, interoperability, or dialects.
+
+---
+
+122. Training and Inference
+
+Training/inference should normally use generic expressions:
+
+train(model, data)
+infer(model, input)
+
+If dedicated syntax is introduced, it must lower to the same canonical semantic model.
+
+---
+
+123. Distributed Computing
+
+Distributed syntax must remain topology-independent.
+
+DistributedDeclaration ::=
+      ServiceDeclaration
+    | ProcessDeclaration
+    | ActorDeclaration
+    | ChannelDeclaration
+    | PlacementDeclaration
+    | ReplicationDeclaration ;
+
+Example:
+
+distributed {
+    spawn worker;
+}
+
+The program does not specify a fixed number of nodes.
+
+---
+
+124. Placement
+
+Portable placement describes requirements or preferences:
+
+PlacementDeclaration ::=
+    "placement"
+    IDENT
+    "="
+    PlacementExpression
+    [";"] ;
+
+Physical node IDs are not part of the portable semantic contract.
+
+---
+
+125. Replication
+
+ReplicationDeclaration ::=
+    "replicate"
+    Expression
+    ["across" Expression]
+    [";"] ;
+
+Replication count may be:
+
+- static;
+- symbolic;
+- resource-dependent;
+- dynamically selected.
+
+---
+
+126. Networking
+
+Networking uses abstract endpoints and capabilities.
+
+EndpointExpression ::=
+    "endpoint"
+    "("
+    Expression
+    ")" ;
+
+The language may describe:
+
+- connections;
+- protocols;
+- channels;
+- requests;
+- responses;
+- streams;
+- services.
+
+Actual addresses and routing are deployment concerns unless explicitly required by a target dialect.
+
+---
+
+127. Security
+
+Security constructs may express:
+
+- identity;
+- authorization;
+- policies;
+- capabilities;
+- trust;
+- secrets;
+- provenance;
+- secure computation.
+
+PolicyDeclaration ::=
+    "policy"
+    IDENT
+    BlockExpression ;
+
+CapabilityDeclaration ::=
+    "capability"
+    IDENT
+    [GenericParameters]
+    BlockExpression ;
+
+Cryptographic algorithms should not become mandatory parser keywords merely because they exist today.
+
+---
+
+128. Memory
+
+Memory syntax describes semantic memory intent.
+
+Possible forms:
+
+MemoryDeclaration ::=
+    "memory"
+    IDENT
+    [":" TypeExpression]
+    [ "=" Expression ]
+    [";"] ;
+
+Memory domains may include:
+
+- local;
+- shared;
+- distributed;
+- persistent;
+- accelerator;
+- quantum;
+- device;
+- managed.
+
+No fixed capacity belongs to syntax.
+
+---
+
+129. Memory Address Spaces
+
+If address-space syntax is required:
+
+AddressSpaceType ::=
+    "AddressSpace"
+    "<"
+    Path
+    ">" ;
+
+The semantic model determines what the address space means.
+
+Physical addresses are target-specific.
+
+---
+
+130. Execution Intent
+
+Execution syntax expresses policies, not hardware internals.
+
+ExecutionStatement ::=
+      RunStatement
+    | ScheduleStatement
+    | CheckpointStatement
+    | RecoverStatement
+    | ObserveStatement ;
+
+---
+
+131. Run
+
+RunStatement ::=
+    "run"
+    Expression
+    [";"] ;
+
+---
+
+132. Scheduling Intent
+
+ScheduleStatement ::=
+    "schedule"
+    Expression
+    [";"] ;
+
+This does not define the scheduler.
+
+---
+
+133. Checkpointing
+
+CheckpointStatement ::=
+    "checkpoint"
+    [Expression]
+    [";"] ;
+
+Checkpoint semantics belong to execution/runtime specifications.
+
+---
+
+134. Recovery
+
+RecoverStatement ::=
+    "recover"
+    [Expression]
+    [";"] ;
+
+Recovery orchestration belongs to resilience/runtime layers.
+
+---
+
+135. Observability
+
+ObserveStatement ::=
+    "observe"
+    Expression
+    [";"] ;
+
+Tracing/profiling implementation is outside syntax.
+
+---
+
+136. Resilience
+
+Portable resilience intent may use:
+
+ResilienceDeclaration ::=
+    "resilience"
+    IDENT
+    BlockExpression ;
+
+The implementation integrates with:
+
+QEC
+ZQN
+HAL
+routing
+scheduling
+optimization
+runtime
+
+The grammar does not duplicate those systems.
+
+---
+
+137. Sankofa
+
+Sankofa constructs remain part of Zamani where accepted by the language lifecycle.
 
 RememberStatement ::=
     "remember"
@@ -1994,24 +2764,17 @@ RememberStatement ::=
     Expression
     [";"] ;
 
-93.2 Recall
-
 RecallExpression ::=
     "recall"
     (
         "(" Expression ")"
-        |
-        Expression
+        | Expression
     ) ;
-
-93.3 Learn
 
 LearnExpression ::=
     ("learn" | "infer")
     ["from"]
     Expression ;
-
-93.4 Wisdom
 
 WisdomStatement ::=
     "wisdom"
@@ -2019,922 +2782,882 @@ WisdomStatement ::=
     ["=" Expression]
     [";"] ;
 
+These are semantic constructs.
+
+The parser does not maintain memory.
+
 ---
 
-94. Temporal constructs
+138. Temporal Constructs
 
-ZamaniExpression ::= "zamani" (BlockExpression | Expression) ;
-
-SasaExpression ::= "sasa" (BlockExpression | Expression) ;
+TemporalExpression ::=
+      "zamani" (BlockExpression | Expression)
+    | "sasa" (BlockExpression | Expression) ;
 
 "zamani" and "sasa" are semantic temporal scopes.
 
-They must not be implemented as textual macros.
+They are not textual macros.
 
 ---
 
-95. Effects
+139. Multi-Timeline Syntax
 
-EffectDeclaration ::=
-    "effect"
+Where the MTS feature is promoted to stable syntax:
+
+TimelineDeclaration ::=
+    "timeline"
     IDENT
-    (BlockExpression | ";") ;
+    [GenericParameters]
+    BlockExpression ;
+
+ForkExpression ::=
+    "fork"
+    Expression ;
+
+MergeExpression ::=
+    "merge"
+    Expression
+    "with"
+    Expression ;
+
+No fixed number of timelines or branches exists.
 
 ---
 
-96. Performing effects
+140. MTS Compatibility
 
-PerformExpression ::= "perform" Expression ;
+The old monolithic "MTS_LITERAL" token must not become a second syntax authority.
 
-The effect system determines:
+Preferred production architecture:
 
-- effect identity;
-- effect arguments;
-- capabilities;
-- handlers;
-- resource requirements;
-- whether an effect is permitted.
+mts [ expression ]
+
+is parsed using normal:
+
+IDENT + "[" + Expression + "]"
+
+unless a future lexical specification explicitly proves that a dedicated literal token is required.
+
+This avoids domain-specific lexical coupling.
 
 ---
 
-97. Effect handlers
+141. Nano Computing
 
-HandleStatement ::=
-    "handle"
+Nano computation remains a domain, not a second language.
+
+NanoDeclaration ::=
+      NanoAgentDeclaration
+    | NanoEntityDeclaration
+    | NanoInteractionDeclaration ;
+
+NanoAgentDeclaration ::=
+    ("nano" "agent" | "agent" | "nano")
     IDENT
-    BlockExpression
-    ["with" BlockExpression] ;
+    (BlockExpression | Expression) ;
+
+The grammar must not encode a fixed physical periodic table or device inventory.
 
 ---
 
-98. Language declaration
+142. Generic Domain Extensions
 
-LanguageDeclaration ::=
-    "language"
+Future domains must use extension points rather than modifying unrelated grammar rules.
+
+DomainDeclaration ::=
+    "domain"
     IDENT
-    [StringLiteral]
-    [";"] ;
+    [GenericParameters]
+    BlockExpression ;
 
-Language declarations identify source compatibility/version intent.
+A domain declares:
 
-They must not silently alter the compiler's interpretation.
-
-Version selection must be deterministic.
-
----
-
-99. Unsafe
-
-The source language may contain an "unsafe" construct only if its semantic purpose is explicitly defined.
-
-However:
-
-«The Zamani compiler implementation itself must contain no Rust "unsafe" code.»
-
-This distinction is mandatory.
-
-A source-level:
-
-unsafe {
-    ...
-}
-
-does not authorize the compiler implementation to use Rust "unsafe".
-
-If source-level unsafe semantics are retained, the compiler must:
-
-1. parse them;
-2. represent them explicitly;
-3. apply capability/type/effect checks;
-4. produce diagnostics;
-5. lower them through safe Rust abstractions.
+- name;
+- version;
+- syntax extensions;
+- semantic model;
+- AST mapping;
+- IR mapping;
+- capability requirements;
+- compatibility;
+- diagnostics.
 
 ---
 
-100. Expression statements
+143. Macros
 
-ExpressionStatement ::= Expression [";"] ;
+Macros must not bypass semantic analysis.
 
-The parser must preserve expression statements in the AST where their value or side effects matter.
+MacroDeclaration ::=
+    "macro"
+    IDENT
+    [GenericParameters]
+    "(" [ParameterList] ")"
+    BlockExpression ;
 
----
+MacroInvocation ::=
+    Path
+    "!"
+    "(" [ArgumentList] ")" ;
 
-101. Semantic boundary
-
-The grammar answers:
-
-«Is the source syntactically valid?»
-
-The AST answers:
-
-«What source construct was written?»
-
-The semantic layer answers:
-
-«Is the construct valid?»
-
-The type system answers:
-
-«What are its types and resource obligations?»
-
-The IR answers:
-
-«What computation does it mean?»
-
-The optimizer answers:
-
-«What equivalent computation is cheaper/better?»
-
-The scheduler answers:
-
-«When can it execute?»
-
-The target backend answers:
-
-«How can this target realize it?»
-
-This boundary is mandatory.
+Macro expansion must produce source/AST information sufficient for diagnostics.
 
 ---
 
-102. Canonical compilation pipeline
+144. Metaprogramming
 
-The intended production pipeline is:
+MetaExpression ::=
+      QuoteExpression
+    | UnquoteExpression
+    | ReflectionExpression
+    | CompileTimeExpression ;
 
-UTF-8 source
-      │
-      ▼
-Lexer
-      │
-      ▼
-Tokens + Spans
-      │
-      ▼
-Parser
-      │
-      ▼
-Canonical AST
-      │
-      ▼
-Name resolution
-      │
-      ▼
-Type checking
-      │
-      ▼
-Effect checking
-      │
-      ▼
-Ownership / linearity / affinity checking
-      │
-      ▼
-Resource analysis
-      │
-      ▼
-Quantum semantic analysis
-      │
-      ▼
-Canonical IR
-      │
-      ▼
-IR verification
-      │
-      ▼
-Optimization
-      │
-      ▼
-Scheduling / routing
-      │
-      ▼
-Target lowering
-      │
-      ▼
-Execution
+Metaprogramming must remain capability-controlled.
 
-No backend may bypass the semantic/IR boundary.
+It must not create an unrestricted compiler escape hatch.
 
 ---
 
-103. AST contract
+145. Quote
 
-Every syntax production that has semantic meaning must map to an explicit AST representation.
-
-The AST must preserve enough information to support:
-
-- diagnostics;
-- formatting;
-- source mapping;
-- semantic analysis;
-- refactoring;
-- optimization;
-- lowering;
-- tooling;
-- LSP features.
-
-Every AST node must retain a source span.
-
-The existing AST already follows this direction, with "Span" carried throughout declarations and expressions.
+QuoteExpression ::= "quote" BlockExpression ;
 
 ---
 
-104. No syntax-only phantom features
+146. Unquote
 
-A feature must not be considered implemented merely because:
+UnquoteExpression ::= "unquote" Expression ;
 
-a keyword exists
-
-or:
-
-an AST enum variant exists
-
-or:
-
-a grammar rule exists
-
-Production status requires:
-
-LEXED
-PARSED
-REPRESENTED
-SEMANTICALLY VALIDATED
-DIAGNOSTICS
-IR LOWERING
-IR VERIFICATION
-TESTED
-DOCUMENTED
-
-A feature may explicitly be marked:
-
-PLANNED
-EXPERIMENTAL
-PARTIAL
-COMPATIBILITY
-STABLE
-
-but status must be truthful.
+Exact macro/metaprogramming semantics belong to the metaprogramming contract.
 
 ---
 
-105. Canonical grammar vs ANTLR
+147. Compile-Time Expressions
 
-"grammar/Zamani.g4" must not become a second independent language.
+CompileTimeExpression ::=
+    "comptime"
+    Expression ;
 
-The ANTLR grammar is an implementation/tooling representation of the canonical syntax.
-
-Therefore:
-
-canonical syntax specification
-        │
-        ├── hand-written parser contract
-        │
-        └── ANTLR representation
-
-not:
-
-Zamani syntax
-├── grammar.md
-├── Zamani.g4
-├── Zamani-Grammar.md
-└── parser.rs
-
-with each independently defining syntax.
-
-Any generated parser must be checked against canonical parser conformance tests.
+Compile-time evaluation must remain deterministic under a deterministic compiler configuration.
 
 ---
 
-106. Grammar modularity
+148. Interoperability
 
-The grammar implementation should eventually be organized into semantic modules:
+Interoperability is not the canonical semantic model.
 
-grammar/
-├── README.md
-├── spec/
-│   ├── lexical.md
-│   ├── syntax.md
-│   ├── semantics.md
-│   ├── types.md
-│   ├── effects.md
-│   ├── quantum.md
-│   ├── compatibility.md
-│   └── conformance.md
+InteropDeclaration ::=
+      ForeignDeclaration
+    | ABIDeclaration
+    | FormatDeclaration ;
+
+---
+
+149. Foreign Functions
+
+ForeignDeclaration ::=
+    "extern"
+    Path
+    BlockExpression ;
+
+The exact FFI contract belongs to interoperability specifications.
+
+---
+
+150. ABIs
+
+ABI syntax describes interoperability intent.
+
+It must not force the entire language to one ABI.
+
+ABI selection may depend on:
+
+- target;
+- platform;
+- calling convention;
+- foreign interface.
+
+---
+
+151. OpenQASM / QIR / HDL Interoperability
+
+OpenQASM, QIR, HDL formats, LLVM-related representations, MLIR-related representations, and vendor formats are interoperability boundaries.
+
+They are not the canonical Zamani semantic model.
+
+The pipeline is:
+
+external representation
+        ↓
+format frontend
+        ↓
+canonical semantic representation
+        ↓
+canonical IR
+
+and the reverse for exporters.
+
+---
+
+152. Dialects
+
+Dialects extend Zamani without silently changing the core language.
+
+DialectDeclaration ::=
+    "dialect"
+    IDENT
+    [Version]
+    BlockExpression ;
+
+A dialect must identify:
+
+- name;
+- version;
+- compatibility;
+- syntax extensions;
+- semantic extensions;
+- AST mapping;
+- IR mapping;
+- capability requirements.
+
+---
+
+153. Dialect Isolation
+
+A dialect must not:
+
+- redefine core keywords silently;
+- change the meaning of existing core syntax;
+- create a competing AST;
+- create an incompatible semantic model;
+- bypass canonical IR;
+- bypass security checks;
+- introduce unsafe compiler implementation.
+
+Dialect syntax must be explicitly activated.
+
+---
+
+154. Literals
+
+The syntax consumes the lexical literal classes:
+
+Literal ::=
+      BooleanLiteral
+    | NullLiteral
+    | IntegerLiteral
+    | FloatLiteral
+    | StringLiteral
+    | CharLiteral
+    | QuantumLiteral ;
+
+The detailed lexical grammar belongs to "grammar/spec/lexical.md".
+
+---
+
+155. Boolean Literals
+
+BooleanLiteral ::= "true" | "false" ;
+
+---
+
+156. Null Literals
+
+Compatibility spellings may include:
+
+NullLiteral ::= "nil" | "null" ;
+
+They normalize to one semantic representation if compatibility policy permits both.
+
+---
+
+157. Integer Literals
+
+Canonical integer tokenization belongs to the lexical specification.
+
+The syntax accepts:
+
+INTEGER
+
+without imposing a machine width.
+
+Literal magnitude checking is semantic/type-system responsibility.
+
+---
+
+158. Floating-Point Literals
+
+The syntax accepts:
+
+FLOAT
+
+as defined by the lexical specification.
+
+The type system determines the destination type.
+
+The parser must not assume:
+
+f64
+
+for every floating literal.
+
+---
+
+159. Strings
+
+StringLiteral ::= STRING ;
+
+The lexical specification owns:
+
+- delimiters;
+- escapes;
+- Unicode handling;
+- termination.
+
+---
+
+160. Characters
+
+CharLiteral ::= CHAR ;
+
+The lexical layer ensures the literal is structurally valid.
+
+Semantic analysis determines whether it is compatible with the destination type.
+
+---
+
+161. Quantum Literals
+
+The lexical contract may define primitive state literals:
+
+|0⟩
+|1⟩
+|+⟩
+|-⟩
+
+These represent source-level quantum values.
+
+They do not identify physical qubits.
+
+General symbolic quantum states must use semantic quantum expressions rather than an ever-growing lexer enumeration.
+
+---
+
+162. Ranges
+
+RangeExpression ::=
+      Expression ".." Expression
+    | Expression "..=" Expression ;
+
+Range size is semantic.
+
+A range must not have a machine-imposed maximum length.
+
+---
+
+163. Precedence
+
+The canonical precedence hierarchy is:
+
+lowest
 │
-├── antlr/
-│   ├── ZamaniLexer.g4
-│   ├── ZamaniParser.g4
-│   ├── Core.g4
-│   ├── Types.g4
-│   ├── Modules.g4
-│   ├── Quantum.g4
-│   ├── Effects.g4
-│   ├── Concurrency.g4
-│   └── Meta.g4
-│
-├── reference/
-│   └── ...
-│
-└── tests/
-    ├── valid/
-    ├── invalid/
-    ├── lexical/
-    ├── types/
-    ├── patterns/
-    ├── quantum/
-    ├── effects/
-    ├── concurrency/
-    ├── temporal/
-    └── compatibility/
+├── assignment
+├── conditional / propagation
+├── range
+├── logical OR
+├── logical AND
+├── bitwise OR
+├── bitwise XOR
+├── bitwise AND
+├── equality
+├── comparison
+├── shift
+├── additive
+├── multiplicative
+├── prefix
+├── postfix call
+├── indexing
+└── member access
+highest
 
-These files must compose into one language.
+The parser and ANTLR representation must agree exactly.
 
-They must never define competing syntax.
+Backends must not reinterpret precedence.
 
 ---
 
-107. Infinite scalability principle
+164. Associativity
 
-"Infinite" means:
+Canonical associativity:
 
-«No artificial language-defined upper bound.»
+Construct| Associativity
+assignment| right
+conditional| right
+range| non-chainable unless explicitly defined
+logical| left
+bitwise| left
+equality| left
+comparison| left
+shift| left
+additive| left
+multiplicative| left
+prefix| right
+call| left/postfix
+index| left/postfix
+member| left/postfix
 
-It does not mean physically unlimited execution.
-
-The actual execution boundary is:
-
-requested resources
-        ∩
-available resources
-        ∩
-target capabilities
-        ∩
-compiler/runtime policy
-
-Therefore the language must not introduce constants such as:
-
-MAX_QUBITS
-MAX_THREADS
-MAX_ARRAY_SIZE
-MAX_AST_DEPTH
-MAX_MODULES
-MAX_FUNCTIONS
-MAX_TENSOR_RANK
-MAX_REGISTER_COUNT
-
-unless the constant is explicitly a safety/resource policy outside the language semantics.
+Any exception must be explicitly specified.
 
 ---
 
-108. Resource-aware scaling
+165. Ambiguity Resolution
 
-The compiler must represent resource quantities using scalable semantic representations.
+The grammar must prefer structural/contextual resolution over lexical duplication.
 
-Resource values may be:
+Examples:
 
-known constant
-symbolic
-inferred
-runtime-dependent
-target-dependent
-unbounded by source syntax
+a & b
 
-A compiler implementation must not use a machine-sized integer merely because it is convenient if that would create an artificial language limit.
+has one "&" token.
 
-Where resource quantities are represented numerically, the representation must be chosen according to the semantic domain and checked for overflow.
-
----
-
-109. Quantum scalability
-
-Quantum programs must express:
-
-logical qubits
-logical operations
-logical measurements
-logical dependencies
-logical entanglement
-logical resources
-
-rather than:
-
-physical qubit 0
-physical qubit 1
-physical qubit 2
-...
-
-Physical allocation belongs to target lowering.
-
----
-
-110. Hardware independence
-
-The syntax must not contain vendor-specific source requirements.
-
-Vendor functionality must enter through:
-
-dialects
-capabilities
-target profiles
-lowering rules
-plugins/backends
-
-rather than source-level grammar forks.
-
----
-
-111. Dialects
-
-A dialect is an extension of the semantic operation/type namespace, not a replacement for Zamani syntax.
-
-A dialect may define:
-
-operations
-types
-attributes
-constraints
-lowering rules
-capabilities
-
-but must integrate with canonical AST/IR interfaces.
-
----
-
-112. Unknown quantum operations
-
-The parser must not reject a quantum operation merely because it is not in a fixed built-in gate list if the operation is syntactically expressible as a semantic operation identifier.
-
-For example:
-
-apply vendor_namespace.CustomOperation(...) to q;
-
-may be syntactically valid.
-
-Semantic analysis determines whether the operation exists.
-
-This prevents the grammar from becoming obsolete whenever quantum hardware evolves.
-
----
-
-113. Quantum decomposition
-
-A source operation may lower through:
-
-semantic operation
-        ↓
-abstract operation
-        ↓
-decomposition
-        ↓
-target operation set
-        ↓
-routing
-        ↓
-scheduling
-        ↓
-physical execution
-
-The source program must not have to change merely because the target gate set changes.
-
----
-
-114. Quantum routing
-
-Routing is never a parser responsibility.
-
-The source may express:
-
-apply controlled(U) from control to target;
-
-The routing layer decides whether the target requires:
-
-- swaps;
-- teleportation;
-- movement;
-- remapping;
-- ancilla allocation;
-- decomposition.
-
----
-
-115. Scheduling
-
-Scheduling is never grammar-defined.
-
-The scheduler consumes semantic operations and resource/timing constraints.
-
-The source grammar must not contain:
-
-cycle 0
-cycle 1
-physical_slot 7
-
-unless explicitly describing a low-level target dialect.
-
----
-
-116. Target capabilities
-
-Targets expose capabilities such as:
-
-supports_operation
-supports_type
-supports_precision
-supports_parallelism
-supports_entanglement
-supports_measurement
-supports_error_correction
-supports_memory
-supports_transport
-
-The compiler selects or rejects a realization based on these capabilities.
-
----
-
-117. Simulation
-
-Simulation is a target.
-
-The source language must not become a simulation language merely because a simulator is used.
-
-The same semantic program may target:
-
-simulator
-emulator
-QPU
-hybrid system
-
-without source changes.
-
----
-
-118. Determinism
-
-Parsing must be deterministic.
-
-For identical:
-
-source
-language version
-configuration
-dialect set
-
-the parser must produce equivalent AST structure.
-
-Diagnostics must be deterministic.
-
-No random number generator may influence parsing.
-
----
-
-119. Error recovery
-
-The parser must never silently discard malformed source.
-
-Recoverable syntax errors should:
-
-1. emit a diagnostic;
-2. retain source span;
-3. synchronize at a safe grammar boundary;
-4. continue where possible;
-5. avoid infinite parser loops.
-
-A production parser must guarantee forward progress during error recovery.
-
----
-
-120. Diagnostics
-
-Diagnostics must identify:
-
-file
-source span
-severity
-error code
-message
-optional explanation
-optional related spans
-
-Examples of conceptual error classes:
-
-Z001 lexical error
-Z002 unexpected token
-Z003 missing delimiter
-Z004 invalid declaration
-Z005 invalid type
-Z006 invalid pattern
-Z007 invalid quantum operation
-Z008 unavailable target capability
-Z009 resource requirement failure
-
-Diagnostic numbering is an API and should remain stable once released.
-
----
-
-121. Source spans
-
-Every meaningful AST node must have a source span.
-
-Spans must be based on source positions, not token-count indexes.
-
-Unicode source must remain correctly diagnosable.
-
----
-
-122. Semicolon policy
-
-Semicolons may terminate statements.
-
-Where the parser supports optional semicolons, omission must be unambiguous.
-
-The language must not introduce implicit semicolon rules that create incompatible parsing interpretations.
-
----
-
-123. Reserved syntax
-
-Syntax may be reserved for future features only when explicitly documented.
-
-Reserved tokens must not accidentally become valid identifiers.
-
-A reserved feature must be classified:
-
-reserved
-experimental
-implemented
-stable
-deprecated
-
----
-
-124. Compatibility
-
-Language evolution must use explicit versions.
-
-A source file may declare:
-
-language Zamani "1.0";
-
-Compatibility behavior must be defined by the language version.
-
-A compiler must not silently reinterpret an old program using new incompatible syntax.
-
----
-
-125. Backward compatibility
-
-New syntax should preferably be:
-
-additive
-unambiguous
-context-sensitive only where necessary
-
-Breaking changes require:
-
-language version
-migration documentation
-diagnostic
-conformance tests
-
----
-
-126. Implementation synchronization
-
-The following must remain synchronized:
-
-grammar/spec/syntax.md
-src/lexer.rs
-src/parser.rs
-src/ast/
-grammar/Zamani.g4
-conformance tests
-
-Synchronization must be tested automatically.
-
----
-
-127. Conformance tests
-
-Every grammar production must have at least:
-
-one positive test
-one boundary test
-one negative test
-
-for production-critical syntax.
-
-Quantum syntax must additionally have:
-
-generic operation tests
-multi-resource tests
-zero/single/many-resource tests
-target-independent tests
-invalid semantic tests
-
----
-
-128. Parser conformance
-
-A syntax test should verify at minimum:
-
-source
-  ↓
-lexer
-  ↓
-parser
-  ↓
-AST
-
-The AST must be compared structurally rather than only checking that parsing succeeded.
-
----
-
-129. AST/IR conformance
-
-For semantic constructs:
-
-source
-→ AST
-→ semantic analysis
-→ IR
-
-must be tested.
-
-The IR must not contain hidden source-specific semantics.
-
----
-
-130. No backend leakage
-
-The following are prohibited in canonical grammar:
-
-CUDA-only syntax
-LLVM-only source syntax
-x86-only registers
-ARM-only instructions
-vendor QPU identifiers
-fixed physical qubit numbers
-simulator-specific commands
-
-Such concepts belong in target-specific dialects or backend representations.
-
----
-
-131. Existing implementation alignment
-
-The repository's current lexer already contains a significantly larger token inventory than the historical implementation grammar documents, including:
-
-quantum
-qubit
-circuit
-entangle
-noise
-fidelity
-surface
-logical
-parity
-mts
-
-as well as advanced system vocabulary.
-
-The production specification therefore distinguishes token existence from language feature completion.
-
-The parser currently dispatches quantum, noise, surface-code, nano, Sankofa, effect, language, and advanced declarations.
-
-The AST contains corresponding semantic structures, including:
-
-QuantumCircuit
-NoiseModel
-SurfaceCode
-NanoAgent
-QuantumOp
-Entangle
-NanoOp
-Recall
-Remember
-Learn
-Perform
-Zamani
-Sasa
-
-and rich type representations including:
-
-Optional
-Result
-Never
-Quantum
-Linear
-Affine
-Temporal
-Pi
-Sigma
-Identity
-HKT
-
-which establishes the intended semantic direction.
-
-The IR layer currently contains quantum and nano instructions, but the production architecture requires those instructions to represent semantic operations rather than force the source language to expose target-specific implementation details.
-
----
-
-132. Critical correction: no fake implementation guarantees
-
-The following must never be written in the specification:
-
-"supported"
-
-when only a lexer token exists.
+Its meaning depends on syntax/type context.
 
 Likewise:
 
-"implemented"
+a | b
 
-when only an AST variant exists.
-
-Feature maturity must be measured by the complete pipeline.
+must not require multiple lexical tokens for the same spelling.
 
 ---
 
-133. Rust implementation requirement
+166. "_" Handling
 
-The Zamani compiler implementation is Rust 2021 with Rust 1.97/1.97.1 as the baseline.
+The underscore spelling has contextual roles.
 
-The implementation must:
+It may represent:
 
-- compile on the declared minimum Rust version;
-- avoid Rust "unsafe";
-- avoid unsafe FFI assumptions;
-- avoid architecture-sized semantic limits;
-- use checked arithmetic where appropriate;
-- avoid recursion where unbounded source nesting could cause stack exhaustion;
-- provide deterministic diagnostics;
-- avoid panics for ordinary malformed user programs.
+- wildcard pattern;
+- identifier component where permitted;
+- ignored binding;
+- placeholder.
 
-A malformed source file must produce a compiler diagnostic, not an uncontrolled process crash.
+The lexer must not produce competing token identities for "_".
+
+The parser determines the syntactic role.
 
 ---
 
-134. Parser scalability
+167. "@" Handling
 
-Because arbitrary source nesting can be extremely deep, production parser implementation should avoid relying on unbounded host-language recursion wherever practical.
+Annotations use the generic form:
 
-The specification places no artificial nesting limit.
+Annotation ::= "@" Path [ "(" [ArgumentList] ")" ] ;
 
-Implementation limits, if required for denial-of-service protection, must be explicit resource policies rather than language semantics.
+Domain-specific annotation meanings belong to semantic analysis.
+
+A separate lexical token such as "NANO_ANNOTATION" must not be required merely because the annotation happens to be used by nano syntax.
 
 ---
 
-135. AST scalability
+168. Unsafe Policy
 
-AST containers must grow according to available resources.
+There is no stable core production:
 
-The compiler must not encode fixed-size arrays such as:
+UnsafeDeclaration
 
+There is no stable core construct granting arbitrary unsafe access.
+
+The compiler implementation itself must contain no Rust "unsafe".
+
+If the historical token "unsafe" remains reserved for compatibility, it must be rejected as a forbidden construct or handled by an explicit migration diagnostic.
+
+It must never enable:
+
+- arbitrary memory access;
+- unchecked compiler internals;
+- unrestricted FFI;
+- backend bypass;
+- semantic-analysis bypass.
+
+---
+
+169. Hardware Independence
+
+The portable grammar must not contain mandatory source constructs for:
+
+CPU0
+GPU0
+QPU0
+core0
+thread0
+physical_qubit0
+memory_bank0
+register31
+device7
+node8
+
+unless they occur inside an explicitly target-specific dialect.
+
+---
+
+170. Resource Requirement vs Implementation Decision
+
+The language distinguishes:
+
+Requirement
+
+requires qubits >= n;
+
+Capability
+
+requires capability("quantum.measurement");
+
+Preference
+
+prefer accelerator("quantum");
+
+Constraint
+
+constrain fidelity >= required_fidelity;
+
+Implementation decision
+
+map q -> physical_device_specific_resource;
+
+The first four can be portable.
+
+The last belongs downstream or inside an explicit target dialect.
+
+---
+
+171. No Hard-Coded Hardware Limits
+
+The grammar must never define:
+
+MAX_QUBITS
+MAX_CPUS
+MAX_CORES
+MAX_THREADS
+MAX_GPUS
+MAX_FPGAS
 MAX_NODES
-MAX_STATEMENTS
-MAX_FIELDS
-MAX_PARAMETERS
-MAX_CHILDREN
+MAX_MEMORY
+MAX_REGISTER_WIDTH
+MAX_VECTOR_WIDTH
+MAX_TENSOR_RANK
+MAX_ARRAY_SIZE
+MAX_TIMELINES
+MAX_PROCESSES
+MAX_CHANNELS
+MAX_ACCELERATORS
 
-as language limits.
+as universal language constants.
 
-Security/resource limits may exist externally and must be represented as compiler policy.
+External security/resource limits are allowed.
 
----
-
-136. IR scalability
-
-The IR must represent arbitrary semantic resource counts subject to implementation/resource limits.
-
-The IR must not use:
-
-0 = unknown
-
-or:
-
-u32 because machines usually support it
-
-where this would artificially constrain semantics.
-
-The canonical IR should use resource abstractions capable of representing:
-
-known
-unknown
-symbolic
-runtime-derived
-target-derived
-
-quantities.
+They must be represented as compiler/runtime policy rather than language semantics.
 
 ---
 
-137. Quantum IR boundary
+172. Source Span Contract
 
-The canonical quantum semantic boundary is:
+Every parsed semantic construct must preserve source location.
+
+The canonical span must support:
+
+start byte offset
+end byte offset
+source identifier
+line/column mapping
+
+Ranges are end-exclusive.
+
+The AST must preserve sufficient information for:
+
+- diagnostics;
+- source maps;
+- formatting;
+- refactoring;
+- IDE/LSP tooling;
+- macro expansion diagnostics;
+- provenance.
+
+---
+
+173. Error Recovery
+
+Parser errors must be structured.
+
+A parser must:
+
+- never panic on ordinary invalid user input;
+- make deterministic progress;
+- report source spans;
+- distinguish lexical errors from syntax errors;
+- recover where safe;
+- avoid silently discarding semantic constructs.
+
+Recovery must never manufacture valid semantic AST nodes from invalid syntax.
+
+---
+
+174. Diagnostics
+
+Diagnostics must contain enough information to identify:
+
+- source;
+- span;
+- diagnostic category;
+- severity;
+- stable diagnostic identifier;
+- message;
+- optional explanation;
+- optional suggestion;
+- optional related spans.
+
+Examples of categories:
+
+LEXICAL_ERROR
+SYNTAX_ERROR
+AMBIGUITY_ERROR
+UNEXPECTED_TOKEN
+UNTERMINATED_CONSTRUCT
+INVALID_ATTRIBUTE
+INVALID_DIALECT
+INVALID_RESOURCE_CONSTRAINT
+UNSUPPORTED_FEATURE
+DEPRECATED_FEATURE
+FORBIDDEN_UNSAFE_CONSTRUCT
+
+---
+
+175. Determinism
+
+Given identical:
+
+source
+language version
+dialect configuration
+feature configuration
+compiler configuration
+
+parsing must produce the same:
+
+token sequence
+source spans
+AST structure
+syntax diagnostics
+
+independent of:
+
+- host CPU;
+- host GPU;
+- operating system;
+- thread scheduling;
+- locale;
+- hardware topology.
+
+---
+
+176. Security
+
+The syntax layer must not:
+
+- execute user code;
+- access files;
+- access networks;
+- invoke devices;
+- mutate compiler global state;
+- bypass semantic validation;
+- bypass resource policies.
+
+Macros and metaprogramming must operate through explicit capability-controlled interfaces.
+
+---
+
+177. Parser Implementation Contract
+
+"src/parser.rs" must implement this syntax contract.
+
+It may use:
+
+- recursive descent;
+- Pratt parsing;
+- precedence climbing;
+- generated parser machinery;
+
+provided behavior is conformant.
+
+The current parser already uses a precedence model covering assignment through member access. The canonical implementation must align its token mapping with this specification and eliminate duplicate lexical concepts rather than preserve accidental implementation distinctions.
+
+---
+
+178. AST Contract
+
+"src/ast/mod.rs" is the canonical frontend AST representation.
+
+Every semantic syntax production must map to an AST representation.
+
+The AST must preserve:
+
+- source spans;
+- names;
+- structure;
+- expressions;
+- declarations;
+- patterns;
+- attributes;
+- generic arguments;
+- resource intent;
+- capability intent;
+- domain constructs;
+- quantum operation identity;
+- HDL intent;
+- interoperability information.
+
+The AST must remain domain-neutral at its architectural boundary.
+
+---
+
+179. Generic Operation Contract
+
+Operations must not be represented as a closed enumeration of every possible future operation.
+
+The semantic model should support:
+
+namespace
+name
+operands
+parameters
+results
+attributes
+modifiers
+effects
+capabilities
+source span
+
+This applies particularly to:
+
+- quantum operations;
+- tensor operations;
+- accelerators;
+- hardware operations;
+- future computational substrates.
+
+---
+
+180. Quantum AST Contract
+
+Quantum syntax lowers into a generic semantic operation model.
+
+The required conceptual mapping is:
+
+quantum syntax
+      ↓
+generic AST operation
+      ↓
+semantic quantum operation
+      ↓
+quantum::ir
+
+It must not become:
+
+quantum syntax
+      ↓
+fixed QuantumGate enum
+      ↓
+second quantum IR
+
+---
+
+181. HDL AST Contract
+
+HDL syntax maps into hardware/co-design semantic structures.
+
+The AST must retain:
+
+- module identity;
+- ports;
+- signals;
+- processes;
+- timing intent;
+- interfaces;
+- assertions;
+- generation;
+- resource intent.
+
+Physical synthesis details remain downstream.
+
+---
+
+182. Resource AST Contract
+
+Resource syntax maps into semantic requirements.
+
+A resource expression must preserve whether it is:
+
+- requirement;
+- capability;
+- preference;
+- constraint;
+- hint;
+- binding.
+
+These categories must not be collapsed.
+
+---
+
+183. Semantic Boundary
+
+After AST construction:
+
+AST
+ ↓
+name resolution
+ ↓
+type analysis
+ ↓
+effect analysis
+ ↓
+ownership/linearity
+ ↓
+resource analysis
+ ↓
+domain semantic validation
+ ↓
+canonical semantic model
+
+Only then does lowering occur.
+
+---
+
+184. Canonical IR Boundary
+
+The source grammar does not define one IR for every domain.
+
+The canonical architecture is:
+
+canonical semantic model
+          │
+          ├── classical semantic IR
+          ├── quantum::ir
+          ├── HDL/hardware semantic IR
+          ├── distributed semantic IR
+          └── other domain IR
+
+These are semantic domain representations, not competing source ASTs.
+
+---
+
+185. Quantum IR
+
+The canonical quantum boundary is:
 
 AST
  ↓
 semantic quantum model
  ↓
-quantum IR
+quantum::ir
  ↓
 optimization
  ↓
@@ -2942,306 +3665,1410 @@ routing
  ↓
 scheduling
  ↓
-QEC/noise/resource planning
+QEC / resilience / ZQN
  ↓
-target lowering
+HAL
+ ↓
+target
 
-Optimization, routing, scheduling, ZQN, hardware adapters, and benchmarking must consume canonical quantum IR rather than defining independent quantum operation types.
-
----
-
-138. No duplicated quantum models
-
-There must be one canonical semantic representation of:
-
-quantum operation
-quantum value
-quantum resource
-quantum measurement
-quantum dependency
-
-A backend may define an internal target representation, but it must provide explicit lowering from the canonical representation.
+All quantum backends must consume or explicitly lower from this canonical representation.
 
 ---
 
-139. Resource availability
+186. Scheduling Boundary
 
-A program may request more resources than a particular target has.
+Scheduling consumes semantic operations and constraints.
 
-That does not make the source syntactically invalid.
+The grammar must not define:
 
-The compilation system may report:
+- physical slots;
+- universal cycle counts;
+- fixed timing widths;
+- hardware-specific schedule algorithms.
 
-target cannot realize requested program
-
-at target analysis time.
-
-This preserves POCO-REAF.
+A target dialect may expose such concepts explicitly.
 
 ---
 
-140. Program portability
+187. Routing Boundary
 
-The following must be valid as a design principle:
+Routing consumes:
 
-same source
-    ↓
-different compiler target
-    ↓
-different realization
+- operations;
+- dependencies;
+- topology/capability information;
+- resource requirements.
+
+The source grammar does not implement routing.
+
+---
+
+188. QEC Boundary
+
+QEC consumes quantum semantic information.
+
+The source language may express:
+
+requires capability("quantum.error_correction");
+requires fidelity >= required_fidelity;
+
+but QEC implementation belongs downstream.
+
+---
+
+189. ZQN Boundary
+
+ZQN represents fault/noise semantics.
+
+The syntax may declare noise or reliability intent.
+
+The grammar must not duplicate ZQN's fault model.
+
+---
+
+190. HAL Boundary
+
+HAL determines actual target capabilities and state.
+
+Source syntax may request capabilities.
+
+It must not require a specific physical implementation in portable code.
+
+---
+
+191. Optimization Boundary
+
+Optimization operates after semantic lowering.
+
+The grammar must not prescribe:
+
+- optimization passes;
+- pass order;
+- target-specific decomposition;
+- register allocation;
+- gate cancellation;
+- scheduling algorithms.
+
+---
+
+192. Compiler Integration
+
+The compiler must consume syntax through:
+
+lexer
+parser
+AST
+semantic analysis
+canonical semantic model
+IR
+
+A backend must not parse Zamani source independently.
+
+---
+
+193. Runtime Integration
+
+Runtime consumes compiled semantic/IR representations.
+
+Runtime behavior must not alter source syntax.
+
+Runtime resource failure must be represented as runtime/resource diagnostics rather than retroactively changing syntax validity.
+
+---
+
+194. Tooling Integration
+
+Syntax must support:
+
+- formatter;
+- syntax highlighter;
+- parser diagnostics;
+- LSP;
+- refactoring;
+- symbol navigation;
+- documentation extraction;
+- source maps;
+- semantic highlighting.
+
+Source spans must be stable.
+
+---
+
+195. Inter-Domain Integration
+
+A Zamani program may contain multiple domains in one compilation unit.
+
+Example conceptual structure:
+
+module application
+
+classical computation
+
+quantum computation
+
+hardware intent
+
+distributed execution
+
+AI model
+
+resource requirements
+
+The parser must not require separate languages.
+
+---
+
+196. Domain Isolation
+
+A domain grammar must own only its domain syntax.
 
 For example:
 
-same quantum program
- ├── simulator
- ├── QPU A
- ├── QPU B
- ├── fault-tolerant system
- └── future quantum architecture
+quantum/
 
-without source-language rewrites.
+owns quantum syntax.
 
----
+It must not redefine:
 
-141. Semantic equivalence
+- expressions;
+- identifiers;
+- modules;
+- types globally;
+- source spans;
+- generic parsing;
+- diagnostics.
 
-Optimization and lowering are permitted only when semantic equivalence is preserved.
+Likewise:
 
-For quantum programs this includes preservation of:
+hdl/
 
-- observable measurement behavior;
-- permitted global phase equivalence where formally applicable;
-- entanglement relationships;
-- resource ownership;
-- effect behavior;
-- declared temporal semantics.
+must not create another expression language.
 
 ---
 
-142. Source-level intent
+197. Extension Rule
 
-Zamani syntax should prefer:
+A new feature must first define:
 
-what
-
-over:
-
-how
-
-For example:
-
-apply FourierTransform to register;
-
-is preferable as a semantic source construct to requiring the programmer to manually specify every low-level gate.
-
-The compiler may lower it into a target-appropriate implementation.
-
----
-
-143. Explicit low-level programming
-
-Zamani must still permit lower-level programming when required.
-
-Therefore semantic operations may be progressively lowered:
-
-high-level operation
-↓
-intermediate operation
-↓
-primitive operation
-↓
-target operation
-
-The existence of low-level facilities must not contaminate the high-level canonical grammar.
-
----
-
-144. Extensibility
-
-New computational domains must be introduced through:
-
-syntax extension
-AST extension
-semantic model
-IR representation
-verification
-lowering
+feature ID
+status
+version
+syntax
+tokens
+AST mapping
+semantic mapping
+IR mapping
+compiler consumers
+runtime consumers
+diagnostics
 tests
+compatibility
+scalability policy
+hard-coding audit
 
-rather than arbitrary parser branches.
-
-A new feature must answer:
-
-What syntax does it introduce?
-What AST node represents it?
-What semantic invariants exist?
-What types does it use?
-What effects does it have?
-What resources does it require?
-What IR represents it?
-How is it verified?
-How is it lowered?
-How is it tested?
+Only after those contracts exist may it become stable syntax.
 
 ---
 
-145. Production definition
+198. Compatibility
 
-A Zamani syntax feature is production-ready only when all of the following are true:
+Existing syntax may be retained through compatibility rules.
 
-[ ] Canonical syntax specified
-[ ] Lexical behavior specified
-[ ] Parser implemented
-[ ] AST representation implemented
-[ ] Semantic rules implemented
-[ ] Type rules implemented
-[ ] Diagnostics implemented
-[ ] IR lowering implemented
-[ ] IR verification implemented
-[ ] Target-independent behavior tested
-[ ] Negative tests implemented
-[ ] Compatibility behavior specified
-[ ] Documentation complete
+Compatibility must distinguish:
+
+STABLE
+EXPERIMENTAL
+DEPRECATED
+COMPATIBILITY
+PLANNED
+REMOVED
+
+A deprecated syntax must not silently acquire a different meaning.
 
 ---
 
-146. Definition of done for this specification
+199. Historical Syntax
 
-This file is complete when:
+"grammar/Zamani-Grammar.md" may contain syntax that is:
 
-1. there is one canonical syntax authority;
-2. the grammar is compositional;
-3. syntax does not contain machine assumptions;
-4. quantum syntax is target-independent;
-5. quantum gate vocabularies are extensible;
-6. resource counts are not hard-coded;
-7. AST and semantic boundaries are explicit;
-8. parser and lexer conformance can be tested;
-9. ANTLR can represent the same language without becoming a competing authority;
-10. future language domains can be added without rewriting the language architecture;
-11. Rust 1.97/1.97.1 remains the implementation baseline;
-12. compiler implementation remains entirely safe Rust.
+- historical;
+- proposed;
+- experimental;
+- aspirational.
+
+Such syntax is not legal merely because it appears there.
+
+Promotion requires the full feature-completion process.
 
 ---
 
-147. Canonical architecture
+200. "grammar/grammar.md"
 
-The final architectural contract is:
+"grammar/grammar.md" is an implementation-conformance reference.
 
-                  ZAMANI SOURCE
-                        │
-                        ▼
-                ┌───────────────┐
-                │ Canonical     │
-                │ Lexer         │
-                └───────┬───────┘
-                        │
-                        ▼
-                ┌───────────────┐
-                │ Canonical     │
-                │ Parser        │
-                └───────┬───────┘
-                        │
-                        ▼
-                ┌───────────────┐
-                │ Canonical AST │
-                └───────┬───────┘
-                        │
-                        ▼
-             ┌──────────────────────┐
-             │ Semantic Analysis    │
-             │ Types / Effects      │
-             │ Ownership / Resource │
-             └──────────┬───────────┘
-                        │
-                        ▼
-              ┌────────────────────┐
-              │ Canonical Zamani   │
-              │ Semantic IR        │
-              └─────────┬──────────┘
-                        │
-          ┌─────────────┼──────────────┐
-          ▼             ▼              ▼
-      Classical      Quantum         Other
-      Optimization   Optimization    Domains
-          │             │              │
-          └─────────────┼──────────────┘
-                        ▼
-                ┌───────────────┐
-                │ Target-       │
-                │ Independent   │
-                │ Lowering      │
-                └───────┬───────┘
-                        │
-          ┌─────────────┼───────────────┐
-          ▼             ▼               ▼
-        CPU            GPU             QPU
-          │             │               │
-          ▼             ▼               ▼
-      Hardware       Hardware        Hardware
+It must distinguish:
 
-The source language remains stable while the realization space evolves.
+SPECIFIED
+IMPLEMENTED
+PARTIAL
+EXPERIMENTAL
+DEPRECATED
+PLANNED
+
+It must not silently become another source of truth.
 
 ---
 
-148. Final invariant
+201. "grammar/Zamani.g4"
 
-The fundamental Zamani language invariant is:
+"grammar/Zamani.g4" is the canonical ANTLR composition root.
 
-«Syntax expresses computation. Semantic analysis establishes meaning. IR expresses canonical computation. Backends determine realization. Hardware never defines the language.»
+It must eventually contain:
+
+program
+item
+declaration
+statement
+expression
+type
+pattern
+domain dispatch
+
+and compose domain-specific grammar components.
+
+It must not become an ever-growing monolithic list of every quantum gate, AI operation, hardware instruction, or vendor API.
+
+---
+
+202. "grammar/antlr/"
+
+"grammar/antlr/" must not become a competing grammar authority.
+
+If legacy ANTLR files remain, they must either:
+
+1. become generated/intermediate tooling artifacts; or
+2. be explicitly marked compatibility/historical.
+
+There must ultimately be one canonical ANTLR composition path.
+
+---
+
+203. Lexical Integration
+
+The syntax parser consumes the tokens defined by:
+
+grammar/spec/lexical.md
+
+The lexical specification owns:
+
+- identifiers;
+- keywords;
+- literals;
+- operators;
+- delimiters;
+- comments;
+- Unicode;
+- whitespace;
+- source token spans.
+
+The syntax specification must not redefine those rules.
+
+---
+
+204. Token Meaning
+
+A lexical token identifies spelling.
+
+The parser determines grammatical role.
+
+For example:
+
+IDENT
+
+may represent:
+
+- variable;
+- type;
+- function;
+- module;
+- operation;
+- quantum operation;
+- resource;
+- capability;
+- domain symbol.
+
+Semantic resolution determines which.
+
+---
+
+205. No Keyword Explosion
+
+A concept should become a keyword only when it has language-level syntactic meaning that cannot reasonably be represented through:
+
+identifier
++
+generic syntax
++
+attributes
++
+types
++
+capabilities
++
+library/intrinsic semantics
+
+This is especially important for:
+
+- mathematics;
+- AI;
+- quantum operations;
+- vendor features;
+- accelerators;
+- networking protocols.
+
+---
+
+206. Fixed Gate Prohibition
+
+The grammar must not contain:
+
+quantumGate
+    : H
+    | X
+    | Y
+    | Z
+    | CNOT
+    | ...
+
+as the universal quantum operation grammar.
+
+"H", "X", "CNOT", and future operations must be representable as operation identifiers.
+
+This permits:
+
+apply H to q;
+apply X to q;
+apply CNOT to q0, q1;
+apply vendor.CustomOperation(a) to q;
+
+without changing the grammar.
+
+---
+
+207. Fixed Hardware Prohibition
+
+The core grammar must not enumerate:
+
+x86
+ARM
+CUDA
+ROCm
+specific QPU
+specific FPGA
+specific GPU
+specific accelerator
+
+as mandatory language constructs.
+
+Interoperability and target dialects may name them explicitly.
+
+---
+
+208. Fixed Topology Prohibition
+
+Portable syntax must not require:
+
+linear topology
+grid topology
+ring topology
+specific coupling map
+specific physical qubit IDs
+
+A program can express connectivity requirements.
+
+The target realization supplies actual topology.
+
+---
+
+209. Fixed Register Prohibition
+
+The grammar must not assume:
+
+8-bit
+16-bit
+32-bit
+64-bit
+128-bit
+
+as universal register widths.
+
+Widths belong to types and target capabilities.
+
+---
+
+210. Fixed Tensor Prohibition
+
+The grammar must not impose:
+
+rank <= N
+dimension <= N
+
+as language rules.
+
+---
+
+211. Fixed Distributed-System Prohibition
+
+The grammar must not impose:
+
+N nodes
+N workers
+N processes
+N services
+N channels
+
+as universal limits.
+
+---
+
+212. Fixed Timeline Prohibition
+
+Temporal/MTS syntax must not impose:
+
+maximum timelines
+maximum branches
+maximum history entries
+
+as language semantics.
+
+---
+
+213. Resource Exhaustion
+
+Resource exhaustion is not syntax invalidity.
+
+Examples:
+
+parser memory exhausted
+compiler memory exhausted
+target lacks requested capability
+runtime lacks required memory
+QPU lacks required capability
+
+must have distinct diagnostics.
+
+---
+
+214. Small-to-Large Scaling
+
+The same syntax must work conceptually for:
+
+one scalar
+one instruction
+one qubit
+one signal
+one tensor element
+one node
+
+and:
+
+very large programs
+very large tensors
+very large quantum systems
+large distributed systems
+large hardware designs
+large AI workloads
+
+subject to actual available resources.
+
+No separate “small” and “large” language is permitted.
+
+---
+
+215. Infinity Clarification
+
+“Scale to infinity” means:
+
+«the language specification does not impose an artificial finite upper bound where the mathematical/semantic model can remain parameterized.»
+
+It does not mean that a finite machine has infinite memory or compute.
 
 Therefore:
 
-Program Once
-    ↓
-Compile Once
-    ↓
-Semantic Program
-    ↓
-Target-independent IR
-    ↓
-Many realizations
+unbounded by language semantics
 
-is the architectural basis for:
+and:
 
-POCO-REAF
+bounded by actual available resources
 
-and for scaling:
-
-atom
-→ one value
-→ one qubit
-→ one processor
-→ one machine
-→ many processors
-→ many machines
-→ distributed systems
-→ heterogeneous systems
-→ quantum systems
-→ future computational substrates
-→ as far as available resources permit
-
-without embedding an artificial upper bound into the Zamani language grammar.
+are intentionally different concepts.
 
 ---
 
-149. Normative statement
+216. Safe Rust Requirement
 
-This document is normative for Zamani syntax.
+The Rust implementation must:
 
-Where another grammar document conflicts with this specification:
+- compile on Rust 1.97/1.97.1;
+- use safe Rust;
+- contain no "unsafe";
+- avoid unsafe FFI assumptions;
+- validate external data;
+- avoid unchecked indexing where possible;
+- handle malformed input without panics;
+- use explicit resource/error handling.
 
-this specification wins
+This requirement applies to:
 
-until an explicit language-version change supersedes it.
+- lexer;
+- parser;
+- AST;
+- grammar tooling;
+- conformance tooling;
+- compiler integration.
 
-Historical grammar documents may remain for:
+---
 
-- migration;
-- archaeology;
-- design history;
-- compatibility analysis.
+217. Parser Resource Policy
 
-They must not silently define new Zamani syntax.
+The parser may have externally configured safety budgets such as:
 
-End of canonical syntax specification.
+maximum diagnostic count
+maximum parser recovery work
+maximum compiler memory
+maximum compilation time
+
+These are implementation policies.
+
+They are not language grammar limits.
+
+---
+
+218. Grammar Conformance Tests
+
+Every syntax production requires:
+
+Positive
+
+At least one valid example.
+
+Negative
+
+At least one invalid example.
+
+Boundary
+
+Smallest valid and structurally difficult cases.
+
+Scalability
+
+Large/generated cases with no artificial language maximum.
+
+Determinism
+
+Repeated parsing produces equivalent AST and diagnostics.
+
+Compatibility
+
+Version-specific behavior is verified.
+
+---
+
+219. Lexical Tests
+
+Tests must cover:
+
+- identifiers;
+- keywords;
+- Unicode source;
+- whitespace;
+- comments;
+- literals;
+- operators;
+- delimiters;
+- malformed literals;
+- malformed escapes;
+- invalid characters.
+
+These belong primarily under:
+
+grammar/tests/lexical/
+
+---
+
+220. Expression Tests
+
+Tests must cover:
+
+- precedence;
+- associativity;
+- assignment;
+- calls;
+- indexing;
+- member access;
+- unary operations;
+- ranges;
+- lambdas;
+- blocks;
+- conditional forms;
+- propagation.
+
+---
+
+221. Type Tests
+
+Tests must cover:
+
+- generic types;
+- dependent types;
+- quantum types;
+- resource types;
+- capability types;
+- arrays;
+- slices;
+- function types;
+- references;
+- optional;
+- result;
+- linear;
+- affine;
+- temporal.
+
+---
+
+222. Quantum Tests
+
+Quantum syntax tests must include:
+
+one qubit
+many qubits
+parameterized qubit count
+dynamic allocation
+custom operations
+parameterized operations
+controls
+adjoints
+measurement
+reset
+barrier
+classical feed-forward
+logical operations
+resource requirements
+unknown operation names
+vendor namespace operations
+
+The test suite must not use a maximum qubit count as a language-validity criterion.
+
+---
+
+223. HDL Tests
+
+HDL tests must include:
+
+- modules;
+- ports;
+- signals;
+- registers;
+- processes;
+- clocking;
+- reset;
+- timing;
+- interfaces;
+- assertions;
+- generate constructs;
+- parameterization;
+- co-design.
+
+---
+
+224. Distributed Tests
+
+Tests must cover:
+
+- processes;
+- services;
+- actors;
+- channels;
+- messages;
+- replication;
+- partitioning;
+- placement;
+- consistency;
+- fault tolerance;
+- scaling.
+
+No fixed node count is permitted.
+
+---
+
+225. AI Tests
+
+Tests must cover:
+
+- model declarations;
+- agent declarations;
+- tensor types;
+- datasets;
+- training;
+- inference;
+- symbolic operations;
+- probabilistic constructs;
+- distributed execution;
+- accelerator requirements.
+
+Framework-specific syntax must be isolated to interoperability/dialects.
+
+---
+
+226. Resource Tests
+
+Tests must distinguish:
+
+requires
+capability
+prefer
+constrain
+bind
+
+They must verify that requirements do not accidentally become implementation decisions.
+
+---
+
+227. Negative Tests
+
+Negative syntax tests must include:
+
+- malformed declarations;
+- missing delimiters;
+- invalid patterns;
+- malformed generic lists;
+- malformed quantum operations;
+- malformed HDL;
+- malformed resource declarations;
+- forbidden unsafe constructs;
+- invalid dialect activation;
+- ambiguous syntax;
+- unterminated constructs.
+
+---
+
+228. Hard-Coding Audit
+
+The syntax specification passes its hard-coding audit only if it contains no universal language limits based on:
+
+qubits
+CPUs
+cores
+threads
+GPUs
+FPGAs
+nodes
+memory
+registers
+vector widths
+tensor dimensions
+timelines
+channels
+processes
+accelerators
+
+Examples such as:
+
+qubit[1024]
+matrix<1024, 1024>
+
+remain valid because those are program values.
+
+A universal grammar restriction such as:
+
+qubit_count <= 1024
+
+is prohibited.
+
+---
+
+229. Portability Audit
+
+A portable source program must not require modification merely because it is moved between:
+
+CPU
+GPU
+FPGA
+QPU
+simulator
+emulator
+distributed cluster
+edge system
+cloud
+future computational substrate
+
+provided the destination exposes the capabilities required by the program.
+
+---
+
+230. Capability Failure
+
+If a target cannot satisfy a program's requirements:
+
+source remains syntactically valid
+
+The compiler/target analysis reports:
+
+capability mismatch
+resource insufficiency
+unsupported semantic requirement
+
+rather than changing the syntax definition.
+
+---
+
+231. Deterministic Syntax
+
+Parsing must not depend on:
+
+- target hardware;
+- runtime state;
+- network state;
+- random choices;
+- locale;
+- device discovery;
+- available QPU;
+- available GPU.
+
+Hardware discovery occurs after parsing.
+
+---
+
+232. No Backend Leakage
+
+The core syntax must not require:
+
+- CUDA source syntax;
+- LLVM source syntax;
+- MLIR source syntax;
+- x86 registers;
+- ARM instructions;
+- vendor QPU identifiers;
+- simulator-specific commands.
+
+Those belong to interoperability or target-specific dialects.
+
+---
+
+233. No Semantic Leakage
+
+The parser must not:
+
+- perform type checking;
+- resolve symbols;
+- select a physical qubit;
+- choose a scheduler;
+- perform routing;
+- choose QEC;
+- determine calibration;
+- determine physical placement;
+- select a backend.
+
+---
+
+234. No Runtime Leakage
+
+The syntax layer must not:
+
+- allocate physical resources;
+- open devices;
+- communicate with hardware;
+- execute quantum operations;
+- access networks;
+- start processes.
+
+---
+
+235. Source Preservation
+
+Parsing must preserve sufficient information for:
+
+- diagnostics;
+- formatting;
+- source-to-AST mapping;
+- source-to-IR provenance;
+- refactoring;
+- debugging;
+- reproducibility.
+
+---
+
+236. Provenance
+
+Every semantic construct that originates in source must be traceable to source spans.
+
+The downstream pipeline should support:
+
+source
+ ↓
+AST
+ ↓
+semantic model
+ ↓
+IR
+ ↓
+lowered target
+
+with provenance where the downstream representation supports it.
+
+---
+
+237. Generated Code
+
+Generated source or AST must remain distinguishable from user-written source.
+
+Diagnostics must identify generated locations when possible.
+
+Generated constructs must not silently circumvent semantic validation.
+
+---
+
+238. Formatting
+
+The syntax must be structurally parseable independent of formatting.
+
+Whitespace must not change semantics except where lexical separation is required.
+
+The formatter must operate from the AST or syntax tree rather than guessing source structure.
+
+---
+
+239. Comments
+
+Comments are owned by the lexical specification.
+
+The parser does not assign semantic meaning to ordinary comments.
+
+Documentation comments may be retained as tooling metadata.
+
+---
+
+240. Versioning
+
+A syntax version must be associated with a language/compatibility configuration.
+
+Syntax changes must be classified:
+
+additive
+clarifying
+deprecated
+breaking
+experimental
+dialect-only
+
+A breaking change requires an explicit compatibility rule.
+
+---
+
+241. Feature Gates
+
+Experimental syntax must require an explicit feature/compatibility mechanism.
+
+Experimental syntax must not silently become stable syntax.
+
+---
+
+242. Reserved Vocabulary
+
+Reserved words are controlled by the lexical keyword registry.
+
+A token being present in the lexer does not make it legal everywhere.
+
+The parser decides whether the token participates in a production.
+
+---
+
+243. Unsupported Reserved Words
+
+A reserved token whose semantic feature is not implemented must produce a deterministic diagnostic such as:
+
+feature not implemented
+
+rather than being parsed into a meaningless AST node.
+
+---
+
+244. Legacy "unsafe"
+
+Historical source may contain:
+
+unsafe
+
+The stable syntax does not define an "UnsafeDeclaration".
+
+If compatibility requires recognizing it, the parser must emit a deterministic migration/forbidden-feature diagnostic.
+
+It must never construct an executable unsafe semantic node.
+
+---
+
+245. Canonical AST Normalization
+
+Equivalent compatibility spellings should normalize to one canonical AST representation.
+
+Examples:
+
+nil
+null
+
+may normalize to the same null node.
+
+Likewise:
+
+and
+&&
+
+may normalize to one logical-and operation if both are enabled.
+
+Normalization must not lose source provenance.
+
+---
+
+246. Generic Operation Normalization
+
+These:
+
+apply H to q;
+apply X to q;
+apply vendor.Custom to q;
+
+should use one generic operation representation.
+
+The operation identity is data.
+
+The grammar does not require a new production for every operation.
+
+---
+
+247. Future Computational Substrates
+
+Future domains must be expressible through:
+
+generic operations
+generic types
+resources
+capabilities
+effects
+constraints
+dialects
+interoperability
+
+The language must not require redesign merely because a new computational substrate appears.
+
+---
+
+248. Domain Addition Contract
+
+To add a new domain, create:
+
+grammar/<domain>/
+
+only when maintainability requires it.
+
+The domain must define:
+
+README
+syntax
+AST contract
+semantic contract
+IR mapping
+compiler integration
+runtime integration
+capabilities
+resource model
+diagnostics
+tests
+compatibility
+hard-coding audit
+
+It must reuse universal grammar components.
+
+---
+
+249. File Completion Contract
+
+Every grammar/specification file must declare:
+
+File
+Purpose
+Status
+Owns
+Does Not Own
+Inputs
+Outputs
+Dependencies
+Upstream Contracts
+Downstream Consumers
+Public Grammar Contract
+AST Contract
+Semantic Contract
+IR Integration
+Compiler Integration
+Runtime Integration
+Tooling Integration
+Cross-Domain Integration
+Positive Tests
+Negative Tests
+Boundary Tests
+Scalability Tests
+Determinism Tests
+Compatibility Tests
+Diagnostics
+Security
+Performance
+Hard-Coding Audit
+Completion Criteria
+
+This is mandatory for production feature work.
+
+---
+
+250. Completion Criteria for This File
+
+"grammar/spec/syntax.md" is complete only when:
+
+- lexical ownership is delegated to "grammar/spec/lexical.md";
+- type ownership is delegated to "grammar/spec/type-system.md";
+- semantic ownership is delegated to semantic specifications;
+- "Zamani.g4" can represent this syntax;
+- "src/parser.rs" can conform to it;
+- "src/ast/mod.rs" has an explicit mapping for every semantic production;
+- every production has defined precedence where applicable;
+- every ambiguous construct has a resolution rule;
+- quantum syntax is generic rather than a fixed gate list;
+- HDL syntax is target-independent;
+- resource syntax distinguishes requirements from implementation;
+- distributed syntax has no fixed node limits;
+- AI syntax does not hard-code frameworks;
+- dialect syntax is isolated;
+- interoperability does not become canonical semantics;
+- "unsafe" is not a stable language escape hatch;
+- no machine-specific universal limits exist;
+- source spans are preserved;
+- diagnostics are deterministic;
+- positive tests exist;
+- negative tests exist;
+- boundary tests exist;
+- scalability tests exist;
+- determinism tests exist;
+- compatibility tests exist;
+- the complete syntax-to-AST-to-semantic-to-IR chain is specified.
+
+---
+
+251. Final Canonical Pipeline
+
+The complete Zamani architecture is:
+
+                         ZAMANI SOURCE
+                              │
+                              ▼
+                  grammar/spec/lexical.md
+                              │
+                              ▼
+                            LEXER
+                              │
+                        tokens + spans
+                              │
+                              ▼
+                   grammar/spec/syntax.md
+                              │
+                              ▼
+                           PARSER
+                              │
+                              ▼
+                      DOMAIN-NEUTRAL AST
+                              │
+             ┌────────────────┼────────────────┐
+             │                │                │
+             ▼                ▼                ▼
+           Types           Effects         Resources
+             │                │                │
+             └────────────────┼────────────────┘
+                              │
+                              ▼
+                     Semantic Analysis
+                              │
+             ┌────────────────┼────────────────┐
+             │                │                │
+             ▼                ▼                ▼
+         Classical         Quantum            HDL
+         Semantic Model    Semantic Model     Semantic Model
+             │                │                │
+             ▼                ▼                ▼
+       Classical IR      quantum::ir       Hardware IR
+             │                │                │
+             └────────────────┼────────────────┘
+                              │
+                              ▼
+                         Optimization
+                              │
+                ┌─────────────┼─────────────┐
+                │             │             │
+                ▼             ▼             ▼
+             Routing      Scheduling     Resilience
+                │             │             │
+                └─────────────┼─────────────┘
+                              │
+                    QEC / ZQN / Resources
+                              │
+                              ▼
+                             HAL
+                              │
+                              ▼
+                     Target Realization
+                              │
+          ┌──────────┬────────┼────────┬──────────┐
+          ▼          ▼        ▼        ▼          ▼
+         CPU        GPU      FPGA      QPU       Future
+          │          │        │        │        substrate
+          └──────────┴────────┴────────┴──────────┘
+                              │
+                              ▼
+                          EXECUTION
+
+The defining architectural rule is:
+
+«Zamani syntax describes portable computational intent. It does not describe today's hardware limits.»
+
+The compiler, semantic layer, resource system, optimization system, quantum IR, routing, scheduler, QEC, ZQN, HAL, and backend collectively determine how that intent is realized.
+
+---
+
+252. Canonical Examples
+
+252.1 Classical
+
+fn sum<T>(values: T[]) -> T {
+    reduce(values)
+}
+
+252.2 Parameterized computation
+
+fn process<T, N>(data: Tensor<T, N>) -> Tensor<T, N> {
+    transform(data)
+}
+
+252.3 Quantum
+
+quantum circuit algorithm(n) {
+    qubit q[n];
+
+    apply H to q[0];
+    apply vendor_namespace.CustomOperation(theta) to q[0];
+
+    measure q[0] into result;
+}
+
+252.4 Hybrid
+
+fn hybrid(input: Data) -> Result {
+    let state = prepare(input);
+
+    quantum circuit compute {
+        apply H to q;
+        measure q into result;
+    }
+
+    if result == 1 {
+        return classical_correction(input);
+    }
+
+    input
+}
+
+252.5 Resource intent
+
+requires qubits >= n;
+requires capability("quantum.mid_circuit_measurement");
+requires capability("distributed.communication");
+
+prefer accelerator("quantum");
+
+252.6 Hardware/software co-design
+
+hardware module Accelerator<T> {
+    port input: input;
+    port output: output;
+
+    process {
+        output = compute(input);
+    }
+}
+
+252.7 Distributed
+
+distributed {
+    spawn worker;
+    replicate worker across available_resources;
+}
+
+No number of workers or nodes is hard-coded.
+
+252.8 AI
+
+model Model<T> {
+    input: Tensor<T>;
+    output: Tensor<T>;
+}
+
+fn train<T>(model: Model<T>, data: Dataset<T>) {
+    train(model, data);
+}
+
+---
+
+253. Final Production Rule
+
+A future contributor must never solve a new language feature by merely adding:
+
+keyword
++
+grammar rule
+
+Instead:
+
+feature proposal
+      ↓
+lexical contract
+      ↓
+syntax contract
+      ↓
+AST contract
+      ↓
+semantic contract
+      ↓
+type/effect/resource contract
+      ↓
+canonical IR mapping
+      ↓
+compiler integration
+      ↓
+runtime/target integration
+      ↓
+diagnostics
+      ↓
+positive tests
+      ↓
+negative tests
+      ↓
+boundary tests
+      ↓
+scalability tests
+      ↓
+determinism tests
+      ↓
+compatibility tests
+      ↓
+hard-coding audit
+      ↓
+STABLE
+
+This is the required definition of production-ready syntax for Zamani.
+
+The language therefore remains extensible from the smallest computation to arbitrarily large computation, while the actual limit at any particular execution is determined by semantic validity, compiler policy, target capabilities, and available resources—not by artificial constants embedded in the grammar.
