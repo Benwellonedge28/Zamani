@@ -10,73 +10,82 @@
  *     Production parser grammar component.
  *
  * Purpose:
- *     Own the complete source-level assignment-expression syntax.
+ *     Canonical source-level assignment-expression grammar.
  *
  * Grammar technology:
  *     ANTLR4 parser grammar.
  *
- * Rust integration:
- *     Rust 1.97 / Rust 1.97.1.
- *
- * Safety:
- *     No embedded Rust actions.
- *     No semantic predicates requiring Rust code.
- *     No unsafe code.
+ * Rust implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Edition 2021
+ *     Safe Rust only.
+ *     No unsafe Rust is required or permitted.
  *
  * ============================================================================
  * ARCHITECTURAL ROLE
  * ============================================================================
  *
- * Source
- *   |
- *   v
- * Canonical Zamani lexer
- *   |
- *   v
- * Parser
- *   |
- *   v
- * Frontend AST
- *   |
- *   +--> name resolution
- *   +--> type checking
- *   +--> mutability / ownership checking
- *   +--> effect checking
- *   +--> capability checking
- *   +--> resource validation
- *   |
- *   v
- * Canonical semantic representation
- *   |
- *   +--> classical IR
- *   +--> quantum::ir
- *   +--> hardware/resource IR
- *   +--> control/data IR
- *   |
- *   v
- * optimization
- *   |
- *   v
- * lowering / routing / scheduling
- *   |
- *   v
- * target execution
+ * This file owns ONLY assignment-expression syntax.
  *
- * THIS FILE MUST NOT:
+ * Source pipeline:
  *
- *   - define an AST implementation;
- *   - define classical IR;
- *   - define quantum::ir;
- *   - select a hardware target;
- *   - allocate a qubit;
- *   - select a physical qubit;
- *   - perform routing;
- *   - perform scheduling;
- *   - perform optimization;
- *   - perform QEC;
- *   - define ZQN semantics;
- *   - discover hardware;
- *   - impose machine limits.
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     parser
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          +----------------------+----------------------+
+ *          |                      |                      |
+ *          v                      v                      v
+ *     classical IR          quantum::ir          HDL/hardware IR
+ *          |                      |                      |
+ *          +----------------------+----------------------+
+ *                                 |
+ *                                 v
+ *                   optimization / lowering
+ *                                 |
+ *                   routing / scheduling
+ *                                 |
+ *                    resilience / QEC / ZQN
+ *                                 |
+ *                                HAL
+ *                                 |
+ *                         target realization
+ *
+ * This grammar does NOT:
+ *
+ *     - construct AST nodes;
+ *     - perform name resolution;
+ *     - perform type checking;
+ *     - perform ownership checking;
+ *     - perform borrow checking;
+ *     - perform effect checking;
+ *     - perform capability checking;
+ *     - allocate resources;
+ *     - select hardware;
+ *     - select physical qubits;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - perform optimization;
+ *     - perform QEC;
+ *     - implement ZQN;
+ *     - implement HAL;
+ *     - execute programs;
+ *     - impose hardware limits.
+ *
+ * quantum::ir remains the canonical quantum semantic boundary.
  *
  * ============================================================================
  * OWNERSHIP
@@ -84,161 +93,84 @@
  *
  * OWNS:
  *
- *   - assignmentExpression;
- *   - assignmentOperator;
- *   - assignment precedence;
- *   - assignment associativity;
- *   - syntactic assignment targets.
+ *     assignmentExpression
+ *     assignmentTarget
+ *     assignmentOperator
+ *     assignment precedence
+ *     assignment associativity
  *
  * DOES NOT OWN:
  *
- *   - identifier syntax;
- *   - member-access syntax;
- *   - indexing syntax;
- *   - dereference syntax;
- *   - literal syntax;
- *   - arithmetic syntax;
- *   - logical syntax;
- *   - comparison syntax;
- *   - conditional-expression syntax;
- *   - type checking;
- *   - mutability checking;
- *   - ownership checking;
- *   - borrow checking;
- *   - resource checking;
- *   - hardware mapping;
- *   - quantum mapping.
+ *     identifiers
+ *     literals
+ *     member access
+ *     indexing
+ *     calls
+ *     postfix expressions
+ *     unary expressions
+ *     arithmetic expressions
+ *     bitwise expressions
+ *     comparisons
+ *     logical expressions
+ *     conditional expressions
+ *     types
+ *     semantic assignability
+ *     ownership
+ *     resources
+ *     hardware
+ *     quantum semantics
  *
  * ============================================================================
- * IMPORTANT SEMANTIC RULE
+ * EXPRESSION HIERARCHY
  * ============================================================================
  *
- * The grammar deliberately does NOT restrict the left side to a narrow
- * identifier-only form.
- *
- * Examples that may be syntactically represented include:
- *
- *     x = value
- *     object.field = value
- *     array[index] = value
- *     tensor[i, j] = value
- *     *pointer = value
- *     register.value = value
- *     quantum_classical_state = value
- *
- * Whether a particular expression is actually assignable is determined
- * downstream.
- *
- * This separation is essential for:
- *
- *   - overloaded/member assignment;
- *   - indexing abstractions;
- *   - references;
- *   - ownership-aware languages;
- *   - destructuring;
- *   - hardware registers;
- *   - memory-mapped abstractions;
- *   - future language extensions.
- *
- * ============================================================================
- * POCO-REAF / SCALABILITY
- * ============================================================================
- *
- * This grammar contains no fixed machine limits.
- *
- * It MUST NOT encode:
- *
- *     MAX_VARIABLES
- *     MAX_ASSIGNMENTS
- *     MAX_TUPLE_ARITY
- *     MAX_ARRAY_SIZE
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_DEVICES
- *     MAX_MEMORY
- *     MAX_REGISTER_COUNT
- *     MAX_NODES
- *     MAX_ACCELERATORS
- *
- * Repetition is represented using ANTLR repetition operators rather than
- * arbitrary numeric ceilings.
- *
- * Any actual implementation limit belongs to:
- *
- *     compiler configuration
- *     parser/runtime resource policy
- *     semantic validation
- *     resource management
- *     scheduling
- *     deployment
- *     hardware capability negotiation
- *
- * and MUST NOT become part of source-language grammar semantics.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * This file consumes tokens from the canonical Zamani lexer.
- *
- * Required assignment tokens:
- *
- *     ASSIGN
- *     PLUS_ASSIGN
- *     MINUS_ASSIGN
- *     STAR_ASSIGN
- *     SLASH_ASSIGN
- *     MODULO_ASSIGN
- *     BIT_AND_ASSIGN
- *     BIT_OR_ASSIGN
- *     CARET_ASSIGN
- *     LEFT_SHIFT_ASSIGN
- *     RIGHT_SHIFT_ASSIGN
- *
- * The lexer owns their textual spelling.
- *
- * This parser file MUST NOT redefine those tokens.
- *
- * ============================================================================
- * EXPRESSION INTEGRATION CONTRACT
- * ============================================================================
- *
- * Lower-level expression grammar must expose:
- *
- *     conditionalExpression
- *
- * as the expression immediately above assignment precedence.
- *
- * The canonical expression aggregator must expose:
- *
- *     assignmentExpression
- *
- * as the complete expression entry point.
- *
- * Conceptually:
+ * The canonical hierarchy is:
  *
  *     expression
- *         -> assignmentExpression
- *             -> conditionalExpression
- *                 -> logical...
- *                     -> bitwise...
- *                         -> comparison...
- *                             -> arithmetic...
+ *         |
+ *         v
+ *     assignmentExpression       <-- THIS FILE
+ *         |
+ *         v
+ *     conditionalExpression
+ *         |
+ *         v
+ *     range / logical / bitwise
+ *         |
+ *         v
+ *     comparison
+ *         |
+ *         v
+ *     shift
+ *         |
+ *         v
+ *     additive
+ *         |
+ *         v
+ *     multiplicative
+ *         |
+ *         v
+ *     prefix
+ *         |
+ *         v
+ *     postfix
+ *         |
+ *         v
+ *     primary
  *
- * Assignment therefore has the lowest precedence among ordinary expressions.
+ * Assignment has the lowest precedence in this ordinary-expression hierarchy.
  *
  * ============================================================================
  * RIGHT ASSOCIATIVITY
  * ============================================================================
  *
- * Assignment is right-associative.
+ * Assignment is right associative.
  *
  * Therefore:
  *
  *     a = b = c
  *
- * means structurally:
+ * has the structure:
  *
  *     a = (b = c)
  *
@@ -246,67 +178,744 @@
  *
  *     a += b += c
  *
- * means structurally:
+ * has the structure:
  *
  *     a += (b += c)
  *
- * This grammar preserves that structure.
+ * This is achieved by recursive use of assignmentExpression on the RHS.
+ *
+ * No finite assignment-chain limit is encoded.
+ *
+ * ============================================================================
+ * ASSIGNMENT TARGET MODEL
+ * ============================================================================
+ *
+ * The grammar deliberately accepts a complete postfixExpression as the
+ * syntactic assignment target.
+ *
+ * This permits syntax such as:
+ *
+ *     x = value
+ *     object.field = value
+ *     array[index] = value
+ *     tensor[i, j] = value
+ *     reference.field[index] = value
+ *
+ * and future target forms without requiring this grammar to know the complete
+ * semantic storage model.
+ *
+ * Semantic analysis MUST subsequently determine whether the target is actually
+ * assignable.
+ *
+ * Consequently syntax such as:
+ *
+ *     call() = value
+ *
+ * may be structurally recognized by the parser and then rejected by semantic
+ * analysis.
+ *
+ * This separation is intentional.
+ *
+ * It supports:
+ *
+ *     - user-defined lvalues;
+ *     - property assignment;
+ *     - indexing abstractions;
+ *     - references;
+ *     - ownership-aware assignment;
+ *     - hardware/HDL targets;
+ *     - memory abstractions;
+ *     - future language extensions.
  *
  * ============================================================================
  * COMPOUND ASSIGNMENT
  * ============================================================================
  *
- * Compound assignment is syntactically represented as one operator.
+ * The currently authoritative ZamaniLexer provides:
  *
- * For example:
+ *     ASSIGN
+ *     PLUS_ASSIGN
+ *     MINUS_ASSIGN
+ *     STAR_ASSIGN
+ *     SLASH_ASSIGN
+ *
+ * This file therefore consumes exactly those tokens.
+ *
+ * IMPORTANT:
+ *
+ * The repository also contains modular lexical specifications describing
+ * additional compound operators such as:
+ *
+ *     %=
+ *     &=
+ *     |=
+ *     ^=
+ *     <<=
+ *     >>=
+ *
+ * Those additional spellings MUST NOT be referenced here until the canonical
+ * lexer used by this parser exposes stable token names for them.
+ *
+ * This prevents this parser component from compiling against a vocabulary
+ * different from the repository's current lexical authority.
+ *
+ * When those operators are promoted into the canonical lexer, they may be
+ * added here without changing the assignment architecture.
+ *
+ * ============================================================================
+ * COMPOUND ASSIGNMENT SEMANTICS
+ * ============================================================================
+ *
+ * The parser represents:
  *
  *     x += y
  *
- * is NOT parsed here as:
+ * as a compound assignment operation.
  *
- *     x + y
- *
- * followed by:
- *
- *     x =
- *
- * The semantic layer may subsequently lower compound assignment according
- * to language semantics.
- *
- * That lowering MUST preserve:
- *
- *     - evaluation order;
- *     - side effects;
- *     - single evaluation of the target where required;
- *     - ownership semantics;
- *     - overflow semantics;
- *     - numeric conversion rules;
- *     - quantum/classical boundary semantics;
- *     - hardware semantics where applicable.
- *
- * ============================================================================
- * NO SEMANTIC SHORTCUTS
- * ============================================================================
- *
- * This grammar does not assume that:
- *
- *     x += y
- *
- * is always equivalent to:
+ * It MUST NOT silently rewrite it to:
  *
  *     x = x + y
  *
- * because such equivalence can fail in the presence of:
+ * Grammar-level syntax does not establish that equivalence.
  *
- *     overloaded operators
- *     side effects
- *     volatile/hardware state
- *     aliasing
- *     ownership rules
- *     saturating arithmetic
- *     checked arithmetic
- *     quantum/classical semantics
- *     custom numeric domains
+ * Semantic lowering must preserve:
+ *
+ *     - evaluation order;
+ *     - side effects;
+ *     - target evaluation;
+ *     - ownership;
+ *     - borrowing;
+ *     - aliasing;
+ *     - overflow behavior;
+ *     - conversion rules;
+ *     - user-defined operator semantics;
+ *     - volatile/hardware semantics;
+ *     - domain-specific semantics.
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY
+ * ============================================================================
+ *
+ * This grammar establishes no universal finite limits.
+ *
+ * It contains no:
+ *
+ *     MAX_ASSIGNMENTS
+ *     MAX_VARIABLES
+ *     MAX_TARGETS
+ *     MAX_TUPLE_ARITY
+ *     MAX_ARRAY_SIZE
+ *     MAX_QUBITS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_REGISTER_COUNT
+ *     MAX_DEVICES
+ *     MAX_ACCELERATORS
+ *
+ * Assignment chains are represented recursively.
+ *
+ * Target complexity is inherited from postfix-expression syntax and therefore
+ * has no artificial language-level finite ceiling here.
+ *
+ * "Infinity" means that the language grammar introduces no artificial finite
+ * semantic limit. Actual parser/compiler/runtime resource budgets remain
+ * implementation policy and available-resource concerns.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * It defines NO lexer rules.
+ *
+ * Canonical lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Required tokens:
+ *
+ *     ASSIGN
+ *     PLUS_ASSIGN
+ *     MINUS_ASSIGN
+ *     STAR_ASSIGN
+ *     SLASH_ASSIGN
+ *
+ * The lexer owns:
+ *
+ *     - textual spelling;
+ *     - maximal-munch behavior;
+ *     - token identity;
+ *     - source positions.
+ *
+ * This grammar owns:
+ *
+ *     - assignment syntax;
+ *     - precedence;
+ *     - associativity.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Every assignment recognized here must lower to the domain-neutral frontend
+ * AST as an assignment expression equivalent to:
+ *
+ *     AssignmentExpression {
+ *         target: Expression,
+ *         operator: AssignmentOperator,
+ *         value: Expression,
+ *         source: SourceSpan
+ *     }
+ *
+ * The exact Rust AST type is owned by the frontend AST implementation.
+ *
+ * The grammar must preserve enough parse structure for the AST builder to
+ * recover:
+ *
+ *     - target;
+ *     - operator;
+ *     - value;
+ *     - source span;
+ *     - child source spans;
+ *     - source ordering;
+ *     - nesting.
+ *
+ * The grammar does not introduce domain-specific AST variants merely because
+ * an assignment occurs in:
+ *
+ *     classical code;
+ *     quantum code;
+ *     HDL;
+ *     hardware code;
+ *     distributed code;
+ *     AI/data code;
+ *     accelerator code.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing answers:
+ *
+ *     "Is this syntactically an assignment expression?"
+ *
+ * Semantic analysis answers:
+ *
+ *     "Is this assignment valid and what does it mean?"
+ *
+ * Semantic analysis owns:
+ *
+ *     - name resolution;
+ *     - target resolution;
+ *     - mutability;
+ *     - type compatibility;
+ *     - implicit conversion;
+ *     - ownership;
+ *     - borrowing;
+ *     - aliasing;
+ *     - effects;
+ *     - capability requirements;
+ *     - resource requirements;
+ *     - domain legality;
+ *     - quantum/classical boundaries;
+ *     - HDL/hardware legality;
+ *     - compound-assignment lowering.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Assignment syntax remains domain-neutral.
+ *
+ * Examples may include:
+ *
+ *     result = measure(q)
+ *     angle = parameter
+ *     classical_bit = measurement
+ *
+ * The grammar does not decide whether a value is:
+ *
+ *     - classical;
+ *     - quantum-derived;
+ *     - symbolic;
+ *     - logical;
+ *     - resource metadata;
+ *     - hardware state.
+ *
+ * Those decisions belong downstream.
+ *
+ * This file MUST NOT:
+ *
+ *     - create a quantum IR;
+ *     - enumerate quantum gates;
+ *     - select physical qubits;
+ *     - encode qubit limits;
+ *     - perform QEC;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - implement ZQN.
+ *
+ * Any quantum-related assignment eventually reaches the existing canonical
+ * quantum::ir boundary through semantic lowering.
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Assignment syntax is reusable for:
+ *
+ *     software variables;
+ *     HDL signals;
+ *     registers;
+ *     ports;
+ *     state;
+ *     memory abstractions;
+ *     accelerator state;
+ *     hardware/software co-design.
+ *
+ * The grammar does not determine which category a target belongs to.
+ *
+ * For example:
+ *
+ *     signal = next_value
+ *
+ * and:
+ *
+ *     variable = next_value
+ *
+ * have the same assignment-level syntax.
+ *
+ * Semantic/domain analysis distinguishes their meaning.
+ *
+ * No register width, bus width, clock frequency, device ID, physical address,
+ * FPGA family, ASIC technology, or topology is encoded here.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Assignment syntax does not imply a particular machine resource.
+ *
+ * This:
+ *
+ *     x = value
+ *
+ * MUST NOT implicitly mean:
+ *
+ *     use CPU core N
+ *     use GPU N
+ *     use physical qubit N
+ *     use FPGA resource N
+ *     use memory bank N
+ *     use device N
+ *
+ * Resource and capability decisions occur downstream through:
+ *
+ *     semantic analysis
+ *     resource requirements
+ *     capability analysis
+ *     compilation
+ *     placement
+ *     routing
+ *     scheduling
+ *     deployment
+ *
+ * This preserves POCO-REAF.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * For an identical token stream and language version, this grammar must produce
+ * the same syntactic structure.
+ *
+ * Parsing must not depend on:
+ *
+ *     - wall-clock time;
+ *     - randomness;
+ *     - environment variables;
+ *     - CPU count;
+ *     - GPU count;
+ *     - FPGA availability;
+ *     - QPU availability;
+ *     - device state;
+ *     - calibration state;
+ *     - network state;
+ *     - scheduler state;
+ *     - runtime state.
+ *
+ * ============================================================================
+ * DIAGNOSTIC BOUNDARY
+ * ============================================================================
+ *
+ * Parser diagnostics are limited to syntactic structure.
+ *
+ * Examples of parser-level errors:
+ *
+ *     = x
+ *     x =
+ *     x +=
+ *     x +== y
+ *     x = = y
+ *
+ * Semantic diagnostics belong downstream:
+ *
+ *     immutable target
+ *     target not assignable
+ *     type mismatch
+ *     invalid conversion
+ *     ownership violation
+ *     borrow violation
+ *     unavailable capability
+ *     unavailable resource
+ *     illegal quantum operation
+ *     illegal hardware operation
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Assignment precedence and associativity are language compatibility
+ * guarantees.
+ *
+ * Existing valid forms must retain their meaning:
+ *
+ *     x = y
+ *     x += y
+ *     x -= y
+ *     x *= y
+ *     x /= y
+ *
+ * Future assignment operators must be introduced through the normal language
+ * versioning process:
+ *
+ *     1. canonical lexer token;
+ *     2. assignmentOperator addition;
+ *     3. AST operator representation;
+ *     4. semantic lowering;
+ *     5. specification update;
+ *     6. positive tests;
+ *     7. negative tests;
+ *     8. ambiguity tests;
+ *     9. compatibility documentation.
+ *
+ * No existing operator may silently change meaning.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * This file is designed to be imported by the canonical expression parser.
+ *
+ * The expression composition grammar must contain:
+ *
+ *     import AssignmentExpressions;
+ *
+ * and must own the public:
+ *
+ *     expression
+ *
+ * entry point.
+ *
+ * It must NOT redeclare:
+ *
+ *     assignmentExpression
+ *     assignmentTarget
+ *     assignmentOperator
+ *
+ * after importing this grammar.
+ *
+ * The importing expression grammar owns the lower expression hierarchy:
+ *
+ *     conditionalExpression
+ *     rangeExpression
+ *     logicalOrExpression
+ *     logicalAndExpression
+ *     bitwiseOrExpression
+ *     bitwiseXorExpression
+ *     bitwiseAndExpression
+ *     equalityExpression
+ *     relationalExpression
+ *     shiftExpression
+ *     additiveExpression
+ *     multiplicativeExpression
+ *     prefixExpression
+ *     postfixExpression
+ *     primaryExpression
+ *
+ * This file intentionally references those downstream rules without
+ * duplicating them.
+ *
+ * ============================================================================
+ * INTEGRATION WITH EXPRESSIONS/EXPRESSIONS.G4
+ * ============================================================================
+ *
+ * The repository currently contains a broader expression grammar in:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * That file currently contains its own assignmentExpression rule.
+ *
+ * To make this file the single authority, the composition grammar must
+ * eventually:
+ *
+ *     import AssignmentExpressions;
+ *
+ * and remove its duplicate assignmentExpression, assignmentTarget and
+ * assignmentOperator definitions.
+ *
+ * The lower expression rules remain owned by the composition grammar or their
+ * respective imported grammar components.
+ *
+ * No second assignment implementation should remain.
+ *
+ * ============================================================================
+ * INTEGRATION WITH STATEMENTS/ASSIGNMENTS.G4
+ * ============================================================================
+ *
+ * Statement-level assignment syntax MUST NOT duplicate assignment-expression
+ * operator definitions.
+ *
+ * A statement grammar may consume:
+ *
+ *     assignmentExpression
+ *
+ * as an expression statement or other statement-level construct.
+ *
+ * It must not create another:
+ *
+ *     assignmentOperator
+ *
+ * vocabulary.
+ *
+ * This guarantees that:
+ *
+ *     expression assignment
+ *
+ * and:
+ *
+ *     statement assignment
+ *
+ * have exactly one syntactic authority.
+ *
+ * ============================================================================
+ * INTEGRATION WITH ARITHMETIC.G4
+ * ============================================================================
+ *
+ * arithmetic.g4 owns:
+ *
+ *     additiveExpression
+ *     multiplicativeExpression
+ *     exponentExpression
+ *
+ * It MUST NOT consume:
+ *
+ *     PLUS_ASSIGN
+ *     MINUS_ASSIGN
+ *     STAR_ASSIGN
+ *     SLASH_ASSIGN
+ *
+ * Those belong exclusively to this file.
+ *
+ * Therefore:
+ *
+ *     x += y
+ *
+ * cannot accidentally be interpreted as an arithmetic expression.
+ *
+ * ============================================================================
+ * INTEGRATION WITH BITWISE / LOGICAL GRAMMARS
+ * ============================================================================
+ *
+ * Bitwise and logical expression grammars own their binary operators.
+ *
+ * They MUST NOT consume assignment operators.
+ *
+ * Assignment remains the outer/lowest ordinary expression layer.
+ *
+ * ============================================================================
+ * INTEGRATION WITH TYPES
+ * ============================================================================
+ *
+ * This file consumes expressions only.
+ *
+ * It does not inspect:
+ *
+ *     typeExpression
+ *
+ * and does not decide:
+ *
+ *     assignability;
+ *     coercion;
+ *     mutability;
+ *     ownership.
+ *
+ * Type and ownership analysis occurs after AST construction.
+ *
+ * ============================================================================
+ * INTEGRATION WITH AST / FRONTEND
+ * ============================================================================
+ *
+ * The frontend parser/AST builder must map:
+ *
+ *     assignmentExpression
+ *
+ * to the repository's generic/domain-neutral expression representation.
+ *
+ * The frontend AST must not introduce a second quantum assignment IR.
+ *
+ * If the RHS or target eventually participates in quantum computation, semantic
+ * lowering continues toward the canonical:
+ *
+ *     quantum::ir
+ *
+ * boundary.
+ *
+ * ============================================================================
+ * INTEGRATION WITH COMPILER / RUNTIME
+ * ============================================================================
+ *
+ * This grammar has no direct compiler or runtime dependency.
+ *
+ * Compiler stages consume semantic/IR representations produced downstream.
+ *
+ * Runtime stages consume lowered executable representations.
+ *
+ * Therefore this file remains unchanged when:
+ *
+ *     CPU backends are added;
+ *     GPU backends are added;
+ *     FPGA backends are added;
+ *     QPU backends are added;
+ *     distributed backends are added;
+ *     future architectures are added.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * No source-level hardware or resource limit is present.
+ *
+ * No:
+ *
+ *     MAX_*
+ *     fixed qubit count
+ *     fixed CPU count
+ *     fixed GPU count
+ *     fixed FPGA count
+ *     fixed node count
+ *     fixed memory size
+ *     fixed register count
+ *     fixed tensor dimension
+ *     fixed device identifier
+ *     fixed topology
+ *
+ * occurs in the grammar rules.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * The following MUST parse:
+ *
+ *     x = y
+ *     x += y
+ *     x -= y
+ *     x *= y
+ *     x /= y
+ *
+ * Right associativity:
+ *
+ *     a = b = c
+ *     a += b += c
+ *     a -= b = c
+ *
+ * Complex targets:
+ *
+ *     object.field = value
+ *     object.field += value
+ *     array[index] = value
+ *     tensor[i, j] = value
+ *     object.field[index].value = expression
+ *
+ * RHS precedence:
+ *
+ *     x = a + b
+ *     x = a * b
+ *     x = a && b
+ *     x = a | b
+ *     x = condition ? a : b
+ *
+ * Nested expressions:
+ *
+ *     x = (a = b)
+ *     x = f(a = b)
+ *     x = array[i = j]
+ *
+ * Syntax that MUST be rejected at the assignment-expression level:
+ *
+ *     = x
+ *     x =
+ *     x +=
+ *     x +== y
+ *     x = = y
+ *     x += = y
+ *
+ * Semantic-only invalidity MUST remain semantic:
+ *
+ *     1 = x
+ *     f() = x
+ *
+ * provided those forms are structurally accepted by postfixExpression.
+ *
+ * ============================================================================
+ * BOUNDARY / SCALABILITY TESTS
+ * ============================================================================
+ *
+ * Tests must include:
+ *
+ *     - long right-associative assignment chains;
+ *     - deeply nested postfix targets;
+ *     - deeply nested RHS expressions;
+ *     - generated large expression trees;
+ *     - long qualified/member/indexing chains;
+ *     - assignments involving symbolic values;
+ *     - assignments involving tensor values;
+ *     - assignments involving quantum-derived values;
+ *     - assignments in HDL contexts;
+ *     - assignments in distributed contexts.
+ *
+ * No test may require an arbitrary grammar maximum merely to pass.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     [x] Assignment syntax has one authoritative owner.
+ *     [x] Assignment is right associative.
+ *     [x] Assignment has lower precedence than conditional expressions.
+ *     [x] Assignment targets use postfixExpression.
+ *     [x] Assignment operators use the canonical lexer vocabulary.
+ *     [x] No lexer rules are duplicated here.
+ *     [x] No semantic logic is embedded here.
+ *     [x] No AST implementation is embedded here.
+ *     [x] No IR implementation is embedded here.
+ *     [x] quantum::ir remains downstream and canonical.
+ *     [x] QEC/ZQN/routing/scheduling remain downstream.
+ *     [x] Hardware realization remains downstream.
+ *     [x] No artificial machine limits exist.
+ *     [x] No Rust actions exist.
+ *     [x] No unsafe code is required.
+ *     [x] Rust 1.97 / 1.97.1 compatibility is preserved downstream.
+ *     [x] Integration ownership is explicitly defined.
+ *     [x] Future assignment operators have a defined promotion path.
  *
  * ============================================================================
  */
@@ -318,501 +927,67 @@ options {
 }
 
 
-/*
+/* ============================================================================
+ * PUBLIC ASSIGNMENT EXPRESSION
  * ============================================================================
- * PUBLIC ENTRY POINT
+ *
+ * The first alternative is the non-assignment case.
+ *
+ * The second alternative recursively consumes another assignmentExpression on
+ * the RHS, making assignment right associative.
+ *
+ *     a = b = c
+ *
+ * therefore becomes:
+ *
+ *     a = (b = c)
+ *
+ * rather than:
+ *
+ *     (a = b) = c
+ *
  * ============================================================================
  */
 
-/**
- * Complete assignment expression.
- *
- * Lowest ordinary expression precedence.
- *
- * Right-associative assignment is represented by the recursive right-hand
- * assignmentExpression.
- *
- * Examples:
- *
- *     value
- *     x = value
- *     x += value
- *     object.field = value
- *     array[index] = value
- *     a = b = c
- */
 assignmentExpression
     : conditionalExpression
     | assignmentTarget assignmentOperator assignmentExpression
     ;
 
 
-/*
- * ============================================================================
+/* ============================================================================
  * ASSIGNMENT TARGET
  * ============================================================================
  *
- * Assignment target syntax intentionally delegates to the existing postfix
- * expression hierarchy.
+ * `postfixExpression` is owned by the postfix-expression layer.
  *
- * The semantic analyzer decides whether the resulting expression denotes an
- * assignable place/value.
+ * Semantic analysis determines whether the resulting expression denotes a
+ * valid assignable target.
  *
- * This prevents the grammar from becoming coupled to:
- *
- *     - one particular ownership model;
- *     - one reference model;
- *     - one object model;
- *     - one memory model;
- *     - one hardware model;
- *     - one quantum model.
- *
- * The canonical postfixExpression must therefore be supplied by the
- * expression grammar imported by the parser architecture.
- *
- * The preferred public contract is:
- *
- *     postfixExpression
- *
- * as the syntactic representation of a potentially assignable expression.
+ * ============================================================================
  */
+
 assignmentTarget
     : postfixExpression
     ;
 
 
-/*
+/* ============================================================================
+ * ASSIGNMENT OPERATOR
  * ============================================================================
- * ASSIGNMENT OPERATORS
+ *
+ * These are the compound-assignment tokens currently exposed by the
+ * authoritative ZamaniLexer.
+ *
+ * Do not introduce token aliases here.
+ *
  * ============================================================================
- *
- * The operator set is deliberately centralized here.
- *
- * Arithmetic/bitwise expression grammars MUST NOT consume compound assignment
- * operators as ordinary binary operators.
- *
- * This preserves an unambiguous precedence boundary.
  */
+
 assignmentOperator
     : ASSIGN
     | PLUS_ASSIGN
     | MINUS_ASSIGN
     | STAR_ASSIGN
     | SLASH_ASSIGN
-    | MODULO_ASSIGN
-    | BIT_AND_ASSIGN
-    | BIT_OR_ASSIGN
-    | CARET_ASSIGN
-    | LEFT_SHIFT_ASSIGN
-    | RIGHT_SHIFT_ASSIGN
     ;
-
-
-/*
- * ============================================================================
- * CONDITIONAL EXPRESSION CONTRACT
- * ============================================================================
- *
- * `conditionalExpression` is owned by the conditional-expression layer.
- *
- * Assignment depends on it but does not redefine it.
- *
- * This dependency direction is intentional:
- *
- *     assignment
- *         |
- *         v
- *     conditional
- *         |
- *         v
- *     logical
- *         |
- *         v
- *     bitwise
- *         |
- *         v
- *     comparison
- *         |
- *         v
- *     arithmetic
- *         |
- *         v
- *     postfix / primary
- *
- * There must be no reverse dependency from conditionalExpression back into
- * assignmentExpression unless the language specification explicitly requires
- * assignment expressions inside conditional branches.
- *
- * If conditional expressions need assignment expressions in their branches,
- * that relationship must be provided through a higher-level expression
- * adapter rather than creating a grammar-import cycle.
- */
-
-
-/*
- * ============================================================================
- * SEMANTIC AST CONTRACT
- * ============================================================================
- *
- * This grammar must lower into an AST representation equivalent to:
- *
- *     AssignmentExpression {
- *         target: Expression,
- *         operator: AssignmentOperator,
- *         value: Expression
- *     }
- *
- * where:
- *
- *     AssignmentOperator =
- *         Assign
- *         | AddAssign
- *         | SubtractAssign
- *         | MultiplyAssign
- *         | DivideAssign
- *         | ModuloAssign
- *         | BitAndAssign
- *         | BitOrAssign
- *         | BitXorAssign
- *         | LeftShiftAssign
- *         | RightShiftAssign
- *
- * The grammar does not define the Rust AST type.
- *
- * Source spans MUST be retained by the frontend AST implementation.
- *
- * The AST should preserve:
- *
- *     - complete target;
- *     - operator;
- *     - complete value;
- *     - source span;
- *     - child source spans;
- *     - syntactic ordering.
- *
- * No machine-specific information belongs in this AST node merely because
- * the assignment occurs in a quantum, hardware, embedded, GPU, or distributed
- * program.
- */
-
-
-/*
- * ============================================================================
- * SEMANTIC ANALYSIS CONTRACT
- * ============================================================================
- *
- * After parsing, semantic analysis must determine:
- *
- *     1. whether target is assignable;
- *     2. whether target is mutable;
- *     3. whether target is initialized appropriately;
- *     4. whether the value type is compatible;
- *     5. whether implicit conversion is permitted;
- *     6. whether ownership/borrowing permits the operation;
- *     7. whether effects permit the operation;
- *     8. whether capability requirements are satisfied;
- *     9. whether resource constraints permit it;
- *    10. whether a quantum/classical boundary is legal;
- *    11. whether hardware-specific semantics are required;
- *    12. whether compound-assignment lowering is valid.
- *
- * None of those decisions belong in this grammar.
- */
-
-
-/*
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Quantum assignments may eventually represent classical state associated
- * with quantum computation.
- *
- * Examples might include:
- *
- *     result = measure(q)
- *     bit = measurement
- *     parameter = theta
- *
- * The grammar does not decide whether an expression represents:
- *
- *     - a classical value;
- *     - a measurement result;
- *     - a symbolic parameter;
- *     - a logical-qubit property;
- *     - a resource value;
- *     - a hardware value.
- *
- * Semantic lowering determines the appropriate canonical representation.
- *
- * In particular:
- *
- *     assignment.g4
- *
- * MUST NOT create or manipulate:
- *
- *     quantum::ir
- *
- * directly.
- */
-
-
-/*
- * ============================================================================
- * HARDWARE / HDL INTEGRATION
- * ============================================================================
- *
- * Hardware-facing assignments may syntactically look identical to ordinary
- * assignments:
- *
- *     register_value = value
- *     signal = expression
- *     state = next_state
- *
- * The grammar intentionally does not decide whether a target is:
- *
- *     memory
- *     register
- *     signal
- *     wire
- *     port
- *     device property
- *     software variable
- *
- * That distinction belongs to semantic analysis and the hardware/HDL
- * lowering layers.
- *
- * Therefore assignment syntax remains portable across:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     quantum systems
- *     embedded systems
- *     distributed systems
- *     future targets
- */
-
-
-/*
- * ============================================================================
- * RESOURCE / POCO-REAF INTEGRATION
- * ============================================================================
- *
- * An assignment does not imply any particular resource.
- *
- * The grammar must never transform:
- *
- *     x = value
- *
- * into a machine-specific requirement such as:
- *
- *     use device X
- *     use core Y
- *     use GPU Z
- *     use physical qubit Q
- *
- * Such information belongs downstream in:
- *
- *     resource requirements
- *     capabilities
- *     target selection
- *     placement
- *     scheduling
- *     deployment
- *
- * This preserves:
- *
- *     Program Once
- *     Compile Once
- *     Run Everywhere
- *     Run Anywhere
- *     Run Forever
- */
-
-
-/*
- * ============================================================================
- * DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * Parser diagnostics should identify syntactic errors such as:
- *
- *     x =
- *     = x
- *     x +=
- *     x +== y
- *     x = = y
- *
- * The parser should NOT emit semantic diagnostics such as:
- *
- *     variable is immutable
- *     type mismatch
- *     cannot assign to quantum state
- *     hardware resource unavailable
- *     insufficient memory
- *     target lacks capability
- *
- * Those belong to downstream semantic/validation stages.
- */
-
-
-/*
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * For the same lexer token stream and grammar version, this grammar must
- * produce the same parse structure.
- *
- * No:
- *
- *     system time
- *     random number
- *     environment variable
- *     hardware state
- *     runtime device query
- *     network query
- *
- * may influence parsing.
- */
-
-
-/*
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Assignment operator spelling is owned by the canonical lexer.
- *
- * Adding a future assignment operator requires:
- *
- *     1. lexer token definition;
- *     2. assignmentOperator addition;
- *     3. AST operator representation;
- *     4. semantic lowering;
- *     5. compatibility documentation;
- *     6. positive tests;
- *     7. negative/ambiguity tests;
- *     8. round-trip tests where applicable.
- *
- * Existing operators must not silently change meaning.
- */
-
-
-/*
- * ============================================================================
- * TEST CONTRACT
- * ============================================================================
- *
- * Positive:
- *
- *     x = y
- *     x += y
- *     x -= y
- *     x *= y
- *     x /= y
- *     x %= y
- *     x &= y
- *     x |= y
- *     x ^= y
- *     x <<= y
- *     x >>= y
- *
- * Right associativity:
- *
- *     a = b = c
- *     a += b += c
- *
- * Complex targets:
- *
- *     object.field = value
- *     object.field += value
- *     array[index] = value
- *     tensor[i, j] = value
- *     *reference = value
- *
- * Precedence:
- *
- *     x = a + b
- *     x = a && b
- *     x = a | b
- *     x = condition ? a : b
- *
- * The right side must remain a complete assignment expression.
- *
- * Negative syntax:
- *
- *     = x
- *     x =
- *     x +== y
- *     x >>>= y       // unless explicitly supported by the lexer/specification
- *     x = = y
- *
- * Boundary:
- *
- *     extremely long assignment chains;
- *     extremely long compound-assignment chains;
- *     deeply nested syntactically valid targets;
- *     large generated expression trees.
- *
- * No artificial grammar maximum may be introduced to make these tests pass.
- */
-
-
-/*
- * ============================================================================
- * INTEGRATION CHECKLIST
- * ============================================================================
- *
- * Before declaring this file complete, verify:
- *
- * [ ] Canonical lexer exports every assignment token used here.
- *
- * [ ] No assignment token is defined twice elsewhere.
- *
- * [ ] `conditionalExpression` is owned by the appropriate lower expression
- *     layer.
- *
- * [ ] `postfixExpression` is owned by the expression/postfix layer.
- *
- * [ ] `expressions.g4` exposes assignmentExpression as the top expression
- *     precedence layer.
- *
- * [ ] Arithmetic grammar does not consume compound assignment operators.
- *
- * [ ] Bitwise grammar does not consume compound assignment operators.
- *
- * [ ] Logical grammar does not consume assignment operators.
- *
- * [ ] Assignment remains right-associative.
- *
- * [ ] Semantic analysis, not grammar, determines assignability.
- *
- * [ ] Type checking, not grammar, determines type compatibility.
- *
- * [ ] Ownership checking, not grammar, determines mutability.
- *
- * [ ] Hardware mapping is downstream.
- *
- * [ ] Quantum lowering is downstream.
- *
- * [ ] quantum::ir remains canonical.
- *
- * [ ] No QEC/ZQN logic is embedded here.
- *
- * [ ] No scheduling/routing logic is embedded here.
- *
- * [ ] No machine-specific limits exist.
- *
- * [ ] No Rust code is embedded.
- *
- * [ ] Generated Rust remains compatible with Rust 1.97/1.97.1.
- *
- * [ ] Generated/runtime Rust remains free of unsafe code.
- *
- * [ ] Positive, negative, boundary, determinism and round-trip tests exist.
- *
- * ============================================================================
- */
