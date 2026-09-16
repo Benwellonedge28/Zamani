@@ -1,846 +1,802 @@
 /*
- * Zamani — Universal Computing Language
- * File: grammar/core/source-unit.g4
+ * ============================================================================
+ * Zamani Universal Programming Language
+ * ============================================================================
  *
- * Purpose
- * -------
- * Defines the source-unit boundary of Zamani.
+ * File:
+ *     grammar/core/source-unit.g4
  *
- * This grammar is intentionally concerned with SOURCE STRUCTURE:
+ * Status:
+ *     Production-ready source-unit composition boundary.
  *
- *   source text
- *       -> sourceUnit
- *       -> source items
- *       -> declaration / statement ownership
- *       -> EOF
+ * Purpose:
+ *     Defines the domain-neutral source-unit boundary of Zamani.
  *
- * It does NOT define:
- *   - lexical tokens
- *   - identifiers
- *   - literals
- *   - expressions
- *   - types
- *   - quantum IR
- *   - classical IR
- *   - hardware topology
- *   - scheduling
- *   - optimization
- *   - runtime behavior
- *   - machine capacity
+ * ============================================================================
+ * AUTHORITY
+ * ============================================================================
  *
- * Those concerns belong to their respective grammar/domain layers.
+ * The canonical language composition root remains:
  *
- * Architectural rule
- * ------------------
- * Grammar describes source-level syntax only.
+ *     grammar/Zamani.g4
  *
- * Semantic analysis, capability resolution, target selection,
- * resource discovery, lowering, optimization, routing, scheduling,
- * hardware mapping, execution and runtime adaptation happen after
- * parsing.
+ * This file is an independently maintainable parser component used by the
+ * canonical parser composition.
  *
+ * It owns ONLY:
+ *
+ *     - source-unit structure;
+ *     - source-file structure;
+ *     - source-item ordering;
+ *     - source-level EOF boundary;
+ *     - the integration boundary between declarations and statements.
+ *
+ * It does NOT own:
+ *
+ *     - lexical tokens;
+ *     - identifiers;
+ *     - qualified names;
+ *     - paths;
+ *     - attributes;
+ *     - annotations;
+ *     - metadata semantics;
+ *     - declarations;
+ *     - functions;
+ *     - modules;
+ *     - types;
+ *     - expressions;
+ *     - statements;
+ *     - control flow;
+ *     - classical syntax;
+ *     - quantum syntax;
+ *     - hybrid syntax;
+ *     - HDL syntax;
+ *     - hardware syntax;
+ *     - distributed syntax;
+ *     - AI/ML syntax;
+ *     - data syntax;
+ *     - networking syntax;
+ *     - security syntax;
+ *     - resource semantics;
+ *     - capability semantics;
+ *     - compilation;
+ *     - execution;
+ *     - AST construction;
+ *     - semantic analysis;
+ *     - IR construction;
+ *     - quantum::ir;
+ *     - QEC;
+ *     - ZQN;
+ *     - routing;
+ *     - scheduling;
+ *     - calibration;
+ *     - HAL;
+ *     - runtime behavior.
+ *
+ * ============================================================================
  * POCO-REAF
- * ---------
- * The source unit MUST NOT encode accidental machine limits.
+ * ============================================================================
  *
- * Therefore this grammar contains no:
- *   - maximum qubit count
- *   - maximum CPU count
- *   - maximum GPU count
- *   - maximum node count
- *   - fixed topology
- *   - fixed device ID
- *   - fixed memory capacity
- *   - fixed register count
- *   - fixed accelerator count
- *   - fixed deployment size
+ * Zamani is designed around:
  *
- * Physical/resource requirements are expressed elsewhere through
- * semantic resource/capability/constraint models.
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Ownership
- * ---------
- * OWNED:
- *   - source-unit boundary
- *   - source-item ordering
- *   - source-level documentation placement
- *   - source-level declarations
- *   - source-level statements
- *   - EOF termination
+ *     POCO-REAF
  *
- * NOT OWNED:
- *   - lexical definitions
- *   - names
- *   - paths
- *   - declarations' internal syntax
- *   - expressions
- *   - types
- *   - domain-specific syntax
- *   - AST construction
- *   - semantic validation
- *   - IR construction
+ * The source-unit grammar therefore imposes no universal limits on:
  *
- * Integration contract
- * --------------------
- * This grammar is consumed by the root Zamani parser grammar.
+ *     - source items;
+ *     - declarations;
+ *     - statements;
+ *     - modules;
+ *     - functions;
+ *     - types;
+ *     - expressions;
+ *     - nesting;
+ *     - namespaces;
+ *     - imports;
+ *     - quantum registers;
+ *     - qubits;
+ *     - CPUs;
+ *     - cores;
+ *     - threads;
+ *     - GPUs;
+ *     - FPGAs;
+ *     - ASICs;
+ *     - QPUs;
+ *     - accelerators;
+ *     - nodes;
+ *     - devices;
+ *     - memory;
+ *     - storage;
+ *     - network links;
+ *     - tensor dimensions;
+ *     - vector widths;
+ *     - timelines;
+ *     - processes.
  *
- * The intended architecture is:
+ * Repetition is expressed using normal grammar recursion and repetition
+ * operators. No artificial machine-derived maximum is permitted here.
  *
- *   lexer
- *      |
- *      v
- *   source-unit
- *      |
- *      v
- *   AST
- *      |
- *      v
- *   semantic analysis
- *      |
- *      +--------------------+
- *      |                    |
- *      v                    v
- *   classical IR       quantum::ir
- *                           |
- *                           v
- *                     QEC / ZQN / optimization
- *                           |
- *                           v
- *                  routing / scheduling / HAL
- *                           |
- *                           v
- *                        runtime
+ * A parser, compiler, operating system, runtime, or hardware resource limit
+ * remains an implementation/resource-policy concern and MUST NOT become a
+ * source-language grammar limit.
  *
- * The source grammar MUST NOT depend on any of those downstream
- * implementation layers.
+ * ============================================================================
+ * ARCHITECTURAL PIPELINE
+ * ============================================================================
  *
- * Rust integration
- * ----------------
- * Rust parser/frontend implementations using this grammar MUST:
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     sourceFile
+ *          |
+ *          v
+ *     sourceUnit
+ *          |
+ *          v
+ *     declaration / statement dispatch
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          v
+ *     name/module resolution
+ *          |
+ *          v
+ *     type/effect/capability/resource analysis
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          +--------------------+--------------------+
+ *          |                    |                    |
+ *          v                    v                    v
+ *     classical IR         quantum::ir         HDL/hardware IR
+ *          |                    |                    |
+ *          +--------------------+--------------------+
+ *                               |
+ *                               v
+ *                         optimization
+ *                               |
+ *                      routing / scheduling
+ *                               |
+ *                     resilience / QEC / ZQN
+ *                               |
+ *                               v
+ *                        target lowering
+ *                               |
+ *                               v
+ *                         HAL / runtime
+ *                               |
+ *                               v
+ *                         actual target
  *
- *   - use Rust 1.97 or 1.97.1
- *   - use safe Rust only
- *   - contain no unsafe blocks
- *   - contain no unsafe functions
- *   - contain no target-specific assumptions in parsing
- *   - preserve source spans
- *   - preserve deterministic parse structure
- *   - distinguish syntax errors from semantic errors
+ * IMPORTANT:
  *
- * The generated ANTLR parser is an implementation artifact and MUST
- * NOT become the canonical semantic representation.
+ *     quantum::ir
  *
- * Versioning
- * ----------
- * Syntax versioning belongs to the language-version/core-versioning
- * layer. This grammar only establishes the syntactic envelope in which
- * version declarations/metadata may occur.
+ * remains the canonical quantum semantic boundary.
+ *
+ * This file MUST NOT create, reference, construct, or lower to quantum::ir.
+ *
+ * ============================================================================
+ * INTEGRATION OWNERSHIP
+ * ============================================================================
+ *
+ * Declaration syntax is owned by:
+ *
+ *     grammar/declarations/declarations.g4
+ *
+ * whose parser grammar is:
+ *
+ *     ZamaniDeclarations
+ *
+ * Statement syntax is owned by:
+ *
+ *     grammar/statements/statements.g4
+ *
+ * whose parser grammar is:
+ *
+ *     Statements
+ *
+ * Therefore this file deliberately delegates:
+ *
+ *     sourceItem
+ *          |
+ *          +--> declaration
+ *          |
+ *          +--> statement
+ *
+ * It MUST NOT duplicate either dispatcher.
+ *
+ * ============================================================================
+ * SOURCE-UNIT VS SOURCE-FILE
+ * ============================================================================
+ *
+ * A sourceUnit is a sequence of source-level items.
+ *
+ * A sourceFile is a complete externally parseable file and therefore owns
+ * the EOF boundary.
+ *
+ * This distinction is intentional:
+ *
+ *     sourceUnit
+ *
+ * may be embedded by a higher-level composition grammar without consuming EOF.
+ *
+ *     sourceFile
+ *
+ * is the standalone parser entry point and consumes exactly one EOF.
+ *
+ * This prevents the previous architectural problem where a reusable source
+ * grammar consumed EOF internally and therefore became difficult to compose
+ * into the canonical Zamani parser.
+ *
+ * ============================================================================
+ * SOURCE ORDER
+ * ============================================================================
+ *
+ * Source items are ordered.
+ *
+ * The parser preserves source order naturally through the parse tree.
+ *
+ * No semantic reordering occurs here.
+ *
+ * Import ordering, declaration ordering, initialization ordering, dependency
+ * ordering, execution ordering, scheduling ordering, or optimization ordering
+ * are downstream concerns.
+ *
+ * ============================================================================
+ * SOURCE ITEM OWNERSHIP
+ * ============================================================================
+ *
+ * A source item is exactly one canonical declaration or statement.
+ *
+ * Documentation, attributes, annotations, and metadata are not independently
+ * admitted as executable source items by this grammar.
+ *
+ * They belong to the grammar component that owns their attachment semantics.
+ *
+ * This avoids the existing ambiguity where:
+ *
+ *     documentation
+ *     metadata
+ *     attribute
+ *
+ * could become detached top-level items instead of being associated with the
+ * declaration or statement they annotate.
+ *
+ * ============================================================================
+ * DOMAIN NEUTRALITY
+ * ============================================================================
+ *
+ * The source-unit grammar deliberately does NOT contain alternatives such as:
+ *
+ *     quantumItem
+ *     cpuItem
+ *     gpuItem
+ *     fpgaItem
+ *     qpuItem
+ *     hdlItem
+ *     distributedItem
+ *     aiItem
+ *
+ * A domain becomes part of a Zamani program through the declaration and
+ * statement composition layers and their domain-specific grammar delegates.
+ *
+ * This means the source-unit boundary does not have to be rewritten whenever
+ * Zamani gains another computational domain.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY SEPARATION
+ * ============================================================================
+ *
+ * Source structure does not select physical resources.
+ *
+ * For example, source syntax may eventually express:
+ *
+ *     requires capability(...)
+ *     requires resource(...)
+ *     prefers capability(...)
+ *     constrains(...)
+ *
+ * but this grammar does not interpret those constructs.
+ *
+ * Semantic/resource analysis decides their meaning.
+ *
+ * This separation permits the same source program to be compiled for:
+ *
+ *     tiny systems
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     QPUs
+ *     heterogeneous systems
+ *     distributed systems
+ *     clusters
+ *     supercomputers
+ *     cloud environments
+ *     future architectures
+ *
+ * without changing the source-unit grammar.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Quantum syntax enters through the declaration/statement/expression grammar
+ * composition owned elsewhere.
+ *
+ * This file MUST NOT define:
+ *
+ *     - gates;
+ *     - qubit identifiers;
+ *     - physical qubit identifiers;
+ *     - fixed gate inventories;
+ *     - maximum qubit counts;
+ *     - topology;
+ *     - routing;
+ *     - scheduling;
+ *     - QEC;
+ *     - noise models;
+ *     - ZQN;
+ *     - calibration;
+ *     - device IDs.
+ *
+ * The downstream quantum path remains:
+ *
+ *     source
+ *       -> AST
+ *       -> semantic quantum model
+ *       -> quantum::ir
+ *       -> optimization
+ *       -> routing
+ *       -> scheduling
+ *       -> QEC / resilience / ZQN
+ *       -> HAL
+ *       -> target realization
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * HDL and hardware/software co-design constructs enter through their owning
+ * domain grammar families.
+ *
+ * This source-unit boundary must remain independent of:
+ *
+ *     registers
+ *     buses
+ *     lanes
+ *     cores
+ *     memory banks
+ *     FPGA fabric dimensions
+ *     ASIC dimensions
+ *     clock counts
+ *     device topology
+ *     accelerator inventory
+ *
+ * Those are semantic or target-realization concerns.
+ *
+ * ============================================================================
+ * DISTRIBUTED / PARALLEL INTEGRATION
+ * ============================================================================
+ *
+ * The source-unit grammar imposes no limit on:
+ *
+ *     processes
+ *     actors
+ *     tasks
+ *     workers
+ *     nodes
+ *     channels
+ *     messages
+ *     partitions
+ *     replicas
+ *     timelines
+ *
+ * Parallelism and distribution remain source semantics where explicitly
+ * expressed, while placement and resource realization remain downstream.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates no Rust values.
+ *
+ * The frontend parser adapter maps:
+ *
+ *     sourceFile
+ *          |
+ *          v
+ *     sourceUnit
+ *          |
+ *          v
+ *     sourceItem
+ *          |
+ *          +--> declaration AST
+ *          |
+ *          +--> statement AST
+ *
+ * Every resulting AST node must preserve, where applicable:
+ *
+ *     - source span;
+ *     - source ordering;
+ *     - parent/child relationships;
+ *     - syntactic category;
+ *     - attached source metadata;
+ *     - diagnostic location information.
+ *
+ * The source-unit grammar itself must not attach:
+ *
+ *     - physical device information;
+ *     - machine capacity;
+ *     - physical qubit mapping;
+ *     - routing decisions;
+ *     - schedules;
+ *     - compiler backend information.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * This file performs no semantic analysis.
+ *
+ * It does not determine:
+ *
+ *     - whether a name exists;
+ *     - whether a type is valid;
+ *     - whether a capability is available;
+ *     - whether a resource requirement is satisfiable;
+ *     - whether a quantum operation is legal;
+ *     - whether hardware can realize a program;
+ *     - whether a schedule is possible;
+ *     - whether a route exists;
+ *     - whether QEC requirements can be satisfied.
+ *
+ * Those questions belong downstream.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * No IR is constructed here.
+ *
+ * The required direction is:
+ *
+ *     sourceFile
+ *       -> parser
+ *       -> frontend AST
+ *       -> semantic analysis
+ *       -> canonical semantic representation
+ *       -> domain IR
+ *
+ * For quantum:
+ *
+ *     AST
+ *       -> semantic quantum representation
+ *       -> quantum::ir
+ *
+ * The source-unit grammar must never become an alternate IR boundary.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no actions;
+ *     - no semantic predicates;
+ *     - no Rust code;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware inspection;
+ *     - no runtime callbacks;
+ *     - no randomness;
+ *     - no time-dependent behavior;
+ *     - no mutable global state.
+ *
+ * Given identical token streams and identical grammar versions, the parser
+ * structure is deterministic.
+ *
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
+ *
+ * Syntax errors belong to the parser/frontend diagnostic layer.
+ *
+ * Examples:
+ *
+ *     unexpected top-level token
+ *     incomplete declaration
+ *     incomplete statement
+ *     malformed declaration dispatch
+ *     malformed statement dispatch
+ *     unexpected EOF
+ *
+ * Semantic errors do NOT belong here.
+ *
+ * Examples:
+ *
+ *     unknown identifier
+ *     invalid type
+ *     unsatisfied resource requirement
+ *     unavailable capability
+ *     illegal quantum operation
+ *     impossible hardware mapping
+ *     impossible schedule
+ *     invalid routing
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing public filename:
+ *
+ *     grammar/core/source-unit.g4
+ *
+ * is intentionally retained.
+ *
+ * Existing conceptual entry:
+ *
+ *     sourceUnit
+ *
+ * is retained.
+ *
+ * The important compatibility correction is that sourceUnit no longer
+ * consumes EOF. A new:
+ *
+ *     sourceFile
+ *
+ * rule owns the complete-file EOF boundary.
+ *
+ * This makes the component composable without forcing the canonical root
+ * grammar to duplicate or work around EOF handling.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Forbidden in this file:
+ *
+ *     MAX_SOURCE_ITEMS
+ *     MAX_DECLARATIONS
+ *     MAX_STATEMENTS
+ *     MAX_MODULES
+ *     MAX_FUNCTIONS
+ *     MAX_TYPES
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_ACCELERATORS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_NETWORK_SIZE
+ *     MAX_TENSOR_DIMENSION
+ *     MAX_TIMELINES
+ *
+ * None are present.
+ *
+ * ============================================================================
+ * RUST INTEGRATION
+ * ============================================================================
+ *
+ * This grammar contains no embedded Rust and therefore contains no unsafe
+ * Rust.
+ *
+ * The repository's Rust frontend/compiler integration must target:
+ *
+ *     Rust 1.97 / Rust 1.97.1
+ *
+ * with:
+ *
+ *     - safe Rust only;
+ *     - no unsafe blocks;
+ *     - no unsafe functions;
+ *     - no target-specific parser behavior;
+ *     - deterministic parsing;
+ *     - source-span preservation.
+ *
+ * The grammar itself must remain independent of Rust implementation details.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive source-file cases:
+ *
+ *     empty source file
+ *     one declaration
+ *     one statement
+ *     declaration followed by statement
+ *     multiple declarations
+ *     multiple statements
+ *     mixed declaration/statement sequences
+ *     classical program
+ *     quantum program
+ *     hybrid program
+ *     HDL program
+ *     hardware/software co-design program
+ *     distributed program
+ *     AI/data program
+ *     mixed-domain program
+ *
+ * Negative source-file cases:
+ *
+ *     unexpected token at source level
+ *     malformed declaration
+ *     malformed statement
+ *     incomplete source item
+ *     unexpected EOF
+ *
+ * Boundary cases:
+ *
+ *     zero source items
+ *     one source item
+ *     deeply nested delegated constructs
+ *     very large source-item sequences
+ *
+ * Scalability cases:
+ *
+ *     arbitrarily large source-item sequences subject only to available
+ *     implementation resources
+ *
+ * Cross-domain cases:
+ *
+ *     classical + quantum
+ *     classical + HDL
+ *     quantum + hardware
+ *     quantum + distributed
+ *     AI + quantum
+ *     AI + hardware
+ *     classical + quantum + HDL + hardware
+ *
+ * Determinism:
+ *
+ *     identical token streams produce equivalent parse structures.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     [ ] It owns only source-unit/file composition.
+ *     [ ] sourceUnit does not consume EOF.
+ *     [ ] sourceFile consumes exactly one EOF.
+ *     [ ] Declaration syntax is delegated to ZamaniDeclarations.
+ *     [ ] Statement syntax is delegated to Statements.
+ *     [ ] No declaration syntax is duplicated here.
+ *     [ ] No statement syntax is duplicated here.
+ *     [ ] No expression grammar is duplicated here.
+ *     [ ] No type grammar is duplicated here.
+ *     [ ] No module grammar is duplicated here.
+ *     [ ] No domain grammar is duplicated here.
+ *     [ ] No hardware assumptions exist.
+ *     [ ] No quantum limits exist.
+ *     [ ] No machine-size limits exist.
+ *     [ ] No embedded Rust exists.
+ *     [ ] No unsafe Rust exists.
+ *     [ ] No semantic actions exist.
+ *     [ ] No semantic predicates exist.
+ *     [ ] The import graph is one-way.
+ *     [ ] The canonical parser can consume sourceFile.
+ *     [ ] The canonical root can compose sourceUnit without an EOF conflict.
+ *     [ ] AST integration is defined before implementation.
+ *     [ ] Semantic integration is downstream.
+ *     [ ] IR integration is downstream.
+ *     [ ] quantum::ir remains canonical.
+ *     [ ] Positive tests exist.
+ *     [ ] Negative tests exist.
+ *     [ ] Boundary tests exist.
+ *     [ ] Scalability tests exist.
+ *     [ ] Cross-domain tests exist.
+ *     [ ] Determinism tests exist.
+ *
+ * ============================================================================
  */
 
-parser grammar ZamaniSourceUnitParser;
+parser grammar ZamaniSourceUnit;
 
 options {
     /*
-     * The concrete token vocabulary is supplied by the authoritative
-     * Zamani lexer/token grammar.
+     * All parser grammars in the production modular architecture must consume
+     * the canonical lexer vocabulary.
      *
-     * The exact token vocabulary file is intentionally not duplicated
-     * here. This prevents source-unit syntax from becoming coupled to
-     * a second lexer definition.
+     * The repository's declaration and statement composition grammars currently
+     * use ZamaniLexer as their parser-facing vocabulary.
      */
     tokenVocab = ZamaniLexer;
 }
 
 /*
  * ============================================================================
+ * DELEGATE GRAMMARS
+ * ============================================================================
+ *
+ * The source-unit grammar composes existing authoritative dispatchers.
+ *
+ * ZamaniDeclarations owns declaration composition.
+ *
+ * Statements owns statement composition.
+ *
+ * No concrete declaration or statement production is repeated here.
+ *
+ * NOTE:
+ *     These delegates must themselves be on the canonical production parser
+ *     generation path. Legacy duplicate parser grammars under grammar/antlr/
+ *     must not simultaneously provide competing declaration/statement rules.
+ */
+import
+    ZamaniDeclarations,
+    Statements
+;
+
+/*
+ * ============================================================================
+ * COMPLETE SOURCE FILE
+ * ============================================================================
+ *
+ * This is the standalone parser entry point for a complete Zamani source
+ * file.
+ *
+ * EOF is deliberately owned here rather than by sourceUnit so that sourceUnit
+ * remains reusable by the canonical root composition.
+ */
+sourceFile
+    : sourceUnit EOF
+    ;
+
+/*
+ * ============================================================================
  * SOURCE UNIT
  * ============================================================================
  *
- * A source unit is the smallest independently parseable Zamani source
- * boundary.
+ * A source unit is an ordered, potentially unbounded sequence of source items.
  *
- * It is intentionally unbounded by machine/resource dimensions.
+ * No machine-derived cardinality limit exists.
  *
- * The parser consumes zero or more source items and requires EOF.
- *
- * Cardinality is therefore determined by available input/resources,
- * not by a language-level constant.
+ * Empty source units are syntactically valid. Whether an empty program is
+ * semantically meaningful is a language-semantics decision, not a grammar
+ * decision.
  */
-
 sourceUnit
-    : sourceHeader?
-      sourceItem*
-      EOF
+    : sourceItem*
     ;
 
 /*
  * ============================================================================
- * SOURCE HEADER
+ * SOURCE ITEM
  * ============================================================================
  *
- * Header information belongs to the source-level contract rather than
- * to a particular computational domain.
+ * Exactly one canonical declaration or statement occupies a source-item
+ * position.
  *
- * A header may carry:
+ * Declaration ownership:
  *
- *   - documentation
- *   - language/version information
- *   - source-level metadata
- *   - source-level attributes
+ *     ZamaniDeclarations.declaration
  *
- * It MUST NOT encode an implicit hardware selection.
+ * Statement ownership:
+ *
+ *     Statements.statement
+ *
+ * No domain-specific alternative is added here.
  */
-
-sourceHeader
-    : sourceDocumentation*
-      sourceMetadata*
-      sourceAttribute*
-    ;
-
-/*
- * ============================================================================
- * SOURCE ITEMS
- * ============================================================================
- *
- * A source item is deliberately an ordered syntactic unit.
- *
- * Domain-specific grammar modules plug into this boundary through
- * declaration and statement ownership.
- *
- * This rule is the integration point that prevents the source-unit
- * grammar from having to be rewritten whenever a new computing domain
- * is introduced.
- */
-
 sourceItem
-    : sourceDocumentation
-    | sourceMetadata
-    | sourceAttribute
-    | declaration
+    : declaration
     | statement
     ;
-
-/*
- * ============================================================================
- * SOURCE DOCUMENTATION
- * ============================================================================
- *
- * Documentation is syntactic metadata and does not change computation.
- *
- * The lexer owns DOC_COMMENT.
- */
-
-sourceDocumentation
-    : DOC_COMMENT+
-    ;
-
-/*
- * ============================================================================
- * SOURCE METADATA
- * ============================================================================
- *
- * Metadata is intentionally generic here.
- *
- * Its semantic interpretation belongs to the metadata/annotation layer.
- */
-
-sourceMetadata
-    : metadataAnnotation
-    ;
-
-/*
- * ============================================================================
- * SOURCE ATTRIBUTES
- * ============================================================================
- *
- * Attributes are attached syntactically to the following source item.
- *
- * The semantic meaning of an attribute is NOT determined by this grammar.
- *
- * This is essential for extensibility:
- *
- *   @quantum
- *   @hardware
- *   @resource
- *   @compile
- *   @runtime
- *   @security
- *
- * may be introduced by the appropriate semantic/domain registry without
- * making source-unit responsible for those meanings.
- */
-
-sourceAttribute
-    : annotation
-    ;
-
-/*
- * ============================================================================
- * DECLARATION BOUNDARY
- * ============================================================================
- *
- * This is an integration rule.
- *
- * It is intentionally not a second implementation of declarations.
- *
- * The root grammar/domain grammar must provide the authoritative
- * declaration alternatives.
- *
- * The declaration contract must eventually include, where supported:
- *
- *   - modules
- *   - imports
- *   - exports
- *   - packages
- *   - functions
- *   - types
- *   - constants
- *   - variables
- *   - classes/traits/interfaces
- *   - classical declarations
- *   - quantum declarations
- *   - hybrid declarations
- *   - HDL declarations
- *   - hardware declarations
- *   - distributed declarations
- *   - AI/data declarations
- *   - dialect declarations
- *   - macros
- *   - metaprogramming declarations
- *
- * None of those domains are owned by source-unit.g4.
- */
-
-declaration
-    : moduleDeclaration
-    | importDeclaration
-    | exportDeclaration
-    | packageDeclaration
-    | functionDeclaration
-    | typeDeclaration
-    | constantDeclaration
-    | variableDeclaration
-    | domainDeclaration
-    ;
-
-/*
- * ============================================================================
- * STATEMENT BOUNDARY
- * ============================================================================
- *
- * Statements are delegated to the statement grammar.
- *
- * Keeping this as an integration boundary prevents source-unit from
- * becoming coupled to every future control-flow feature.
- */
-
-statement
-    : blockStatement
-    | declarationStatement
-    | expressionStatement
-    | controlStatement
-    | returnStatement
-    | loopControlStatement
-    | effectStatement
-    | domainStatement
-    ;
-
-/*
- * ============================================================================
- * GENERIC DECLARATION INTEGRATION
- * ============================================================================
- *
- * These rules represent integration contracts.
- *
- * They are intentionally narrow enough that the source-unit grammar does
- * not become the owner of the internal syntax of those constructs.
- *
- * The final composed Zamani grammar may replace these forwarding rules
- * with imported rules where the ANTLR composition layout requires it.
- */
-
-/*
- * Module system
- */
-moduleDeclaration
-    : MODULE qualifiedName moduleBody?
-    ;
-
-moduleBody
-    : LEFT_BRACE sourceItem* RIGHT_BRACE
-    ;
-
-/*
- * Imports
- *
- * Import syntax belongs to the module/import grammar.
- */
-importDeclaration
-    : IMPORT importTarget importAlias? SEMICOLON
-    ;
-
-importTarget
-    : qualifiedName
-    | STRING_LITERAL
-    ;
-
-importAlias
-    : AS IDENTIFIER
-    ;
-
-/*
- * Exports
- */
-exportDeclaration
-    : EXPORT exportTarget SEMICOLON
-    ;
-
-exportTarget
-    : qualifiedName
-    | STAR
-    ;
-
-/*
- * Package declaration
- */
-packageDeclaration
-    : PACKAGE qualifiedName SEMICOLON
-    ;
-
-/*
- * Function declaration boundary.
- *
- * The body and parameter/type syntax belong to functions.g4.
- */
-functionDeclaration
-    : functionModifier*
-      FN
-      IDENTIFIER
-      functionGenericParameters?
-      LEFT_PAREN
-      functionParameters?
-      RIGHT_PAREN
-      functionReturnType?
-      functionEffects?
-      block
-    ;
-
-functionModifier
-    : PUBLIC
-    | PRIVATE
-    | INTERNAL
-    | ASYNC
-    | CONST
-    | EXTERN
-    ;
-
-functionGenericParameters
-    : LESS_THAN genericParameter (COMMA genericParameter)* GREATER_THAN
-    ;
-
-genericParameter
-    : IDENTIFIER
-    ;
-
-functionParameters
-    : functionParameter (COMMA functionParameter)*
-    ;
-
-functionParameter
-    : IDENTIFIER (COLON typeExpression)?
-    ;
-
-functionReturnType
-    : ARROW typeExpression
-    ;
-
-functionEffects
-    : WITH EFFECTS LEFT_BRACE
-      effectName (COMMA effectName)*
-      RIGHT_BRACE
-    ;
-
-effectName
-    : qualifiedName
-    ;
-
-/*
- * Type declaration boundary.
- */
-typeDeclaration
-    : TYPE IDENTIFIER typeParameters? typeDefinition
-    ;
-
-typeParameters
-    : LESS_THAN genericParameter (COMMA genericParameter)* GREATER_THAN
-    ;
-
-typeDefinition
-    : EQUALS typeExpression SEMICOLON
-    ;
-
-/*
- * Constants
- */
-constantDeclaration
-    : CONST IDENTIFIER
-      (COLON typeExpression)?
-      EQUALS expression
-      SEMICOLON
-    ;
-
-/*
- * Variables
- *
- * The source-unit grammar permits declarations but does not impose
- * capacity limits or target-specific storage rules.
- */
-variableDeclaration
-    : variableKeyword IDENTIFIER
-      (COLON typeExpression)?
-      variableInitializer?
-      SEMICOLON
-    ;
-
-variableKeyword
-    : LET
-    | VAR
-    | CONST
-    ;
-
-variableInitializer
-    : EQUALS expression
-    ;
-
-/*
- * ============================================================================
- * DOMAIN DECLARATION BOUNDARY
- * ============================================================================
- *
- * Domain syntax is intentionally represented as a forwarding boundary.
- *
- * A domain may be:
- *
- *   classical
- *   quantum
- *   hybrid
- *   hdl
- *   hardware
- *   distributed
- *   ai
- *   data
- *   networking
- *   security
- *   future/registered dialect
- *
- * Source-unit does NOT interpret these domains.
- *
- * Semantic ownership belongs to their respective domain layers.
- */
-
-domainDeclaration
-    : DOMAIN domainKind IDENTIFIER domainBody?
-    ;
-
-domainKind
-    : IDENTIFIER
-    ;
-
-domainBody
-    : LEFT_BRACE sourceItem* RIGHT_BRACE
-    ;
-
-/*
- * ============================================================================
- * STATEMENT INTEGRATION
- * ============================================================================
- */
-
-blockStatement
-    : block
-    ;
-
-block
-    : LEFT_BRACE statement* RIGHT_BRACE
-    ;
-
-declarationStatement
-    : variableDeclaration
-    | constantDeclaration
-    ;
-
-expressionStatement
-    : expression SEMICOLON
-    ;
-
-controlStatement
-    : IF expression block
-      (ELSE IF expression block)*
-      (ELSE block)?
-    | WHILE expression block
-    | DO block WHILE expression SEMICOLON
-    | FOR IDENTIFIER IN expression block
-    | MATCH expression matchBody
-    ;
-
-matchBody
-    : LEFT_BRACE matchCase+ RIGHT_BRACE
-    ;
-
-matchCase
-    : CASE pattern
-      (WHEN expression)?
-      FAT_ARROW
-      (expression | block)
-    ;
-
-loopControlStatement
-    : BREAK SEMICOLON
-    | CONTINUE SEMICOLON
-    ;
-
-returnStatement
-    : RETURN expression? SEMICOLON
-    ;
-
-effectStatement
-    : HANDLE expression block
-    ;
-
-domainStatement
-    : DOMAIN domainKind expression SEMICOLON
-    ;
-
-/*
- * ============================================================================
- * PATTERN BOUNDARY
- * ============================================================================
- */
-
-pattern
-    : IDENTIFIER
-    | UNDERSCORE
-    | literal
-    | tuplePattern
-    | arrayPattern
-    | typedPattern
-    ;
-
-tuplePattern
-    : LEFT_PAREN pattern (COMMA pattern)+ RIGHT_PAREN
-    ;
-
-arrayPattern
-    : LEFT_BRACKET
-      (pattern (COMMA pattern)*)?
-      RIGHT_BRACKET
-    ;
-
-typedPattern
-    : IDENTIFIER COLON typeExpression
-    ;
-
-/*
- * ============================================================================
- * TYPE / EXPRESSION FORWARDING BOUNDARIES
- * ============================================================================
- *
- * These are deliberately abstract integration rules.
- *
- * The source-unit grammar does not define the complete type system or
- * expression precedence hierarchy.
- *
- * That belongs to:
- *
- *   grammar/types/*
- *   grammar/expressions/*
- *
- * This prevents duplicate expression/type definitions.
- */
-
-typeExpression
-    : qualifiedName
-    | typeConstructor
-    ;
-
-typeConstructor
-    : qualifiedName
-      LESS_THAN
-      typeArgumentList?
-      GREATER_THAN
-    ;
-
-typeArgumentList
-    : typeExpression (COMMA typeExpression)*
-    ;
-
-expression
-    : primaryExpression
-    | unaryExpression
-    | binaryExpression
-    | callExpression
-    | memberExpression
-    | indexExpression
-    | lambdaExpression
-    ;
-
-primaryExpression
-    : IDENTIFIER
-    | literal
-    | LEFT_PAREN expression RIGHT_PAREN
-    ;
-
-unaryExpression
-    : unaryOperator expression
-    ;
-
-unaryOperator
-    : PLUS
-    | MINUS
-    | NOT
-    | BIT_NOT
-    ;
-
-binaryExpression
-    : expression binaryOperator expression
-    ;
-
-binaryOperator
-    : PLUS
-    | MINUS
-    | STAR
-    | SLASH
-    | PERCENT
-    | EQUAL_EQUAL
-    | NOT_EQUAL
-    | LESS_THAN
-    | LESS_EQUAL
-    | GREATER_THAN
-    | GREATER_EQUAL
-    | AND
-    | OR
-    | BIT_AND
-    | BIT_OR
-    | BIT_XOR
-    | SHIFT_LEFT
-    | SHIFT_RIGHT
-    ;
-
-callExpression
-    : expression
-      LEFT_PAREN
-      argumentList?
-      RIGHT_PAREN
-    ;
-
-argumentList
-    : expression (COMMA expression)*
-    ;
-
-memberExpression
-    : expression DOT IDENTIFIER
-    ;
-
-indexExpression
-    : expression
-      LEFT_BRACKET
-      expression
-      RIGHT_BRACKET
-    ;
-
-lambdaExpression
-    : PIPE
-      functionParameters?
-      PIPE
-      expression
-    ;
-
-/*
- * ============================================================================
- * LITERALS
- * ============================================================================
- *
- * Literal token ownership belongs to lexer/literals.g4.
- */
-
-literal
-    : INTEGER_LITERAL
-    | DECIMAL_LITERAL
-    | STRING_LITERAL
-    | CHARACTER_LITERAL
-    | BOOLEAN_LITERAL
-    | QUANTUM_LITERAL
-    | HARDWARE_LITERAL
-    | DURATION_LITERAL
-    | SIZE_LITERAL
-    ;
-
-/*
- * ============================================================================
- * QUALIFIED NAMES
- * ============================================================================
- *
- * Name syntax is ultimately owned by core/names.g4 and core/paths.g4.
- *
- * This forwarding form exists only to make the source-unit integration
- * contract explicit.
- */
-
-qualifiedName
-    : IDENTIFIER
-      (NAMESPACE_SEPARATOR IDENTIFIER)*
-    ;
-
-/*
- * ============================================================================
- * ANNOTATIONS
- * ============================================================================
- *
- * Annotation syntax is generic.
- *
- * Interpretation belongs to the annotation/metadata registry.
- */
-
-annotation
-    : AT IDENTIFIER
-      (
-          LEFT_PAREN annotationArguments? RIGHT_PAREN
-      )?
-    ;
-
-annotationArguments
-    : annotationArgument (COMMA annotationArgument)*
-    ;
-
-annotationArgument
-    : IDENTIFIER
-    | literal
-    | expression
-    ;
-
-metadataAnnotation
-    : annotation
-    ;
-
-/*
- * ============================================================================
- * SOURCE-LEVEL INVARIANTS
- * ============================================================================
- *
- * These are grammar invariants, not semantic actions.
- *
- * 1. sourceUnit always terminates at EOF.
- * 2. sourceItem has no machine-size-dependent repetition bound.
- * 3. sourceUnit does not reference hardware capacity.
- * 4. sourceUnit does not reference quantum device topology.
- * 5. sourceUnit does not construct IR.
- * 6. sourceUnit does not perform semantic validation.
- * 7. sourceUnit does not select a backend.
- * 8. sourceUnit does not schedule execution.
- * 9. sourceUnit does not perform optimization.
- * 10. sourceUnit remains extensible through domain/declaration boundaries.
- *
- * ============================================================================
- * END
- * ============================================================================
- */
