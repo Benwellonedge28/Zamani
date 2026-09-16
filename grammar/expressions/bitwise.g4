@@ -6,269 +6,233 @@
  * File:
  *     grammar/expressions/bitwise.g4
  *
- * Role:
- *     Canonical parser component for binary bitwise-expression syntax.
+ * Status:
+ *     Canonical production parser component for bitwise expressions.
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Rust integration baseline:
+ * Implementation baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     Safe Rust only
  *
  * Safety:
- *     This grammar contains no embedded Rust implementation code.
- *     It introduces no unsafe Rust.
+ *     This grammar contains no embedded Rust code, actions, predicates,
+ *     I/O, runtime calls, hardware access, or unsafe code.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar owns the syntactic precedence hierarchy for binary bitwise
- * operators:
+ * This file owns the source-language precedence and associativity of the
+ * binary bitwise operators:
  *
- *                         bitwiseExpression
- *                                |
- *                                v
- *                         bitwiseOrExpression
- *                                |
- *                                v
- *                        bitwiseXorExpression
- *                                |
- *                                v
- *                        bitwiseAndExpression
- *                                |
- *                                v
- *                        equalityExpression
+ *     &
+ *     ^
+ *     |
  *
- * The hierarchy is:
+ * The precedence hierarchy owned here is:
  *
- *     bitwise AND
- *         &
+ *     bitwiseOrExpression
+ *             |
+ *             v
+ *     bitwiseXorExpression
+ *             |
+ *             v
+ *     bitwiseAndExpression
+ *             |
+ *             v
+ *     equalityExpression
  *
- *     bitwise XOR
- *         ^
- *
- *     bitwise OR
- *         |
- *
- * with AND binding more tightly than XOR, and XOR binding more tightly than OR.
- *
- * Example:
+ * Therefore:
  *
  *     a | b ^ c & d
  *
- * parses structurally as:
+ * is structurally:
  *
  *     a | (b ^ (c & d))
  *
- * It does NOT decide whether the operands are:
+ * This file defines syntax only.
+ *
+ * It does not determine whether the operands are:
  *
  *     integers
- *     arbitrary-width integers
+ *     arbitrary-precision integers
  *     fixed-width integers
  *     bit vectors
- *     packed data
- *     SIMD values
- *     vectors
  *     masks
+ *     packed values
+ *     SIMD/vector values
+ *     tensors
  *     hardware signals
  *     registers
- *     tensors
  *     accelerator values
- *     quantum/classical representations
- *     user-defined types
+ *     user-defined values
  *
- * Those decisions belong to semantic analysis and downstream IR/lowering.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * OWNS:
- *
- *   - binary bitwise-expression syntax;
- *   - bitwise AND syntax;
- *   - bitwise XOR syntax;
- *   - bitwise OR syntax;
- *   - precedence between those operators;
- *   - left-associative chaining of those operators;
- *   - the public bitwiseExpression parser entry rule;
- *   - syntactic composition with equalityExpression.
- *
- * DOES NOT OWN:
- *
- *   - operator lexical spelling;
- *   - lexer token definitions;
- *   - identifiers;
- *   - literals;
- *   - primary expressions;
- *   - unary operators;
- *   - arithmetic expressions;
- *   - shift expressions;
- *   - comparison expressions;
- *   - equality-expression semantics;
- *   - assignment expressions;
- *   - logical expressions;
- *   - function calls;
- *   - indexing;
- *   - member access;
- *   - types;
- *   - type checking;
- *   - operator overload resolution;
- *   - implicit conversions;
- *   - constant evaluation;
- *   - compile-time evaluation;
- *   - ownership;
- *   - borrowing;
- *   - lifetimes;
- *   - effects;
- *   - capabilities;
- *   - resources;
- *   - hardware selection;
- *   - hardware topology;
- *   - scheduling;
- *   - routing;
- *   - optimization;
- *   - QEC;
- *   - ZQN;
- *   - simulation;
- *   - classical IR;
- *   - quantum::ir;
- *   - runtime behavior;
- *   - backend selection;
- *   - ABI selection;
- *   - machine-specific limits.
+ * Those decisions belong to semantic analysis.
  *
  * ============================================================================
- * OPERATOR OWNERSHIP
+ * OWNS
  * ============================================================================
  *
- * The canonical lexer owns:
+ * This file owns:
  *
- *     AMPERSAND
- *     CARET
- *     PIPE
- *
- * Their source spellings are therefore NOT repeated in this parser grammar.
- *
- * The parser owns their syntactic precedence.
- *
- * Semantic analysis owns their meaning.
- *
- * This preserves the repository boundary:
- *
- *     characters
- *         |
- *         v
- *     ZamaniLexer
- *         |
- *         v
- *     operator tokens
- *         |
- *         v
- *     bitwise.g4
- *         |
- *         v
- *     expression AST
- *         |
- *         v
- *     semantic analysis
- *         |
- *         v
- *     canonical semantic representation / IR
+ *     - bitwiseExpression
+ *     - bitwiseOrExpression
+ *     - bitwiseXorExpression
+ *     - bitwiseAndExpression
+ *     - bitwise OR precedence
+ *     - bitwise XOR precedence
+ *     - bitwise AND precedence
+ *     - left-associative repetition within each bitwise level
+ *     - composition with equalityExpression
  *
  * ============================================================================
- * OPERATOR SET
+ * DOES NOT OWN
  * ============================================================================
  *
- * This file intentionally recognizes exactly the currently established
- * binary bitwise operators:
+ * This file does NOT own:
+ *
+ *     - lexical operator spelling
+ *     - lexer tokens
+ *     - identifiers
+ *     - literals
+ *     - primary expressions
+ *     - postfix expressions
+ *     - unary expressions
+ *     - arithmetic expressions
+ *     - shift expressions
+ *     - comparison expressions
+ *     - equality expressions
+ *     - logical expressions
+ *     - conditional expressions
+ *     - ranges
+ *     - assignments
+ *     - types
+ *     - type checking
+ *     - overload resolution
+ *     - conversions
+ *     - constant evaluation
+ *     - ownership
+ *     - borrowing
+ *     - effects
+ *     - capabilities
+ *     - resources
+ *     - hardware selection
+ *     - hardware topology
+ *     - scheduling
+ *     - routing
+ *     - optimization
+ *     - QEC
+ *     - ZQN
+ *     - HAL
+ *     - calibration
+ *     - runtime behavior
+ *     - ABI selection
+ *     - backend selection
+ *     - IR construction
+ *     - machine-specific limits
+ *
+ * ============================================================================
+ * LEXER AUTHORITY
+ * ============================================================================
+ *
+ * The canonical lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * The lexer owns the spelling and identity of the bitwise operators.
+ *
+ * Canonical tokens consumed here:
  *
  *     AMPERSAND    &
  *     CARET        ^
  *     PIPE         |
  *
- * It does NOT redefine:
+ * This file MUST NOT redefine those tokens and MUST NOT replace them with
+ * string literals.
  *
- *     TILDE        ~
+ * The separation is:
  *
- * because TILDE is a unary operator owned by unary.g4.
- *
- * It does NOT redefine:
- *
- *     LEFT_SHIFT   <<
- *     RIGHT_SHIFT  >>
- *
- * because shiftExpression owns shift precedence.
- *
- * It does NOT redefine:
- *
- *     AMP_ASSIGN
- *     CARET_ASSIGN
- *     PIPE_ASSIGN
- *
- * because compound assignment belongs to assignment-expression syntax.
+ *     source characters
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     canonical operator token
+ *          |
+ *          v
+ *     this grammar
+ *          |
+ *          v
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     canonical semantic representation / IR
  *
  * ============================================================================
  * PRECEDENCE CONTRACT
  * ============================================================================
  *
- * The complete binary-expression precedence direction is conceptually:
+ * The universal expression hierarchy around this file is:
  *
- *     logical OR
- *         |
- *     logical AND
- *         |
- *     bitwise OR
- *         |
- *     bitwise XOR
- *         |
- *     bitwise AND
- *         |
- *     equality
- *         |
- *     comparison
- *         |
- *     shift
- *         |
- *     additive
- *         |
- *     multiplicative
- *         |
- *     unary
- *         |
- *     postfix / primary
+ *     logicalOrExpression
+ *             |
+ *     logicalAndExpression
+ *             |
+ *     bitwiseOrExpression       <-- this file
+ *             |
+ *     bitwiseXorExpression      <-- this file
+ *             |
+ *     bitwiseAndExpression      <-- this file
+ *             |
+ *     equalityExpression
+ *             |
+ *     comparisonExpression
+ *             |
+ *     shiftExpression
+ *             |
+ *     additiveExpression
+ *             |
+ *     multiplicativeExpression
+ *             |
+ *     prefix/unary expression
+ *             |
+ *     postfix expression
+ *             |
+ *     primary expression
  *
- * The exact surrounding hierarchy is owned by the corresponding expression
- * grammar components.
+ * Thus:
  *
- * This file owns only:
+ *     &
  *
- *     bitwise OR
- *     bitwise XOR
- *     bitwise AND
+ * binds more tightly than:
  *
- * This prevents precedence duplication between:
+ *     ^
  *
- *     expressions.g4
- *     binary.g4
- *     arithmetic.g4
- *     comparison.g4
- *     logical.g4
- *     unary.g4
- *     assignment.g4
+ * which binds more tightly than:
+ *
+ *     |
+ *
+ * The equality/comparison/shift layers are supplied by their respective
+ * expression grammar components.
  *
  * ============================================================================
  * ASSOCIATIVITY
  * ============================================================================
  *
- * Bitwise binary operators are parsed as left-associative chains.
+ * Each binary bitwise operator level is left associative.
  *
  * Therefore:
  *
  *     a & b & c
  *
- * has the syntactic structure:
+ * has the structural form:
  *
  *     (a & b) & c
  *
@@ -288,360 +252,662 @@
  *
  *     (a | b) | c
  *
- * The grammar uses iterative operator chains rather than recursive
- * left-recursive rules. This keeps arbitrary-length chains out of recursive
- * parser call structure and avoids introducing a language-level operator-count
- * limit.
+ * Iterative repetition is deliberately used instead of recursive
+ * left-recursive chains.
+ *
+ * This permits arbitrary-length source-level chains without introducing a
+ * grammar-defined operator-count limit.
+ *
+ * ============================================================================
+ * PUBLIC ENTRY RULE
+ * ============================================================================
+ *
+ * `bitwiseExpression` is the public entry rule for this component.
+ *
+ * The canonical expression composition layer may consume this rule when
+ * composing the complete expression hierarchy.
+ *
+ * The individual precedence rules remain public parser rules because the
+ * higher-level logical-expression grammar needs `bitwiseOrExpression`.
  *
  * ============================================================================
  * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * This component depends on:
+ * This grammar depends on:
  *
- *     comparison.g4
+ *     equalityExpression
  *
- * which MUST expose:
+ * supplied by:
  *
- *     comparisonExpression
- *
- * as the expression immediately below the bitwise layer.
+ *     grammar/expressions/comparison.g4
  *
  * The dependency direction is:
  *
- *     logical.g4
- *          |
- *          v
- *     bitwise.g4
- *          |
- *          v
+ *     higher-precedence/lower-level expressions
+ *             |
+ *             v
  *     comparison.g4
- *          |
- *          v
- *     lower expression layers
+ *             |
+ *             v
+ *     bitwise.g4
+ *             |
+ *             v
+ *     logical-expression composition
  *
- * The reverse dependency is forbidden.
+ * More precisely, in terms of precedence:
  *
- * In particular:
+ *     equalityExpression
+ *             ^
+ *             |
+ *     bitwiseAndExpression
+ *             ^
+ *             |
+ *     bitwiseXorExpression
+ *             ^
+ *             |
+ *     bitwiseOrExpression
+ *             ^
+ *             |
+ *     logicalAndExpression
+ *             ^
+ *             |
+ *     logicalOrExpression
  *
- *     comparison.g4 MUST NOT import bitwise.g4
+ * `bitwise.g4` MUST NOT define `equalityExpression`.
  *
- * and:
+ * `comparison.g4` MUST NOT depend on `bitwise.g4`.
  *
- *     bitwise.g4 MUST NOT import expressions.g4
+ * `bitwise.g4` MUST NOT import the complete expression composition grammar.
  *
- * because expressions.g4 is the higher-level composition layer.
- *
- * This prevents:
- *
- *     grammar -> grammar -> grammar -> cycle
+ * This prevents cyclic grammar dependencies.
  *
  * ============================================================================
  * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
- * This file is a parser grammar and uses the canonical Zamani lexer vocabulary.
+ * This is a parser grammar, not a combined lexer/parser grammar.
  *
- * The canonical parser architecture is:
+ * Its header is intentionally:
  *
- *     grammar/antlr/ZamaniLexer.g4
- *                 |
- *                 v
- *     token vocabulary
- *                 |
- *                 v
- *     modular parser grammars
- *                 |
- *                 v
- *     grammar/antlr/ZamaniParser.g4
+ *     parser grammar ZamaniBitwise;
  *
- * This component therefore does not define lexer rules.
+ * and its lexical vocabulary is supplied through:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * The composing expression grammar is responsible for importing this module.
+ *
+ * The module itself does not define lexer rules.
+ *
+ * ANTLR parser-grammar composition must remain the mechanism used to combine
+ * these independent precedence layers.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * This grammar does not construct an AST directly.
+ * This grammar does not construct the frontend AST.
  *
- * The parser output must preserve enough structure for the frontend AST layer
- * to represent:
+ * The parser output must preserve:
  *
- *     BitwiseOr
- *     BitwiseXor
- *     BitwiseAnd
+ *     - operator identity
+ *     - left operand
+ *     - right operand
+ *     - operand ordering
+ *     - source span
+ *     - nested precedence structure
  *
- * together with:
+ * The domain-neutral frontend AST may normalize a parser chain into generic
+ * binary-operation nodes.
  *
- *     left operand
- *     operator token
- *     right operand
- *     source span
- *
- * For a chain such as:
+ * Conceptually:
  *
  *     a | b ^ c & d
  *
- * the parser must preserve the precedence structure rather than flattening
- * every operator into an undifferentiated binary node.
+ * becomes:
  *
- * The AST layer may subsequently normalize the iterative parse-chain form
- * into canonical binary-expression nodes.
+ *     BitwiseOr(
+ *         a,
+ *         BitwiseXor(
+ *             b,
+ *             BitwiseAnd(c, d)
+ *         )
+ *     )
+ *
+ * The actual AST representation must follow the repository's canonical
+ * frontend AST contract rather than introducing a grammar-specific AST type.
+ *
+ * This grammar MUST NOT require domain-specific nodes such as:
+ *
+ *     QuantumBitwiseOperation
+ *     GPUBitwiseOperation
+ *     FPGAOperation
+ *     HDLBitwiseOperation
+ *
+ * merely because the operands belong to those domains.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * This grammar deliberately accepts syntactically valid operand combinations
- * without deciding whether those combinations are semantically legal.
+ * Parsing establishes only syntactic structure.
  *
- * Examples:
+ * Semantic analysis determines whether a particular bitwise expression is
+ * legal for its resolved operand types.
  *
- *     a & b
- *     a ^ b
- *     a | b
+ * Examples that may be semantically supported by different type systems
+ * include:
  *
- * are syntactically valid.
- *
- * Whether they are valid for the resolved types is determined downstream.
- *
- * Semantic analysis may determine that an operation applies to:
- *
- *     integer values
- *     arbitrary-precision integers
- *     bit vectors
- *     masks
- *     packed values
- *     hardware signals
- *     vector types
- *     accelerator-specific values
- *     user-defined operator implementations
- *
- * or reject the operation for the resolved types.
- *
- * This file MUST NOT encode fixed operand widths such as:
- *
- *     8
- *     16
- *     32
- *     64
- *     128
- *     256
- *
- * or any other implementation-specific width.
- *
- * ============================================================================
- * QUANTUM / CLASSICAL / HDL INTEGRATION
- * ============================================================================
- *
- * Bitwise syntax is domain-neutral.
- *
- * The same source-level operator structure may eventually be lowered into
- * different semantic representations depending on the resolved operand type
- * and program context.
- *
- * Classical example:
- *
+ *     integer & integer
+ *     bit_vector & bit_vector
  *     mask & value
- *
- * HDL example:
- *
  *     signal_a ^ signal_b
- *
- * Accelerator example:
- *
  *     vector_a | vector_b
  *
- * Quantum-related expressions may appear as operands only where the semantic
- * type system explicitly permits such an operation.
+ * Semantic analysis owns:
  *
- * This grammar itself MUST NOT decide that a bitwise expression:
+ *     - operand type compatibility
+ *     - width compatibility
+ *     - arbitrary-width integer semantics
+ *     - signed/unsigned semantics
+ *     - bit-vector semantics
+ *     - tensor/vector semantics
+ *     - broadcasting rules
+ *     - user-defined operators
+ *     - trait/interface constraints
+ *     - conversions
+ *     - result type
+ *     - overflow behavior where applicable
+ *     - symbolic semantics
+ *     - domain-specific legality
  *
- *     creates a quantum gate
- *     allocates a qubit
- *     measures a qubit
- *     changes a physical qubit
- *     invokes QEC
- *     invokes ZQN
- *     selects a quantum backend
- *
- * If a valid semantic operation ultimately lowers into quantum::ir, that
- * lowering occurs after parsing and semantic analysis.
- *
- * Therefore:
- *
- *     grammar
- *         -> AST
- *         -> semantic analysis
- *         -> quantum::ir
- *
- * and never:
- *
- *     grammar
- *         -> private quantum IR
+ * This grammar MUST NOT encode any of those rules.
  *
  * ============================================================================
- * HARDWARE / HDL CONTRACT
+ * ARBITRARY WIDTH / SCALABILITY
  * ============================================================================
  *
- * Bitwise operators may be useful for hardware-oriented expressions, but this
- * grammar does not encode:
+ * This file imposes no source-language limit on:
  *
- *     register count
- *     signal width
- *     bus width
- *     FPGA LUT count
- *     ASIC resources
- *     clock frequency
- *     device topology
- *     physical placement
+ *     - integer width
+ *     - bit-vector width
+ *     - signal width
+ *     - tensor dimension
+ *     - vector length
+ *     - number of chained operators
+ *     - number of operands
+ *     - expression depth
+ *     - source-file size
  *
- * Hardware-specific constraints belong to:
+ * For example, the grammar does not contain:
  *
- *     type checking
- *     capability checking
- *     resource checking
- *     hardware description
- *     target selection
- *     lowering
+ *     MAX_BITS
+ *     MAX_WIDTH
+ *     MAX_VECTOR_WIDTH
+ *     MAX_SIGNAL_WIDTH
+ *     MAX_OPERATORS
+ *     MAX_EXPRESSION_DEPTH
  *
- * and not to this grammar.
+ * or equivalent limits.
+ *
+ * "Infinity" here means that the language grammar introduces no artificial
+ * finite limit. Actual compilation and execution remain bounded by available
+ * resources and implementation policy.
  *
  * ============================================================================
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * A Zamani source program describes computation, not the size of the machine
- * that happens to execute it.
+ * Bitwise syntax describes computation rather than a particular machine.
  *
- * This grammar therefore contains no:
+ * This grammar MUST NOT encode:
  *
- *     MAX_BITS
- *     MAX_WIDTH
- *     MAX_OPERANDS
- *     MAX_EXPRESSION_DEPTH
- *     MAX_EXPRESSION_COUNT
- *     MAX_VECTOR_WIDTH
- *     MAX_REGISTER_WIDTH
- *     MAX_SIGNAL_WIDTH
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QUBITS
- *     MAX_DEVICES
- *     MAX_NODES
- *     MAX_MEMORY
+ *     - CPU count
+ *     - core count
+ *     - thread count
+ *     - GPU count
+ *     - FPGA count
+ *     - QPU count
+ *     - register count
+ *     - physical register width
+ *     - memory capacity
+ *     - device count
+ *     - node count
+ *     - network topology
+ *     - accelerator topology
+ *     - physical qubit identifiers
  *
- * or equivalent fixed machine restrictions.
- *
- * An implementation may impose operational limits because of available
- * memory, parser configuration, compilation resources, or runtime policy.
- *
- * Such limits MUST remain implementation/resource policy and MUST NOT become
- * source-language syntax restrictions.
+ * The same source expression may therefore participate in compilation for
+ * different target systems when the semantic requirements can be satisfied.
  *
  * ============================================================================
- * SCALABILITY CONTRACT
+ * CLASSICAL INTEGRATION
  * ============================================================================
  *
- * The grammar uses repetition operators for arbitrary-length bitwise chains:
+ * Classical expressions may use:
  *
- *     (AMPERSAND equalityExpression)*
- *     (CARET bitwiseAndExpression)*
- *     (PIPE bitwiseXorExpression)*
+ *     &
+ *     ^
+ *     |
  *
- * There is no grammar-defined maximum number of operators.
+ * for supported scalar, arbitrary-precision, bit-vector, packed, vector,
+ * tensor, mask, or user-defined types.
  *
- * There is no grammar-defined maximum operand width.
+ * The grammar does not determine which of these types exist.
  *
- * There is no grammar-defined maximum program size.
+ * Type and capability systems determine that downstream.
  *
- * There is no grammar-defined maximum nesting count.
+ * ============================================================================
+ * HDL INTEGRATION
+ * ============================================================================
  *
- * Practical resource exhaustion is an implementation concern rather than a
- * semantic language limit.
+ * HDL expressions may use the same source-level syntax for hardware-oriented
+ * semantic values, including signals, masks, buses, vectors and other
+ * hardware-described values.
+ *
+ * This grammar does not decide:
+ *
+ *     - signal width
+ *     - register width
+ *     - bus width
+ *     - FPGA resource usage
+ *     - ASIC implementation
+ *     - clock frequency
+ *     - timing
+ *     - placement
+ *     - routing
+ *     - synthesis strategy
+ *
+ * Those belong to the HDL/hardware semantic and lowering layers.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Bitwise operators remain domain-neutral.
+ *
+ * This grammar MUST NOT interpret:
+ *
+ *     &
+ *     ^
+ *     |
+ *
+ * as quantum gates or quantum hardware operations.
+ *
+ * It MUST NOT:
+ *
+ *     - allocate qubits
+ *     - measure qubits
+ *     - select physical qubits
+ *     - select QPUs
+ *     - perform routing
+ *     - perform scheduling
+ *     - invoke QEC
+ *     - invoke ZQN
+ *     - invoke HAL
+ *     - select a quantum backend
+ *
+ * If semantic analysis determines that an expression has a valid quantum
+ * meaning, downstream lowering must continue through the canonical:
+ *
+ *     quantum::ir
+ *
+ * boundary.
+ *
+ * This grammar must never create a second quantum IR.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * The same syntax may participate in:
+ *
+ *     classical computing
+ *     quantum/classical hybrid programs
+ *     HDL
+ *     accelerator programming
+ *     AI/data processing
+ *     distributed computation
+ *     networking/data manipulation
+ *     security/cryptographic computation
+ *
+ * Domain interpretation is downstream from parsing.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates no IR.
+ *
+ * The frontend AST and semantic model provide the bridge:
+ *
+ *     source
+ *       |
+ *       v
+ *     parser
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       +----------------------+-----------------------+
+ *       |                      |                       |
+ *       v                      v                       v
+ *   classical            quantum::ir             HDL/hardware
+ *       |                      |                       |
+ *       +----------------------+-----------------------+
+ *                              |
+ *                              v
+ *                    optimization / lowering
+ *
+ * The appropriate downstream IR is selected from semantic information.
+ *
+ * ============================================================================
+ * COMPILER INTEGRATION
+ * ============================================================================
+ *
+ * The compiler must treat these operators as source-level operations.
+ *
+ * Target instruction selection belongs after:
+ *
+ *     parsing
+ *     AST construction
+ *     semantic analysis
+ *     type resolution
+ *     capability/resource analysis
+ *     canonical IR construction
+ *
+ * The grammar MUST NOT select:
+ *
+ *     CPU instruction
+ *     GPU instruction
+ *     FPGA primitive
+ *     ASIC gate
+ *     QPU instruction
+ *     vendor intrinsic
+ *
+ * ============================================================================
+ * OPTIMIZATION CONTRACT
+ * ============================================================================
+ *
+ * Optimizations are downstream.
+ *
+ * Examples include:
+ *
+ *     constant folding
+ *     algebraic simplification
+ *     vectorization
+ *     masking optimization
+ *     hardware lowering
+ *     instruction selection
+ *
+ * None of these transformations belongs in this grammar.
+ *
+ * Optimizers must preserve the language's semantic rules, including user
+ * defined operations and observable effects.
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * The grammar performs no runtime evaluation.
+ *
+ * It must not:
+ *
+ *     - inspect runtime values
+ *     - inspect hardware
+ *     - allocate memory
+ *     - perform I/O
+ *     - invoke devices
+ *     - access QPUs
+ *     - access GPUs
+ *     - access FPGAs
+ *     - schedule work
+ *
+ * ============================================================================
+ * ERROR CONTRACT
+ * ============================================================================
+ *
+ * The parser must reject incomplete or malformed bitwise syntax.
+ *
+ * Examples:
+ *
+ *     a &
+ *     a ^
+ *     a |
+ *
+ *     & b
+ *     ^ b
+ *     | b
+ *
+ *     a & & b
+ *     a ^ ^ b
+ *     a | | b
+ *
+ * These are syntax errors.
+ *
+ * A syntactically valid expression whose operands are semantically
+ * incompatible is NOT a grammar error.
+ *
+ * Example:
+ *
+ *     value_of_type_A & value_of_type_B
+ *
+ * is accepted syntactically and checked by semantic analysis.
  *
  * ============================================================================
  * DETERMINISM CONTRACT
  * ============================================================================
  *
- * Given the same token stream, this grammar must produce the same parse
- * structure.
+ * Given the same token stream and grammar version, parsing must produce the
+ * same structural result.
  *
- * The operator hierarchy is unambiguous:
+ * Parsing MUST NOT depend on:
  *
- *     & > ^ > |
- *
- * Parentheses and lower/higher expression layers determine explicit grouping.
- *
- * No semantic state, hardware state, runtime state, or backend state may be
- * consulted while parsing these rules.
+ *     - time
+ *     - randomness
+ *     - environment variables
+ *     - filesystem state
+ *     - network state
+ *     - hardware discovery
+ *     - resource availability
+ *     - runtime scheduler state
+ *     - calibration
+ *     - backend selection
  *
  * ============================================================================
- * ERROR-RECOVERY CONTRACT
+ * SECURITY CONTRACT
  * ============================================================================
  *
- * Syntax errors are parser concerns.
+ * This grammar performs no:
  *
- * This grammar must not:
+ *     - filesystem access
+ *     - network access
+ *     - command execution
+ *     - dynamic code execution
+ *     - hardware access
+ *     - runtime evaluation
  *
- *     print diagnostics;
- *     write to stdout;
- *     access files;
- *     access networks;
- *     inspect hardware;
- *     inspect runtime resources;
- *     silently reinterpret invalid operators;
- *     convert invalid syntax into comments.
- *
- * The canonical parser/frontend diagnostic layer owns error presentation and
- * source-span reporting.
+ * It contains no embedded target-language actions.
  *
  * ============================================================================
  * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * Existing Zamani operator tokens remain authoritative:
+ * Existing canonical operator spellings remain:
+ *
+ *     &
+ *     ^
+ *     |
+ *
+ * represented by:
  *
  *     AMPERSAND
  *     CARET
  *     PIPE
  *
- * Existing source forms therefore remain valid:
+ * No alternate operator spelling is introduced here.
  *
- *     a & b
- *     a ^ b
- *     a | b
+ * New operator spellings require coordinated changes to:
  *
- * No new operator spelling is introduced by this file.
- *
- * This is important because operator spellings belong to:
- *
- *     grammar/lexer/operators.g4
- *
- * while precedence belongs here.
+ *     lexer specification
+ *     lexer grammar
+ *     syntax specification
+ *     parser grammar
+ *     AST contract
+ *     semantic contract
+ *     compatibility tests
  *
  * ============================================================================
- * RUST CONTRACT
+ * DUPLICATION PROHIBITION
  * ============================================================================
  *
- * This grammar itself is language/runtime independent.
+ * These rules must have one canonical owner:
  *
- * The generated Zamani frontend must integrate with:
+ *     bitwiseExpression
+ *     bitwiseOrExpression
+ *     bitwiseXorExpression
+ *     bitwiseAndExpression
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ * They MUST NOT also be independently defined in:
  *
- * and repository policy MUST prohibit unsafe Rust.
+ *     grammar/expressions/expression.g4
+ *     grammar/expressions/expressions.g4
+ *     grammar/expressions/binary.g4
+ *     grammar/antlr/Core.g4
+ *     grammar/antlr/ZamaniParser.g4
+ *     grammar/Zamani.g4
  *
- * No embedded Rust actions, predicates, or unsafe implementation code are
- * required by this grammar.
+ * The root/composition grammars should import or compose this module.
+ *
+ * Existing duplicate definitions are integration debt and must be removed
+ * from the authoritative composition path when this module is activated.
+ *
+ * ============================================================================
+ * EXPRESSION COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * The intended complete hierarchy is:
+ *
+ *     expression
+ *         |
+ *     assignmentExpression
+ *         |
+ *     conditionalExpression
+ *         |
+ *     rangeExpression
+ *         |
+ *     logicalOrExpression
+ *         |
+ *     logicalAndExpression
+ *         |
+ *     bitwiseOrExpression       <-- this file
+ *         |
+ *     bitwiseXorExpression      <-- this file
+ *         |
+ *     bitwiseAndExpression      <-- this file
+ *         |
+ *     equalityExpression
+ *         |
+ *     comparisonExpression
+ *         |
+ *     shiftExpression
+ *         |
+ *     additiveExpression
+ *         |
+ *     multiplicativeExpression
+ *         |
+ *     prefixExpression
+ *         |
+ *     postfixExpression
+ *         |
+ *     primaryExpression
+ *
+ * The direction is from lower binding strength at the top to higher binding
+ * strength toward the bottom.
+ *
+ * ============================================================================
+ * INTEGRATION WITH CURRENT REPOSITORY
+ * ============================================================================
+ *
+ * The repository currently has bitwise rules duplicated in the broader
+ * expression grammar. The modular architecture should make this file their
+ * sole owner.
+ *
+ * Required integration:
+ *
+ *     1. `grammar/expressions/expressions.g4`
+ *        must stop defining:
+ *
+ *            bitwiseOrExpression
+ *            bitwiseXorExpression
+ *            bitwiseAndExpression
+ *
+ *        and instead compose/import this module.
+ *
+ *     2. The canonical expression composition must continue to expose:
+ *
+ *            logicalAndExpression
+ *            bitwiseOrExpression
+ *
+ *        at the logical/bitwise boundary.
+ *
+ *     3. `grammar/expressions/comparison.g4`
+ *        remains the owner of:
+ *
+ *            equalityExpression
+ *            comparisonExpression
+ *
+ *        and therefore supplies the lower dependency:
+ *
+ *            equalityExpression
+ *
+ *     4. `grammar/expressions/arithmetic.g4`
+ *        and lower expression modules must remain below the comparison layer.
+ *
+ *     5. `grammar/antlr/Core.g4`
+ *        must not remain a second authoritative owner of this bitwise
+ *        hierarchy.
+ *
+ *     6. `grammar/antlr/ZamaniParser.g4`
+ *        must not independently redefine these rules if it is retained as
+ *        a compatibility/composition grammar.
+ *
+ *     7. `grammar/Zamani.g4`
+ *        must consume the canonical expression composition rather than
+ *        introduce another bitwise hierarchy.
+ *
+ * ============================================================================
+ * FEATURE TRACEABILITY
+ * ============================================================================
+ *
+ * This feature has the following conceptual traceability:
+ *
+ *     lexer token
+ *         ->
+ *     parser rule
+ *         ->
+ *     frontend AST operation
+ *         ->
+ *     semantic operator resolution
+ *         ->
+ *     canonical semantic representation / IR
+ *         ->
+ *     compiler lowering
+ *         ->
+ *     target realization
+ *
+ * Every implementation stage must preserve source provenance/source spans
+ * where the repository's frontend contract requires them.
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * Positive tests MUST include at least:
+ * Positive syntax tests MUST include:
  *
  *     a & b
  *     a ^ b
@@ -659,11 +925,12 @@
  *     a | (b & c)
  *     (a ^ b) | (c & d)
  *
- *     nested expressions containing bitwise operators
- *     calls used as operands
- *     indexed values used as operands
- *     member-access expressions used as operands
- *     literal operands where the lower grammar permits them
+ *     foo() & bar()
+ *     value[index] ^ mask
+ *     object.field | flags
+ *
+ *     nested expression operands
+ *     literal operands accepted by lower expression layers
  *
  * Precedence tests MUST establish:
  *
@@ -673,15 +940,11 @@
  *
  *     a | (b ^ c)
  *
- * and:
- *
  *     a ^ b & c
  *
  * as:
  *
  *     a ^ (b & c)
- *
- * and:
  *
  *     a | b ^ c & d
  *
@@ -689,122 +952,121 @@
  *
  *     a | (b ^ (c & d))
  *
- * Negative tests MUST include malformed forms such as:
+ * Associativity tests MUST establish:
+ *
+ *     a & b & c
+ *         ==
+ *     (a & b) & c
+ *
+ *     a ^ b ^ c
+ *         ==
+ *     (a ^ b) ^ c
+ *
+ *     a | b | c
+ *         ==
+ *     (a | b) | c
+ *
+ * Negative tests MUST include:
  *
  *     a &
  *     a ^
  *     a |
- *     & b
- *     ^ b
- *     | b
+ *     & a
+ *     ^ a
+ *     | a
  *     a & & b
  *     a ^ ^ b
  *     a | | b
  *
  * Boundary tests MUST include:
  *
- *     very long operator chains;
- *     very large source expressions;
- *     deeply nested parenthesized expressions;
- *     large arbitrary-width operand representations where the lower grammar
- *     permits them.
+ *     long bitwise chains
+ *     deeply nested expressions
+ *     large source expressions
+ *     large operands accepted by lower layers
  *
- * The tests MUST NOT encode an artificial language maximum merely because a
- * test fixture happens to use a particular size.
+ * Scalability tests MUST NOT establish an artificial maximum operator count,
+ * operand width, vector width, tensor dimension, or source size.
+ *
+ * Determinism tests MUST parse identical token streams repeatedly and verify
+ * equivalent parse structure.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * Fixed machine/resource values:
+ * Forbidden in this file:
  *
- *     NONE
+ *     MAX_BITS
+ *     MAX_WIDTH
+ *     MAX_VECTOR_WIDTH
+ *     MAX_SIGNAL_WIDTH
+ *     MAX_REGISTER_WIDTH
+ *     MAX_OPERATORS
+ *     MAX_EXPRESSION_DEPTH
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
  *
- * Fixed bit width:
- *
- *     NONE
- *
- * Fixed operand count:
- *
- *     NONE
- *
- * Fixed expression depth:
- *
- *     NONE
- *
- * Fixed hardware topology:
- *
- *     NONE
- *
- * Fixed quantum resource count:
- *
- *     NONE
- *
- * Fixed backend:
- *
- *     NONE
- *
- * Any future limit found in this file must be classified as:
- *
- *     1. language semantic requirement
- *     2. target-specific requirement
- *     3. resource constraint
- *     4. implementation limitation
- *     5. accidental hard-coding
- *     6. test-only limitation
- *     7. documentation-only limitation
- *
- * Accidental hard-coding MUST be removed.
+ * No hardware/resource quantity is used to determine syntactic validity.
  *
  * ============================================================================
- * INTEGRATION CHECKLIST
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- * Before declaring this file complete:
+ * This file is complete when:
  *
- * [ ] ZamaniLexer provides AMPERSAND.
- * [ ] ZamaniLexer provides CARET.
- * [ ] ZamaniLexer provides PIPE.
- * [ ] comparison.g4 exports comparisonExpression.
- * [ ] comparison.g4 does not import bitwise.g4.
- * [ ] logical.g4 consumes bitwiseExpression.
- * [ ] expressions.g4 exposes the complete expression hierarchy.
- * [ ] binary.g4 does not redefine these precedence rules.
- * [ ] unary.g4 owns unary TILDE.
- * [ ] assignment.g4 owns AMP_ASSIGN, CARET_ASSIGN and PIPE_ASSIGN.
- * [ ] shift expressions remain owned by the shift layer.
- * [ ] no local lexer rules exist here.
- * [ ] no semantic actions exist here.
- * [ ] no Rust code exists here.
- * [ ] no unsafe code is introduced.
- * [ ] no machine-specific limits exist here.
- * [ ] parser tests cover precedence.
- * [ ] parser tests cover associativity.
- * [ ] negative tests cover malformed chains.
- * [ ] scalability tests do not introduce artificial source limits.
+ *     [ ] canonical lexer tokens are used;
+ *     [ ] no lexer rules are duplicated;
+ *     [ ] bitwise AND/XOR/OR precedence is unambiguous;
+ *     [ ] each bitwise level is left associative;
+ *     [ ] equalityExpression is consumed from comparison.g4;
+ *     [ ] no lower expression layer is duplicated;
+ *     [ ] no higher expression layer is duplicated;
+ *     [ ] no circular grammar dependency exists;
+ *     [ ] no target-language action exists;
+ *     [ ] no unsafe Rust is involved;
+ *     [ ] AST preservation requirements are documented;
+ *     [ ] semantic responsibilities are documented;
+ *     [ ] IR responsibilities are documented;
+ *     [ ] quantum::ir remains the quantum semantic boundary;
+ *     [ ] HDL remains downstream semantic responsibility;
+ *     [ ] resource/hardware limits are not encoded;
+ *     [ ] POCO-REAF remains target independent;
+ *     [ ] positive tests exist;
+ *     [ ] negative tests exist;
+ *     [ ] boundary tests exist;
+ *     [ ] scalability tests exist;
+ *     [ ] determinism tests exist;
+ *     [ ] compatibility tests exist;
+ *     [ ] duplicate authoritative definitions are removed from composition;
+ *     [ ] the canonical expression composition imports this module.
  *
  * ============================================================================
  */
 
-parser grammar bitwise;
+parser grammar ZamaniBitwise;
 
 options {
     tokenVocab = ZamaniLexer;
 }
 
+
 /*
  * ============================================================================
- * PUBLIC ENTRY
+ * PUBLIC BITWISE ENTRY
  * ============================================================================
  *
- * Higher-level expression grammars should consume:
+ * This entry point represents the complete bitwise precedence layer.
  *
- *     bitwiseExpression
- *
- * rather than reaching directly into the individual precedence layers.
- *
- * This keeps the internal hierarchy replaceable without forcing every
- * downstream grammar to depend on all implementation details.
+ * It begins at the highest-precedence bitwise operation and returns the
+ * complete bitwise expression.
  */
 bitwiseExpression
     : bitwiseOrExpression
@@ -816,14 +1078,15 @@ bitwiseExpression
  * BITWISE OR
  * ============================================================================
  *
- * Lowest precedence within the bitwise family.
+ * Lowest-precedence bitwise operator.
  *
- *     a | b | c
+ * Example:
  *
- * is represented as an ordered left-associative chain.
+ *     a | b ^ c & d
  *
- * The semantic/AST layer is responsible for lowering the chain into canonical
- * binary-expression nodes while preserving source order and spans.
+ * parses through:
+ *
+ *     a | (b ^ (c & d))
  */
 bitwiseOrExpression
     : bitwiseXorExpression
@@ -840,10 +1103,6 @@ bitwiseOrExpression
  * ============================================================================
  *
  * Higher precedence than bitwise OR and lower precedence than bitwise AND.
- *
- *     a ^ b ^ c
- *
- * is parsed as a left-associative chain.
  */
 bitwiseXorExpression
     : bitwiseAndExpression
@@ -859,26 +1118,10 @@ bitwiseXorExpression
  * BITWISE AND
  * ============================================================================
  *
- * Highest precedence within the binary bitwise family.
+ * Highest-precedence binary bitwise operator.
  *
- * The operand below this level is equalityExpression.
- *
- * This is intentional:
- *
- *     equality
- *         |
- *     bitwise AND
- *         |
- *     bitwise XOR
- *         |
- *     bitwise OR
- *
- * Therefore:
- *
- *     a == b & c == d
- *
- * is structurally governed by the equality layer before entering this
- * bitwise layer, according to the repository's canonical expression hierarchy.
+ * Its operands begin at equalityExpression because comparison/equality
+ * operators bind more tightly than the bitwise operators.
  */
 bitwiseAndExpression
     : equalityExpression
