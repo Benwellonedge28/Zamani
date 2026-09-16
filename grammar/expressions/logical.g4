@@ -6,218 +6,232 @@
  * File:
  *     grammar/expressions/logical.g4
  *
- * Role:
- *     Authoritative parser grammar for logical expressions in Zamani.
+ * Grammar:
+ *     ANTLR4 parser grammar
+ *
+ * Rust implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Edition 2021
+ *     Safe Rust only
+ *     No unsafe Rust
  *
  * ============================================================================
- * OWNERSHIP
+ * PURPOSE
  * ============================================================================
  *
- * This file owns:
+ * This file is the single authoritative grammar component for logical
+ * expressions.
  *
- *   - logical expression syntax;
- *   - logical-OR precedence;
- *   - logical-AND precedence;
- *   - unary logical negation;
- *   - logical operand boundaries;
- *   - short-circuit logical operator syntax;
- *   - logical expression associativity;
- *   - syntax required to preserve logical-expression structure for the AST.
+ * It owns:
  *
- * This file does NOT own:
+ *     - logical OR;
+ *     - logical AND;
+ *     - unary logical NOT;
+ *     - logical operator precedence;
+ *     - logical operator associativity;
+ *     - logical-expression source structure;
+ *     - the boundary between logical operators and lower-precedence
+ *       expression operators.
  *
- *   - operator lexical spelling;
- *   - whitespace;
- *   - comments;
- *   - identifiers;
- *   - literal spelling;
- *   - primitive type definitions;
- *   - type checking;
- *   - truthiness rules;
- *   - boolean conversion;
- *   - three-valued/four-valued logic semantics;
- *   - symbolic logic semantics;
- *   - quantum measurement semantics;
- *   - quantum state semantics;
- *   - hardware semantics;
- *   - resource limits;
- *   - target selection;
- *   - scheduling;
- *   - routing;
- *   - optimization;
- *   - QEC;
- *   - ZQN;
- *   - runtime behavior;
- *   - classical IR;
- *   - quantum::ir;
- *   - machine-specific limits.
+ * It does NOT own:
  *
- * ============================================================================
- * ARCHITECTURAL BOUNDARY
- * ============================================================================
- *
- * Source
- *   |
- *   v
- * Canonical Zamani lexer
- *   |
- *   v
- * Logical expression parser
- *   |
- *   v
- * Frontend AST
- *   |
- *   +--> name resolution
- *   +--> type checking
- *   +--> effect checking
- *   +--> capability checking
- *   +--> constant evaluation
- *   |
- *   v
- * Canonical semantic representation
- *   |
- *   +--> classical IR
- *   +--> quantum::ir
- *   +--> control/data IR
- *   +--> hardware/resource metadata
- *   |
- *   v
- * optimization
- *   |
- *   v
- * routing / scheduling / lowering
- *   |
- *   v
- * target realization
- *
- * This file MUST NOT create or define a second IR.
+ *     - lexical token definitions;
+ *     - identifiers;
+ *     - literals;
+ *     - arithmetic;
+ *     - shifts;
+ *     - comparisons;
+ *     - bitwise operators;
+ *     - assignment;
+ *     - conditional expressions;
+ *     - ranges;
+ *     - postfix expressions;
+ *     - function calls;
+ *     - indexing;
+ *     - member access;
+ *     - type checking;
+ *     - truthiness;
+ *     - boolean conversion;
+ *     - overload resolution;
+ *     - ownership;
+ *     - borrowing;
+ *     - effects;
+ *     - capabilities;
+ *     - resources;
+ *     - quantum semantics;
+ *     - HDL semantics;
+ *     - hardware topology;
+ *     - routing;
+ *     - scheduling;
+ *     - optimization;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime execution;
+ *     - IR construction.
  *
  * ============================================================================
- * POCO-REAF CONTRACT
+ * ARCHITECTURAL CONTRACT
  * ============================================================================
  *
- * Logical expressions describe program semantics.
+ * Canonical expression hierarchy:
  *
- * They MUST NOT encode physical characteristics such as:
+ *     expression
+ *         |
+ *         v
+ *     assignmentExpression
+ *         |
+ *         v
+ *     conditionalExpression
+ *         |
+ *         v
+ *     rangeExpression
+ *         |
+ *         v
+ *     logicalExpression
+ *         |
+ *         v
+ *     logicalOrExpression
+ *         |
+ *         v
+ *     logicalAndExpression
+ *         |
+ *         v
+ *     logicalNotExpression
+ *         |
+ *         v
+ *     bitwiseOrExpression
+ *         |
+ *         v
+ *     ...
  *
- *   MAX_QUBITS
- *   MAX_CORES
- *   MAX_THREADS
- *   MAX_DEVICES
- *   MAX_MEMORY
- *   MAX_NODES
- *   MAX_ACCELERATORS
- *   MAX_TENSOR_ELEMENTS
- *   MAX_REGISTER_WIDTH
- *   MAX_VECTOR_WIDTH
- *   MAX_LOGICAL_OPERANDS
+ * The lower-precedence expression hierarchy is owned by the binary-expression
+ * component.
  *
- * No finite machine capacity is represented by this grammar.
+ * This file therefore MUST NOT duplicate:
  *
- * Repetition in this grammar is syntactic and therefore scales with the
- * parser/compiler's available resources rather than an artificial language
- * limit.
+ *     bitwiseOrExpression
+ *     bitwiseXorExpression
+ *     bitwiseAndExpression
+ *     equalityExpression
+ *     relationalExpression
+ *     shiftExpression
+ *     additiveExpression
+ *     multiplicativeExpression
+ *     prefixExpression
+ *     postfixExpression
+ *     primaryExpression
  *
  * ============================================================================
- * RUST CONTRACT
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * This file contains no Rust implementation code.
+ * `logical.g4` is the sole owner of:
  *
- * Generated Zamani frontend infrastructure MUST target:
+ *     logicalExpression
+ *     logicalOrExpression
+ *     logicalAndExpression
+ *     logicalNotExpression
  *
- *   Rust 1.97
- *   Rust 1.97.1
+ * No other grammar file may define competing versions of those rules.
  *
- * The generated Rust implementation MUST remain safe Rust.
+ * In particular:
  *
- * Repository Rust code integrating the grammar MUST support:
+ *     grammar/expressions/binary.g4
+ *     grammar/antlr/Core.g4
+ *     grammar/expressions/expressions.g4
+ *     grammar/Zamani.g4
  *
- *   #![forbid(unsafe_code)]
- *
- * This grammar introduces no unsafe code.
+ * must delegate to this grammar instead of redefining logical precedence.
  *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * Operator tokens are owned by the canonical Zamani lexer.
+ * Token spelling belongs exclusively to:
  *
- * This grammar consumes:
+ *     grammar/antlr/ZamaniLexer.g4
  *
- *   LOGICAL_AND
- *   LOGICAL_OR
- *   NOT
+ * This grammar consumes the canonical logical tokens:
  *
- * It MUST NOT redefine those lexer tokens.
+ *     AND_AND
+ *     OR_OR
+ *     NOT_OPERATOR
  *
- * The lexer is responsible for recognizing:
+ * and the existing word-form logical operators:
  *
- *   &&
- *   ||
- *   !
+ *     AND
+ *     OR
+ *     NOT
  *
- * The parser is responsible for their precedence and syntactic structure.
+ * The symbolic forms are:
+ *
+ *     &&
+ *     ||
+ *     !
+ *
+ * The word forms are:
+ *
+ *     and
+ *     or
+ *     not
+ *
+ * This grammar does not define or redefine those tokens.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The grammar establishes syntax only.
+ * Parsing establishes structure only.
  *
- * In particular, this grammar MUST NOT assume that every logical operand is
- * necessarily a built-in boolean.
+ * Semantic analysis determines whether operands are valid logical operands.
  *
- * Semantic analysis determines whether an operand is valid in a logical
- * context.
+ * A logical operand may eventually represent:
  *
- * Depending on the semantic/type system, logical operands may eventually
- * represent:
+ *     - Boolean;
+ *     - predicate;
+ *     - symbolic proposition;
+ *     - compile-time predicate;
+ *     - capability predicate;
+ *     - resource predicate;
+ *     - classical-control predicate;
+ *     - quantum/classical control predicate;
+ *     - domain-specific predicate;
+ *     - future predicate types.
  *
- *   boolean values
- *   predicate values
- *   compile-time predicates
- *   symbolic propositions
- *   capability predicates
- *   resource predicates
- *   classical control predicates
- *   quantum/classical control predicates
- *   future extensible predicate types
- *
- * The grammar remains unchanged when such semantic domains are added.
+ * This grammar must remain unchanged when such semantic types are added.
  *
  * ============================================================================
  * SHORT-CIRCUIT CONTRACT
  * ============================================================================
  *
- * `&&` and `||` are syntactic logical operators.
+ * `&&` / `and` and `||` / `or` describe logical operators.
  *
- * Whether they have short-circuit evaluation semantics is determined by the
- * semantic/execution model, not by this grammar.
+ * Whether evaluation is short-circuiting is a semantic/execution concern.
  *
- * The AST must preserve the operator and operand ordering so downstream
- * stages can apply the language-defined evaluation semantics.
+ * The parser must preserve:
+ *
+ *     - operator identity;
+ *     - left operand;
+ *     - right operand;
+ *     - source ordering;
+ *     - nesting.
  *
  * ============================================================================
- * PRECEDENCE CONTRACT
+ * PRECEDENCE
  * ============================================================================
  *
- * Logical precedence is:
+ * From lower to higher precedence:
  *
  *     logical OR
- *         lower precedence
- *
  *     logical AND
- *         higher precedence
- *
  *     logical NOT
- *         unary logical precedence
  *
  * Therefore:
  *
  *     a || b && c
  *
- * parses structurally as:
+ * is:
  *
  *     a || (b && c)
  *
@@ -225,83 +239,277 @@
  *
  *     !a && b
  *
- * parses structurally as:
+ * is:
  *
  *     (!a) && b
  *
- * Parentheses supplied by the general expression grammar override this
- * precedence.
- *
  * ============================================================================
- * ASSOCIATIVITY CONTRACT
+ * ASSOCIATIVITY
  * ============================================================================
  *
- * Logical AND and logical OR are left-associative at the syntax level:
- *
- *     a && b && c
- *
- * is represented as:
- *
- *     ((a && b) && c)
- *
- * and:
+ * Logical OR and logical AND are left associative.
  *
  *     a || b || c
  *
- * is represented as:
+ * is:
  *
- *     ((a || b) || c)
+ *     (a || b) || c
  *
- * This representation preserves source order and gives semantic lowering a
- * deterministic structure.
+ * Likewise:
  *
- * ============================================================================
- * IMPORTANT INTEGRATION NOTE
- * ============================================================================
+ *     a && b && c
  *
- * This grammar is intentionally a parser-fragment grammar.
+ * is:
  *
- * Its operand boundary is:
+ *     (a && b) && c
  *
- *     logicalOperand
+ * Logical NOT is unary and recursively nestable:
  *
- * which is the integration point supplied by the canonical expression
- * precedence assembly.
+ *     !!!value
  *
- * The expression assembly must bind:
+ * is:
  *
- *     logicalOrExpression
- *         -> logicalAndExpression
- *             -> logicalNotExpression
- *                 -> logicalOperand
+ *     !(!(!value))
  *
- * `logicalOperand` MUST ultimately resolve to the expression-precedence layer
- * immediately below logical NOT/AND/OR.
- *
- * It MUST NOT recursively reference `logicalOrExpression`, because that would
- * introduce an uncontrolled grammar cycle.
+ * No artificial chain-depth limit is encoded.
  *
  * ============================================================================
- * NO DUPLICATED EXPRESSION SEMANTICS
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
- * This file deliberately does not define:
+ * This grammar introduces no machine-dependent limits.
  *
- *     arithmeticExpression
- *     comparisonExpression
- *     equalityExpression
- *     bitwiseExpression
- *     assignmentExpression
- *     conditionalExpression
- *     callExpression
- *     indexingExpression
- *     quantumExpression
- *     hardwareExpression
+ * It MUST NOT define:
  *
- * Those remain owned by their respective expression grammar layers.
+ *     MAX_OPERANDS
+ *     MAX_EXPRESSION_DEPTH
+ *     MAX_THREADS
+ *     MAX_CORES
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QUBITS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_REGISTER_WIDTH
+ *     MAX_VECTOR_WIDTH
+ *     MAX_TENSOR_RANK
  *
- * Logical syntax consumes the lower-precedence boundary supplied by the
- * expression assembly.
+ * Logical-expression chains may grow according to available implementation
+ * resources.
+ *
+ * "Infinity" means that the language grammar introduces no artificial finite
+ * semantic limit.
+ *
+ * Actual parser/compiler resource limits remain implementation-policy concerns.
+ *
+ * ============================================================================
+ * DOMAIN-NEUTRALITY
+ * ============================================================================
+ *
+ * Logical expressions may participate in:
+ *
+ *     classical computation
+ *     quantum/classical control
+ *     HDL conditions
+ *     hardware predicates
+ *     resource constraints
+ *     capability constraints
+ *     distributed conditions
+ *     AI/data predicates
+ *     networking conditions
+ *     security policies
+ *     compile-time conditions
+ *     runtime conditions
+ *
+ * This file does not specialize itself for any domain.
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Logical expressions may control quantum/classical hybrid computation.
+ *
+ * For example, after semantic validation, a program may express a condition
+ * involving a measurement result.
+ *
+ * This grammar does NOT define:
+ *
+ *     - qubits;
+ *     - physical qubits;
+ *     - quantum states;
+ *     - gates;
+ *     - measurement semantics;
+ *     - QEC;
+ *     - noise;
+ *     - ZQN;
+ *     - routing;
+ *     - scheduling;
+ *     - calibration;
+ *     - HAL.
+ *
+ * Valid quantum constructs continue through the established pipeline:
+ *
+ *     frontend AST
+ *         ->
+ *     semantic analysis
+ *         ->
+ *     quantum::ir
+ *         ->
+ *     optimization
+ *         ->
+ *     routing / scheduling / resilience / QEC / ZQN
+ *         ->
+ *     HAL
+ *         ->
+ *     target realization
+ *
+ * No second quantum IR is introduced here.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Each logical operation must lower to the existing domain-neutral frontend
+ * expression representation.
+ *
+ * Conceptually:
+ *
+ *     LogicalOr
+ *         left
+ *         right
+ *
+ *     LogicalAnd
+ *         left
+ *         right
+ *
+ *     LogicalNot
+ *         operand
+ *
+ * The AST must preserve:
+ *
+ *     - operator identity;
+ *     - operand ordering;
+ *     - source spans;
+ *     - nesting;
+ *     - source-level syntax.
+ *
+ * The grammar must not introduce:
+ *
+ *     QuantumLogicalExpression
+ *     HardwareLogicalExpression
+ *     BooleanOnlyExpression
+ *
+ * merely to support a domain.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This file creates no IR.
+ *
+ * Lowering is performed after semantic analysis.
+ *
+ * Depending on the program:
+ *
+ *     logical expression
+ *         ->
+ *     semantic expression
+ *         ->
+ *     classical/control IR
+ *
+ * or:
+ *
+ *     logical expression
+ *         ->
+ *     semantic quantum/classical control
+ *         ->
+ *     canonical quantum::ir
+ *
+ * The grammar must never bypass the established semantic boundary.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *     - source tokens;
+ *     - grammar version;
+ *     - grammar composition.
+ *
+ * It must not depend on:
+ *
+ *     - hardware discovery;
+ *     - runtime state;
+ *     - device state;
+ *     - network state;
+ *     - randomness;
+ *     - system time;
+ *     - scheduling state.
+ *
+ * ============================================================================
+ * DIAGNOSTICS CONTRACT
+ * ============================================================================
+ *
+ * Syntax errors include:
+ *
+ *     a &&
+ *     a ||
+ *     &&
+ *     ||
+ *     !
+ *     a && || b
+ *     a || && b
+ *
+ * Semantic errors are handled downstream, for example:
+ *
+ *     1 && 2
+ *     object && function()
+ *
+ * if those operands are not valid logical operands under the semantic/type
+ * system.
+ *
+ * The parser must not perform type checking.
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * These forms must remain structurally supported without fixed language limits:
+ *
+ *     a && b
+ *
+ *     a && b && c
+ *
+ *     a || b || c || d
+ *
+ *     a || b && c || d && e
+ *
+ *     !(a && b)
+ *
+ *     !(!(!condition))
+ *
+ *     condition_0 && condition_1 && ... && condition_n
+ *
+ * The grammar uses repetition for associative binary chains and recursion only
+ * for unary NOT.
+ *
+ * ============================================================================
+ * INTEGRATION
+ * ============================================================================
+ *
+ * This grammar imports the binary-expression component because the operand
+ * immediately below logical NOT is the canonical `bitwiseOrExpression`.
+ *
+ * The resulting hierarchy is:
+ *
+ *     logicalExpression
+ *         -> logicalOrExpression
+ *             -> logicalAndExpression
+ *                 -> logicalNotExpression
+ *                     -> bitwiseOrExpression
+ *
+ * `BinaryExpressions` owns everything below that boundary.
  *
  * ============================================================================
  */
@@ -312,24 +520,18 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+import BinaryExpressions;
+
 
 /* ============================================================================
  * PUBLIC ENTRY POINT
  * ========================================================================== */
 
 /**
- * Canonical logical-expression entry point.
+ * Complete logical-expression syntax.
  *
- * This rule is intended for integration by the canonical expression grammar.
- *
- * Examples:
- *
- *     a
- *     a && b
- *     a || b
- *     a && b || c
- *     !(a && b)
- *     !(condition)
+ * This is the public logical-expression rule consumed by the canonical
+ * expression composition grammar.
  */
 logicalExpression
     : logicalOrExpression
@@ -341,25 +543,27 @@ logicalExpression
  * ========================================================================== */
 
 /**
- * Logical OR.
+ * Logical OR is lower precedence than logical AND.
  *
- * Higher-level logical OR combines one or more logical AND expressions.
- *
- * Examples:
+ * Both symbolic and word-form operators are accepted:
  *
  *     a || b
- *     a || b || c
- *     condition_a || condition_b && condition_c
+ *     a or b
  *
- * The repetition form deliberately avoids recursive nesting solely for
- * left-associative chains. This keeps parser behavior predictable while
- * allowing arbitrary source-level chain length subject only to available
- * parser resources.
+ * Repetition gives left-associative structure.
  */
 logicalOrExpression
     : logicalAndExpression
       (
-          LOGICAL_OR
+          OR_OR
+        | OR
+      )
+      logicalAndExpression
+      (
+          (
+              OR_OR
+            | OR
+          )
           logicalAndExpression
       )*
     ;
@@ -370,28 +574,22 @@ logicalOrExpression
  * ========================================================================== */
 
 /**
- * Logical AND.
- *
  * Logical AND binds more tightly than logical OR.
  *
- * Examples:
+ * Both symbolic and word-form operators are accepted:
  *
  *     a && b
- *     a && b && c
- *     a || b && c
+ *     a and b
  *
- * The grammar therefore guarantees:
- *
- *     a || b && c
- *
- * is parsed as:
- *
- *     a || (b && c)
+ * Repetition gives left-associative structure.
  */
 logicalAndExpression
     : logicalNotExpression
       (
-          LOGICAL_AND
+          (
+              AND_AND
+            | AND
+          )
           logicalNotExpression
       )*
     ;
@@ -404,720 +602,25 @@ logicalAndExpression
 /**
  * Unary logical negation.
  *
- * Examples:
+ * Both symbolic and word-form operators are accepted:
  *
  *     !a
+ *     not a
+ *
+ * Recursive nesting supports:
+ *
  *     !!a
  *     !!!a
- *     !(a && b)
+ *     not not a
+ *     !not a
  *
- * Repetition is expressed recursively because NOT is unary and naturally
- * associates from the operand outward:
- *
- *     !!!a
- *
- * represents:
- *
- *     !(!(!a))
- *
- * No finite NOT-chain limit is encoded.
+ * without introducing a finite language-level depth limit.
  */
 logicalNotExpression
-    : NOT logicalNotExpression
-    | logicalOperand
+    : (
+          NOT_OPERATOR
+        | NOT
+      )
+      logicalNotExpression
+    | bitwiseOrExpression
     ;
-
-
-/* ============================================================================
- * OPERAND BOUNDARY
- * ========================================================================== */
-
-/**
- * Logical operand integration boundary.
- *
- * This rule is deliberately kept as the single integration point between
- * logical syntax and the lower expression-precedence layer.
- *
- * The canonical expression grammar must connect this rule to the expression
- * immediately below logical NOT/AND/OR.
- *
- * The intended semantic precedence stack is:
- *
- *     assignment
- *       -> conditional
- *         -> logical OR
- *           -> logical AND
- *             -> logical NOT
- *               -> bitwise/comparison/equality/etc.
- *
- * The exact lower-level rule is owned by the canonical expression assembler.
- *
- * This file therefore does not duplicate comparison, arithmetic, bitwise,
- * quantum, hardware, or primary-expression rules.
- *
- * --------------------------------------------------------------------------
- * Integration contract
- * --------------------------------------------------------------------------
- *
- * During grammar assembly, `logicalOperand` MUST be bound to the canonical
- * lower-precedence expression rule.
- *
- * The selected rule MUST:
- *
- *   1. parse a complete non-logical expression operand;
- *   2. not consume LOGICAL_AND or LOGICAL_OR as part of that operand;
- *   3. permit parenthesized expressions;
- *   4. permit comparison/equality expressions;
- *   5. permit ordinary classical expressions;
- *   6. permit quantum/classical control expressions where defined;
- *   7. permit resource/capability predicates where defined;
- *   8. preserve source spans;
- *   9. avoid introducing machine-specific restrictions;
- *  10. avoid recursively invoking logicalExpression.
- *
- * The canonical assembled grammar may provide this rule through a delegation
- * layer. It MUST NOT create a second competing logical grammar.
- */
-logicalOperand
-    : logicalAtom
-    ;
-
-
-/* ============================================================================
- * LOGICAL ATOM
- * ========================================================================== */
-
-/**
- * Structural logical atom.
- *
- * This rule is intentionally an integration boundary rather than a duplicate
- * definition of the complete Zamani expression language.
- *
- * Parenthesized logical expressions are explicitly recognized here so that
- * nested logical precedence can be controlled without requiring the lower
- * expression layer to understand logical operators.
- *
- * The identifier/literal/other expression alternative is delegated to the
- * canonical expression operand adapter.
- */
-logicalAtom
-    : LPAREN
-      logicalExpression
-      RPAREN
-    | nonLogicalExpression
-    ;
-
-
-/* ============================================================================
- * NON-LOGICAL EXPRESSION INTEGRATION BOUNDARY
- * ========================================================================== */
-
-/**
- * Integration boundary for the expression layer below logical operators.
- *
- * This rule is intentionally named rather than duplicating a repository-wide
- * expression rule.
- *
- * The canonical expression grammar must provide the concrete implementation
- * when this parser grammar is assembled.
- *
- * The concrete implementation MUST represent the highest-precedence
- * expression category below logical NOT.
- *
- * Typical semantic stack:
- *
- *     logicalOrExpression
- *         logicalAndExpression
- *             logicalNotExpression
- *                 nonLogicalExpression
- *                     bitwise...
- *                     equality...
- *                     comparison...
- *                     shift...
- *                     arithmetic...
- *                     unary...
- *                     postfix...
- *                     primary...
- *
- * --------------------------------------------------------------------------
- * Architectural requirement
- * --------------------------------------------------------------------------
- *
- * Do not replace this integration point with a finite list of machine or
- * domain-specific expressions.
- *
- * The lower layer may grow to support:
- *
- *     classical values
- *     vectors
- *     matrices
- *     tensors
- *     symbolic expressions
- *     quantum expressions
- *     hardware expressions
- *     resource expressions
- *     capability expressions
- *     distributed expressions
- *     accelerator expressions
- *     future dialect expressions
- *
- * without changing logical precedence.
- */
-nonLogicalExpression
-    : expressionOperand
-    ;
-
-
-/**
- * Final expression-assembly integration point.
- *
- * The canonical expression grammar owns the concrete operand implementation.
- *
- * This rule exists to document the contract explicitly.
- *
- * In the assembled grammar, it must resolve to the canonical expression
- * category below logical operators.
- */
-expressionOperand
-    : primaryLogicalOperand
-    ;
-
-
-/**
- * Lowest-level adapter for the expression grammar.
- *
- * The canonical expression assembler replaces this delegation boundary with
- * the repository's authoritative lower-precedence expression rule.
- *
- * It must never become a second implementation of the complete expression
- * language.
- */
-primaryLogicalOperand
-    : identifier
-    | literalLogicalOperand
-    | parenthesizedNonLogicalExpression
-    ;
-
-
-/* ============================================================================
- * IDENTIFIER INTEGRATION
- * ========================================================================== */
-
-/**
- * Identifier integration boundary.
- *
- * Identifier spelling is owned by the lexer/core identifier grammar.
- */
-identifier
-    : IDENT
-    ;
-
-
-/* ============================================================================
- * LITERAL INTEGRATION
- * ========================================================================== */
-
-/**
- * Literal values which can syntactically occur as logical operands.
- *
- * Semantic analysis determines whether a particular literal is valid as a
- * logical value.
- *
- * This grammar intentionally does not perform boolean conversion.
- */
-literalLogicalOperand
-    : TRUE
-    | FALSE
-    | NULL
-    | INTEGER
-    | FLOAT
-    | STRING
-    | CHARACTER
-    ;
-
-
-/* ============================================================================
- * PARENTHESIZED NON-LOGICAL EXPRESSION
- * ========================================================================== */
-
-/**
- * Parenthesized expression integration boundary.
- *
- * This permits lower-precedence expression forms to remain grouped before
- * logical evaluation.
- */
-parenthesizedNonLogicalExpression
-    : LPAREN
-      nonLogicalExpression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * NULL / OPTIONAL LOGICAL INTEGRATION
- * ========================================================================== */
-
-/**
- * Logical syntax deliberately does not assign semantics to NULL.
- *
- * Whether:
- *
- *     !null
- *     null && condition
- *     null || condition
- *
- * is legal is a semantic/type-system decision.
- *
- * No null-propagation or null-coalescing semantics are embedded here.
- *
- * Those operators are separately owned by the operator lexer and must be
- * integrated by their dedicated expression layer.
- */
-
-
-/* ============================================================================
- * QUANTUM INTEGRATION
- * ========================================================================== */
-
-/**
- * Quantum programs may use logical expressions for classical control.
- *
- * Examples that may be accepted by the complete language after semantic
- * integration include forms conceptually equivalent to:
- *
- *     if measurement_result && condition
- *
- *     if parity == expected && flag
- *
- *     if predicate_a || predicate_b
- *
- * This grammar does NOT determine:
- *
- *     measurement semantics
- *     qubit allocation
- *     physical qubits
- *     gate execution
- *     quantum state representation
- *     backend selection
- *     coupling topology
- *     calibration
- *     error correction
- *     noise
- *
- * The semantic frontend must lower valid quantum-related conditions into the
- * canonical semantic representation and, where appropriate, eventually into
- * quantum::ir.
- *
- * This grammar must never introduce:
- *
- *     q[0]
- *     q[1]
- *     MAX_QUBITS
- *
- * or equivalent fixed quantum-machine assumptions.
- */
-
-
-/* ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ========================================================================== */
-
-/**
- * HDL and hardware constructs may use logical expressions for:
- *
- *     enables
- *     conditions
- *     guards
- *     state transitions
- *     assertions
- *     protocol conditions
- *     control predicates
- *
- * This grammar does not define:
- *
- *     clock frequency
- *     register width
- *     number of ports
- *     FPGA resources
- *     ASIC resources
- *     physical addresses
- *     bus width
- *     device count
- *
- * Those belong to hardware/HDL semantics and target/resource descriptions.
- */
-
-
-/* ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
- * ========================================================================== */
-
-/**
- * Logical syntax may eventually be used to express predicates over abstract
- * resources and capabilities.
- *
- * For example, the semantic layer may interpret expressions conceptually like:
- *
- *     capability_available
- *     resource_available && feature_enabled
- *     quantum_supported || simulation_supported
- *
- * This file does not decide what a capability means.
- *
- * Capability resolution belongs to semantic analysis and the resource /
- * capability subsystem.
- */
-
-
-/* ============================================================================
- * DETERMINISM
- * ========================================================================== */
-
-/**
- * For identical source text and identical language version, the logical
- * parser must produce the same parse structure.
- *
- * Parsing must not depend on:
- *
- *     CPU count
- *     GPU count
- *     FPGA count
- *     QPU count
- *     machine topology
- *     memory capacity
- *     runtime state
- *     network state
- *     backend selection
- *     scheduling
- *     calibration
- *     resource availability
- */
-
-
-/* ============================================================================
- * ERROR / DIAGNOSTIC CONTRACT
- * ========================================================================== */
-
-/**
- * Syntax errors are reported by the canonical parser/diagnostic subsystem.
- *
- * This grammar must not:
- *
- *     silently discard malformed operators;
- *     reinterpret malformed logical expressions as valid expressions;
- *     encode target-specific recovery;
- *     emit comments as substitutes for invalid syntax;
- *     make semantic decisions during parsing.
- *
- * Examples of syntax errors include malformed operator sequences that cannot
- * be tokenized as valid Zamani expressions.
- *
- * Semantic errors such as:
- *
- *     integer used where boolean/predicate is required;
- *     incompatible predicate types;
- *     unsupported logical operation for a user-defined type;
- *
- * belong to semantic/type checking rather than this grammar.
- */
-
-
-/* ============================================================================
- * SECURITY CONTRACT
- * ========================================================================== */
-
-/**
- * Logical expressions must remain declarative syntax.
- *
- * Parsing them must not:
- *
- *     execute user code;
- *     access the filesystem;
- *     access the network;
- *     discover hardware;
- *     query devices;
- *     access secrets;
- *     mutate compiler state through arbitrary user-controlled actions.
- *
- * Compile-time execution, if supported by Zamani, is handled by the
- * metaprogramming/compile-time execution subsystem after syntactic parsing.
- */
-
-
-/* ============================================================================
- * SCALABILITY CONTRACT
- * ========================================================================== */
-
-/**
- * This grammar imposes no source-level limit on:
- *
- *     logical expression chain length
- *     nested NOT operations
- *     nested parenthesized logical expressions
- *     number of operands
- *
- * Examples of arbitrary syntactic depth include:
- *
- *     a && b && c && ...
- *
- *     a || b || c || ...
- *
- *     !!!!!!!!!condition
- *
- *     (((condition)))
- *
- * Actual parser-resource limits, such as memory exhaustion protection or
- * recursion protection, are implementation/runtime safeguards and MUST NOT
- * become language-semantic limits.
- *
- * Such limits must be configurable through compiler infrastructure rather than
- * represented as constants in this grammar.
- */
-
-
-/* ============================================================================
- * COMPATIBILITY CONTRACT
- * ========================================================================== */
-
-/**
- * The following source forms are stable logical syntax:
- *
- *     a && b
- *     a || b
- *     !a
- *
- * Precedence:
- *
- *     !
- *     &&
- *     ||
- *
- * Existing valid source using these forms must retain its meaning across
- * compatible language versions.
- *
- * Any future change to logical operator spelling or precedence requires:
- *
- *     language-version documentation
- *     compatibility analysis
- *     migration guidance
- *     positive tests
- *     negative tests
- *     ambiguity tests
- *     round-trip tests
- */
-
-
-/* ============================================================================
- * EXTENSIBILITY CONTRACT
- * ========================================================================== */
-
-/**
- * Future logical operators must not be added casually.
- *
- * A new logical operator requires:
- *
- *   1. lexer ownership;
- *   2. parser precedence definition;
- *   3. associativity definition;
- *   4. AST representation;
- *   5. semantic/type rules;
- *   6. diagnostics;
- *   7. compatibility analysis;
- *   8. documentation;
- *   9. positive tests;
- *  10. negative tests;
- *  11. boundary tests;
- *  12. cross-domain tests.
- *
- * Domain-specific operators should preferably be implemented through the
- * dialect/extension mechanism rather than permanently coupling the universal
- * grammar to one hardware vendor or execution platform.
- */
-
-
-/* ============================================================================
- * TEST CONTRACT
- * ========================================================================== */
-
-/**
- * POSITIVE TESTS
- *
- * The grammar test suite must include at least:
- *
- *     a && b
- *     a || b
- *     !a
- *     !(a)
- *     !a && b
- *     a && b || c
- *     a || b && c
- *     !a || b && !c
- *     ((a && b) || c)
- *
- * NEGATIVE TESTS
- *
- * Include malformed forms such as:
- *
- *     a &&
- *     a ||
- *     &&
- *     ||
- *     !
- *     a && && b
- *     a || || b
- *
- * and malformed parenthesized forms.
- *
- * BOUNDARY TESTS
- *
- * Include generated expressions with:
- *
- *     one operand
- *     many operands
- *     deeply nested parentheses
- *     deeply nested NOT
- *     long AND chains
- *     long OR chains
- *     alternating AND/OR chains
- *
- * No test may define a language maximum such as:
- *
- *     MAX_LOGICAL_OPERANDS
- *
- * CROSS-DOMAIN TESTS
- *
- * Verify logical syntax can participate in:
- *
- *     classical control flow
- *     quantum-classical control
- *     HDL guards
- *     hardware state conditions
- *     resource predicates
- *     capability predicates
- *     distributed conditions
- *
- * provided the corresponding semantic layers permit those combinations.
- *
- * DETERMINISM TESTS
- *
- * Identical source and language version must produce identical parser output.
- *
- * ROUND-TRIP TESTS
- *
- * Where a canonical printer/serializer exists:
- *
- *     source
- *       -> lexer
- *       -> parser
- *       -> AST
- *       -> printer
- *       -> parser
- *
- * must preserve logical-expression structure and semantics.
- */
-
-
-/* ============================================================================
- * HARD-CODING AUDIT
- * ========================================================================== */
-
-/**
- * Forbidden in this file:
- *
- *     MAX_LOGICAL_OPERANDS
- *     MAX_LOGICAL_DEPTH
- *     MAX_NOT_DEPTH
- *     MAX_AND_TERMS
- *     MAX_OR_TERMS
- *     MAX_PREDICATES
- *     MAX_BOOLEAN_VARIABLES
- *     MAX_CONDITIONS
- *     MAX_QUANTUM_CONDITIONS
- *     MAX_HARDWARE_CONDITIONS
- *
- * Any finite implementation safeguard belongs outside the language grammar.
- */
-
-
-/* ============================================================================
- * COMPLETION CRITERIA
- * ========================================================================== */
-
-/**
- * This file is complete when:
- *
- *   [ ] Logical operator tokens are consumed exclusively from ZamaniLexer.
- *
- *   [ ] `&&` is represented by LOGICAL_AND.
- *
- *   [ ] `||` is represented by LOGICAL_OR.
- *
- *   [ ] `!` is represented by NOT.
- *
- *   [ ] NOT has higher precedence than AND.
- *
- *   [ ] AND has higher precedence than OR.
- *
- *   [ ] AND is left-associative.
- *
- *   [ ] OR is left-associative.
- *
- *   [ ] NOT supports arbitrary syntactic nesting.
- *
- *   [ ] Logical chains have no artificial finite grammar limit.
- *
- *   [ ] Parentheses can override logical precedence.
- *
- *   [ ] The grammar does not duplicate lexer ownership.
- *
- *   [ ] The grammar does not duplicate semantic/type ownership.
- *
- *   [ ] The grammar does not define hardware limits.
- *
- *   [ ] The grammar does not define quantum-machine limits.
- *
- *   [ ] The grammar does not depend on QEC.
- *
- *   [ ] The grammar does not depend on ZQN.
- *
- *   [ ] The grammar does not depend on routing.
- *
- *   [ ] The grammar does not depend on scheduling.
- *
- *   [ ] The grammar does not depend on optimization.
- *
- *   [ ] The grammar does not create a second quantum IR.
- *
- *   [ ] AST construction preserves operator ordering and source spans.
- *
- *   [ ] Semantic analysis remains downstream.
- *
- *   [ ] Classical IR lowering remains downstream.
- *
- *   [ ] quantum::ir lowering remains downstream where applicable.
- *
- *   [ ] Rust integration remains compatible with Rust 1.97/1.97.1.
- *
- *   [ ] Rust integration requires no unsafe code.
- *
- *   [ ] Positive tests exist.
- *
- *   [ ] Negative tests exist.
- *
- *   [ ] Boundary tests exist.
- *
- *   [ ] Determinism tests exist.
- *
- *   [ ] Cross-domain tests exist.
- *
- *   [ ] Round-trip tests exist where the repository printer supports them.
- *
- *   [ ] No unresolved ownership ambiguity remains with expressions.g4.
- *
- *   [ ] The canonical expression assembler binds `logicalOperand` to the
- *       authoritative lower-precedence expression layer.
- *
- *   [ ] No circular grammar dependency exists.
- *
- * ============================================================================
- */
