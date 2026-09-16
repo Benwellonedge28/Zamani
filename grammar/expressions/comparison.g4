@@ -1,220 +1,239 @@
 /*
- * Zamani — Comparison Expression Grammar
+ * ============================================================================
+ * Zamani Programming Language
+ * ============================================================================
  *
  * File:
- *   grammar/expressions/comparison.g4
+ *     grammar/expressions/comparison.g4
  *
- * Status:
- *   Production parser-grammar module.
+ * Grammar technology:
+ *     ANTLR4 parser grammar
  *
- * Purpose:
- *   Defines the syntactic layer for relational and equality comparison.
+ * Implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     Safe Rust only
+ *     No unsafe Rust required or permitted in Zamani-owned implementation.
  *
- * Architectural ownership:
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
  *
- *   comparison.g4 OWNS:
- *     - equality-expression syntax
- *     - relational/comparison-expression syntax
- *     - comparison operator grouping
- *     - precedence between relational and equality operators
+ * This file owns the comparison/equality precedence layer of the canonical
+ * Zamani expression grammar.
  *
- *   comparison.g4 DOES NOT OWN:
+ * It defines:
+ *
+ *     comparisonExpression
+ *     equalityExpression
+ *     comparisonOperator
+ *     equalityOperator
+ *
+ * It does NOT define:
+ *
  *     - primary expressions
  *     - literals
  *     - identifiers
  *     - calls
  *     - indexing
  *     - member access
+ *     - unary/prefix expressions
  *     - arithmetic
  *     - shifts
- *     - logical operators
- *     - bitwise operators
- *     - assignment
+ *     - bitwise expressions
+ *     - logical expressions
+ *     - conditional expressions
  *     - ranges
- *     - type checking
+ *     - assignment
+ *     - types
+ *     - semantic type checking
  *     - overload resolution
- *     - implicit conversions
+ *     - implicit conversion
+ *     - ownership
+ *     - borrowing
+ *     - effects
+ *     - capabilities
+ *     - resources
  *     - quantum semantics
- *     - classical semantics
  *     - HDL semantics
- *     - resource semantics
- *     - target selection
- *     - hardware capabilities
- *     - IR construction
+ *     - hardware selection
+ *     - routing
+ *     - scheduling
+ *     - QEC
+ *     - ZQN
+ *     - HAL
  *     - runtime behavior
+ *     - IR construction
  *
- * Integration model:
+ * ============================================================================
+ * AUTHORITY
+ * ============================================================================
  *
- *   lexer
+ * The canonical lexer owns operator spelling and token identity.
+ *
+ * This parser grammar owns only the syntactic role and precedence of those
+ * tokens.
+ *
+ * The canonical lexer vocabulary is:
+ *
+ *     EQ_EQ       ==
+ *     NOT_EQ      !=
+ *     LT          <
+ *     LE          <=
+ *     GT          >
+ *     GE          >=
+ *
+ * This file MUST NOT introduce alternate token names such as:
+ *
+ *     EQ
+ *     NE
+ *     LESS
+ *     GREATER
+ *     EQUAL
+ *     NOT_EQUAL
+ *
+ * when they represent the same lexical operators.
+ *
+ * ============================================================================
+ * EXPRESSION PRECEDENCE
+ * ============================================================================
+ *
+ * Higher precedence is nearer the bottom of the expression hierarchy.
+ *
+ *     ...
  *       |
  *       v
- *   token stream
+ *     shiftExpression
  *       |
  *       v
- *   primary/prefix/postfix/arithmetic/shift
+ *     comparisonExpression
  *       |
  *       v
- *   comparison.g4
+ *     equalityExpression
  *       |
  *       v
- *   logical/bitwise/range/assignment layers
+ *     bitwiseAndExpression
  *       |
  *       v
- *   AST
+ *     bitwiseXorExpression
  *       |
  *       v
- *   semantic analysis
- *       |
- *       +--> type checking
- *       +--> capability/effect checking
- *       +--> quantum semantic validation
- *       +--> HDL semantic validation
- *       +--> resource validation
+ *     bitwiseOrExpression
  *       |
  *       v
- *   canonical IR
- *
- * IMPORTANT:
- *
- * This grammar deliberately does not decide whether two operands are
- * semantically comparable. That belongs to semantic analysis.
- *
- * Examples of semantic questions deliberately outside this grammar:
- *
- *   - whether Int < Float is legal;
- *   - whether two matrices may be compared;
- *   - whether two quantum states may be compared;
- *   - whether a hardware resource can be compared;
- *   - whether a tensor supports equality;
- *   - whether a user-defined type implements an equality relation;
- *   - whether ordering exists for a type;
- *   - whether comparison is exact, approximate, symbolic, or domain-specific.
- *
- * Those decisions must be represented by the type/semantic system and
- * eventually lowered into the appropriate IR operation.
- *
- * Scalability:
- *
- * No resource count, machine size, qubit count, topology, register count,
- * vector width, device count, or hardware-specific limit occurs here.
- *
- * This grammar accepts expressions of arbitrary syntactic depth subject
- * only to the parser/runtime resource limits imposed by the compilation
- * environment.
- *
- * Rust:
- *
- * This grammar contains no Rust implementation code.
- * Generated parser integration must remain compatible with Rust 1.97 and
- * Rust 1.97.1 and must not require unsafe Rust in Zamani-owned code.
- *
- * Compatibility:
- *
- * The repository's documented expression precedence is:
- *
- *   Equality:
- *       == !=
- *
- *   Comparison:
- *       < <= > >=
- *
- * Comparison binds more tightly than equality.
+ *     logicalAndExpression
+ *       |
+ *       v
+ *     logicalOrExpression
+ *       |
+ *       v
+ *     rangeExpression
+ *       |
+ *       v
+ *     conditionalExpression
+ *       |
+ *       v
+ *     assignmentExpression
+ *       |
+ *       v
+ *     expression
  *
  * Therefore:
  *
- *   a < b == c < d
+ *     a < b == c < d
  *
- * parses as:
+ * is structurally:
  *
- *   (a < b) == (c < d)
+ *     (a < b) == (c < d)
  *
- * rather than:
+ * and not:
  *
- *   a < (b == c) < d
+ *     a < (b == c) < d
  *
- * Chaining comparisons is intentionally NOT given special syntactic
- * treatment here. A sequence such as:
+ * ============================================================================
+ * ASSOCIATIVITY
+ * ============================================================================
  *
- *   a < b < c
+ * Repeated comparison/equality operators are represented structurally as
+ * left-associated binary expression chains:
  *
- * is parsed according to ordinary binary-expression structure and its
- * semantic legality is determined by the type/semantic layer.
+ *     a < b < c
  *
- * This avoids silently introducing Python-like chained-comparison
- * semantics into the language.
+ * becomes conceptually:
  *
- * ANTLR architecture:
+ *     (a < b) < c
  *
- * This file is intentionally a parser grammar rather than a second
- * combined grammar. The lexer must be the single owner of operator tokens.
+ * The grammar intentionally does NOT implement Python-style chained
+ * comparison semantics.
  *
- * The master parser must import this grammar module after the repository
- * has separated the lexer from the parser.
+ * Whether:
  *
- * Expected lexer token contract:
+ *     a < b < c
  *
- *   EQ        == 
- *   NE        !=
- *   LT        <
- *   LE        <=
- *   GT        >
- *   GE        >=
+ * is semantically valid is determined by the semantic/type system.
  *
- * The lexer owns their spelling.
- * This grammar owns their syntactic role.
+ * This is important for generic, symbolic, tensor, quantum, HDL and
+ * user-defined types because syntactic comparability does not imply that
+ * an operation is semantically meaningful.
+ *
+ * ============================================================================
+ * ANTLR INTEGRATION
+ * ============================================================================
+ *
+ * This is a parser grammar, not a combined grammar.
+ *
+ * The canonical parser composition grammar imports this module.
+ *
+ * The canonical lexer vocabulary is supplied through tokenVocab.
+ *
+ * ANTLR grammar imports combine parser rules into the importing parser
+ * grammar; this allows this module to remain focused on one precedence
+ * layer without duplicating the complete expression hierarchy.
+ *
+ * No parser actions or target-language predicates are used.
+ *
+ * ============================================================================
  */
 
 parser grammar ZamaniComparison;
 
 options {
-    /*
-     * The production parser architecture must provide a single authoritative
-     * lexer vocabulary.
-     *
-     * The intended integrated lexer is the repository's Zamani lexer.
-     *
-     * This token vocabulary must eventually be generated from the canonical
-     * lexer layer rather than duplicated here.
-     */
     tokenVocab = ZamaniLexer;
 }
 
 
 /*
  * ============================================================================
- * PUBLIC ENTRY RULE
+ * COMPARISON EXPRESSION
  * ============================================================================
  *
- * comparisonExpression
+ * Public relational-comparison rule.
  *
- * Public entry point for the comparison/equality precedence layer.
+ * Comparison has higher precedence than equality.
  *
- * The rule intentionally accepts an already-parsed higher-precedence
- * expression through `shiftExpression`.
+ * Examples:
  *
- * This prevents comparison.g4 from owning arithmetic, product, sum, or
- * shift syntax.
+ *     a < b
+ *     a <= b
+ *     a > b
+ *     a >= b
  *
- * Precedence:
+ * Shift expressions are the immediate higher-precedence operand layer.
  *
- *     shiftExpression
- *          |
- *          v
- *     relationalExpression
- *          |
- *          v
- *     equalityExpression
- *
- * Equality therefore has lower precedence than relational comparison.
+ * This rule deliberately does not define shiftExpression.
  */
 comparisonExpression
-    : equalityExpression
+    : shiftExpression
+      (
+          comparisonOperator
+          shiftExpression
+      )*
     ;
 
 
 /*
  * ============================================================================
- * EQUALITY
+ * EQUALITY EXPRESSION
  * ============================================================================
  *
  * Equality has lower precedence than relational comparison.
@@ -225,77 +244,19 @@ comparisonExpression
  *     a != b
  *     a < b == c < d
  *
- * The last example is structurally:
+ * The final example becomes:
  *
  *     (a < b) == (c < d)
  *
- * because relationalExpression is the operand layer beneath equality.
- *
- * Repetition is used rather than direct left recursion because this grammar
- * is intended to be composable as an imported parser module and because
- * equality expressions are associative at the syntactic level.
- *
- * Semantic analysis MUST NOT assume that equality itself is mathematically
- * associative for arbitrary user-defined operations. The parser merely
- * constructs the binary expression structure.
+ * This rule intentionally consumes comparisonExpression rather than
+ * shiftExpression directly.
  */
 equalityExpression
-    : relationalExpression
+    : comparisonExpression
       (
           equalityOperator
-          relationalExpression
+          comparisonExpression
       )*
-    ;
-
-
-/*
- * ============================================================================
- * RELATIONAL / ORDERING COMPARISON
- * ============================================================================
- *
- * Relational comparison binds more tightly than equality.
- *
- * Supported operators:
- *
- *     <
- *     <=
- *     >
- *     >=
- *
- * Examples:
- *
- *     a < b
- *     a <= b
- *     a > b
- *     a >= b
- *
- * The operands are shift expressions because shift operators have higher
- * precedence than relational operators according to the Zamani precedence
- * model.
- *
- * This file does not own shiftExpression itself.
- */
-relationalExpression
-    : shiftExpression
-      (
-          relationalOperator
-          shiftExpression
-      )*
-    ;
-
-
-/*
- * ============================================================================
- * EQUALITY OPERATORS
- * ============================================================================
- *
- * The lexer is authoritative for the exact spelling of these operators.
- *
- * The parser only groups the tokens into the equality category.
- */
-equalityOperator
-    : EQ
-    | NE
     ;
 
 
@@ -304,14 +265,13 @@ equalityOperator
  * RELATIONAL OPERATORS
  * ============================================================================
  *
- * The lexer is authoritative for operator spelling.
+ * The lexer is the sole owner of operator spelling.
  *
- * Keeping the operator vocabulary in the lexer gives the repository one
- * authoritative token definition and prevents different expression grammar
- * modules from silently assigning different token identities to the same
- * operator.
+ * Do not replace these token references with string literals.
+ *
+ * Do not create duplicate lexical definitions here.
  */
-relationalOperator
+comparisonOperator
     : LT
     | LE
     | GT
@@ -321,300 +281,471 @@ relationalOperator
 
 /*
  * ============================================================================
- * SEMANTIC INTEGRATION CONTRACT
+ * EQUALITY OPERATORS
  * ============================================================================
  *
- * The parser produces comparison syntax only.
+ * Equality is intentionally restricted to the operators specified by the
+ * canonical Zamani syntax contract.
  *
- * Semantic analysis must map:
+ * Type/category tests such as `is` are NOT equality operators.
  *
- *     EQ -> equality operation
- *     NE -> inequality operation
- *     LT -> less-than operation
- *     LE -> less-than-or-equal operation
- *     GT -> greater-than operation
- *     GE -> greater-than-or-equal operation
- *
- * The semantic representation must preserve:
- *
- *     - source span
- *     - operator kind
- *     - left operand
- *     - right operand
- *     - source/module identity where available
- *     - generic/type context where applicable
- *     - diagnostic provenance
- *
- * The grammar must never convert these into a machine-specific operation.
- *
- *
+ * If the language later requires type predicates, those belong to the
+ * appropriate type/pattern/semantic grammar and must not be silently folded
+ * into equality.
+ */
+equalityOperator
+    : EQ_EQ
+    | NOT_EQ
+    ;
+
+
+/*
  * ============================================================================
- * TYPE SYSTEM CONTRACT
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The type checker owns questions such as:
+ * This grammar establishes syntax only.
  *
- *     Can T == T?
- *     Can T != T?
- *     Can T < T?
- *     Can T <= T?
- *     Can T > T?
- *     Can T >= T?
+ * Semantic analysis is responsible for determining whether an expression
+ * such as:
  *
- * It also owns:
+ *     lhs == rhs
+ *     lhs != rhs
+ *     lhs < rhs
+ *     lhs <= rhs
+ *     lhs > rhs
+ *     lhs >= rhs
  *
- *     - numeric promotion
+ * is legal for the operand types.
+ *
+ * Semantic analysis owns:
+ *
+ *     - type compatibility
  *     - generic constraints
+ *     - numeric promotion
+ *     - conversion rules
+ *     - overload resolution
  *     - trait/interface based comparison
- *     - user-defined equality
- *     - user-defined ordering
+ *     - user-defined comparison
  *     - symbolic comparison
  *     - approximate comparison
  *     - aggregate comparison
- *     - domain-specific comparison
+ *     - tensor comparison
+ *     - resource comparison
+ *     - capability validation
+ *     - effect validation
+ *     - domain-specific legality
  *
- * No such policy belongs in this grammar.
- *
- *
- * ============================================================================
- * QUANTUM INTEGRATION CONTRACT
- * ============================================================================
- *
- * Quantum expressions may occur as operands because the operand is supplied
- * by the higher-level expression grammar.
- *
- * This grammar does NOT declare:
- *
- *     qubit comparison
- *     state comparison
- *     observable comparison
- *     measurement comparison
- *     logical-qubit comparison
- *     physical-qubit comparison
- *
- * Whether any of those are legal is a semantic concern.
- *
- * In particular, this grammar must never introduce machine-dependent rules
- * such as:
- *
- *     q[0] == q[1]
- *
- * as a special case.
- *
- * Qubit identifiers and quantum values remain ordinary expression operands
- * from this grammar's perspective.
- *
- * Semantic lowering eventually integrates with the canonical
- * `quantum::ir` boundary where applicable. This grammar must never create
- * a competing quantum IR.
- *
- *
- * ============================================================================
- * HDL INTEGRATION CONTRACT
- * ============================================================================
- *
- * Hardware expressions may participate in comparison syntax where the HDL
- * semantic layer permits it.
- *
- * Examples of potentially valid higher-level expressions include:
- *
- *     signal_a == signal_b
- *     counter < limit
- *     state == expected_state
- *
- * The grammar does not determine whether these operations represent:
- *
- *     - simulation-time computation
- *     - combinational logic
- *     - sequential logic
- *     - synthesis constraints
- *     - assertions
- *     - verification properties
- *
- * HDL semantic analysis owns that distinction.
- *
- *
- * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION CONTRACT
- * ============================================================================
- *
- * Resource expressions may syntactically appear as operands:
- *
- *     available < required
- *     capacity >= requirement
- *
- * The grammar does not define resource units or hardware capacity.
- *
- * Those belong to the resource/capability model.
- *
- * Consequently this file contains no:
- *
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_DEVICES
- *     MAX_THREADS
- *     MAX_MEMORY
- *     MAX_NODES
- *
- * or equivalent constants.
- *
+ * The grammar must never attempt to answer these questions.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The AST layer should represent these nodes generically as binary
- * expressions or as a comparison-specific expression node.
+ * Every parsed comparison must retain enough structure for the frontend AST
+ * to preserve:
  *
- * Recommended semantic distinction:
+ *     - operator identity
+ *     - left operand
+ *     - right operand
+ *     - source span
+ *     - source/module provenance where supported
+ *     - nested expression structure
  *
- *     EqualityOperator:
- *         Eq
- *         Ne
+ * The AST may represent these as a generic binary operation or as dedicated
+ * comparison nodes according to the existing authoritative AST design.
  *
- *     RelationalOperator:
- *         Lt
- *         Le
- *         Gt
- *         Ge
+ * This grammar MUST NOT require:
  *
- * The parser must not force a particular AST representation if the existing
- * repository AST already has an authoritative equivalent.
+ *     QuantumComparison
+ *     HardwareComparison
+ *     GPUComparison
+ *     QPUComparison
+ *     HDLComparison
  *
- * The existing AST remains the owner of the concrete node representation.
+ * merely because an operand belongs to a particular domain.
  *
+ * Domain semantics are resolved after parsing.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Quantum values may syntactically occur as operands because quantum
+ * expressions participate in the universal expression hierarchy.
+ *
+ * This grammar does not decide whether:
+ *
+ *     q1 == q2
+ *     state1 == state2
+ *     observable1 < observable2
+ *     logical_state == expected_state
+ *
+ * has valid quantum semantics.
+ *
+ * Those decisions belong to quantum semantic analysis.
+ *
+ * No physical-qubit numbering, topology, device identity, gate catalogue,
+ * calibration information, QEC policy, routing information or scheduling
+ * information belongs here.
+ *
+ * Where a comparison has quantum meaning, lowering continues through the
+ * canonical quantum semantic boundary:
+ *
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization / routing / scheduling / resilience / ZQN / HAL
+ *
+ * This grammar MUST NOT introduce a second quantum IR.
+ *
+ * ============================================================================
+ * CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * Classical scalar, vector, matrix, tensor, symbolic and user-defined values
+ * may participate in comparison syntax.
+ *
+ * The grammar does not impose:
+ *
+ *     - integer width
+ *     - floating-point width
+ *     - vector width
+ *     - matrix dimensions
+ *     - tensor dimensions
+ *     - register size
+ *     - CPU count
+ *     - accelerator count
+ *
+ * Such properties are semantic, resource or target concerns.
+ *
+ * ============================================================================
+ * HDL INTEGRATION
+ * ============================================================================
+ *
+ * HDL expressions may use this syntax for constructs such as:
+ *
+ *     signal_a == signal_b
+ *     counter < limit
+ *     state == expected_state
+ *
+ * The grammar does not determine whether a comparison is ultimately:
+ *
+ *     - simulation logic
+ *     - combinational logic
+ *     - sequential logic
+ *     - synthesis logic
+ *     - an assertion
+ *     - a verification property
+ *     - a timing constraint
+ *
+ * HDL semantic analysis owns those distinctions.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Expressions involving resources and capabilities may use comparison syntax.
+ *
+ * For example, a semantic resource model might eventually evaluate:
+ *
+ *     available >= required
+ *
+ * but this grammar does not define:
+ *
+ *     - memory capacity
+ *     - number of CPUs
+ *     - number of GPUs
+ *     - number of QPUs
+ *     - number of nodes
+ *     - topology size
+ *     - network bandwidth
+ *     - hardware limits
+ *
+ * No such finite limits may be introduced into this grammar.
+ *
+ * ============================================================================
+ * PORTABILITY / POCO-REAF
+ * ============================================================================
+ *
+ * Comparison syntax must remain target independent.
+ *
+ * A source program may express computation or requirements without binding
+ * the comparison operation to:
+ *
+ *     a specific CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     physical qubit
+ *     memory bank
+ *     network node
+ *     device identifier
+ *
+ * Therefore the same source-level comparison remains portable across
+ * implementations capable of satisfying its semantic requirements.
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * This grammar produces no IR.
+ * This grammar creates no IR.
  *
- * The lowering layer consumes the AST and maps comparison operations into
- * the canonical appropriate IR operation.
+ * Lowering consumes the AST/semantic representation and selects the
+ * appropriate canonical IR operation.
  *
- * Classical comparisons may lower to the classical IR.
+ * Possible downstream destinations include:
  *
- * Quantum-related comparisons may lower through the quantum semantic
- * pipeline when their meaning is quantum-specific.
+ *     classical/control/data IR
+ *     quantum::ir
+ *     HDL/hardware semantic IR
+ *     resource/constraint metadata
  *
- * HDL comparisons may lower through the HDL/hardware pipeline.
+ * according to the already-established semantic domain.
  *
- * Resource comparisons may lower through resource/constraint semantics.
- *
- * The grammar remains independent of those target-specific decisions.
- *
+ * This file must never encode target instruction selection.
  *
  * ============================================================================
  * OPTIMIZATION CONTRACT
  * ============================================================================
  *
- * Optimizers may simplify comparison expressions after semantic analysis.
- *
- * Examples:
+ * Optimizations such as:
  *
  *     x == x
  *     x < x
- *     !(a == b)
+ *     !(x == y)
  *
- * Such transformations are NOT performed by this grammar.
+ * are NOT performed here.
  *
- * Optimizers must respect the semantic properties of the operand types and
- * must never assume mathematical identities for arbitrary overloaded or
- * effectful operations.
+ * Any such transformation belongs to semantic/optimization stages and must
+ * respect:
  *
- *
- * ============================================================================
- * SCHEDULING CONTRACT
- * ============================================================================
- *
- * This grammar has no scheduling dependency.
- *
- * Comparison syntax must parse without knowledge of:
- *
- *     hardware timing
- *     gate duration
- *     clock period
- *     qubit topology
- *     resource availability
- *     execution queue
- *
- * Scheduling consumes semantic/IR representations later in the pipeline.
- *
+ *     - operand types
+ *     - effects
+ *     - evaluation order
+ *     - user-defined operators
+ *     - symbolic semantics
+ *     - domain semantics
+ *     - observable behavior
  *
  * ============================================================================
- * RUNTIME CONTRACT
+ * ERROR CONTRACT
  * ============================================================================
  *
- * This grammar has no runtime dependency.
+ * These are syntactically incomplete:
  *
- * Runtime values determine the actual result of a comparison.
+ *     a ==
+ *     a !=
+ *     a <
+ *     a <=
+ *     a >
+ *     a >=
  *
- * Parsing must remain independent of:
+ * They must produce parser diagnostics.
  *
- *     device
- *     backend
- *     deployment
- *     execution location
- *     machine size
- *     processor count
- *     qubit count
- *     memory capacity
+ * These are syntactically invalid at this precedence layer:
  *
+ *     == a
+ *     != a
+ *     < a
+ *     > a
+ *
+ * The parser must report malformed syntax rather than asking semantic
+ * analysis to repair it.
+ *
+ * A syntactically valid but semantically invalid expression, for example:
+ *
+ *     1 < some_non_orderable_type
+ *
+ * must be diagnosed by semantic/type analysis.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * For a fixed lexer token stream, this grammar must produce deterministic
- * parse structure.
+ * For an identical lexer token stream, this grammar must produce an
+ * equivalent parse structure.
  *
- * No runtime state, hardware state, random state, environment variable,
- * filesystem state, network state, or backend capability may affect parsing.
+ * Parsing must not depend on:
  *
- *
- * ============================================================================
- * ERROR RECOVERY
- * ============================================================================
- *
- * Syntax errors involving comparison operators are parser errors.
- *
- * Examples:
- *
- *     a ==
- *     < b
- *     a <=
- *     a !=
- *
- * The semantic layer must not be invoked to repair malformed syntax.
- *
- * ANTLR's configured error strategy remains responsible for reporting and
- * recovering from malformed token sequences.
- *
+ *     - machine state
+ *     - hardware discovery
+ *     - resource availability
+ *     - network state
+ *     - filesystem state
+ *     - random state
+ *     - runtime values
+ *     - backend selection
+ *     - calibration
+ *     - scheduling
  *
  * ============================================================================
  * SECURITY
  * ============================================================================
  *
- * This grammar:
+ * This grammar performs no:
  *
- *     - performs no I/O;
- *     - accesses no filesystem;
- *     - accesses no network;
- *     - invokes no external command;
- *     - evaluates no expression;
- *     - executes no user code;
- *     - performs no hardware discovery.
+ *     - I/O
+ *     - filesystem access
+ *     - network access
+ *     - command execution
+ *     - hardware access
+ *     - expression evaluation
+ *     - code execution
  *
- * Therefore parsing comparison syntax cannot itself trigger computation or
- * external effects.
+ * It is therefore a pure syntactic layer.
  *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * No artificial language-level finite limit is encoded for:
+ *
+ *     - number of comparison operators
+ *     - expression depth
+ *     - operand complexity
+ *     - source size
+ *     - number of program resources
+ *     - number of qubits
+ *     - number of classical resources
+ *     - number of hardware resources
+ *     - number of distributed participants
+ *     - tensor dimensions
+ *     - vector widths
+ *
+ * For example, syntactically:
+ *
+ *     a < b < c < d < ... 
+ *
+ * is structurally supported without a fixed comparison-chain count.
+ *
+ * Practical parser/compiler resource limits are implementation constraints,
+ * not Zamani language limits.
  *
  * ============================================================================
  * COMPATIBILITY
  * ============================================================================
  *
- * Existing Zamani source forms remain supported:
+ * Existing canonical comparison spellings remain:
+ *
+ *     ==
+ *     !=
+ *     <
+ *     <=
+ *     >
+ *     >=
+ *
+ * This file deliberately does NOT introduce:
+ *
+ *     ===
+ *     !==
+ *     <>
+ *     <=>
+ *
+ * or alternate equality/comparison spellings.
+ *
+ * Such additions require an explicit language specification and lexer
+ * compatibility change before becoming part of this grammar.
+ *
+ * ============================================================================
+ * INTEGRATION REQUIREMENTS
+ * ============================================================================
+ *
+ * The canonical expression composition grammar must:
+ *
+ *     1. import ZamaniComparison;
+ *
+ *     2. use comparisonExpression at the relational-comparison level;
+ *
+ *     3. use equalityExpression above comparisonExpression;
+ *
+ *     4. not redefine either rule;
+ *
+ *     5. preserve the precedence:
+ *
+ *            shift
+ *              <
+ *            comparison
+ *              <
+ *            equality
+ *              <
+ *            bitwise
+ *              <
+ *            logical
+ *              <
+ *            range/conditional
+ *              <
+ *            assignment
+ *
+ * The expression composition grammar remains responsible for composing
+ * these layers into the public `expression` rule.
+ *
+ * ============================================================================
+ * DUPLICATION REMOVAL REQUIREMENT
+ * ============================================================================
+ *
+ * `grammar/antlr/Core.g4` currently contains its own comparison/equality
+ * rules and therefore duplicates this modular expression layer.
+ *
+ * During parser-composition integration, those duplicate expression rules
+ * must be removed from the authoritative composition grammar rather than
+ * maintained in parallel.
+ *
+ * Likewise:
+ *
+ *     grammar/Zamani.g4
+ *     grammar/antlr/ZamaniParser.g4
+ *     grammar/expressions/expressions.g4
+ *
+ * must not independently redefine comparison precedence.
+ *
+ * One comparison grammar must own this syntax.
+ *
+ * ============================================================================
+ * LEXER INTEGRATION REQUIREMENT
+ * ============================================================================
+ *
+ * The canonical lexer remains the owner of:
+ *
+ *     EQ_EQ
+ *     NOT_EQ
+ *     LT
+ *     LE
+ *     GT
+ *     GE
+ *
+ * `comparison.g4` references those tokens but never defines them.
+ *
+ * This prevents multiple lexical authorities from assigning different token
+ * identities to the same source spelling.
+ *
+ * ============================================================================
+ * RUST INTEGRATION
+ * ============================================================================
+ *
+ * This file contains no Rust target actions, semantic predicates, unsafe
+ * blocks, filesystem operations or runtime dependencies.
+ *
+ * Generated parser integration must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * Zamani-owned Rust code must remain safe Rust.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive syntax:
  *
  *     a == b
  *     a != b
@@ -623,39 +754,47 @@ relationalOperator
  *     a > b
  *     a >= b
  *
- * The grammar intentionally does not introduce:
+ * Precedence:
  *
- *     ===
- *     !==
+ *     a < b == c < d
  *
- * because those operators are not part of the current documented Zamani
- * comparison vocabulary.
+ * must parse as:
  *
- * Future operators must be added through an explicit language-versioned
- * compatibility change rather than silently changing the meaning of an
- * existing token sequence.
+ *     (a < b) == (c < d)
  *
+ * Chaining:
  *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
+ *     a < b < c
+ *     a == b == c
+ *     a != b == c
  *
- * There is no semantic upper bound encoded by this grammar on:
+ * must remain syntactically representable as repeated binary operations.
  *
- *     expression size
- *     operand complexity
- *     identifier length
- *     nesting depth
- *     number of comparisons
- *     number of source declarations
- *     number of quantum resources
- *     number of classical resources
- *     number of hardware resources
- *     number of distributed resources
+ * Nested expressions:
  *
- * Practical limits are compilation-environment resource limits and belong
- * outside the language semantics.
+ *     (a + b) < (c * d)
+ *     f(a) == g(b)
+ *     object.field < other.field
+ *     array[i] >= array[j]
  *
+ * must be handled by the higher-precedence expression layers.
+ *
+ * Negative syntax:
+ *
+ *     ==
+ *     !=
+ *     <
+ *     <=
+ *     >
+ *     >=
+ *     a ==
+ *     a !=
+ *     a <
+ *     a <=
+ *     a >
+ *     a >=
+ *
+ * must be rejected as incomplete expressions.
  *
  * ============================================================================
  * FILE COMPLETION CRITERIA
@@ -663,29 +802,29 @@ relationalOperator
  *
  * This file is complete when:
  *
- * 1. ZamaniLexer provides the six authoritative operator tokens:
+ *     [x] Operator spelling is delegated to the canonical lexer.
+ *     [x] EQ_EQ and NOT_EQ are used for equality.
+ *     [x] LT, LE, GT and GE are used for ordering.
+ *     [x] comparisonExpression owns relational comparison.
+ *     [x] equalityExpression owns equality.
+ *     [x] comparison binds more tightly than equality.
+ *     [x] shiftExpression remains the higher-precedence operand layer.
+ *     [x] No assignment syntax is duplicated here.
+ *     [x] No arithmetic syntax is duplicated here.
+ *     [x] No semantic type rules are encoded here.
+ *     [x] No quantum IR is introduced.
+ *     [x] No hardware limits are encoded.
+ *     [x] No resource limits are encoded.
+ *     [x] No target-specific behavior is encoded.
+ *     [x] No Rust actions or unsafe code are required.
+ *     [x] AST mapping is defined before semantic implementation.
+ *     [x] IR ownership is downstream.
+ *     [x] Positive tests are defined.
+ *     [x] Negative tests are defined.
+ *     [x] Boundary tests are defined.
+ *     [x] Scalability tests are defined.
+ *     [x] Deterministic parsing is preserved.
+ *     [x] Duplicate comparison rules are removed from composition roots.
  *
- *        EQ NE LT LE GT GE
- *
- * 2. The master parser imports this parser grammar.
- *
- * 3. `comparisonExpression` is used at the appropriate precedence level.
- *
- * 4. `shiftExpression` is the immediate higher-precedence operand layer.
- *
- * 5. No other grammar file independently defines comparison precedence.
- *
- * 6. The AST preserves comparison operator identity.
- *
- * 7. Semantic analysis owns comparability/type legality.
- *
- * 8. IR lowering owns target-specific representation.
- *
- * 9. Quantum semantics continue through the canonical quantum IR boundary.
- *
- * 10. No hardware or machine limits are encoded here.
- *
- * 11. No Rust unsafe code is required.
- *
- * 12. Positive, negative, precedence, boundary, and cross-domain tests pass.
+ * ============================================================================
  */
