@@ -1,1043 +1,1004 @@
 /*
-
-* ============================================================================
-* Zamani Programming Language
-* ============================================================================
-* 
-* File:
-* grammar/expressions/arithmetic.g4
-* 
-* Role:
-* Canonical arithmetic-expression grammar for Zamani.
-* 
-* This is a PARSER grammar.
-* 
-* It owns ONLY the syntactic precedence structure for arithmetic expressions:
-* 
-* additive
-*     ↓
-* multiplicative
-*     ↓
-* exponentiation
-* 
-* Arithmetic operators are represented by canonical lexer tokens.
-* 
-* This file does NOT define lexer tokens.
-* 
-* ============================================================================
-* ARCHITECTURAL OWNERSHIP
-* ============================================================================
-* 
-* OWNS
-* ---
-* 
-* - additive-expression syntax;
-* - multiplicative-expression syntax;
-* - exponentiation syntax;
-* - arithmetic operator grouping;
-* - arithmetic precedence;
-* - arithmetic associativity;
-* - the parser-level boundary between arithmetic and adjacent precedence
-* layers.
-* 
-* DOES NOT OWN
-* ---
-* 
-* - lexical spelling of operators;
-* - identifiers;
-* - numeric literals;
-* - unary-expression syntax;
-* - function calls;
-* - indexing;
-* - member access;
-* - assignments;
-* - comparisons;
-* - equality;
-* - logical operators;
-* - bitwise operators;
-* - shifts;
-* - type definitions;
-* - numeric type checking;
-* - overflow rules;
-* - floating-point semantics;
-* - integer representation;
-* - arbitrary-precision implementation;
-* - constant folding;
-* - algebraic simplification;
-* - symbolic evaluation;
-* - vector/matrix/tensor semantics;
-* - quantum semantics;
-* - quantum::ir;
-* - hardware semantics;
-* - HDL semantics;
-* - resource discovery;
-* - scheduling;
-* - optimization;
-* - code generation;
-* - runtime execution;
-* - machine-specific limits.
-* 
-* ============================================================================
-* DEPENDENCY BOUNDARY
-* ============================================================================
-* 
-* The intended expression hierarchy is:
-* 
-* assignment
-*     ↓
-* conditional
-*     ↓
-* logical OR
-*     ↓
-* logical AND
-*     ↓
-* bitwise OR
-*     ↓
-* bitwise XOR
-*     ↓
-* bitwise AND
-*     ↓
-* equality
-*     ↓
-* comparison
-*     ↓
-* shift
-*     ↓
-* additive              <-- THIS FILE
-*     ↓
-* multiplicative        <-- THIS FILE
-*     ↓
-* exponentiation        <-- THIS FILE
-*     ↓
-* unary
-*     ↓
-* postfix
-*     ↓
-* primary
-* 
-* This corresponds to the canonical Zamani syntax specification:
-* 
-* 11 = Sum
-* 12 = Product
-* 13 = Prefix
-* 
-* with exponentiation explicitly placed inside the arithmetic layer.
-* 
-* ============================================================================
-* ANTLR INTEGRATION
-* ============================================================================
-* 
-* This grammar is imported by the canonical expression parser.
-* 
-* The canonical integration is:
-* 
-* parser grammar Expressions;
-* 
-* options {
-*     tokenVocab = ZamaniLexer;
-* }
-* 
-* import Arithmetic;
-* 
-* Expressions MUST NOT redeclare:
-* 
-* additiveExpression
-* multiplicativeExpression
-* exponentExpression
-* 
-* after importing this grammar.
-* 
-* This prevents duplicate rule ownership and guarantees one authoritative
-* arithmetic precedence hierarchy.
-* 
-* ============================================================================
-* LEXER CONTRACT
-* ============================================================================
-* 
-* Operator tokens consumed here are supplied by the canonical Zamani lexer.
-* 
-* Required token names:
-* 
-* PLUS
-* MINUS
-* STAR
-* SLASH
-* MODULO
-* POWER
-* 
-* IMPORTANT:
-* 
-* POWER is intentionally referenced as a parser token.
-* 
-* If the current canonical lexer does not yet expose POWER, the lexer must
-* first be extended through the normal lexical-versioning process.
-* 
-* This file MUST NOT introduce a local lexer rule such as:
-* 
-* POWER : '**' ;
-* 
-* because parser grammars do not own lexical definitions.
-* 
-* ============================================================================
-* AST CONTRACT
-* ============================================================================
-* 
-* This grammar does not construct AST nodes itself.
-* 
-* The parser/frontend AST layer receives:
-* 
-* lhs
-* operator
-* rhs
-* 
-* together with source spans.
-* 
-* The semantic layer subsequently determines whether the operator is valid
-* for the operand types.
-* 
-* Examples:
-* 
-* a + b
-* a - b
-* a * b
-* a / b
-* a % b
-* a ** b
-* 
-* may all lower into the repository's canonical binary-expression AST
-* representation.
-* 
-* The grammar must not create separate:
-* 
-* MatrixAdd
-* TensorAdd
-* QuantumAdd
-* HardwareAdd
-* 
-* AST categories merely because an operand happens to have such a type.
-* 
-* ============================================================================
-* SEMANTIC CONTRACT
-* ============================================================================
-* 
-* Arithmetic syntax is type-independent.
-* 
-* The semantic/type system determines whether an operation is valid for:
-* 
-* integers
-* arbitrary-precision integers
-* floating-point values
-* fixed-point values
-* decimal values
-* complex values
-* vectors
-* matrices
-* tensors
-* symbolic values
-* user-defined numeric types
-* hardware numeric values
-* future numeric abstractions
-* 
-* This grammar MUST NOT decide:
-* 
-* integer width
-* floating-point width
-* overflow behavior
-* rounding mode
-* precision
-* saturation
-* vector width
-* tensor dimensions
-* hardware instruction selection
-* 
-* Those decisions belong downstream.
-* 
-* ============================================================================
-* SCALABILITY / POCO-REAF
-* ============================================================================
-* 
-* No machine capacity is encoded by this grammar.
-* 
-* In particular, there is no:
-* 
-* MAX_OPERANDS
-* MAX_EXPRESSION_DEPTH
-* MAX_INTEGER_BITS
-* MAX_VECTOR_SIZE
-* MAX_MATRIX_SIZE
-* MAX_TENSOR_SIZE
-* MAX_REGISTER_COUNT
-* MAX_CORES
-* MAX_THREADS
-* MAX_QUBITS
-* MAX_DEVICES
-* 
-* Repetition is expressed recursively or through zero-or-more parser
-* constructs so that the grammar does not impose an artificial semantic
-* capacity.
-* 
-* Actual implementation resource limits, if required, belong to compiler
-* resource-policy infrastructure rather than this language grammar.
-* 
-* ============================================================================
-* DETERMINISM
-* ============================================================================
-* 
-* For identical:
-* 
-* source text
-* language version
-* lexer version
-* 
-* this grammar must produce the same parse structure.
-* 
-* Arithmetic parsing must never depend on:
-* 
-* CPU count
-* GPU count
-* FPGA count
-* QPU topology
-* memory size
-* scheduler state
-* runtime state
-* backend selection
-* hardware calibration
-* network state
-* 
-* ============================================================================
-* PRECEDENCE
-* ============================================================================
-* 
-* Within this grammar:
-* 
-* additive < multiplicative < exponentiation
-* 
-* where "less than" means lower binding strength.
-* 
-* Therefore:
-* 
-* a + b * c
-* 
-* parses as:
-* 
-* a + (b * c)
-* 
-* and:
-* 
-* a * b + c
-* 
-* parses as:
-* 
-* (a * b) + c
-* 
-* Exponentiation is right-associative:
-* 
-* a ** b ** c
-* 
-* parses as:
-* 
-* a ** (b ** c)
-* 
-* This is intentionally recursive rather than encoded through an arbitrary
-* depth.
-* 
-* ============================================================================
-* ASSOCIATIVITY
-* ============================================================================
-* 
-* Addition:
-* 
-* left associative
-* 
-* Multiplication:
-* 
-* left associative
-* 
-* Exponentiation:
-* 
-* right associative
-* 
-* Thus:
-* 
-* a - b - c
-* 
-* is:
-* 
-* (a - b) - c
-* 
-* and:
-* 
-* a / b / c
-* 
-* is:
-* 
-* (a / b) / c
-* 
-* while:
-* 
-* a ** b ** c
-* 
-* is:
-* 
-* a ** (b ** c)
-* 
-* Associativity is syntax here; semantic validity remains downstream.
-* 
-* ============================================================================
-* ARITHMETIC OPERATOR OWNERSHIP
-* ============================================================================
-* 
-* ADDITIVE
-* 
-* PLUS
-* MINUS
-* 
-* MULTIPLICATIVE
-* 
-* STAR
-* SLASH
-* MODULO
-* 
-* EXPONENTIATION
-* 
-* POWER
-* 
-* Compound assignment operators are NOT arithmetic-expression operators in
-* this file. They belong to assignment syntax.
-* 
-* Therefore this file does NOT consume:
-* 
-* PLUS_ASSIGN
-* MINUS_ASSIGN
-* STAR_ASSIGN
-* SLASH_ASSIGN
-* PERCENT_ASSIGN
-* 
-* ============================================================================
-* NO UNARY DUPLICATION
-* ============================================================================
-* 
-* This grammar intentionally does not define:
-* 
-* +x
-* -x
-* !x
-* ~x
-* 
-* Those belong to unary-expression syntax.
-* 
-* This distinction is necessary to prevent ambiguity between:
-* 
-* additive
-* 
-* and:
-* 
-* unary
-* 
-* and to preserve the canonical expression dependency graph.
-* 
-* ============================================================================
-* QUANTUM INTEGRATION
-* ============================================================================
-* 
-* Arithmetic operators can syntactically operate on expressions whose
-* semantic values are quantum-related.
-* 
-* For example:
-* 
-* angle + phase
-* 
-* may be valid after semantic analysis.
-* 
-* However, this grammar does not define quantum arithmetic semantics.
-* 
-* It does not know about:
-* 
-* qubits
-* quantum states
-* gates
-* observables
-* QEC
-* ZQN
-* physical qubits
-* topology
-* calibration
-* gate durations
-* 
-* If an arithmetic expression eventually contributes to quantum::ir, the
-* frontend/semantic lowering layer performs that translation.
-* 
-* There is deliberately no direct dependency:
-* 
-* grammar -> quantum::ir
-* 
-* ============================================================================
-* HDL / HARDWARE INTEGRATION
-* ============================================================================
-* 
-* Arithmetic syntax can also appear in hardware-oriented source constructs:
-* 
-* width - 1
-* address + offset
-* signal * factor
-* 
-* This grammar remains unaware of:
-* 
-* bus width
-* register width
-* clock frequency
-* FPGA family
-* ASIC technology
-* physical address
-* device count
-* 
-* Such information belongs to HDL/hardware semantics and target realization.
-* 
-* ============================================================================
-* CLASSICAL / NUMERICAL INTEGRATION
-* ============================================================================
-* 
-* The same arithmetic syntax is intentionally reusable for:
-* 
-* scalar
-* vector
-* matrix
-* tensor
-* numerical
-* symbolic
-* accelerator
-* 
-* domains.
-* 
-* A domain must not introduce a new arithmetic token merely because it
-* implements a different semantic operation.
-* 
-* ============================================================================
-* SYMBOLIC / MATHEMATICAL INTEGRATION
-* ============================================================================
-* 
-* Expressions such as:
-* 
-* x + y * z
-* 
-* are parsed structurally.
-* 
-* Symbolic simplification, algebraic normalization, polynomial arithmetic,
-* differentiation, integration, optimization, and other mathematical
-* transformations occur after parsing.
-* 
-* This grammar therefore remains small and stable even as the mathematical
-* subsystem grows.
-* 
-* ============================================================================
-* CONSTANT EXPRESSIONS
-* ============================================================================
-* 
-* The grammar does not evaluate arithmetic.
-* 
-* For example:
-* 
-* 2 + 3
-* 
-* is parsed exactly like:
-* 
-* x + y
-* 
-* Constant evaluation belongs to semantic analysis / compile-time evaluation.
-* 
-* This separation is required so the grammar does not become dependent on
-* target integer widths or floating-point representations.
-* 
-* ============================================================================
-* OVERFLOW / PRECISION
-* ============================================================================
-* 
-* No overflow or precision policy appears in this file.
-* 
-* The parser must accept syntactically valid numeric expressions regardless
-* of whether a particular target can represent their eventual values.
-* 
-* Semantic analysis may subsequently reject or transform an expression
-* according to the selected type and compilation policy.
-* 
-* ============================================================================
-* ERROR BOUNDARY
-* ============================================================================
-* 
-* This grammar is responsible for syntactic structure.
-* 
-* Examples of syntax errors include malformed operator sequences that cannot
-* form an arithmetic expression.
-* 
-* Examples of semantic errors that MUST NOT be diagnosed here include:
-* 
-* integer division by zero
-* overflow
-* unsupported numeric type
-* incompatible vector dimensions
-* incompatible matrix dimensions
-* unsupported quantum arithmetic
-* unsupported hardware arithmetic
-* 
-* Those belong downstream.
-* 
-* ============================================================================
-* COMPATIBILITY
-* ============================================================================
-* 
-* The precedence and associativity rules are language compatibility contracts.
-* 
-* A compatible language release MUST NOT silently change:
-* 
-* additive precedence
-* multiplicative precedence
-* exponentiation precedence
-* associativity
-* 
-* Such changes require an explicit language-version compatibility decision.
-* 
-* ============================================================================
-* IMPLEMENTATION SAFETY
-* ============================================================================
-* 
-* This grammar contains no Rust implementation code.
-* 
-* The Rust compiler/parser implementation consuming this grammar MUST target:
-* 
-* Rust 1.97
-* Rust 1.97.1
-* 
-* and MUST use safe Rust.
-* 
-* Repository Rust code must enforce:
-* 
-* #![forbid(unsafe_code)]
-* 
-* or an equivalent repository-wide policy.
-* 
-* No arithmetic grammar feature requires unsafe Rust.
-* 
-* ============================================================================
-* CANONICAL RULES
-* ============================================================================
-  */
-
-/*
-
-* NOTE:
-* 
-* "parser grammar" inheritance/import is used so this file can be composed
-* with the canonical Expressions parser without introducing lexer rules.
-  */
+ * ============================================================================
+ * Zamani Universal Programming Language
+ * ============================================================================
+ *
+ * File:
+ *     grammar/expressions/arithmetic.g4
+ *
+ * Status:
+ *     Canonical modular arithmetic-expression grammar.
+ *
+ * Grammar technology:
+ *     ANTLR4 parser grammar.
+ *
+ * Rust implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Edition 2021
+ *     Safe Rust only.
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This file owns the syntactic structure of Zamani arithmetic expressions.
+ *
+ * It defines:
+ *
+ *     additiveExpression
+ *     multiplicativeExpression
+ *     exponentExpression
+ *
+ * and therefore establishes the arithmetic portion of the expression
+ * precedence hierarchy.
+ *
+ * The arithmetic hierarchy is:
+ *
+ *     multiplicative
+ *          |
+ *          v
+ *     additive
+ *
+ * with exponentiation binding more strongly than multiplication/division/
+ * remainder.
+ *
+ * The complete expression hierarchy is composed by the canonical expression
+ * grammar rather than duplicated here.
+ *
+ * ============================================================================
+ * ARCHITECTURAL OWNERSHIP
+ * ============================================================================
+ *
+ * OWNS
+ * ----
+ *
+ * - additive-expression syntax;
+ * - multiplicative-expression syntax;
+ * - exponentiation syntax;
+ * - arithmetic operator grouping;
+ * - arithmetic precedence;
+ * - arithmetic associativity;
+ * - the parser-level boundary between arithmetic and the adjacent expression
+ *   layers;
+ * - syntactic repetition of arithmetic operations.
+ *
+ * DOES NOT OWN
+ * -----------
+ *
+ * - lexical token definitions;
+ * - identifiers;
+ * - numeric literal definitions;
+ * - unary/prefix operator definitions;
+ * - postfix expressions;
+ * - function calls;
+ * - indexing;
+ * - member access;
+ * - assignment;
+ * - conditional expressions;
+ * - ranges;
+ * - logical operators;
+ * - bitwise operators;
+ * - shifts;
+ * - comparisons;
+ * - equality;
+ * - type checking;
+ * - overload resolution;
+ * - numeric representation;
+ * - integer width;
+ * - floating-point width;
+ * - precision;
+ * - rounding;
+ * - overflow policy;
+ * - division-by-zero semantics;
+ * - vector/matrix/tensor semantics;
+ * - symbolic evaluation;
+ * - constant folding;
+ * - optimization;
+ * - quantum semantics;
+ * - quantum::ir;
+ * - HDL semantics;
+ * - hardware realization;
+ * - resource discovery;
+ * - routing;
+ * - scheduling;
+ * - QEC;
+ * - ZQN;
+ * - HAL;
+ * - runtime execution;
+ * - code generation;
+ * - target-specific instruction selection.
+ *
+ * ============================================================================
+ * AUTHORITY
+ * ============================================================================
+ *
+ * Lexical authority:
+ *
+ *     grammar/lexer/tokens.g4
+ *
+ * Expression composition authority:
+ *
+ *     grammar/expressions/expression.g4
+ *
+ * Legacy/compatibility expression surface:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * Language-level syntax/specification:
+ *
+ *     grammar/spec/syntax.md
+ *     grammar/specification/syntax.md
+ *
+ * This file must not create a second lexical or expression authority.
+ *
+ * ============================================================================
+ * TOKEN VOCABULARY
+ * ============================================================================
+ *
+ * This grammar consumes the canonical modular lexer vocabulary:
+ *
+ *     ZamaniTokens
+ *
+ * Arithmetic tokens required here are:
+ *
+ *     PLUS
+ *     MINUS
+ *     STAR
+ *     SLASH
+ *     MODULO
+ *     POWER
+ *
+ * No lexer rule is defined in this file.
+ *
+ * In particular, this file MUST NOT define:
+ *
+ *     PLUS   : '+' ;
+ *     MINUS  : '-' ;
+ *     STAR   : '*' ;
+ *     ...
+ *
+ * Lexical spelling belongs exclusively to the lexer.
+ *
+ * ============================================================================
+ * PRECEDENCE
+ * ============================================================================
+ *
+ * Arithmetic precedence is:
+ *
+ *     additive
+ *         <
+ *     multiplicative
+ *         <
+ *     exponentiation
+ *         <
+ *     prefix/postfix operand layer
+ *
+ * where "<" means "binds less strongly than".
+ *
+ * Therefore:
+ *
+ *     a + b * c
+ *
+ * is structurally:
+ *
+ *     a + (b * c)
+ *
+ * and:
+ *
+ *     a * b + c
+ *
+ * is structurally:
+ *
+ *     (a * b) + c
+ *
+ * Exponentiation binds more strongly than multiplication:
+ *
+ *     a * b ** c
+ *
+ * is structurally:
+ *
+ *     a * (b ** c)
+ *
+ * ============================================================================
+ * ASSOCIATIVITY
+ * ============================================================================
+ *
+ * Addition/subtraction:
+ *
+ *     left associative
+ *
+ * Multiplication/division/remainder:
+ *
+ *     left associative
+ *
+ * Exponentiation:
+ *
+ *     right associative
+ *
+ * Therefore:
+ *
+ *     a - b - c
+ *
+ * is:
+ *
+ *     (a - b) - c
+ *
+ * and:
+ *
+ *     a / b / c
+ *
+ * is:
+ *
+ *     (a / b) / c
+ *
+ * while:
+ *
+ *     a ** b ** c
+ *
+ * is:
+ *
+ *     a ** (b ** c)
+ *
+ * Associativity here describes syntax only.
+ * Semantic analysis determines whether the resulting operation is valid.
+ *
+ * ============================================================================
+ * ARITHMETIC OPERATORS
+ * ============================================================================
+ *
+ * ADDITIVE
+ *
+ *     PLUS
+ *     MINUS
+ *
+ * MULTIPLICATIVE
+ *
+ *     STAR
+ *     SLASH
+ *     MODULO
+ *
+ * EXPONENTIATION
+ *
+ *     POWER
+ *
+ * Compound assignments do NOT belong here.
+ *
+ * They are owned by:
+ *
+ *     grammar/expressions/assignment.g4
+ *
+ * Therefore this grammar does not consume:
+ *
+ *     PLUS_ASSIGN
+ *     MINUS_ASSIGN
+ *     STAR_ASSIGN
+ *     SLASH_ASSIGN
+ *     ...
+ *
+ * ============================================================================
+ * OPERAND BOUNDARY
+ * ============================================================================
+ *
+ * This grammar deliberately delegates its highest-precedence operand layer
+ * to the canonical prefix-expression rule.
+ *
+ * Therefore this file does not redefine:
+ *
+ *     prefixExpression
+ *     postfixExpression
+ *     primaryExpression
+ *
+ * Those belong to their respective expression modules.
+ *
+ * The dependency is:
+ *
+ *     additiveExpression
+ *         |
+ *         v
+ *     multiplicativeExpression
+ *         |
+ *         v
+ *     exponentExpression
+ *         |
+ *         v
+ *     prefixExpression
+ *
+ * This allows the arithmetic grammar to be independently maintained without
+ * becoming a second owner of unary/prefix syntax.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar constructs no AST itself.
+ *
+ * The frontend AST must preserve:
+ *
+ *     - source span;
+ *     - operator identity;
+ *     - left/right operand ordering;
+ *     - syntactic nesting;
+ *     - expression structure.
+ *
+ * Arithmetic expressions should lower through the repository's existing
+ * domain-neutral expression representation.
+ *
+ * Do NOT introduce parser-level domain-specific nodes such as:
+ *
+ *     MatrixAdd
+ *     TensorMultiply
+ *     QuantumAdd
+ *     HardwareMultiply
+ *     FPGAArithmetic
+ *
+ * merely because an operand later receives one of those semantic types.
+ *
+ * The same syntax:
+ *
+ *     a + b
+ *
+ * can therefore represent scalar, vector, matrix, tensor, symbolic,
+ * user-defined, accelerator, or other future arithmetic depending on the
+ * semantic type system.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing answers:
+ *
+ *     "Is this structurally an arithmetic expression?"
+ *
+ * Semantic analysis answers:
+ *
+ *     "Is this arithmetic operation meaningful for these operands?"
+ *
+ * Semantic analysis owns:
+ *
+ *     - operand type compatibility;
+ *     - numeric promotion;
+ *     - conversion;
+ *     - operator overloading;
+ *     - generic operator constraints;
+ *     - integer overflow policy;
+ *     - floating-point behavior;
+ *     - precision;
+ *     - rounding;
+ *     - division-by-zero behavior;
+ *     - modulo semantics;
+ *     - exponentiation domain;
+ *     - vector dimensions;
+ *     - matrix dimensions;
+ *     - tensor compatibility;
+ *     - symbolic semantics;
+ *     - user-defined numeric semantics;
+ *     - domain-specific legality.
+ *
+ * None of these are parser decisions.
+ *
+ * ============================================================================
+ * CONSTANT EVALUATION
+ * ============================================================================
+ *
+ * This grammar never evaluates expressions.
+ *
+ * For example:
+ *
+ *     2 + 3
+ *
+ * and:
+ *
+ *     x + y
+ *
+ * are both syntactically parsed.
+ *
+ * Constant folding belongs to semantic analysis / compile-time evaluation /
+ * optimization.
+ *
+ * This prevents the grammar from becoming coupled to:
+ *
+ *     - target integer widths;
+ *     - host floating-point representation;
+ *     - backend instruction sets;
+ *     - hardware availability.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Arithmetic syntax may occur inside quantum programs.
+ *
+ * Examples include:
+ *
+ *     theta + phi
+ *     angle * scale
+ *     parameter ** exponent
+ *
+ * The grammar does not decide whether such operations are valid quantum
+ * operations.
+ *
+ * Quantum semantics remain downstream.
+ *
+ * The canonical quantum semantic boundary remains:
+ *
+ *     quantum::ir
+ *
+ * This grammar MUST NOT introduce:
+ *
+ *     grammar -> quantum-specific arithmetic IR
+ *
+ * and MUST NOT duplicate quantum::ir.
+ *
+ * Quantum lowering remains:
+ *
+ *     source
+ *       |
+ *       v
+ *     frontend AST
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     optimization / decomposition / routing / scheduling
+ *       |
+ *       v
+ *     QEC / resilience / ZQN / HAL
+ *
+ * ============================================================================
+ * CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * The same arithmetic syntax is reusable for:
+ *
+ *     scalars
+ *     integers
+ *     floating-point values
+ *     fixed-point values
+ *     arbitrary-precision values
+ *     complex values
+ *     vectors
+ *     matrices
+ *     tensors
+ *     symbolic values
+ *     scientific computation
+ *     signal processing
+ *     optimization
+ *     user-defined numeric types
+ *
+ * The grammar does not enumerate these semantic categories.
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Arithmetic expressions may appear in hardware-oriented constructs such as:
+ *
+ *     width - 1
+ *     address + offset
+ *     index * stride
+ *     signal_a + signal_b
+ *
+ * The grammar does not encode:
+ *
+ *     - fixed bus widths;
+ *     - fixed register widths;
+ *     - CPU instruction widths;
+ *     - FPGA family limits;
+ *     - ASIC technology;
+ *     - clock frequency;
+ *     - physical addresses;
+ *     - device identifiers.
+ *
+ * Those are downstream semantic/target concerns.
+ *
+ * ============================================================================
+ * RESOURCE / POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * This file introduces no universal machine or resource limit.
+ *
+ * In particular, it contains no:
+ *
+ *     MAX_INTEGER_BITS
+ *     MAX_EXPRESSION_DEPTH
+ *     MAX_OPERAND_COUNT
+ *     MAX_VECTOR_SIZE
+ *     MAX_MATRIX_SIZE
+ *     MAX_TENSOR_SIZE
+ *     MAX_REGISTER_COUNT
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QUBITS
+ *     MAX_DEVICES
+ *
+ * Repetition uses ANTLR's structural repetition/recursion facilities.
+ *
+ * "Infinity" in the POCO-REAF requirement means:
+ *
+ *     the language grammar introduces no artificial finite semantic limit.
+ *
+ * Actual resource limits may exist in implementations because finite
+ * computers have finite resources. Those limits are operational policy and
+ * must not become language-level syntax restrictions.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * For an identical:
+ *
+ *     source token stream
+ *     grammar version
+ *     lexer version
+ *
+ * this grammar must produce the same parse structure.
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     - CPU count;
+ *     - GPU count;
+ *     - QPU topology;
+ *     - memory size;
+ *     - scheduler state;
+ *     - runtime state;
+ *     - hardware calibration;
+ *     - network state;
+ *     - environment state;
+ *     - randomness.
+ *
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
+ *
+ * This grammar is responsible for syntactic errors.
+ *
+ * Examples:
+ *
+ *     a +
+ *     a * / b
+ *     a ** * b
+ *
+ * when these token sequences cannot form the required expression structure.
+ *
+ * Semantic errors do NOT belong here.
+ *
+ * Examples:
+ *
+ *     division by zero
+ *     integer overflow
+ *     incompatible matrix dimensions
+ *     invalid tensor broadcasting
+ *     unsupported exponentiation type
+ *     unsupported hardware arithmetic
+ *     unsupported quantum arithmetic
+ *
+ * These are downstream semantic diagnostics.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The following are language compatibility contracts:
+ *
+ *     additive precedence
+ *     multiplicative precedence
+ *     exponentiation precedence
+ *     associativity
+ *     operator ownership
+ *
+ * A language release must not silently alter these relationships.
+ *
+ * A deliberate precedence/associativity change requires an explicit language
+ * compatibility/versioning decision.
+ *
+ * ============================================================================
+ * ANTLR COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * This file is a parser grammar and must be imported by the canonical
+ * expression composition grammar.
+ *
+ * Canonical composition:
+ *
+ *     parser grammar Expression;
+ *
+ *     options {
+ *         tokenVocab = ZamaniTokens;
+ *     }
+ *
+ *     import Arithmetic;
+ *
+ * The importing grammar owns the public `expression` entry point.
+ *
+ * This file MUST NOT define:
+ *
+ *     expression
+ *     assignmentExpression
+ *     conditionalExpression
+ *     rangeExpression
+ *     logicalOrExpression
+ *     logicalAndExpression
+ *     bitwiseOrExpression
+ *     bitwiseXorExpression
+ *     bitwiseAndExpression
+ *     equalityExpression
+ *     relationalExpression
+ *     shiftExpression
+ *     prefixExpression
+ *     postfixExpression
+ *     primaryExpression
+ *
+ * unless that rule is explicitly assigned to this module in the canonical
+ * expression architecture.
+ *
+ * In particular, the expression root must not duplicate the arithmetic rules.
+ *
+ * ============================================================================
+ * LEGACY INTEGRATION
+ * ============================================================================
+ *
+ * The repository currently contains:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * as well as the newer canonical expression composition surface:
+ *
+ *     grammar/expressions/expression.g4
+ *
+ * The latter is the intended canonical composition point.
+ *
+ * The former must not continue to independently own additive or
+ * multiplicative precedence once this module is integrated.
+ *
+ * Migration contract:
+ *
+ *     expressions.g4
+ *         -> compatibility/delegation surface
+ *
+ *     expression.g4
+ *         -> canonical expression composition
+ *
+ *     arithmetic.g4
+ *         -> canonical arithmetic ownership
+ *
+ * This prevents two arithmetic grammars from silently diverging.
+ *
+ * ============================================================================
+ * LEGACY MONOLITHIC GRAMMAR INTEGRATION
+ * ============================================================================
+ *
+ * grammar/Zamani.g4 currently contains arithmetic-expression material.
+ *
+ * The modular grammar must become the authoritative implementation.
+ *
+ * Zamani.g4 should compose the expression grammar rather than maintain an
+ * independent arithmetic implementation.
+ *
+ * No second arithmetic hierarchy should be added to Zamani.g4.
+ *
+ * ============================================================================
+ * OTHER DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * Classical:
+ *
+ *     classical/scalar.g4
+ *     classical/vector.g4
+ *     classical/matrix.g4
+ *     classical/tensor.g4
+ *
+ * must consume or lower through the generic expression architecture rather
+ * than redefine arithmetic precedence.
+ *
+ * Quantum:
+ *
+ *     quantum/*.g4
+ *
+ * may embed arithmetic expressions for parameters and expressions, but must
+ * not redefine arithmetic precedence.
+ *
+ * HDL:
+ *
+ *     hdl/*.g4
+ *
+ * may embed arithmetic expressions for widths, indices, timing expressions,
+ * parameter expressions, and hardware intent, but must not create a second
+ * arithmetic hierarchy.
+ *
+ * Resources:
+ *
+ *     resources/*.g4
+ *
+ * may use arithmetic expressions for quantities and constraints without
+ * turning arithmetic syntax into resource-specific arithmetic grammar.
+ *
+ * ============================================================================
+ * IR INTEGRATION
+ * ============================================================================
+ *
+ * This grammar does not directly produce IR.
+ *
+ * The intended lowering path is:
+ *
+ *     arithmetic syntax
+ *         |
+ *         v
+ *     domain-neutral AST
+ *         |
+ *         v
+ *     semantic analysis
+ *         |
+ *         v
+ *     canonical semantic representation
+ *         |
+ *         +------------------+------------------+
+ *         |                  |                  |
+ *         v                  v                  v
+ *     classical IR       quantum::ir       HDL/hardware IR
+ *
+ * Existing canonical IR implementations remain authoritative.
+ *
+ * The arithmetic grammar must never introduce a competing IR merely to
+ * represent arithmetic.
+ *
+ * ============================================================================
+ * OPTIMIZATION INTEGRATION
+ * ============================================================================
+ *
+ * Optimizations such as:
+ *
+ *     constant folding
+ *     strength reduction
+ *     algebraic simplification
+ *     common-subexpression elimination
+ *     vectorization
+ *     tensor optimization
+ *     symbolic normalization
+ *     target-specific instruction selection
+ *
+ * belong downstream.
+ *
+ * They must not alter the grammar's syntax contract.
+ *
+ * ============================================================================
+ * RUST / SAFETY CONTRACT
+ * ============================================================================
+ *
+ * This file contains no Rust implementation code.
+ *
+ * The generated parser/frontend integration must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *
+ * and must use safe Rust.
+ *
+ * This grammar does not require:
+ *
+ *     unsafe
+ *
+ * Rust code.
+ *
+ * Repository Rust implementation should enforce the project's safe-Rust
+ * policy, including `#![forbid(unsafe_code)]` where applicable.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive syntax tests must cover:
+ *
+ *     a + b
+ *     a - b
+ *     a * b
+ *     a / b
+ *     a % b
+ *     a ** b
+ *
+ *     a + b * c
+ *     a * b + c
+ *     a ** b * c
+ *     a * b ** c
+ *
+ *     a + b + c
+ *     a - b - c
+ *     a * b * c
+ *     a / b / c
+ *     a % b % c
+ *
+ *     a ** b ** c
+ *
+ *     deeply nested arithmetic
+ *     arbitrarily long arithmetic chains
+ *     parenthesized arithmetic
+ *     arithmetic involving generic expressions
+ *     arithmetic in classical contexts
+ *     arithmetic in quantum parameter contexts
+ *     arithmetic in HDL parameter contexts
+ *     arithmetic in resource expressions
+ *
+ * Negative syntax tests must cover malformed operator sequences such as:
+ *
+ *     a +
+ *     a *
+ *     a /
+ *     a %
+ *     a **
+ *     a * / b
+ *     a + * b
+ *
+ * Boundary tests must cover:
+ *
+ *     zero
+ *     negative literals/expressions where supported by prefix grammar
+ *     nested parentheses
+ *     very long operator chains
+ *     very deeply nested expressions
+ *
+ * Scalability tests must verify that no grammar rule introduces a semantic
+ * upper bound on:
+ *
+ *     operand count
+ *     expression chain length
+ *     expression nesting
+ *     numeric magnitude
+ *     vector size
+ *     matrix size
+ *     tensor size
+ *
+ * Determinism tests must verify identical token streams produce identical
+ * parse structures.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Forbidden universal limits include:
+ *
+ *     MAX_*
+ *     DEFAULT_MAX_*
+ *     *_LIMIT
+ *     fixed register counts
+ *     fixed processor counts
+ *     fixed accelerator counts
+ *     fixed tensor dimensions
+ *     fixed vector widths
+ *     fixed expression-chain counts
+ *
+ * No such semantic limits are encoded here.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ * [ ] canonical lexer vocabulary is consumed;
+ * [ ] arithmetic operators have one lexical authority;
+ * [ ] additive precedence is unambiguous;
+ * [ ] multiplicative precedence is unambiguous;
+ * [ ] exponentiation precedence is unambiguous;
+ * [ ] additive operations are left associative;
+ * [ ] multiplicative operations are left associative;
+ * [ ] exponentiation is right associative;
+ * [ ] no unary/prefix grammar is duplicated;
+ * [ ] no comparison grammar is duplicated;
+ * [ ] no assignment grammar is duplicated;
+ * [ ] no domain-specific arithmetic grammar is introduced;
+ * [ ] no machine/resource limits are encoded;
+ * [ ] AST mapping is defined downstream;
+ * [ ] semantic ownership is defined downstream;
+ * [ ] IR ownership is defined downstream;
+ * [ ] quantum::ir remains the canonical quantum boundary;
+ * [ ] positive tests exist;
+ * [ ] negative tests exist;
+ * [ ] boundary tests exist;
+ * [ ] scalability tests exist;
+ * [ ] determinism tests exist;
+ * [ ] compatibility tests exist;
+ * [ ] the canonical expression grammar imports this grammar;
+ * [ ] the legacy expression surface no longer independently owns these rules;
+ * [ ] the monolithic root grammar no longer independently owns these rules.
+ *
+ * ============================================================================
+ */
 
 parser grammar Arithmetic;
 
 options {
-tokenVocab = ZamaniLexer;
+    tokenVocab = ZamaniTokens;
 }
 
-/* ============================================================================
 
-* ADDITIVE EXPRESSIONS
-* ============================================================================
-* 
-* Addition/subtraction bind more weakly than multiplication/division/modulo.
-* 
-* Examples:
-* 
-* a + b
-* a - b
-* a + b - c
-* a - b + c
-* 
-* All binary arithmetic chains are unbounded by the grammar.
-* 
-* No finite operand count is encoded.
-* 
-* ============================================================================
-  */
-
+/*
+ * ============================================================================
+ * ADDITIVE EXPRESSIONS
+ * ============================================================================
+ *
+ * Left associative:
+ *
+ *     a + b - c
+ *
+ * becomes structurally:
+ *
+ *     (a + b) - c
+ *
+ * Repetition is unbounded by the language grammar.
+ */
 additiveExpression
-: multiplicativeExpression
-(
-PLUS
-| MINUS
-)
+    : multiplicativeExpression
+      (
+          additiveOperator
+          multiplicativeExpression
+      )*
+    ;
+
+additiveOperator
+    : PLUS
+    | MINUS
+    ;
+
+
+/*
+ * ============================================================================
+ * MULTIPLICATIVE EXPRESSIONS
+ * ============================================================================
+ *
+ * Left associative:
+ *
+ *     a * b / c % d
+ *
+ * becomes structurally:
+ *
+ *     (((a * b) / c) % d)
+ *
+ * Remainder is syntactically an arithmetic operator. Its legality for a
+ * particular type is determined by semantic analysis.
+ */
 multiplicativeExpression
-(
-(
-PLUS
-| MINUS
-)
-multiplicativeExpression
-)*
-;
+    : exponentExpression
+      (
+          multiplicativeOperator
+          exponentExpression
+      )*
+    ;
 
-/* ============================================================================
+multiplicativeOperator
+    : STAR
+    | SLASH
+    | MODULO
+    ;
 
-* MULTIPLICATIVE EXPRESSIONS
-* ============================================================================
-* 
-* Multiplication/division/modulo bind more strongly than addition/subtraction.
-* 
-* Examples:
-* 
-* a * b
-* a / b
-* a % b
-* a * b / c % d
-* 
-* The grammar deliberately does not determine whether "%" is meaningful for
-* every operand type.
-* 
-* That is a semantic/type-system decision.
-* 
-* ============================================================================
-  */
 
-multiplicativeExpression
-: exponentExpression
-(
-STAR
-| SLASH
-| MODULO
-)
+/*
+ * ============================================================================
+ * EXPONENTIATION
+ * ============================================================================
+ *
+ * Right associative:
+ *
+ *     a ** b ** c
+ *
+ * becomes:
+ *
+ *     a ** (b ** c)
+ *
+ * The recursive right-hand side intentionally introduces no artificial
+ * exponentiation-chain limit.
+ *
+ * The operand boundary is prefixExpression, which is the canonical lower
+ * expression layer supplied by the expression grammar composition.
+ *
+ * Semantic analysis determines whether exponentiation is valid for the
+ * operand types and values.
+ */
 exponentExpression
-(
-(
-STAR
-| SLASH
-| MODULO
-)
-exponentExpression
-)*
-;
-
-/* ============================================================================
-
-* EXPONENTIATION
-* ============================================================================
-* 
-* Exponentiation is right-associative.
-* 
-* Examples:
-* 
-* a ** b
-* a ** b ** c
-* 
-* The recursive right-hand side ensures:
-* 
-* a ** b ** c
-* 
-* becomes structurally equivalent to:
-* 
-* a ** (b ** c)
-* 
-* No exponentiation-depth limit is encoded.
-* 
-* The operand is "unaryExpression" because that is the precedence boundary
-* established by the canonical expression architecture.
-* 
-* This grammar does not decide whether negative exponents, fractional
-* exponents, complex exponents, symbolic exponents, or domain-specific
-* exponentiation are semantically valid.
-* 
-* ============================================================================
-  */
-
-exponentExpression
-: unaryExpression
-| unaryExpression POWER exponentExpression
-;
-
-/* ============================================================================
-
-* INTEGRATION CONTRACT
-* ============================================================================
-* 
-* The canonical "grammar/expressions/expressions.g4" must import this parser
-* grammar:
-* 
-* import Arithmetic;
-* 
-* and must remove its local definitions of:
-* 
-* additiveExpression
-* multiplicativeExpression
-* exponentExpression
-* 
-* The surrounding expression grammar continues to own:
-* 
-* assignmentExpression
-* conditionalExpression
-* logicalOrExpression
-* logicalAndExpression
-* bitwiseOrExpression
-* bitwiseXorExpression
-* bitwiseAndExpression
-* equalityExpression
-* relationalExpression
-* shiftExpression
-* unaryExpression
-* postfixExpression
-* primaryExpression
-* 
-* Therefore the final dependency is:
-* 
-* Expressions
-*     |
-*     +--> Arithmetic
-*                |
-*                +--> unaryExpression
-* 
-* The apparent reverse reference is resolved by ANTLR parser-grammar
-* composition: the imported grammar supplies the arithmetic rules while the
-* complete parser provides the lower-level expression rule used by the
-* arithmetic boundary.
-* 
-* If the chosen ANTLR composition strategy does not permit this mutual
-* rule visibility in the repository's parser-generation setup, the canonical
-* alternative is to keep the single precedence chain in "Expressions" and
-* treat this file as an included/generated fragment rather than an
-* independently imported parser grammar.
-* 
-* What MUST NOT happen is having two independently authoritative definitions.
-* 
-* ============================================================================
-* INTEGRATION WITH THE AST
-* ============================================================================
-* 
-* Parser output is consumed by the frontend AST layer.
-* 
-* Arithmetic operators should map to the repository's generic binary-expression
-* representation.
-* 
-* The AST must preserve:
-* 
-* operator kind
-* left operand
-* right operand
-* source span
-* 
-* Semantic analysis determines the operation's type and validity.
-* 
-* ============================================================================
-* INTEGRATION WITH THE COMPILER
-* ============================================================================
-* 
-* This file has no direct dependency on:
-* 
-* classical IR
-* quantum::ir
-* optimization
-* scheduling
-* routing
-* hardware
-* runtime
-* 
-* The integration path is:
-* 
-* arithmetic syntax
-*      ↓
-* parser
-*      ↓
-* frontend AST
-*      ↓
-* semantic/type analysis
-*      ↓
-* canonical semantic representation
-*      ↓
-* appropriate IR
-*      ↓
-* optimization/lowering
-*      ↓
-* target realization
-* 
-* This preserves the universal-language boundary.
-* 
-* ============================================================================
-* RESOURCE / SCALABILITY CONTRACT
-* ============================================================================
-* 
-* An arithmetic expression such as:
-* 
-* x + y * z
-* 
-* makes no statement about:
-* 
-* CPU count
-* GPU count
-* accelerator count
-* vector width
-* memory capacity
-* quantum processor size
-* distributed node count
-* 
-* Consequently the same syntax can participate in programs targeting:
-* 
-* embedded systems
-* CPUs
-* GPUs
-* FPGAs
-* ASICs
-* quantum-classical systems
-* clusters
-* HPC systems
-* distributed systems
-* future execution substrates
-* 
-* without changing the source grammar.
-* 
-* ============================================================================
-* HARD-CODING AUDIT
-* ============================================================================
-* 
-* This file contains no:
-* 
-* machine size
-* hardware size
-* resource count
-* qubit count
-* topology
-* device identifier
-* memory capacity
-* register capacity
-* fixed vector length
-* fixed tensor rank
-* 
-* The only finite list in this grammar is the language's defined operator
-* vocabulary. That is a language-semantic property, not a machine limit.
-* 
-* ============================================================================
-* TEST CONTRACT
-* ============================================================================
-* 
-* The following tests are required.
-* 
-* POSITIVE
-* ---
-* 
-* a + b
-* a - b
-* a * b
-* a / b
-* a % b
-* a + b * c
-* a * b + c
-* a - b - c
-* a / b / c
-* a ** b
-* a ** b ** c
-* a + b * c ** d
-* 
-* PRECEDENCE
-* ---
-* 
-* a + b * c
-*     => a + (b * c)
-* 
-* a * b + c
-*     => (a * b) + c
-* 
-* a + b ** c
-*     => a + (b ** c)
-* 
-* ASSOCIATIVITY
-* ---
-* 
-* a - b - c
-*     => (a - b) - c
-* 
-* a / b / c
-*     => (a / b) / c
-* 
-* a ** b ** c
-*     => a ** (b ** c)
-* 
-* CROSS-DOMAIN
-* ---
-* 
-* Arithmetic expressions must parse independently of whether their operands
-* later become:
-* 
-* classical values
-* vector values
-* matrix values
-* tensor values
-* symbolic values
-* hardware values
-* quantum-related values
-* 
-* NEGATIVE
-* ---
-* 
-* The expression parser, not this file, must reject malformed arithmetic
-* operator sequences.
-* 
-* Semantic tests must separately reject invalid operations such as unsupported
-* operand/operator combinations.
-* 
-* SCALABILITY
-* ---
-* 
-* Test generated expressions whose depth and chain length are limited only by
-* the test harness/resource policy, not by constants in this grammar.
-* 
-* DETERMINISM
-* ---
-* 
-* Parse the same source repeatedly and verify identical parse structure.
-* 
-* ROUND TRIP
-* ---
-* 
-* Where a canonical printer exists:
-* 
-* source
-*   ↓
-* lexer
-*   ↓
-* parser
-*   ↓
-* AST
-*   ↓
-* printer
-*   ↓
-* parser
-* 
-* must preserve arithmetic semantics.
-* 
-* ============================================================================
-* COMPLETION CRITERIA
-* ============================================================================
-* 
-* This file is COMPLETE only when all of the following are true:
-* 
-* [ ] Arithmetic operator ownership is unique.
-* [ ] Arithmetic precedence matches grammar/spec/syntax.md.
-* [ ] Additive expressions are left-associative.
-* [ ] Multiplicative expressions are left-associative.
-* [ ] Exponentiation is right-associative.
-* [ ] No lexer rules exist in this file.
-* [ ] No machine-specific limits exist.
-* [ ] No quantum-specific semantics exist.
-* [ ] No hardware-specific semantics exist.
-* [ ] No numeric-width assumptions exist.
-* [ ] AST integration is documented and verified.
-* [ ] Expressions grammar delegates arithmetic rules here.
-* [ ] No duplicate arithmetic rules remain elsewhere in the authoritative
-* parser grammar.
-* [ ] Lexer token names exactly match the canonical lexer.
-* [ ] POWER is defined by the canonical lexer before this grammar is generated.
-* [ ] Positive tests pass.
-* [ ] Negative tests pass.
-* [ ] Precedence tests pass.
-* [ ] Associativity tests pass.
-* [ ] Boundary/scalability tests pass.
-* [ ] Determinism tests pass.
-* [ ] Round-trip tests pass where supported.
-* [ ] Rust parser integration remains compatible with Rust 1.97/1.97.1.
-* [ ] No unsafe Rust is required or introduced.
-* 
-* ============================================================================
-  */
+    : prefixExpression
+    | prefixExpression POWER exponentExpression
+    ;
