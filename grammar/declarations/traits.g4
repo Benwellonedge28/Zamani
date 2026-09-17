@@ -7,49 +7,63 @@
  *     grammar/declarations/traits.g4
  *
  * Grammar:
- *     ZamaniTraits
+ *     Traits
  *
- * Purpose:
- *     Canonical parser grammar for trait declarations.
+ * Status:
+ *     Canonical production parser delegate for trait declarations.
+ *
+ * Implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     Safe Rust only
+ *     No embedded Rust
+ *     No semantic predicates
+ *     No filesystem/network/runtime access
+ *     No unsafe code
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * PURPOSE
  * ============================================================================
  *
- *                         Zamani source
- *                              |
- *                              v
- *                       canonical lexer
- *                              |
- *                              v
- *                       canonical parser
- *                              |
- *              +---------------+----------------+
- *              |               |                |
- *              v               v                v
- *        declarations       types           functions
- *              |
- *              v
- *        ZamaniTraits
- *              |
- *              v
- *             AST
- *              |
- *              v
- *       semantic analysis
- *              |
- *       +------+------+------------------+
- *       |             |                  |
- *       v             v                  v
- *   type system   capability/effect   resource analysis
- *       |
- *       v
- *   canonical semantic IR
- *       |
- *       +-------------------+
- *       |                   |
- *       v                   v
- * classical / quantum / hardware / distributed / future domains
+ * This file is the SINGLE SYNTAX OWNER for source-level trait declarations.
+ *
+ * A trait is a reusable source-level contract that may be implemented by
+ * arbitrary source-level types.
+ *
+ * Examples:
+ *
+ *     trait Drawable {
+ *         fn draw(self);
+ *     }
+ *
+ *     trait Numeric<T extends Number> {
+ *         fn add(lhs: T, rhs: T) -> T;
+ *     }
+ *
+ *     trait QuantumOperation<Q extends Qubit> {
+ *         fn apply(operation: Q);
+ *     }
+ *
+ *     trait Serializable {
+ *         type Output;
+ *
+ *         const VERSION: Version;
+ *
+ *         fn serialize(self) -> Bytes;
+ *     }
+ *
+ * A required trait method ends with `;`.
+ *
+ * A method containing a body is a default trait method:
+ *
+ *     trait Drawable {
+ *         fn draw(self) {
+ *             ...
+ *         }
+ *     }
+ *
+ * No `default` keyword is required. This avoids introducing an unnecessary
+ * reserved word solely for trait syntax.
  *
  * ============================================================================
  * OWNERSHIP
@@ -57,216 +71,349 @@
  *
  * THIS FILE OWNS:
  *
- *   - trait declaration syntax;
- *   - trait names;
- *   - trait generic parameter references;
- *   - trait inheritance syntax;
- *   - trait body syntax;
- *   - trait member dispatch;
- *   - trait method signatures;
- *   - trait default method bodies;
- *   - trait associated types;
- *   - trait associated constants;
- *   - trait properties;
- *   - trait requirements;
- *   - trait member attributes;
- *   - trait-local declarations that are explicitly permitted by the
- *     language contract.
+ *     - traitDeclaration
+ *     - trait visibility attachment
+ *     - trait declaration modifiers
+ *     - trait generic parameter attachment
+ *     - trait inheritance syntax
+ *     - trait where-clause attachment
+ *     - trait body
+ *     - trait member dispatch
+ *     - trait method declarations
+ *     - trait associated types
+ *     - trait associated constants
+ *     - trait-local source ordering
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - lexical tokens;
- *   - identifiers;
- *   - generic parameter declaration syntax;
- *   - type-expression syntax;
- *   - function parameter syntax;
- *   - function return-type syntax;
- *   - effect declaration syntax;
- *   - capability declaration syntax;
- *   - resource discovery;
- *   - hardware discovery;
- *   - quantum IR;
- *   - classical IR;
- *   - QEC;
- *   - ZQN;
- *   - routing;
- *   - scheduling;
- *   - optimization;
- *   - backend selection;
- *   - runtime execution;
- *   - implementation resolution;
- *   - trait coherence;
- *   - trait method dispatch;
- *   - type inference;
- *   - constraint solving.
+ *     - lexical token definitions
+ *     - keyword spelling
+ *     - identifiers
+ *     - qualified names
+ *     - generic parameter semantics
+ *     - type-expression syntax
+ *     - parameter syntax
+ *     - expression syntax
+ *     - block syntax
+ *     - effect syntax
+ *     - contract semantics
+ *     - implementation semantics
+ *     - trait coherence
+ *     - name resolution
+ *     - type inference
+ *     - capability resolution
+ *     - resource resolution
+ *     - hardware discovery
+ *     - target selection
+ *     - routing
+ *     - scheduling
+ *     - optimization
+ *     - QEC
+ *     - ZQN
+ *     - HAL
+ *     - runtime execution
+ *     - quantum::ir
+ *     - classical IR
+ *     - HDL/hardware IR
+ *
+ * ============================================================================
+ * ARCHITECTURAL PIPELINE
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical ZamaniLexer
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          v
+ *     traitDeclaration
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          +--> name resolution
+ *          +--> generic/type analysis
+ *          +--> trait resolution
+ *          +--> coherence analysis
+ *          +--> effect analysis
+ *          +--> capability analysis
+ *          +--> resource analysis
+ *          |
+ *          v
+ *     canonical semantic model
+ *          |
+ *          +--> classical representation
+ *          +--> quantum semantic representation
+ *          +--> HDL/hardware representation
+ *          +--> distributed representation
+ *          +--> accelerator representation
+ *          +--> future domain representations
+ *          |
+ *          v
+ *     canonical IR / domain IR
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          +--> routing
+ *          +--> scheduling
+ *          +--> resilience
+ *          +--> QEC
+ *          +--> ZQN
+ *          |
+ *          v
+ *     HAL / target realization
+ *          |
+ *          v
+ *     runtime
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Traits describe reusable semantic contracts.
+ * Traits MUST describe portable source-level contracts.
  *
- * They MUST NOT encode:
+ * This grammar contains no language-level limits for:
  *
- *   - fixed CPU counts;
- *   - fixed core counts;
- *   - fixed thread counts;
- *   - fixed GPU counts;
- *   - fixed FPGA counts;
- *   - fixed qubit counts;
- *   - fixed register counts;
- *   - fixed memory capacities;
- *   - fixed network sizes;
- *   - fixed machine topology;
- *   - device identifiers;
- *   - physical addresses;
- *   - backend-specific resource limits.
+ *     traits
+ *     generic parameters
+ *     supertraits
+ *     members
+ *     methods
+ *     parameters
+ *     associated types
+ *     associated constants
+ *     inheritance depth
  *
- * Trait syntax describes PROGRAM CAPABILITY and SEMANTIC REQUIREMENTS.
+ * It MUST NOT encode:
  *
- * Physical realization is selected downstream by:
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_QUBITS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_REGISTERS
+ *     MAX_TENSOR_RANK
+ *     MAX_VECTOR_WIDTH
  *
- *   capability analysis
- *   resource analysis
- *   target selection
- *   compilation
- *   routing
- *   scheduling
- *   hardware abstraction
- *   runtime
+ * Nor may it encode:
+ *
+ *     physical qubit identifiers
+ *     physical device identifiers
+ *     fixed topology
+ *     fixed accelerator counts
+ *     hardware addresses
+ *     backend-specific limits
+ *
+ * Practical compiler/parser limits belong to explicit implementation/resource
+ * policy and MUST NOT become Zamani language semantics.
  *
  * ============================================================================
  * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Traits may describe contracts involving quantum types, operations,
- * capabilities, or resources.
+ * A trait may be implemented by or constrain a quantum abstraction.
  *
- * This grammar MUST NOT create a quantum IR.
+ * Examples:
  *
- * If a trait contains a quantum-related type or requirement:
+ *     trait QuantumOperation<Q extends Qubit> {
+ *         fn apply(operation: Q);
+ *     }
  *
- *     source
- *       -> trait AST
- *       -> semantic analysis
- *       -> canonical quantum semantic representation
- *       -> quantum::ir
+ *     trait Measurable {
+ *         type Result;
+ *         fn measure(self) -> Result;
+ *     }
  *
- * `quantum::ir` remains the canonical quantum semantic boundary.
+ * These remain source-level contracts.
  *
- * This grammar therefore has NO direct dependency on:
+ * This grammar MUST NOT:
  *
+ *     - enumerate physical qubits;
+ *     - enumerate physical gates;
+ *     - select a QPU;
+ *     - select topology;
+ *     - select calibration;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - perform QEC;
+ *     - implement ZQN;
+ *     - construct quantum::ir.
+ *
+ * Required direction:
+ *
+ *     Trait AST
+ *         |
+ *         v
+ *     semantic trait model
+ *         |
+ *         v
+ *     quantum semantic representation
+ *         |
+ *         v
  *     quantum::ir
- *     QEC
- *     ZQN
- *     routing
- *     scheduling
- *     hardware HAL
- *     quantum optimization
  *
  * ============================================================================
- * RUST / SAFETY
+ * AST CONTRACT
  * ============================================================================
  *
- * The grammar contains no embedded Rust actions.
+ * The existing canonical Trait AST contains source-level:
  *
- * The generated compiler/parser implementation MUST remain compatible with:
+ *     Node
+ *     name
+ *     visibility
+ *     generics
+ *     supertraits
+ *     members
+ *     modifiers
+ *     attributes
+ *     annotations
+ *     effects
+ *     capabilities
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ * This grammar therefore preserves:
  *
- * No unsafe Rust is required or permitted by this grammar architecture.
+ *     - declaration source span;
+ *     - name;
+ *     - generic parameter order;
+ *     - supertrait order;
+ *     - member order;
+ *     - member source spans;
+ *     - modifier structure;
+ *     - attribute structure.
+ *
+ * The parser/frontend adapter creates NodeIds and stores children in the
+ * canonical AST store.
+ *
+ * This grammar creates no Rust AST values directly.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     - trait-name resolution;
+ *     - generic binding;
+ *     - duplicate-name detection;
+ *     - inheritance resolution;
+ *     - inheritance-cycle detection;
+ *     - supertrait compatibility;
+ *     - associated-type compatibility;
+ *     - associated-constant compatibility;
+ *     - method compatibility;
+ *     - method effect compatibility;
+ *     - implementation satisfaction;
+ *     - coherence;
+ *     - visibility;
+ *     - capability requirements;
+ *     - resource requirements;
+ *     - portability.
+ *
+ * None of those decisions are made by parser predicates.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no actions;
+ *     - no semantic predicates;
+ *     - no randomness;
+ *     - no time dependence;
+ *     - no I/O;
+ *     - no hardware discovery;
+ *     - no runtime execution;
+ *     - no mutable global state.
+ *
+ * Identical token streams under identical grammar/token versions must produce
+ * identical parse structures.
  *
  * ============================================================================
  * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * Required parser-level contracts:
+ * This grammar consumes the canonical shared parser components:
+ *
+ *     Types
+ *     Expressions
+ *     Parameters
+ *     Blocks
+ *     Attributes
+ *     Generics
+ *     Constraints
+ *
+ * These components are shared syntax owners.
+ *
+ * This grammar MUST NOT duplicate:
  *
  *     identifier
  *     qualifiedName
- *     genericParameterList
- *     typeReference
+ *     typeExpression
+ *     expression
  *     parameterList
- *     functionReturnClause
- *     effectClause
- *     contractClause
- *     block
+ *     blockExpression
+ *     genericParameterList
  *     attribute
- *     typeConstraintClause
- *     typeInheritanceClause
- *
- * These rules are OWNED by their respective canonical grammar components.
- *
- * They MUST NOT be duplicated here.
- *
- * ============================================================================
- * INTEGRATION CONTRACT
- * ============================================================================
- *
- * The canonical declaration grammar should import/compose this grammar and
- * retain only the declaration dispatch:
- *
- *     | traitDeclaration
- *
- * Existing trait rules in declarations.g4 MUST be removed after this delegate
- * becomes authoritative.
- *
- * No second trait syntax may remain active in declarations.g4.
  *
  * ============================================================================
  */
 
-parser grammar ZamaniTraits;
+parser grammar Traits;
 
 options {
     tokenVocab = ZamaniLexer;
 }
 
+import
+    Types,
+    Expressions,
+    Parameters,
+    Blocks,
+    Attributes,
+    Generics,
+    Constraints;
+
 
 /*
  * ============================================================================
- * 1. TRAIT DECLARATION
+ * 1. PUBLIC TRAIT ENTRY POINT
  * ============================================================================
  *
- * Canonical form:
+ * Declaration examples:
  *
- *     trait Name {
- *         ...
+ *     trait Drawable {
+ *         fn draw(self);
  *     }
  *
- * Generic traits:
- *
- *     trait Name<T> {
- *         ...
+ *     pub trait Numeric<T extends Number> {
+ *         fn add(lhs: T, rhs: T) -> T;
  *     }
- *
- * Inherited traits:
- *
- *     trait Child extends Parent {
- *         ...
- *     }
- *
- * Multiple inheritance:
  *
  *     trait Child extends ParentA, ParentB {
  *         ...
  *     }
- *
- * The grammar does not impose an inheritance-count limit.
- *
- * Semantic analysis is responsible for:
- *
- *     - duplicate bases;
- *     - inheritance cycles;
- *     - incompatible inherited contracts;
- *     - visibility;
- *     - generic compatibility;
- *     - associated-type conflicts;
- *     - method conflicts.
  */
 traitDeclaration
-    : declarationModifiers
+    : traitAttributes*
+      traitVisibility?
+      traitModifiers*
       TRAIT
       identifier
       genericParameterList?
@@ -278,66 +425,142 @@ traitDeclaration
 
 /*
  * ============================================================================
- * 2. TRAIT INHERITANCE
+ * 2. TRAIT ATTRIBUTES
  * ============================================================================
  *
- * Inheritance is a semantic relationship.
+ * Attributes are generic source metadata.
  *
- * It does not imply:
- *
- *     - implementation inheritance;
- *     - hardware inheritance;
- *     - device selection;
- *     - runtime dispatch strategy.
+ * Their semantics are owned by the attribute/semantic subsystem.
  */
-traitInheritanceClause
-    : EXTENDS
-      traitSuperTypeList
-    ;
-
-traitSuperTypeList
-    : traitSuperType
-      (
-          COMMA
-          traitSuperType
-      )*
-    ;
-
-traitSuperType
-    : typeReference
+traitAttributes
+    : attribute
     ;
 
 
 /*
  * ============================================================================
- * 3. TRAIT WHERE CLAUSE
+ * 3. TRAIT VISIBILITY
  * ============================================================================
  *
- * Constraints are preserved syntactically and interpreted semantically.
+ * Visibility is source-level metadata.
+ *
+ * Semantic legality is determined later.
+ */
+traitVisibility
+    : PUBLIC
+    | PUB
+    | PRIVATE
+    | PROTECTED
+    | INTERNAL
+    ;
+
+
+/*
+ * ============================================================================
+ * 4. TRAIT MODIFIERS
+ * ============================================================================
+ *
+ * Only modifiers already present in the canonical lexer are admitted here.
+ *
+ * This grammar deliberately does NOT add a `default` keyword.
+ *
+ * A method body itself identifies a default implementation.
+ */
+traitModifiers
+    : ABSTRACT
+    | FINAL
+    | SEALED
+    | PARTIAL
+    | PURE
+    | IMMUTABLE
+    | LINEAR
+    | AFFINE
+    | INLINE
+    ;
+
+
+/*
+ * ============================================================================
+ * 5. INHERITANCE
+ * ============================================================================
+ *
+ *     trait Child extends Parent
+ *
+ *     trait Child extends ParentA, ParentB
+ *
+ * No inheritance-count limit is encoded.
+ */
+traitInheritanceClause
+    : EXTENDS
+      traitSupertraitList
+    ;
+
+
+traitSupertraitList
+    : typeExpression
+      (
+          COMMA
+          typeExpression
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 6. WHERE CLAUSE
+ * ============================================================================
  *
  * Example:
  *
- *     trait Storage<T>
+ *     trait Numeric<T extends Number>
  *     where
- *         T: Serializable
+ *         T extends Addable + Comparable
  *     {
  *         ...
  *     }
  *
- * This grammar does not solve constraints.
+ * Constraint interpretation is semantic.
  */
 traitWhereClause
     : WHERE
-      typeConstraintList
+      traitWhereConstraintList
+    ;
+
+
+traitWhereConstraintList
+    : traitWhereConstraint
+      (
+          COMMA
+          traitWhereConstraint
+      )*
+      COMMA?
+    ;
+
+
+traitWhereConstraint
+    : identifier
+      EXTENDS
+      traitBoundList
+    ;
+
+
+traitBoundList
+    : typeExpression
+      (
+          PLUS
+          typeExpression
+      )*
     ;
 
 
 /*
  * ============================================================================
- * 4. TRAIT BODY
+ * 7. TRAIT BODY
  * ============================================================================
+ *
+ * Empty traits are legal.
  */
-
 traitBody
     : LBRACE
       traitMember*
@@ -347,154 +570,246 @@ traitBody
 
 /*
  * ============================================================================
- * 5. TRAIT MEMBER
+ * 8. TRAIT MEMBER DISPATCH
  * ============================================================================
  *
- * A trait member is deliberately explicit.
+ * The member set is deliberately closed.
  *
- * This avoids the dangerous pattern:
- *
- *     traitMember : declaration ;
- *
- * which would accidentally allow arbitrary declarations and create ambiguous
- * ownership between traits, modules, classes, implementations, effects,
- * resources, and other declaration domains.
+ * This prevents arbitrary declarations from leaking into trait bodies.
  */
 traitMember
-    : traitMemberAttributes traitMethodDeclaration
-    | traitMemberAttributes traitAssociatedTypeDeclaration
-    | traitMemberAttributes traitAssociatedConstantDeclaration
-    | traitMemberAttributes traitPropertyDeclaration
-    | traitMemberAttributes traitNestedTypeDeclaration
+    : traitMemberAttributes*
+      traitMethodDeclaration
+    | traitMemberAttributes*
+      traitAssociatedTypeDeclaration
+    | traitMemberAttributes*
+      traitAssociatedConstantDeclaration
     ;
 
-
-/*
- * ============================================================================
- * 6. TRAIT MEMBER ATTRIBUTES
- * ============================================================================
- */
 
 traitMemberAttributes
-    : attribute*
+    : attribute
     ;
 
 
 /*
  * ============================================================================
- * 7. TRAIT METHOD
+ * 9. TRAIT METHOD
  * ============================================================================
  *
- * A trait method can be:
+ * Required method:
  *
- *     - a required method;
- *     - a default method.
+ *     fn compute(value: T) -> R;
  *
- * Required:
+ * Default method:
  *
- *     fn execute(input: Input) -> Output;
- *
- * Default:
- *
- *     fn execute(input: Input) -> Output {
+ *     fn compute(value: T) -> R {
  *         ...
  *     }
  *
- * A trait method body is NOT interpreted here.
+ * A body is canonical `blockExpression` syntax.
  *
- * It is passed to the normal block/statement grammar.
- *
- * This preserves one canonical statement grammar.
+ * The grammar does not determine whether a default method is semantically
+ * legal for a particular trait.
  */
 traitMethodDeclaration
-    : traitMethodModifiers?
+    : traitMethodModifiers*
       FN
       identifier
       genericParameterList?
       LPAREN
       parameterList?
       RPAREN
-      functionReturnClause?
-      effectClause?
-      contractClause?
-      traitMethodTermination
+      traitReturnClause?
+      traitMethodWhereClause?
+      traitMethodEffects?
+      traitMethodContracts*
+      traitMethodBodyOrTerminator
     ;
+
 
 traitMethodModifiers
-    : declarationModifiers
+    : STATIC
+    | ABSTRACT
+    | FINAL
+    | VIRTUAL
+    | OVERRIDE
+    | ASYNC
+    | CONST
+    | PURE
+    | IMMUTABLE
+    | LINEAR
+    | AFFINE
+    | INLINE
     ;
 
-traitMethodTermination
-    : SEMICOLON
-    | block
+
+traitReturnClause
+    : THIN_ARROW
+      typeExpression
+    ;
+
+
+traitMethodWhereClause
+    : WHERE
+      traitWhereConstraintList
     ;
 
 
 /*
  * ============================================================================
- * 8. TRAIT ASSOCIATED TYPE
+ * 10. METHOD EFFECT ATTACHMENT
  * ============================================================================
+ *
+ * The repository currently contains an effect grammar, but its modular parser
+ * vocabulary is still part of the ZamaniTokens -> ZamaniLexer migration.
+ *
+ * Therefore the trait grammar owns only the attachment boundary here.
+ *
+ * The semantic effect system remains the owner of effect meaning.
+ *
+ * Syntax:
+ *
+ *     with effects { IO, quantum::Measurement }
+ *
+ * Effect identities are open-world qualified names.
+ */
+traitMethodEffects
+    : WITH
+      EFFECTS
+      LBRACE
+      traitEffectReferenceList?
+      RBRACE
+    ;
+
+
+traitEffectReferenceList
+    : qualifiedName
+      (
+          COMMA
+          qualifiedName
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 11. METHOD CONTRACT ATTACHMENT
+ * ============================================================================
+ *
+ * Contract syntax is intentionally structural.
  *
  * Example:
  *
+ *     contract {
+ *         requires(condition);
+ *         ensures(result);
+ *         invariant(property);
+ *     }
+ *
+ * The expressions remain canonical Zamani expressions.
+ *
+ * The parser does not evaluate contracts.
+ */
+traitMethodContracts
+    : REQUIRES
+      LPAREN
+      expression
+      RPAREN
+      SEMICOLON?
+    | ENSURES
+      LPAREN
+      expression
+      RPAREN
+      SEMICOLON?
+    | INVARIANT
+      LPAREN
+      expression
+      RPAREN
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. METHOD BODY / TERMINATOR
+ * ============================================================================
+ *
+ * Required method:
+ *
+ *     fn work();
+ *
+ * Default method:
+ *
+ *     fn work() {
+ *         ...
+ *     }
+ *
+ * This is deliberately the only distinction required by the source grammar.
+ */
+traitMethodBodyOrTerminator
+    : SEMICOLON
+    | blockExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. ASSOCIATED TYPE
+ * ============================================================================
+ *
+ * Required associated type:
+ *
  *     type Item;
  *
- * With a bound:
+ * Bounded associated type:
  *
- *     type Item: Serializable;
+ *     type Item extends Serializable + Ordered;
  *
- * Multiple constraints remain a semantic concern.
+ * A default associated type is deliberately NOT accepted until specialization
+ * semantics have a canonical AST and semantic contract.
  */
 traitAssociatedTypeDeclaration
     : TYPE
       identifier
-      traitAssociatedTypeConstraint?
+      traitAssociatedTypeBounds?
       SEMICOLON
     ;
 
-traitAssociatedTypeConstraint
-    : COLON
-      typeConstraintBoundList
-    ;
 
-typeConstraintBoundList
-    : typeReference
-      (
-          PLUS
-          typeReference
-      )*
+traitAssociatedTypeBounds
+    : EXTENDS
+      traitBoundList
     ;
 
 
 /*
  * ============================================================================
- * 9. TRAIT ASSOCIATED CONSTANT
+ * 14. ASSOCIATED CONSTANT
  * ============================================================================
  *
- * Example:
+ * Required:
  *
  *     const VERSION: Version;
  *
- * A trait-associated constant may be required:
- *
- *     const VERSION: Version;
- *
- * or given a default:
+ * Default:
  *
  *     const VERSION: Version = 1;
  *
- * The value is parsed as an expression but not evaluated here.
+ * The initializer is a source expression.
  *
- * Evaluation belongs to semantic analysis / compile-time evaluation.
+ * It is not evaluated by this grammar.
  */
 traitAssociatedConstantDeclaration
     : CONST
       identifier
       COLON
-      typeReference
+      typeExpression
       traitAssociatedConstantInitializer?
       SEMICOLON
     ;
+
 
 traitAssociatedConstantInitializer
     : ASSIGN
@@ -504,741 +819,350 @@ traitAssociatedConstantInitializer
 
 /*
  * ============================================================================
- * 10. TRAIT PROPERTY
+ * 15. SOURCE-ORDER CONTRACT
  * ============================================================================
  *
- * A property is a semantic contract, not a storage declaration.
+ * Trait member order is semantically observable for:
+ *
+ *     diagnostics
+ *     source reconstruction
+ *     deterministic AST serialization
+ *     tooling
+ *     provenance
+ *
+ * The parser/AST adapter MUST preserve the order in which traitMember occurs.
+ */
+
+
+/*
+ * ============================================================================
+ * 16. AST LOWERING CONTRACT
+ * ============================================================================
+ *
+ * Parse context             Canonical AST representation
+ *
+ * traitDeclaration          Trait
+ *
+ * trait name                source name
+ *
+ * genericParameterList      generic NodeIds
+ *
+ * traitSupertraitList       supertrait NodeIds
+ *
+ * traitMember               member NodeIds
+ *
+ * trait attributes          attribute NodeIds
+ *
+ * trait modifiers           modifier NodeIds
+ *
+ * visibility                visibility NodeId
+ *
+ * The existing Trait AST owns the resulting source structure.
+ *
+ * No alternate Trait AST may be introduced.
+ */
+
+
+/*
+ * ============================================================================
+ * 17. MEMBER LOWERING
+ * ============================================================================
+ *
+ * traitMethodDeclaration
+ *     ->
+ * canonical function/method declaration AST node
+ *
+ * traitAssociatedTypeDeclaration
+ *     ->
+ * canonical associated-type/type declaration AST node
+ *
+ * traitAssociatedConstantDeclaration
+ *     ->
+ * canonical constant declaration AST node
+ *
+ * Child nodes are allocated in the canonical AST store.
+ *
+ * This grammar does not construct those Rust values directly.
+ */
+
+
+/*
+ * ============================================================================
+ * 18. SEMANTIC TRAIT CONTRACT
+ * ============================================================================
+ *
+ * After parsing, semantic analysis must validate:
+ *
+ *     - trait name uniqueness;
+ *     - generic parameter scope;
+ *     - duplicate generic parameters;
+ *     - supertrait resolution;
+ *     - supertrait cycles;
+ *     - duplicate inherited members;
+ *     - method compatibility;
+ *     - associated type compatibility;
+ *     - associated constant compatibility;
+ *     - visibility;
+ *     - modifier combinations;
+ *     - method effects;
+ *     - method contracts;
+ *     - implementation conformance;
+ *     - coherence;
+ *     - capability requirements;
+ *     - resource requirements.
+ *
+ * None of these are parser predicates.
+ */
+
+
+/*
+ * ============================================================================
+ * 19. QUANTUM SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * A trait may use:
+ *
+ *     Qubit
+ *     QuantumResource
+ *     LogicalQubit
+ *     QuantumState<T>
+ *     quantum::...
+ *
+ * as source-level names/types.
+ *
+ * The grammar imposes no quantum resource limit.
  *
  * Example:
  *
- *     property state: State;
- *
- * The grammar therefore does NOT imply:
- *
- *     - memory layout;
- *     - register allocation;
- *     - hardware storage;
- *     - physical location;
- *     - cache placement.
- *
- * Access semantics are explicit.
- */
-traitPropertyDeclaration
-    : declarationModifiers?
-      PROPERTY
-      identifier
-      COLON
-      typeReference
-      traitPropertyAccessorBlock?
-      SEMICOLON?
-    ;
-
-traitPropertyAccessorBlock
-    : LBRACE
-      traitPropertyAccessor+
-      RBRACE
-    ;
-
-traitPropertyAccessor
-    : GET
-      SEMICOLON
-    | SET
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 11. NESTED TYPE DECLARATIONS
- * ============================================================================
- *
- * Traits may contain nested semantic type declarations where supported by the
- * language specification.
- *
- * The nested declaration is intentionally restricted.
- *
- * It must not recurse into the complete top-level declaration dispatcher.
- *
- * This prevents accidental declarations such as:
- *
- *     module
- *     package
- *     import
- *     hardware device
- *     deployment
- *
- * from appearing inside a trait.
- *
- * The concrete nested type grammars remain authoritative.
- */
-traitNestedTypeDeclaration
-    : traitNestedTypeAlias
-    | traitNestedStruct
-    | traitNestedEnum
-    | traitNestedUnion
-    | traitNestedInterface
-    | traitNestedTrait
-    ;
-
-traitNestedTypeAlias
-    : declarationModifiers
-      TYPE
-      identifier
-      genericParameterList?
-      ASSIGN
-      typeReference
-      SEMICOLON
-    ;
-
-traitNestedStruct
-    : declarationModifiers
-      STRUCT
-      identifier
-      genericParameterList?
-      typeInheritanceClause?
-      traitNestedStructBody
-    ;
-
-traitNestedStructBody
-    : LBRACE
-      traitNestedStructMember*
-      RBRACE
-    ;
-
-traitNestedStructMember
-    : traitMemberAttributes traitNestedField
-    ;
-
-traitNestedField
-    : identifier
-      COLON
-      typeReference
-      traitNestedFieldInitializer?
-      SEMICOLON
-    ;
-
-traitNestedFieldInitializer
-    : ASSIGN
-      expression
-    ;
-
-traitNestedEnum
-    : declarationModifiers
-      ENUM
-      identifier
-      genericParameterList?
-      traitNestedEnumBody
-    ;
-
-traitNestedEnumBody
-    : LBRACE
-      traitNestedEnumVariant*
-      RBRACE
-    ;
-
-traitNestedEnumVariant
-    : attribute*
-      identifier
-      traitNestedEnumVariantPayload?
-      COMMA?
-    ;
-
-traitNestedEnumVariantPayload
-    : LPAREN
-      parameterList?
-      RPAREN
-    | LBRACE
-      traitNestedEnumField*
-      RBRACE
-    ;
-
-traitNestedEnumField
-    : identifier
-      COLON
-      typeReference
-      SEMICOLON
-    ;
-
-traitNestedUnion
-    : declarationModifiers
-      UNION
-      identifier
-      genericParameterList?
-      ASSIGN
-      traitNestedUnionVariants
-      SEMICOLON
-    ;
-
-traitNestedUnionVariants
-    : traitNestedUnionVariant
-      (
-          PIPE
-          traitNestedUnionVariant
-      )*
-    ;
-
-traitNestedUnionVariant
-    : attribute*
-      identifier
-      traitNestedUnionVariantPayload?
-    ;
-
-traitNestedUnionVariantPayload
-    : LPAREN
-      parameterList?
-      RPAREN
-    | LBRACE
-      traitNestedStructMember*
-      RBRACE
-    ;
-
-traitNestedInterface
-    : declarationModifiers
-      INTERFACE
-      identifier
-      genericParameterList?
-      interfaceInheritanceClause?
-      LBRACE
-      traitNestedInterfaceMember*
-      RBRACE
-    ;
-
-traitNestedInterfaceMember
-    : traitMemberAttributes
-      traitNestedInterfaceMemberCore
-    ;
-
-traitNestedInterfaceMemberCore
-    : traitMethodDeclaration
-    | traitAssociatedTypeDeclaration
-    | traitAssociatedConstantDeclaration
-    | traitPropertyDeclaration
-    ;
-
-traitNestedTrait
-    : traitDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 12. TRAIT SEMANTIC CONTRACT
- * ============================================================================
- *
- * The following are intentionally NOT grammar rules.
- *
- * They are semantic obligations for the frontend:
- *
- *     - trait names must resolve correctly;
- *     - trait generic parameters must bind correctly;
- *     - inherited traits must exist;
- *     - inheritance cycles must be rejected;
- *     - inherited members must be merged deterministically;
- *     - conflicting methods must be diagnosed;
- *     - conflicting associated types must be diagnosed;
- *     - conflicting constants must be diagnosed;
- *     - property compatibility must be checked;
- *     - method parameter types must be checked;
- *     - return types must be checked;
- *     - effects must be checked;
- *     - contracts must be checked;
- *     - generic constraints must be solved;
- *     - implementations must satisfy all required members;
- *     - default implementations must remain semantically valid;
- *     - visibility must be respected.
- *
- * None of these rules should be encoded as parser predicates.
- */
-
-
-/*
- * ============================================================================
- * 13. EFFECT INTEGRATION
- * ============================================================================
- *
- * A trait method may declare effects.
- *
- * Example:
- *
- *     fn execute() -> Result
- *         effects { ... };
- *
- * The exact effect syntax is owned by grammar/effects/.
- *
- * This file only consumes `effectClause`.
- *
- * Trait grammar must never redefine:
- *
- *     effect
- *     effect sets
- *     effect handlers
- *     IO
- *     quantum effects
- *     network effects
- *     hardware effects
- */
-
-
-/*
- * ============================================================================
- * 14. CONTRACT INTEGRATION
- * ============================================================================
- *
- * A trait method may declare semantic contracts.
- *
- * Example concepts:
- *
- *     requires ...
- *     ensures ...
- *     invariant ...
- *
- * The contract grammar owns their expression.
- *
- * Trait syntax merely provides the attachment point.
- */
-
-
-/*
- * ============================================================================
- * 15. GENERIC INTEGRATION
- * ============================================================================
- *
- * Generic declaration syntax is owned by the generic subsystem.
- *
- * This file consumes:
- *
- *     genericParameterList
- *
- * It MUST NOT duplicate generic parameter grammar.
- *
- * Generic applications are likewise owned by the canonical type grammar.
- *
- * This prevents:
- *
- *     traits.g4 -> generic-types.g4 -> traits.g4
- *
- * dependency cycles.
- */
-
-
-/*
- * ============================================================================
- * 16. TYPE INTEGRATION
- * ============================================================================
- *
- * All trait type positions use:
- *
- *     typeReference
- *
- * rather than defining a private trait type system.
- *
- * This allows trait contracts to use:
- *
- *     classical types
- *     quantum types
- *     hardware abstractions
- *     accelerator types
- *     distributed types
- *     data types
- *     future types
- *
- * without changing this grammar.
- */
-
-
-/*
- * ============================================================================
- * 17. QUANTUM INTEGRATION
- * ============================================================================
- *
- * Examples of semantically legal future trait contracts include:
- *
- *     trait QuantumOperation {
- *         fn apply(...);
+ *     trait QuantumOperation<Q extends Qubit> {
+ *         fn apply(operation: Q);
  *     }
  *
- *     trait QuantumResource {
- *         type State;
- *         fn measure(...) -> Result;
- *     }
+ * The parser does not know:
  *
- *     trait ErrorCorrectable {
- *         ...
- *     }
+ *     - physical qubit count;
+ *     - physical qubit identity;
+ *     - topology;
+ *     - gate duration;
+ *     - calibration;
+ *     - QPU;
+ *     - backend;
+ *     - QEC code;
+ *     - ZQN fault model.
  *
- * The grammar does NOT define:
+ * Those are downstream concerns.
  *
- *     qubit counts
- *     physical qubit identifiers
- *     topology
- *     gate durations
- *     calibration
- *     QPU selection
- *     error rates
- *     noise models
- *     QEC algorithms
+ * Quantum lowering remains:
  *
- * Such information belongs downstream.
- *
- * In particular:
- *
- *     traits.g4
- *          |
- *          v
- *       trait AST
- *          |
- *          v
- *    semantic analysis
- *          |
- *          v
+ *     Trait AST
+ *       ->
+ *     semantic model
+ *       ->
  *     quantum::ir
  *
- * and never:
+ * There is no:
  *
- *     traits.g4 -> quantum::ir
+ *     Traits.g4 -> quantum::ir
  */
 
 
 /*
  * ============================================================================
- * 18. HARDWARE / HDL INTEGRATION
+ * 20. CLASSICAL / HDL / HARDWARE / DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * A trait may describe a hardware-independent capability.
+ * Traits remain domain-neutral.
  *
- * For example:
+ * They may describe contracts implemented by:
  *
- *     trait Accelerator {
- *         ...
+ *     classical types
+ *     numerical types
+ *     tensor abstractions
+ *     accelerators
+ *     HDL abstractions
+ *     hardware resources
+ *     distributed services
+ *     AI/ML abstractions
+ *     networking abstractions
+ *     cryptographic abstractions
+ *     future computational domains
+ *
+ * Domain meaning is resolved semantically.
+ *
+ * No:
+ *
+ *     CpuTrait
+ *     GpuTrait
+ *     QpuTrait
+ *     FpgaTrait
+ *     NodeTrait
+ *
+ * syntax is introduced merely because a target exists.
+ */
+
+
+/*
+ * ============================================================================
+ * 21. IMPLEMENTATION INTEGRATION
+ * ============================================================================
+ *
+ * implementations.g4 consumes trait identity through a qualified source name.
+ *
+ * Example:
+ *
+ *     impl Drawable for Widget {
+ *         fn draw(self) {
+ *             ...
+ *         }
  *     }
  *
- *     trait StreamProcessor<T> {
- *         ...
- *     }
+ * The implementation grammar does not import this grammar and does not embed
+ * trait declarations.
  *
- * But this grammar must never turn such a trait into:
+ * This avoids a circular:
  *
- *     use GPU 0
- *     use 8 cores
- *     use device X
- *     use FPGA Y
+ *     Traits <-> Implementations
  *
- * Hardware selection belongs to:
+ * parser dependency.
  *
- *     capabilities
- *     requirements
- *     resources
- *     targets
- *     compilation
- *     hardware abstraction
+ * Semantic analysis connects the two.
  */
 
 
 /*
  * ============================================================================
- * 19. RESOURCE INTEGRATION
+ * 22. DECLARATION DISPATCH INTEGRATION
  * ============================================================================
  *
- * Traits may participate in capability and resource semantics through:
+ * grammar/declarations/declarations.g4 must remain the composition owner.
  *
- *     type constraints
- *     effect clauses
- *     contract clauses
- *     attributes
- *
- * Resource quantities remain semantic expressions.
- *
- * This grammar does not impose any resource maximum.
- *
- * Examples:
- *
- *     Resource
- *     QuantumResource
- *     MemoryResource
- *     AcceleratorResource
- *
- * remain types/capabilities rather than hard-coded grammar constructs.
- */
-
-
-/*
- * ============================================================================
- * 20. IMPLEMENTATION INTEGRATION
- * ============================================================================
- *
- * Trait implementations are NOT owned here.
- *
- * `impl` belongs to declarations/implementations.g4.
- *
- * That grammar consumes the canonical:
+ * It should expose:
  *
  *     traitDeclaration
  *
- * semantic identity and resolves:
+ * by importing this grammar.
  *
- *     impl Trait for Type
- *
- * relationships.
- *
- * This separation is intentional:
- *
- *     traits.g4
- *          |
- *          +---- declares contract
- *                         |
- *                         v
- *                 implementations.g4
- *                         |
- *                         +---- supplies implementation
+ * It must NOT redefine trait syntax.
  */
 
 
 /*
  * ============================================================================
- * 21. AST CONTRACT
+ * 23. LEGACY GRAMMAR MIGRATION
  * ============================================================================
  *
- * The parser must produce a trait declaration structure containing, at
- * minimum, semantic-preserving source information for:
+ * The repository contains legacy/parallel syntax in:
  *
- *     TraitDecl
- *       name
- *       modifiers
- *       genericParameters
- *       superTraits
- *       whereClause
- *       members
+ *     grammar/Zamani.g4
+ *     grammar/antlr/Core.g4
+ *     grammar/antlr/ZamaniParser.g4
+ *     grammar/statements/declarations.g4
  *
- * Member variants:
+ * Those surfaces may remain during migration but MUST NOT simultaneously be
+ * authoritative production trait grammars.
  *
- *     TraitMethod
- *       name
- *       modifiers
- *       genericParameters
- *       parameters
- *       returnType
- *       effects
- *       contracts
- *       optionalDefaultBody
+ * The final production path must have one trait declaration owner:
  *
- *     TraitAssociatedType
- *       name
- *       bounds
- *
- *     TraitAssociatedConstant
- *       name
- *       type
- *       optionalInitializer
- *
- *     TraitProperty
- *       name
- *       type
- *       accessors
- *
- *     TraitNestedType
- *       nested declaration
- *
- * The AST layer owns the concrete Rust representation.
- *
- * This grammar must not introduce a competing AST.
+ *     grammar/declarations/traits.g4
  */
 
 
 /*
  * ============================================================================
- * 22. DETERMINISM
+ * 24. ERROR CONTRACT
  * ============================================================================
  *
- * Parsing must be deterministic for the same token stream.
+ * Parser errors include:
  *
- * Member alternatives are deliberately separated:
+ *     missing trait name
+ *     malformed generic parameter list
+ *     malformed inheritance list
+ *     malformed where clause
+ *     malformed method signature
+ *     missing method terminator/body
+ *     malformed associated type
+ *     malformed associated constant
+ *     malformed attribute
  *
- *     method
- *     associated type
- *     associated constant
- *     property
- *     nested type
+ * Semantic errors include:
  *
- * rather than allowing an unrestricted declaration fallback.
- *
- * No semantic lookup is required to decide the fundamental trait-member
- * alternative.
- */
-
-
-/*
- * ============================================================================
- * 23. SCALABILITY
- * ============================================================================
- *
- * There is deliberately NO grammar-level maximum for:
- *
- *     trait count
- *     member count
- *     generic parameter count
- *     inheritance-list length
- *     type nesting
- *     source size
- *     implementation count
- *     associated types
- *     associated constants
- *
- * Practical limits belong to explicit compiler/resource policy.
- *
- * They must not become language semantics.
- */
-
-
-/*
- * ============================================================================
- * 24. COMPATIBILITY
- * ============================================================================
- *
- * Existing syntax preserved:
- *
- *     trait Name { ... }
- *     trait Name<T> { ... }
- *     trait Child extends Parent { ... }
- *     fn method(...);
- *     fn method(...) { ... }
- *     type Item;
- *     const VALUE: Type = expression;
- *
- * Existing consumers should continue to refer to:
- *
- *     traitDeclaration
- *     traitBody
- *     traitMember
- *     traitMethodDeclaration
- *     traitAssociatedType
- *     traitConstantDeclaration
- *
- * during migration.
- *
- * Compatibility aliases MAY be retained temporarily in the composition
- * grammar, but duplicate active definitions MUST NOT remain.
- */
-
-
-/*
- * ============================================================================
- * 25. VALIDATION / ERROR OWNERSHIP
- * ============================================================================
- *
- * Syntax errors belong to the parser.
- *
- * Examples:
- *
- *     trait { ... }
- *     trait Name(
- *     trait Name { fn }
- *     trait Name { type ; }
- *
- * Semantic errors belong downstream.
- *
- * Examples:
- *
+ *     unresolved trait
  *     cyclic inheritance
- *     duplicate member
- *     conflicting inherited method
- *     invalid associated-type bound
- *     incompatible implementation
- *     unsatisfied generic constraint
- *     invalid effect relationship
+ *     duplicate supertrait
+ *     incompatible inherited method
+ *     invalid associated type
+ *     invalid associated constant
+ *     invalid modifier combination
+ *     unsatisfied implementation
  *     unavailable capability
+ *     unavailable resource
  *
- * Do not encode semantic diagnostics as grammar actions.
+ * Semantic errors MUST NOT be implemented through parser predicates.
  */
 
 
 /*
  * ============================================================================
- * 26. SECURITY / SAFETY
+ * 25. SCALABILITY TEST CONTRACT
  * ============================================================================
  *
- * Trait declarations cannot grant themselves:
+ * Conformance tests must cover:
  *
- *     unsafe execution
- *     hardware access
- *     network access
- *     filesystem access
- *     privileged capabilities
- *     quantum backend access
+ *     empty trait
+ *     one-member trait
+ *     many-member trait
+ *     generic trait
+ *     many generic parameters
+ *     many bounds
+ *     multiple supertraits
+ *     deeply nested generic types
+ *     many associated types
+ *     many associated constants
+ *     many methods
+ *     default methods
+ *     quantum-related contracts
+ *     hardware-neutral contracts
+ *     distributed contracts
+ *     AI/data contracts
  *
- * Such authority must be represented through the canonical effect/capability
- * and security systems.
- *
- * In particular:
- *
- *     trait -> capability
- *
- * does not mean:
- *
- *     trait -> automatic permission.
- *
- * Capability checking remains a semantic/compiler concern.
+ * No test may establish an artificial maximum.
  */
 
 
 /*
  * ============================================================================
- * 27. COMPLETION CRITERIA
+ * 26. COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is COMPLETE only when:
+ * traits.g4 is complete when:
  *
- * [ ] It is the single authoritative trait parser delegate.
+ * [ ] It is the only concrete trait-syntax owner.
+ * [ ] declarations.g4 only dispatches to it.
+ * [ ] No legacy parser remains authoritative.
+ * [ ] Canonical ZamaniLexer supplies all tokens.
+ * [ ] Shared type syntax comes from Types.
+ * [ ] Shared expression syntax comes from Expressions.
+ * [ ] Shared parameter syntax comes from Parameters.
+ * [ ] Shared block syntax comes from Blocks.
+ * [ ] Shared attribute syntax comes from Attributes.
+ * [ ] Shared generic syntax comes from Generics.
+ * [ ] Shared constraint syntax comes from Constraints.
+ * [ ] No duplicated identifier/type/expression grammar exists here.
+ * [ ] No quantum IR is constructed.
+ * [ ] No hardware limit is encoded.
+ * [ ] No physical resource is selected.
+ * [ ] No QEC/ZQN/routing/scheduling logic exists.
+ * [ ] AST mapping is documented.
+ * [ ] Semantic mapping is documented.
+ * [ ] Implementation integration is documented.
+ * [ ] Positive tests exist.
+ * [ ] Negative tests exist.
+ * [ ] Boundary tests exist.
+ * [ ] Scalability tests exist.
+ * [ ] Determinism tests exist.
+ * [ ] Compatibility tests exist.
+ * [ ] Rust integration remains compatible with 1.97/1.97.1.
+ * [ ] No unsafe Rust is required.
  *
- * [ ] No duplicate trait parser definitions remain active in
- *     declarations.g4.
- *
- * [ ] `traitDeclaration` remains the stable public declaration entry point.
- *
- * [ ] Generic parameters come from the canonical generic grammar.
- *
- * [ ] Types come from the canonical type grammar.
- *
- * [ ] Parameters come from the canonical function grammar.
- *
- * [ ] Blocks come from the canonical statement grammar.
- *
- * [ ] Effects come from the canonical effect grammar.
- *
- * [ ] Contracts come from the canonical contract grammar.
- *
- * [ ] Attributes come from the canonical attribute grammar.
- *
- * [ ] No lexer rules are duplicated here.
- *
- * [ ] No hardware limits are encoded.
- *
- * [ ] No quantum machine assumptions are encoded.
- *
- * [ ] No direct dependency on quantum::ir exists.
- *
- * [ ] No QEC/ZQN/routing/scheduling implementation is embedded.
- *
- * [ ] No Rust action code exists.
- *
- * [ ] Generated Rust remains safe and compatible with Rust 1.97/1.97.1.
- *
- * [ ] Required positive tests exist.
- *
- * [ ] Required negative tests exist.
- *
- * [ ] Boundary/scalability tests exist.
- *
- * [ ] Cross-domain tests exist.
- *
- * [ ] Parser determinism tests exist.
- *
- * [ ] AST lowering tests exist.
- *
- * [ ] Trait-to-implementation semantic tests exist.
- *
- * [ ] Quantum trait contracts reach canonical quantum semantic lowering
- *     without creating another quantum IR.
- *
- * [ ] Classical, HDL, hardware, distributed, AI, and future types can appear
- *     through the canonical type system without modifying this grammar.
+ * ============================================================================
  */
