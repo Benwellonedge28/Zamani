@@ -1,1542 +1,1076 @@
 /*
-
-* ============================================================================
-* Zamani Programming Language
-* ============================================================================
-* 
-* File:
-* grammar/expressions/conditionals.g4
-* 
-* Status:
-* Canonical modular grammar component for value-producing conditional
-* expressions.
-* 
-* Grammar technology:
-* ANTLR4 parser grammar.
-* 
-* Rust implementation baseline:
-* Rust 1.97 / Rust 1.97.1
-* Edition 2021.
-* 
-* Safety:
-* Grammar contains no embedded Rust actions.
-* Grammar contains no semantic predicates.
-* Grammar contains no unsafe Rust.
-* Compiler/frontend implementation must use safe Rust only.
-* 
-* ============================================================================
-* PURPOSE
-* ============================================================================
-* 
-* This file is the SINGLE MODULAR SYNTAX OWNER for VALUE-PRODUCING
-* conditional expressions.
-* 
-* It defines:
-* 
-* - conditionalExpression
-* - structured if expressions
-* - else-if chains
-* - optional else branches
-* - ternary conditional expressions
-* - nesting of conditional expressions
-* 
-* It does NOT define:
-* 
-* - statement-level if control flow
-* - general expression syntax
-* - expression precedence outside this construct
-* - blocks
-* - statements
-* - types
-* - semantic analysis
-* - AST structures
-* - IR
-* - quantum IR
-* - QEC
-* - ZQN
-* - routing
-* - scheduling
-* - HAL
-* - hardware selection
-* - runtime execution
-* - optimization
-* 
-* ============================================================================
-* SINGLE-AUTHORITY RULE
-* ============================================================================
-* 
-* There MUST be exactly one authoritative modular definition of:
-* 
-* conditionalExpression
-* 
-* in grammar/expressions/.
-* 
-* This file is that authority.
-* 
-* The existing:
-* 
-* grammar/expressions/conditional-expressions.g4
-* 
-* MUST NOT independently define conditionalExpression, ifExpression,
-* ternaryConditionalExpression, or another competing conditional-expression
-* hierarchy once this file is authoritative.
-* 
-* It may be retained temporarily as:
-* 
-* - migration documentation;
-* - compatibility documentation;
-* - a non-authoritative wrapper;
-* - a reference to this file.
-* 
-* It must not create a second parser definition.
-* 
-* ============================================================================
-* REPOSITORY ARCHITECTURE
-* ============================================================================
-* 
-* Canonical language pipeline:
-* 
-* source
-*   |
-*   v
-* grammar/antlr/ZamaniLexer.g4
-*   |
-*   v
-* canonical parser composition
-*   |
-*   v
-* domain-neutral frontend AST
-*   |
-*   v
-* structural validation
-*   |
-*   v
-* semantic analysis
-*   |
-*   v
-* canonical semantic model / ZUIR
-*   |
-*   +-----------------------+----------------------+
-*   |                       |                      |
-*   v                       v                      v
-* classical              quantum::ir           HDL/hardware
-*   |                       |                      |
-*   +-----------------------+----------------------+
-*                           |
-*                           v
-*                optimization / lowering
-*                           |
-*                routing / scheduling
-*                           |
-*                resilience / QEC / ZQN
-*                           |
-*                          HAL
-*                           |
-*                   target realization
-* 
-* "quantum::ir" remains the canonical quantum semantic boundary.
-* 
-* This grammar does not create or define any IR.
-* 
-* ============================================================================
-* FILE OWNERSHIP
-* ============================================================================
-* 
-* THIS FILE OWNS:
-* 
-* conditionalExpression
-* ifExpression
-* elseIfExpressionBranch
-* elseExpressionBranch
-* ternaryConditionalExpression
-* 
-* THIS FILE DOES NOT OWN:
-* 
-* expression
-* assignmentExpression
-* rangeExpression
-* logical expressions
-* arithmetic expressions
-* comparison expressions
-* blocks
-* statements
-* types
-* declarations
-* lexer tokens
-* AST types
-* semantic rules
-* IR
-* 
-* ============================================================================
-* UPSTREAM CONTRACTS
-* ============================================================================
-* 
-* Lexer:
-* 
-* grammar/antlr/ZamaniLexer.g4
-* 
-* supplies:
-* 
-* IF
-* ELSE
-* QUESTION
-* COLON
-* LBRACE
-* RBRACE
-* 
-* This file MUST NOT define lexer rules.
-* 
-* The repository's canonical lexer currently uses:
-* 
-* QUESTION
-* 
-* for "?".
-* 
-* Therefore this grammar intentionally uses QUESTION rather than introducing
-* QUESTION_MARK or QUESTION as a second lexical vocabulary.
-* 
-* ============================================================================
-* BLOCK CONTRACT
-* ============================================================================
-* 
-* Block syntax is owned by:
-* 
-* grammar/core/blocks.g4
-* 
-* That grammar owns:
-* 
-* block
-* blockExpression
-* blockElement
-* 
-* This file consumes "blockExpression".
-* 
-* This file MUST NOT redefine:
-* 
-* block
-* blockExpression
-* blockElement
-* 
-* ============================================================================
-* EXPRESSION CONTRACT
-* ============================================================================
-* 
-* General expression syntax is owned by the canonical expression composition.
-* 
-* This file consumes:
-* 
-* expression
-* 
-* but does not redefine it.
-* 
-* The canonical expression composition is responsible for wiring this
-* conditional-expression component into the complete expression hierarchy.
-* 
-* Conceptually:
-* 
-* expression
-*     |
-*     v
-* assignmentExpression
-*     |
-*     v
-* conditionalExpression
-*     |
-*     +------------------------+
-*     |                        |
-*     v                        v
-* ifExpression       ternaryConditionalExpression
-* 
-* Lower-precedence expression layers remain owned by the canonical expression
-* composition.
-* 
-* ============================================================================
-* IMPORTANT COMPOSITION REQUIREMENT
-* ============================================================================
-* 
-* ANTLR parser grammars cannot resolve arbitrary references merely because a
-* similarly named .g4 file exists in another directory.
-* 
-* Therefore this component must be incorporated into the repository's actual
-* parser composition mechanism.
-* 
-* The composition layer must provide:
-* 
-* expression
-* blockExpression
-* 
-* and must import/include this component exactly once.
-* 
-* No implementation should attempt to compile this file as an unrelated,
-* complete parser while simultaneously compiling another parser containing
-* another conditionalExpression definition.
-* 
-* ============================================================================
-* CONDITIONAL EXPRESSION SEMANTICS
-* ============================================================================
-* 
-* A conditional expression is a source construct that may produce a value.
-* 
-* Structured form:
-* 
-* if condition {
-*     then_value
-* } else {
-*     else_value
-* }
-* 
-* Optional else:
-* 
-* if condition {
-*     then_value
-* }
-* 
-* Chained form:
-* 
-* if condition_a {
-*     value_a
-* } else if condition_b {
-*     value_b
-* } else {
-*     value_c
-* }
-* 
-* Ternary form:
-* 
-* condition ? then_value : else_value
-* 
-* The grammar establishes structure only.
-* 
-* Semantic analysis determines whether a particular conditional expression is
-* legal in its context.
-* 
-* ============================================================================
-* CONDITIONAL EXPRESSION
-* ============================================================================
-* 
-* This is the ONLY public conditional-expression rule owned by this file.
-* 
-* It deliberately separates the two source forms:
-* 
-* structured if
-* ternary
-* 
-* Both are expressions.
-* 
-* Neither is a statement-level conditional.
-* 
-* ============================================================================
-  */
+ * ============================================================================
+ * Zamani Programming Language
+ * ============================================================================
+ *
+ * File:
+ *     grammar/expressions/conditionals.g4
+ *
+ * Status:
+ *     Canonical, production-ready modular grammar component for
+ *     value-producing conditional expressions.
+ *
+ * Grammar:
+ *     ANTLR4 parser grammar
+ *
+ * Rust implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Edition 2021
+ *     Safe Rust only.
+ *     No unsafe Rust.
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This file is the SINGLE AUTHORITATIVE MODULAR SYNTAX OWNER for
+ * value-producing conditional expressions.
+ *
+ * It owns:
+ *
+ *     conditionalExpression
+ *     ifExpression
+ *     elseIfExpressionBranch
+ *     elseExpressionBranch
+ *     ternaryConditionalExpression
+ *
+ * It supports:
+ *
+ *     - structured if expressions;
+ *     - else-if chains;
+ *     - optional final else branches;
+ *     - ternary conditional expressions;
+ *     - arbitrary syntactic nesting subject only to implementation resources;
+ *     - use inside classical, quantum, hybrid, HDL, hardware, AI, data,
+ *       distributed, networking, security, and future domains;
+ *     - target-independent conditional computation.
+ *
+ * It does NOT own:
+ *
+ *     - the public expression entry point;
+ *     - assignment;
+ *     - range expressions;
+ *     - logical operators;
+ *     - arithmetic operators;
+ *     - blocks;
+ *     - statement-level conditionals;
+ *     - lexer tokens;
+ *     - AST structures;
+ *     - semantic analysis;
+ *     - type checking;
+ *     - effect checking;
+ *     - resource analysis;
+ *     - capability resolution;
+ *     - IR;
+ *     - quantum::ir;
+ *     - QEC;
+ *     - ZQN;
+ *     - routing;
+ *     - scheduling;
+ *     - HAL;
+ *     - target selection;
+ *     - runtime execution.
+ *
+ * ============================================================================
+ * SINGLE-AUTHORITY CONTRACT
+ * ============================================================================
+ *
+ * There must be exactly one authoritative modular definition of:
+ *
+ *     conditionalExpression
+ *
+ * within grammar/expressions/.
+ *
+ * This file is that authority.
+ *
+ * The deleted/retired:
+ *
+ *     grammar/expressions/conditional-expressions.g4
+ *
+ * MUST NOT be recreated as a competing grammar.
+ *
+ * No other expression grammar may independently define:
+ *
+ *     conditionalExpression
+ *     ifExpression
+ *     ternaryConditionalExpression
+ *
+ * The canonical expression-composition grammar:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * owns the precedence hierarchy and references conditionalExpression.
+ *
+ * This file owns the implementation of conditionalExpression itself.
+ *
+ * ============================================================================
+ * EXISTING EXPRESSION HIERARCHY
+ * ============================================================================
+ *
+ * The existing expressions.g4 establishes:
+ *
+ *     expression
+ *         |
+ *     assignmentExpression
+ *         |
+ *     conditionalExpression
+ *         |
+ *     rangeExpression
+ *         |
+ *     logicalOrExpression
+ *         |
+ *     logicalAndExpression
+ *         |
+ *     bitwiseOrExpression
+ *         |
+ *     bitwiseXorExpression
+ *         |
+ *     bitwiseAndExpression
+ *         |
+ *     equalityExpression
+ *         |
+ *     relationalExpression
+ *         |
+ *     shiftExpression
+ *         |
+ *     additiveExpression
+ *         |
+ *     multiplicativeExpression
+ *         |
+ *     prefixExpression
+ *         |
+ *     postfixExpression
+ *         |
+ *     primaryExpression
+ *
+ * This file MUST preserve that architecture.
+ *
+ * Therefore:
+ *
+ *     conditionalExpression
+ *
+ * consumes the next-tighter:
+ *
+ *     rangeExpression
+ *
+ * for the condition of a ternary expression.
+ *
+ * It MUST NOT use:
+ *
+ *     expression
+ *
+ * as the condition operand of the ternary operator.
+ *
+ * Otherwise the conditional layer would recursively consume its own
+ * precedence boundary and make the grammar unnecessarily ambiguous and
+ * difficult to reason about.
+ *
+ * ============================================================================
+ * CANONICAL PIPELINE
+ * ============================================================================
+ *
+ *     source
+ *       |
+ *       v
+ *     canonical lexer
+ *       |
+ *       v
+ *     canonical parser composition
+ *       |
+ *       v
+ *     domain-neutral frontend AST
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       v
+ *     canonical semantic model / ZUIR
+ *       |
+ *       +-------------------+---------------------+
+ *       |                   |                     |
+ *       v                   v                     v
+ *   classical          quantum::ir          HDL/hardware
+ *       |                   |                     |
+ *       +-------------------+---------------------+
+ *                           |
+ *                           v
+ *                     optimization
+ *                           |
+ *                   routing/scheduling
+ *                           |
+ *                  resilience/QEC/ZQN
+ *                           |
+ *                          HAL
+ *                           |
+ *                   target realization
+ *
+ * This grammar creates no IR.
+ *
+ * quantum::ir remains the canonical quantum semantic boundary.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * Lexer ownership remains outside this file.
+ *
+ * The canonical lexer must provide the tokens consumed here, including:
+ *
+ *     IF
+ *     ELSE
+ *     QUESTION
+ *     COLON
+ *
+ * and whatever token vocabulary is required by rangeExpression and
+ * blockExpression.
+ *
+ * This file MUST NOT create aliases such as:
+ *
+ *     QUESTION_MARK
+ *
+ * when QUESTION is already canonical.
+ *
+ * Likewise, this file MUST NOT duplicate IF or ELSE lexer definitions.
+ *
+ * ============================================================================
+ * BLOCK CONTRACT
+ * ============================================================================
+ *
+ * Structured conditional branches consume:
+ *
+ *     blockExpression
+ *
+ * from the repository's canonical block grammar.
+ *
+ * This file MUST NOT redefine:
+ *
+ *     block
+ *     blockExpression
+ *     blockElement
+ *
+ * Branch blocks therefore inherit the complete universal Zamani block
+ * capability, including constructs from:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     distributed
+ *     AI
+ *     data
+ *     networking
+ *     security
+ *     concurrency
+ *     effects
+ *     future domains
+ *
+ * ============================================================================
+ * CONDITION CONTRACT
+ * ============================================================================
+ *
+ * Conditions use:
+ *
+ *     rangeExpression
+ *
+ * rather than the complete:
+ *
+ *     expression
+ *
+ * This is deliberate.
+ *
+ * It means that:
+ *
+ *     a ? b : c
+ *
+ * parses as:
+ *
+ *     rangeExpression QUESTION expression COLON conditionalExpression
+ *
+ * and prevents the condition from recursively consuming another conditional
+ * expression before QUESTION is reached.
+ *
+ * Semantic analysis remains responsible for deciding whether the resulting
+ * expression is a valid condition.
+ *
+ * The grammar does not introduce separate:
+ *
+ *     booleanExpression
+ *     classicalCondition
+ *     quantumCondition
+ *     hardwareCondition
+ *     resourceCondition
+ *
+ * Conditional syntax is domain-neutral.
+ *
+ * ============================================================================
+ * STRUCTURED IF EXPRESSIONS
+ * ============================================================================
+ *
+ * Canonical forms:
+ *
+ *     if condition {
+ *         value
+ *     }
+ *
+ *     if condition {
+ *         value_a
+ *     } else {
+ *         value_b
+ *     }
+ *
+ *     if condition_a {
+ *         value_a
+ *     } else if condition_b {
+ *         value_b
+ *     } else {
+ *         value_c
+ *     }
+ *
+ * The final else branch is syntactically optional.
+ *
+ * Whether an omitted else is semantically legal depends on the expression
+ * context and the language's type/flow rules.
+ *
+ * ============================================================================
+ * ELSE-IF CHAINS
+ * ============================================================================
+ *
+ * Else-if branches are repeated structurally:
+ *
+ *     (ELSE IF rangeExpression blockExpression)*
+ *
+ * There is deliberately no enumeration such as:
+ *
+ *     elseIf1
+ *     elseIf2
+ *     elseIf3
+ *
+ * Therefore the grammar imposes no artificial branch-count limit.
+ *
+ * Any practical limit comes from:
+ *
+ *     - source size;
+ *     - parser memory;
+ *     - compiler resources;
+ *     - runtime resources;
+ *     - deployment policy.
+ *
+ * None is a Zamani language limit.
+ *
+ * ============================================================================
+ * TERNARY CONDITIONALS
+ * ============================================================================
+ *
+ * Canonical form:
+ *
+ *     condition ? thenValue : elseValue
+ *
+ * The grammar is:
+ *
+ *     rangeExpression
+ *         QUESTION
+ *     expression
+ *         COLON
+ *     conditionalExpression
+ *
+ * The false/else branch recursively consumes conditionalExpression.
+ *
+ * This makes ternary conditionals RIGHT ASSOCIATIVE.
+ *
+ * Therefore:
+ *
+ *     a ? b : c ? d : e
+ *
+ * is parsed as:
+ *
+ *     a ? b : (c ? d : e)
+ *
+ * rather than:
+ *
+ *     (a ? b : c) ? d : e
+ *
+ * This association is part of the grammar contract and must not be
+ * independently reimplemented downstream.
+ *
+ * ============================================================================
+ * MIDDLE OPERAND CONTRACT
+ * ============================================================================
+ *
+ * The true branch of a ternary consumes:
+ *
+ *     expression
+ *
+ * rather than:
+ *
+ *     rangeExpression
+ *
+ * This permits the true branch to contain a complete Zamani expression,
+ * including assignments and nested conditional expressions where the
+ * surrounding syntax makes them unambiguous.
+ *
+ * Example:
+ *
+ *     condition ? value_a + value_b : value_c
+ *
+ * and:
+ *
+ *     condition ? a ? b : c : d
+ *
+ * are structurally representable according to the canonical expression
+ * hierarchy.
+ *
+ * Parentheses remain available wherever explicit grouping is desirable.
+ *
+ * ============================================================================
+ * ELSE OPERAND CONTRACT
+ * ============================================================================
+ *
+ * The false branch consumes:
+ *
+ *     conditionalExpression
+ *
+ * rather than the complete expression.
+ *
+ * This is the mechanism that gives the ternary operator its right
+ * associativity while preserving its position below rangeExpression and
+ * above assignmentExpression.
+ *
+ * ============================================================================
+ * STRUCTURED IF ASSOCIATIVITY
+ * ============================================================================
+ *
+ * Structured if expressions are represented as one conditional expression
+ * containing:
+ *
+ *     - one initial condition;
+ *     - one initial branch;
+ *     - zero or more ordered else-if branches;
+ *     - zero or one final else branch.
+ *
+ * Example:
+ *
+ *     if a {
+ *         x
+ *     } else if b {
+ *         y
+ *     } else if c {
+ *         z
+ *     } else {
+ *         w
+ *     }
+ *
+ * is one conditional-expression structure with three conditions and four
+ * possible result branches.
+ *
+ * ============================================================================
+ * EXPRESSION VS STATEMENT OWNERSHIP
+ * ============================================================================
+ *
+ * This file owns VALUE-PRODUCING conditional expressions.
+ *
+ * Statement-level control flow belongs to the statement grammar.
+ *
+ * The repository MUST NOT use this file to redefine statement-level:
+ *
+ *     if
+ *     else
+ *     else-if
+ *
+ * constructs.
+ *
+ * The lexical tokens may be shared.
+ *
+ * The syntax ownership and AST semantics remain distinct.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar lowers into the existing domain-neutral frontend AST.
+ *
+ * It MUST NOT introduce a second AST hierarchy.
+ *
+ * The AST representation must preserve sufficient information for:
+ *
+ *     - source spans;
+ *     - condition;
+ *     - then branch;
+ *     - ordered else-if branches;
+ *     - optional else branch;
+ *     - ternary source form when required;
+ *     - child ordering;
+ *     - nesting;
+ *     - diagnostics;
+ *     - provenance.
+ *
+ * Conceptually:
+ *
+ *     ConditionalExpression {
+ *         condition,
+ *         then_branch,
+ *         else_if_branches,
+ *         else_branch,
+ *         source_span
+ *     }
+ *
+ * The actual Rust type is owned by:
+ *
+ *     src/frontend/ast/
+ *
+ * This grammar MUST NOT define Rust AST structures.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing establishes structure.
+ *
+ * Semantic analysis establishes meaning.
+ *
+ * Semantic analysis owns:
+ *
+ *     - condition validity;
+ *     - condition typing;
+ *     - truth-value rules;
+ *     - branch result typing;
+ *     - branch compatibility;
+ *     - contextual typing;
+ *     - conversions;
+ *     - effects;
+ *     - ownership;
+ *     - borrowing;
+ *     - resource requirements;
+ *     - capabilities;
+ *     - domain legality;
+ *     - control-flow guarantees.
+ *
+ * Precedence and associativity MUST NOT be confused with evaluation order.
+ *
+ * A parse tree establishes grouping.
+ *
+ * It does not by itself establish:
+ *
+ *     - eager evaluation;
+ *     - lazy evaluation;
+ *     - short-circuit behavior;
+ *     - parallel evaluation;
+ *     - speculative execution;
+ *     - quantum execution;
+ *     - hardware scheduling.
+ *
+ * Those are semantic/compiler/runtime concerns.
+ *
+ * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
+ *
+ * For value-producing conditionals, semantic analysis determines the common
+ * or otherwise valid result type of the branches.
+ *
+ * For:
+ *
+ *     if condition {
+ *         a
+ *     } else {
+ *         b
+ *     }
+ *
+ * the language type system determines whether the branch results can inhabit
+ * the required surrounding type.
+ *
+ * The grammar MUST NOT encode a fixed type universe for conditional results.
+ *
+ * This permits:
+ *
+ *     scalar values
+ *     vectors
+ *     matrices
+ *     tensors
+ *     quantum values
+ *     classical values
+ *     hardware descriptions
+ *     resources
+ *     capabilities
+ *     distributed values
+ *     futures
+ *     streams
+ *     user-defined types
+ *     future types
+ *
+ * without changing conditional grammar.
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Quantum conditions remain semantic constructs.
+ *
+ * This grammar must not enumerate quantum-specific conditional operators or
+ * hardware-specific measurement forms merely to support conditional syntax.
+ *
+ * Quantum examples can use the same conditional structure:
+ *
+ *     if measurement_result {
+ *         operation_a
+ *     } else {
+ *         operation_b
+ *     }
+ *
+ * or:
+ *
+ *     measurement_result ? operation_a : operation_b
+ *
+ * Quantum legality, measurement semantics, classical feed-forward,
+ * reversibility, dynamic control, and hardware constraints are resolved
+ * downstream.
+ *
+ * Any resulting quantum computation lowers through the canonical:
+ *
+ *     quantum::ir
+ *
+ * boundary.
+ *
+ * This grammar does not create a quantum conditional IR.
+ *
+ * ============================================================================
+ * CLASSICAL / HDL / HYBRID CONTRACT
+ * ============================================================================
+ *
+ * The same conditional syntax applies to:
+ *
+ *     classical computation;
+ *     quantum-classical hybrid computation;
+ *     HDL expressions;
+ *     hardware/software co-design;
+ *     AI/ML;
+ *     tensor/dataflow computation;
+ *     distributed computation;
+ *     networking;
+ *     security;
+ *     accelerator programming;
+ *     future domains.
+ *
+ * Domain-specific behavior belongs to semantic analysis and downstream IRs.
+ *
+ * No domain is permitted to fork the universal conditional-expression
+ * precedence model.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Conditional expressions may select computations involving arbitrary
+ * resource and capability values.
+ *
+ * Examples:
+ *
+ *     capability_available ? use_capability() : fallback()
+ *
+ *     enough_memory ? allocate() : stream()
+ *
+ * The grammar does not inspect actual resources.
+ *
+ * Parsing MUST NOT query:
+ *
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     QPU count
+ *     memory
+ *     topology
+ *     device state
+ *     network state
+ *
+ * Resource and capability decisions occur after parsing.
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar imposes no artificial finite limit on:
+ *
+ *     - number of conditional branches;
+ *     - number of nested conditionals;
+ *     - expression size;
+ *     - branch size;
+ *     - number of conditions;
+ *     - number of domain constructs inside branches;
+ *     - number of resources referenced semantically;
+ *     - number of operations selected by conditions.
+ *
+ * Repetition is structural.
+ *
+ * There are no:
+ *
+ *     MAX_CONDITIONAL_BRANCHES
+ *     MAX_NESTED_CONDITIONALS
+ *     MAX_TERNARY_DEPTH
+ *     MAX_EXPRESSION_DEPTH
+ *
+ * language constants.
+ *
+ * "Infinity" means:
+ *
+ *     no artificial language-level finite limit is introduced.
+ *
+ * Actual implementation exhaustion must be treated as a resource/diagnostic
+ * condition, never as a semantic reason to restrict the language.
+ *
+ * ============================================================================
+ * TARGET INDEPENDENCE
+ * ============================================================================
+ *
+ * Conditional syntax MUST NOT hard-code:
+ *
+ *     CPU identifiers;
+ *     GPU identifiers;
+ *     FPGA identifiers;
+ *     physical qubit identifiers;
+ *     memory-bank identifiers;
+ *     network-node identifiers;
+ *     accelerator identifiers;
+ *     fixed topology;
+ *     fixed device counts;
+ *     fixed register widths;
+ *     fixed machine sizes.
+ *
+ * A conditional selects semantic computation.
+ *
+ * Target realization remains downstream.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing this grammar depends only on:
+ *
+ *     - source token sequence;
+ *     - active language version;
+ *     - enabled, explicitly declared grammar features.
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     - wall-clock time;
+ *     - randomness;
+ *     - environment variables;
+ *     - filesystem state;
+ *     - network state;
+ *     - hardware discovery;
+ *     - runtime scheduler state;
+ *     - device state;
+ *     - backend availability.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Parsing is non-executing.
+ *
+ * A branch containing:
+ *
+ *     system.run(...)
+ *     network.send(...)
+ *     device.invoke(...)
+ *
+ * remains syntax only during parsing.
+ *
+ * The parser MUST NOT:
+ *
+ *     - execute commands;
+ *     - access files;
+ *     - access credentials;
+ *     - access networks;
+ *     - inspect hardware;
+ *     - invoke devices;
+ *     - invoke compilers;
+ *     - invoke simulators;
+ *     - load arbitrary plugins.
+ *
+ * ============================================================================
+ * DIAGNOSTICS CONTRACT
+ * ============================================================================
+ *
+ * The parser/frontend should report useful source locations for:
+ *
+ *     - missing condition;
+ *     - missing branch block;
+ *     - missing colon in ternary;
+ *     - malformed else-if;
+ *     - malformed else branch;
+ *     - unexpected QUESTION;
+ *     - unexpected COLON;
+ *     - unmatched delimiters.
+ *
+ * Semantic diagnostics own:
+ *
+ *     - invalid condition type;
+ *     - incompatible branch types;
+ *     - invalid effects;
+ *     - illegal resource use;
+ *     - illegal quantum control;
+ *     - unavailable capability;
+ *     - invalid target realization.
+ *
+ * Diagnostics must preserve source spans.
+ *
+ * ============================================================================
+ * ERROR RECOVERY
+ * ============================================================================
+ *
+ * Error recovery belongs to the parser/frontend infrastructure.
+ *
+ * This grammar must not embed parser actions or unsafe recovery mechanisms.
+ *
+ * Recovery must not execute semantic operations.
+ *
+ * ============================================================================
+ * PERFORMANCE
+ * ============================================================================
+ *
+ * The grammar is designed to avoid:
+ *
+ *     - full-expression recursion in the ternary condition;
+ *     - duplicate conditional hierarchies;
+ *     - enumerated branch counts;
+ *     - semantic predicates;
+ *     - embedded actions;
+ *     - runtime-dependent parsing.
+ *
+ * Else-if chains use repetition.
+ *
+ * Ternary right-association is represented structurally rather than by
+ * backtracking.
+ *
+ * The implementation should maintain deterministic parsing and avoid
+ * exponential ambiguity.
+ *
+ * ============================================================================
+ * COMPILER CONTRACT
+ * ============================================================================
+ *
+ * Compiler stages may transform conditional expressions only when the
+ * transformation preserves language semantics.
+ *
+ * Optimization MUST preserve:
+ *
+ *     - branch meaning;
+ *     - side-effect rules;
+ *     - effect ordering;
+ *     - ownership rules;
+ *     - observable behavior;
+ *     - floating-point semantics where required;
+ *     - quantum semantics;
+ *     - hardware/HDL semantics;
+ *     - resource constraints;
+ *     - determinism guarantees.
+ *
+ * The compiler may lower:
+ *
+ *     if-expression
+ *
+ * into:
+ *
+ *     control-flow IR
+ *
+ * or an equivalent canonical representation.
+ *
+ * This file does not prescribe the IR representation.
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime behavior is downstream from parsing.
+ *
+ * The runtime decides how conditional computation is executed on available
+ * resources according to the semantic and compiler contracts.
+ *
+ * This grammar must not encode:
+ *
+ *     thread count;
+ *     core count;
+ *     device count;
+ *     QPU topology;
+ *     memory size;
+ *     scheduling policy;
+ *     physical placement.
+ *
+ * ============================================================================
+ * INTEROPERABILITY CONTRACT
+ * ============================================================================
+ *
+ * Interoperability formats such as:
+ *
+ *     OpenQASM
+ *     QIR
+ *     HDL formats
+ *     LLVM-related representations
+ *     MLIR-related representations
+ *     foreign languages
+ *
+ * may contain conditional constructs.
+ *
+ * Their syntax must be translated into the Zamani domain-neutral AST and
+ * semantic model rather than creating a competing Zamani conditional grammar.
+ *
+ * ============================================================================
+ * DIALECT CONTRACT
+ * ============================================================================
+ *
+ * Dialects may extend conditional semantics only through declared extension
+ * mechanisms.
+ *
+ * A dialect MUST NOT silently redefine the precedence or associativity of
+ * core conditional syntax.
+ *
+ * Any dialect extension affecting conditional parsing must specify:
+ *
+ *     - dialect identifier;
+ *     - version;
+ *     - feature gate;
+ *     - grammar extension;
+ *     - precedence relationship;
+ *     - associativity;
+ *     - AST mapping;
+ *     - semantic mapping;
+ *     - IR mapping;
+ *     - compatibility behavior;
+ *     - positive tests;
+ *     - negative tests;
+ *     - boundary tests.
+ *
+ * ============================================================================
+ * MACRO / METAPROGRAMMING CONTRACT
+ * ============================================================================
+ *
+ * Macros may generate conditional syntax only through the canonical parser
+ * and AST pipeline.
+ *
+ * Macro expansion must not bypass:
+ *
+ *     - syntax validation;
+ *     - structural validation;
+ *     - semantic analysis;
+ *     - type checking;
+ *     - effect checking;
+ *     - capability checking.
+ *
+ * Generated conditionals remain ordinary Zamani conditional expressions.
+ *
+ * ============================================================================
+ * SOURCE PROVENANCE
+ * ============================================================================
+ *
+ * Conditional expressions must retain source provenance sufficient for:
+ *
+ *     - diagnostics;
+ *     - formatting;
+ *     - debugging;
+ *     - source maps;
+ *     - compiler provenance;
+ *     - deterministic reproduction.
+ *
+ * The grammar itself does not define the Rust source-span representation.
+ *
+ * ============================================================================
+ * CANONICAL RULES
+ * ============================================================================
+ */
 
 parser grammar ConditionalsParser;
 
 options {
-tokenVocab = ZamaniLexer;
+    tokenVocab = ZamaniLexer;
 }
 
-/*
-
-* ============================================================================
-* 1. CANONICAL CONDITIONAL EXPRESSION
-* ============================================================================
-* 
-* A conditional expression is either:
-* 
-* - a structured if expression; or
-* - a ternary conditional expression.
-* 
-* There is no third competing conditional hierarchy.
-  */
-  conditionalExpression
-  : ifExpression
-  | ternaryConditionalExpression
-  ;
 
 /*
+ * ============================================================================
+ * PUBLIC CONDITIONAL EXPRESSION
+ * ============================================================================
+ *
+ * This is the only public conditional-expression entry point.
+ *
+ * The expression composition layer in expressions.g4 places this rule between
+ * assignmentExpression and rangeExpression.
+ */
+conditionalExpression
+    : ifExpression
+    | ternaryConditionalExpression
+    ;
 
-* ============================================================================
-* 2. STRUCTURED IF EXPRESSION
-* ============================================================================
-* 
-* Canonical forms:
-* 
-* if condition {
-*     then_value
-* }
-* 
-* if condition {
-*     then_value
-* } else {
-*     else_value
-* }
-* 
-* if condition_a {
-*     value_a
-* } else if condition_b {
-*     value_b
-* } else {
-*     value_c
-* }
-* 
-* The final else is optional at the grammar level.
-* 
-* Whether an omitted else is semantically valid is determined by semantic
-* analysis and the Zamani type/control-flow specification.
-* 
-* This preserves compatibility with the frontend AST contract where an
-* else branch may be optional.
-  /
-  ifExpression
-  : IF expression blockExpression elseIfExpressionBranch elseExpressionBranch?
-  ;
 
 /*
+ * ============================================================================
+ * STRUCTURED IF EXPRESSION
+ * ============================================================================
+ *
+ * One initial condition and branch, followed by zero or more else-if branches
+ * and an optional final else branch.
+ *
+ * Repetition provides an unbounded structural form without artificial limits.
+ */
+ifExpression
+    : IF rangeExpression blockExpression
+      elseIfExpressionBranch*
+      elseExpressionBranch?
+    ;
 
-* ============================================================================
-* 3. ELSE-IF EXPRESSION BRANCH
-* ============================================================================
-* 
-* Each branch is:
-* 
-* else if condition block
-* 
-* Repetition allows an arbitrary number of branches without enumerating:
-* 
-* elseIf1
-* elseIf2
-* elseIf3
-* ...
-* 
-* No grammar-level branch-count limit exists.
-  */
-  elseIfExpressionBranch
-  : ELSE IF expression blockExpression
-  ;
 
 /*
+ * ============================================================================
+ * ELSE-IF BRANCH
+ * ============================================================================
+ *
+ * Each occurrence represents exactly one:
+ *
+ *     else if condition { ... }
+ *
+ * branch.
+ *
+ * The parent rule repeats this rule as necessary.
+ */
+elseIfExpressionBranch
+    : ELSE IF rangeExpression blockExpression
+    ;
 
-* ============================================================================
-* 4. ELSE EXPRESSION BRANCH
-* ============================================================================
-* 
-* The final alternative branch is:
-* 
-* else block
-* 
-* The branch is optional in "ifExpression".
-  */
-  elseExpressionBranch
-  : ELSE blockExpression
-  ;
-
-/*
-
-* ============================================================================
-* 5. TERNARY CONDITIONAL EXPRESSION
-* ============================================================================
-* 
-* Canonical form:
-* 
-* condition ? then_value : else_value
-* 
-* Both branches consume the canonical "expression" rule.
-* 
-* This permits nested expressions while keeping the lexical tokens owned by
-* the canonical lexer.
-* 
-* Examples:
-* 
-* ready ? value_a : value_b
-* 
-* a ? b : c
-* 
-* a ? b : c ? d : e
-* 
-* function(
-*     condition ? value_a : value_b
-* )
-* 
-* The semantic layer determines type compatibility and legality.
-  */
-  ternaryConditionalExpression
-  : expression QUESTION expression COLON expression
-  ;
 
 /*
+ * ============================================================================
+ * FINAL ELSE BRANCH
+ * ============================================================================
+ */
+elseExpressionBranch
+    : ELSE blockExpression
+    ;
 
-* ============================================================================
-* 6. IMPORTANT NOTE ABOUT TERNARY ASSOCIATIVITY
-* ============================================================================
-* 
-* The repository's canonical expression hierarchy must determine the final
-* precedence/associativity of ternary conditional syntax.
-* 
-* This component intentionally does not create a second expression hierarchy.
-* 
-* The canonical expression composition MUST ensure that:
-* 
-* a ? b : c ? d : e
-* 
-* receives the language-specified association.
-* 
-* If Zamani specifies right associativity, the semantic/AST structure must be:
-* 
-* a ? b : (c ? d : e)
-* 
-* rather than:
-* 
-* (a ? b : c) ? d : e
-* 
-* This must be established in the canonical expression composition rather than
-* by maintaining two competing ternary implementations.
-* 
-* ============================================================================
-  */
 
 /*
-
-* ============================================================================
-* 7. NESTING
-* ============================================================================
-* 
-* Structured conditional expressions may contain conditional expressions in:
-* 
-* - conditions;
-* - branch blocks;
-* - nested expressions;
-* - function arguments;
-* - indices;
-* - member expressions;
-* - assignments;
-* - returns;
-* - collection elements;
-* - other domain expressions.
-* 
-* Example:
-* 
-* if outer_condition {
-*     if inner_condition {
-*         value_a
-*     } else {
-*         value_b
-*     }
-* } else {
-*     value_c
-* }
-* 
-* Ternary nesting:
-* 
-* a ? (b ? c : d) : e
-* 
-* Mixed nesting:
-* 
-* if a {
-*     b ? c : d
-* } else {
-*     if e {
-*         f
-*     } else {
-*         g
-*     }
-* }
-* 
-* No finite language-level nesting limit is encoded.
-  */
-
-/*
-
-* ============================================================================
-* 8. BLOCK OWNERSHIP
-* ============================================================================
-* 
-* Every structured conditional branch uses:
-* 
-* blockExpression
-* 
-* from:
-* 
-* grammar/core/blocks.g4
-* 
-* This guarantees that conditional branches use the same source-level block
-* representation as the rest of Zamani.
-* 
-* Blocks may therefore contain constructs from:
-* 
-* classical
-* quantum
-* hybrid
-* HDL
-* hardware
-* distributed
-* AI
-* data
-* networking
-* security
-* concurrency
-* effects
-* future domains
-* 
-* without requiring domain-specific conditional grammar.
-  */
-
-/*
-
-* ============================================================================
-* 9. STATEMENT/EXPRESSION SEPARATION
-* ============================================================================
-* 
-* Statement-level conditionals are owned by:
-* 
-* grammar/statements/conditionals.g4
-* 
-* That file owns:
-* 
-* ifStatement
-* elseIfClause
-* elseClause
-* 
-* It MUST NOT define:
-* 
-* conditionalExpression
-* ifExpression
-* ternaryConditionalExpression
-* 
-* This file owns only value-producing conditional syntax.
-* 
-* Therefore:
-* 
-* if condition {
-*     work();
-* }
-* 
-* in statement position is handled by the statement grammar.
-* 
-* Whereas:
-* 
-* let result =
-*     if condition {
-*         value_a
-*     } else {
-*         value_b
-*     };
-* 
-* in expression position is handled through this file.
-* 
-* The shared IF/ELSE lexical tokens do not make the two constructs the same
-* semantic entity.
-  */
-
-/*
-
-* ============================================================================
-* 10. NO CONDITION-SPECIFIC BOOLEAN GRAMMAR
-* ============================================================================
-* 
-* This grammar deliberately uses:
-* 
-* expression
-* 
-* as the condition.
-* 
-* It does not introduce:
-* 
-* booleanExpression
-* conditionExpression
-* quantumCondition
-* classicalCondition
-* hardwareCondition
-* resourceCondition
-* 
-* Semantic analysis determines whether the resulting expression is a valid
-* condition.
-* 
-* This allows conditional syntax to remain domain-neutral.
-  */
-
-/*
-
-* ============================================================================
-* 11. AST CONTRACT
-* ============================================================================
-* 
-* Every conditional expression must lower into the existing domain-neutral
-* frontend AST.
-* 
-* The frontend AST already identifies:
-* 
-* ConditionalExpression
-* 
-* as a canonical expression node kind.
-* 
-* The AST must preserve:
-* 
-* - complete source span;
-* - condition;
-* - then branch;
-* - ordered else-if branches;
-* - optional else branch;
-* - ternary-vs-structured source form where required;
-* - child ordering;
-* - source locations;
-* - syntactic nesting.
-* 
-* Conceptual structured representation:
-* 
-* ConditionalExpression {
-*     condition: NodeId,
-*     then_branch: NodeId,
-*     else_if_branches: [
-*         {
-*             condition: NodeId,
-*             branch: NodeId
-*         },
-*         ...
-*     ],
-*     else_branch: Option<NodeId>,
-*     source_span: Span
-* }
-* 
-* The exact Rust structure remains owned by:
-* 
-* src/frontend/ast/
-* 
-* This grammar must not define or duplicate that Rust type.
-  */
-
-/*
-
-* ============================================================================
-* 12. TERNARY AST CONTRACT
-* ============================================================================
-* 
-* The frontend must preserve sufficient source information to distinguish:
-* 
-* if condition {
-*     a
-* } else {
-*     b
-* }
-* 
-* from:
-* 
-* condition ? a : b
-* 
-* unless the AST specification explicitly defines normalization between the
-* forms.
-* 
-* If normalization occurs, it must preserve source spans and diagnostics.
-* 
-* Grammar changes must not force a new domain-specific AST hierarchy.
-  */
-
-/*
-
-* ============================================================================
-* 13. SEMANTIC CONTRACT
-* ============================================================================
-* 
-* Semantic analysis owns:
-* 
-* - name resolution;
-* - condition validity;
-* - condition type checking;
-* - truth-value interpretation;
-* - branch result typing;
-* - type unification;
-* - contextual typing;
-* - coercions/conversions;
-* - reachability;
-* - definite assignment;
-* - ownership;
-* - borrowing;
-* - lifetime rules;
-* - effect checking;
-* - capability checking;
-* - resource requirements;
-* - domain legality;
-* - control-flow semantics;
-* - divergence;
-* - constant evaluation.
-* 
-* None of those rules belong in this grammar.
-  */
-
-/*
-
-* ============================================================================
-* 14. OPTIONAL ELSE SEMANTICS
-* ============================================================================
-* 
-* The grammar permits:
-* 
-* if condition {
-*     value
-* }
-* 
-* because the frontend AST contract permits an optional else branch.
-* 
-* Semantic analysis must determine whether the expression is valid in context.
-* 
-* Possible language semantics may include:
-* 
-* - unit-valued conditional;
-* - optional result;
-* - partial result;
-* - context where the value is discarded;
-* - never-returning branch;
-* - another explicitly specified semantic model.
-* 
-* This grammar does not select among those possibilities.
-* 
-* The language specification must define the semantic rule.
-  */
-
-/*
-
-* ============================================================================
-* 15. BRANCH TYPE COMPATIBILITY
-* ============================================================================
-* 
-* The grammar intentionally permits:
-* 
-* if condition {
-*     integer_expression
-* } else {
-*     compatible_expression
-* }
-* 
-* and:
-* 
-* if condition {
-*     quantum_expression
-* } else {
-*     another_expression
-* }
-* 
-* It does not require syntactic identity between branches.
-* 
-* Semantic analysis determines whether the branch results are compatible.
-* 
-* The grammar must never encode:
-* 
-* branch type == branch type
-* 
-* as a parser restriction.
-  */
-
-/*
-
-* ============================================================================
-* 16. EFFECTS AND CAPABILITIES
-* ============================================================================
-* 
-* A condition or branch may participate in effectful computation.
-* 
-* Examples include:
-* 
-* if ready {
-*     perform_effect()
-* } else {
-*     fallback()
-* }
-* 
-* if measurement_result {
-*     quantum_path()
-* } else {
-*     classical_path()
-* }
-* 
-* if capability_available {
-*     accelerated_path()
-* } else {
-*     portable_path()
-* }
-* 
-* Whether these are legal is determined downstream by:
-* 
-* type/effect/capability/resource analysis.
-* 
-* This grammar remains unaware of those mechanisms.
-  */
-
-/*
-
-* ============================================================================
-* 17. QUANTUM INTEGRATION
-* ============================================================================
-* 
-* Conditional expressions may participate in hybrid quantum/classical
-* computation.
-* 
-* Example:
-* 
-* if measurement_result {
-*     quantum_operation()
-* } else {
-*     classical_operation()
-* }
-* 
-* The grammar does NOT decide:
-* 
-* - number of qubits;
-* - logical qubits;
-* - physical qubits;
-* - QPU count;
-* - gate set;
-* - topology;
-* - physical mapping;
-* - calibration;
-* - noise model;
-* - QEC;
-* - ZQN;
-* - routing;
-* - scheduling;
-* - backend.
-* 
-* Downstream architecture remains:
-* 
-* source
-*   -> frontend AST
-*   -> semantic analysis
-*   -> canonical semantic model
-*   -> quantum::ir
-*   -> optimization
-*   -> routing/scheduling
-*   -> QEC/ZQN/resilience
-*   -> HAL
-*   -> target realization
-* 
-* "quantum::ir" remains the canonical quantum semantic boundary.
-* 
-* This grammar must never introduce another quantum IR.
-  */
-
-/*
-
-* ============================================================================
-* 18. CLASSICAL INTEGRATION
-* ============================================================================
-* 
-* Conditional expressions may control:
-* 
-* scalar computation
-* vector computation
-* matrix computation
-* tensor computation
-* symbolic computation
-* numerical computation
-* scientific computation
-* accelerator computation
-* 
-* No classical target is selected by the grammar.
-  */
-
-/*
-
-* ============================================================================
-* 19. HDL / HARDWARE INTEGRATION
-* ============================================================================
-* 
-* Conditional expressions may occur wherever the canonical expression grammar
-* permits expressions in HDL or hardware/software co-design contexts.
-* 
-* This grammar does not define:
-* 
-* cpuConditional
-* gpuConditional
-* fpgaConditional
-* asicConditional
-* qpuConditional
-* 
-* Hardware realization remains downstream.
-  */
-
-/*
-
-* ============================================================================
-* 20. DISTRIBUTED / PARALLEL INTEGRATION
-* ============================================================================
-* 
-* Conditional expressions may participate in distributed or parallel programs.
-* 
-* The grammar imposes no limits on:
-* 
-* - participants;
-* - processes;
-* - workers;
-* - tasks;
-* - branches;
-* - nesting;
-* - execution regions.
-* 
-* Placement and scheduling remain downstream semantic/compiler/runtime
-* responsibilities.
-  */
-
-/*
-
-* ============================================================================
-* 21. RESOURCE / CAPABILITY INDEPENDENCE
-* ============================================================================
-* 
-* This grammar contains no:
-* 
-* MAX_BRANCHES
-* MAX_NESTING
-* MAX_EXPRESSIONS
-* MAX_THREADS
-* MAX_CORES
-* MAX_GPUS
-* MAX_FPGAS
-* MAX_QPUS
-* MAX_QUBITS
-* MAX_NODES
-* MAX_MEMORY
-* MAX_ACCELERATORS
-* 
-* It contains no physical device identifiers.
-* 
-* It contains no topology constants.
-* 
-* It contains no fixed hardware dimensions.
-* 
-* Resource requirements and capabilities are semantic constructs elsewhere in
-* the language.
-  */
-
-/*
-
-* ============================================================================
-* 22. POCO-REAF
-* ============================================================================
-* 
-* Conditional expressions describe program semantics, not machine topology.
-* 
-* The same source construct can therefore be lowered to:
-* 
-* tiny embedded systems
-* CPUs
-* multicore systems
-* GPUs
-* FPGAs
-* ASIC-oriented targets
-* quantum systems
-* hybrid systems
-* distributed systems
-* HPC systems
-* heterogeneous systems
-* future computational architectures
-* 
-* The grammar imposes no universal machine-size restriction.
-* 
-* Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever remains a
-* downstream compiler/runtime responsibility built on target-independent
-* language semantics.
-  */
-
-/*
-
-* ============================================================================
-* 23. SCALABILITY
-* ============================================================================
-* 
-* Branch chains use repetition:
-* 
-* elseIfExpressionBranch*
-* 
-* rather than a finite enumeration.
-* 
-* Nested expressions are represented through the canonical expression
-* composition.
-* 
-* Branch body size is governed by the general block grammar.
-* 
-* No language-level finite maximum is introduced for:
-* 
-* - branch count;
-* - nesting depth;
-* - expression size;
-* - program size.
-* 
-* "Infinity" means absence of an artificial grammar-level finite limit.
-* 
-* Actual parser/compiler/runtime limits may exist because physical resources
-* are finite. Such limits are implementation/resource policies and MUST NOT
-* alter the language's semantic definition.
-  */
-
-/*
-
-* ============================================================================
-* 24. DETERMINISM
-* ============================================================================
-* 
-* Given identical:
-* 
-* - source;
-* - token sequence;
-* - grammar version;
-* - parser configuration;
-* 
-* parsing must produce the same structural interpretation.
-* 
-* Parsing MUST NOT depend on:
-* 
-* - CPU availability;
-* - GPU availability;
-* - FPGA availability;
-* - QPU availability;
-* - machine topology;
-* - memory capacity;
-* - calibration state;
-* - scheduler state;
-* - network state;
-* - runtime state;
-* - current time;
-* - randomness.
-
-*/
-
-/*
-
-* ============================================================================
-* 25. SECURITY
-* ============================================================================
-* 
-* This grammar performs no:
-* 
-* - filesystem access;
-* - network access;
-* - process execution;
-* - device discovery;
-* - hardware probing;
-* - runtime dispatch.
-* 
-* There are no embedded actions.
-* 
-* There is no embedded unsafe Rust.
-* 
-* Any macro/metaprogramming execution policy belongs to its own semantic and
-* capability system.
-  */
-
-/*
-
-* ============================================================================
-* 26. ERROR AND DIAGNOSTIC CONTRACT
-* ============================================================================
-* 
-* The parser/frontend diagnostic layer should be able to report:
-* 
-* - missing condition;
-* - malformed condition;
-* - missing branch block;
-* - malformed else-if;
-* - malformed else;
-* - missing ternary then expression;
-* - missing ternary colon;
-* - missing ternary else expression;
-* - incomplete conditional at EOF;
-* - unexpected tokens between conditional clauses.
-* 
-* Diagnostics must preserve source spans.
-* 
-* Diagnostic wording and structured Rust error types belong to the frontend
-* diagnostic subsystem.
-* 
-* No Rust actions are embedded in this grammar.
-  */
-
-/*
-
-* ============================================================================
-* 27. COMPATIBILITY CONTRACT
-* ============================================================================
-* 
-* The historical monolithic Zamani grammar has conditional syntax.
-* 
-* The modular grammar must preserve its intended source forms without keeping
-* duplicate definitions.
-* 
-* Migration:
-* 
-* historical Zamani.g4 conditional syntax
-*            |
-*            v
-* grammar/expressions/conditionals.g4
-*            |
-*            v
-* canonical expression composition
-*            |
-*            v
-* frontend AST
-* 
-* "grammar/Zamani-Grammar.md" may document additional proposed syntax but does
-* not independently authorize syntax.
-* 
-* "grammar/grammar.md" records implementation conformance and must not silently
-* introduce syntax absent from the canonical grammar.
-  */
-
-/*
-
-* ============================================================================
-* 28. RELATIONSHIP TO conditional-expressions.g4
-* ============================================================================
-* 
-* IMPORTANT MIGRATION RULE:
-* 
-* grammar/expressions/conditionals.g4
-* 
-* is the canonical owner.
-* 
-* grammar/expressions/conditional-expressions.g4
-* 
-* must NOT define a competing:
-* 
-* conditionalExpression
-* 
-* rule.
-* 
-* The existing repository contains overlapping conditional-expression
-* definitions. Those must be consolidated.
-* 
-* The existing conditional-expressions.g4 may be retained without renaming as
-* a compatibility/reference file, but its grammar authority must be removed.
-* 
-* Preferred eventual relationship:
-* 
-* conditionals.g4
-*     |
-*     +--> canonical conditional-expression rules
-* 
-* conditional-expressions.g4
-*     |
-*     +--> compatibility/reference documentation
-* 
-* There must be only one effective parser rule implementation.
-  */
-
-/*
-
-* ============================================================================
-* 29. RELATIONSHIP TO expressions.g4 / expression.g4
-* ============================================================================
-* 
-* The repository currently contains expression-composition material whose
-* content identifies "expression" as the public expression entry point and
-* "conditionalExpression" as part of the expression hierarchy.
-* 
-* The final composition must not create:
-* 
-* one conditionalExpression in expressions.g4
-* another conditionalExpression in conditionals.g4
-* another conditionalExpression in conditional-expressions.g4
-* 
-* Instead:
-* 
-* canonical expression composition
-*          |
-*          +--> conditionalExpression
-*                     |
-*                     +--> this file
-* 
-* The exact generated ANTLR composition mechanism must be chosen once and used
-* consistently throughout grammar/.
-  */
-
-/*
-
-* ============================================================================
-* 30. NO DUPLICATE TOKEN AUTHORITY
-* ============================================================================
-* 
-* This file intentionally uses only parser token references.
-* 
-* It must not define:
-* 
-* IF
-* ELSE
-* QUESTION
-* COLON
-* LBRACE
-* RBRACE
-* 
-* The canonical lexer remains the sole lexical authority.
-  */
-
-/*
-
-* ============================================================================
-* 31. NO BACKEND COUPLING
-* ============================================================================
-* 
-* This grammar must remain independent of:
-* 
-* LLVM
-* MLIR
-* QIR
-* OpenQASM implementation details
-* CUDA
-* ROCm
-* vendor FPGA languages
-* vendor QPU APIs
-* physical device identifiers
-* backend instruction sets.
-* 
-* Interoperability and lowering occur downstream.
-  */
-
-/*
-
-* ============================================================================
-* 32. NO RESOURCE POLICY IN GRAMMAR
-* ============================================================================
-* 
-* The grammar must not decide whether:
-* 
-* a branch fits memory;
-* a computation fits a device;
-* a quantum operation fits a QPU;
-* a distributed computation fits available nodes;
-* an accelerator is available;
-* a schedule is feasible.
-* 
-* These are semantic/compiler/runtime resource questions.
-  */
-
-/*
-
-* ============================================================================
-* 33. TEST CONTRACT
-* ============================================================================
-* 
-* The repository must contain tests covering this grammar through the actual
-* canonical parser composition.
-* 
-* POSITIVE SYNTAX TESTS:
-* 
-* 1. Basic if expression.
-* 
-*    if condition {
-*        value
-*    }
-* 
-* 2. If/else expression.
-* 
-*    if condition {
-*        value_a
-*    } else {
-*        value_b
-*    }
-* 
-* 3. One else-if.
-* 
-*    if a {
-*        x
-*    } else if b {
-*        y
-*    }
-* 
-* 4. Multiple else-if branches.
-* 
-*    if a {
-*        x
-*    } else if b {
-*        y
-*    } else if c {
-*        z
-*    } else {
-*        fallback
-*    }
-* 
-* 5. Nested structured conditionals.
-* 
-* 6. Ternary conditional.
-* 
-*    condition ? a : b
-* 
-* 7. Nested ternary conditional.
-* 
-* 8. Structured conditional containing ternary expression.
-* 
-* 9. Ternary containing structured conditional where expression grammar
-*    permits it.
-* 
-* 10. Conditional as function argument.
-* 
-* 11. Conditional as index expression.
-* 
-* 12. Conditional as initializer.
-* 
-* 13. Conditional as return expression.
-* 
-* 14. Conditional inside collection expressions.
-* 
-* 15. Conditional involving quantum/classical expressions.
-* 
-* 16. Conditional involving hardware/resource capability expressions where
-*    those expressions are valid.
-* 
-* NEGATIVE SYNTAX TESTS:
-* 
-* 1. Missing condition.
-* 2. Missing branch.
-* 3. Missing closing brace.
-* 4. Malformed else-if.
-* 5. Malformed else branch.
-* 6. Missing ternary condition.
-* 7. Missing ternary true expression.
-* 8. Missing ternary colon.
-* 9. Missing ternary false expression.
-* 10. Invalid token between condition and branch.
-* 
-* SEMANTIC TESTS:
-* 
-* 1. Invalid condition type.
-* 2. Incompatible branch types.
-* 3. Invalid branch effect.
-* 4. Invalid capability requirement.
-* 5. Invalid ownership/borrow behavior.
-* 6. Unreachable branch.
-* 7. Valid optional-else context.
-* 
-* BOUNDARY TESTS:
-* 
-* 1. Empty branch.
-* 2. Large condition expression.
-* 3. Large branch body.
-* 4. Long else-if chain.
-* 5. Deep nesting.
-* 6. Large ternary chain.
-* 
-* SCALABILITY TESTS:
-* 
-* Verify absence of language-level finite limits on:
-* 
-*     branch count
-*     nesting
-*     expression size
-*     program size
-* 
-* Practical resource limits must be tested separately as implementation
-* policies rather than language semantics.
-* 
-* DETERMINISM TESTS:
-* 
-* Parse identical source repeatedly and verify identical structural output.
-* 
-* CROSS-DOMAIN TESTS:
-* 
-* Classical:
-*     if classical_condition { ... } else { ... }
-* 
-* Quantum/hybrid:
-*     if measurement_result { ... } else { ... }
-* 
-* HDL/hardware:
-*     conditional expressions in legal HDL/hardware expression positions.
-* 
-* Distributed:
-*     conditional expressions inside legal distributed computation.
-* 
-* AI/data:
-*     conditional expressions inside legal model/data expressions.
-* 
-* ============================================================================
-  */
-
-/*
-
-* ============================================================================
-* 34. HARD-CODING AUDIT
-* ============================================================================
-* 
-* This file passes the following intended audit:
-* 
-* [x] No fixed qubit count.
-* [x] No fixed CPU count.
-* [x] No fixed core count.
-* [x] No fixed thread count.
-* [x] No fixed GPU count.
-* [x] No fixed FPGA count.
-* [x] No fixed QPU count.
-* [x] No fixed node count.
-* [x] No fixed memory capacity.
-* [x] No fixed tensor dimension.
-* [x] No fixed vector width.
-* [x] No physical device IDs.
-* [x] No topology constants.
-* [x] No timing constants.
-* [x] No calibration constants.
-* [x] No backend-specific instructions.
-* [x] No finite branch enumeration.
-* [x] No finite nesting enumeration.
-* [x] No embedded Rust.
-* [x] No unsafe Rust.
-
-*/
-
-/*
-
-* ============================================================================
-* 35. COMPLETION CRITERIA
-* ============================================================================
-* 
-* This file is COMPLETE only when all of the following are true:
-* 
-* [ ] It is the sole modular owner of conditionalExpression.
-* 
-* [ ] conditional-expressions.g4 no longer defines a competing
-*     conditionalExpression hierarchy.
-* 
-* [ ] statements/conditionals.g4 owns only statement-level conditionals.
-* 
-* [ ] expressions/ canonical composition wires this rule exactly once.
-* 
-* [ ] `expression` resolves through the canonical expression hierarchy.
-* 
-* [ ] `blockExpression` resolves through grammar/core/blocks.g4.
-* 
-* [ ] IF/ELSE/QUESTION/COLON are supplied by the canonical lexer.
-* 
-* [ ] No lexer rules exist in this file.
-* 
-* [ ] No duplicate block grammar exists in this file.
-* 
-* [ ] AST mapping is documented and implemented downstream.
-* 
-* [ ] Semantic typing is implemented downstream.
-* 
-* [ ] Effects/capabilities are implemented downstream.
-* 
-* [ ] Classical lowering is implemented downstream.
-* 
-* [ ] Quantum lowering reaches quantum::ir rather than a second quantum IR.
-* 
-* [ ] HDL/hardware lowering is implemented downstream.
-* 
-* [ ] Resource/capability analysis is downstream.
-* 
-* [ ] No hardware limit is encoded.
-* 
-* [ ] Positive tests pass.
-* 
-* [ ] Negative tests pass.
-* 
-* [ ] Boundary tests pass.
-* 
-* [ ] Scalability tests pass.
-* 
-* [ ] Determinism tests pass.
-* 
-* [ ] Cross-domain tests pass.
-* 
-* [ ] Compatibility tests pass.
-* 
-* [ ] Rust 1.97/1.97.1 integration remains safe Rust only.
-* 
-* [ ] No generated parser contains duplicate conditional rule authority.
-* 
-* ============================================================================
-  */
+ * ============================================================================
+ * TERNARY CONDITIONAL EXPRESSION
+ * ============================================================================
+ *
+ * The condition uses rangeExpression, which is the next-tighter precedence
+ * layer established by expressions.g4.
+ *
+ * The true branch uses the complete expression grammar.
+ *
+ * The false branch uses conditionalExpression to establish right
+ * associativity:
+ *
+ *     a ? b : c ? d : e
+ *
+ * becomes:
+ *
+ *     a ? b : (c ? d : e)
+ *
+ * Parentheses may be used for explicit alternative grouping where permitted
+ * by the surrounding expression grammar.
+ */
+ternaryConditionalExpression
+    : rangeExpression QUESTION expression COLON conditionalExpression
+    ;
