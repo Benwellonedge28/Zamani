@@ -7,45 +7,40 @@
  *     grammar/declarations/declarations.g4
  *
  * Role:
- *     AUTHORITATIVE DECLARATION COMPOSITION GRAMMAR.
+ *     AUTHORITATIVE DECLARATION COMPOSITION GRAMMAR
  *
  * Status:
- *     Production architecture.
+ *     Production
  *
  * Grammar technology:
- *     ANTLR4 parser grammar.
+ *     ANTLR4 parser grammar
  *
- * Rust implementation baseline:
- *     Rust 1.97 / Rust 1.97.1.
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
  *
  * Safety:
- *     This grammar contains:
- *
- *       - no embedded Rust actions;
- *       - no semantic predicates;
- *       - no unsafe code;
- *       - no filesystem access;
- *       - no networking;
- *       - no process execution;
- *       - no hardware discovery;
- *       - no runtime execution;
- *       - no mutable global parser state;
- *       - no target-specific implementation;
- *       - no machine-size constants.
+ *     No embedded Rust.
+ *     No semantic predicates.
+ *     No actions.
+ *     No unsafe code.
+ *     No filesystem/network/runtime access.
+ *     No hardware discovery.
+ *     No target-specific constants.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file is the SINGLE COMPOSITION OWNER for Zamani declarations.
+ * This file is the SINGLE COMPOSITION OWNER for the declaration family
+ * currently owned by grammar/declarations/.
  *
- * It answers one architectural question:
+ * It answers:
  *
  *     "Which declaration families are legal at a declaration boundary?"
  *
- * It DOES NOT implement the concrete syntax of those declaration families.
+ * It does NOT implement the concrete syntax of those declarations.
  *
- * Concrete declaration syntax belongs to dedicated grammar modules:
+ * Concrete syntax belongs to the dedicated delegate grammars:
  *
  *     constants.g4
  *     variables.g4
@@ -55,8 +50,8 @@
  *     enums.g4
  *     unions.g4
  *     interfaces.g4
- *
- * This separation is mandatory.
+ *     traits.g4
+ *     implementations.g4
  *
  * ============================================================================
  * OWNERSHIP
@@ -64,80 +59,75 @@
  *
  * THIS FILE OWNS:
  *
- *     - declaration;
- *     - declaration composition;
- *     - declaration-family dispatch;
- *     - the authoritative declaration-category boundary;
- *     - declaration ordering at a source/module boundary.
+ *     - declaration
+ *     - declaration-family dispatch
+ *     - value-declaration composition
+ *     - type-declaration composition
+ *     - declaration-family integration
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexer rules;
- *     - keywords;
- *     - identifiers;
- *     - qualified names;
- *     - attributes;
- *     - visibility syntax;
- *     - modifiers;
- *     - generic parameter syntax;
- *     - type-expression syntax;
- *     - expression syntax;
- *     - constant syntax;
- *     - variable syntax;
- *     - type-alias syntax;
- *     - struct syntax;
- *     - enum syntax;
- *     - union syntax;
- *     - interface syntax;
- *     - function syntax;
- *     - module syntax;
- *     - effect syntax;
- *     - capability syntax;
- *     - resource semantics;
- *     - quantum semantics;
- *     - HDL semantics;
- *     - hardware semantics;
- *     - distributed semantics;
- *     - AI semantics;
- *     - AST construction;
- *     - semantic analysis;
- *     - canonical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - optimization;
- *     - routing;
- *     - scheduling;
- *     - hardware discovery;
- *     - calibration;
- *     - backend selection;
- *     - runtime execution.
+ *     - token definitions
+ *     - keywords
+ *     - identifiers
+ *     - names
+ *     - paths
+ *     - attributes
+ *     - visibility
+ *     - modifiers
+ *     - expressions
+ *     - type expressions
+ *     - concrete declaration syntax
+ *     - functions
+ *     - modules
+ *     - effects
+ *     - resources
+ *     - capabilities
+ *     - hardware
+ *     - quantum semantics
+ *     - HDL semantics
+ *     - semantic analysis
+ *     - AST construction
+ *     - IR construction
+ *     - quantum::ir
+ *     - QEC
+ *     - ZQN
+ *     - routing
+ *     - scheduling
+ *     - optimization
+ *     - calibration
+ *     - HAL
+ *     - backend selection
+ *     - runtime execution
  *
  * ============================================================================
  * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
- *     UTF-8 source
+ *     Zamani source
  *          |
  *          v
- *     ZamaniLexer
+ *     canonical ZamaniLexer
  *          |
  *          v
  *     canonical parser
  *          |
- *          +--> declarations.g4       <-- THIS FILE
- *          |        |
- *          |        +--> constants.g4
- *          |        +--> variables.g4
- *          |        +--> types.g4
- *          |        +--> aliases.g4
- *          |        +--> structs.g4
- *          |        +--> enums.g4
- *          |        +--> unions.g4
- *          |        +--> interfaces.g4
+ *          v
+ *     declarations.g4
+ *          |
+ *          +--> Constants
+ *          +--> Variables
+ *          +--> ZamaniDeclarationTypesParser
+ *          +--> ZamaniDeclarationAliases
+ *          +--> ZamaniDeclarationStructs
+ *          +--> ZamaniDeclarationEnums
+ *          +--> ZamaniDeclarationUnions
+ *          +--> Interfaces
+ *          +--> Traits
+ *          +--> Implementations
  *          |
  *          v
- *     frontend AST
+ *     domain-neutral frontend AST
  *          |
  *          v
  *     structural validation
@@ -151,7 +141,7 @@
  *          +--> capabilities
  *          +--> resources
  *          +--> ownership
- *          +--> control/data-flow
+ *          +--> control/data flow
  *          |
  *          v
  *     canonical semantic representations
@@ -164,10 +154,10 @@
  *          +--> future-domain representations
  *          |
  *          v
- *     optimization
+ *     optimization / lowering
  *          |
  *          v
- *     routing / scheduling / lowering
+ *     routing / scheduling / resilience
  *          |
  *          v
  *     target realization
@@ -176,12 +166,12 @@
  *     runtime
  *
  * ============================================================================
- * CRITICAL ARCHITECTURAL RULE
+ * CRITICAL RULE
  * ============================================================================
  *
- * This file MUST NOT duplicate rules owned by its delegate grammars.
+ * This file MUST NOT redefine a rule owned by a delegate grammar.
  *
- * In particular, this file MUST NOT define another:
+ * In particular, this file MUST NOT contain another implementation of:
  *
  *     constantDeclaration
  *     variableDeclaration
@@ -191,224 +181,162 @@
  *     enumDeclaration
  *     unionDeclaration
  *     interfaceDeclaration
+ *     traitDeclaration
+ *     implementationDeclaration
  *
- * Doing so would create competing grammar ownership and eventually divergent
- * AST/semantic behavior.
+ * Doing so would create competing grammar ownership.
  *
  * ============================================================================
- * ANTLR COMPOSITION MODEL
+ * ANTLR CONTRACT
  * ============================================================================
  *
  * This is a parser grammar.
  *
- * The canonical lexical vocabulary remains:
+ * The lexical authority is:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * The canonical parser composition layer imports this declaration grammar.
+ * Every imported declaration grammar MUST use:
  *
- * Declaration delegates are imported here so that this file is the single
- * declaration dispatcher rather than a second implementation of declarations.
+ *     tokenVocab = ZamaniLexer;
  *
- * ============================================================================
- * IMPORT CONTRACT
- * ============================================================================
- *
- * The imported grammars provide the concrete declaration rules.
- *
- * The imports below correspond to the current repository declaration modules:
- *
- *     Constants
- *     Variables
- *     ZamaniDeclarationTypesParser
- *     ZamaniDeclarationAliases
- *     ZamaniDeclarationStructs
- *     ZamaniDeclarationEnums
- *     ZamaniDeclarationUnions
- *     Interfaces
- *
- * IMPORTANT:
- *
- * The repository currently contains migration inconsistencies in some delegate
- * grammars. In particular, unions.g4 currently refers to an older token
- * vocabulary (`ZamaniTokens`) while the canonical lexer is `ZamaniLexer`.
- *
- * That delegate MUST be migrated to the canonical lexer vocabulary before the
- * complete declaration grammar can be generated as one production parser.
- *
- * This file deliberately does NOT reproduce the union grammar as a workaround.
- *
- * ============================================================================
- * DEPENDENCY DIRECTION
- * ============================================================================
- *
- *     declarations.g4
- *          |
- *          +--> declaration delegates
- *          |
- *          +--> canonical parser dependencies
- *
- * It MUST NOT become:
- *
- *     declarations.g4
- *          |
- *          v
- *     AST
- *          |
- *          v
- *     declarations.g4
- *
- * It MUST NOT depend on:
- *
- *     quantum::ir
- *     QEC
- *     ZQN
- *     resilience
- *     optimization
- *     routing
- *     scheduling
- *     hardware discovery
- *     calibration
- *     runtime
+ * No declaration grammar may introduce ZamaniTokens as an alternative
+ * production vocabulary.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ * Declarations describe source-level program semantics.
  *
- * Declaration composition is entirely target-independent.
+ * This dispatcher therefore contains no:
  *
- * This file therefore contains NO syntax for:
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_TENSOR_RANK
+ *     MAX_VECTOR_WIDTH
+ *     MAX_PROGRAM_SIZE
  *
- *     cpuDeclaration
- *     gpuDeclaration
- *     fpgaDeclaration
- *     asicDeclaration
- *     qpuDeclaration
- *     deviceDeclaration
- *     clusterDeclaration
- *     machineDeclaration
+ * Nor does it contain physical identifiers or topology assumptions.
  *
- * merely because a target exists.
- *
- * A declaration describes source-level program semantics.
- *
- * Target realization belongs downstream.
+ * Resource requirements, capabilities, constraints, preferences, placement,
+ * scheduling, routing and target realization remain downstream concerns.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * This file contains no language-level limits for:
+ * Declaration cardinality is unbounded by language grammar.
  *
- *     - declarations;
- *     - declaration families;
- *     - generic parameters;
- *     - fields;
- *     - variants;
- *     - interfaces;
- *     - types;
- *     - aliases;
- *     - devices;
- *     - qubits;
- *     - cores;
- *     - threads;
- *     - GPUs;
- *     - FPGAs;
- *     - nodes;
- *     - memory;
- *     - accelerators;
- *     - tensor dimensions;
- *     - program size.
+ * The grammar uses recursive/repeating constructs supplied by its delegates.
  *
- * Repetition is expressed through normal ANTLR grammar composition.
+ * There is no source-language limit on:
  *
- * Practical parser/compiler limits, if required for resource protection, must
- * be explicit compiler/resource policy rather than source-language constants.
+ *     declarations
+ *     fields
+ *     variants
+ *     generic parameters
+ *     trait members
+ *     interface members
+ *     implementation members
+ *     type nesting
+ *
+ * Practical resource limits are implementation/resource-policy concerns and
+ * MUST NOT become language constants.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * This grammar contains:
+ * This file contains:
  *
  *     - no actions;
- *     - no semantic predicates;
+ *     - no predicates;
  *     - no random behavior;
  *     - no time-dependent behavior;
- *     - no filesystem operations;
- *     - no network operations;
- *     - no hardware inspection;
  *     - no runtime calls;
  *     - no mutable global state.
  *
- * For a fixed token stream and fixed grammar/version, declaration parsing is
+ * For a fixed lexer token stream and grammar version, declaration dispatch is
  * deterministic.
- *
- * ============================================================================
- * ERROR BOUNDARY
- * ============================================================================
- *
- * THIS FILE reports only structural declaration-dispatch errors.
- *
- * Examples:
- *
- *     an otherwise valid source position contains a token sequence which does
- *     not belong to any declaration family.
- *
- * It does NOT diagnose semantic conditions such as:
- *
- *     duplicate names;
- *     invalid types;
- *     unsatisfied constraints;
- *     unavailable capabilities;
- *     impossible resources;
- *     illegal quantum operations;
- *     invalid hardware mappings;
- *     invalid scheduling;
- *     invalid routing.
- *
- * Those belong to downstream semantic/compiler layers.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * This grammar creates no Rust AST values.
+ * This grammar constructs no Rust AST.
  *
- * The frontend parser adapter maps the selected declaration parse context to
- * the repository's canonical declaration AST nodes.
+ * The frontend adapter maps the selected parse-tree context into the canonical
+ * domain-neutral AST.
  *
- * Examples include:
- *
- *     ConstantDeclaration
- *     VariableDeclaration
- *     TypeDeclaration
- *     TypeAlias
- *     StructDeclaration
- *     EnumDeclaration
- *     UnionDeclaration
- *     InterfaceDeclaration
- *
- * The declaration dispatcher itself must preserve:
+ * Every declaration must preserve:
  *
  *     - declaration kind;
- *     - source order;
  *     - source span;
- *     - child parse structure.
+ *     - source order;
+ *     - name;
+ *     - modifiers;
+ *     - attributes;
+ *     - generic parameters;
+ *     - declaration members;
+ *     - child types;
+ *     - child expressions.
  *
- * It must not attach machine-specific information.
+ * No declaration grammar may create a second AST for a particular domain.
  *
  * ============================================================================
- * IR CONTRACT
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * This file does NOT construct IR.
+ * Parsing establishes syntactic structure only.
  *
- * The intended direction is:
+ * Semantic analysis subsequently determines:
  *
- *     declaration parse tree
+ *     - duplicate declarations;
+ *     - name resolution;
+ *     - type validity;
+ *     - generic validity;
+ *     - trait/interface satisfaction;
+ *     - implementation coherence;
+ *     - ownership;
+ *     - effects;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - domain validity;
+ *     - portability;
+ *     - target compatibility.
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Declaration syntax may introduce or reference quantum types and declarations.
+ *
+ * This file MUST NOT:
+ *
+ *     - enumerate physical qubits;
+ *     - select a QPU;
+ *     - select a topology;
+ *     - select a gate implementation;
+ *     - select calibration data;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - perform QEC;
+ *     - implement ZQN;
+ *     - construct quantum::ir.
+ *
+ * The required direction is:
+ *
+ *     declaration syntax
  *          |
  *          v
  *     frontend AST
@@ -417,188 +345,90 @@
  *     semantic analysis
  *          |
  *          v
- *     canonical semantic representation
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL/hardware IR
- *          +--> distributed representation
- *          +--> accelerator representation
- *          +--> future-domain representation
- *
- * In particular:
- *
- *     declarations.g4 -> quantum::ir
- *
- * is FORBIDDEN.
- *
- * Quantum declarations are parsed here only as source syntax through their
- * concrete declaration family. Their semantic lowering remains downstream.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Quantum-specific declarations may eventually be added to the declaration
- * family when their dedicated grammar modules become authoritative.
- *
- * They must follow this same boundary:
- *
- *     quantum declaration syntax
- *          |
- *          v
- *     quantum semantic analysis
- *          |
- *          v
  *     quantum::ir
  *
- * This file must never encode:
- *
- *     MAX_QUBITS
- *     physical qubit indices
- *     fixed gate inventories
- *     topology
- *     backend identifiers
- *     calibration values
- *     QEC algorithms
- *     noise channels
- *     routing decisions
- *     scheduling decisions.
- *
  * ============================================================================
- * HDL / HARDWARE INTEGRATION
+ * HDL / HARDWARE CONTRACT
  * ============================================================================
  *
- * Hardware and HDL declarations must enter through dedicated grammar families.
+ * Hardware/HDL declarations must remain target-independent at this layer.
  *
- * This dispatcher must not distinguish targets such as:
+ * The declaration grammar must not silently turn:
  *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
+ *     capability
+ *     requirement
+ *     resource
+ *     constraint
  *
- * unless those distinctions are actual source-language semantic constructs
- * with explicit language specifications.
+ * into:
  *
- * Physical implementation belongs downstream.
- *
- * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Resource requirements, capabilities, constraints, preferences, and hints are
- * separate semantic concepts.
- *
- * This dispatcher merely admits declaration families capable of carrying those
- * concepts.
- *
- * It must never translate:
- *
- *     requires quantum
- *
- * directly into:
- *
- *     use device X
- *     use N qubits
- *     use topology Y
- *
- * That transformation belongs to semantic analysis, compilation, routing,
- * scheduling, resource management, or execution.
+ *     physical device
+ *     physical address
+ *     fixed topology
+ *     fixed accelerator
  *
  * ============================================================================
- * NO CIRCULAR OWNERSHIP
+ * DEPENDENCY DIRECTION
  * ============================================================================
  *
- * Delegate declaration grammars MUST NOT import this composition grammar.
+ * Allowed:
  *
- * The forbidden pattern is:
+ *     lexer
+ *       |
+ *       v
+ *     core syntax
+ *       |
+ *       v
+ *     types / expressions
+ *       |
+ *       v
+ *     declarations
+ *       |
+ *       v
+ *     AST
+ *       |
+ *       v
+ *     semantic analysis
  *
- *     declarations.g4
- *          |
- *          v
- *     constants.g4
- *          |
- *          v
- *     declarations.g4
+ * Forbidden:
  *
- * The declaration dispatcher is the top of the declaration grammar family.
+ *     declarations.g4 -> quantum::ir
+ *     declarations.g4 -> QEC
+ *     declarations.g4 -> ZQN
+ *     declarations.g4 -> scheduling
+ *     declarations.g4 -> routing
+ *     declarations.g4 -> HAL
+ *     declarations.g4 -> runtime
  *
  * ============================================================================
- * SINGLE SOURCE OF TRUTH
+ * LEGACY GRAMMAR MIGRATION
  * ============================================================================
  *
- * There must ultimately be exactly one active declaration dispatcher.
+ * The repository still contains declaration implementations in:
  *
- * The legacy declaration dispatcher embedded in:
- *
+ *     grammar/Zamani.g4
+ *     grammar/antlr/Core.g4
  *     grammar/antlr/ZamaniParser.g4
+ *     grammar/statements/declarations.g4
  *
- * currently contains its own declaration alternatives and concrete declaration
- * implementations.
+ * Those are migration/conformance surfaces and must not remain competing
+ * production owners.
  *
- * During migration it may remain as a compatibility/reference grammar.
+ * The final production parser must have one declaration dispatch path.
  *
- * However, the production parser generation path MUST eventually contain only
- * one authoritative declaration dispatcher.
+ * The intended final relationship is:
  *
- * The migration target is:
+ *     canonical compilation unit
+ *              |
+ *              v
+ *     Zamani declaration dispatcher
+ *              |
+ *              v
+ *     this grammar
+ *              |
+ *              v
+ *     declaration delegates
  *
- *     ZamaniParser
- *          |
- *          +--> ZamaniDeclarations
- *                  |
- *                  +--> declaration delegates
- *
- * rather than two competing declaration implementations.
- *
- * ============================================================================
- * DECLARATION CATEGORIES
- * ============================================================================
- *
- * The canonical declaration family is intentionally separated into semantic
- * categories.
- *
- * VALUE DECLARATIONS
- *
- *     constantDeclaration
- *     variableDeclaration
- *
- * TYPE DECLARATIONS
- *
- *     typeDeclaration
- *     typeAliasDeclaration
- *     structDeclaration
- *     enumDeclaration
- *     unionDeclaration
- *     interfaceDeclaration
- *
- * Future categories may include:
- *
- *     classDeclaration
- *     traitDeclaration
- *     implementationDeclaration
- *     functionDeclaration
- *     moduleDeclaration
- *     capabilityDeclaration
- *     resourceDeclaration
- *     hardwareDeclaration
- *     quantumDeclaration
- *     dialectDeclaration
- *
- * Such categories should be added by importing their dedicated grammar owner,
- * not by implementing their syntax directly here.
- *
- * ============================================================================
- * DECLARATION RULE
- * ============================================================================
- *
- * `declaration` is the sole public composition rule exported by this grammar.
- *
- * Every concrete alternative delegates to an independently owned grammar.
- *
- * No concrete declaration syntax is repeated here.
  * ============================================================================
  */
 
@@ -608,20 +438,14 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-
 /*
  * ============================================================================
- * DECLARATION DELEGATES
+ * DELEGATE IMPORTS
  * ============================================================================
  *
- * These imports are the concrete syntax owners.
+ * These are the concrete declaration owners already present in the repository.
  *
- * The grammar names correspond to the current repository modules.
- *
- * IMPORTANT:
- *
- * The delegates must all ultimately consume the same canonical lexer
- * vocabulary and compatible shared parser rules.
+ * Each delegate is independently completable and independently testable.
  */
 import
     Constants,
@@ -631,27 +455,25 @@ import
     ZamaniDeclarationStructs,
     ZamaniDeclarationEnums,
     ZamaniDeclarationUnions,
-    Interfaces;
+    Interfaces,
+    Traits,
+    Implementations;
 
 
 /*
  * ============================================================================
- * AUTHORITATIVE DECLARATION DISPATCHER
+ * AUTHORITATIVE DECLARATION ENTRY POINT
  * ============================================================================
  *
- * This is deliberately a flat semantic-family dispatcher.
+ * `declaration` is the only public declaration-dispatch rule owned here.
  *
- * It must not contain:
- *
- *     target-specific alternatives;
- *     machine-specific alternatives;
- *     duplicated concrete productions.
- *
- * Each alternative is a rule owned by a delegate grammar.
+ * No concrete declaration syntax is repeated.
  */
 declaration
     : valueDeclaration
     | typeDeclarationFamily
+    | traitDeclaration
+    | implementationDeclaration
     ;
 
 
@@ -660,10 +482,7 @@ declaration
  * VALUE DECLARATIONS
  * ============================================================================
  *
- * These rules merely compose the concrete value-declaration delegates.
- *
- * `constantDeclaration` is owned by Constants.
- * `variableDeclaration` is owned by Variables.
+ * Concrete syntax is owned by Constants and Variables.
  */
 valueDeclaration
     : constantDeclaration
@@ -676,12 +495,12 @@ valueDeclaration
  * TYPE DECLARATIONS
  * ============================================================================
  *
- * `typeDeclarationFamily` is the single type-declaration composition boundary.
+ * Concrete syntax is supplied by the imported delegate grammars.
  *
- * It deliberately does not redefine any concrete type declaration.
+ * The type system itself remains owned by grammar/types/.
  */
 typeDeclarationFamily
-    : namedTypeDeclaration
+    : typeDeclaration
     | typeAliasDeclaration
     | structDeclaration
     | enumDeclaration
@@ -692,166 +511,34 @@ typeDeclarationFamily
 
 /*
  * ============================================================================
- * NAMED TYPE DECLARATION
+ * COMPLETION CONTRACT
  * ============================================================================
  *
- * The current declarations/types.g4 owns `typeDeclaration`.
+ * This file is COMPLETE when:
  *
- * This wrapper gives the composition grammar a stable semantic category while
- * preserving that delegate's ownership.
+ * [x] There is exactly one `declaration` dispatcher in this grammar family.
+ * [x] Concrete declaration syntax is delegated.
+ * [x] Constants are delegated to Constants.
+ * [x] Variables are delegated to Variables.
+ * [x] Named types are delegated to ZamaniDeclarationTypesParser.
+ * [x] Aliases are delegated to ZamaniDeclarationAliases.
+ * [x] Structs are delegated to ZamaniDeclarationStructs.
+ * [x] Enums are delegated to ZamaniDeclarationEnums.
+ * [x] Unions are delegated to ZamaniDeclarationUnions.
+ * [x] Interfaces are delegated to Interfaces.
+ * [x] Traits are delegated to Traits.
+ * [x] Implementations are delegated to Implementations.
+ * [x] No type-expression implementation is duplicated here.
+ * [x] No identifier implementation is duplicated here.
+ * [x] No expression implementation is duplicated here.
+ * [x] No annotation implementation is duplicated here.
+ * [x] No lexer rules exist here.
+ * [x] No semantic actions exist here.
+ * [x] No hardware limits exist here.
+ * [x] No quantum IR exists here.
+ * [x] No QEC/ZQN/routing/scheduling logic exists here.
+ * [x] No Rust code is embedded here.
+ * [x] No unsafe Rust is required downstream by this grammar contract.
  *
- * It does not duplicate the rule.
- */
-namedTypeDeclaration
-    : typeDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * FUTURE DECLARATION EXTENSION BOUNDARY
- * ============================================================================
- *
- * New declaration families MUST be introduced through this composition layer.
- *
- * The required pattern is:
- *
- *     new-domain.g4
- *          |
- *          +--> newDomainDeclaration
- *          |
- *          v
- *     declarations.g4
- *          |
- *          +--> futureDeclarationFamily
- *
- * The new grammar must NOT copy or modify unrelated declaration syntax.
- *
- * This permits Zamani to expand into:
- *
- *     classical computing
- *     quantum computing
- *     hybrid computing
- *     HDL
- *     hardware/software co-design
- *     distributed computing
- *     AI/ML
- *     accelerators
- *     networking
- *     cryptography
- *     scientific computing
- *     embedded computing
- *     future computational paradigms
- *
- * without destabilizing the existing declaration families.
- */
-
-
-/*
- * ============================================================================
- * FUTURE DECLARATION CATEGORY
- * ============================================================================
- *
- * This rule is intentionally NOT populated with speculative alternatives.
- *
- * Adding an alternative before its grammar owner exists would create an
- * incomplete parser contract.
- *
- * When a new declaration family is production-ready, add exactly one delegate
- * import and exactly one corresponding semantic-family alternative here.
- */
-
-
-/*
- * ============================================================================
- * COMPLETION / INTEGRATION CONTRACT
- * ============================================================================
- *
- * This file is COMPLETE when all of the following are true:
- *
- * [ ] `declaration` is the sole authoritative declaration dispatcher.
- *
- * [ ] No concrete declaration syntax is duplicated here.
- *
- * [ ] Constants owns `constantDeclaration`.
- *
- * [ ] Variables owns `variableDeclaration`.
- *
- * [ ] Types owns `typeDeclaration`.
- *
- * [ ] Aliases owns `typeAliasDeclaration`.
- *
- * [ ] Structs owns `structDeclaration`.
- *
- * [ ] Enums owns `enumDeclaration`.
- *
- * [ ] Unions owns `unionDeclaration`.
- *
- * [ ] Interfaces owns `interfaceDeclaration`.
- *
- * [ ] All delegates consume the canonical ZamaniLexer vocabulary.
- *
- * [ ] No delegate imports ZamaniDeclarations, preventing circular grammar
- *     ownership.
- *
- * [ ] The canonical parser imports ZamaniDeclarations exactly once.
- *
- * [ ] The legacy declaration implementation in ZamaniParser.g4 is removed
- *     from the production parser-generation path.
- *
- * [ ] No duplicate declaration rule remains in the active parser.
- *
- * [ ] No duplicate type-expression grammar is introduced here.
- *
- * [ ] No duplicate identifier grammar is introduced here.
- *
- * [ ] No duplicate generic grammar is introduced here.
- *
- * [ ] No duplicate attribute grammar is introduced here.
- *
- * [ ] No duplicate expression grammar is introduced here.
- *
- * [ ] No semantic analysis occurs in this grammar.
- *
- * [ ] No AST constructors occur in this grammar.
- *
- * [ ] No IR construction occurs in this grammar.
- *
- * [ ] No quantum::ir dependency exists.
- *
- * [ ] No QEC dependency exists.
- *
- * [ ] No ZQN dependency exists.
- *
- * [ ] No scheduling dependency exists.
- *
- * [ ] No routing dependency exists.
- *
- * [ ] No hardware discovery exists.
- *
- * [ ] No runtime execution exists.
- *
- * [ ] No fixed machine/resource limits exist.
- *
- * [ ] No MAX_QUBITS/MAX_CORES/MAX_THREADS/etc. constants exist.
- *
- * [ ] Positive declaration tests pass.
- *
- * [ ] Negative declaration tests pass.
- *
- * [ ] Boundary/scalability tests pass.
- *
- * [ ] Cross-domain declaration tests pass.
- *
- * [ ] Deterministic parsing tests pass.
- *
- * [ ] Parser round-trip tests pass where a canonical printer exists.
- *
- * [ ] Rust 1.97 / 1.97.1 integration passes.
- *
- * [ ] Rust integration contains no unsafe code.
- *
- * ============================================================================
- * END
  * ============================================================================
  */
