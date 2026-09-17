@@ -9,13 +9,228 @@
  * Grammar:
  *     ZamaniDeclarationUnions
  *
- * PURPOSE
- * -------
+ * Role:
+ *     Canonical parser delegate for source-level union declarations.
  *
- * Canonical source-level syntax for UNION DECLARATIONS.
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
  *
- * A union declaration defines a finite-or-arbitrarily-large set of
- * alternative value constructors sharing one declared semantic type.
+ * Safety:
+ *     This grammar has no Rust implementation code and requires no unsafe Rust.
+ *
+ * ============================================================================
+ *
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * This grammar owns:
+ *
+ *     - unionDeclaration
+ *     - unionVariantList
+ *     - unionVariant
+ *     - unionVariantPayload
+ *     - unionTuplePayload
+ *     - unionStructPayload
+ *     - unionVariantField
+ *
+ * This grammar does NOT own:
+ *
+ *     - lexical token definitions
+ *     - keywords
+ *     - identifiers
+ *     - attributes
+ *     - declaration modifiers
+ *     - generic-parameter semantics
+ *     - generic-parameter syntax
+ *     - type-expression syntax
+ *     - struct declarations
+ *     - enum declarations
+ *     - aliases
+ *     - interfaces
+ *     - traits
+ *     - implementations
+ *     - classes
+ *     - records
+ *     - pattern matching
+ *     - exhaustiveness checking
+ *     - name resolution
+ *     - type checking
+ *     - recursive-type validation
+ *     - discriminant assignment
+ *     - representation/layout
+ *     - ABI selection
+ *     - memory allocation
+ *     - hardware selection
+ *     - quantum routing
+ *     - scheduling
+ *     - QEC
+ *     - ZQN
+ *     - resilience
+ *     - runtime behavior
+ *     - classical IR
+ *     - quantum::ir
+ *
+ * ============================================================================
+ *
+ * ARCHITECTURAL PIPELINE
+ * ============================================================================
+ *
+ *     source
+ *       |
+ *       v
+ *     canonical lexer
+ *       |
+ *       v
+ *     parser
+ *       |
+ *       +--> ZamaniDeclarationUnions
+ *       |
+ *       v
+ *     domain-neutral frontend AST
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       +--> name resolution
+ *       +--> generic validation
+ *       +--> type validation
+ *       +--> recursive-type validation
+ *       +--> constructor validation
+ *       +--> pattern/exhaustiveness validation
+ *       |
+ *       v
+ *     canonical semantic representation
+ *       |
+ *       +--> classical IR
+ *       +--> quantum semantic model
+ *       +--> HDL/hardware semantic model
+ *       +--> resource/capability metadata
+ *       |
+ *       v
+ *     optimization / lowering
+ *       |
+ *       v
+ *     target realization
+ *
+ * Union grammar MUST remain independent of physical hardware and runtime
+ * realization.
+ *
+ * ============================================================================
+ *
+ * LEXICAL AUTHORITY
+ * ============================================================================
+ *
+ * The canonical lexical vocabulary is supplied by the Zamani lexer boundary.
+ *
+ * This parser therefore consumes:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * DO NOT use:
+ *
+ *     tokenVocab = ZamaniTokens;
+ *
+ * inside this parser grammar.
+ *
+ * ZamaniTokens is the lexical composition vocabulary underneath the canonical
+ * ZamaniLexer and is not a competing parser-facing vocabulary.
+ *
+ * ============================================================================
+ *
+ * SHARED RULE CONTRACT
+ * ============================================================================
+ *
+ * The following rules are supplied by imported/composed grammars:
+ *
+ *     declarationModifiers
+ *     identifier
+ *     genericParameterList
+ *     typeExpression
+ *     attribute
+ *
+ * They MUST NOT be redefined here.
+ *
+ * This prevents independent declaration grammars from developing incompatible
+ * identifier, generic, attribute, or type-expression syntax.
+ *
+ * ============================================================================
+ *
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Union declarations describe semantic alternatives.
+ *
+ * They do not prescribe:
+ *
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     QPU count
+ *     qubit count
+ *     memory capacity
+ *     register width
+ *     accelerator count
+ *     node count
+ *     topology
+ *     physical address
+ *     device identifier
+ *     network size
+ *     cluster size
+ *
+ * No universal implementation limit is encoded in this grammar.
+ *
+ * A union may therefore be used in:
+ *
+ *     tiny embedded systems
+ *     microcontrollers
+ *     CPUs
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     QPUs
+ *     accelerators
+ *     clusters
+ *     supercomputers
+ *     distributed systems
+ *     cloud systems
+ *     future computational substrates
+ *
+ * subject to actual semantic validity and available target resources.
+ *
+ * ============================================================================
+ *
+ * SCALABILITY
+ * ============================================================================
+ *
+ * The grammar imposes no finite language-level maximum on:
+ *
+ *     - union declarations
+ *     - generic parameters
+ *     - variants
+ *     - tuple payload elements
+ *     - named payload fields
+ *     - nesting
+ *     - type-expression complexity
+ *     - recursive references
+ *
+ * Repetition is represented using ANTLR repetition operators.
+ *
+ * Parser-resource limits, if required for denial-of-service protection or
+ * implementation resource management, belong to the compiler/tooling layer and
+ * MUST NOT change the language's semantic limits.
+ *
+ * ============================================================================
+ *
+ * UNION MODEL
+ * ============================================================================
+ *
+ * Canonical form:
+ *
+ *     union NAME GENERICS? = VARIANT (| VARIANT)* ;
  *
  * Examples:
  *
@@ -32,880 +247,333 @@
  *       | Data(Bytes)
  *       | Stop;
  *
- *     union HardwareEvent<T> =
- *         Signal(T)
- *       | Resource(Resource<T>);
- *
- *     union QuantumResult<T> =
- *         Measured(T)
- *       | Error(Error);
- *
- * ============================================================================
- * ARCHITECTURAL OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - unionDeclaration;
- *     - the source-level `union` declaration form;
- *     - union generic-parameter attachment;
- *     - union variant list structure;
- *     - union variant names;
- *     - unit variants;
- *     - tuple/payload variants;
- *     - struct/payload variants;
- *     - variant attributes;
- *     - union-specific payload field syntax;
- *     - union declaration grammar boundaries.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexical tokens;
- *     - identifier spelling;
- *     - keywords;
- *     - generic parameter semantics;
- *     - complete type-expression syntax;
- *     - primitive types;
- *     - tuple types;
- *     - arrays;
- *     - references;
- *     - pointers;
- *     - functions;
- *     - type aliases;
- *     - structs;
- *     - enums;
- *     - records;
- *     - classes;
- *     - traits;
- *     - interfaces;
- *     - type inference;
- *     - name resolution;
- *     - generic substitution;
- *     - recursive-type validation;
- *     - exhaustiveness checking;
- *     - discriminant assignment;
- *     - representation/layout;
- *     - ABI selection;
- *     - memory layout;
- *     - resource allocation;
- *     - hardware selection;
- *     - device selection;
- *     - physical qubit allocation;
- *     - quantum routing;
- *     - scheduling;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - simulation;
- *     - runtime execution;
- *     - classical IR;
- *     - quantum::ir.
+ *     union Error =
+ *         Simple
+ *       | Detailed {
+ *             code: ErrorCode,
+ *             message: String,
+ *         };
  *
  * ============================================================================
- * ARCHITECTURAL BOUNDARY
- * ============================================================================
  *
- * Source
- *   |
- *   v
- * Canonical lexer
- *   |
- *   v
- * Parser
- *   |
- *   +--> declarations/unions.g4
- *   |
- *   v
- * Frontend AST
- *   |
- *   v
- * Semantic type/declaration analysis
- *   |
- *   +--> name resolution
- *   +--> generic validation
- *   +--> recursive-type validation
- *   +--> constructor validation
- *   +--> exhaustiveness analysis
- *   |
- *   v
- * Canonical semantic representation
- *   |
- *   +--> classical IR
- *   +--> quantum semantic lowering
- *   +--> resource metadata
- *   +--> hardware-independent representation
- *   |
- *   v
- * optimization
- *   |
- *   v
- * routing / scheduling / target lowering
- *   |
- *   v
- * runtime
- *
- * This grammar MUST NOT directly depend on:
- *
- *     quantum::ir
- *     QEC
- *     ZQN
- *     scheduling
- *     routing
- *     hardware discovery
- *     runtime
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Union syntax expresses VALUE SEMANTICS.
- *
- * It does not prescribe a physical representation.
- *
- * A declaration such as:
- *
- *     union QuantumResult<T> =
- *         Success(T)
- *       | Failure(Error);
- *
- * does NOT specify:
- *
- *     - number of qubits;
- *     - physical qubit identifiers;
- *     - CPU count;
- *     - GPU count;
- *     - FPGA count;
- *     - memory capacity;
- *     - device identifier;
- *     - topology;
- *     - register width;
- *     - network node count;
- *     - cluster size.
- *
- * Therefore the same union remains semantically valid from a tiny embedded
- * target through arbitrarily large systems, provided the target/runtime has
- * sufficient resources and can realize the semantic type.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * No finite source-language limits are encoded for:
- *
- *     - number of union declarations;
- *     - number of generic parameters;
- *     - number of variants;
- *     - number of fields;
- *     - payload arity;
- *     - nesting depth;
- *     - recursive references;
- *     - program size;
- *     - type-expression complexity.
- *
- * Repetition operators are intentionally used instead of fixed alternatives.
- *
- * Examples of forbidden architectural patterns:
- *
- *     unionVariant2
- *     unionVariant4
- *     unionVariant8
- *     MAX_VARIANTS
- *     MAX_UNION_FIELDS
- *     MAX_PAYLOAD_FIELDS
- *
- * Any implementation limit required for parser protection, memory safety,
- * resource exhaustion, denial-of-service protection, or compilation policy
- * MUST exist outside the language semantics.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The authoritative lexical foundation is:
- *
- *     grammar/lexer/tokens.g4
- *
- * whose grammar name is:
- *
- *     ZamaniTokens
- *
- * This file therefore consumes:
- *
- *     tokenVocab = ZamaniTokens;
- *
- * No lexer rules are declared here.
- *
- * IMPORTANT:
- *
- * `union` must be represented by a canonical lexical token.
- *
- * The required token is:
- *
- *     K_UNION : 'union' ;
- *
- * It MUST be added to grammar/lexer/tokens.g4 before this grammar is
- * considered integrated.
- *
- * The parser must not attempt to emulate a keyword using IDENTIFIER.
- *
- * ============================================================================
- * PARSER COMPOSITION
- * ============================================================================
- *
- * This grammar is a parser delegate.
- *
- * It relies on composition-provided rules:
- *
- *     declarationModifiers
- *     identifier
- *     genericParameterList
- *     typeExpression
- *     attribute
- *
- * It intentionally does not redefine those rules.
- *
- * This prevents:
- *
- *     - duplicate identifier definitions;
- *     - duplicate generic syntax;
- *     - duplicate type syntax;
- *     - inconsistent attribute syntax;
- *     - parser drift between declarations.
- *
- * ============================================================================
- * DECLARATION OWNERSHIP
- * ============================================================================
- *
- * `declarations.g4` remains the declaration dispatcher.
- *
- * It MUST contain:
- *
- *     | unionDeclaration
- *
- * but MUST NOT continue to define:
- *
- *     unionDeclaration
- *     unionVariantList
- *     unionVariant
- *     unionVariantPayload
- *
- * locally.
- *
- * Those rules belong exclusively to this file.
- *
- * ============================================================================
- * UNION MODEL
- * ============================================================================
- *
- * A union is:
- *
- *     union NAME GENERICS? = VARIANT | VARIANT | ... ;
- *
- * Examples:
- *
- *     union Result<T, E> =
- *         Ok(T)
- *       | Err(E);
- *
- *     union State =
- *         Ready
- *       | Running
- *       | Stopped;
- *
- * The grammar permits any number of variants.
- *
- * The semantic layer determines:
- *
- *     - whether variant names are unique;
- *     - whether constructors conflict;
- *     - whether generic parameters are used correctly;
- *     - whether payload types are valid;
- *     - whether recursive references are valid;
- *     - whether the resulting union is inhabited;
- *     - whether representation is constructible.
- *
- * ============================================================================
- * GENERIC PARAMETERS
- * ============================================================================
- *
- * Generic parameter syntax is NOT redefined here.
- *
- * Example:
- *
- *     union Result<T, E> =
- *         Ok(T)
- *       | Err(E);
- *
- * `genericParameterList` is owned by the canonical generic/type declaration
- * subsystem.
- *
- * No maximum generic arity is encoded.
- *
- * ============================================================================
  * VARIANT MODEL
  * ============================================================================
  *
- * Every variant has:
+ * A variant consists of:
  *
  *     optional attributes
  *     identifier
  *     optional payload
  *
- * Therefore:
+ * Payloads are either:
  *
- *     Start
+ *     - tuple payloads
+ *     - named-field payloads
  *
- * is a unit variant.
- *
- *     Data(Bytes)
- *
- * is a tuple/product variant.
- *
- *     Error {
- *         code: ErrorCode,
- *         message: String,
- *     }
- *
- * is a named-field variant.
+ * A variant without a payload is a unit variant.
  *
  * ============================================================================
- * VARIANT NAMES
- * ============================================================================
  *
- * Variant names use the canonical identifier rule.
- *
- * This grammar does not impose:
- *
- *     PascalCase
- *     UpperCamelCase
- *     lowerCamelCase
- *     prefixes
- *     suffixes
- *
- * Naming conventions belong to language style/tooling policy.
- *
- * ============================================================================
- * UNIT VARIANTS
- * ============================================================================
- *
- * A variant without payload is legal:
- *
- *     None
- *
- *     Ready
- *
- *     Empty
- *
- * The absence of a payload is meaningful syntax.
- *
- * Semantic analysis determines whether a unit variant is legal and whether
- * duplicate unit constructors exist.
- *
- * ============================================================================
- * TUPLE PAYLOADS
- * ============================================================================
- *
- * Tuple payloads have the form:
- *
- *     Variant(Type)
- *
- *     Variant(Type, Type)
- *
- *     Variant(Type, Type, Type)
- *
- * and so on without a finite grammar-defined maximum.
- *
- * Examples:
- *
- *     Point(Coordinate)
- *
- *     Pair(A, B)
- *
- *     Triple(A, B, C)
- *
- *     TensorBlock<T, N>(Tensor<T, N>, Index)
- *
- * A trailing comma is accepted:
- *
- *     Pair(A, B,)
- *
- * This is useful for formatting and source generation.
- *
- * ============================================================================
- * STRUCT PAYLOADS
- * ============================================================================
- *
- * Named-field payloads have the form:
- *
- *     Variant {
- *         field: Type,
- *         ...
- *     }
- *
- * Example:
- *
- *     Error {
- *         code: ErrorCode,
- *         message: String,
- *     }
- *
- * Only DATA FIELDS are permitted here.
- *
- * A union variant payload must NOT silently acquire:
- *
- *     functions
- *     constructors
- *     destructors
- *     properties
- *     operators
- *     arbitrary declarations
- *
- * Those belong to enclosing type declarations.
- *
- * This corrects the previous architecture in which `structMember*` was used
- * inside union payloads, unintentionally allowing methods and other members.
- *
- * ============================================================================
- * FIELD OWNERSHIP
- * ============================================================================
- *
- * `unionVariantField` owns only the syntax needed to describe a data field
- * inside a union variant payload.
- *
- * It does not create a second semantic field type.
- *
- * The AST builder maps it to the repository's canonical field representation.
- *
- * The grammar does not decide:
- *
- *     - field uniqueness;
- *     - field ordering semantics;
- *     - memory layout;
- *     - alignment;
- *     - ABI representation;
- *     - packing;
- *     - serialization format.
- *
- * ============================================================================
  * TRAILING COMMAS
  * ============================================================================
  *
- * Tuple payloads permit:
+ * Tuple payloads permit trailing commas:
  *
- *     Variant(A, B,)
+ *     Pair(A, B,)
  *
- * Struct payloads permit:
+ * Named payloads permit trailing commas:
  *
- *     Variant {
- *         a: A,
- *         b: B,
+ *     Error {
+ *         code: ErrorCode,
+ *         message: String,
  *     }
  *
- * This does not impose any cardinality limitation.
- *
- * ============================================================================
- * ATTRIBUTES
  * ============================================================================
  *
- * Attributes may decorate variants:
+ * NAMED VARIANT FIELDS
+ * ============================================================================
+ *
+ * Named union-variant payloads intentionally have their own field rule.
+ *
+ * They MUST NOT reuse a general struct-member rule that could introduce:
+ *
+ *     functions
+ *     methods
+ *     constructors
+ *     destructors
+ *     properties
+ *     arbitrary declarations
+ *
+ * A union variant payload contains data fields only.
+ *
+ * ============================================================================
+ *
+ * GENERIC TYPES
+ * ============================================================================
+ *
+ * Payload types are delegated to the canonical type-expression grammar.
+ *
+ * Examples:
  *
  *     union Result<T, E> =
- *         @primary Ok(T)
- *       | @recoverable Err(E);
+ *         Ok(T)
+ *       | Err(E);
  *
- * Attribute semantics are NOT interpreted here.
+ *     union Nested<T> =
+ *         Value(List<Option<T>>);
  *
- * They are consumed by semantic analysis/tooling.
+ *     union QuantumResult<T> =
+ *         Value(T)
+ *       | Measured(Qubit)
+ *       | Failure(Error);
  *
- * This grammar does not hard-code vendor/backend meaning into attributes.
+ * This grammar does not define the meaning of those types.
  *
  * ============================================================================
- * RECURSIVE UNIONS
+ *
+ * RECURSION
  * ============================================================================
  *
- * Recursive references are syntactically supported through `typeExpression`.
- *
- * Example:
+ * Recursive union references are syntactically legal:
  *
  *     union List<T> =
  *         Nil
  *       | Cons(T, List<T>);
  *
- * The parser accepts the recursive reference.
- *
- * Semantic analysis is responsible for determining:
- *
- *     - whether `List` resolves;
- *     - whether generic arguments are valid;
- *     - whether recursion is legal;
- *     - whether recursion is guarded;
- *     - whether the representation is constructible;
- *     - whether ownership/resource rules are satisfied.
+ * Semantic analysis determines whether the recursive type is valid and
+ * representable.
  *
  * ============================================================================
+ *
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Union payloads may contain quantum types through the canonical
- * `typeExpression`.
+ * Quantum types may occur in union payloads through typeExpression.
  *
- * Example:
+ * This grammar does NOT:
  *
- *     union QuantumResult<T> =
- *         Success(T)
- *       | Measured(Qubit)
- *       | Failure(Error);
+ *     - allocate qubits
+ *     - identify physical qubits
+ *     - select QPUs
+ *     - select gate sets
+ *     - perform routing
+ *     - perform scheduling
+ *     - perform calibration
+ *     - perform QEC
+ *     - interpret ZQN noise
  *
- * This does NOT allocate a physical qubit.
+ * Quantum semantics ultimately cross the repository's canonical:
  *
- * It does NOT select:
+ *     quantum::ir
  *
- *     - QPU;
- *     - physical qubit;
- *     - topology;
- *     - gate set;
- *     - calibration;
- *     - pulse schedule;
- *     - QEC implementation;
- *     - ZQN noise channel.
- *
- * Those decisions occur downstream.
- *
- * The semantic pipeline remains:
- *
- *     union syntax
- *       -> AST
- *       -> semantic type
- *       -> canonical semantic representation
- *       -> quantum lowering when required
- *       -> quantum::ir
- *
- * This grammar has no direct dependency on quantum::ir.
+ * boundary downstream of parsing and semantic analysis.
  *
  * ============================================================================
- * HARDWARE / HDL INTEGRATION
+ *
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Union payloads may contain canonical hardware/resource types:
+ * Hardware and HDL types may occur in payloads through typeExpression.
  *
- *     union HardwareEvent<T> =
- *         Signal(T)
- *       | Resource(Resource<T>)
- *       | Failure(HardwareError);
+ * This grammar does NOT encode:
  *
- * This does NOT imply:
+ *     - physical FPGA identifiers
+ *     - ASIC identifiers
+ *     - physical registers
+ *     - fixed device counts
+ *     - fixed memory capacities
+ *     - physical topology
+ *     - hardware addresses
  *
- *     - a physical device;
- *     - a fixed FPGA;
- *     - a fixed ASIC;
- *     - a fixed register width;
- *     - a physical address;
- *     - a fixed hardware topology.
- *
- * Hardware realization remains downstream.
+ * Those are downstream realization concerns.
  *
  * ============================================================================
- * CLASSICAL / DISTRIBUTED / AI / DATA INTEGRATION
+ *
+ * CLASSICAL / AI / DATA / DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * Since payloads consume canonical `typeExpression`, union variants can
- * contain types from any current or future semantic domain.
+ * The union grammar remains domain-neutral.
  *
- * Examples include:
+ * Any domain whose types are admitted by the canonical type system may be used
+ * as a union payload.
  *
- *     classical values
- *     tensors
- *     AI model handles
- *     distributed values
- *     network messages
- *     accelerator resources
- *     hardware signals
- *     quantum values
- *     future domain types
- *
- * This prevents the union grammar from becoming a dependency hub for every
- * domain in Zamani.
+ * This allows future domains to integrate without modifying this grammar merely
+ * because a new semantic type exists.
  *
  * ============================================================================
+ *
  * AST CONTRACT
  * ============================================================================
  *
- * This grammar creates NO Rust AST types.
+ * This grammar produces ANTLR parser contexts only.
  *
- * The parser produces ANTLR parse-tree nodes.
+ * It does NOT define Rust AST structures.
  *
- * The frontend AST builder maps the result into the canonical declaration
- * representation.
- *
- * Conceptually:
+ * The frontend AST layer maps the parse tree conceptually into:
  *
  *     UnionDeclaration {
  *         span,
+ *         modifiers,
+ *         attributes,
  *         name,
  *         parameters,
  *         variants,
  *     }
  *
- * and each variant becomes the repository's canonical variant representation:
+ * and variants into the existing canonical variant representation.
  *
- *     Unit
- *     Tuple(fields)
- *     Struct(fields)
- *
- * The exact Rust structures are owned by the frontend AST, not by grammar.
- *
- * This grammar MUST NOT introduce:
+ * No parallel:
  *
  *     UnionAst
- *     UnionIr
- *     UnionTypeNode
+ *     UnionIR
  *     UnionSemanticNode
  *
- * as parallel representations.
+ * types should be introduced merely because this grammar exists.
  *
  * ============================================================================
+ *
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The grammar establishes syntax only.
+ * Semantic analysis is responsible for:
  *
- * Semantic analysis must validate at least:
- *
- *     - union name resolution;
- *     - generic parameter declaration/use;
- *     - duplicate variant names;
- *     - duplicate field names inside a variant;
- *     - payload type resolution;
- *     - recursive references;
- *     - recursive generic substitution;
- *     - constructor legality;
- *     - exhaustiveness requirements where applicable;
- *     - pattern matching compatibility;
- *     - ownership/resource constraints;
- *     - effect constraints;
- *     - capability constraints;
- *     - representation feasibility.
- *
- * None of these are parser responsibilities.
+ *     - declaration-name resolution
+ *     - generic-parameter validation
+ *     - duplicate variant detection
+ *     - duplicate field detection
+ *     - payload type resolution
+ *     - recursive-type validation
+ *     - constructor validation
+ *     - pattern compatibility
+ *     - exhaustiveness analysis
+ *     - ownership/resource validation
+ *     - effect validation
+ *     - capability validation
+ *     - representation feasibility
  *
  * ============================================================================
- * PATTERN-MATCHING INTEGRATION
- * ============================================================================
  *
- * Pattern matching must consume the semantic union declaration.
- *
- * The grammar does not duplicate variant definitions inside match syntax.
- *
- * Pipeline:
- *
- *     union declaration
- *       |
- *       v
- *     semantic union definition
- *       |
- *       v
- *     match/pattern resolution
- *
- * This ensures one source of truth for variants.
- *
- * ============================================================================
- * TYPE SYSTEM INTEGRATION
- * ============================================================================
- *
- * `typeExpression` remains owned by the canonical type grammar.
- *
- * This file MUST NOT redefine:
- *
- *     primitive types
- *     named types
- *     generic types
- *     tuples
- *     arrays
- *     functions
- *     references
- *     pointers
- *     quantum types
- *     dependent types
- *
- * This is essential to prevent multiple competing type systems.
- *
- * ============================================================================
- * CLASSICAL IR INTEGRATION
- * ============================================================================
- *
- * Union syntax may eventually lower to canonical classical IR when the
- * semantic program requires it.
- *
- * This grammar does not choose:
- *
- *     tagged representation
- *     niche representation
- *     pointer representation
- *     integer discriminant width
- *     memory layout
- *     ABI
- *
- * Those are target/compiler decisions.
- *
- * ============================================================================
- * QUANTUM IR INTEGRATION
- * ============================================================================
- *
- * Union declarations are NOT quantum IR.
- *
- * If a union contains quantum values or participates in a quantum/classical
- * program, semantic lowering determines whether and how it interacts with
- * quantum::ir.
- *
- * This grammar must never import or depend on:
- *
- *     src/quantum/ir
- *
- * ============================================================================
- * RESOURCE INTEGRATION
- * ============================================================================
- *
- * Union syntax does not allocate resources.
- *
- * A variant such as:
- *
- *     QubitValue(Qubit)
- *
- * describes a type containing a quantum value.
- *
- * It does not mean:
- *
- *     allocate one physical qubit
- *
- * nor:
- *
- *     use device X.
- *
- * Resource requirements and capabilities are represented and resolved by the
- * resource/capability/compiler layers.
- *
- * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Given the same source text and the same canonical token stream, parsing
- * must produce the same parse-tree structure.
+ * The grammar must parse identical source/token streams deterministically.
  *
- * This grammar must not contain:
+ * It must not depend on:
  *
- *     semantic predicates depending on hardware;
- *     runtime callbacks;
- *     filesystem access;
- *     network access;
- *     random choices;
- *     target discovery.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * The grammar contains no executable Rust code.
- *
- * It performs no:
- *
- *     filesystem operations;
- *     network operations;
- *     device operations;
- *     subprocess execution;
- *     dynamic loading.
- *
- * Generated parser infrastructure must be integrated into the Rust compiler
- * with:
- *
- *     #![deny(unsafe_code)]
- *     #![deny(unsafe_op_in_unsafe_fn)]
- *
- * and must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
+ *     - machine identity
+ *     - hardware discovery
+ *     - runtime state
+ *     - resource availability
+ *     - network state
+ *     - quantum-device state
+ *     - calibration state
  *
  * ============================================================================
+ *
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Parser diagnostics must preserve:
+ *
+ *     - source span
+ *     - offending token
+ *     - expected syntactic category
+ *
+ * Semantic diagnostics belong downstream.
+ *
+ * Examples of syntax errors include:
+ *
+ *     union Result<T> =
+ *
+ * missing variants
+ *
+ *     union Result<T> = Ok(T) |
+ *
+ * incomplete variant
+ *
+ *     union Result<T> = Ok(T) Err(E);
+ *
+ * missing separator
+ *
+ * Semantic errors such as duplicate variants are NOT parser errors.
+ *
+ * ============================================================================
+ *
  * COMPATIBILITY
  * ============================================================================
  *
- * The existing union syntax is preserved:
+ * Existing union syntax should remain source-compatible where it does not
+ * conflict with the canonical grammar architecture.
  *
- *     union Name<T> = A(...) | B(...);
+ * Compatibility changes must be documented in:
  *
- * This is important because the current declarations grammar already exposes
- * `unionDeclaration`, `unionVariantList`, `unionVariant`, and
- * `unionVariantPayload`.
+ *     grammar/compatibility/
  *
- * The production migration moves those rules here rather than silently
- * changing their public syntax.
+ * and the authoritative specification.
  *
  * ============================================================================
- * NEGATIVE SYNTAX GUARANTEES
+ *
+ * TEST CONTRACT
  * ============================================================================
  *
- * The following are intentionally rejected:
+ * Required positive coverage includes:
  *
- *     union
+ *     union Empty = Nothing;
  *
- *     union Result =
+ *     union Result<T, E> =
+ *         Ok(T)
+ *       | Err(E);
  *
- *     union Result = ;
+ *     union Optional<T> =
+ *         None
+ *       | Some(T);
  *
- *     union Result = A | ;
+ *     union Event =
+ *         Start
+ *       | Data(Bytes)
+ *       | Stop;
  *
- *     union Result = | A;
+ *     union Error =
+ *         Simple
+ *       | Detailed {
+ *             code: ErrorCode,
+ *             message: String,
+ *         };
  *
- *     union Result = A(B C);
+ *     union Pair<A, B> =
+ *         Value(A, B,);
  *
- *     union Result = A {
- *         field
- *     };
+ *     union List<T> =
+ *         Nil
+ *       | Cons(T, List<T>);
  *
- *     union Result = A {
- *         fn invalid();
- *     };
+ * Required negative coverage includes:
  *
- * The last form is especially important:
+ *     missing union keyword
+ *     missing identifier
+ *     missing equals sign
+ *     missing variant
+ *     missing variant separator
+ *     unterminated tuple payload
+ *     unterminated struct payload
+ *     missing field type
+ *     missing field separator
  *
- * union variant payloads are data payloads, not arbitrary declaration bodies.
+ * Required boundary coverage includes:
  *
- * ============================================================================
- * COMPLETION CONTRACT
- * ============================================================================
+ *     one variant
+ *     many variants
+ *     one tuple field
+ *     many tuple fields
+ *     one named field
+ *     many named fields
+ *     trailing comma
+ *     nested type expressions
+ *     recursive references
+ *     generic variants
  *
- * This file is complete when:
- *
- *     [ ] canonical lexer token K_UNION exists;
- *     [ ] tokenVocab is the canonical lexical grammar;
- *     [ ] declaration dispatcher imports this grammar;
- *     [ ] declaration dispatcher exposes unionDeclaration exactly once;
- *     [ ] old union rules are removed from declarations.g4;
- *     [ ] genericParameterList resolves to the canonical generic grammar;
- *     [ ] identifier resolves to the canonical name grammar;
- *     [ ] typeExpression resolves to the canonical type grammar;
- *     [ ] attributes resolve to the canonical attribute grammar;
- *     [ ] tuple payloads support arbitrary arity;
- *     [ ] struct payloads support arbitrary field count;
- *     [ ] trailing commas behave deterministically;
- *     [ ] unit variants work;
- *     [ ] tuple variants work;
- *     [ ] struct variants work;
- *     [ ] recursive types parse;
- *     [ ] quantum-containing variants parse;
- *     [ ] hardware/resource-containing variants parse;
- *     [ ] no physical resource limit is encoded;
- *     [ ] no AST duplicate is introduced;
- *     [ ] no IR duplicate is introduced;
- *     [ ] no quantum::ir dependency exists;
- *     [ ] no unsafe Rust requirement exists;
- *     [ ] positive tests pass;
- *     [ ] negative tests pass;
- *     [ ] boundary tests pass;
- *     [ ] cross-domain tests pass;
- *     [ ] deterministic parsing tests pass;
- *     [ ] compatibility tests pass.
+ * Required scalability coverage must verify that no language-level artificial
+ * limit exists on variant count, field count, payload arity, or generic arity.
  *
  * ============================================================================
  */
@@ -913,7 +581,7 @@
 parser grammar ZamaniDeclarationUnions;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 
@@ -922,23 +590,27 @@ options {
  * UNION DECLARATION
  * ============================================================================
  *
- * Canonical form:
+ * A union declaration consists of:
  *
- *     union Name = Variant | Variant;
+ *     declaration modifiers
+ *     optional attributes
+ *     union keyword
+ *     identifier
+ *     optional generic parameters
+ *     equals sign
+ *     one or more variants
+ *     semicolon
  *
- * Generic form:
- *
- *     union Name<T, E> = Variant(T) | Error(E);
- *
- * `declarationModifiers`, `identifier`, and `genericParameterList` are
- * composition dependencies owned elsewhere.
+ * Generic syntax, identifiers, attributes, and modifiers are supplied by
+ * canonical shared grammar components.
  */
 unionDeclaration
-    : declarationModifiers
+    : declarationModifiers*
+      attribute*
       K_UNION
       identifier
       genericParameterList?
-      EQUALS
+      EQUAL
       unionVariantList
       SEMICOLON
     ;
@@ -949,9 +621,9 @@ unionDeclaration
  * VARIANT LIST
  * ============================================================================
  *
- * At least one variant is required.
+ * One or more variants separated by '|'.
  *
- * There is deliberately no upper bound.
+ * No finite maximum is encoded.
  */
 unionVariantList
     : unionVariant
@@ -961,14 +633,16 @@ unionVariantList
 
 /*
  * ============================================================================
- * UNION VARIANT
+ * VARIANT
  * ============================================================================
  *
- * A variant consists of:
+ * A variant may be:
  *
- *     attributes*
- *     name
- *     optional payload
+ *     Unit
+ *     Tuple(Type, Type, ...)
+ *     Struct { field: Type, ... }
+ *
+ * Attributes belong to the variant itself.
  */
 unionVariant
     : attribute*
@@ -979,14 +653,8 @@ unionVariant
 
 /*
  * ============================================================================
- * UNION VARIANT PAYLOAD
+ * VARIANT PAYLOAD
  * ============================================================================
- *
- * A variant can have:
- *
- *     no payload
- *     tuple payload
- *     named-field payload
  */
 unionVariantPayload
     : unionTuplePayload
@@ -1005,25 +673,21 @@ unionVariantPayload
  *     Pair(A, B)
  *     Triple(A, B, C,)
  *
- * There is no fixed arity.
+ * The repetition operator intentionally imposes no finite source-language
+ * maximum.
  */
 unionTuplePayload
     : LPAREN
-      unionTupleFieldList?
-      RPAREN
-    ;
-
-
-unionTupleFieldList
-    : typeExpression
+      typeExpression
       (COMMA typeExpression)*
       COMMA?
+      RPAREN
     ;
 
 
 /*
  * ============================================================================
- * STRUCT PAYLOAD
+ * STRUCT / NAMED-FIELD PAYLOAD
  * ============================================================================
  *
  * Examples:
@@ -1033,39 +697,34 @@ unionTupleFieldList
  *         message: String,
  *     }
  *
- * Only data fields are accepted.
+ * Only data fields are permitted.
  */
 unionStructPayload
     : LBRACE
-      unionVariantFieldList?
-      RBRACE
-    ;
-
-
-unionVariantFieldList
-    : unionVariantField
+      unionVariantField
       (COMMA unionVariantField)*
       COMMA?
-    ;
-
-
-unionVariantField
-    : attribute*
-      identifier
-      COLON
-      typeExpression
-      unionVariantFieldInitializer?
-    ;
-
-
-unionVariantFieldInitializer
-    : EQUALS
-      expression
+      RBRACE
     ;
 
 
 /*
  * ============================================================================
- * END
+ * UNION VARIANT FIELD
  * ============================================================================
+ *
+ * This is deliberately NOT structMember.
+ *
+ * A union payload field owns only:
+ *
+ *     name : type
+ *
+ * and therefore cannot accidentally admit methods, constructors, properties,
+ * or arbitrary declarations.
  */
+unionVariantField
+    : attribute*
+      identifier
+      COLON
+      typeExpression
+    ;
