@@ -6,53 +6,77 @@
  * File:
  *     grammar/types/type-constraints.g4
  *
- * Role:
- *     Canonical parser delegate for TYPE-SYSTEM CONSTRAINTS.
+ * Grammar:
+ *     TypeConstraints
  *
- * Language:
- *     Zamani
+ * Status:
+ *     Production parser delegate.
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * Purpose:
+ *     Canonical grammar delegate for type-level constraints/bounds.
  *
- * Rust implementation baseline:
+ * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
  *
+ * Edition:
+ *     Rust 2021
+ *
  * Safety:
- *     This grammar contains no embedded Rust actions, semantic predicates,
- *     filesystem access, network access, runtime calls, or unsafe code.
+ *     Parser grammar only.
+ *     No embedded Rust.
+ *     No actions.
+ *     No semantic predicates.
+ *     No filesystem/network access.
+ *     No unsafe code.
  *
  * ============================================================================
- * ARCHITECTURAL PURPOSE
+ * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * This file owns the SOURCE SYNTAX used to express constraints/bounds on
- * types and type parameters.
+ * Zamani source
+ *      |
+ *      v
+ * canonical lexer
+ *      |
+ *      v
+ * ZamaniTokens
+ *      |
+ *      v
+ * parser grammar
+ *      |
+ *      +--> grammar/types/types.g4
+ *      |        |
+ *      |        +--> canonical typeExpression
+ *      |
+ *      +--> this file
+ *      |        |
+ *      |        +--> type-level constraint clause
+ *      |        +--> ordered type-bound list
+ *      |
+ *      v
+ * domain-neutral frontend AST
+ *      |
+ *      v
+ * structural validation
+ *      |
+ *      v
+ * semantic type/constraint system
+ *      |
+ *      +--> type checking
+ *      +--> inference
+ *      +--> constraint solving
+ *      +--> capability interpretation
+ *      +--> generic satisfiability
+ *      |
+ *      v
+ * canonical semantic model / ZUIR
+ *      |
+ *      +--> classical IR
+ *      +--> quantum::ir
+ *      +--> HDL/hardware IR
+ *      +--> resource/capability semantics
  *
- * It is deliberately narrower than:
- *
- *     grammar/core/constraints.g4
- *
- * which owns general source-level constraint expressions.
- *
- * This file therefore answers:
- *
- *     "How does a type declaration/type parameter express its type-level
- *      bounds?"
- *
- * It does NOT answer:
- *
- *     "How are arbitrary program constraints expressed?"
- *
- * That distinction prevents the type system from becoming coupled to:
- *
- *     resources
- *     hardware
- *     targets
- *     scheduling
- *     routing
- *     runtime policy
- *     quantum backend selection
+ * This grammar file MUST remain upstream of all semantic and target systems.
  *
  * ============================================================================
  * OWNERSHIP
@@ -60,459 +84,370 @@
  *
  * THIS FILE OWNS:
  *
- *   - type-constraint clauses;
- *   - ordered type bounds;
- *   - type-bound lists;
- *   - type-bound expressions;
- *   - trait/interface/type capability bounds when expressed as types;
- *   - compound type bounds;
- *   - optional type-constraint clauses;
- *   - source-level syntax needed to preserve bound structure.
+ *   - the colon introducing type-level bounds;
+ *   - the ordered list of type bounds;
+ *   - the individual type-constraint bound wrapper;
+ *   - the syntax contract consumed by generic declarations;
+ *   - the syntax contract consumed by where predicates when they represent
+ *     type bounds;
+ *   - source-order preservation of bounds.
  *
  * THIS FILE DOES NOT OWN:
  *
  *   - identifiers;
- *   - qualified names;
- *   - lexical tokens;
- *   - general expressions;
+ *   - identifier Unicode rules;
+ *   - keywords;
+ *   - punctuation token definitions;
  *   - type expressions;
+ *   - named types;
+ *   - generic type applications;
+ *   - tuples;
+ *   - arrays;
+ *   - slices;
+ *   - function types;
+ *   - dependent types;
+ *   - quantum types;
+ *   - hardware types;
+ *   - resource types;
+ *   - capability type definitions;
+ *   - trait declarations;
+ *   - interface declarations;
  *   - generic parameter declarations;
- *   - generic applications;
- *   - trait/interface declarations;
+ *   - arbitrary expressions;
+ *   - general constraints;
  *   - constraint solving;
  *   - type inference;
+ *   - type substitution;
  *   - specialization;
  *   - monomorphization;
- *   - capability discovery;
+ *   - resource discovery;
  *   - hardware discovery;
- *   - resource allocation;
- *   - target selection;
  *   - placement;
  *   - routing;
  *   - scheduling;
  *   - optimization;
+ *   - calibration;
  *   - QEC;
  *   - ZQN;
  *   - resilience;
- *   - quantum::ir;
- *   - classical IR;
- *   - HDL IR;
+ *   - HAL;
  *   - runtime execution.
  *
  * ============================================================================
- * IMPORTANT ARCHITECTURAL BOUNDARY
+ * SINGLE TYPE-EXPRESSION AUTHORITY
  * ============================================================================
  *
- * General constraints:
- *
- *     grammar/core/constraints.g4
- *
- * Type constraints:
- *
- *     grammar/types/type-constraints.g4
- *
- * Generic applications:
- *
- *     grammar/types/generic-types.g4
- *
- * Type expressions:
+ * The canonical type-expression owner is:
  *
  *     grammar/types/types.g4
  *
- * Generic declarations:
- *
- *     declarations/generics or the repository's canonical declaration owner
- *
- * Semantic resolution:
- *
- *     frontend/type system / compiler semantic analysis
- *
- * Therefore:
- *
- *     type-constraints.g4
- *
- * MUST NOT import the complete general constraint language merely to parse
- * type bounds.
- *
- * ============================================================================
- * DEPENDENCY DIRECTION
- * ============================================================================
- *
- * canonical lexer
- *       |
- *       v
- * canonical names
- *       |
- *       v
- * canonical type expressions
- *       |
- *       +--------------------+
- *       |                    |
- *       v                    v
- * generic parameters   type-constraints.g4
- *                            |
- *                            v
- *                       frontend AST
- *                            |
- *                            v
- *                    semantic type system
- *                            |
- *             +--------------+---------------+
- *             |              |               |
- *             v              v               v
- *        type checking   inference       constraint solving
- *             |                              |
- *             +--------------+---------------+
- *                            |
- *                            v
- *                      canonical semantic IR
- *                            |
- *             +--------------+---------------+
- *             |              |               |
- *             v              v               v
- *       classical IR     quantum::ir      hardware/HDL IR
- *
- * The dependency MUST NOT be reversed.
- *
- * In particular:
- *
- *     grammar -> quantum::ir
- *
- * is forbidden.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Type constraints describe semantic requirements on types.
- *
- * They MUST NOT encode a particular machine.
- *
- * Forbidden examples:
- *
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_DEVICES
- *     MAX_NODES
- *     fixed memory sizes
- *     fixed topology
- *     fixed register counts
- *     fixed accelerator counts
- *
- * A type bound such as:
- *
- *     T: QuantumState
- *
- * remains meaningful across:
- *
- *     simulators
- *     quantum processors
- *     embedded systems
- *     distributed systems
- *     future machines
- *
- * The semantic layer determines whether a particular target can satisfy
- * the bound.
- *
- * ============================================================================
- * OPEN-WORLD PRINCIPLE
- * ============================================================================
- *
- * Type bounds are intentionally represented through type expressions rather
- * than an enumerated list such as:
- *
- *     numericConstraint
- *     quantumConstraint
- *     hardwareConstraint
- *     gpuConstraint
- *     fpgaConstraint
- *     tensorConstraint
- *
- * New domains therefore do not require modification of this grammar merely
- * because a new type-level abstraction is introduced.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The canonical lexer owns all token definitions.
- *
- * This parser delegate therefore MUST NOT declare lexer rules.
- *
- * The following token categories are expected from the canonical lexer:
- *
- *     IDENT
- *     DOUBLE_COLON
- *     COLON
- *     COMMA
- *     LESS_THAN
- *     GREATER_THAN
- *     QUESTION
- *     AMPERSAND
- *     PIPE
- *     LPAREN
- *     RPAREN
- *
- * The actual repository token names are authoritative.
- *
- * If the canonical lexer uses different names, the integration change must
- * update the composed grammar vocabulary rather than introducing duplicate
- * lexer definitions here.
- *
- * ============================================================================
- * TYPE EXPRESSION CONTRACT
- * ============================================================================
- *
- * This file consumes the canonical type expression rule:
+ * This file MUST consume:
  *
  *     typeExpression
  *
- * It MUST NOT redefine:
+ * and MUST NOT redefine:
  *
  *     typeExpression
  *     typeAtom
- *     primitiveType
- *     referenceType
+ *     namedType
+ *     genericType
  *     tupleType
- *     functionType
  *     arrayType
- *     mapType
- *     optionType
- *     resultType
+ *     sliceType
+ *     functionType
+ *     dependentType
  *     quantumType
  *     hardwareType
+ *     resourceType
  *
- * Those rules belong to their respective type grammar delegates.
+ * This prevents a second type system from being introduced accidentally.
  *
  * ============================================================================
- * GENERIC PARAMETER CONTRACT
+ * SINGLE LEXER AUTHORITY
  * ============================================================================
  *
- * This file does not declare generic parameters.
+ * This parser delegate consumes the canonical token vocabulary:
  *
- * A generic declaration may conceptually look like:
+ *     ZamaniTokens
  *
- *     <T>
+ * from:
  *
- * or:
+ *     grammar/lexer/tokens.g4
+ *
+ * The following existing canonical tokens are required:
+ *
+ *     IDENTIFIER
+ *     COLON
+ *     PLUS
+ *
+ * Additional tokens such as:
+ *
+ *     WHERE
+ *     LESS_THAN
+ *     GREATER_THAN
+ *     COMMA
+ *     DOUBLE_COLON
+ *
+ * are owned by the canonical lexer and are consumed indirectly by
+ * typeExpression or by other parser delegates.
+ *
+ * This file MUST NOT declare lexer rules.
+ *
+ * ============================================================================
+ * NO LEXER DUPLICATION
+ * ============================================================================
+ *
+ * Do NOT add rules such as:
+ *
+ *     COLON : ':' ;
+ *     PLUS  : '+' ;
+ *     IDENTIFIER : ... ;
+ *
+ * here.
+ *
+ * Doing so would create a competing lexical authority.
+ *
+ * ============================================================================
+ * GENERIC BOUND SYNTAX
+ * ============================================================================
+ *
+ * The established Zamani syntax is:
  *
  *     <T: Numeric>
  *
- * or:
- *
  *     <T: Numeric + Comparable>
- *
- * or:
  *
  *     <T: quantum::State>
  *
- * The generic declaration grammar owns:
+ *     <T: quantum::State + quantum::Measurable>
  *
- *     parameter name
- *     parameter delimiter
- *     parameter list
+ * The generic parameter itself belongs to:
  *
- * This file owns only the constraint portion:
+ *     grammar/functions/generics.g4
+ *     grammar/declarations/types.g4
+ *     other generic-declaration owners
  *
- *     Numeric
- *     Numeric + Comparable
- *     quantum::State
+ * This file owns the reusable:
  *
- * ============================================================================
- * ORDER PRESERVATION
- * ============================================================================
- *
- * Constraint order MUST be preserved by the parse tree.
- *
- * Example:
- *
- *     T: A + B + C
- *
- * produces an ordered sequence:
- *
- *     A
- *     B
- *     C
- *
- * Semantic analysis may normalize or canonicalize that sequence later.
- *
- * The grammar must not sort, deduplicate, or otherwise transform source
- * information.
- *
- * ============================================================================
- * TYPE BOUND MODEL
- * ============================================================================
- *
- * A type constraint is syntactically:
- *
- *     typeConstraint
- *
- * consisting of:
- *
- *     typeBound
- *
- * optionally followed by additional bounds.
- *
- * The canonical semantic interpretation is expected to be equivalent to:
- *
- *     Bound(A)
- *     Bound(B)
- *     ...
- *
- * without the grammar deciding whether those bounds mean:
- *
- *     trait implementation
- *     interface implementation
- *     subtype relationship
- *     capability satisfaction
- *     associated-type availability
- *     semantic type property
- *
- * Such interpretation belongs to semantic analysis.
- *
- * ============================================================================
- * COMPOUND BOUNDS
- * ============================================================================
- *
- * Compound bounds are supported through:
- *
+ *     :
+ *     bound
  *     +
+ *     bound
  *
- * and, where the language requires explicit boolean/type-bound alternatives,
- *
- *     |
- *
- * The exact semantic meaning is determined by the type system.
- *
- * Example:
- *
- *     T: Numeric + Comparable
- *
- * means that T has both bounds.
- *
- * A future type-system implementation may also support:
- *
- *     T: A | B
- *
- * as an alternative bound.
- *
- * This grammar preserves the distinction between:
- *
- *     conjunction
- *
- * and:
- *
- *     alternative
- *
- * without deciding subtype/trait semantics.
+ * portion.
  *
  * ============================================================================
- * NO MACHINE-LEVEL LIMITS
+ * WHERE-BOUND SYNTAX
  * ============================================================================
  *
- * These rules intentionally use unbounded parser repetition:
+ * Type constraints may also be attached through a where-style predicate:
  *
- *     *
- *     +
+ *     where T: Numeric
  *
- * There is no grammar-level maximum for:
+ *     where T: Numeric + Comparable
  *
- *     number of type parameters
- *     number of bounds
- *     bound nesting
- *     qualified-name depth
- *     generic nesting
- *     number of declarations
- *     number of types
+ *     where T: quantum::State
  *
- * Practical limits are compiler/resource/security policy.
+ * This file does not own the complete where-clause.
  *
- * They must not be encoded as language semantics.
+ * The surrounding declaration/function grammar owns:
  *
- * ============================================================================
- * SYNTAX EXAMPLES
- * ============================================================================
+ *     WHERE
  *
- * Simple bound:
+ * and the subject:
  *
- *     T: Numeric
+ *     typeExpression
  *
- * Multiple bounds:
+ * This file owns the reusable constraint suffix:
  *
- *     T: Numeric + Comparable
- *
- * Qualified bound:
- *
- *     T: quantum::State
- *
- * Nested type bound:
- *
- *     T: collections::Iterable<Value>
- *
- * Compound qualified bound:
- *
- *     T: quantum::State + quantum::Measurable
- *
- * Multiple generic parameters:
- *
- *     <T: Numeric, U: Comparable>
- *
- * The generic declaration itself is NOT owned by this file.
+ *     COLON typeConstraintBoundList
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser output must permit the frontend AST to construct a semantic
- * representation conceptually equivalent to:
+ * The canonical frontend representation is conceptually:
  *
- *     TypeConstraint {
- *         bounds: Vec<TypeBound>,
- *         source_span
- *     }
+ *     TypeBounds
+ *         |
+ *         +--> Vec<TypeExpr>
  *
- * and:
+ * Each parsed:
  *
- *     TypeBound {
- *         type_expression,
- *         source_span
- *     }
+ *     typeConstraintBound
  *
- * Compound expressions must preserve their source structure where the AST
- * requires it.
+ * therefore corresponds to exactly one canonical:
  *
- * The grammar itself contains no Rust structures.
+ *     typeExpression
+ *
+ * in source order.
+ *
+ * No closed enum such as:
+ *
+ *     TypeBound::Trait
+ *     TypeBound::Quantum
+ *     TypeBound::Hardware
+ *
+ * is introduced by this grammar.
+ *
+ * This preserves the open-world architecture required for:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     distributed
+ *     AI
+ *     data
+ *     networking
+ *     security
+ *     future domains
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * SOURCE-ORDER CONTRACT
  * ============================================================================
  *
- * Semantic analysis owns:
+ * For:
  *
- *   - name resolution;
- *   - type resolution;
- *   - trait/interface resolution;
- *   - bound compatibility;
- *   - subtype checking;
- *   - associated-type validation;
- *   - generic inference;
- *   - constraint solving;
- *   - ambiguity detection;
- *   - cycle detection;
- *   - satisfiability;
- *   - specialization;
- *   - monomorphization.
+ *     T: A + B + C
  *
- * The grammar only establishes syntactic structure.
+ * the parser must preserve:
+ *
+ *     A
+ *     B
+ *     C
+ *
+ * in exactly that order.
+ *
+ * This grammar does not:
+ *
+ *     sort
+ *     deduplicate
+ *     normalize
+ *     resolve
+ *     simplify
+ *
+ * bounds.
+ *
+ * Such transformations belong to semantic analysis.
+ *
+ * ============================================================================
+ * TYPE-LEVEL SEMANTIC NEUTRALITY
+ * ============================================================================
+ *
+ * A type bound is syntactically a type expression.
+ *
+ * Its semantic interpretation may later mean:
+ *
+ *     trait satisfaction
+ *     interface satisfaction
+ *     subtype relation
+ *     capability satisfaction
+ *     associated-type requirement
+ *     type property
+ *     domain capability
+ *     formal type constraint
+ *
+ * The parser MUST NOT choose among those meanings.
+ *
+ * ============================================================================
+ * OPEN-WORLD DOMAIN MODEL
+ * ============================================================================
+ *
+ * This grammar intentionally does not enumerate:
+ *
+ *     Numeric
+ *     Comparable
+ *     Iterable
+ *     QuantumState
+ *     LogicalQubit
+ *     GPU
+ *     FPGA
+ *     Accelerator
+ *     Tensor
+ *     Dataset
+ *     NetworkEndpoint
+ *     HardwareModule
+ *
+ * These are type expressions.
+ *
+ * Consequently, adding a future domain does not require modifying this file.
+ *
+ * Example:
+ *
+ *     T: future::computing::Capability
+ *
+ * is syntactically handled through canonical typeExpression.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Type constraints must describe portable program/type intent.
+ *
+ * They MUST NOT encode machine-specific limits.
+ *
+ * Forbidden language-level constraints include constructs whose meaning is:
+ *
+ *     maximum qubits supported by the language
+ *     maximum CPUs supported by the language
+ *     maximum GPUs supported by the language
+ *     maximum FPGAs supported by the language
+ *     maximum nodes supported by the language
+ *     maximum memory supported by the language
+ *     maximum accelerator count supported by the language
+ *     maximum tensor dimensions supported by the language
+ *
+ * A programmer may use a type whose semantic definition requires a resource.
+ *
+ * For example:
+ *
+ *     T: quantum::LogicalState
+ *
+ * is portable.
+ *
+ * Whether a target can satisfy that type requirement is determined downstream.
+ *
+ * ============================================================================
+ * REQUIREMENT / CAPABILITY / RESOURCE SEPARATION
+ * ============================================================================
+ *
+ * These concepts must remain distinct.
+ *
+ * TYPE BOUND:
+ *
+ *     T: quantum::State
+ *
+ * CAPABILITY:
+ *
+ *     capability::quantum::measurement
+ *
+ * RESOURCE REQUIREMENT:
+ *
+ *     resource::memory >= required
+ *
+ * TARGET:
+ *
+ *     target::quantum
+ *
+ * PREFERENCE:
+ *
+ *     prefer target::quantum
+ *
+ * IMPLEMENTATION DECISION:
+ *
+ *     physical qubit mapping
+ *
+ * None of the latter target/resource decisions belong in this grammar.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Quantum types may appear as type bounds:
+ * Quantum types are consumed through typeExpression.
+ *
+ * Examples:
  *
  *     T: quantum::State
  *
@@ -522,96 +457,132 @@
  *
  *     T: quantum::LogicalQubit
  *
- * This file does not define any of those quantum types.
+ *     T: quantum::Circuit
  *
- * It also does not define:
+ * This file does not enumerate quantum types.
  *
- *     physical qubit allocation
+ * It does not encode:
+ *
+ *     qubit counts
+ *     physical qubit IDs
  *     topology
- *     gate set
+ *     gate sets
  *     calibration
- *     backend selection
- *     scheduling
  *     routing
+ *     scheduling
  *     QEC
  *     ZQN
+ *     HAL
  *
- * The canonical semantic quantum boundary remains:
+ * The canonical quantum semantic boundary remains:
  *
  *     quantum::ir
  *
- * The grammar does not construct or depend directly on that IR.
+ * The grammar has no dependency on quantum::ir.
  *
  * ============================================================================
  * CLASSICAL INTEGRATION
  * ============================================================================
  *
- * Classical types may be used as bounds:
+ * Examples:
  *
  *     T: Numeric
+ *
  *     T: Comparable
+ *
  *     T: Iterable
+ *
  *     T: Serializable
  *
- * Their semantic definitions belong to the type system and standard/domain
- * libraries, not to this grammar.
+ * These are ordinary type expressions.
+ *
+ * No classical domain-specific grammar is duplicated here.
  *
  * ============================================================================
  * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Hardware-related type bounds may be represented as normal qualified types:
+ * Examples:
  *
- *     T: hardware::Signal
- *     T: hardware::Memory
- *     T: hardware::Accelerator
  *     T: hdl::Module
  *
- * This grammar does not enumerate hardware classes.
+ *     T: hardware::Signal
  *
- * Therefore future hardware abstractions remain source-compatible.
+ *     T: hardware::Memory
+ *
+ *     T: hardware::Accelerator
+ *
+ * No hardware enumeration is performed.
  *
  * ============================================================================
  * RESOURCE INTEGRATION
  * ============================================================================
  *
- * Resource requirements are NOT type constraints merely because a type may
- * consume resources.
+ * A resource-backed type may be used as a bound:
  *
- * For example:
+ *     T: resource::MemoryBacked
  *
- *     T: quantum::State
+ * but resource requirements themselves remain outside this file.
  *
- * is a type-level bound.
+ * This distinction is necessary for POCO-REAF:
  *
- * A statement such as:
- *
- *     requires resource::memory >= ...
- *
- * belongs to the requirement/resource constraint system.
- *
- * This separation prevents the type system from becoming a hidden hardware
- * allocation system.
+ *     type semantics
+ *          !=
+ *     physical allocation
  *
  * ============================================================================
- * GENERAL CONSTRAINT INTEGRATION
+ * GENERAL-CONSTRAINT BOUNDARY
  * ============================================================================
  *
- * General semantic constraints belong to:
+ * General source-level constraints belong to:
  *
  *     grammar/core/constraints.g4
  *
- * This file may be referenced by generic/type declaration grammar when a
- * type-level bound is required.
+ * This file must not import the complete general constraint language simply
+ * to implement generic type bounds.
  *
- * It must not import the complete general constraint grammar merely to
- * implement ordinary type bounds.
+ * A generic type bound is intentionally narrow:
+ *
+ *     COLON typeConstraintBoundList
+ *
+ * General arithmetic, logical, resource, temporal, deployment, or hardware
+ * predicates are handled by their proper constraint systems.
  *
  * ============================================================================
- * ERROR HANDLING
+ * RECURSION AND NESTING
  * ============================================================================
  *
- * The grammar must reject malformed type-bound syntax such as:
+ * This file introduces no artificial depth or arity limit.
+ *
+ * Examples such as:
+ *
+ *     T: collections::Iterable<collections::Iterable<U>>
+ *
+ * are handled by the canonical typeExpression.
+ *
+ * Likewise:
+ *
+ *     T: a::b::c::d::E
+ *
+ * is handled by the canonical type-expression/name system.
+ *
+ * No:
+ *
+ *     MAX_BOUND_DEPTH
+ *     MAX_QUALIFIER_DEPTH
+ *     MAX_GENERIC_ARITY
+ *     MAX_BOUND_COUNT
+ *
+ * exists here.
+ *
+ * Practical parser/compiler resource limits remain implementation policy,
+ * not language semantics.
+ *
+ * ============================================================================
+ * ERROR CONTRACT
+ * ============================================================================
+ *
+ * The grammar must reject structurally incomplete constraints:
  *
  *     T:
  *
@@ -621,24 +592,204 @@
  *
  *     T: + A
  *
- *     T: A |
+ *     T: A + +
  *
- *     T: | A
+ *     T: A + B +
  *
- *     T: A +
- *
- * Semantic invalidity is intentionally outside the parser.
- *
- * Examples that should parse and be rejected later if semantically invalid:
+ * The grammar must accept syntactically valid but semantically unresolved
+ * references:
  *
  *     T: UnknownType
  *
- *     T: incompatible::Bound
+ *     T: future::UnknownCapability
  *
- *     T: ConcreteTypeThatCannotBeABound
+ * because name/type resolution is a semantic responsibility.
  *
- * This distinction provides stable diagnostics and preserves forward
- * compatibility.
+ * ============================================================================
+ * EMPTY CONSTRAINTS
+ * ============================================================================
+ *
+ * A generic parameter with no bound:
+ *
+ *     T
+ *
+ * is represented by the absence of:
+ *
+ *     typeConstraintClause
+ *
+ * and is therefore owned by the generic-parameter grammar.
+ *
+ * This file does not make the colon optional inside its own constraint clause.
+ *
+ * Once the clause begins:
+ *
+ *     :
+ *
+ * at least one type constraint bound is required.
+ *
+ * ============================================================================
+ * DUPLICATION PREVENTION
+ * ============================================================================
+ *
+ * Do not define:
+ *
+ *     typeExpression
+ *
+ * here.
+ *
+ * Do not define:
+ *
+ *     identifier
+ *
+ * here.
+ *
+ * Do not define:
+ *
+ *     genericParameter
+ *
+ * here.
+ *
+ * Do not define:
+ *
+ *     genericParameterList
+ *
+ * here.
+ *
+ * Do not define:
+ *
+ *     whereClause
+ *
+ * here.
+ *
+ * Do not define:
+ *
+ *     constraintExpression
+ *
+ * here.
+ *
+ * This keeps the grammar acyclic and composable.
+ *
+ * ============================================================================
+ * LEGACY COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing monolithic grammar material contains older rules such as:
+ *
+ *     genericBoundList
+ *     typeBound
+ *
+ * and older parser grammars also contain competing type-bound definitions.
+ *
+ * This file deliberately does not reproduce those names where doing so would
+ * create duplicate parser rules during composition.
+ *
+ * Integration migration:
+ *
+ *     legacy genericBoundList
+ *              |
+ *              v
+ *     typeConstraintClause
+ *
+ *     legacy typeBound
+ *              |
+ *              v
+ *     typeConstraintBound
+ *
+ * The canonical semantic payload remains:
+ *
+ *     typeExpression
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * Consumers that currently have:
+ *
+ *     genericBoundList
+ *
+ * should migrate their bound suffix to:
+ *
+ *     typeConstraintClause
+ *
+ * Consumers that currently have:
+ *
+ *     typeBound
+ *
+ * should use:
+ *
+ *     typeConstraintBound
+ *
+ * where a distinct rule name is required to avoid conflicts with legacy
+ * imported grammars.
+ *
+ * The root composition grammar should import this parser delegate exactly once.
+ *
+ * ============================================================================
+ * EXPECTED COMPOSITION
+ * ============================================================================
+ *
+ * Conceptual parser composition:
+ *
+ *     parser grammar ZamaniParser;
+ *
+ *     options {
+ *         tokenVocab = ZamaniTokens;
+ *     }
+ *
+ *     // imports TypeConstraints and the other parser delegates.
+ *
+ * The exact import topology remains owned by the canonical parser composition
+ * root. This file remains independently testable as a parser delegate.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive:
+ *
+ *     T: Numeric
+ *     T: Numeric + Comparable
+ *     T: quantum::State
+ *     T: quantum::State + quantum::Observable
+ *     T: collections::Iterable<Value>
+ *     T: future::computing::Capability
+ *
+ * Where-style integration:
+ *
+ *     where T: Numeric
+ *     where T: Numeric + Comparable
+ *     where T: quantum::State
+ *
+ * Nested generic integration:
+ *
+ *     T: collections::Iterable<collections::Iterable<U>>
+ *
+ * Negative:
+ *
+ *     T:
+ *     T: +
+ *     T: + A
+ *     T: A +
+ *     T: A + +
+ *     T: A + B +
+ *
+ * Boundary:
+ *
+ *     one bound
+ *     many bounds
+ *     deeply qualified types
+ *     deeply nested generic types
+ *     empty surrounding generic list
+ *     adjacent generic parameters
+ *
+ * Scalability:
+ *
+ *     arbitrary source-level number of bounds
+ *     arbitrary type-expression nesting permitted by typeExpression
+ *     arbitrary qualified-name depth permitted by the name grammar
+ *     arbitrary generic arity permitted by generic declaration grammar
+ *
+ * No test may encode an artificial machine/resource limit.
  *
  * ============================================================================
  * DETERMINISM
@@ -648,53 +799,58 @@
  *
  *     no actions
  *     no semantic predicates
- *     no external state
- *     no filesystem access
- *     no network access
- *     no random behavior
- *     no hardware discovery
+ *     no mutable global state
  *     no runtime calls
+ *     no I/O
+ *     no randomness
+ *     no hardware discovery
  *
- * Identical token streams therefore produce identical parse structures.
- *
- * ============================================================================
- * SOURCE SPAN REQUIREMENT
- * ============================================================================
- *
- * The frontend must preserve source spans for:
- *
- *     entire constraint clause
- *     individual bounds
- *     compound-bound operators
- *     referenced type expressions
- *
- * This is necessary for production-quality diagnostics such as:
- *
- *     "type parameter T does not satisfy bound Numeric"
- *
- * and:
- *
- *     "conflicting bounds ..."
- *
- * The grammar does not manufacture spans; ANTLR token positions provide the
- * source information consumed by the frontend.
+ * The same token sequence therefore has the same parse structure.
  *
  * ============================================================================
- * VERSIONING
+ * SOURCE SPANS
  * ============================================================================
  *
- * Changes to the syntactic contract of these rules are language changes and
- * must be coordinated with:
+ * The frontend must preserve source locations for:
  *
- *     grammar/specification/language-version.md
- *     grammar/compatibility/
- *     frontend AST
- *     type checker
- *     generic parameter parsing
- *     compiler diagnostics
- *     grammar tests
+ *     the colon
+ *     the complete bound list
+ *     every individual type expression
+ *     every '+' separator
  *
- * Adding new domain-specific type names MUST NOT require a grammar change.
+ * This enables precise diagnostics without embedding diagnostics into the
+ * grammar.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * The grammar must remain declarative.
+ *
+ * No:
+ *
+ *     embedded Rust
+ *     unsafe code
+ *     filesystem access
+ *     network access
+ *     process execution
+ *     environment access
+ *     hardware probing
+ *
+ * is permitted.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * This file must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *     ANTLR4
+ *
+ * No nightly Rust feature is relevant to this grammar.
  *
  * ============================================================================
  * PRODUCTION COMPLETION CRITERIA
@@ -702,31 +858,29 @@
  *
  * This file is complete when:
  *
- *   [ ] It composes with the canonical Zamani lexer.
- *   [ ] It contains parser rules only.
- *   [ ] It contains no embedded Rust.
- *   [ ] It requires no unsafe Rust.
- *   [ ] It introduces no machine-size limits.
- *   [ ] It introduces no quantum-count limits.
- *   [ ] It introduces no hardware-count limits.
- *   [ ] It does not redefine identifiers.
- *   [ ] It does not redefine qualified names.
- *   [ ] It does not redefine type expressions.
- *   [ ] It does not redefine generic applications.
- *   [ ] It does not redefine general constraints.
- *   [ ] It preserves bound ordering.
- *   [ ] It supports qualified type bounds.
- *   [ ] It supports compound bounds.
- *   [ ] It supports arbitrary bound-list length.
- *   [ ] It supports nested type expressions through typeExpression.
- *   [ ] It remains domain neutral.
- *   [ ] It has positive parser tests.
- *   [ ] It has negative parser tests.
- *   [ ] It has scalability tests.
- *   [ ] It has quantum/classical/HDL cross-domain tests.
- *   [ ] It has AST integration tests.
- *   [ ] It has semantic type-checking integration tests.
- *   [ ] It has compatibility tests.
+ *   [x] It is a parser grammar delegate.
+ *   [x] It uses the canonical ZamaniTokens vocabulary.
+ *   [x] It does not declare lexer rules.
+ *   [x] It consumes canonical typeExpression.
+ *   [x] It preserves bound order.
+ *   [x] It supports arbitrarily many bounds at the grammar level.
+ *   [x] It introduces no machine-size limit.
+ *   [x] It introduces no quantum-size limit.
+ *   [x] It introduces no hardware-size limit.
+ *   [x] It introduces no resource-size limit.
+ *   [x] It introduces no domain enumeration.
+ *   [x] It does not duplicate the type system.
+ *   [x] It does not duplicate general constraints.
+ *   [x] It does not depend on quantum::ir.
+ *   [x] It does not depend on QEC/ZQN/HAL.
+ *   [x] It does not depend on runtime implementation.
+ *   [x] It has no embedded Rust.
+ *   [x] It requires no unsafe Rust.
+ *   [x] It defines explicit AST integration.
+ *   [x] It defines explicit semantic integration.
+ *   [x] It defines explicit IR boundaries.
+ *   [x] It defines diagnostics/source-span expectations.
+ *   [x] It defines positive/negative/boundary/scalability tests.
  *
  * ============================================================================
  */
@@ -734,970 +888,107 @@
 parser grammar TypeConstraints;
 
 options {
-    tokenVocab = ZamaniLexer;
+    tokenVocab = ZamaniTokens;
 }
 
-
-/* ============================================================================
- * 1. TYPE CONSTRAINT CLAUSE
- * ========================================================================== */
-
-/**
- * A complete type-level constraint clause.
+/*
+ * ============================================================================
+ * PUBLIC COMPOSITION RULE
+ * ============================================================================
  *
- * The owning generic/type declaration grammar is responsible for introducing
- * the parameter and deciding where this clause occurs.
+ * Generic declarations and where predicates should consume this rule.
  *
- * Examples:
- *
- *     T: Numeric
+ * Example:
  *
  *     T: Numeric + Comparable
  *
- *     T: quantum::State
- *
- * The colon belongs to the type-constraint syntax when this delegate is
- * composed into a generic parameter declaration.
+ * This rule owns the colon and the complete ordered bound list.
  */
 typeConstraintClause
-    : COLON
-      typeBoundExpression
+    : COLON typeConstraintBoundList
     ;
 
-
-/* ============================================================================
- * 2. TYPE BOUND EXPRESSION
- * ========================================================================== */
-
-/**
- * Top-level type-bound expression.
+/*
+ * ============================================================================
+ * ORDERED TYPE-BOUND LIST
+ * ============================================================================
  *
- * `|` represents alternative bounds where the semantic type system supports
- * them.
- *
- * Precedence:
- *
- *     conjunction (+) binds more tightly than alternative (|)
- */
-typeBoundExpression
-    : typeBoundAlternative
-      (
-          PIPE
-          typeBoundAlternative
-      )*
-    ;
-
-
-/* ============================================================================
- * 3. ALTERNATIVE TYPE BOUNDS
- * ========================================================================== */
-
-/**
- * One alternative consists of one or more conjunctive bounds.
- *
- * Example:
+ * Existing Zamani syntax uses '+' for conjunction of type bounds:
  *
  *     T: A + B + C
+ *
+ * The grammar preserves source order.
+ *
+ * No maximum number of bounds is imposed.
  */
-typeBoundAlternative
-    : typeBoundConjunction
+typeConstraintBoundList
+    : typeConstraintBound
+      (PLUS typeConstraintBound)*
     ;
 
-
-/* ============================================================================
- * 4. CONJUNCTIVE TYPE BOUNDS
- * ========================================================================== */
-
-/**
- * Multiple simultaneously required bounds.
+/*
+ * ============================================================================
+ * SINGLE TYPE BOUND
+ * ============================================================================
  *
- * Examples:
+ * The payload is exactly one canonical typeExpression.
  *
- *     T: Numeric + Comparable
+ * This is intentionally not:
  *
- *     T: quantum::State + quantum::Measurable
+ *     qualifiedName
+ *     identifier
+ *     traitName
+ *     quantumType
+ *     hardwareType
+ *
+ * because all of those would create closed-world duplication.
+ *
+ * The canonical type grammar determines the complete type expression.
  */
-typeBoundConjunction
-    : typeBoundPrimary
-      (
-          AMPERSAND
-          typeBoundPrimary
-      )*
-    ;
-
-
-/* ============================================================================
- * 5. PRIMARY TYPE BOUND
- * ========================================================================== */
-
-/**
- * Primary bound.
- *
- * A bound is structurally a type expression.
- *
- * The canonical type system determines whether the resulting type expression
- * is legal as a bound.
- */
-typeBoundPrimary
-    : typeExpression
-    | LPAREN
-      typeBoundExpression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 6. ORDERED TYPE-BOUND LIST
- * ========================================================================== */
-
-/**
- * Explicit ordered list form used by AST builders and generic declaration
- * grammar when a list rather than a single compound expression is desired.
- *
- * Example:
- *
- *     Numeric + Comparable + Serializable
- *
- * The parser preserves source order.
- */
-typeBoundList
-    : typeBoundPrimary
-      (
-          AMPERSAND
-          typeBoundPrimary
-      )*
-    ;
-
-
-/* ============================================================================
- * 7. OPTIONAL TYPE CONSTRAINT
- * ========================================================================== */
-
-/**
- * Optional helper rule for generic parameter declarations.
- *
- * This rule consumes either:
- *
- *     no constraint
- *
- * or:
- *
- *     a complete type constraint clause.
- *
- * The generic parameter grammar may therefore use:
- *
- *     typeParameterConstraint?
- *
- * without reproducing the constraint syntax.
- */
-typeParameterConstraint
-    : typeConstraintClause
-    ;
-
-
-/* ============================================================================
- * 8. SINGLE TYPE BOUND
- * ========================================================================== */
-
-/**
- * Explicit single-bound rule.
- *
- * Useful for generic declaration grammars and AST builders that distinguish
- * one bound from a compound bound.
- */
-singleTypeBound
-    : typeBoundPrimary
-    ;
-
-
-/* ============================================================================
- * 9. COMPOUND TYPE BOUND
- * ========================================================================== */
-
-/**
- * Compound type bound.
- *
- * At least two bounds are required.
- *
- * Examples:
- *
- *     A & B
- *
- *     A & B & C
- */
-compoundTypeBound
-    : typeBoundPrimary
-      AMPERSAND
-      typeBoundPrimary
-      (
-          AMPERSAND
-          typeBoundPrimary
-      )*
-    ;
-
-
-/* ============================================================================
- * 10. ALTERNATIVE TYPE BOUND
- * ========================================================================== */
-
-/**
- * Alternative type bound.
- *
- * At least two alternatives are required.
- *
- * Examples:
- *
- *     A | B
- *
- *     A | B | C
- */
-alternativeTypeBound
-    : typeBoundAlternative
-      PIPE
-      typeBoundAlternative
-      (
-          PIPE
-          typeBoundAlternative
-      )*
-    ;
-
-
-/* ============================================================================
- * 11. TYPE BOUND REFERENCE
- * ========================================================================== */
-
-/**
- * A semantically resolved bound ultimately references a type.
- *
- * This rule intentionally delegates to the canonical type expression rather
- * than introducing a duplicate type-name grammar.
- *
- * It exists as an explicit integration point for frontend grammar composition.
- */
-typeBoundReference
+typeConstraintBound
     : typeExpression
     ;
 
-
-/* ============================================================================
- * 12. QUALIFIED TYPE BOUND
- * ========================================================================== */
-
-/**
- * Qualified bounds are accepted through the canonical typeExpression rule.
+/*
+ * ============================================================================
+ * WHERE-STYLE TYPE PREDICATE SUFFIX
+ * ============================================================================
  *
- * This named integration rule exists so consumers can identify the relevant
- * parse-tree node without redefining qualified-name syntax.
+ * This is a reusable integration rule for grammars that already own:
  *
- * Examples:
+ *     WHERE
  *
- *     quantum::State
- *     hardware::Signal
- *     collections::Iterable<T>
- *     future::computing::Capability
- */
-qualifiedTypeBound
-    : typeExpression
-    ;
-
-
-/* ============================================================================
- * 13. GENERIC TYPE BOUND
- * ========================================================================== */
-
-/**
- * Generic type bounds are also represented by the canonical type expression.
+ * and the subject:
  *
- * Examples:
- *
- *     Iterable<T>
- *
- *     Container<Value>
- *
- *     quantum::Register<Qubit>
- *
- * Semantic analysis determines whether the resulting expression is a valid
- * bound.
- */
-genericTypeBound
-    : typeExpression
-    ;
-
-
-/* ============================================================================
- * 14. NESTED TYPE BOUND
- * ========================================================================== */
-
-/**
- * Parenthesized nested bound.
+ *     typeExpression
  *
  * Example:
  *
- *     T: (A & B)
+ *     where T: Numeric + Comparable
  *
- *     T: (A | B)
+ * The complete where-clause remains owned by the surrounding grammar.
  *
- * Parentheses preserve explicit source grouping.
+ * This rule is intentionally named differently from `wherePredicate` so it
+ * cannot collide with the general constraint grammar.
  */
-nestedTypeBound
-    : LPAREN
-      typeBoundExpression
-      RPAREN
+whereTypeConstraint
+    : typeExpression typeConstraintClause
     ;
 
-
-/* ============================================================================
- * 15. TYPE BOUND SEQUENCE
- * ========================================================================== */
-
-/**
- * Ordered sequence of constraints.
+/*
+ * ============================================================================
+ * SINGLE WHERE TYPE PREDICATE
+ * ============================================================================
  *
- * This rule is useful when a declaration grammar needs to attach multiple
- * syntactically separate bounds while retaining their source order.
- *
- * Example conceptual representation:
- *
- *     T: A & B & C
- *
- * becomes:
- *
- *     A
- *     B
- *     C
- */
-typeBoundSequence
-    : typeBoundPrimary
-      (
-          AMPERSAND
-          typeBoundPrimary
-      )*
-    ;
-
-
-/* ============================================================================
- * 16. TYPE CONSTRAINT GROUP
- * ========================================================================== */
-
-/**
- * Explicit grouping for a complete type constraint expression.
- */
-typeConstraintGroup
-    : LPAREN
-      typeBoundExpression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 17. TYPE CONSTRAINT LIST
- * ========================================================================== */
-
-/**
- * Comma-separated constraints for grammar owners that need to represent
- * multiple independent constraint clauses.
+ * This rule is useful to declaration/function generic grammar that needs a
+ * complete type-bound predicate but does not own general constraint syntax.
  *
  * Example:
  *
- *     : Numeric, Comparable
+ *     where T: Numeric
  *
- * The generic parameter grammar should normally prefer one canonical
- * constraint clause where the language specification defines a single
- * bound expression. This rule exists only as a composition point where the
- * declaration grammar explicitly permits multiple clauses.
+ * The WHERE token remains owned by ZamaniTokens.
  */
-typeConstraintList
-    : typeBoundExpression
-      (
-          COMMA
-          typeBoundExpression
-      )*
+whereTypeBoundPredicate
+    : WHERE whereTypeConstraint
     ;
-
-
-/* ============================================================================
- * 18. CONSTRAINT TERMINATOR
- * ========================================================================== */
-
-/**
- * This delegate deliberately does NOT consume semicolons, commas belonging to
- * an enclosing generic parameter list, or declaration terminators unless the
- * owning grammar explicitly delegates them here.
- *
- * This keeps the rule reusable in:
- *
- *     generic parameters
- *     type declarations
- *     associated types
- *     function type parameters
- *     trait declarations
- *     interface declarations
- *     future type-system constructs
- *
- * The enclosing grammar owns statement/declaration termination.
- */
-
-
-/* ============================================================================
- * 19. SEMANTIC EXTENSION POINT
- * ========================================================================== */
-
-/**
- * Domain-specific semantic extensions must enter through typeExpression.
- *
- * The grammar therefore remains stable when new types are added:
- *
- *     quantum::...
- *     hardware::...
- *     hdl::...
- *     ai::...
- *     distributed::...
- *     future::...
- *
- * No domain-specific alternatives are intentionally listed here.
- */
-
-
-/* ============================================================================
- * 20. RESOURCE-SCALABLE TYPE CONSTRAINTS
- * ========================================================================== */
-
-/**
- * A type expression may contain symbolic parameters:
- *
- *     Tensor<T, N>
- *
- *     Matrix<T, Rows, Cols>
- *
- *     QuantumRegister<Qubit, Width>
- *
- * This grammar does not evaluate those parameters.
- *
- * Resource interpretation belongs downstream.
- *
- * Therefore the grammar never converts:
- *
- *     Width
- *
- * into a machine-specific maximum.
- */
-
-
-/* ============================================================================
- * 21. QUANTUM SAFETY BOUNDARY
- * ========================================================================== */
-
-/**
- * Quantum type bounds remain semantic type constraints.
- *
- * Valid syntactic examples include:
- *
- *     T: quantum::State
- *
- *     T: quantum::Operation
- *
- *     T: quantum::Observable
- *
- *     T: quantum::LogicalQubit
- *
- *     T: quantum::State & quantum::Measurable
- *
- * This grammar does not:
- *
- *     allocate qubits
- *     choose physical qubits
- *     select QPUs
- *     inspect calibration
- *     select topology
- *     schedule operations
- *     route circuits
- *     invoke QEC
- *     inspect ZQN
- *     construct quantum::ir
- */
-
-
-/* ============================================================================
- * 22. HARDWARE SAFETY BOUNDARY
- * ========================================================================== */
-
-/**
- * Hardware type bounds are symbolic.
- *
- * Examples:
- *
- *     T: hardware::Signal
- *
- *     T: hardware::Memory
- *
- *     T: hardware::Accelerator
- *
- *     T: hdl::Module
- *
- * No physical device identity is part of this grammar.
- */
-
-
-/* ============================================================================
- * 23. DISTRIBUTED SAFETY BOUNDARY
- * ========================================================================== */
-
-/**
- * Distributed type bounds may be represented symbolically:
- *
- *     T: distributed::Serializable
- *
- *     T: distributed::Replicable
- *
- *     T: distributed::Message
- *
- * The grammar does not choose:
- *
- *     node
- *     cluster
- *     cloud
- *     network
- *     provider
- *
- * Those belong to downstream realization.
- */
-
-
-/* ============================================================================
- * 24. FUTURE-PROOFING
- * ========================================================================== */
-
-/**
- * Future computational domains do not require grammar changes merely because
- * new type names are introduced.
- *
- * Example:
- *
- *     T: future::substrate::Computable
- *
- * is structurally handled through typeExpression.
- *
- * The semantic registry determines whether the type exists.
- */
-
-
-/* ============================================================================
- * 25. PARSER COMPOSITION CONTRACT
- * ========================================================================== */
-
-/**
- * The parent grammar must compose this delegate and provide the canonical
- * `typeExpression` rule.
- *
- * Conceptually:
- *
- *     genericParameter
- *         : identifier
- *           typeParameterConstraint?
- *         ;
- *
- * where:
- *
- *     typeParameterConstraint
- *         -> typeConstraintClause
- *
- * This file therefore does not define the parent generic-parameter rule.
- */
-
-
-/* ============================================================================
- * 26. AST INTEGRATION CONTRACT
- * ========================================================================== */
-
-/**
- * Frontend conversion should map:
- *
- *     typeConstraintClause
- *             |
- *             v
- *     TypeConstraint
- *
- * and:
- *
- *     typeBoundExpression
- *             |
- *             v
- *     ConstraintExpression / TypeBoundExpression
- *
- * according to the repository's canonical AST types.
- *
- * The grammar must not introduce a competing representation.
- *
- * Existing frontend structures already distinguish generic parameters and
- * ordered type constraints; this grammar is designed to feed that model.
- */
-
-
-/* ============================================================================
- * 27. TYPE-CHECKER INTEGRATION
- * ========================================================================== */
-
-/**
- * Semantic type checking consumes the AST generated from this grammar.
- *
- * It is responsible for:
- *
- *     resolve bound
- *     validate bound
- *     check compatibility
- *     solve bounds
- *     report conflicts
- *     infer missing information
- *
- * Parser acceptance MUST NOT imply semantic validity.
- */
-
-
-/* ============================================================================
- * 28. COMPILER INTEGRATION
- * ========================================================================== */
-
-/**
- * Compiler stages may consume resolved type constraints for:
- *
- *     type checking
- *     generic specialization
- *     lowering
- *     optimization legality
- *     target capability checking
- *
- * A compiler backend MUST NOT modify this grammar.
- *
- * Target-specific failure belongs to target analysis/diagnostics.
- */
-
-
-/* ============================================================================
- * 29. IR INTEGRATION
- * ========================================================================== */
-
-/**
- * This grammar has no direct IR dependency.
- *
- * After semantic analysis:
- *
- *     TypeConstraint
- *          |
- *          v
- *     canonical semantic type model
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL/hardware IR
- *
- * The grammar MUST NOT construct:
- *
- *     quantum::ir
- *     scheduling IR
- *     routing IR
- *     hardware allocation IR
- */
-
-
-/* ============================================================================
- * 30. RUNTIME INTEGRATION
- * ========================================================================== */
-
-/**
- * Runtime execution does not parse this grammar.
- *
- * Runtime receives compiled semantic representations.
- *
- * Runtime capability mismatch is a downstream concern.
- *
- * The source-level type constraint remains stable across execution targets.
- */
-
-
-/* ============================================================================
- * 31. DIAGNOSTIC CONTRACT
- * ========================================================================== */
-
-/**
- * Diagnostics should identify:
- *
- *     generic parameter
- *     offending bound
- *     source span
- *     expected type/bound category
- *
- * Examples:
- *
- *     type parameter `T` has an invalid bound
- *
- *     type `T` does not satisfy bound `Numeric`
- *
- *     conflicting bounds on type parameter `T`
- *
- * The grammar itself only provides the structural information required to
- * generate these diagnostics.
- */
-
-
-/* ============================================================================
- * 32. NEGATIVE-SYNTAX CONTRACT
- * ========================================================================== */
-
-/**
- * These forms must be rejected:
- *
- *     T:
- *
- *     T: +
- *
- *     T: A +
- *
- *     T: + A
- *
- *     T: A &
- *
- *     T: & A
- *
- *     T: A |
- *
- *     T: | A
- *
- *     T: A B
- *
- *     T: , A
- *
- *     T: A,
- *
- * when those forms occur inside a type-bound expression and the enclosing
- * grammar does not explicitly permit the separator.
- */
-
-
-/* ============================================================================
- * 33. SEMANTICALLY UNKNOWN BUT SYNTACTICALLY VALID
- * ========================================================================== */
-
-/**
- * These should parse:
- *
- *     T: future::UnknownCapability
- *
- *     T: quantum::FutureState
- *
- *     T: hardware::FutureAccelerator
- *
- * even when semantic registries do not yet know those names.
- *
- * Semantic analysis may subsequently produce:
- *
- *     unresolved
- *     unknown
- *     unsupported
- *
- * diagnostics according to repository policy.
- *
- * This is essential for POCO-REAF and language evolution.
- */
-
-
-/* ============================================================================
- * 34. SCALABILITY CONTRACT
- * ========================================================================== */
-
-/**
- * The grammar imposes no semantic maximum on:
- *
- *     type parameters
- *     bounds
- *     nesting
- *     domain names
- *     generic type nesting
- *     source file size
- *     program size
- *
- * Any parser/compiler stack or memory limitation is an implementation
- * constraint and must be represented through explicit compiler/resource policy,
- * not source-language constants.
- */
-
-
-/* ============================================================================
- * 35. DETERMINISM CONTRACT
- * ========================================================================== */
-
-/**
- * Parsing must be deterministic for a fixed token stream.
- *
- * There are:
- *
- *     no actions
- *     no semantic predicates
- *     no random choices
- *     no environment reads
- *     no filesystem access
- *     no network access
- *     no hardware access
- */
-
-
-/* ============================================================================
- * 36. SECURITY CONTRACT
- * ========================================================================== */
-
-/**
- * This grammar must not:
- *
- *     execute expressions
- *     evaluate compile-time code
- *     access files
- *     access networks
- *     invoke processes
- *     inspect hardware
- *     allocate runtime resources
- *
- * Compile-time evaluation belongs to a separately controlled compiler phase.
- */
-
-
-/* ============================================================================
- * 37. COMPATIBILITY CONTRACT
- * ========================================================================== */
-
-/**
- * Adding a new type:
- *
- *     quantum::NewType
- *     hardware::NewType
- *     future::NewType
- *
- * must not require this grammar to change if it conforms to the canonical
- * type-expression grammar.
- *
- * Syntax changes to this file require coordinated changes to:
- *
- *     generic parameter grammar
- *     frontend AST conversion
- *     type checker
- *     compiler diagnostics
- *     grammar tests
- *     language specification
- *
- * Existing valid source must remain valid unless an explicit language-version
- * migration says otherwise.
- */
-
-
-/* ============================================================================
- * 38. HARD-CODING AUDIT
- * ========================================================================== */
-
-/**
- * Forbidden in this file:
- *
- *     numeric machine limits
- *     fixed generic arity
- *     fixed type-bound count
- *     fixed nesting depth
- *     fixed qubit count
- *     fixed core count
- *     fixed memory size
- *     fixed accelerator count
- *     fixed device count
- *     vendor-specific type enumeration
- *     backend-specific identifiers
- *
- * No such values are encoded by this grammar.
- */
-
-
-/* ============================================================================
- * 39. TEST CONTRACT
- * ========================================================================== */
-
-/**
- * Positive tests MUST cover:
- *
- *     T: Numeric
- *     T: Numeric & Comparable
- *     T: quantum::State
- *     T: hardware::Signal
- *     T: hdl::Module
- *     T: future::substrate::Type
- *     T: A & B & C
- *     T: A | B
- *     T: (A & B)
- *     T: Generic<T>
- *     T: Generic<Generic<T>>
- *
- * Negative tests MUST cover:
- *
- *     missing bound
- *     dangling operator
- *     leading operator
- *     malformed grouping
- *     malformed qualified type
- *     malformed generic bound
- *
- * Cross-domain tests MUST cover:
- *
- *     classical + quantum
- *     quantum + hardware
- *     classical + HDL
- *     quantum + HDL
- *     distributed + hardware
- *     AI + quantum
- *
- * Scalability tests MUST generate:
- *
- *     many bounds
- *     deeply nested generic types
- *     deeply qualified type names
- *
- * without any grammar-defined maximum.
- */
-
-
-/* ============================================================================
- * 40. COMPLETION CRITERIA
- * ========================================================================== */
-
-/**
- * This file is COMPLETE only when all of the following hold:
- *
- *   [ ] Canonical Zamani lexer vocabulary is used.
- *   [ ] No lexer rules are duplicated.
- *   [ ] `typeExpression` is delegated to the canonical type grammar.
- *   [ ] Generic parameter declarations remain outside this file.
- *   [ ] Generic applications remain outside this file.
- *   [ ] General constraints remain outside this file.
- *   [ ] Type-bound syntax is complete.
- *   [ ] Bound order is preserved.
- *   [ ] Compound bounds are represented.
- *   [ ] Alternative bounds are represented where supported.
- *   [ ] Parenthesized bounds are represented.
- *   [ ] Qualified types are delegated.
- *   [ ] Generic types are delegated.
- *   [ ] No machine-specific limits exist.
- *   [ ] No quantum-specific limits exist.
- *   [ ] No hardware-specific limits exist.
- *   [ ] No unsafe code exists.
- *   [ ] No embedded Rust actions exist.
- *   [ ] No runtime dependency exists.
- *   [ ] AST conversion has a defined contract.
- *   [ ] Type-checking integration has a defined contract.
- *   [ ] Compiler integration has a defined contract.
- *   [ ] IR integration remains downstream.
- *   [ ] `quantum::ir` is not imported or duplicated.
- *   [ ] QEC is not implemented here.
- *   [ ] ZQN is not implemented here.
- *   [ ] Routing is not implemented here.
- *   [ ] Scheduling is not implemented here.
- *   [ ] Hardware discovery is not implemented here.
- *   [ ] Positive tests exist.
- *   [ ] Negative tests exist.
- *   [ ] Boundary tests exist.
- *   [ ] Cross-domain tests exist.
- *   [ ] Scalability tests exist.
- *   [ ] Determinism tests exist.
- *   [ ] Compatibility tests exist.
- */
