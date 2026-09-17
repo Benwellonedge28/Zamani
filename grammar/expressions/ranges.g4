@@ -7,474 +7,314 @@
  *     grammar/expressions/ranges.g4
  *
  * Status:
- *     Production range-expression parser grammar.
+ *     Production modular range-expression grammar.
  *
  * Purpose:
- *     Own the syntax of Zamani range expressions while remaining completely
- *     independent of machine size, memory capacity, iterator implementation,
- *     hardware topology, quantum-device size, or target architecture.
+ *     Own the reusable syntax of Zamani range expressions while delegating
+ *     expression precedence, lexical tokenization, typing, semantics, AST
+ *     construction, IR lowering, and target realization to their canonical
+ *     owners.
  *
  * ============================================================================
- * ARCHITECTURAL OWNERSHIP
+ * ARCHITECTURAL AUTHORITY
+ * ============================================================================
+ *
+ * Language specification
+ *        |
+ *        v
+ * Modular grammar components
+ *        |
+ *        v
+ * grammar/expressions/expression.g4
+ *        |
+ *        v
+ * grammar/Zamani.g4
+ *        |
+ *        v
+ * Lexer / parser implementation
+ *        |
+ *        v
+ * Domain-neutral frontend AST
+ *        |
+ *        v
+ * Semantic analysis
+ *        |
+ *        +------------------+------------------+
+ *        |                  |                  |
+ *        v                  v                  v
+ *   Classical IR       quantum::ir       HDL/Hardware IR
+ *        |                  |                  |
+ *        +------------------+------------------+
+ *                           |
+ *                           v
+ *                  optimization/lowering
+ *                           |
+ *                    routing/scheduling
+ *                           |
+ *                    resilience/QEC/ZQN
+ *                           |
+ *                           v
+ *                          HAL
+ *                           |
+ *                           v
+ *                    target realization
+ *
+ * This file has NO dependency on:
+ *
+ *     quantum::ir
+ *     hardware
+ *     HAL
+ *     routing
+ *     scheduling
+ *     QEC
+ *     ZQN
+ *     runtime state
+ *     target selection
+ *
+ * ============================================================================
+ * FILE OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *   - range-expression syntax;
- *   - range endpoints;
- *   - inclusive/exclusive endpoint syntax;
- *   - open/unbounded range syntax;
- *   - range-with-step syntax;
- *   - range-with-count syntax where the language specification supports it;
- *   - range composition syntax;
- *   - parser-level distinction between bounded and unbounded forms;
- *   - parser-level distinction between inclusive and exclusive bounds.
+ *     - range-expression syntax;
+ *     - range operators;
+ *     - optional lower endpoint;
+ *     - optional upper endpoint;
+ *     - inclusive/exclusive upper-bound syntax;
+ *     - open-start syntax;
+ *     - open-end syntax;
+ *     - completely open range syntax;
+ *     - composition of a range with the canonical lower expression layer.
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - lexer token definitions;
- *   - identifier spelling;
- *   - numeric literal spelling;
- *   - arithmetic precedence;
- *   - unary-expression precedence;
- *   - general expression precedence;
- *   - type checking;
- *   - constant evaluation;
- *   - range cardinality calculation;
- *   - overflow detection;
- *   - iteration;
- *   - collection allocation;
- *   - memory management;
- *   - parallel execution;
- *   - scheduling;
- *   - hardware discovery;
- *   - hardware topology;
- *   - quantum allocation;
- *   - physical qubit selection;
- *   - CPU/GPU/FPGA selection;
- *   - resource allocation;
- *   - optimization;
- *   - routing;
- *   - QEC;
- *   - ZQN;
- *   - simulation;
- *   - classical IR;
- *   - quantum::ir;
- *   - HDL IR;
- *   - runtime representation;
- *   - target lowering;
- *   - machine-specific limits.
+ *     - lexer rules;
+ *     - token spelling;
+ *     - identifiers;
+ *     - numeric literals;
+ *     - arithmetic;
+ *     - comparison;
+ *     - logical operators;
+ *     - assignment;
+ *     - calls;
+ *     - indexing;
+ *     - statements;
+ *     - loops;
+ *     - iteration;
+ *     - collection materialization;
+ *     - range cardinality;
+ *     - overflow;
+ *     - type checking;
+ *     - endpoint ordering;
+ *     - resource allocation;
+ *     - hardware mapping;
+ *     - physical qubit selection;
+ *     - QEC;
+ *     - ZQN;
+ *     - scheduling;
+ *     - runtime execution.
  *
  * ============================================================================
- * DEPENDENCY DIRECTION
+ * CANONICAL LEXER CONTRACT
  * ============================================================================
  *
- *     lexer
- *       |
- *       v
- *     Ranges
- *       |
- *       v
- *     Expressions
- *       |
- *       v
- *     frontend AST
- *       |
- *       +--> name resolution
- *       +--> type checking
- *       +--> constant evaluation
- *       +--> effect checking
- *       +--> resource validation
- *       |
- *       +--> classical IR
- *       +--> quantum::ir
- *       +--> HDL/control IR
- *       |
- *       v
- *     optimization
- *       |
- *       v
- *     scheduling / routing / lowering
- *       |
- *       v
- *     target realization
+ * The repository's canonical lexer owns range punctuation.
  *
- * There is deliberately NO dependency:
+ * Canonical tokens:
  *
- *     ranges -> quantum::ir
- *     ranges -> hardware
- *     ranges -> runtime
- *     ranges -> scheduler
+ *     DOT_DOT
+ *         source spelling: ..
+ *
+ *     DOT_DOT_EQ
+ *         source spelling: ..=
+ *
+ * This grammar MUST NOT redefine those tokens.
+ *
+ * In particular, this file MUST NOT introduce:
+ *
+ *     RANGE
+ *     RANGE_INCLUSIVE
+ *     RANGE_EXCLUSIVE
+ *     STEP
+ *     COUNT
+ *
+ * as alternative lexical vocabulary.
+ *
+ * The existing lexer already establishes:
+ *
+ *     DOT_DOT_EQ
+ *     DOT_DOT
+ *
+ * and the modular grammar must consume those tokens directly.
  *
  * ============================================================================
- * POCO-REAF
+ * RANGE MODEL
  * ============================================================================
  *
- * A range expresses a computation-domain concept.
+ * Supported syntactic forms:
  *
- * It does not prescribe how the range is physically represented.
+ *     start .. end
+ *     start ..= end
+ *
+ *     start ..
+ *     start ..=
+ *
+ *     .. end
+ *     ..= end
+ *
+ *     ..
+ *     ..=
+ *
+ * The grammar preserves endpoint presence/absence.
+ *
+ * It MUST NOT replace an omitted endpoint with:
+ *
+ *     0
+ *     1
+ *     MIN
+ *     MAX
+ *     infinity
+ *     machine_word_max
+ *     type_max
+ *     any target-specific value.
+ *
+ * The semantic/type layer decides what an omitted endpoint means in context.
+ *
+ * ============================================================================
+ * BOUNDARY MEANING
+ * ============================================================================
+ *
+ *     start .. end
+ *
+ * has an exclusive upper boundary.
+ *
+ *     start ..= end
+ *
+ * has an inclusive upper boundary.
+ *
+ * The lower boundary is represented by the presence or absence of the lower
+ * endpoint. No separate lower-inclusive/lower-exclusive token is invented.
+ *
+ * ============================================================================
+ * SCALABILITY / POCO-REAF
+ * ============================================================================
+ *
+ * No artificial resource limit is encoded here.
+ *
+ * This grammar does NOT define:
+ *
+ *     MAX_RANGE_LENGTH
+ *     MAX_RANGE_VALUE
+ *     MAX_INDEX
+ *     MAX_ITERATIONS
+ *     MAX_ELEMENTS
+ *     MAX_DIMENSIONS
+ *     MAX_INTEGER_BITS
+ *     MAX_TENSOR_SIZE
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *
+ * A range is a compact source-level description of a domain.
  *
  * For example:
  *
- *     0..n
+ *     0 .. n
  *
- * may become:
+ * may ultimately be represented as:
  *
- *     - a lazy iterator;
- *     - a compile-time sequence;
- *     - a classical loop;
+ *     - a lazy range;
+ *     - an iteration domain;
+ *     - a slice;
+ *     - a tensor domain;
  *     - a distributed partition;
- *     - a GPU launch domain;
- *     - an FPGA iteration domain;
- *     - a quantum-control iteration domain;
- *     - a symbolic mathematical domain;
+ *     - an accelerator launch domain;
  *     - an HDL generation domain;
+ *     - a quantum index domain;
+ *     - a symbolic mathematical interval.
  *
- * depending on downstream semantics.
+ * That decision belongs downstream.
  *
- * The grammar therefore MUST NOT choose any of those implementations.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are deliberately NO grammar constants such as:
- *
- *     MAX_RANGE_SIZE
- *     MAX_RANGE_LENGTH
- *     MAX_RANGE_STEP
- *     MAX_RANGE_DEPTH
- *     MAX_ENDPOINT_VALUE
- *     MAX_INTEGER_BITS
- *     MAX_ITERATIONS
- *     MAX_LOOP_ITERATIONS
- *     MAX_ARRAY_LENGTH
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_DEVICES
- *
- * A range can describe arbitrarily large values or domains subject only to
- * the resources and semantic policies available to the eventual implementation.
- *
- * The grammar imposes no artificial cardinality limit.
+ * "Infinity" therefore means that this grammar introduces no artificial
+ * language-level finite resource limit. Actual compiler/runtime limits remain
+ * implementation and resource-policy concerns.
  *
  * ============================================================================
- * LEXER CONTRACT
+ * EXPRESSION PRECEDENCE CONTRACT
  * ============================================================================
  *
- * This is a PARSER grammar.
+ * The canonical expression hierarchy in expression.g4 is:
  *
- * The canonical Zamani lexer owns:
+ *     expression
+ *       |
+ *       v
+ *     assignmentExpression
+ *       |
+ *       v
+ *     conditionalExpression
+ *       |
+ *       v
+ *     rangeExpression
+ *       |
+ *       v
+ *     logicalOrExpression
+ *       |
+ *       v
+ *     logicalAndExpression
+ *       |
+ *       v
+ *     bitwise...
+ *       |
+ *       v
+ *     comparison...
+ *       |
+ *       v
+ *     arithmetic...
+ *       |
+ *       v
+ *     prefix
+ *       |
+ *       v
+ *     postfix
+ *       |
+ *       v
+ *     primary
  *
- *     DOT
- *     RANGE / RANGE_INCLUSIVE / RANGE_EXCLUSIVE tokens, if adopted
- *     COLON
- *     HASH
- *     COMMA
- *     INTEGER
- *     FLOAT
- *     IDENT
- *     and all other lexical tokens.
+ * This file MUST NOT recreate that precedence graph.
  *
- * This file MUST NOT define lexer rules.
+ * Range endpoints therefore consume:
  *
- * ============================================================================
- * CANONICAL OPERATOR POLICY
- * ============================================================================
+ *     logicalOrExpression
  *
- * Range punctuation must have exactly one lexical owner.
+ * rather than `expression`.
  *
- * This grammar intentionally uses the canonical token names:
+ * This is important.
  *
- *     RANGE
- *     RANGE_EXCLUSIVE
- *
- * only where those tokens are established by the Zamani lexer contract.
- *
- * If the canonical lexer uses a different spelling, the lexer vocabulary must
- * be reconciled centrally. This file must not invent a second lexical
- * vocabulary.
- *
- * ============================================================================
- * RANGE SEMANTICS
- * ============================================================================
- *
- * The grammar represents:
- *
- *     lower .. upper
- *
- * as a bounded range.
- *
- * Endpoint openness is represented separately from endpoint value.
- *
- * This permits the semantic layer to distinguish:
- *
- *     a..b
- *     a..<b
- *
- * without encoding iteration policy into parsing.
- *
- * Unbounded forms may represent:
- *
- *     ..b
- *     a..
- *     ..
- *
- * where those forms are admitted by the surrounding language construct.
- *
- * The semantic layer determines whether an unbounded range is valid in a
- * particular context.
+ * Using `expression` as the endpoint would re-enter assignment/conditional/
+ * range parsing and create a competing expression boundary.
  *
  * ============================================================================
- * STEP SEMANTICS
+ * PUBLIC COMPOSITION CONTRACT
  * ============================================================================
  *
- * A step is a semantic value, not a machine increment instruction.
- *
- * Examples:
- *
- *     0..n step s
- *     0..<n step s
- *
- * are syntax.
- *
- * The semantic layer determines:
- *
- *     - whether the step is valid;
- *     - whether zero is permitted;
- *     - whether the direction is valid;
- *     - whether the endpoint is reachable;
- *     - whether overflow is possible;
- *     - whether the range is finite;
- *     - whether evaluation is lazy;
- *     - whether distribution is possible.
- *
- * ============================================================================
- * COUNT SEMANTICS
- * ============================================================================
- *
- * Count-based ranges, when supported, express a requested cardinality.
- *
- * Example conceptual form:
- *
- *     start .. #count
- *
- * The grammar does not decide whether the count is representable by a
- * particular machine.
- *
- * ============================================================================
- * RANGE COMPOSITION
- * ============================================================================
- *
- * A range endpoint is an expression.
- *
- * Therefore:
- *
- *     0..n
- *     start..end
- *     offset..(base + width)
- *     q..(q + count)
- *
- * are all syntactically possible.
- *
- * Type compatibility and range validity are semantic concerns.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Range syntax can be used in source constructs involving:
- *
- *     qubit ranges;
- *     logical-qubit ranges;
- *     classical registers;
- *     measurement domains;
- *     parameter domains;
- *     circuit iteration;
- *     quantum-control iteration.
- *
- * This grammar does NOT determine:
- *
- *     - number of physical qubits;
- *     - QPU topology;
- *     - qubit allocation;
- *     - routing;
- *     - QEC;
- *     - ZQN;
- *     - gate scheduling.
- *
- * A range such as:
- *
- *     0..qubit_count
- *
- * remains a source-level expression.
- *
- * If it contributes to quantum::ir, the frontend/semantic lowering layer
- * performs that translation.
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Ranges may describe:
- *
- *     bus slices;
- *     generated instances;
- *     address domains;
- *     pipeline indices;
- *     replicated hardware structures;
- *     parameterized hardware generation.
- *
- * The grammar does not choose:
- *
- *     FPGA width;
- *     ASIC implementation;
- *     physical address space;
- *     number of generated units;
- *     clock domains.
- *
- * ============================================================================
- * DISTRIBUTED / PARALLEL INTEGRATION
- * ============================================================================
- *
- * A range can later be interpreted as:
- *
- *     sequential iteration;
- *     parallel iteration;
- *     partition domain;
- *     distributed index space;
- *     tensor dimension;
- *     accelerator launch domain.
- *
- * Those are semantic/compiler decisions.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend AST should preserve at least:
- *
- *     start
- *     end
- *     start_bound
- *     end_bound
- *     step
- *     count
- *     source span
- *
- * where applicable.
- *
- * The AST must distinguish:
- *
- *     absent endpoint
- *
- * from:
- *
- *     endpoint whose expression happens to evaluate to a value.
- *
- * The AST must also preserve whether an endpoint is inclusive or exclusive.
- *
- * The grammar does not construct AST nodes directly.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis is responsible for:
- *
- *     - endpoint type compatibility;
- *     - step type compatibility;
- *     - count validity;
- *     - ordering;
- *     - direction;
- *     - zero-step rejection;
- *     - overflow policy;
- *     - infinite-range detection;
- *     - cardinality;
- *     - constant evaluation;
- *     - symbolic-range validity;
- *     - resource implications.
- *
- * None of these belong in this grammar.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Given identical:
- *
- *     source text;
- *     language version;
- *     lexer version;
- *
- * parsing must produce the same parse structure.
- *
- * Parsing must never depend on:
- *
- *     CPU count;
- *     GPU count;
- *     FPGA count;
- *     QPU topology;
- *     available memory;
- *     runtime state;
- *     backend;
- *     scheduler state;
- *     calibration state;
- *     network state.
- *
- * ============================================================================
- * ERROR BOUNDARY
- * ============================================================================
- *
- * SYNTAX ERRORS BELONG HERE:
- *
- *     malformed range punctuation;
- *     missing endpoint where the selected form requires one;
- *     malformed step syntax;
- *     malformed count syntax;
- *     malformed range composition.
- *
- * SEMANTIC ERRORS DO NOT BELONG HERE:
- *
- *     zero step;
- *     incompatible endpoint types;
- *     reversed range under a policy that forbids it;
- *     integer overflow;
- *     excessive cardinality;
- *     unavailable hardware resources;
- *     unavailable qubits;
- *     impossible FPGA placement;
- *     unsupported parallelization.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Range punctuation and associativity are language compatibility contracts.
- *
- * Existing range syntax must not be silently reinterpreted.
- *
- * Any breaking change requires an explicit language-version decision.
- *
- * ============================================================================
- * RUST CONTRACT
- * ============================================================================
- *
- * This file contains no Rust implementation code.
- *
- * Rust components consuming its generated parser must support:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * and safe Rust only.
- *
- * Repository Rust code must enforce:
- *
- *     #![forbid(unsafe_code)]
- *
- * or an equivalent repository-wide policy.
+ * The canonical expression grammar imports this grammar and owns the public
+ * `expression` entry point.
+ *
+ * Conceptually:
+ *
+ *     expression.g4
+ *         |
+ *         +--> conditionalExpression
+ *                 |
+ *                 +--> rangeExpression
+ *                         |
+ *                         +--> lower expression layer
+ *
+ * This file provides the range-specific rules only.
  *
  * ============================================================================
  */
@@ -488,395 +328,174 @@ options {
 
 /*
  * ============================================================================
- * PUBLIC ENTRY POINT
+ * PUBLIC RANGE RULE
  * ============================================================================
  *
- * `rangeExpression` is the single public range-expression rule.
+ * This is the single public range rule supplied by this grammar.
  *
- * Other expression grammars should consume this rule rather than duplicating
- * range syntax.
+ * The surrounding expression grammar should delegate to this rule.
+ *
  * ============================================================================
  */
 
 rangeExpression
-    : rangeCore
+    : rangeStart? rangeOperator rangeEnd?
     ;
 
 
 /*
  * ============================================================================
- * RANGE CORE
+ * RANGE START
  * ============================================================================
  *
- * A range is composed from:
+ * The lower endpoint is optional.
  *
- *     optional lower endpoint
- *     range operator
- *     optional upper endpoint
- *     optional range modifier
+ * Examples:
  *
- * Endpoint expressions are supplied by the surrounding expression grammar.
+ *     0
+ *     start
+ *     index + offset
  *
- * `rangeEndpoint` is intentionally an integration boundary rather than a
- * duplicate expression grammar.
+ * The endpoint is deliberately the lower expression layer rather than the
+ * complete `expression` rule.
+ *
  * ============================================================================
  */
 
-rangeCore
-    : rangeEndpoint? rangeOperator rangeEndpoint? rangeModifier*
+rangeStart
+    : logicalOrExpression
     ;
 
 
 /*
  * ============================================================================
- * RANGE OPERATORS
+ * RANGE END
  * ============================================================================
  *
- * The exact lexical representation is owned by ZamaniLexer.
+ * The upper endpoint is optional.
  *
- * RANGE represents the canonical inclusive range operator.
+ * Examples:
  *
- * RANGE_EXCLUSIVE represents an explicitly exclusive upper-bound form.
+ *     10
+ *     end
+ *     limit + offset
  *
- * Keeping these as distinct tokens allows the parser to preserve endpoint
- * intent without semantic guessing.
+ * As with the lower endpoint, this consumes the canonical lower expression
+ * layer and therefore cannot accidentally consume a second range operator.
+ *
+ * ============================================================================
+ */
+
+rangeEnd
+    : logicalOrExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * RANGE OPERATOR
+ * ============================================================================
+ *
+ * Canonical lexical ownership:
+ *
+ *     DOT_DOT
+ *     DOT_DOT_EQ
+ *
+ * No literal punctuation is defined here.
+ *
  * ============================================================================
  */
 
 rangeOperator
-    : RANGE
-    | RANGE_EXCLUSIVE
+    : DOT_DOT
+    | DOT_DOT_EQ
     ;
 
 
 /*
  * ============================================================================
- * RANGE ENDPOINT
+ * EXPLICIT RANGE FORMS
  * ============================================================================
  *
- * An endpoint is an arbitrary expression at the semantic level.
+ * These named rules are integration aliases.
  *
- * It must not be restricted to integer literals.
+ * They do not introduce additional syntax.
  *
- * Examples:
- *
- *     0..n
- *     start..end
- *     offset..(base + width)
- *     q..(q + count)
- *     index..limit
- *
- * The actual expression rule is supplied by the canonical Expressions
- * grammar.
- *
- * `rangeEndpoint` is intentionally kept as an integration rule so that this
- * grammar does not recursively import the complete expression hierarchy.
+ * They provide stable parser-rule names for downstream grammar consumers and
+ * tests without duplicating the public range grammar.
  * ============================================================================
  */
-
-rangeEndpoint
-    : rangeEndpointExpression
-    ;
 
 
 /*
- * ============================================================================
- * EXPRESSION INTEGRATION BRIDGE
- * ============================================================================
+ * Both endpoints are explicitly present.
  *
- * The canonical Expressions grammar MUST bind this rule to the appropriate
- * expression level.
- *
- * This file deliberately does not define:
- *
- *     expression
- *     assignmentExpression
- *     conditionalExpression
- *     logicalExpression
- *     additiveExpression
- *
- * because doing so would create duplicate expression ownership and circular
- * parser dependencies.
- *
- * The canonical integration point is therefore a parser-rule alias.
- *
- * In the composed expression grammar, `rangeEndpointExpression` must resolve
- * to the expression level that is valid as a range endpoint.
- *
- * ============================================================================
- *
- * IMPORTANT:
- *
- * Do not add a second complete expression grammar here.
- *
- * ============================================================================
+ *     start .. end
+ *     start ..= end
  */
-
-rangeEndpointExpression
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * RANGE MODIFIERS
- * ============================================================================
- *
- * Range modifiers refine iteration/domain semantics without changing the
- * endpoint grammar.
- *
- * Supported forms:
- *
- *     step
- *     count
- *
- * Additional future modifiers should be introduced as explicit language
- * constructs or dialect extensions rather than overloading existing syntax.
- * ============================================================================
- */
-
-rangeModifier
-    : rangeStep
-    | rangeCount
-    ;
-
-
-/*
- * ============================================================================
- * STEP
- * ============================================================================
- *
- * Canonical conceptual syntax:
- *
- *     range step expression
- *
- * Examples:
- *
- *     0..10 step 2
- *     start..end step stride
- *     0..<n step block
- *
- * The `step` keyword/token must be owned by the canonical lexer.
- *
- * ============================================================================
- */
-
-rangeStep
-    : STEP
-      rangeModifierExpression
-    ;
-
-
-/*
- * ============================================================================
- * COUNT
- * ============================================================================
- *
- * Canonical conceptual syntax:
- *
- *     range count expression
- *
- * This represents a requested cardinality rather than a physical allocation.
- *
- * Example:
- *
- *     start..end count n
- *
- * Semantic analysis determines whether that form is meaningful for the
- * selected range.
- * ============================================================================
- */
-
-rangeCount
-    : COUNT
-      rangeModifierExpression
-    ;
-
-
-/*
- * ============================================================================
- * MODIFIER EXPRESSION
- * ============================================================================
- *
- * Step and count values are expressions.
- *
- * This allows:
- *
- *     step 1
- *     step stride
- *     step (base + delta)
- *     count n
- *     count partitions
- *
- * without introducing artificial numeric restrictions.
- * ============================================================================
- */
-
-rangeModifierExpression
-    : rangeEndpointExpression
-    ;
-
-
-/*
- * ============================================================================
- * EXPLICIT BOUNDED RANGE
- * ============================================================================
- *
- * This convenience rule gives downstream grammar composition a stable name for
- * ranges where both endpoints are syntactically present.
- *
- * Examples:
- *
- *     a..b
- *     a..<b
- *
- * ============================================================================
- */
-
 boundedRangeExpression
-    : rangeEndpoint
+    : rangeStart
       rangeOperator
-      rangeEndpoint
-      rangeModifier*
+      rangeEnd
     ;
 
 
 /*
- * ============================================================================
- * LOWER-BOUNDED RANGE
- * ============================================================================
+ * Lower endpoint is present and upper endpoint is omitted.
  *
- * Examples:
- *
- *     a..
- *     a.. step s
- *     a.. count n
- *
- * The missing upper endpoint is represented syntactically by absence.
- *
- * The semantic layer decides whether the range is finite or infinite.
- * ============================================================================
+ *     start ..
+ *     start ..=
  */
-
 lowerBoundedRangeExpression
-    : rangeEndpoint
+    : rangeStart
       rangeOperator
-      rangeModifier*
     ;
 
 
 /*
- * ============================================================================
- * UPPER-BOUNDED RANGE
- * ============================================================================
+ * Lower endpoint is omitted and upper endpoint is present.
  *
- * Examples:
- *
- *     ..b
- *     ..<b
- *     ..b step s
- *
- * ============================================================================
+ *     .. end
+ *     ..= end
  */
-
 upperBoundedRangeExpression
     : rangeOperator
-      rangeEndpoint
-      rangeModifier*
+      rangeEnd
     ;
 
 
 /*
- * ============================================================================
- * UNBOUNDED RANGE
- * ============================================================================
- *
- * Example:
+ * Neither endpoint is present.
  *
  *     ..
+ *     ..=
  *
- * Whether a completely unbounded range is legal in a particular syntactic
- * context is a semantic/contextual decision.
- *
- * The grammar preserves the construct without assigning it a runtime meaning.
- * ============================================================================
+ * Whether this is legal as a standalone value is a semantic/contextual
+ * decision. The parser preserves the syntax rather than inventing a bound.
  */
-
 unboundedRangeExpression
     : rangeOperator
-      rangeModifier*
     ;
 
 
 /*
  * ============================================================================
- * RANGE WITH STEP
+ * RANGE DOMAIN ALIAS
  * ============================================================================
  *
- * Convenience rule for downstream parser composition.
+ * Consumers such as:
  *
- * ============================================================================
- */
-
-steppedRangeExpression
-    : rangeCore
-      rangeStep
-    ;
-
-
-/*
- * ============================================================================
- * RANGE WITH COUNT
- * ============================================================================
+ *     for
+ *     indexing
+ *     slicing
+ *     tensor operations
+ *     quantum selection
+ *     HDL generation
+ *     distributed partitioning
  *
- * Convenience rule for downstream parser composition.
+ * may explicitly reference the generic range expression.
  *
- * ============================================================================
- */
-
-countedRangeExpression
-    : rangeCore
-      rangeCount
-    ;
-
-
-/*
- * ============================================================================
- * RANGE WITH BOTH STEP AND COUNT
- * ============================================================================
- *
- * Modifier order is intentionally syntactically flexible:
- *
- *     start..end step s count n
- *     start..end count n step s
- *
- * Semantic validation determines whether both modifiers are meaningful and
- * whether their combination is valid.
- *
- * ============================================================================
- */
-
-parameterizedRangeExpression
-    : rangeCore
-      rangeModifier
-      rangeModifier
-      rangeModifier*
-    ;
-
-
-/*
- * ============================================================================
- * RANGE DOMAIN EXPRESSION
- * ============================================================================
- *
- * This stable rule is intended for constructs such as:
- *
- *     for i in 0..n
- *     foreach q in qubits
- *     forall i in domain
- *
- * It does NOT require the source to be a concrete materialized collection.
- *
+ * This is an alias only. It does not introduce a second range syntax.
  * ============================================================================
  */
 
@@ -887,12 +506,12 @@ rangeDomainExpression
 
 /*
  * ============================================================================
- * RANGE PATTERN
+ * RANGE PATTERN ALIAS
  * ============================================================================
  *
- * This parser-level form is useful to pattern/matching infrastructure without
- * introducing a second range syntax.
+ * Pattern/match infrastructure may consume the same range representation.
  *
+ * No second range grammar is created.
  * ============================================================================
  */
 
@@ -903,424 +522,367 @@ rangePattern
 
 /*
  * ============================================================================
- * RANGE TYPE-AGNOSTICITY
+ * SEMANTIC BOUNDARY
  * ============================================================================
  *
- * The following are intentionally all syntactically representable:
+ * This grammar deliberately does NOT decide:
  *
- *     0..n
- *     0.0..1.0
- *     start..end
- *     q0..qN
- *     row..rows
- *     time0..time1
- *     address0..address1
- *     symbolic_start..symbolic_end
+ *     - whether endpoints have compatible types;
+ *     - whether a range is finite;
+ *     - whether it is empty;
+ *     - whether ordering is valid;
+ *     - whether an endpoint overflows;
+ *     - whether an omitted endpoint is legal;
+ *     - whether the range is materialized;
+ *     - whether the range is lazy;
+ *     - whether it is sequential;
+ *     - whether it is parallel;
+ *     - whether it is distributed;
+ *     - whether it is mapped to an accelerator;
+ *     - whether it represents quantum indices;
+ *     - whether it represents physical qubits;
+ *     - whether it is valid for HDL generation.
  *
- * Semantic/type checking determines validity.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * INTEGRATION CONTRACT
- * ============================================================================
- *
- * The canonical expression parser should import this grammar:
- *
- *     import Ranges;
- *
- * It should delegate range syntax to:
- *
- *     rangeExpression
- *
- * and MUST NOT independently redefine:
- *
- *     rangeExpression
- *     rangeOperator
- *     rangeStep
- *     rangeCount
+ * Those decisions belong to semantic/type/resource analysis.
  *
  * ============================================================================
- *
- * RANGE PRECEDENCE
+ * AST CONTRACT
  * ============================================================================
  *
- * Range expressions must sit above arithmetic endpoint expressions.
+ * The parser must provide enough structure for the existing domain-neutral
+ * frontend AST to preserve:
  *
- * Conceptually:
+ *     - lower endpoint presence;
+ *     - upper endpoint presence;
+ *     - lower endpoint expression;
+ *     - upper endpoint expression;
+ *     - exclusive/inclusive operator;
+ *     - operator source span;
+ *     - endpoint source spans;
+ *     - complete range source span.
  *
- *     ...
- *       relational
- *           |
- *       shift
- *           |
- *       additive
- *           |
- *       multiplicative
- *           |
- *       exponent
- *           |
- *       unary
- *           |
- *       postfix
- *           |
- *       primary
- *           |
- *       range composition
+ * The frontend AST must remain generic.
  *
- * The exact position in the canonical expression hierarchy must be fixed by
- * `expressions.g4` so this file does not create a second precedence graph.
+ * It MUST NOT create:
  *
- * ============================================================================
+ *     QuantumRange
+ *     TensorRange
+ *     HardwareRange
+ *     PhysicalQubitRange
+ *     CpuRange
+ *     GpuRange
+ *     FpgaRange
  *
- * Examples that must remain structurally unambiguous:
- *
- *     0..n
- *     0..n + 1
- *     0..(n + 1)
- *     start..end step stride
- *     (start + offset)..(end + offset)
- *
- * Endpoint grouping belongs to the ordinary expression grammar.
+ * or similar domain-specific parser nodes.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * AST INTEGRATION CONTRACT
+ * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Frontend AST construction must map:
+ * A range may participate in a quantum source construct, for example:
  *
- *     rangeExpression
- *
- * into the repository's existing range-expression representation.
- *
- * The existing frontend already contains range-expression builder support.
- * Therefore this grammar must feed that existing representation rather than
- * introduce a grammar-specific range AST.
- *
- * The AST must retain:
- *
- *     start endpoint;
- *     end endpoint;
- *     endpoint openness/inclusivity;
- *     step;
- *     count;
- *     source span.
- *
- * Absent endpoints MUST remain absent.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * SEMANTIC INTEGRATION CONTRACT
- * ============================================================================
- *
- * Semantic analysis consumes the AST and determines:
- *
- *     endpoint compatibility;
- *     step compatibility;
- *     count compatibility;
- *     range direction;
- *     finiteness;
- *     cardinality;
- *     zero-step validity;
- *     overflow behavior;
- *     symbolic validity;
- *     constant-evaluation opportunities.
- *
- * This grammar MUST NOT perform those operations.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * CLASSICAL IR INTEGRATION
- * ============================================================================
- *
- * A range may lower to:
- *
- *     iteration domain;
- *     slice;
- *     interval;
- *     index set;
- *     lazy sequence;
- *     symbolic domain.
- *
- * The grammar has no direct dependency on classical IR.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * QUANTUM IR INTEGRATION
- * ============================================================================
- *
- * A range may participate in quantum source constructs.
- *
- * Example conceptual source:
- *
- *     for q in logical_qubits {
- *         ...
- *     }
+ *     q[0 .. n]
  *
  * or:
  *
- *     measure qubits[0..n]
+ *     measure q[start ..= end]
  *
- * The range grammar does not create quantum operations.
+ * The range grammar does not select physical qubits.
  *
- * If the resulting semantic construct becomes a quantum operation, lowering
- * occurs through the canonical quantum frontend/IR path.
+ * The semantic pipeline remains:
  *
- * There is no:
+ *     source
+ *       |
+ *       v
+ *     frontend AST
+ *       |
+ *       v
+ *     semantic quantum model
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     QEC / resilience / ZQN
+ *       |
+ *       v
+ *     HAL
+ *       |
+ *       v
+ *     physical target
  *
- *     grammar -> quantum::ir
- *
- * dependency.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * HARDWARE / HDL INTEGRATION
- * ============================================================================
- *
- * Hardware-oriented users may use ranges to describe:
- *
- *     replicated structures;
- *     index domains;
- *     slices;
- *     generated instances;
- *     parameterized widths.
- *
- * This grammar remains unaware of the target.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * RESOURCE INTEGRATION
- * ============================================================================
- *
- * A range can describe a requested domain whose realization consumes resources.
- *
- * Resource analysis may determine:
- *
- *     memory requirements;
- *     parallelism;
- *     communication;
- *     execution cost;
- *     quantum resources;
- *     hardware resources.
- *
- * Those analyses are downstream.
+ * This grammar creates no quantum IR.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * DETERMINISM / REPRODUCIBILITY
+ * CLASSICAL / DATA / AI INTEGRATION
  * ============================================================================
  *
- * No rule in this grammar may depend on runtime discovery.
+ * The same generic range syntax can describe semantic domains used for:
  *
- * Identical source + identical language/lexer versions must produce identical
- * parse trees.
+ *     arrays
+ *     vectors
+ *     matrices
+ *     tensors
+ *     datasets
+ *     streams
+ *     partitions
+ *     scientific domains
+ *     numerical domains
+ *     accelerator domains
+ *
+ * No fixed dimensionality, element count, vector width, or accelerator count
+ * is encoded here.
  *
  * ============================================================================
- */
-
-
-/*
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * The same syntax may be consumed by HDL/hardware grammar constructs for:
+ *
+ *     parameterized widths
+ *     generated instances
+ *     address domains
+ *     memory indices
+ *     pipeline indices
+ *     replicated structures
+ *
+ * This file does not determine actual hardware width or implementation.
+ *
+ * ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * A range can describe an abstract domain used for:
+ *
+ *     partitioning
+ *     sharding
+ *     task generation
+ *     distributed indexing
+ *     collective domains
+ *
+ * It does not establish a fixed node count or physical placement.
+ *
+ * ============================================================================
+ * RESOURCE / PORTABILITY CONTRACT
+ * ============================================================================
+ *
+ * Requirements such as:
+ *
+ *     requires a capability
+ *
+ * and target decisions such as:
+ *
+ *     place on device X
+ *
+ * are not range syntax.
+ *
+ * A range describes a source-level domain.
+ *
+ * Resource analysis determines whether and how that domain can be realized
+ * on the available target.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing this grammar must depend only on:
+ *
+ *     - token sequence;
+ *     - grammar version;
+ *     - parser configuration.
+ *
+ * It must never depend on:
+ *
+ *     - CPU count;
+ *     - GPU count;
+ *     - QPU availability;
+ *     - memory capacity;
+ *     - network state;
+ *     - runtime scheduler state;
+ *     - calibration state;
+ *     - random state.
+ *
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
+ *
+ * Syntax errors:
+ *
+ *     malformed range punctuation;
+ *     malformed endpoint token sequence;
+ *     malformed surrounding expression.
+ *
+ * Semantic errors:
+ *
+ *     incompatible endpoint types;
+ *     invalid ordering;
+ *     unsupported rangeable type;
+ *     overflow;
+ *     invalid use of an unbounded range;
+ *     impossible materialization;
+ *     unavailable resources.
+ *
+ * Semantic errors MUST be reported downstream.
+ *
+ * ============================================================================
+ * STEPS / STRIDES
+ * ============================================================================
+ *
+ * This file deliberately does NOT introduce a `step` or `stride` grammar.
+ *
+ * The repository's existing canonical range contract defines `..` and `..=`
+ * only. Adding:
+ *
+ *     start .. end step stride
+ *
+ * here without first establishing a language-wide lexical/specification/AST/
+ * semantic contract would create an incomplete feature and force later
+ * re-editing.
+ *
+ * If stepped ranges are eventually standardized, they require a coordinated
+ * contract across:
+ *
+ *     specification
+ *     lexer
+ *     expression grammar
+ *     AST
+ *     semantic analysis
+ *     diagnostics
+ *     IR
+ *     compiler
+ *     runtime
+ *     compatibility
+ *     tests
+ *
+ * This file therefore remains independently complete for the range feature
+ * that the repository currently defines.
+ *
+ * ============================================================================
+ * NO HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * No resource or hardware limit appears in this grammar.
+ *
+ * No fixed:
+ *
+ *     qubit count
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     node count
+ *     memory size
+ *     tensor dimension
+ *     vector width
+ *     range cardinality
+ *     endpoint magnitude
+ *
+ * is encoded.
+ *
+ * ============================================================================
+ * RUST INTEGRATION
+ * ============================================================================
+ *
+ * This file contains no Rust code.
+ *
+ * Generated-parser consumers must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and safe Rust only.
+ *
+ * The grammar itself introduces no requirement for `unsafe`.
+ *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * Required positive syntax cases include:
+ * Required positive cases:
  *
- *     0..10
- *     0..<10
- *     start..end
- *     start..<end
- *     ..end
- *     ..<end
- *     start..
+ *     0 .. 10
+ *     0 ..= 10
+ *     start .. end
+ *     start ..= end
+ *     start ..
+ *     start ..=
+ *     .. end
+ *     ..= end
  *     ..
- *     0..10 step 2
- *     0..<10 step stride
- *     start..end count n
- *     start..end step stride count n
- *     start..end count n step stride
- *     (base + offset)..(limit + offset)
- *     symbolic_start..symbolic_end
+ *     ..=
+ *     (base + offset) .. (limit + offset)
+ *     symbolic_start .. symbolic_end
  *
- * Required domain cases include:
+ * Required composition cases:
  *
- *     classical indices
- *     vector ranges
- *     matrix ranges
- *     tensor ranges
- *     quantum indices
- *     logical-qubit ranges
- *     hardware-generation ranges
- *     distributed partition ranges
+ *     x = 0 .. n
+ *     array[0 .. n]
+ *     tensor[start ..= end]
+ *     quantum_selection[0 .. qubit_count]
+ *     generated_block[0 .. width]
  *
- * ============================================================================
+ * Required semantic-negative cases belong downstream:
  *
- * Required negative syntax cases include:
- *
- *     malformed range operator
- *     incomplete range punctuation
- *     malformed step modifier
- *     malformed count modifier
- *     missing modifier expression
- *     malformed endpoint expression
- *     invalid token sequence around range punctuation
- *
- * ============================================================================
- *
- * Required semantic-negative cases are tested downstream, NOT by this grammar:
- *
- *     zero step
  *     incompatible endpoint types
- *     invalid count
- *     impossible direction
+ *     invalid ordering
+ *     unsupported unbounded range
  *     overflow
- *     unsupported range type
+ *     impossible materialization
+ *     unavailable resources
  *
- * ============================================================================
+ * Required scalability cases:
  *
- * Required scalability tests:
+ *     small endpoints
+ *     large representable endpoints
+ *     symbolic endpoints
+ *     deeply composed endpoint expressions
+ *     many range expressions in one source unit
  *
- *     tiny range
- *     symbolic range
- *     very large literal endpoint
- *     arbitrarily long range modifier expressions
- *     deeply nested endpoint expressions
- *     large source programs containing many ranges
+ * Tests MUST NOT establish an artificial maximum range size.
  *
- * The tests must verify that the grammar itself does not introduce a finite
- * range-size or endpoint-size restriction.
- *
- * ============================================================================
- *
- * Required determinism tests:
- *
- *     identical source -> identical parse tree
- *
- * across repeated parser invocations.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * This file must contain NONE of:
- *
- *     numeric maximums;
- *     range cardinality constants;
- *     endpoint-size constants;
- *     machine-size constants;
- *     resource counts;
- *     hardware identifiers;
- *     device topology;
- *     fixed qubit counts;
- *     fixed CPU counts;
- *     fixed GPU counts;
- *     fixed FPGA counts;
- *     fixed memory sizes.
- *
- * Any such addition is an architectural violation unless it is purely a
- * syntactic token required by the language itself and is documented as such.
- *
- * ============================================================================
- */
-
-
-/*
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is COMPLETE only when:
+ * This file is complete when:
  *
- * [ ] It compiles as an ANTLR parser grammar with the canonical lexer.
- *
- * [ ] It defines no lexer rules.
- *
- * [ ] It owns range syntax exclusively.
- *
- * [ ] No other expression grammar independently owns range syntax.
- *
- * [ ] `expressions.g4` imports/delegates to `Ranges`.
- *
- * [ ] Range endpoints use the canonical expression grammar.
- *
- * [ ] No artificial range-size limit exists.
- *
- * [ ] Open-ended ranges are represented without machine assumptions.
- *
- * [ ] Inclusive/exclusive endpoint intent is preserved.
- *
- * [ ] Step syntax is preserved without imposing step semantics.
- *
- * [ ] Count syntax is preserved without imposing allocation semantics.
- *
- * [ ] The existing frontend range AST is the downstream AST integration point.
- *
- * [ ] Semantic analysis, rather than grammar parsing, owns validity checks.
- *
- * [ ] Classical, quantum, HDL, hardware, distributed and accelerator use cases
- *     can consume range syntax without changing this grammar.
- *
- * [ ] No dependency on quantum::ir exists.
- *
- * [ ] No dependency on hardware discovery exists.
- *
- * [ ] No dependency on scheduling exists.
- *
- * [ ] No dependency on runtime state exists.
- *
- * [ ] Positive tests exist.
- *
- * [ ] Negative syntax tests exist.
- *
- * [ ] Boundary tests exist.
- *
- * [ ] Cross-domain tests exist.
- *
- * [ ] Determinism tests exist.
- *
- * [ ] Scalability tests exist.
- *
- * [ ] Rust integration remains compatible with Rust 1.97/1.97.1 and safe Rust.
- *
- * [ ] Documentation identifies this file as the authoritative range-syntax
- *     owner.
+ *     [ ] It consumes only canonical lexer tokens.
+ *     [ ] It uses DOT_DOT and DOT_DOT_EQ.
+ *     [ ] It defines no lexer rules.
+ *     [ ] It does not define `expression`.
+ *     [ ] It does not reference the complete `expression` rule for endpoints.
+ *     [ ] It consumes logicalOrExpression as its endpoint boundary.
+ *     [ ] It defines exactly one canonical range syntax.
+ *     [ ] It supports bounded ranges.
+ *     [ ] It supports open-start ranges.
+ *     [ ] It supports open-end ranges.
+ *     [ ] It supports fully open ranges.
+ *     [ ] It preserves inclusive/exclusive intent.
+ *     [ ] It imposes no machine/resource limits.
+ *     [ ] It does not encode iteration semantics.
+ *     [ ] It does not encode step/stride semantics.
+ *     [ ] It does not depend on quantum::ir.
+ *     [ ] It does not depend on hardware.
+ *     [ ] It does not depend on scheduling.
+ *     [ ] It preserves the existing domain-neutral AST boundary.
+ *     [ ] It has defined downstream semantic ownership.
+ *     [ ] It has defined classical/quantum/HDL/resource integration.
+ *     [ ] It has positive tests.
+ *     [ ] It has negative tests.
+ *     [ ] It has boundary tests.
+ *     [ ] It has scalability tests.
+ *     [ ] It has compatibility tests.
+ *     [ ] It has deterministic parsing.
+ *     [ ] It requires no unsafe Rust.
  *
  * ============================================================================
  */
