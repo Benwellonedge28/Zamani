@@ -6,766 +6,770 @@
  * File:
  *     grammar/expressions/literals.g4
  *
+ * Status:
+ *     Canonical modular expression parser grammar.
+ *
  * Purpose:
- *     Canonical expression-level literal grammar.
- *
- * Architectural status:
- *     Parser grammar / expression grammar fragment.
+ *     Defines the expression-level composition of Zamani literals.
  *
  * ============================================================================
- * OWNERSHIP
+ * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * OWNS:
- *   - literal expression composition;
- *   - literal categories as parser-level expressions;
- *   - integer literal syntax composition;
- *   - floating-point literal syntax composition;
- *   - decimal literals;
- *   - boolean literals;
- *   - character literals;
- *   - string literals;
- *   - byte/string-byte literals where supported by the lexer contract;
- *   - null/nil/none literal forms where supported by the language contract;
- *   - complex-number literal composition where the lexical contract permits it;
- *   - duration literals;
- *   - size/resource quantity literals;
- *   - quantum literal forms;
- *   - hardware/resource literal forms;
- *   - collection literal delegation;
- *   - literal suffixes/modifiers that are syntactically part of literals.
+ *     source
+ *       |
+ *       v
+ *     canonical lexer
+ *       |
+ *       v
+ *     literal tokens
+ *       |
+ *       v
+ *     this parser grammar
+ *       |
+ *       v
+ *     domain-neutral frontend AST
+ *       |
+ *       v
+ *     structural / semantic analysis
+ *       |
+ *       v
+ *     canonical semantic model
+ *       |
+ *       +----------------------+----------------------+
+ *       |                      |                      |
+ *       v                      v                      v
+ *   Classical IR          quantum::ir          HDL/Hardware IR
+ *       |                      |                      |
+ *       +----------------------+----------------------+
+ *                              |
+ *                              v
+ *                   optimization / lowering
+ *                              |
+ *                   routing / scheduling
+ *                              |
+ *                    resilience / QEC / ZQN
+ *                              |
+ *                             HAL
+ *                              |
+ *                       target realization
  *
- * DOES NOT OWN:
- *   - lexer token definitions;
- *   - Unicode lexical classification;
+ * IMPORTANT:
+ *
+ * This file owns SOURCE-LEVEL EXPRESSION COMPOSITION ONLY.
+ *
+ * It does not own:
+ *
+ *   - lexical token definitions;
+ *   - Unicode policy;
  *   - identifier syntax;
- *   - comments;
- *   - whitespace;
- *   - source encoding;
- *   - arbitrary-precision implementation;
- *   - integer overflow policy;
- *   - floating-point semantics;
+ *   - numeric lexical syntax;
+ *   - string escape syntax;
+ *   - character escape syntax;
+ *   - semantic types;
+ *   - constant evaluation;
  *   - numeric conversion;
- *   - type inference;
- *   - type checking;
- *   - constant folding;
- *   - compile-time evaluation;
- *   - machine word size;
- *   - register size;
- *   - quantum hardware size;
+ *   - overflow policy;
+ *   - runtime representation;
+ *   - resource allocation;
+ *   - hardware selection;
  *   - physical qubit allocation;
- *   - hardware capacity;
- *   - resource availability;
- *   - scheduling;
- *   - optimization;
  *   - QEC;
  *   - ZQN;
- *   - simulation;
- *   - canonical quantum::ir;
- *   - runtime values.
+ *   - routing;
+ *   - scheduling;
+ *   - optimization;
+ *   - canonical quantum::ir.
  *
  * ============================================================================
- * CRITICAL SCALABILITY RULE
+ * POCO-REAF / SCALABILITY
  * ============================================================================
  *
- * Literal syntax MUST NOT impose machine-dependent limits.
+ * Literal syntax MUST NOT establish universal machine-dependent limits.
  *
- * There is deliberately no:
+ * This grammar therefore contains no:
  *
  *     MAX_INTEGER_BITS
  *     MAX_DECIMAL_DIGITS
+ *     MAX_FLOAT_DIGITS
  *     MAX_STRING_LENGTH
  *     MAX_ARRAY_LENGTH
- *     MAX_QUANTUM_REGISTER_SIZE
+ *     MAX_QUANTUM_STATE_SIZE
  *     MAX_QUBITS
  *     MAX_RESOURCE_COUNT
+ *     MAX_MEMORY
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_DEVICE_COUNT
  *
- * A compiler/runtime may have implementation limits, but those limits belong
- * to explicit resource/capability/runtime policies and MUST NOT be encoded
- * as grammar restrictions.
+ * A source program may contain values of any magnitude that are expressible
+ * by the canonical lexical layer and representable by the implementation's
+ * configured parsing/resource policy.
+ *
+ * Any implementation/resource limit is NOT a language-level literal limit.
+ *
+ * ============================================================================
+ * OWNERSHIP CONTRACT
+ * ============================================================================
+ *
+ * OWNS:
+ *
+ *   - literalExpression;
+ *   - the expression-level classification of canonical literal tokens;
+ *   - the stable parser boundary consumed by expression.g4;
+ *   - preservation of literal-category distinctions for AST lowering.
+ *
+ * DOES NOT OWN:
+ *
+ *   - literal token spelling;
+ *   - token definitions;
+ *   - lexical validation;
+ *   - literal decoding;
+ *   - numeric representation;
+ *   - arbitrary-precision implementation;
+ *   - semantic typing;
+ *   - constant folding;
+ *   - collection literals;
+ *   - tuple literals;
+ *   - array literals;
+ *   - map literals;
+ *   - range expressions;
+ *   - indexing;
+ *   - member access;
+ *   - calls;
+ *   - unary operators;
+ *   - binary operators;
+ *   - assignment;
+ *   - domain-specific semantic IR.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * The canonical lexer owns literal tokenization.
+ *
+ * The parser consumes the canonical parser-facing lexer vocabulary.
+ *
+ * The repository's modular lexer architecture identifies:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * as the canonical lexer assembly boundary.
+ *
+ * Literal families are separately owned under:
+ *
+ *     grammar/lexer/
+ *
+ * including:
+ *
+ *     numeric-literals.g4
+ *     string-literals.g4
+ *     character-literals.g4
+ *     boolean-literals.g4
+ *     quantum-literals.g4
+ *     hardware-literals.g4
+ *     duration-literals.g4
+ *     size-literals.g4
+ *
+ * This parser file MUST NOT redefine any of those lexical rules.
+ *
+ * ============================================================================
+ * TOKEN VOCABULARY
+ * ============================================================================
+ *
+ * The expression grammar consumes the canonical literal token categories:
+ *
+ *     INTEGER_LITERAL
+ *     DECIMAL_LITERAL
+ *     FLOAT_LITERAL
+ *     STRING_LITERAL
+ *     CHAR_LITERAL
+ *     BOOLEAN_LITERAL
+ *     NIL_LITERAL
+ *     QUANTUM_LITERAL
+ *     COMPLEX_LITERAL
+ *     DURATION_LITERAL
+ *     SIZE_LITERAL
+ *     HARDWARE_LITERAL
+ *
+ * Boolean and null/nil semantics remain downstream semantic concerns.
+ *
+ * This grammar does not introduce alternate token names such as:
+ *
+ *     TRUE
+ *     FALSE
+ *     NULL
+ *     INTEGER
+ *     FLOAT
+ *     STRING
+ *     CHARACTER
+ *     COMPLEX
+ *
+ * merely as aliases.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The parser must preserve the literal category so the domain-neutral AST
+ * can distinguish source forms without prematurely selecting a runtime type.
+ *
+ * Conceptually:
+ *
+ *     LiteralExpression
+ *         |
+ *         +-- IntegerLiteral
+ *         +-- DecimalLiteral
+ *         +-- FloatLiteral
+ *         +-- StringLiteral
+ *         +-- CharacterLiteral
+ *         +-- BooleanLiteral
+ *         +-- NilLiteral
+ *         +-- QuantumLiteral
+ *         +-- ComplexLiteral
+ *         +-- DurationLiteral
+ *         +-- SizeLiteral
+ *         +-- HardwareLiteral
+ *
+ * The exact AST types are owned by the existing frontend AST implementation.
+ *
+ * This grammar MUST NOT introduce:
+ *
+ *     QuantumGateLiteral
+ *     PhysicalQubitLiteral
+ *     CpuLiteral
+ *     GpuLiteral
+ *     FpgaLiteral
+ *     TensorLiteral<N>
+ *     HardwareLiteral<fixed-device>
+ *
+ * or other target/domain-specific AST variants merely because a literal is
+ * consumed by a particular domain.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Literal parsing establishes syntactic category only.
+ *
+ * Semantic analysis determines:
+ *
+ *   - literal type;
+ *   - numeric representation;
+ *   - signedness;
+ *   - precision;
+ *   - scale;
+ *   - unit meaning;
+ *   - validity;
+ *   - conversions;
+ *   - constant evaluation;
+ *   - resource implications;
+ *   - domain interpretation.
+ *
+ * For example:
+ *
+ *     42
+ *
+ * is not inherently:
+ *
+ *     i32
+ *     i64
+ *     u32
+ *     u64
+ *     usize
+ *     native integer
+ *
+ * Likewise:
+ *
+ *     1.0
+ *
+ * is not inherently:
+ *
+ *     f32
+ *     f64
+ *     IEEE-754
+ *
+ * unless a later type/semantic rule establishes that interpretation.
+ *
+ * ============================================================================
+ * NUMERIC INTEGRATION
+ * ============================================================================
+ *
+ * Numeric lexical ownership belongs to grammar/lexer/numeric-literals.g4.
+ *
+ * The parser therefore consumes:
+ *
+ *     INTEGER_LITERAL
+ *     DECIMAL_LITERAL
+ *     FLOAT_LITERAL
+ *     COMPLEX_LITERAL
+ *
+ * without reimplementing their lexical structure.
+ *
+ * Numeric signs remain expression operators.
+ *
+ * For example:
+ *
+ *     -42
+ *
+ * is structurally:
+ *
+ *     unary operator
+ *         +
+ *     integer literal
+ *
+ * rather than a parser-level signed-literal production.
+ *
+ * This preserves the existing separation between numeric literals and unary
+ * expressions.
+ *
+ * ============================================================================
+ * STRING / CHARACTER INTEGRATION
+ * ============================================================================
+ *
+ * String and character lexical syntax is owned by the lexer.
+ *
+ * This grammar merely exposes those tokens as literal expressions.
+ *
+ * It does not:
+ *
+ *   - decode escapes;
+ *   - normalize Unicode;
+ *   - impose an encoding;
+ *   - impose a maximum string length;
+ *   - select an in-memory representation.
+ *
+ * ============================================================================
+ * BOOLEAN / NIL INTEGRATION
+ * ============================================================================
+ *
+ * Boolean syntax is represented by BOOLEAN_LITERAL.
+ *
+ * Nil syntax is represented by NIL_LITERAL.
+ *
+ * This avoids making parser syntax responsible for whether:
+ *
+ *     nil
+ *     null
+ *
+ * represents:
+ *
+ *   - an optional value;
+ *   - a nullable reference;
+ *   - an absence value;
+ *   - another semantic construct.
+ *
+ * Those distinctions belong to the type and semantic systems.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * QUANTUM_LITERAL is a SOURCE-LEVEL quantum literal.
+ *
+ * Parsing it does not:
+ *
+ *   - allocate a physical qubit;
+ *   - choose a QPU;
+ *   - choose a simulator;
+ *   - select a gate set;
+ *   - choose topology;
+ *   - choose calibration;
+ *   - select a device;
+ *   - impose a qubit limit.
+ *
+ * Quantum semantics continue through:
+ *
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic quantum model
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     routing / scheduling
+ *          |
+ *          v
+ *     QEC / resilience / ZQN
+ *          |
+ *          v
+ *     HAL
+ *          |
+ *          v
+ *     target
+ *
+ * This file therefore does not create a second quantum IR.
+ *
+ * ============================================================================
+ * COMPLEX NUMBER INTEGRATION
+ * ============================================================================
+ *
+ * COMPLEX_LITERAL represents the source-level complex-number lexical form
+ * supplied by the canonical lexer.
+ *
+ * This grammar does not decide:
+ *
+ *     complex64
+ *     complex128
+ *     arbitrary precision complex
+ *     symbolic complex
+ *
+ * Such decisions belong to semantic/type analysis.
+ *
+ * ============================================================================
+ * DURATION INTEGRATION
+ * ============================================================================
+ *
+ * DURATION_LITERAL represents a source-level duration quantity.
+ *
+ * It does not select:
+ *
+ *     CPU cycles
+ *     quantum clock cycles
+ *     scheduler slots
+ *     hardware timers
+ *
+ * Conversion to a target timing model is downstream.
+ *
+ * ============================================================================
+ * SIZE / RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * SIZE_LITERAL represents a source-level size/quantity literal.
+ *
+ * It must not silently become:
+ *
+ *     host pointer size
+ *     RAM capacity
+ *     VRAM capacity
+ *     register width
+ *     physical storage capacity
+ *
+ * Resource analysis and target realization determine those properties.
+ *
+ * ============================================================================
+ * HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * HARDWARE_LITERAL represents source-level hardware/resource-oriented literal
+ * syntax where the lexical layer explicitly provides such a token.
+ *
+ * It does NOT by itself select a physical device.
+ *
+ * Hardware selection, capability matching, placement, topology, calibration,
+ * and deployment remain downstream responsibilities.
+ *
+ * ============================================================================
+ * COLLECTION / COMPOSITE LITERALS
+ * ============================================================================
+ *
+ * This file intentionally does NOT define:
+ *
+ *     array literals
+ *     tuple literals
+ *     map literals
+ *     record literals
+ *     tensor literals
+ *
+ * Those constructs may contain literalExpression, but their delimiters and
+ * recursive structure belong to their respective grammar files.
+ *
+ * This prevents duplicate ownership and recursive grammar cycles.
+ *
+ * ============================================================================
+ * RANGE / INDEX / MEMBER / CALL INTEGRATION
+ * ============================================================================
+ *
+ * This file does NOT define:
+ *
+ *     range expressions
+ *     indexing
+ *     member access
+ *     calls
+ *     postfix expressions
+ *
+ * A literal can be the base of those expressions through the canonical
+ * expression hierarchy.
+ *
+ * Examples conceptually include:
+ *
+ *     42
+ *     "Zamani"
+ *     value.member
+ *     values[42]
+ *     f(42)
+ *     0 .. n
+ *
+ * but the operators and delimiters belong to their respective grammar
+ * components.
+ *
+ * ============================================================================
+ * DOMAIN NEUTRALITY
+ * ============================================================================
+ *
+ * Literals are universal expression primitives.
+ *
+ * They may eventually participate in:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware/software co-design
+ *     distributed
+ *     parallel/HPC
+ *     AI/ML
+ *     tensor/data
+ *     networking
+ *     cryptography
+ *     scientific computing
+ *     embedded systems
+ *     accelerators
+ *     future computational domains
+ *
+ * This file does not create one literal grammar per domain.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * A literal represents a source-level value or value-producing construct.
+ * The same source-level literal must retain its language-defined meaning when
+ * compiled for different targets.
  *
- * The grammar therefore describes:
- *
- *     WHAT the programmer wrote
- *
- * rather than:
- *
- *     HOW the current machine stores it.
- *
- * Examples:
- *
- *     42
- *     0xFFFF
- *     1.25
- *     3.14e1000
- *     "Zamani"
- *     1ns
- *     4MiB
- *     qstate(...)
- *
- * must remain portable source representations.
- *
- * Their semantic representation and eventual physical realization belong
- * downstream.
- *
- * ============================================================================
- * LEXER BOUNDARY
- * ============================================================================
- *
- * This file MUST NOT define lexer rules.
- *
- * The canonical lexer owns:
- *
- *     INTEGER
- *     DECIMAL
- *     FLOAT
- *     STRING
- *     CHARACTER
- *     BOOLEAN
- *     NULL
- *     duration/resource tokens
- *     quantum literal tokens
- *     punctuation
- *     suffix tokens
- *
- * If the repository's canonical lexer uses different token names, the token
- * vocabulary must be reconciled centrally. This file must NOT create a second
- * competing vocabulary.
- *
- * ============================================================================
- * AST BOUNDARY
- * ============================================================================
- *
- * Literal parsing produces syntax nodes that downstream frontend code lowers
- * into the repository's canonical AST literal representation.
- *
- * The grammar MUST preserve source spelling/radix/suffix information when
- * required by the AST.
+ * Target-specific realization is allowed to differ.
  *
  * For example:
  *
- *     0xff
- *     0b1111
- *     15
+ *     42
  *
- * may have the same mathematical value while retaining different source
- * representations.
+ * may ultimately be represented differently on different targets while
+ * retaining the same language-level value.
  *
- * Semantic normalization belongs downstream.
+ * Similarly:
+ *
+ *     1GiB
+ *
+ * describes a source-level quantity. It does not require every target to have
+ * 1 GiB available.
+ *
+ * A resource requirement, if one exists, must be represented by the resource
+ * and capability systems rather than hidden inside this literal grammar.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Literal parsing must be deterministic.
+ *
+ * Given the same:
+ *
+ *     token stream
+ *     grammar version
+ *     parser configuration
+ *
+ * the same parse structure must result.
+ *
+ * Parsing must not depend on:
+ *
+ *     CPU count
+ *     GPU availability
+ *     QPU availability
+ *     memory capacity
+ *     network state
+ *     hardware topology
+ *     runtime state
+ *     random state
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Lexical errors belong to the lexer.
+ *
+ * Syntax errors belong to the parser.
+ *
+ * Semantic errors belong to semantic/type analysis.
+ *
+ * Examples of semantic errors include:
+ *
+ *     numeric value outside requested type
+ *     invalid duration context
+ *     unsupported hardware quantity
+ *     invalid quantum-state semantics
+ *     incompatible literal conversion
+ *
+ * This grammar must not attempt to perform semantic validation.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing canonical literal token meanings must remain stable.
+ *
+ * Future literal categories require:
+ *
+ *     - specification update;
+ *     - lexer-token ownership;
+ *     - parser integration;
+ *     - AST contract;
+ *     - semantic contract;
+ *     - compatibility analysis;
+ *     - positive tests;
+ *     - negative tests;
+ *     - boundary tests;
+ *     - scalability tests.
+ *
+ * Adding a new domain must not require modifying this grammar merely because
+ * that domain needs a new semantic value representation unless the value has
+ * genuinely become a language-level literal category.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * This file is complete only when the integration test suite covers at least:
+ *
+ * Positive:
+ *
+ *     integer literals
+ *     decimal literals
+ *     floating literals
+ *     string literals
+ *     character literals
+ *     boolean literals
+ *     nil literals
+ *     quantum literals
+ *     complex literals
+ *     duration literals
+ *     size literals
+ *     hardware literals
+ *
+ * Negative:
+ *
+ *     malformed token streams
+ *     incomplete literals
+ *     lexer/parser boundary failures
+ *     literals incorrectly consumed as identifiers/operators
+ *
+ * Boundary:
+ *
+ *     zero
+ *     very large integer source values
+ *     very small/large decimal source values
+ *     long strings where supported
+ *     Unicode characters where supported
+ *     quantum literal boundaries
+ *     duration boundaries
+ *     size boundaries
+ *
+ * Scalability:
+ *
+ *     arbitrarily large source-level numeric magnitude subject to lexer/parser
+ *     operational budgets;
+ *
+ *     arbitrarily long literal-containing programs subject to implementation
+ *     resource budgets;
+ *
+ *     no test may establish a universal maximum literal size as language
+ *     semantics.
+ *
+ * Determinism:
+ *
+ *     identical token streams must produce identical parse trees.
  *
  * ============================================================================
  * RUST CONTRACT
  * ============================================================================
  *
- * Generated/integrating Rust code must remain compatible with:
+ * This file contains no Rust code.
+ *
+ * The generated/compiler implementation must remain compatible with:
  *
  *     Rust 1.97
  *     Rust 1.97.1
  *
- * and the project requirement:
+ * and the repository's safe-Rust requirement.
  *
- *     #![forbid(unsafe_code)]
- *
- * This grammar itself contains no Rust code and therefore introduces no
- * unsafe implementation.
+ * No unsafe Rust is required or permitted by this grammar.
  *
  * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * Upstream:
+ *
+ *     grammar/specification/lexical.md
+ *     grammar/spec/syntax.md
+ *     grammar/lexer/*.g4
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Downstream:
+ *
+ *     grammar/expressions/expression.g4
+ *     grammar/expressions/primary.g4, if present
+ *     frontend AST
+ *     semantic analysis
+ *     type inference
+ *     canonical semantic model
+ *     canonical/domain IR
+ *
+ * Cross-domain:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     resources
+ *     distributed
+ *     AI/data
+ *     networking
+ *     security
+ *
+ * No downstream component should need to modify this file merely because it
+ * changes the target hardware or runtime.
+ *
+ * ============================================================================
+ * ANTLR4 PARSER GRAMMAR
+ * ============================================================================
  */
+
+parser grammar Literals;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
 
 
 /*
  * ============================================================================
- * PUBLIC LITERAL ENTRY POINT
+ * PUBLIC ENTRY POINT
  * ============================================================================
  *
- * This is the single expression-level literal boundary.
+ * This is the ONLY expression-level literal dispatcher owned by this file.
  *
- * Other expression grammars should consume `literalExpression` rather than
- * independently defining literal alternatives.
+ * Other expression grammars should consume:
+ *
+ *     literalExpression
+ *
+ * rather than reproducing this token list.
  */
 literalExpression
-    : integerLiteral
-    | floatingLiteral
-    | decimalLiteral
-    | booleanLiteral
-    | characterLiteral
-    | stringLiteral
-    | byteStringLiteral
-    | nullLiteral
-    | complexLiteral
-    | durationLiteral
-    | sizeLiteral
-    | quantumLiteral
-    | hardwareLiteral
-    ;
-
-
-/*
- * ============================================================================
- * INTEGER LITERALS
- * ============================================================================
- *
- * Integer syntax is deliberately unbounded by this grammar.
- *
- * Supported forms are delegated to the canonical lexer token contract.
- *
- * Typical examples:
- *
- *     0
- *     42
- *     0b101010
- *     0o755
- *     0xDEADBEEF
- *     1_000_000
- *
- * Digit separators, radix validation and lexical normalization belong to the
- * lexer.
- */
-integerLiteral
-    : INTEGER
-    ;
-
-
-/*
- * ============================================================================
- * FLOATING-POINT LITERALS
- * ============================================================================
- *
- * Floating literals are preserved lexically.
- *
- * Their precision, rounding mode, arbitrary precision behavior, and target
- * representation are semantic/compiler concerns.
- */
-floatingLiteral
-    : FLOAT
-    ;
-
-
-/*
- * ============================================================================
- * DECIMAL LITERALS
- * ============================================================================
- *
- * A decimal literal is kept separate from generic floating syntax when the
- * lexer exposes a dedicated DECIMAL token.
- *
- * This allows the semantic layer to distinguish:
- *
- *     decimal
- *
- * from:
- *
- *     binary floating-point
- *
- * without forcing the grammar to select a runtime representation.
- */
-decimalLiteral
-    : DECIMAL
-    ;
-
-
-/*
- * ============================================================================
- * BOOLEAN LITERALS
- * ============================================================================
- */
-booleanLiteral
-    : TRUE
-    | FALSE
-    ;
-
-
-/*
- * ============================================================================
- * CHARACTER LITERALS
- * ============================================================================
- */
-characterLiteral
-    : CHARACTER
-    ;
-
-
-/*
- * ============================================================================
- * STRING LITERALS
- * ============================================================================
- *
- * String encoding, escape validation, Unicode normalization and runtime
- * storage belong to the lexical/frontend semantic layers.
- *
- * The grammar only recognizes the expression form.
- */
-stringLiteral
-    : STRING
-    ;
-
-
-/*
- * ============================================================================
- * BYTE STRING LITERALS
- * ============================================================================
- *
- * Optional lexical forms for explicitly byte-oriented strings.
- *
- * This rule is intentionally token-based so the lexer remains authoritative
- * over prefixes and escape syntax.
- */
-byteStringLiteral
-    : BYTE_STRING
-    ;
-
-
-/*
- * ============================================================================
- * NULLABLE VALUE LITERALS
- * ============================================================================
- *
- * The language may expose one canonical null spelling.
- *
- * If the repository evolves toward `none` or `nil`, that change belongs in the
- * lexical/language-version contract rather than introducing multiple semantic
- * null values accidentally.
- */
-nullLiteral
-    : NULL
-    ;
-
-
-/*
- * ============================================================================
- * COMPLEX LITERALS
- * ============================================================================
- *
- * Complex numbers must remain values rather than machine-specific structures.
- *
- * Examples supported by the lexical contract may include:
- *
- *     1i
- *     2+3i
- *     1.5i
- *
- * The actual lexical representation is owned by the lexer.
- *
- * The grammar supports a dedicated token where available.
- */
-complexLiteral
-    : COMPLEX
-    ;
-
-
-/*
- * ============================================================================
- * DURATION LITERALS
- * ============================================================================
- *
- * Examples:
- *
- *     1ns
- *     10us
- *     1ms
- *     2s
- *     5min
- *     1h
- *
- * Duration syntax represents a semantic duration.
- *
- * It does NOT mean:
- *
- *     a particular processor cycle count
- *     a particular quantum hardware clock
- *     a particular scheduler slot
- *
- * Conversion to target timing occurs downstream.
- */
-durationLiteral
-    : DURATION_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * SIZE / QUANTITY LITERALS
- * ============================================================================
- *
- * Examples:
- *
- *     1B
- *     4KiB
- *     1MiB
- *     1GiB
- *
- * These represent abstract quantities.
- *
- * They MUST NOT imply:
- *
- *     machine memory size
- *     register width
- *     available storage
- *
- * Those are resource/capability properties.
- */
-sizeLiteral
-    : SIZE_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * QUANTUM LITERALS
- * ============================================================================
- *
- * Quantum values are represented abstractly.
- *
- * No physical device is selected by parsing.
- *
- * No qubit count is hard-coded.
- *
- * No topology is encoded.
- *
- * No backend is selected.
- */
-quantumLiteral
-    : qubitLiteral
-    | quantumStateLiteral
-    | amplitudeLiteral
-    | probabilityLiteral
-    | observableLiteral
-    ;
-
-
-/*
- * ============================================================================
- * QUBIT LITERALS
- * ============================================================================
- *
- * A literal/reference-like quantum value must remain independent of physical
- * allocation.
- *
- * The semantic layer determines whether the resulting entity is:
- *
- *     logical qubit
- *     abstract qubit
- *     physical qubit reference
- *     qubit resource
- *
- * based on explicit source semantics and compilation context.
- */
-qubitLiteral
-    : QUBIT_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * QUANTUM STATE LITERALS
- * ============================================================================
- *
- * State syntax remains source-level.
- *
- * State validity and normalization belong to semantic validation.
- */
-quantumStateLiteral
-    : QUANTUM_STATE_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * AMPLITUDE LITERALS
- * ============================================================================
- *
- * Amplitudes may be represented using exact or approximate source syntax.
- *
- * Numerical representation is deliberately not fixed here.
- */
-amplitudeLiteral
-    : AMPLITUDE_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * PROBABILITY LITERALS
- * ============================================================================
- *
- * The grammar does not enforce:
- *
- *     0 <= p <= 1
- *
- * because that is a semantic constraint.
- *
- * This distinction permits symbolic expressions to remain expressible:
- *
- *     p
- *     1 / n
- *     amplitude^2
- *
- * etc.
- */
-probabilityLiteral
-    : PROBABILITY_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * OBSERVABLE LITERALS
- * ============================================================================
- *
- * Observable syntax remains abstract.
- *
- * Mapping to quantum::ir belongs to semantic lowering.
- */
-observableLiteral
-    : OBSERVABLE_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * HARDWARE / RESOURCE LITERALS
- * ============================================================================
- *
- * Hardware-related literals express values, identifiers or quantities.
- *
- * They MUST NOT select a physical machine implicitly.
- */
-hardwareLiteral
-    : hardwareIdentifierLiteral
-    | resourceQuantityLiteral
-    | addressLiteral
-    | capabilityLiteral
-    ;
-
-
-/*
- * ============================================================================
- * HARDWARE IDENTIFIER
- * ============================================================================
- *
- * A symbolic hardware identifier is not a device selection by itself.
- *
- * Semantic validation determines whether a given context permits symbolic
- * hardware references.
- */
-hardwareIdentifierLiteral
-    : HARDWARE_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * RESOURCE QUANTITY
- * ============================================================================
- *
- * Examples may include:
- *
- *     8 qubits
- *     4 cores
- *     16GiB
- *
- * IMPORTANT:
- *
- * Such syntax represents a requirement/quantity only.
- *
- * It does not mean:
- *
- *     use the first 8 qubits
- *     use CPU cores 0..3
- *     allocate a fixed physical topology
- *
- * Allocation belongs to the resource/compiler/runtime layers.
- */
-resourceQuantityLiteral
-    : RESOURCE_QUANTITY_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * ADDRESS LITERALS
- * ============================================================================
- *
- * Addresses are explicitly represented as values only where the language
- * permits low-level/system/HDL address semantics.
- *
- * The grammar does not validate whether an address exists on the current
- * machine.
- */
-addressLiteral
-    : ADDRESS_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * CAPABILITY LITERALS
- * ============================================================================
- *
- * Capability values represent abstract capabilities.
- *
- * Example conceptual forms:
- *
- *     quantum
- *     vector
- *     fpga
- *     distributed
- *
- * Whether a capability exists is determined by the capability system.
- */
-capabilityLiteral
-    : CAPABILITY_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * LITERAL WITH EXPLICIT TYPE/SUFFIX
- * ============================================================================
- *
- * Some Zamani literals may support explicit suffixes:
- *
- *     42u8
- *     42i64
- *     1.0f64
- *     1ns
- *
- * The lexer should prefer canonical tokenization where possible.
- *
- * If suffixes are separate tokens, this rule provides the parser-level
- * composition.
- */
-typedLiteralExpression
-    : baseTypedLiteral literalTypeSuffix
-    ;
-
-
-baseTypedLiteral
-    : integerLiteral
-    | floatingLiteral
-    | decimalLiteral
-    | characterLiteral
-    | stringLiteral
-    | byteStringLiteral
-    ;
-
-
-literalTypeSuffix
-    : INTEGER_TYPE_SUFFIX
-    | FLOAT_TYPE_SUFFIX
-    | DECIMAL_TYPE_SUFFIX
-    | STRING_TYPE_SUFFIX
-    | BYTE_TYPE_SUFFIX
-    ;
-
-
-/*
- * ============================================================================
- * USER-DEFINED / DIALECT LITERAL EXTENSION
- * ============================================================================
- *
- * Zamani must remain extensible without modifying the core grammar every time
- * a new computing domain introduces a value representation.
- *
- * Domain-specific literal syntax should therefore be registered through the
- * dialect mechanism.
- *
- * The dialect system owns the extension registration and validation.
- */
-dialectLiteralExpression
-    : DIALECT_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * UNIVERSAL LITERAL EXPRESSION
- * ============================================================================
- *
- * This rule provides the stable boundary used by expressions.g4.
- *
- * It intentionally includes typed and dialect extensions separately so the
- * AST can distinguish:
- *
- *     canonical literal
- *     explicitly typed literal
- *     dialect literal
- *
- * without forcing semantic interpretation into the grammar.
- */
-universalLiteralExpression
-    : literalExpression
-    | typedLiteralExpression
-    | dialectLiteralExpression
-    ;
-
-
-/*
- * ============================================================================
- * LITERAL LIST
- * ============================================================================
- *
- * Used by expression-level collection constructs where a separate collection
- * grammar consumes literal values.
- *
- * No fixed number of elements is imposed.
- */
-literalList
-    : universalLiteralExpression
-      (COMMA universalLiteralExpression)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * OPTIONAL LITERAL LIST
- * ============================================================================
- */
-optionalLiteralList
-    : literalList?
-    ;
-
-
-/*
- * ============================================================================
- * LITERAL MAP ENTRY
- * ============================================================================
- *
- * The parser does not require keys to be compile-time constants.
- */
-literalMapEntry
-    : universalLiteralExpression
-      COLON
-      expressionReference
-    ;
-
-
-/*
- * ============================================================================
- * EXPRESSION BRIDGE
- * ============================================================================
- *
- * This bridge deliberately avoids defining the entire expression grammar here.
- *
- * The canonical expressions grammar owns expression precedence and recursion.
- *
- * This rule exists solely so this file can express constructs whose values
- * may be arbitrary Zamani expressions without creating a circular grammar.
- *
- * The integration parser should alias/import this to the canonical expression
- * rule.
- *
- * IMPORTANT:
- *
- * Do not create a second independent `expression` rule.
- */
-expressionReference
-    : EXPRESSION_REFERENCE
+    : INTEGER_LITERAL
+    | DECIMAL_LITERAL
+    | FLOAT_LITERAL
+    | STRING_LITERAL
+    | CHAR_LITERAL
+    | BOOLEAN_LITERAL
+    | NIL_LITERAL
+    | QUANTUM_LITERAL
+    | COMPLEX_LITERAL
+    | DURATION_LITERAL
+    | SIZE_LITERAL
+    | HARDWARE_LITERAL
     ;
