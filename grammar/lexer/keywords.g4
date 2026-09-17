@@ -566,3 +566,51 @@ UNION       : 'union' ;
 ALIAS       : 'alias' ;
 SEALED      : 'sealed' ;
 PARTIAL     : 'partial' ;
+
+
+
+/* ============================================================================
+ * RESOURCE INTENT
+ * ========================================================================== */
+
+RESOURCE        : 'resource' ;
+RESOURCES       : 'resources' ;
+
+QUANTITY        : 'quantity' ;
+
+CONSTRAINT      : 'constraint' ;
+PREFER          : 'prefer' ;
+HINT            : 'hint' ;
+
+CAPABILITY      : 'capability' ;
+TARGET          : 'target' ;
+
+CAPACITY        : 'capacity' ;
+AVAILABILITY    : 'availability' ;
+
+PORTABILITY     : 'portability' ;
+SCALABILITY     : 'scalability' ;
+
+PERFORMANCE     : 'performance' ;
+LATENCY         : 'latency' ;
+THROUGHPUT      : 'throughput' ;
+BANDWIDTH       : 'bandwidth' ;
+
+ENERGY          : 'energy' ;
+POWER           : 'power' ;
+
+RELIABILITY     : 'reliability' ;
+RESILIENCE      : 'resilience' ;
+
+COST            : 'cost' ;
+
+RESERVE         : 'reserve' ;
+ACQUIRE         : 'acquire' ;
+RELEASE         : 'release' ;
+
+DERIVE          : 'derive' ;
+
+GROUP           : 'group' ;
+CONTRACT        : 'contract' ;
+PROFILE         : 'profile' ;
+PROPERTY        : 'property' ;
