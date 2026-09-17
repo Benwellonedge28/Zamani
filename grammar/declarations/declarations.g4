@@ -10,121 +10,64 @@
  *     AUTHORITATIVE DECLARATION COMPOSITION GRAMMAR
  *
  * Status:
- *     Production
+ *     Production-target / canonical declaration dispatcher
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
  * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
  * Safety:
- *     No embedded Rust.
- *     No semantic predicates.
+ *     This grammar contains no embedded Rust.
  *     No actions.
+ *     No semantic predicates.
  *     No unsafe code.
- *     No filesystem/network/runtime access.
+ *     No filesystem access.
+ *     No network access.
+ *     No runtime access.
  *     No hardware discovery.
- *     No target-specific constants.
+ *     No target selection.
+ *     No physical-resource selection.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file is the SINGLE COMPOSITION OWNER for the declaration family
- * currently owned by grammar/declarations/.
+ * This file is the SINGLE DECLARATION COMPOSITION OWNER.
  *
  * It answers:
  *
- *     "Which declaration families are legal at a declaration boundary?"
+ *     "Which source-level declaration families are legal at a
+ *      declaration boundary?"
  *
- * It does NOT implement the concrete syntax of those declarations.
+ * This file MUST NOT implement the concrete syntax of those declarations.
  *
- * Concrete syntax belongs to the dedicated delegate grammars:
- *
- *     constants.g4
- *     variables.g4
- *     types.g4
- *     aliases.g4
- *     structs.g4
- *     enums.g4
- *     unions.g4
- *     interfaces.g4
- *     traits.g4
- *     implementations.g4
+ * Concrete declaration syntax belongs to the dedicated declaration grammars.
  *
  * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - declaration
- *     - declaration-family dispatch
- *     - value-declaration composition
- *     - type-declaration composition
- *     - declaration-family integration
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - token definitions
- *     - keywords
- *     - identifiers
- *     - names
- *     - paths
- *     - attributes
- *     - visibility
- *     - modifiers
- *     - expressions
- *     - type expressions
- *     - concrete declaration syntax
- *     - functions
- *     - modules
- *     - effects
- *     - resources
- *     - capabilities
- *     - hardware
- *     - quantum semantics
- *     - HDL semantics
- *     - semantic analysis
- *     - AST construction
- *     - IR construction
- *     - quantum::ir
- *     - QEC
- *     - ZQN
- *     - routing
- *     - scheduling
- *     - optimization
- *     - calibration
- *     - HAL
- *     - backend selection
- *     - runtime execution
- *
- * ============================================================================
- * ARCHITECTURAL PIPELINE
+ * CANONICAL PIPELINE
  * ============================================================================
  *
  *     Zamani source
  *          |
  *          v
- *     canonical ZamaniLexer
+ *     grammar/antlr/ZamaniLexer.g4
  *          |
  *          v
- *     canonical parser
+ *     canonical Zamani parser
  *          |
  *          v
- *     declarations.g4
+ *     declaration
  *          |
- *          +--> Constants
- *          +--> Variables
- *          +--> ZamaniDeclarationTypesParser
- *          +--> ZamaniDeclarationAliases
- *          +--> ZamaniDeclarationStructs
- *          +--> ZamaniDeclarationEnums
- *          +--> ZamaniDeclarationUnions
- *          +--> Interfaces
- *          +--> Traits
- *          +--> Implementations
+ *          +--> value declarations
+ *          +--> type declarations
+ *          +--> aggregate declarations
+ *          +--> object-model declarations
+ *          +--> contract declarations
+ *          +--> implementation declarations
+ *          +--> domain/resource/capability declarations
  *          |
  *          v
  *     domain-neutral frontend AST
@@ -138,10 +81,11 @@
  *          +--> names
  *          +--> types
  *          +--> effects
+ *          +--> ownership
  *          +--> capabilities
  *          +--> resources
- *          +--> ownership
- *          +--> control/data flow
+ *          +--> portability
+ *          +--> domain semantics
  *          |
  *          v
  *     canonical semantic representations
@@ -157,60 +101,147 @@
  *     optimization / lowering
  *          |
  *          v
- *     routing / scheduling / resilience
+ *     routing / scheduling / resilience / QEC / ZQN
  *          |
  *          v
- *     target realization
+ *     HAL / target realization
  *          |
  *          v
  *     runtime
  *
  * ============================================================================
- * CRITICAL RULE
+ * OWNERSHIP
  * ============================================================================
  *
- * This file MUST NOT redefine a rule owned by a delegate grammar.
+ * THIS FILE OWNS:
  *
- * In particular, this file MUST NOT contain another implementation of:
+ *     - declaration
+ *     - declaration-family dispatch
+ *     - declaration-family grouping
+ *     - declaration-layer composition
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     - lexer rules
+ *     - token definitions
+ *     - keyword spelling
+ *     - identifiers
+ *     - qualified names
+ *     - paths
+ *     - attributes
+ *     - visibility
+ *     - modifiers
+ *     - expressions
+ *     - type expressions
+ *     - generic-parameter syntax
+ *     - fields
+ *     - variants
+ *     - methods
+ *     - concrete class syntax
+ *     - concrete struct syntax
+ *     - concrete enum syntax
+ *     - concrete union syntax
+ *     - concrete alias syntax
+ *     - concrete interface syntax
+ *     - concrete trait syntax
+ *     - concrete implementation syntax
+ *     - concrete resource syntax
+ *     - concrete capability syntax
+ *     - concrete domain syntax
+ *     - functions
+ *     - modules
+ *     - effects
+ *     - statements
+ *     - quantum semantics
+ *     - HDL semantics
+ *     - hardware semantics
+ *     - semantic analysis
+ *     - AST construction
+ *     - IR construction
+ *     - quantum::ir
+ *     - QEC
+ *     - ZQN
+ *     - routing
+ *     - scheduling
+ *     - optimization
+ *     - calibration
+ *     - HAL
+ *     - backend selection
+ *     - runtime execution
+ *
+ * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
+ *
+ * There MUST be exactly one declaration dispatcher at the canonical
+ * declaration boundary.
+ *
+ * This grammar MUST NOT contain another implementation of:
  *
  *     constantDeclaration
  *     variableDeclaration
  *     typeDeclaration
  *     typeAliasDeclaration
  *     structDeclaration
+ *     recordDeclaration
  *     enumDeclaration
  *     unionDeclaration
+ *     classDeclaration
  *     interfaceDeclaration
  *     traitDeclaration
  *     implementationDeclaration
+ *     resourceDeclaration
+ *     capabilityDeclaration
+ *     domainDeclaration
  *
- * Doing so would create competing grammar ownership.
+ * The concrete implementation of each rule belongs to its dedicated owner.
  *
  * ============================================================================
- * ANTLR CONTRACT
+ * CANONICAL LEXER
  * ============================================================================
  *
- * This is a parser grammar.
+ * All imported parser grammars MUST use:
  *
- * The lexical authority is:
+ *     options {
+ *         tokenVocab = ZamaniLexer;
+ *     }
+ *
+ * The canonical lexical authority is:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * Every imported declaration grammar MUST use:
+ * No declaration grammar may introduce:
  *
- *     tokenVocab = ZamaniLexer;
+ *     ZamaniTokens
+ *     K_*
+ *     IDENT
+ *     SEMI
  *
- * No declaration grammar may introduce ZamaniTokens as an alternative
- * production vocabulary.
+ * as an alternative lexical vocabulary.
+ *
+ * Existing grammars that still use such names are migration/conformance
+ * surfaces and must be normalized to the canonical lexer vocabulary.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Declarations describe source-level program semantics.
+ * Declarations express source-level semantics and portable computational
+ * intent.
  *
- * This dispatcher therefore contains no:
+ * This dispatcher contains NO universal limits such as:
  *
+ *     MAX_DECLARATIONS
+ *     MAX_TYPES
+ *     MAX_STRUCT_FIELDS
+ *     MAX_ENUM_VARIANTS
+ *     MAX_GENERIC_PARAMETERS
+ *     MAX_TRAIT_MEMBERS
+ *     MAX_INTERFACE_MEMBERS
+ *     MAX_IMPLEMENTATION_MEMBERS
+ *     MAX_RESOURCES
+ *     MAX_CAPABILITIES
+ *     MAX_DOMAINS
  *     MAX_QUBITS
  *     MAX_CPUS
  *     MAX_CORES
@@ -224,148 +255,45 @@
  *     MAX_MEMORY
  *     MAX_TENSOR_RANK
  *     MAX_VECTOR_WIDTH
- *     MAX_PROGRAM_SIZE
  *
- * Nor does it contain physical identifiers or topology assumptions.
- *
- * Resource requirements, capabilities, constraints, preferences, placement,
- * scheduling, routing and target realization remain downstream concerns.
+ * Practical limits are compiler/runtime/resource-policy concerns and MUST NOT
+ * become source-language grammar limits.
  *
  * ============================================================================
- * SCALABILITY
+ * OPEN-WORLD DESIGN
  * ============================================================================
  *
- * Declaration cardinality is unbounded by language grammar.
+ * The declaration dispatcher deliberately does not enumerate every future
+ * computational domain.
  *
- * The grammar uses recursive/repeating constructs supplied by its delegates.
+ * For example, the following must remain extensible through the canonical
+ * type/name/capability/resource systems:
  *
- * There is no source-language limit on:
+ *     classical
+ *     quantum
+ *     hybrid
+ *     hdl
+ *     hardware
+ *     distributed
+ *     parallel
+ *     hpc
+ *     ai
+ *     ml
+ *     data
+ *     networking
+ *     cryptography
+ *     embedded
+ *     edge
+ *     cloud
+ *     accelerator
+ *     optical
+ *     neuromorphic
+ *     biological
+ *     nano
+ *     future computational paradigms
  *
- *     declarations
- *     fields
- *     variants
- *     generic parameters
- *     trait members
- *     interface members
- *     implementation members
- *     type nesting
- *
- * Practical resource limits are implementation/resource-policy concerns and
- * MUST NOT become language constants.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This file contains:
- *
- *     - no actions;
- *     - no predicates;
- *     - no random behavior;
- *     - no time-dependent behavior;
- *     - no runtime calls;
- *     - no mutable global state.
- *
- * For a fixed lexer token stream and grammar version, declaration dispatch is
- * deterministic.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * This grammar constructs no Rust AST.
- *
- * The frontend adapter maps the selected parse-tree context into the canonical
- * domain-neutral AST.
- *
- * Every declaration must preserve:
- *
- *     - declaration kind;
- *     - source span;
- *     - source order;
- *     - name;
- *     - modifiers;
- *     - attributes;
- *     - generic parameters;
- *     - declaration members;
- *     - child types;
- *     - child expressions.
- *
- * No declaration grammar may create a second AST for a particular domain.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Parsing establishes syntactic structure only.
- *
- * Semantic analysis subsequently determines:
- *
- *     - duplicate declarations;
- *     - name resolution;
- *     - type validity;
- *     - generic validity;
- *     - trait/interface satisfaction;
- *     - implementation coherence;
- *     - ownership;
- *     - effects;
- *     - resource requirements;
- *     - capability requirements;
- *     - domain validity;
- *     - portability;
- *     - target compatibility.
- *
- * ============================================================================
- * QUANTUM CONTRACT
- * ============================================================================
- *
- * Declaration syntax may introduce or reference quantum types and declarations.
- *
- * This file MUST NOT:
- *
- *     - enumerate physical qubits;
- *     - select a QPU;
- *     - select a topology;
- *     - select a gate implementation;
- *     - select calibration data;
- *     - perform routing;
- *     - perform scheduling;
- *     - perform QEC;
- *     - implement ZQN;
- *     - construct quantum::ir.
- *
- * The required direction is:
- *
- *     declaration syntax
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     quantum::ir
- *
- * ============================================================================
- * HDL / HARDWARE CONTRACT
- * ============================================================================
- *
- * Hardware/HDL declarations must remain target-independent at this layer.
- *
- * The declaration grammar must not silently turn:
- *
- *     capability
- *     requirement
- *     resource
- *     constraint
- *
- * into:
- *
- *     physical device
- *     physical address
- *     fixed topology
- *     fixed accelerator
+ * A new semantic domain must not require this dispatcher to be rewritten
+ * merely because a new domain name exists.
  *
  * ============================================================================
  * DEPENDENCY DIRECTION
@@ -376,58 +304,238 @@
  *     lexer
  *       |
  *       v
- *     core syntax
+ *     core
+ *       |
+ *       +--> names
+ *       +--> attributes
+ *       +--> visibility
+ *       +--> modifiers
  *       |
  *       v
- *     types / expressions
+ *     types / expressions / generics
  *       |
  *       v
- *     declarations
+ *     declaration grammars
  *       |
  *       v
- *     AST
+ *     frontend AST
  *       |
  *       v
  *     semantic analysis
+ *       |
+ *       v
+ *     canonical semantic representations
  *
  * Forbidden:
  *
  *     declarations.g4 -> quantum::ir
  *     declarations.g4 -> QEC
  *     declarations.g4 -> ZQN
- *     declarations.g4 -> scheduling
  *     declarations.g4 -> routing
+ *     declarations.g4 -> scheduling
  *     declarations.g4 -> HAL
  *     declarations.g4 -> runtime
+ *     declarations.g4 -> physical hardware
  *
  * ============================================================================
- * LEGACY GRAMMAR MIGRATION
+ * QUANTUM BOUNDARY
  * ============================================================================
  *
- * The repository still contains declaration implementations in:
+ * Declaration syntax may introduce or reference quantum types and declarations.
  *
- *     grammar/Zamani.g4
- *     grammar/antlr/Core.g4
- *     grammar/antlr/ZamaniParser.g4
- *     grammar/statements/declarations.g4
+ * This dispatcher MUST NOT:
  *
- * Those are migration/conformance surfaces and must not remain competing
- * production owners.
+ *     - enumerate gates;
+ *     - enumerate physical qubits;
+ *     - select physical qubits;
+ *     - select QPUs;
+ *     - encode QPU topology;
+ *     - encode calibration;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - perform QEC;
+ *     - implement ZQN;
+ *     - construct quantum::ir.
  *
- * The final production parser must have one declaration dispatch path.
+ * Required direction:
  *
- * The intended final relationship is:
+ *     declaration
+ *          |
+ *          v
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
  *
- *     canonical compilation unit
- *              |
- *              v
- *     Zamani declaration dispatcher
- *              |
- *              v
- *     this grammar
- *              |
- *              v
- *     declaration delegates
+ * `quantum::ir` remains the canonical quantum semantic boundary.
+ *
+ * ============================================================================
+ * HDL / HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * Hardware-related declarations describe source-level intent.
+ *
+ * They MUST NOT turn:
+ *
+ *     capability
+ *     requirement
+ *     resource
+ *     constraint
+ *     preference
+ *     hint
+ *
+ * into an implicit:
+ *
+ *     physical device
+ *     physical address
+ *     fixed topology
+ *     fixed accelerator
+ *     fixed CPU
+ *     fixed GPU
+ *     fixed FPGA
+ *     fixed QPU
+ *
+ * Target realization remains downstream.
+ *
+ * ============================================================================
+ * DECLARATION FAMILY MAP
+ * ============================================================================
+ *
+ * Value:
+ *
+ *     constantDeclaration
+ *     variableDeclaration
+ *
+ * Named/type:
+ *
+ *     typeDeclaration
+ *     typeAliasDeclaration
+ *
+ * Aggregate:
+ *
+ *     structDeclaration
+ *     recordDeclaration
+ *     enumDeclaration
+ *     unionDeclaration
+ *
+ * Object/contract:
+ *
+ *     classDeclaration
+ *     interfaceDeclaration
+ *     traitDeclaration
+ *     implementationDeclaration
+ *
+ * Universal execution intent:
+ *
+ *     resourceDeclaration
+ *     capability declaration adapter
+ *     domainDeclaration
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar constructs no Rust AST.
+ *
+ * The frontend adapter maps the selected parse-tree branch into the existing
+ * domain-neutral AST.
+ *
+ * Every declaration branch must preserve:
+ *
+ *     - declaration kind
+ *     - complete source span
+ *     - source ordering
+ *     - identifier/name
+ *     - attributes
+ *     - visibility
+ *     - modifiers
+ *     - generic parameters
+ *     - declaration members
+ *     - child type expressions
+ *     - child expressions
+ *     - documentation where supported
+ *
+ * No grammar file may create a competing domain AST.
+ *
+ * In particular there must not be:
+ *
+ *     QuantumDeclarationAst
+ *     HardwareDeclarationAst
+ *     QuantumDeclarationIR
+ *     DeclarationIR
+ *
+ * inside this grammar layer.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing establishes syntactic structure only.
+ *
+ * Later semantic analysis determines:
+ *
+ *     - declaration uniqueness;
+ *     - name resolution;
+ *     - scope;
+ *     - type validity;
+ *     - generic validity;
+ *     - bounds;
+ *     - trait/interface satisfaction;
+ *     - implementation coherence;
+ *     - ownership;
+ *     - effects;
+ *     - capabilities;
+ *     - resource requirements;
+ *     - domain validity;
+ *     - portability;
+ *     - target compatibility.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY SEPARATION
+ * ============================================================================
+ *
+ * These concepts MUST remain distinct.
+ *
+ * Capability:
+ *
+ *     what an execution environment can do.
+ *
+ * Resource:
+ *
+ *     something computation can consume/use.
+ *
+ * Requirement:
+ *
+ *     something the program requires.
+ *
+ * Constraint:
+ *
+ *     a condition that must be satisfied.
+ *
+ * Preference:
+ *
+ *     an optimization preference.
+ *
+ * Hint:
+ *
+ *     advisory implementation information.
+ *
+ * Target:
+ *
+ *     an execution context/profile.
+ *
+ * This dispatcher must not collapse these concepts into physical placement.
+ *
+ * ============================================================================
+ * DECLARATION DISPATCH
+ * ============================================================================
+ *
+ * `declaration` is the only public dispatcher owned by this file.
+ *
+ * Concrete syntax is entirely delegated.
  *
  * ============================================================================
  */
@@ -438,15 +546,29 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+
 /*
  * ============================================================================
  * DELEGATE IMPORTS
  * ============================================================================
  *
- * These are the concrete declaration owners already present in the repository.
+ * These grammar names correspond to the concrete declaration owners already
+ * present in the repository.
  *
- * Each delegate is independently completable and independently testable.
+ * IMPORTANT:
+ *
+ *     The imports below intentionally use grammar names rather than filenames.
+ *
+ * For example:
+ *
+ *     classes.g4          -> ZamaniClasses
+ *     records.g4          -> ZamaniDeclarationRecords
+ *     aliases.g4          -> ZamaniDeclarationAliases
+ *     types.g4            -> ZamaniDeclarationTypesParser
+ *
+ * ============================================================================
  */
+
 import
     Constants,
     Variables,
@@ -455,9 +577,15 @@ import
     ZamaniDeclarationStructs,
     ZamaniDeclarationEnums,
     ZamaniDeclarationUnions,
+    ZamaniDeclarationRecords,
+    ZamaniClasses,
     Interfaces,
     Traits,
-    Implementations;
+    ZamaniImplementations,
+    Resources,
+    CapabilityDeclarations,
+    ZamaniDomains
+;
 
 
 /*
@@ -465,15 +593,20 @@ import
  * AUTHORITATIVE DECLARATION ENTRY POINT
  * ============================================================================
  *
- * `declaration` is the only public declaration-dispatch rule owned here.
+ * All source-level declaration families enter through this rule.
  *
- * No concrete declaration syntax is repeated.
+ * No concrete declaration syntax is implemented here.
+ *
+ * ============================================================================
  */
+
 declaration
     : valueDeclaration
     | typeDeclarationFamily
-    | traitDeclaration
-    | implementationDeclaration
+    | aggregateDeclaration
+    | objectContractDeclaration
+    | resourceCapabilityDeclaration
+    | domainDeclaration
     ;
 
 
@@ -482,8 +615,11 @@ declaration
  * VALUE DECLARATIONS
  * ============================================================================
  *
- * Concrete syntax is owned by Constants and Variables.
+ * Constants and variables are separate concrete declaration owners.
+ *
+ * ============================================================================
  */
+
 valueDeclaration
     : constantDeclaration
     | variableDeclaration
@@ -495,50 +631,91 @@ valueDeclaration
  * TYPE DECLARATIONS
  * ============================================================================
  *
- * Concrete syntax is supplied by the imported delegate grammars.
+ * `typeDeclaration` remains the named-type declaration owned by types.g4.
  *
- * The type system itself remains owned by grammar/types/.
+ * `typeAliasDeclaration` remains the alias declaration owned by aliases.g4.
+ *
+ * ============================================================================
  */
+
 typeDeclarationFamily
     : typeDeclaration
     | typeAliasDeclaration
-    | structDeclaration
-    | enumDeclaration
-    | unionDeclaration
-    | interfaceDeclaration
     ;
 
 
 /*
  * ============================================================================
- * COMPLETION CONTRACT
+ * AGGREGATE DECLARATIONS
  * ============================================================================
  *
- * This file is COMPLETE when:
+ * Aggregates are intentionally grouped here only for dispatch.
  *
- * [x] There is exactly one `declaration` dispatcher in this grammar family.
- * [x] Concrete declaration syntax is delegated.
- * [x] Constants are delegated to Constants.
- * [x] Variables are delegated to Variables.
- * [x] Named types are delegated to ZamaniDeclarationTypesParser.
- * [x] Aliases are delegated to ZamaniDeclarationAliases.
- * [x] Structs are delegated to ZamaniDeclarationStructs.
- * [x] Enums are delegated to ZamaniDeclarationEnums.
- * [x] Unions are delegated to ZamaniDeclarationUnions.
- * [x] Interfaces are delegated to Interfaces.
- * [x] Traits are delegated to Traits.
- * [x] Implementations are delegated to Implementations.
- * [x] No type-expression implementation is duplicated here.
- * [x] No identifier implementation is duplicated here.
- * [x] No expression implementation is duplicated here.
- * [x] No annotation implementation is duplicated here.
- * [x] No lexer rules exist here.
- * [x] No semantic actions exist here.
- * [x] No hardware limits exist here.
- * [x] No quantum IR exists here.
- * [x] No QEC/ZQN/routing/scheduling logic exists here.
- * [x] No Rust code is embedded here.
- * [x] No unsafe Rust is required downstream by this grammar contract.
+ * Their concrete syntax remains in their individual grammars.
  *
  * ============================================================================
  */
+
+aggregateDeclaration
+    : structDeclaration
+    | recordDeclaration
+    | enumDeclaration
+    | unionDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * OBJECT / CONTRACT DECLARATIONS
+ * ============================================================================
+ *
+ * Classes, interfaces, traits and implementations remain independently owned.
+ *
+ * ============================================================================
+ */
+
+objectContractDeclaration
+    : classDeclaration
+    | interfaceDeclaration
+    | traitDeclaration
+    | implementationDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * RESOURCE / CAPABILITY DECLARATIONS
+ * ============================================================================
+ *
+ * Resources are source-level resource abstractions.
+ *
+ * Capabilities are source-level capability contracts.
+ *
+ * Neither selects a physical machine resource.
+ *
+ * The capability adapter delegates to the canonical capability grammar.
+ *
+ * ============================================================================
+ */
+
+resourceCapabilityDeclaration
+    : resourceDeclaration
+    | declarationCapability
+    ;
+
+
+/*
+ * ============================================================================
+ * DOMAIN DECLARATIONS
+ * ============================================================================
+ *
+ * Domains are open-world source-level semantic namespaces.
+ *
+ * The concrete domain grammar owns domain syntax.
+ *
+ * ============================================================================
+ */
+
+domainDeclaration
+    : domainDeclaration
+    ;
