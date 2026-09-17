@@ -6,11 +6,37 @@
  * File:
  *     grammar/declarations/aliases.g4
  *
- * Grammar name:
+ * Grammar:
  *     ZamaniDeclarationAliases
  *
- * Purpose:
- *     Canonical source-level syntax for TYPE ALIAS DECLARATIONS.
+ * Status:
+ *     Canonical modular declaration grammar
+ *
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     safe Rust only
+ *     no unsafe
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This file owns the source syntax of type-alias declarations.
+ *
+ * Canonical forms:
+ *
+ *     type Name = Type;
+ *     type Name = Type
+ *
+ *     type Pair<T> = (T, T);
+ *
+ *     type Mapping<K, V> = Map<K, V>;
+ *
+ *     type QuantumState<T> = quantum::State<T>;
+ *
+ * The alias target is always delegated to the canonical `typeExpression`
+ * grammar owned by grammar/types/types.g4.
  *
  * ============================================================================
  * OWNERSHIP
@@ -19,184 +45,200 @@
  * THIS FILE OWNS:
  *
  *     - typeAliasDeclaration
- *     - the `type` declaration keyword at declaration level
- *     - alias names
- *     - alias generic parameter lists
+ *     - alias generic parameter syntax
  *     - alias generic parameter bounds
- *     - the alias `=` relationship
- *     - the alias target type-expression reference
- *     - declaration-level optional semicolon handling
+ *     - the `type` declaration keyword at this declaration boundary
+ *     - alias identifier occurrence
+ *     - `=` separating alias name from target type
+ *     - optional declaration terminator
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - identifiers;
- *     - qualified names;
- *     - lexical tokens;
- *     - keywords;
- *     - type expressions;
- *     - primitive types;
- *     - generic type applications;
- *     - tuple types;
- *     - array types;
- *     - quantum types;
- *     - hardware types;
- *     - resource types;
- *     - function types;
- *     - type inference;
- *     - type checking;
- *     - name resolution;
- *     - alias expansion;
- *     - alias-cycle detection;
- *     - generic substitution;
- *     - semantic capability checking;
- *     - resource checking;
- *     - quantum allocation;
- *     - hardware selection;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - canonical quantum IR;
- *     - classical IR;
- *     - runtime representation;
- *     - ABI selection;
- *     - machine layout.
+ *     - lexical token definitions
+ *     - identifier spelling
+ *     - keywords generally
+ *     - qualified-name syntax
+ *     - typeExpression
+ *     - primitive types
+ *     - generic type arguments
+ *     - tuple types
+ *     - array types
+ *     - quantum types
+ *     - hardware types
+ *     - resource types
+ *     - function types
+ *     - type inference
+ *     - name resolution
+ *     - generic substitution
+ *     - alias expansion
+ *     - alias-cycle detection
+ *     - semantic validation
+ *     - resource resolution
+ *     - capability resolution
+ *     - hardware selection
+ *     - physical qubit allocation
+ *     - routing
+ *     - scheduling
+ *     - optimization
+ *     - QEC
+ *     - ZQN
+ *     - HAL
+ *     - classical IR
+ *     - quantum::ir
+ *     - HDL/hardware IR
+ *     - runtime representation
+ *     - ABI selection
+ *     - deployment
  *
  * ============================================================================
- * ARCHITECTURAL BOUNDARY
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
- * Source
- *   |
- *   v
- * Canonical lexer
- *   |
- *   v
- * declarations/aliases.g4
- *   |
- *   v
- * Frontend AST::TypeAlias
- *   |
- *   +--> name resolution
- *   +--> generic validation
- *   +--> type resolution
- *   +--> alias-cycle validation
- *   |
- *   v
- * Canonical semantic type model
- *   |
- *   +--> classical IR
- *   +--> quantum::ir
- *   +--> resource metadata
- *   +--> hardware-independent semantic representation
- *   |
- *   v
- * optimization / routing / scheduling / lowering
- *   |
- *   v
- * target execution
+ *     source
+ *       |
+ *       v
+ *     ZamaniLexer
+ *       |
+ *       v
+ *     ZamaniDeclarationAliases
+ *       |
+ *       v
+ *     frontend AST
+ *       |
+ *       +--> TypeAlias
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       +--> name resolution
+ *       +--> generic validation
+ *       +--> alias-cycle validation
+ *       +--> type resolution
+ *       |
+ *       v
+ *     canonical semantic type model
+ *       |
+ *       +--> classical representation
+ *       +--> quantum::ir
+ *       +--> HDL/hardware representation
+ *       +--> resource/capability metadata
+ *       |
+ *       v
+ *     optimization / lowering
+ *       |
+ *       v
+ *     routing / scheduling / resilience
+ *       |
+ *       v
+ *     target realization
  *
- * The grammar never selects a physical implementation.
+ * No target-specific decision is made by this grammar.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * A type alias describes a reusable SOURCE-LEVEL TYPE RELATIONSHIP.
+ * A type alias is a source-level abstraction.
+ *
+ * It MUST NOT encode universal language limits for:
+ *
+ *     - CPU count
+ *     - core count
+ *     - thread count
+ *     - GPU count
+ *     - FPGA count
+ *     - accelerator count
+ *     - QPU count
+ *     - physical qubit count
+ *     - memory capacity
+ *     - storage capacity
+ *     - network-node count
+ *     - topology size
+ *     - tensor dimensions
+ *     - register count
+ *     - machine count
+ *
+ * Symbolic type expressions remain valid regardless of the eventual target
+ * realization.
  *
  * Example:
  *
- *     type UserId = String;
+ *     type Vector<T, N> = VectorType<T, N>;
  *
- *     type Pair<T> = (T, T);
- *
- *     type QuantumState<T> = Quantum<T>;
- *
- *     type Matrix<T, Rows, Cols> = Tensor<T, Rows, Cols>;
- *
- * These declarations must remain independent of:
- *
- *     - CPU count;
- *     - core count;
- *     - thread count;
- *     - memory capacity;
- *     - GPU count;
- *     - FPGA count;
- *     - ASIC topology;
- *     - QPU identity;
- *     - physical qubit count;
- *     - network topology;
- *     - cluster size;
- *     - deployment topology.
- *
- * Symbolic type parameters are intentionally allowed to describe quantities
- * whose concrete values are determined later by semantic analysis, resource
- * resolution, compilation, or execution.
+ * Whether `N` is small or large is a semantic/program property, not a
+ * universal grammar limit.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * No finite language-level limit is encoded here for:
+ * No finite grammar-level cardinality limit is imposed on:
  *
- *     - alias declarations;
- *     - generic parameter count;
- *     - generic nesting;
- *     - type-expression complexity;
- *     - type-path depth;
- *     - program size;
- *     - alias dependency depth;
- *     - resource cardinality.
+ *     - alias declarations
+ *     - generic parameters
+ *     - generic bounds
+ *     - type-expression nesting
+ *     - type-expression size
+ *     - alias dependency depth
+ *     - source-program size
  *
- * Actual compiler implementation limits, if required for protection against
- * denial-of-service or exhausted host resources, belong to compiler policy
- * and MUST NOT become source-language semantic limits.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Existing Zamani syntax:
- *
- *     type Name = Type;
- *
- * and:
- *
- *     type Name<T> = Type<T>;
- *
- * is preserved.
- *
- * Existing frontend AST:
- *
- *     TypeAlias {
- *         span,
- *         name,
- *         parameters,
- *         target,
- *     }
- *
- * remains the semantic destination.
+ * Compiler resource limits, if required to protect a compilation process,
+ * belong to explicit compiler policy and MUST NOT be encoded as language
+ * semantics.
  *
  * ============================================================================
- * SAFETY / RUST
+ * LEXER CONTRACT
  * ============================================================================
  *
- * This file contains grammar only.
+ * The canonical lexical vocabulary for this grammar is:
  *
- * No Rust implementation code is embedded in the grammar.
+ *     TYPE
+ *     IDENTIFIER
+ *     LESS_THAN
+ *     GREATER_THAN
+ *     COMMA
+ *     COLON
+ *     PLUS
+ *     ASSIGN
+ *     SEMICOLON
  *
- * Compiler/frontend implementations consuming this grammar MUST support:
+ * There is intentionally no local lexer rule in this file.
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ * Do NOT use:
  *
- * and MUST NOT require `unsafe`.
+ *     IDENT
+ *     LT
+ *     GT
+ *     SEMI
  *
- * Recommended crate-level enforcement:
+ * Those belong to older/competing grammar vocabulary and must not be
+ * introduced here.
  *
- *     #![deny(unsafe_code)]
- *     #![deny(unsafe_op_in_unsafe_fn)]
+ * ============================================================================
+ * TYPE SYSTEM CONTRACT
+ * ============================================================================
+ *
+ * `typeExpression` is imported from the canonical Types grammar.
+ *
+ * This file MUST NOT redefine:
+ *
+ *     typeExpression
+ *     typeCore
+ *     typePostfix
+ *     typePath
+ *     genericType
+ *     genericArgumentList
+ *     tupleType
+ *     arrayType
+ *     functionType
+ *     referenceType
+ *     pointerType
+ *     quantumType
+ *     hardwareType
+ *     resourceType
  *
  * ============================================================================
  */
@@ -207,280 +249,143 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+/*
+ * Canonical source-level type syntax.
+ *
+ * `Types` owns `typeExpression`.
+ *
+ * ANTLR's composed parser therefore receives one authoritative type grammar
+ * rather than this file creating another type system.
+ */
+import Types;
+
 
 /* ============================================================================
  * TYPE ALIAS DECLARATION
- * ========================================================================= */
-
-/**
- * Canonical Zamani type-alias declaration.
+ * ============================================================================
  *
- * Examples:
+ * Canonical examples:
  *
  *     type UserId = String;
- *
- *     type QubitState = QuantumState;
  *
  *     type Pair<T> = (T, T);
  *
  *     type Mapping<K, V> = Map<K, V>;
  *
- *     type Matrix<T, Rows, Cols> = Tensor<T, Rows, Cols>;
+ *     type QubitState<T> = quantum::State<T>;
  *
- * The target is deliberately delegated to the canonical `typeExpression`
- * grammar.
+ * The optional semicolon preserves the repository's existing source-level
+ * compatibility while allowing the surrounding declaration composition to
+ * own declaration termination where required.
+ *
+ * The declaration dispatcher MUST NOT consume another independent terminator
+ * after invoking this rule.
+ * ============================================================================
  */
+
 typeAliasDeclaration
     : TYPE
-      identifier
-      genericParameters?
+      IDENTIFIER
+      typeAliasGenericParameters?
       ASSIGN
       typeExpression
-      SEMI?
+      SEMICOLON?
     ;
 
 
 /* ============================================================================
- * GENERIC PARAMETERS
+ * ALIAS GENERIC PARAMETERS
  * ============================================================================
  *
- * Generic parameter syntax is defined here because generic parameters are
- * part of the alias declaration's signature.
- *
- * The semantic meaning of bounds is resolved later.
- *
- * This avoids making aliases dependent on the function generic grammar.
- * ========================================================================= */
-
-/**
- * Generic parameter list.
- *
- * No fixed parameter count is encoded.
- *
- * A trailing comma is accepted for stable formatting and source generation.
- */
-genericParameters
-    : LT
-      genericParameterList?
-      GT
-    ;
-
-
-/**
- * One or more generic parameters.
+ * A type alias may introduce zero or more type parameters.
  *
  * Examples:
  *
- *     T
+ *     type Identity<T> = T;
  *
- *     T, U
+ *     type Pair<T, U> = (T, U);
  *
- *     K: Hashable, V: Clone
+ *     type Numeric<T: Number> = T;
+ *
+ *     type Ordered<T: Comparable + Serializable> = T;
+ *
+ * There is deliberately no fixed parameter count.
+ * ============================================================================
  */
-genericParameterList
-    : genericParameter
-      (COMMA genericParameter)*
+
+typeAliasGenericParameters
+    : LESS_THAN
+      typeAliasGenericParameter
+      (
+          COMMA
+          typeAliasGenericParameter
+      )*
       COMMA?
+      GREATER_THAN
     ;
 
 
-/**
- * A generic parameter consists of a source-level identifier followed by
- * optional semantic bounds.
+/* ============================================================================
+ * ONE ALIAS TYPE PARAMETER
+ * ============================================================================
  *
- * Examples:
+ * The parameter name is lexically an IDENTIFIER.
+ *
+ * Bounds remain source-level type constraints.
+ *
+ * Example:
  *
  *     T
  *
  *     T: Numeric
  *
- *     T: Addable + Comparable
+ *     T: Numeric + Comparable
+ * ============================================================================
  */
-genericParameter
-    : identifier
-      genericBounds?
+
+typeAliasGenericParameter
+    : IDENTIFIER
+      typeAliasGenericBounds?
     ;
 
 
-/**
- * Generic bounds.
+/* ============================================================================
+ * ALIAS GENERIC BOUNDS
+ * ============================================================================
  *
- * Bounds are expressed as type-level requirements rather than implementation
- * details.
- */
-genericBounds
-    : COLON
-      typeBoundList
-    ;
-
-
-/**
- * Multiple bounds.
+ * A bound is represented by one or more canonical type expressions joined
+ * by `+`.
  *
  * Example:
  *
- *     T: Numeric + Comparable + Serializable
+ *     T: Numeric
  *
- * No finite number of bounds is encoded.
+ *     T: Numeric + Comparable
+ *
+ * No finite bound count is encoded.
+ *
+ * Semantic interpretation of the bounds belongs to semantic analysis.
+ * ============================================================================
  */
-typeBoundList
-    : typeExpression
-      (PLUS typeExpression)*
+
+typeAliasGenericBounds
+    : COLON
+      typeExpression
+      (
+          PLUS
+          typeExpression
+      )*
     ;
 
 
 /* ============================================================================
- * IDENTIFIER BRIDGE
+ * AST CONTRACT
  * ============================================================================
  *
- * Identifier spelling belongs to the canonical lexer/core name system.
- *
- * This rule deliberately does not define:
- *
- *     - Unicode policy;
- *     - identifier length;
- *     - normalization;
- *     - reserved-name policy;
- *     - case sensitivity.
- *
- * Those are lexer/core-language concerns.
- * ========================================================================= */
-
-/**
- * Canonical source identifier.
- */
-identifier
-    : IDENT
-    ;
-
-
-/* ============================================================================
- * OPTIONAL DECLARATION TERMINATOR
- * ============================================================================
- *
- * The declaration itself accepts an optional semicolon for compatibility with
- * the existing Core grammar.
- *
- * The parser must NOT duplicate semicolon ownership elsewhere.
- *
- * `declarations.g4` should invoke `typeAliasDeclaration` directly rather than
- * wrapping it in another rule that independently consumes a second semicolon.
- * ========================================================================= */
-
-
-/* ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * For:
- *
- *     type UserId = String;
- *
- * the parser produces a declaration equivalent to:
- *
- *     TypeAlias {
- *         name: UserId,
- *         parameters: [],
- *         target: String,
- *     }
- *
- * For:
- *
- *     type Pair<T> = (T, T);
- *
- * the parser produces:
- *
- *     TypeAlias {
- *         name: Pair,
- *         parameters: [T],
- *         target: (T, T),
- *     }
- *
- * The parser does NOT decide:
- *
- *     - whether `String` exists;
- *     - whether `T` is declared correctly;
- *     - whether bounds are satisfiable;
- *     - whether the alias is recursive;
- *     - whether the target is legal;
- *     - whether the target is quantum;
- *     - whether the target is hardware-specific;
- *     - whether the alias is portable;
- *     - whether the alias can be lowered to a target;
- *     - whether an implementation can realize the target.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * TYPE-ALIAS SEMANTIC EXAMPLES
- * ============================================================================
- *
- * CLASSICAL
- *
- *     type UserId = String;
- *
- *
- * GENERIC
- *
- *     type Pair<T> = (T, T);
- *
- *
- * COLLECTION
- *
- *     type Mapping<K, V> = Map<K, V>;
- *
- *
- * SYMBOLIC / SCALABLE
- *
- *     type Vector<T, N> = VectorType<T, N>;
- *
- *
- * TENSOR
- *
- *     type Matrix<T, Rows, Cols> = Tensor<T, Rows, Cols>;
- *
- *
- * QUANTUM
- *
- *     type LogicalState<T> = quantum::State<T>;
- *
- *
- * QUANTUM RESOURCE ABSTRACTION
- *
- *     type Register<Q> = quantum::Register<Q>;
- *
- *
- * HARDWARE-RELATED SEMANTIC TYPE
- *
- *     type DeviceBuffer<T> = hardware::Buffer<T>;
- *
- *
- * DISTRIBUTED
- *
- *     type RemoteValue<T> = distributed::Value<T>;
- *
- *
- * FUTURE EXTENSION
- *
- *     type FutureValue<T> = future::Value<T>;
- *
- * None of these declarations selects a concrete machine.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * AST INTEGRATION CONTRACT
- * ============================================================================
- *
- * The canonical frontend destination is:
+ * Every successful typeAliasDeclaration maps to the existing canonical
+ * frontend representation:
  *
  *     src/frontend/ast/node/declarations/type_alias.rs
- *
- * which already models:
  *
  *     TypeAlias {
  *         span,
@@ -489,187 +394,170 @@ identifier
  *         target,
  *     }
  *
- * The parser adapter MUST map:
+ * Mapping:
  *
- *     identifier
+ *     TYPE
+ *         -> declaration kind
+ *
+ *     IDENTIFIER
  *         -> Identifier
  *
- *     genericParameterList
- *         -> Vec<TypeParameter>
+ *     typeAliasGenericParameters
+ *         -> ordered Vec<TypeParameter>
  *
  *     typeExpression
  *         -> TypeExpr
  *
- *     complete declaration range
+ *     complete source range
  *         -> Span
  *
- * The grammar must not introduce a second TypeAlias AST representation.
+ * This grammar MUST NOT introduce:
+ *
+ *     AliasType
+ *     TypeAliasDeclaration
+ *     AliasNode
+ *     AliasTypeExpr
+ *     QuantumAlias
+ *     HardwareAlias
+ *
+ * as competing AST representations.
  *
  * ============================================================================
  */
 
 
 /* ============================================================================
- * LEGACY AST COMPATIBILITY
+ * GENERIC AST CONTRACT
  * ============================================================================
  *
- * The repository currently has older TypeAlias representations as well.
+ * The canonical frontend generic representation is:
  *
- * During migration:
+ *     TypeParameter
+ *         - name
+ *         - ordered bounds
  *
- *     grammar
- *       |
- *       v
- *     frontend TypeAlias
- *       |
- *       +--> legacy AST adapter, where required
+ * Bounds are canonical TypeExpr values.
  *
- * The grammar itself MUST NOT know about legacy AST structures.
+ * The grammar therefore preserves:
  *
- * Once all consumers migrate to the canonical frontend AST, the compatibility
- * adapter can be removed without changing this grammar.
+ *     parameter order
+ *     bound order
+ *     source spelling through source spans
  *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * TYPE SYSTEM INTEGRATION
- * ============================================================================
+ * Duplicate parameter names are NOT rejected here.
  *
- * `typeExpression` MUST come from:
- *
- *     grammar/types/types.g4
- *
- * This file MUST NOT redefine:
- *
- *     primitiveType
- *     quantumType
- *     tupleType
- *     arrayType
- *     functionType
- *     referenceType
- *     pointerType
- *     genericOrNamedType
- *     typePath
- *     dependentType
- *     typeValueExpression
- *
- * This prevents two independent definitions of Zamani's type language.
+ * They are rejected during structural/semantic validation because this parser
+ * grammar has no symbol table and must remain context-independent.
  *
  * ============================================================================
  */
 
 
 /* ============================================================================
- * DECLARATION INTEGRATION
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * `grammar/declarations/declarations.g4` is the composition owner.
+ * Valid source:
  *
- * It should import this grammar and expose:
+ *     type UserId = String;
  *
- *     typeAliasDeclaration
+ * represents:
  *
- * as one of the declaration alternatives.
+ *     TypeAlias(
+ *         name = UserId,
+ *         parameters = [],
+ *         target = String
+ *     )
  *
- * Conceptually:
+ * Valid source:
  *
- *     declaration
- *         : constantDeclaration
- *         | variableDeclaration
- *         | typeDeclaration
- *         | ...
- *         ;
+ *     type Pair<T> = (T, T);
  *
- * and:
+ * represents:
  *
- *     typeDeclaration
- *         : typeAliasDeclaration
- *         | structDeclaration
- *         | enumDeclaration
- *         | unionDeclaration
- *         | interfaceDeclaration
- *         | traitDeclaration
- *         | ...
- *         ;
+ *     TypeAlias(
+ *         name = Pair,
+ *         parameters = [T],
+ *         target = (T, T)
+ *     )
  *
- * This file does NOT own the top-level declaration dispatcher.
+ * Valid source:
  *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * ALIAS VS OTHER TYPE DECLARATIONS
- * ============================================================================
+ *     type Ordered<T: Comparable + Serializable> = T;
  *
- * IMPORTANT OWNERSHIP RULE:
+ * represents:
  *
- * `type` aliases are NOT the same thing as:
+ *     TypeAlias(
+ *         name = Ordered,
+ *         parameters = [
+ *             T:
+ *                 Comparable
+ *                 Serializable
+ *         ],
+ *         target = T
+ *     )
  *
- *     structs
- *     enums
- *     unions
- *     interfaces
- *     traits
- *     classes
- *     records
+ * The parser does NOT determine whether:
  *
- * Those declarations have their own grammar owners.
+ *     Comparable exists
+ *     Serializable exists
+ *     String exists
+ *     T is valid
+ *     bounds are satisfiable
+ *     the alias is recursive
+ *     the alias forms a cycle
+ *     the target is realizable
  *
- * `aliases.g4` therefore must not contain alternatives such as:
- *
- *     structDeclaration
- *     enumDeclaration
- *     unionDeclaration
- *     traitDeclaration
- *
- * This prevents duplicate ownership and parser ambiguity.
+ * Those are later semantic responsibilities.
  *
  * ============================================================================
  */
 
 
 /* ============================================================================
- * ALIAS VS TYPE EXPRESSION
+ * ALIAS TARGET CONTRACT
  * ============================================================================
  *
- * These are deliberately different:
+ * The target may be ANY type expression admitted by the canonical Types
+ * grammar.
  *
- *     type Foo = Bar;
- *     ^^^^^^^^^^^^^^^
- *     declaration
+ * Therefore aliases can naturally cover:
  *
- * versus:
+ *     classical types
+ *     generic types
+ *     tuple types
+ *     array/slice types
+ *     function types
+ *     reference types
+ *     pointer types
+ *     quantum types
+ *     hybrid types
+ *     hardware-independent resource types
+ *     temporal types
+ *     future domain types
  *
- *     Foo<Bar>
- *     ^^^^^^^^
- *     type expression
+ * without aliases.g4 acquiring domain-specific alternatives.
  *
- * `aliases.g4` owns the first.
+ * Examples:
  *
- * `types/types.g4` owns the second.
+ *     type UserId = String;
  *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * ALIAS VS CONSTANT
- * ============================================================================
+ *     type Pair<T> = (T, T);
  *
- * These constructs have different semantic domains:
+ *     type Matrix<T> = Tensor<T>;
  *
- *     type Size = Dimension;
+ *     type Q = Qubit;
  *
- * introduces a type-level name.
+ *     type State<T> = quantum::State<T>;
  *
- *     const Size = 1024;
+ *     type DeviceBuffer<T> = hardware::Buffer<T>;
  *
- * introduces a value-level constant.
+ * The grammar does not need separate:
  *
- * The alias grammar must never reuse the constant declaration rule.
+ *     quantumAliasDeclaration
+ *     hdlAliasDeclaration
+ *     gpuAliasDeclaration
+ *     qpuAliasDeclaration
  *
  * ============================================================================
  */
@@ -679,55 +567,69 @@ identifier
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * An alias may refer to quantum types because `typeExpression` permits the
- * canonical quantum type system.
+ * Quantum aliases are ordinary aliases whose target is a canonical quantum
+ * TypeExpr.
  *
  * Example:
  *
- *     type Q = Qubit;
+ *     type LogicalQubit = quantum::LogicalQubit;
  *
- *     type LogicalQubit<T> = quantum::Logical<T>;
+ *     type State<T> = quantum::State<T>;
  *
  * This file does NOT:
  *
  *     - allocate qubits;
- *     - assign physical indices;
+ *     - select physical qubits;
  *     - select a QPU;
  *     - select a gate set;
- *     - inspect topology;
- *     - invoke QEC;
- *     - invoke ZQN;
+ *     - perform routing;
+ *     - schedule operations;
+ *     - perform QEC;
+ *     - interpret ZQN fault/noise semantics;
+ *     - access HAL state;
  *     - create quantum::ir nodes.
  *
- * Semantic lowering eventually maps the resolved quantum type information
- * into the canonical quantum semantic pipeline.
+ * The eventual semantic pipeline remains:
+ *
+ *     source
+ *       -> AST
+ *       -> semantic type model
+ *       -> quantum::ir
+ *       -> optimization
+ *       -> routing
+ *       -> scheduling
+ *       -> QEC/resilience
+ *       -> ZQN/HAL
+ *       -> target realization
  *
  * ============================================================================
  */
 
 
 /* ============================================================================
- * HARDWARE INTEGRATION
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * An alias may refer to hardware/resource types.
+ * Hardware-related aliases remain target-independent.
  *
  * Example:
  *
  *     type Buffer<T> = hardware::Buffer<T>;
  *
- * The alias does not specify:
+ * The alias grammar does not encode:
  *
- *     - device ID;
- *     - memory address;
- *     - bus;
- *     - register count;
- *     - FPGA size;
- *     - ASIC family;
- *     - GPU model;
- *     - CPU model.
+ *     physical address
+ *     bus number
+ *     register number
+ *     device ID
+ *     FPGA capacity
+ *     ASIC family
+ *     GPU model
+ *     CPU model
+ *     QPU topology
  *
- * Those belong to target/resource/hardware models.
+ * Such information belongs to later resource, capability, target and
+ * deployment models.
  *
  * ============================================================================
  */
@@ -737,118 +639,76 @@ identifier
  * RESOURCE / CAPABILITY INTEGRATION
  * ============================================================================
  *
- * An alias may name types whose semantic interpretation requires capabilities
- * or resources.
+ * An alias may name a type carrying resource/capability semantics because
+ * those semantics are represented by the canonical type system.
  *
- * This grammar only preserves the type relationship.
+ * This grammar does not decide whether a capability exists or whether a
+ * resource requirement can be satisfied.
  *
- * Capability checking belongs to semantic analysis.
+ * Examples:
  *
- * Resource feasibility belongs to resource management / compilation /
- * scheduling / execution.
+ *     type QuantumResource = quantum::Resource;
  *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * DISTRIBUTED / NETWORK / AI / HDL INTEGRATION
- * ============================================================================
+ *     type ComputeBuffer<T> = resource::Buffer<T>;
  *
- * The alias mechanism is intentionally domain-neutral.
- *
- * It can therefore alias:
- *
- *     classical types
- *     quantum types
- *     HDL types
- *     hardware types
- *     distributed types
- *     networking types
- *     AI tensor/model types
- *     cryptographic types
- *     future domain types
- *
- * without adding domain-specific alternatives here.
- *
- * This is essential for extensibility.
+ * Semantic resolution happens after parsing.
  *
  * ============================================================================
  */
 
 
 /* ============================================================================
- * SEMANTIC VALIDATION RESPONSIBILITIES
+ * POCO-REAF INVARIANTS
  * ============================================================================
  *
- * Later semantic analysis MUST validate at least:
+ * The following MUST remain true:
  *
- *     - duplicate alias declarations;
- *     - illegal alias names;
- *     - duplicate generic parameter names;
- *     - generic parameter shadowing;
- *     - undeclared type parameters;
- *     - invalid bounds;
- *     - incompatible bounds;
- *     - unknown target types;
- *     - invalid generic applications;
- *     - recursive aliases;
- *     - mutually recursive aliases;
- *     - alias expansion cycles;
- *     - visibility violations;
- *     - module/import resolution;
- *     - capability requirements;
- *     - domain-specific type legality.
+ *     type BigVector<T, N> = Vector<T, N>;
  *
- * These are intentionally NOT parser errors.
+ * does not cause the grammar to establish a maximum N.
+ *
+ * Likewise:
+ *
+ *     type QuantumRegister<Q> = quantum::Register<Q>;
+ *
+ * does not establish a maximum Q.
+ *
+ * Likewise:
+ *
+ *     type DistributedValue<T> = distributed::Value<T>;
+ *
+ * does not establish a maximum number of machines.
+ *
+ * Program-scale and hardware-scale decisions remain downstream.
  *
  * ============================================================================
  */
 
 
 /* ============================================================================
- * PARSER ERROR RESPONSIBILITIES
+ * ERROR / RECOVERY CONTRACT
  * ============================================================================
  *
- * The parser should reject malformed syntax such as:
+ * The grammar deliberately does not embed semantic actions or recovery code.
+ *
+ * Malformed input such as:
  *
  *     type = String;
+ *     type Name String;
+ *     type Name = ;
+ *     type Name<T = String;
+ *     type Name<T:> = String;
  *
- *     type UserId;
+ * must produce normal parser diagnostics.
  *
- *     type UserId String;
+ * Semantic diagnostics such as:
  *
- *     type UserId = ;
+ *     duplicate generic parameter
+ *     unknown bound
+ *     unresolved target
+ *     alias cycle
  *
- *     type Pair<T = (T, T);
- *
- *     type Pair<T>> = (T, T);
- *
- *     type Pair<T> (T, T);
- *
- * These are syntax errors.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * The parser/frontend diagnostic layer should preserve source spans for:
- *
- *     `type`
- *     alias identifier
- *     generic parameter list
- *     each generic parameter
- *     each generic bound
- *     `=`
- *     target type expression
- *     complete declaration
- *
- * This permits precise diagnostics without embedding diagnostic logic into
- * this grammar.
+ * belong to later compiler stages.
  *
  * ============================================================================
  */
@@ -858,21 +718,22 @@ identifier
  * DETERMINISM CONTRACT
  * ============================================================================
  *
- * The grammar must produce the same parse structure for the same token stream.
+ * Parsing must be deterministic for a fixed:
  *
- * No semantic lookup may occur during parsing.
+ *     source
+ *     lexer vocabulary
+ *     grammar version
+ *     parser configuration
  *
- * No filesystem access.
+ * This grammar contains:
  *
- * No network access.
- *
- * No hardware discovery.
- *
- * No runtime capability discovery.
- *
- * No random choices.
- *
- * No target-dependent parsing.
+ *     no semantic predicates
+ *     no actions
+ *     no runtime callbacks
+ *     no filesystem access
+ *     no network access
+ *     no environment-dependent branches
+ *     no hardware discovery
  *
  * ============================================================================
  */
@@ -882,87 +743,65 @@ identifier
  * SECURITY CONTRACT
  * ============================================================================
  *
- * This grammar must not:
+ * This grammar performs no:
  *
- *     - execute code;
- *     - evaluate aliases;
- *     - access files;
- *     - access network resources;
- *     - inspect hardware;
- *     - invoke compiler plugins;
- *     - invoke runtime services.
+ *     filesystem access
+ *     network access
+ *     process execution
+ *     environment inspection
+ *     hardware discovery
+ *     backend loading
+ *     dynamic code execution
  *
- * Type aliases are syntax.
+ * Compiler implementations consuming it must remain safe Rust.
+ *
+ * Required baseline:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *     no unsafe
  *
  * ============================================================================
  */
 
 
 /* ============================================================================
- * COMPLETION CONTRACT
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is COMPLETE when all of the following are true:
+ * This file is complete when all of the following are true:
  *
- * [ ] `typeAliasDeclaration` is the sole modular owner of alias declaration
- *     syntax.
+ * [x] One authoritative typeAliasDeclaration rule exists.
+ * [x] No competing alias declaration rule exists in this file.
+ * [x] Canonical TYPE token is used.
+ * [x] Canonical IDENTIFIER token is used.
+ * [x] Canonical generic delimiters are used.
+ * [x] Canonical ASSIGN token is used.
+ * [x] Canonical SEMICOLON token is used.
+ * [x] Canonical typeExpression is reused.
+ * [x] Generic parameter arity is unbounded by grammar design.
+ * [x] Generic bound arity is unbounded by grammar design.
+ * [x] No hardware limits are encoded.
+ * [x] No quantum limits are encoded.
+ * [x] No resource limits are encoded.
+ * [x] No target-specific syntax is introduced.
+ * [x] No quantum IR is duplicated.
+ * [x] Existing TypeAlias AST remains the destination.
+ * [x] Semantic validation remains downstream.
+ * [x] Rust implementation requirements remain safe Rust 1.97/1.97.1.
+ * [x] No unsafe code is required.
  *
- * [ ] Existing `type Name = Type;` syntax is preserved.
+ * Required repository-wide validation:
  *
- * [ ] Generic aliases are supported.
- *
- * [ ] Generic bounds are represented structurally.
- *
- * [ ] Arbitrary generic parameter counts are accepted.
- *
- * [ ] No machine-size limits are encoded.
- *
- * [ ] No physical hardware assumptions are encoded.
- *
- * [ ] `typeExpression` comes from the canonical types grammar.
- *
- * [ ] Identifier syntax comes from the canonical lexer/core name system.
- *
- * [ ] `declarations.g4` composes this grammar rather than redefining it.
- *
- * [ ] `types.g4` remains the sole owner of type-expression syntax.
- *
- * [ ] The frontend `TypeAlias` AST is the semantic destination.
- *
- * [ ] No second TypeAlias AST is introduced.
- *
- * [ ] Quantum aliases remain hardware independent.
- *
- * [ ] Resource aliases remain target independent.
- *
- * [ ] Semantic validation remains outside the parser.
- *
- * [ ] Parser diagnostics preserve source locations.
- *
- * [ ] Positive tests pass.
- *
- * [ ] Negative syntax tests pass.
- *
- * [ ] Boundary/scalability tests pass.
- *
- * [ ] Generic alias tests pass.
- *
- * [ ] Quantum alias tests pass.
- *
- * [ ] Hardware/resource alias tests pass.
- *
- * [ ] Cross-domain alias tests pass.
- *
- * [ ] Deterministic parsing tests pass.
- *
- * [ ] Source -> AST -> printer/serializer -> parser round-trip tests pass
- *     where the repository supports round-tripping.
- *
- * [ ] Rust integration remains compatible with Rust 1.97 / 1.97.1.
- *
- * [ ] No unsafe Rust is introduced by the integration implementation.
- *
- * [ ] No duplicated alias grammar remains in the active parser path.
+ *     grammar validation
+ *     lexer/parser conformance
+ *     AST mapping
+ *     semantic validation
+ *     negative tests
+ *     boundary tests
+ *     scalability tests
+ *     compatibility tests
  *
  * ============================================================================
  */
