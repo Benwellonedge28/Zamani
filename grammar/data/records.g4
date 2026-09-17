@@ -1,46 +1,66 @@
 /*
  * ============================================================================
- * Zamani — Universal Data Record Grammar
+ * Zamani Programming Language
  * ============================================================================
  *
  * File:
- *   grammar/data/records.g4
+ *     grammar/data/records.g4
+ *
+ * Grammar:
+ *     ZamaniDataRecords
  *
  * Status:
- *   Production grammar component.
+ *     Production / canonical logical-record grammar
  *
  * Purpose:
- *   Own the syntax of logical data-record declarations in Zamani.
+ *     Own the source syntax of logical data-record declarations.
  *
- * Architectural role:
+ * ============================================================================
+ * ARCHITECTURAL ROLE
+ * ============================================================================
  *
- *   Source
- *      |
- *      v
- *   Zamani Lexer
- *      |
- *      v
- *   Zamani Parser
- *      |
- *      v
- *   records.g4
- *      |
- *      v
- *   Parse Tree / AST
- *      |
- *      v
- *   Semantic Analysis
- *      |
- *      v
- *   Canonical Data/Type Representation
- *      |
- *      +--> Classical compilation
- *      +--> Quantum/classical interoperability
- *      +--> AI/data pipelines
- *      +--> Serialization
- *      +--> Distributed execution
- *      +--> Hardware/runtime lowering
- *
+ *     Zamani source
+ *          |
+ *          v
+ *     grammar/antlr/ZamaniLexer.g4
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          v
+ *     grammar/data/data.g4
+ *          |
+ *          +--> schemas.g4
+ *          +--> records.g4       <-- this grammar
+ *          +--> collections.g4
+ *          +--> streams.g4
+ *          +--> serialization.g4
+ *          +--> transformations.g4
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     canonical data/type representation
+ *          |
+ *          +--> classical representation
+ *          +--> quantum::ir consumers
+ *          +--> HDL/hardware representation
+ *          +--> AI/data representation
+ *          +--> distributed representation
+ *          +--> future-domain representations
+ *          |
+ *          v
+ *     optimization / lowering
+ *          |
+ *          v
+ *     scheduling / resource resolution / target realization
  *
  * ============================================================================
  * OWNERSHIP
@@ -48,158 +68,173 @@
  *
  * THIS FILE OWNS:
  *
- *   - logical data-record declarations
- *   - record names
- *   - record generic parameters
- *   - record inheritance/composition references
- *   - record fields
- *   - record field modifiers
- *   - record defaults
- *   - record-level invariants
- *   - record-level annotations
- *   - record-level logical requirements
- *   - record-level logical constraints
+ *     - logical record declarations;
+ *     - record declaration attributes/modifiers;
+ *     - record names;
+ *     - record generic parameters;
+ *     - record where clauses;
+ *     - record inheritance/composition references;
+ *     - record field declarations;
+ *     - record field attributes/modifiers;
+ *     - record field separators;
+ *     - record declaration source ordering.
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - the universal type system
- *   - primitive type definitions
- *   - generic type semantics
- *   - expressions
- *   - statements
- *   - functions
- *   - modules
- *   - schemas
- *   - collections
- *   - streams
- *   - transformations
- *   - serialization implementations
- *   - databases
- *   - physical storage
- *   - physical memory layout
- *   - network protocols
- *   - hardware topology
- *   - CPU/GPU/FPGA/ASIC selection
- *   - quantum hardware
- *   - quantum IR
- *   - classical IR
- *   - scheduling
- *   - optimization
- *   - routing
- *   - runtime resource discovery
- *   - migration execution
- *
+ *     - lexer rules;
+ *     - keyword definitions;
+ *     - identifiers;
+ *     - qualified-name lexical rules;
+ *     - universal type syntax;
+ *     - universal expressions;
+ *     - functions;
+ *     - statements;
+ *     - schemas;
+ *     - collections;
+ *     - streams;
+ *     - transformations;
+ *     - serialization implementations;
+ *     - database implementations;
+ *     - filesystem implementations;
+ *     - physical memory layout;
+ *     - ABI;
+ *     - CPU/GPU/FPGA/QPU selection;
+ *     - quantum allocation;
+ *     - quantum routing;
+ *     - scheduling;
+ *     - optimization;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime execution.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * A record describes logical data semantics.
+ * Record syntax describes logical data semantics.
  *
- * It MUST NOT encode accidental assumptions about the machine executing it.
+ * It imposes NO language-level maximum on:
  *
- * Therefore this grammar contains no fixed:
+ *     - records;
+ *     - fields;
+ *     - generic parameters;
+ *     - type nesting;
+ *     - declaration nesting;
+ *     - record size;
+ *     - data size;
+ *     - tensor dimensions;
+ *     - distributed partitions;
+ *     - nodes;
+ *     - devices;
+ *     - CPUs;
+ *     - GPUs;
+ *     - FPGAs;
+ *     - QPUs;
+ *     - qubits;
+ *     - memory;
+ *     - storage;
+ *     - network capacity.
  *
- *   - number of fields
- *   - number of records
- *   - record size
- *   - memory size
- *   - alignment size
- *   - address width
- *   - register count
- *   - CPU count
- *   - GPU count
- *   - accelerator count
- *   - node count
- *   - network size
- *   - storage capacity
- *   - serialization buffer size
- *   - quantum resource count
+ * Repetition is therefore represented with unbounded parser constructs.
  *
- * Such properties belong to downstream resource, target, compilation,
- * scheduling, deployment, or runtime systems.
- *
- *
- * ============================================================================
- * INTEGRATION PRINCIPLE
- * ============================================================================
- *
- * `records.g4` is a delegated parser grammar.
- *
- * The authoritative lexer remains the Zamani lexer.
- *
- * This file MUST NOT introduce a second lexer.
- *
- * Existing canonical rules from the root grammar are reused where appropriate:
- *
- *   IDENTIFIER
- *   INTEGER
- *   annotation
- *   expression
- *   typeExpr
- *   genericParameters
- *
- * Where the repository later centralizes these constructs into dedicated
- * grammar files, those centralized rules become the authoritative providers.
- *
+ * Practical resource limits are compiler/runtime policy, not language syntax.
  *
  * ============================================================================
- * RUST
+ * HARD-CODING POLICY
  * ============================================================================
  *
- * This grammar contains no target-language actions.
+ * Forbidden:
  *
- * It therefore does not require unsafe Rust or target-specific executable
- * grammar code.
+ *     MAX_RECORDS
+ *     MAX_FIELDS
+ *     MAX_GENERIC_PARAMETERS
+ *     MAX_RECORD_SIZE
+ *     MAX_NESTING
+ *     MAX_MEMORY
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
  *
- * Generated parser integration MUST remain compatible with:
- *
- *   Rust 1.97
- *   Rust 1.97.1
- *
- * Zamani-owned Rust integration MUST contain no `unsafe`.
- *
+ * Source-level numeric values remain legal when they are actual program
+ * semantics. What is prohibited is turning implementation limits into
+ * universal language restrictions.
  *
  * ============================================================================
- * IMPORTANT OWNERSHIP RULE
+ * RUST CONTRACT
  * ============================================================================
  *
- * `record` here means a LOGICAL DATA RECORD.
+ * This grammar contains:
  *
- * It does not mean:
+ *     - no embedded Rust;
+ *     - no actions;
+ *     - no semantic predicates;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no runtime calls;
+ *     - no hardware discovery.
  *
- *   - a CPU register
- *   - a hardware register
- *   - a quantum register
- *   - an HDL register
- *   - a database row implementation
- *   - a network packet implementation
- *   - a physical memory structure
+ * Zamani-owned Rust integration must remain compatible with:
  *
- * Those concepts belong to their respective domains.
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *
+ * and must contain no `unsafe`.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * The canonical parser vocabulary is:
+ *
+ *     ZamaniLexer
+ *
+ * Do not use the combined `Zamani.g4` grammar as the lexer vocabulary here.
+ *
+ * The repository already identifies:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * as the canonical lexer, while grammar/lexer/* provides the lexical
+ * decomposition/documentation. The modular lexer files must converge into
+ * that canonical lexer rather than causing parser grammars to use competing
+ * vocabularies.
+ *
+ * ============================================================================
+ * SHARED GRAMMAR CONTRACT
+ * ============================================================================
+ *
+ * This grammar reuses:
+ *
+ *     ZamaniDeclarationSupport
+ *     ZamaniTypeSyntax
+ *
+ * It does not duplicate:
+ *
+ *     identifier
+ *     visibility
+ *     attributes
+ *     modifiers
+ *     genericParameters
+ *     whereClause
+ *     typeExpression
  *
  * ============================================================================
  */
 
-
-/*
- * ============================================================================
- * GRAMMAR DECLARATION
- * ============================================================================
- */
-
-parser grammar records;
+parser grammar ZamaniDataRecords;
 
 options {
-    /*
-     * Current repository root grammar is `grammar/Zamani.g4`, which provides
-     * the shared lexer vocabulary.
-     *
-     * When the lexer is eventually split into a dedicated ZamaniLexer.g4,
-     * this option must point to that authoritative lexer vocabulary.
-     */
-    tokenVocab = Zamani;
+    tokenVocab = ZamaniLexer;
 }
+
+import
+    ZamaniDeclarationSupport,
+    ZamaniTypeSyntax;
 
 
 /*
@@ -209,864 +244,508 @@ options {
  *
  * `dataRecordDeclaration` is the canonical integration rule.
  *
- * `data.g4` MUST delegate to this rule rather than redefine record syntax.
+ * grammar/data/data.g4 MUST delegate to this rule.
  *
- * Do not add EOF here because this is a reusable delegated grammar rule.
- * The root compilation-unit rule owns EOF.
+ * No EOF is consumed here because this is a reusable parser component.
+ * The compilation-unit grammar owns EOF.
  * ============================================================================
  */
 
 dataRecordDeclaration
-    : recordAnnotation*
-      recordVisibility?
-      'record'
-      recordName
+    : declarationAttributes?
+      declarationVisibility?
+      declarationModifiers?
+      RECORD
+      identifier
       genericParameters?
-      recordExtendsClause?
-      recordImplementsClause*
-      recordRequirementsClause*
-      recordConstraintsClause*
-      '{'
-      dataRecordMember*
-      '}'
+      whereClause?
+      recordInheritanceClause?
+      recordBody
     ;
 
 
 /*
  * ============================================================================
- * RECORD NAME
+ * RECORD INHERITANCE / COMPOSITION
  * ============================================================================
  *
- * Record identity remains symbolic and portable.
+ * This expresses logical type relationships.
  *
- * No machine/device identity is encoded here.
+ * It does NOT define:
+ *
+ *     ABI
+ *     physical layout
+ *     memory offsets
+ *     implementation inheritance
+ *     hardware representation
+ *
+ * Those meanings belong to semantic analysis and downstream lowering.
  * ============================================================================
  */
 
-recordName
-    : IDENTIFIER
-    ;
-
-
-/*
- * ============================================================================
- * VISIBILITY
- * ============================================================================
- *
- * Reuse the repository's canonical visibility vocabulary.
- *
- * This local rule intentionally avoids redefining semantic visibility rules.
- * ============================================================================
- */
-
-recordVisibility
-    : visibilityModifier
-    ;
-
-
-/*
- * ============================================================================
- * ANNOTATIONS
- * ============================================================================
- *
- * Annotation semantics are owned by the central annotation system.
- *
- * The record grammar only provides the legal attachment point.
- * ============================================================================
- */
-
-recordAnnotation
-    : annotation
-    ;
-
-
-/*
- * ============================================================================
- * RECORD MEMBERS
- * ============================================================================
- */
-
-dataRecordMember
-    : recordAnnotation*
-      dataRecordField
-    | recordAnnotation*
-      dataRecordInvariant
-    | recordAnnotation*
-      dataRecordRequirement
-    | recordAnnotation*
-      dataRecordConstraint
-    | recordAnnotation*
-      dataRecordAttribute
-    ;
-
-
-/*
- * ============================================================================
- * RECORD FIELDS
- * ============================================================================
- *
- * A field consists of:
- *
- *   name
- *   type
- *   optional modifiers
- *   optional default
- *   optional constraints
- *
- * Type semantics remain owned by the canonical type system.
- *
- * There is deliberately no field-count limit.
- * ============================================================================
- */
-
-dataRecordField
-    : recordFieldModifier*
-      IDENTIFIER
-      ':'
-      typeExpr
-      recordFieldAttribute*
-      recordDefaultValue?
-      recordFieldConstraint*
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * FIELD MODIFIERS
- * ============================================================================
- *
- * These modifiers describe logical record semantics.
- *
- * They do not define physical layout.
- * ============================================================================
- */
-
-recordFieldModifier
-    : 'optional'
-    | 'required'
-    | 'nullable'
-    | 'nonnullable'
-    | 'mutable'
-    | 'immutable'
-    | 'computed'
-    | 'transient'
-    | 'sensitive'
-    | 'deprecated'
-    ;
-
-
-/*
- * ============================================================================
- * FIELD ATTRIBUTES
- * ============================================================================
- *
- * Attributes are deliberately extensible.
- *
- * Backend-specific interpretation must happen after parsing.
- * ============================================================================
- */
-
-recordFieldAttribute
-    : 'tag' INTEGER
-    | 'default' expression
-    | 'generated' 'by' expression
-    | 'property' IDENTIFIER
-    | 'property' IDENTIFIER '=' expression
-    | annotation
-    ;
-
-
-/*
- * ============================================================================
- * DEFAULT VALUES
- * ============================================================================
- */
-
-recordDefaultValue
-    : '=' expression
-    ;
-
-
-/*
- * ============================================================================
- * FIELD CONSTRAINTS
- * ============================================================================
- *
- * Constraints are semantic expressions.
- *
- * The grammar does not decide whether a constraint is enforced:
- *
- *   statically
- *   dynamically
- *   at compile time
- *   at runtime
- *   by hardware
- *   by a backend
- *
- * That decision belongs to semantic analysis and downstream compilation.
- * ============================================================================
- */
-
-recordFieldConstraint
-    : 'where'
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * RECORD INVARIANTS
- * ============================================================================
- *
- * An invariant applies to the logical record as a whole.
- * ============================================================================
- */
-
-dataRecordInvariant
-    : 'invariant'
-      '('
-      expression
-      ')'
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * RECORD REQUIREMENTS
- * ============================================================================
- *
- * Requirements express semantic conditions.
- *
- * They are intentionally separate from:
- *
- *   constraints
- *   preferences
- *   hints
- *   physical resource selections
- *
- * Examples of valid downstream meanings could include:
- *
- *   requires a capability
- *   requires a property
- *   requires a representation
- *
- * The actual capability/resource model owns interpretation.
- * ============================================================================
- */
-
-dataRecordRequirement
-    : 'requires'
-      recordRequirementExpression
-      ';'
-    ;
-
-recordRequirementExpression
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * RECORD CONSTRAINTS
- * ============================================================================
- */
-
-dataRecordConstraint
-    : 'constraint'
-      IDENTIFIER?
-      '('
-      expression
-      ')'
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * RECORD ATTRIBUTES
- * ============================================================================
- *
- * Open-ended attributes prevent this grammar from becoming a closed list of
- * future concepts.
- *
- * Semantic validation determines which properties are recognized.
- * ============================================================================
- */
-
-dataRecordAttribute
-    : 'attribute'
-      IDENTIFIER
-      recordAttributeValue?
-      ';'
-    ;
-
-recordAttributeValue
-    : '=' expression
-    ;
-
-
-/*
- * ============================================================================
- * RECORD INHERITANCE
- * ============================================================================
- *
- * A record may compose or extend logical record contracts.
- *
- * There is deliberately no limit on the number of referenced parents.
- *
- * Semantic analysis determines whether a particular inheritance graph is
- * valid.
- * ============================================================================
- */
-
-recordExtendsClause
-    : 'extends'
-      recordTypeReference
+recordInheritanceClause
+    : EXTENDS
+      typeExpression
       (
-          ','
-          recordTypeReference
+          COMMA
+          typeExpression
       )*
     ;
 
 
 /*
  * ============================================================================
- * RECORD IMPLEMENTATION / CONTRACTS
+ * RECORD BODY
  * ============================================================================
  *
- * `implements` is a logical contract relationship.
+ * Empty records are legal.
  *
- * It does not imply a programming-language ABI or physical implementation.
+ * There is no source-language field-count limit.
  * ============================================================================
  */
 
-recordImplementsClause
-    : 'implements'
-      recordTypeReference
+recordBody
+    : LBRACE
+      recordFieldList?
+      RBRACE
+    ;
+
+
+/*
+ * ============================================================================
+ * RECORD FIELD LIST
+ * ============================================================================
+ *
+ * Existing Zamani struct syntax uses field separators and supports trailing
+ * separators. Records follow the same structural convention so that:
+ *
+ *     struct fields
+ *
+ * and:
+ *
+ *     record fields
+ *
+ * do not acquire unrelated field languages.
+ *
+ * Both comma and semicolon are accepted because the existing declaration
+ * family already uses both styles.
+ *
+ * A separator is required between adjacent fields.
+ * ============================================================================
+ */
+
+recordFieldList
+    : recordField
       (
-          ','
-          recordTypeReference
+          recordFieldSeparator
+          recordField
       )*
+      recordFieldSeparator?
+    ;
+
+
+recordFieldSeparator
+    : COMMA
+    | SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * RECORD TYPE REFERENCES
+ * RECORD FIELD
  * ============================================================================
  *
- * This grammar MUST NOT duplicate the canonical type grammar.
+ * Canonical form:
  *
- * It therefore accepts qualified type references and generic arguments using
- * the canonical type-expression grammar where possible.
+ *     fieldName: Type
  *
- * The current root grammar already owns `typeExpr`.
+ * Field type syntax is delegated to the canonical type grammar.
  *
- * This adapter exists so that record inheritance/contract references remain
- * syntactically explicit without introducing another type system.
+ * Field names use the canonical identifier rule.
+ *
+ * Attributes/modifiers use the shared declaration-support grammar.
+ *
  * ============================================================================
  */
 
-recordTypeReference
-    : IDENTIFIER
-      (
-          '::'
-          IDENTIFIER
-      )*
-      recordTypeArguments?
-    ;
-
-recordTypeArguments
-    : '<'
-      recordTypeArgument
-      (
-          ','
-          recordTypeArgument
-      )*
-      '>'
-    ;
-
-recordTypeArgument
-    : typeExpr
-    | expression
+recordField
+    : declarationAttributes?
+      declarationVisibility?
+      declarationModifiers?
+      identifier
+      COLON
+      typeExpression
     ;
 
 
 /*
  * ============================================================================
- * RECORD REQUIREMENT / CAPABILITY BLOCKS
+ * MULTIPLE RECORD DECLARATIONS
  * ============================================================================
  *
- * These are logical declarations only.
+ * Reusable parser entry point for tooling/tests.
  *
- * They MUST NOT encode:
- *
- *   device IDs
- *   fixed machine sizes
- *   physical addresses
- *   topology
- *   hardware vendor selection
- *
- * Those concepts belong to the capability/resource/target layers.
+ * No finite declaration count is encoded.
  * ============================================================================
  */
 
-recordRequirementsClause
-    : 'requires'
-      '{'
-      recordRequirementEntry*
-      '}'
-    ;
-
-recordRequirementEntry
-    : IDENTIFIER
-      (
-          '='
-          expression
-      )?
-      ';'
+dataRecordDeclarations
+    : dataRecordDeclaration+
     ;
 
 
 /*
  * ============================================================================
- * RECORD CONSTRAINT BLOCKS
+ * SOURCE ORDER CONTRACT
+ * ============================================================================
+ *
+ * The parse tree preserves:
+ *
+ *     - record declaration order;
+ *     - generic parameter order;
+ *     - inheritance reference order;
+ *     - field order;
+ *     - field source spans.
+ *
+ * This grammar performs no sorting, normalization or deduplication.
+ *
+ * Duplicate-name checking is semantic analysis.
  * ============================================================================
  */
 
-recordConstraintsClause
-    : 'constraints'
-      '{'
-      recordConstraintEntry*
-      '}'
-    ;
-
-recordConstraintEntry
-    : IDENTIFIER?
-      expression
-      ';'
-    ;
-
 
 /*
  * ============================================================================
- * RECORD FIELD INITIALIZATION
+ * DOMAIN-NEUTRAL TYPE CONTRACT
  * ============================================================================
  *
- * This rule is intentionally separate from the general expression grammar.
+ * A record field can use any type admitted by `typeExpression`.
  *
- * `data.g4` may integrate it into a record-value expression without making
- * records responsible for the entire expression system.
+ * Therefore this grammar can automatically participate in:
+ *
+ *     classical types
+ *     quantum types
+ *     hybrid types
+ *     tensor types
+ *     AI/data types
+ *     resource types
+ *     capability types
+ *     hardware/software co-design types
+ *     distributed types
+ *     networking types
+ *     security types
+ *     future domain types
+ *
+ * without modifying this grammar whenever a new type is added.
+ *
  * ============================================================================
  */
 
-recordFieldInitializer
-    : IDENTIFIER
-      ':'
-      expression
-    ;
-
-recordFieldInitializerList
-    : recordFieldInitializer
-      (
-          ','
-          recordFieldInitializer
-      )*
-    ;
-
 
 /*
  * ============================================================================
- * RECORD VALUE
+ * QUANTUM CONTRACT
  * ============================================================================
  *
- * A record value is explicitly introduced by `record` to prevent accidental
- * ambiguity with:
- *
- *   blocks
- *   maps
- *   object literals
- *   schema literals
- *   hardware descriptions
- *
- * Examples:
- *
- *   record User {
- *       name: "Samuel",
- *       active: true
- *   }
- *
- *   record package::User {
- *       name: "Samuel"
- *   }
- *
- * The expression system decides where this rule is admitted.
- * ============================================================================
- */
-
-recordValue
-    : 'record'
-      recordTypeReference?
-      '{'
-      recordFieldInitializerList?
-      '}'
-    ;
-
-
-/*
- * ============================================================================
- * RECORD UPDATE VALUE
- * ============================================================================
- *
- * Supports immutable-style construction without requiring a physical memory
- * model.
+ * Records may contain quantum-domain values through the canonical type system.
  *
  * Example:
  *
- *   record existing with {
- *       name: "new-name"
- *   }
+ *     record MeasurementResult<T> {
+ *         value: T,
+ *         state: quantum::State<T>,
+ *     }
  *
- * The semantic layer decides whether this becomes:
+ * This grammar does NOT:
  *
- *   copy
- *   persistent update
- *   structural sharing
- *   mutation
- *   distributed update
- *   hardware-specific operation
+ *     - allocate qubits;
+ *     - enumerate physical qubits;
+ *     - choose QPUs;
+ *     - choose topology;
+ *     - select gates;
+ *     - route circuits;
+ *     - schedule operations;
+ *     - perform QEC;
+ *     - implement ZQN;
+ *     - construct quantum::ir.
+ *
+ * The downstream direction remains:
+ *
+ *     source
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic analysis
+ *       ->
+ *     canonical semantic representation
+ *       ->
+ *     quantum::ir where quantum semantics require it.
+ *
  * ============================================================================
  */
-
-recordUpdateValue
-    : 'record'
-      recordTypeReference
-      'from'
-      expression
-      'with'
-      '{'
-      recordFieldInitializerList?
-      '}'
-    ;
 
 
 /*
  * ============================================================================
- * RECORD PATTERN
+ * HDL / HARDWARE CONTRACT
  * ============================================================================
  *
- * Record patterns belong to pattern matching semantically but the record
- * grammar owns the record-specific structural syntax.
+ * Records may carry data used by HDL/hardware/software co-design.
  *
- * The statement/pattern grammar can integrate this rule.
+ * They do not define:
+ *
+ *     wires
+ *     ports
+ *     registers
+ *     clocks
+ *     physical addresses
+ *     buses
+ *     device IDs
+ *     topology
+ *     accelerator counts
+ *
+ * Those are owned by grammar/hdl/, grammar/hardware/, resources/, and
+ * downstream compilation.
+ *
  * ============================================================================
  */
-
-recordPattern
-    : recordTypeReference?
-      '{'
-      recordPatternFieldList?
-      '}'
-    ;
-
-recordPatternFieldList
-    : recordPatternField
-      (
-          ','
-          recordPatternField
-      )*
-    ;
-
-recordPatternField
-    : IDENTIFIER
-      (
-          ':'
-          pattern
-      )?
-    ;
 
 
 /*
  * ============================================================================
- * RECORD FIELD PATH
+ * DISTRIBUTED CONTRACT
  * ============================================================================
  *
- * Supports arbitrarily deep logical field paths without imposing a nesting
- * limit.
+ * A record can describe logical distributed data.
  *
- * Physical memory offsets are deliberately NOT represented here.
+ * It does not determine:
+ *
+ *     partition count
+ *     node count
+ *     replica count
+ *     storage provider
+ *     network topology
+ *     physical placement
+ *
+ * Those are semantic/resource/deployment decisions.
+ *
  * ============================================================================
  */
-
-recordFieldPath
-    : IDENTIFIER
-      (
-          '.'
-          IDENTIFIER
-      )*
-    ;
 
 
 /*
  * ============================================================================
- * RECORD SELECTION
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * This is a syntactic hook for downstream data expressions.
+ * Parsing establishes structure only.
  *
- * It does not define query execution.
+ * Semantic analysis determines:
+ *
+ *     - record-name uniqueness;
+ *     - field-name uniqueness;
+ *     - type validity;
+ *     - generic validity;
+ *     - where-clause validity;
+ *     - inheritance validity;
+ *     - recursive-type legality;
+ *     - visibility;
+ *     - ownership;
+ *     - effects;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - portability;
+ *     - target compatibility.
+ *
+ * This grammar does none of those things.
+ *
  * ============================================================================
  */
-
-recordFieldSelection
-    : expression
-      '.'
-      IDENTIFIER
-    ;
 
 
 /*
  * ============================================================================
- * RECORD TYPE CONVERSION
+ * AST CONTRACT
  * ============================================================================
  *
- * Conversion semantics belong to type checking / semantic analysis.
+ * This grammar maps to the canonical domain-neutral frontend AST.
+ *
+ * Required semantic shape:
+ *
+ *     RecordDeclaration
+ *         |
+ *         +--> attributes
+ *         +--> visibility
+ *         +--> modifiers
+ *         +--> name
+ *         +--> generic parameters
+ *         +--> where clause
+ *         +--> inheritance references
+ *         +--> ordered fields
+ *
+ *     RecordField
+ *         |
+ *         +--> attributes
+ *         +--> visibility
+ *         +--> modifiers
+ *         +--> name
+ *         +--> type
+ *         +--> source span
+ *
+ * The grammar must not introduce a second record AST.
+ *
+ * Source order and source spans must be preserved.
+ *
  * ============================================================================
  */
-
-recordConversionExpression
-    : 'record_cast'
-      '('
-      expression
-      'as'
-      typeExpr
-      ')'
-    ;
 
 
 /*
  * ============================================================================
- * RECORD COMPOSITION
+ * IR CONTRACT
  * ============================================================================
  *
- * Logical record composition remains independent from physical layout.
+ * Records do not create a special record IR merely because their source
+ * spelling is `record`.
+ *
+ * Semantic lowering may represent them as:
+ *
+ *     algebraic/product data
+ *     classical aggregate
+ *     data schema
+ *     serialization schema
+ *     distributed value
+ *     accelerator data structure
+ *     HDL/hardware data representation
+ *
+ * depending on semantic use.
+ *
+ * Quantum-containing records may participate in quantum lowering, but this
+ * grammar never creates or modifies quantum::ir.
+ *
  * ============================================================================
  */
-
-recordCompositionExpression
-    : 'record_merge'
-      '('
-      expression
-      ','
-      expression
-      (
-          ','
-          expression
-      )*
-      ')'
-    ;
 
 
 /*
  * ============================================================================
- * RECORD PROJECTION
+ * SERIALIZATION CONTRACT
  * ============================================================================
  *
- * Projection is useful to downstream data processing without coupling this
- * grammar to a database/query language.
+ * Serialization syntax belongs to:
+ *
+ *     grammar/data/serialization.g4
+ *
+ * Record declarations merely provide the logical structure that serialization
+ * semantics may consume.
+ *
+ * This grammar therefore does not define:
+ *
+ *     JSON
+ *     CBOR
+ *     binary layout
+ *     wire format
+ *     byte order
+ *     padding
+ *     physical offsets
+ *
  * ============================================================================
  */
-
-recordProjectionExpression
-    : 'record_project'
-      '('
-      expression
-      'select'
-      recordProjectionList
-      ')'
-    ;
-
-recordProjectionList
-    : recordProjection
-      (
-          ','
-          recordProjection
-      )*
-    ;
-
-recordProjection
-    : recordFieldPath
-      (
-          'as'
-          IDENTIFIER
-      )?
-    ;
 
 
 /*
  * ============================================================================
- * RECORD UPDATE EXPRESSION
+ * MEMORY / LAYOUT CONTRACT
+ * ============================================================================
+ *
+ * Field order is source information and must be preserved.
+ *
+ * This grammar does not define:
+ *
+ *     alignment
+ *     padding
+ *     packing
+ *     ABI
+ *     addresses
+ *     cache placement
+ *     register allocation
+ *     accelerator memory placement
+ *     NUMA placement
+ *     quantum storage representation
+ *
+ * Those decisions occur after semantic analysis.
+ *
  * ============================================================================
  */
-
-recordUpdateExpression
-    : 'record_update'
-      '('
-      expression
-      ','
-      '{'
-      recordFieldInitializerList?
-      '}'
-      ')'
-    ;
 
 
 /*
  * ============================================================================
- * RECORD EQUALITY / IDENTITY HOOKS
+ * DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * These are syntax hooks only.
+ * Syntax errors owned by this grammar include:
  *
- * Semantic analysis determines whether equality means:
+ *     record {}
+ *     record Name { field }
+ *     record Name { : Type }
+ *     record Name { field: }
+ *     record Name { field: Type other: Type }
+ *     record Name { field: Type,, other: Type }
  *
- *   structural equality
- *   nominal equality
- *   identity equality
- *   logical equality
- *   application-defined equality
+ * Semantic errors belong downstream:
+ *
+ *     duplicate record name
+ *     duplicate field name
+ *     unknown type
+ *     invalid generic parameter
+ *     invalid inheritance
+ *     inaccessible type
+ *     unsatisfied capability
+ *     insufficient resources
+ *     target incompatibility
+ *
  * ============================================================================
  */
-
-recordEqualityExpression
-    : 'record_equal'
-      '('
-      expression
-      ','
-      expression
-      ')'
-    ;
 
 
 /*
  * ============================================================================
- * RECORD METADATA
+ * COMPLETION CONTRACT
  * ============================================================================
  *
- * Metadata is deliberately open-ended.
+ * This file is complete when:
  *
- * The semantic metadata system decides what a particular metadata key means.
+ * [x] `dataRecordDeclaration` is the sole public record declaration rule.
+ * [x] `recordBody` owns record body syntax.
+ * [x] `recordFieldList` owns field sequencing.
+ * [x] `recordField` owns record field syntax.
+ * [x] field separators have one owner.
+ * [x] identifier syntax is delegated.
+ * [x] attributes are delegated.
+ * [x] visibility is delegated.
+ * [x] declaration modifiers are delegated.
+ * [x] generic parameters are delegated.
+ * [x] where clauses are delegated.
+ * [x] type syntax is delegated.
+ * [x] no lexer rules are duplicated.
+ * [x] no expressions are reimplemented.
+ * [x] no second type system exists.
+ * [x] no record-value expression language is hidden here.
+ * [x] no record-pattern language is hidden here.
+ * [x] no serialization implementation exists here.
+ * [x] no database implementation exists here.
+ * [x] no physical layout exists here.
+ * [x] no hardware limits exist here.
+ * [x] no quantum hardware logic exists here.
+ * [x] no quantum IR exists here.
+ * [x] no QEC/ZQN/routing/scheduling logic exists here.
+ * [x] no Rust actions exist.
+ * [x] no unsafe Rust is required.
+ * [x] arbitrary field cardinality is supported.
+ * [x] arbitrary generic cardinality is delegated.
+ * [x] source ordering is preserved.
+ * [x] quantum/classical/HDL/resource types can pass through typeExpression.
+ *
  * ============================================================================
  */
-
-recordMetadata
-    : 'metadata'
-      '{'
-      recordMetadataEntry*
-      '}'
-    ;
-
-recordMetadataEntry
-    : IDENTIFIER
-      (
-          '='
-          expression
-      )?
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * RECORD SERIALIZATION INTENT
- * ============================================================================
- *
- * This is NOT a serialization implementation.
- *
- * It merely allows a record to express a logical serialization requirement.
- *
- * Concrete formats and codecs belong to interoperability/serialization
- * subsystems.
- * ============================================================================
- */
-
-recordSerializationIntent
-    : 'serialize'
-      recordSerializationTarget?
-      recordSerializationOptions?
-      ';'
-    ;
-
-recordSerializationTarget
-    : 'as'
-      recordTypeReference
-    ;
-
-recordSerializationOptions
-    : 'with'
-      '{'
-      recordSerializationOption*
-      '}'
-    ;
-
-recordSerializationOption
-    : IDENTIFIER
-      (
-          '='
-          expression
-      )?
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * RECORD COMPATIBILITY INTENT
- * ============================================================================
- *
- * Compatibility policy belongs to semantic compatibility analysis.
- *
- * This grammar merely provides an extensible syntactic declaration.
- * ============================================================================
- */
-
-recordCompatibility
-    : 'compatibility'
-      recordCompatibilityPolicy
-      ';'
-    ;
-
-recordCompatibilityPolicy
-    : recordTypeReference
-      (
-          '('
-          argumentList?
-          ')'
-      )?
-    ;
-
-
-/*
- * ============================================================================
- * RECORD DIALECT EXTENSION
- * ============================================================================
- *
- * Future domains may add record semantics through dialects without changing
- * the core record model.
- *
- * The dialect system owns registration and semantic validation.
- * ============================================================================
- */
-
-recordDialectExtension
-    : 'dialect'
-      recordTypeReference
-      (
-          '('
-          argumentList?
-          ')'
-      )?
-      ';'
-    ;
