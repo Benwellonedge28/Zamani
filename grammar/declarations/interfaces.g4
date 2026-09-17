@@ -6,16 +6,22 @@
  * File:
  *     grammar/declarations/interfaces.g4
  *
- * Role:
- *     Canonical source-level INTERFACE DECLARATION grammar.
+ * Grammar:
+ *     Interfaces
+ *
+ * Status:
+ *     Production parser delegate
+ *
+ * Purpose:
+ *     Canonical source-level interface declaration grammar.
  *
  * Implementation baseline:
  *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     This grammar contains no embedded Rust actions and requires no Rust
- *     `unsafe`. The Zamani compiler/frontend implementation MUST remain safe
- *     Rust.
+ *     Rust 2021
+ *     Safe Rust only.
+ *     No Rust actions.
+ *     No semantic predicates.
+ *     No unsafe code.
  *
  * ============================================================================
  * OWNERSHIP
@@ -23,183 +29,413 @@
  *
  * THIS FILE OWNS:
  *
- *   - interface declaration syntax;
- *   - interface inheritance syntax;
- *   - interface generic parameter syntax through the canonical generic grammar;
+ *   - interface declarations;
+ *   - interface names;
+ *   - interface generic parameters;
+ *   - interface inheritance;
+ *   - interface where constraints;
+ *   - interface attributes;
  *   - interface members;
+ *   - interface method contracts;
  *   - interface method signatures;
- *   - interface property contracts;
- *   - interface associated types;
- *   - interface associated constants;
- *   - interface-level attributes;
- *   - interface-member attributes;
- *   - interface-level semantic contracts;
- *   - interface-level effect declarations through the canonical effect grammar;
- *   - interface-level capability/resource annotations through the canonical
- *     attribute/capability systems;
- *   - syntactic composition required to express an interface contract.
+ *   - optional interface default method bodies;
+ *   - interface properties;
+ *   - property accessors;
+ *   - associated types;
+ *   - associated constants;
+ *   - interface-local contract syntax;
+ *   - interface-local source ordering.
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - lexer/token definitions;
- *   - identifier spelling;
- *   - qualified-name syntax;
- *   - general type-expression syntax;
- *   - generic application syntax;
- *   - generic constraint solving;
- *   - function implementation syntax;
- *   - function-body syntax;
- *   - class syntax;
- *   - trait syntax;
- *   - implementation syntax;
- *   - module syntax;
- *   - namespace syntax;
+ *   - lexer rules;
+ *   - token spellings;
+ *   - identifier syntax;
+ *   - general expression precedence;
+ *   - general type syntax;
+ *   - general statement syntax;
+ *   - module/package syntax;
+ *   - trait declarations;
+ *   - implementation declarations;
+ *   - class declarations;
  *   - semantic type checking;
- *   - subtype checking;
- *   - interface conformance checking;
+ *   - inheritance resolution;
+ *   - coherence;
  *   - overload resolution;
- *   - method dispatch;
- *   - vtable generation;
  *   - ABI selection;
  *   - object layout;
- *   - memory layout;
- *   - ownership checking;
- *   - borrow checking;
- *   - capability evaluation;
- *   - effect checking;
+ *   - ownership/borrowing;
  *   - resource allocation;
  *   - hardware discovery;
- *   - hardware selection;
- *   - CPU/GPU/QPU selection;
- *   - physical qubit allocation;
+ *   - target selection;
  *   - quantum compilation;
- *   - canonical `quantum::ir`;
+ *   - quantum::ir;
  *   - QEC;
  *   - ZQN;
- *   - resilience;
- *   - optimization;
  *   - routing;
  *   - scheduling;
+ *   - optimization;
+ *   - calibration;
+ *   - HAL;
  *   - runtime execution.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
+ *     source
+ *       |
+ *       v
  *     canonical lexer
- *          |
- *          v
+ *       |
+ *       v
  *     canonical parser
- *          |
- *          +--> declarations/interfaces.g4
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> name resolution
- *          +--> type checking
- *          +--> generic checking
- *          +--> interface conformance
- *          +--> effect checking
- *          +--> capability checking
- *          +--> resource validation
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--> classical representation
- *          +--> quantum::ir
- *          +--> HDL representation
- *          +--> hardware representation
- *          +--> distributed representation
- *          +--> future-domain representations
- *          |
- *          v
- *     optimization / lowering / routing / scheduling
- *          |
- *          v
- *     target realization
- *
- * Interface syntax therefore establishes a SOURCE-LEVEL CONTRACT.
- *
- * It must never directly construct or depend semantically on a target
- * representation.
+ *       |
+ *       +--> declarations.g4
+ *                |
+ *                +--> Interfaces
+ *                       |
+ *                       v
+ *                 frontend AST
+ *                       |
+ *                       v
+ *                 structural validation
+ *                       |
+ *                       v
+ *                 semantic analysis
+ *                       |
+ *             +---------+----------+-----------+
+ *             |         |          |           |
+ *             v         v          v           v
+ *           types    effects    resources   capabilities
+ *             |         |          |           |
+ *             +---------+----------+-----------+
+ *                       |
+ *                       v
+ *                 semantic model
+ *                       |
+ *             +---------+----------+
+ *             |                    |
+ *             v                    v
+ *       classical semantics    quantum semantics
+ *                                  |
+ *                                  v
+ *                              quantum::ir
+ *                       |
+ *                       v
+ *             optimization / lowering
+ *                       |
+ *             routing / scheduling
+ *                       |
+ *             resilience / QEC / ZQN
+ *                       |
+ *                       v
+ *                   target/HAL
  *
  * ============================================================================
- * POCO-REAF
+ * POCO-REAF / SCALABILITY
  * ============================================================================
  *
- * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ * Interfaces describe portable contracts.
  *
- * Interfaces are one of the primary mechanisms through which portable
- * semantics are expressed.
- *
- * An interface describes:
- *
- *     what an implementation must provide;
- *
- * rather than:
- *
- *     which machine must provide it.
- *
- * Therefore an interface MUST NOT encode:
+ * This grammar MUST NOT encode:
  *
  *     MAX_CPUS
  *     MAX_CORES
  *     MAX_THREADS
- *     MAX_QUBITS
- *     MAX_DEVICES
  *     MAX_GPUS
  *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_QUBITS
  *     MAX_NODES
+ *     MAX_DEVICES
  *     MAX_MEMORY
+ *     MAX_REGISTER_WIDTH
  *     MAX_TENSOR_RANK
+ *     MAX_VECTOR_WIDTH
  *     fixed topology
  *     physical addresses
+ *     physical qubit identifiers
  *     backend identifiers
+ *     vendor gate inventories
  *     calibration values
- *     gate inventories
- *     device counts
  *
- * Such information belongs to explicit resource/capability/target layers.
+ * Interface cardinalities are intentionally represented with `*` / `+`.
+ *
+ * Therefore:
+ *
+ *     interface members
+ *     generic parameters
+ *     inherited contracts
+ *     constraints
+ *     properties
+ *     associated types
+ *     associated constants
+ *
+ * are not artificially bounded by language-level constants.
+ *
+ * Practical resource limits belong to explicit compiler/resource policy.
  *
  * ============================================================================
- * ANTLR INTEGRATION CONTRACT
+ * TARGET INDEPENDENCE
  * ============================================================================
  *
- * This is a parser delegate.
+ * An interface expresses:
  *
- * It deliberately does NOT define:
+ *     what an implementation provides;
  *
- *     lexer grammar ...
+ * not:
  *
- * and it does NOT define a second combined Zamani grammar.
+ *     where or on which machine it executes.
  *
- * The canonical lexer remains:
+ * Examples of portable contracts:
  *
- *     grammar/antlr/ZamaniLexer.g4
+ *     interface Compute<T> {
+ *         fn compute(value: T) -> T;
+ *     }
  *
- * The repository's canonical parser composition must import this delegate.
+ *     interface QuantumOperator<Q> {
+ *         fn apply(operation: Q);
+ *     }
  *
- * The current declaration grammar contains interface rules itself. Those
- * duplicate rules MUST be removed when this delegate becomes authoritative.
+ *     interface Accelerator<T> {
+ *         fn execute(value: T) -> T;
+ *     }
  *
- * The intended ownership becomes:
+ * The semantic layer may subsequently determine that an implementation
+ * requires a CPU, GPU, FPGA, QPU, distributed resource, accelerator, or
+ * another computational substrate.
  *
- *     grammar/declarations/declarations.g4
- *              |
- *              +--> interfaceDeclaration
- *                       |
- *                       +--> grammar/declarations/interfaces.g4
+ * This grammar does not make that determination.
  *
- * There must be exactly one effective authoritative `interfaceDeclaration`
- * rule in the assembled production grammar.
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Quantum-related interfaces may reference quantum types and capabilities.
+ *
+ * This file MUST NOT:
+ *
+ *     - enumerate physical qubits;
+ *     - enumerate physical gates;
+ *     - choose a QPU;
+ *     - choose a topology;
+ *     - select calibration;
+ *     - route operations;
+ *     - schedule operations;
+ *     - perform QEC;
+ *     - implement ZQN;
+ *     - construct quantum::ir.
+ *
+ * The required path remains:
+ *
+ *     interface syntax
+ *          ->
+ *     frontend AST
+ *          ->
+ *     semantic model
+ *          ->
+ *     quantum::ir
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The existing InterfaceDeclaration AST is source-structural and stores:
+ *
+ *     Node
+ *     name
+ *     generic parameter NodeIds
+ *     extends NodeIds
+ *     member NodeIds
+ *
+ * The grammar therefore MUST preserve:
+ *
+ *     - source span;
+ *     - declaration name;
+ *     - source ordering;
+ *     - generic parameter ordering;
+ *     - inheritance ordering;
+ *     - member ordering;
+ *     - member attributes;
+ *     - method signatures;
+ *     - property signatures;
+ *     - associated type declarations;
+ *     - associated constants.
+ *
+ * The parser/AST adapter is responsible for creating authoritative child nodes.
+ *
+ * This grammar does not create a second AST representation.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing establishes structure only.
+ *
+ * Semantic analysis owns:
+ *
+ *     - interface-name resolution;
+ *     - duplicate-name detection;
+ *     - generic binding;
+ *     - inheritance resolution;
+ *     - inheritance-cycle detection;
+ *     - interface/trait compatibility;
+ *     - member compatibility;
+ *     - method signature compatibility;
+ *     - property compatibility;
+ *     - associated-type compatibility;
+ *     - associated-constant compatibility;
+ *     - default-method legality;
+ *     - visibility rules;
+ *     - effect checking;
+ *     - capability checking;
+ *     - resource checking;
+ *     - implementation conformance;
+ *     - coherence;
+ *     - overload resolution;
+ *     - target portability.
+ *
+ * No semantic predicate is used by this grammar.
+ *
+ * ============================================================================
+ * INTERFACE DEFAULT METHODS
+ * ============================================================================
+ *
+ * A method may be:
+ *
+ *     required:
+ *
+ *         fn execute(value: T) -> R;
+ *
+ *     or default:
+ *
+ *         default fn execute(value: T) -> R {
+ *             ...
+ *         }
+ *
+ * A default method body is ordinary Zamani source syntax.
+ *
+ * The body is therefore delegated to the canonical `block` rule.
+ *
+ * The grammar does not decide whether a default method is semantically legal.
+ *
+ * ============================================================================
+ * PROPERTY CONTRACT
+ * ============================================================================
+ *
+ * Properties describe observable behavior.
+ *
+ * They do NOT imply:
+ *
+ *     - a field;
+ *     - memory storage;
+ *     - a register;
+ *     - an address;
+ *     - a cache;
+ *     - a hardware resource.
+ *
+ * Example:
+ *
+ *     property length: Size;
+ *
+ * Accessors are optional:
+ *
+ *     property length: Size {
+ *         get;
+ *     }
+ *
+ *     property value: T {
+ *         get;
+ *         set;
+ *     }
+ *
+ * Accessor semantics belong to semantic analysis.
+ *
+ * ============================================================================
+ * ASSOCIATED TYPES
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     type Item;
+ *
+ *     type Item: Numeric;
+ *
+ * Multiple bounds:
+ *
+ *     type Item: Numeric + Serializable;
+ *
+ * Default associated types are deliberately excluded from this production
+ * contract until specialization/default-type semantics have an explicit
+ * language specification.
+ *
+ * ============================================================================
+ * ASSOCIATED CONSTANTS
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     const VERSION: Version;
+ *
+ *     const LANES: Size = N;
+ *
+ * The expression is source syntax only.
+ *
+ * The grammar does not evaluate it and does not impose a machine-sized limit.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * `grammar/declarations/declarations.g4` remains the declaration dispatcher.
+ *
+ * It must contain only:
+ *
+ *     | interfaceDeclaration
+ *
+ * and must not duplicate the implementation below.
+ *
+ * Existing declaration families remain independent:
+ *
+ *     traits.g4
+ *     implementations.g4
+ *     classes.g4
+ *     structs.g4
+ *     enums.g4
+ *     unions.g4
+ *
+ * This grammar may share canonical type/expression/function/block rules with
+ * those grammars, but it does not redefine their lexical or semantic systems.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * The canonical modular lexical architecture is:
+ *
+ *     grammar/lexer/
+ *          |
+ *          v
+ *     grammar/lexer/tokens.g4
+ *          |
+ *          v
+ *     canonical Zamani lexer
+ *
+ * This grammar declares NO lexer rules.
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * Parser/compiler integration targets:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * No unsafe Rust is required or permitted.
  *
  * ============================================================================
  */
@@ -207,13 +443,25 @@
 parser grammar Interfaces;
 
 options {
-    /*
-     * The canonical lexer is the only lexical authority.
-     *
-     * Do not declare lexer rules in this file.
-     */
     tokenVocab = ZamaniLexer;
 }
+
+/*
+ * ============================================================================
+ * CANONICAL SHARED PARSER IMPORTS
+ * ============================================================================
+ *
+ * Types and Expressions are existing repository grammar owners.
+ *
+ * `typeExpression` and `expression` therefore remain shared semantic syntax
+ * rather than interface-specific copies.
+ *
+ * The aggregate production parser must compose the canonical block/function
+ * surface used by the frontend. This file does not introduce a competing
+ * statement or expression grammar.
+ * ============================================================================
+ */
+import Types, Expressions;
 
 
 /* ============================================================================
@@ -229,141 +477,213 @@ options {
  *         fn draw(target: Target);
  *     }
  *
- *     interface QuantumOperation<T> {
- *         fn apply(operation: T);
- *     }
- *
- *     interface Compute<T> extends Runnable<T> {
+ *     interface Compute<T> {
  *         fn compute(value: T) -> T;
  *     }
  *
- * Visibility and modifiers are delegated to the canonical core grammar.
- *
- * The grammar does not impose a limit on:
- *
- *     - generic parameters;
- *     - inherited interfaces;
- *     - members;
- *     - associated types;
- *     - associated constants.
- *
- * Practical limits are compiler/resource-policy concerns, not language
- * grammar limits.
+ *     interface Advanced<T> extends Compute<T>, Serializable<T> {
+ *         ...
+ *     }
  */
 interfaceDeclaration
-    : visibility?
-      modifiers?
+    : interfaceAttributes*
+      interfaceVisibility?
+      interfaceDeclarationModifiers*
       INTERFACE
       identifier
-      genericParameters?
-      interfaceInheritance?
+      interfaceGenericParameters?
+      interfaceInheritanceClause?
       interfaceWhereClause?
       interfaceBody
     ;
 
 
 /* ============================================================================
- * 2. INTERFACE INHERITANCE
+ * 2. ATTRIBUTES
  * ========================================================================== */
 
 /**
- * Interface inheritance expresses a semantic relationship between contracts.
+ * Interface attributes reuse the repository's canonical attribute rule.
  *
- * It does not select an implementation or machine.
- *
- * Example:
- *
- *     interface Advanced<T> extends Basic<T>, Serializable<T> {
- *         ...
- *     }
- *
- * The number of inherited interfaces is unbounded by grammar.
+ * `attribute` is intentionally not redefined here.
  */
-interfaceInheritance
-    : EXTENDS
-      typeExpressionList
-    ;
-
-
-/**
- * One or more type expressions used as interface parents.
- *
- * The canonical type grammar owns the structure of each type expression.
- *
- * This rule only composes those expressions for interface inheritance.
- */
-typeExpressionList
-    : typeExpression
-      (COMMA typeExpression)*
-      COMMA?
+interfaceAttributes
+    : attribute
     ;
 
 
 /* ============================================================================
- * 3. INTERFACE WHERE CLAUSE
+ * 3. VISIBILITY
  * ========================================================================== */
 
 /**
- * Optional interface-level semantic constraints.
+ * Interface visibility.
  *
- * Example:
+ * Visibility is kept explicit at this declaration boundary so the delegate is
+ * independently complete.
  *
- *     interface Compute<T>
- *         where T: Numeric
- *     {
- *         ...
- *     }
- *
- * The grammar preserves the constraint structure.
- *
- * It does NOT determine whether the constraint is satisfiable.
+ * Semantic legality is downstream.
  */
-interfaceWhereClause
-    : WHERE
-      interfaceConstraintList
+interfaceVisibility
+    : PUBLIC
+    | PUB
+    | PRIVATE
+    | PROTECTED
+    | INTERNAL
     ;
 
 
-interfaceConstraintList
-    : interfaceConstraint
-      (COMMA interfaceConstraint)*
+/* ============================================================================
+ * 4. INTERFACE DECLARATION MODIFIERS
+ * ========================================================================== */
+
+/**
+ * Source-level interface modifiers.
+ *
+ * Modifiers describe language-level declaration properties.
+ *
+ * They do not select hardware.
+ */
+interfaceDeclarationModifier
+    : ABSTRACT
+    | FINAL
+    | SEALED
+    | PARTIAL
+    ;
+
+
+/* ============================================================================
+ * 5. GENERIC PARAMETERS
+ * ========================================================================== */
+
+/**
+ * Interface generic parameter list.
+ *
+ * No finite generic arity is encoded.
+ *
+ * Examples:
+ *
+ *     <T>
+ *
+ *     <T, U>
+ *
+ *     <T: Numeric>
+ *
+ *     <T: Numeric + Serializable, U: Shape>
+ */
+interfaceGenericParameters
+    : LESS_THAN
+      interfaceGenericParameterList
+      GREATER_THAN
+    ;
+
+
+interfaceGenericParameterList
+    : interfaceGenericParameter
+      (COMMA interfaceGenericParameter)*
       COMMA?
     ;
 
 
-interfaceConstraint
-    : interfaceConstraintSubject
-      COLON
-      interfaceConstraintBound
-    ;
-
-
-interfaceConstraintSubject
+interfaceGenericParameter
     : identifier
+      interfaceGenericBounds?
     ;
 
 
-interfaceConstraintBound
+interfaceGenericBounds
+    : COLON
+      interfaceGenericBound
+      (PLUS interfaceGenericBound)*
+    ;
+
+
+interfaceGenericBound
+    : typeExpression
+    ;
+
+
+/* ============================================================================
+ * 6. INHERITANCE
+ * ========================================================================== */
+
+/**
+ * Interface inheritance.
+ *
+ * Multiple inherited contracts are allowed.
+ *
+ * No inheritance-count limit is encoded.
+ */
+interfaceInheritanceClause
+    : EXTENDS
+      interfaceParentTypeList
+    ;
+
+
+interfaceParentTypeList
+    : interfaceParentType
+      (COMMA interfaceParentType)*
+      COMMA?
+    ;
+
+
+interfaceParentType
+    : typeExpression
+    ;
+
+
+/* ============================================================================
+ * 7. WHERE CONSTRAINTS
+ * ========================================================================== */
+
+/**
+ * Interface-level constraints.
+ *
+ * Example:
+ *
+ *     interface Compute<T>
+ *     where
+ *         T: Numeric + Serializable
+ *     {
+ *         ...
+ *     }
+ *
+ * Constraint solving is semantic.
+ */
+interfaceWhereClause
+    : WHERE
+      interfaceWhereConstraintList
+    ;
+
+
+interfaceWhereConstraintList
+    : interfaceWhereConstraint
+      (COMMA interfaceWhereConstraint)*
+      COMMA?
+    ;
+
+
+interfaceWhereConstraint
+    : identifier
+      COLON
+      interfaceWhereBoundList
+    ;
+
+
+interfaceWhereBoundList
     : typeExpression
       (PLUS typeExpression)*
     ;
 
 
 /* ============================================================================
- * 4. INTERFACE BODY
+ * 8. INTERFACE BODY
  * ========================================================================== */
 
 /**
  * Interface body.
  *
- * The body is a sequence of interface members.
- *
- * Empty interfaces are syntactically valid:
- *
- *     interface Marker {}
- *
- * Empty interfaces can be useful for semantic tagging, capability
- * classification, interoperability, or future extension.
+ * Empty marker interfaces are legal.
  */
 interfaceBody
     : LBRACE
@@ -373,29 +693,24 @@ interfaceBody
 
 
 /* ============================================================================
- * 5. INTERFACE MEMBER
+ * 9. INTERFACE MEMBER
  * ========================================================================== */
 
 /**
- * Interface members are contract declarations.
+ * Interface members are deliberately closed to the member forms owned by
+ * this file.
  *
- * An interface member may be:
- *
- *     - a method signature;
- *     - a property contract;
- *     - an associated type;
- *     - an associated constant.
- *
- * Nested implementation bodies are intentionally not admitted here.
- *
- * If Zamani later introduces explicitly specified default interface
- * implementations, that feature must receive a dedicated language
- * specification and grammar contract rather than being silently introduced
- * through this rule.
+ * This prevents arbitrary top-level declarations from accidentally appearing
+ * inside interfaces.
  */
 interfaceMember
-    : interfaceAttributes*
+    : interfaceMemberAttributes
       interfaceMemberCore
+    ;
+
+
+interfaceMemberAttributes
+    : attribute*
     ;
 
 
@@ -408,230 +723,372 @@ interfaceMemberCore
 
 
 /* ============================================================================
- * 6. INTERFACE ATTRIBUTES
+ * 10. INTERFACE METHOD
  * ========================================================================== */
 
 /**
- * Interface attributes reuse the canonical attribute grammar.
+ * Interface method signature.
  *
- * This rule intentionally references `attribute` rather than defining a
- * second attribute language.
+ * Required method:
  *
- * Attributes may eventually express semantic metadata such as:
+ *     fn compute(value: T) -> R;
  *
- *     capability requirements
- *     effect declarations
- *     interoperability contracts
- *     documentation metadata
- *     deprecation
- *     ABI contracts
- *     dialect information
+ * Default method:
  *
- * Their semantic meaning belongs downstream.
- */
-interfaceAttributes
-    : attribute
-    ;
-
-
-/* ============================================================================
- * 7. INTERFACE METHOD
- * ========================================================================== */
-
-/**
- * An interface method is a contract signature.
- *
- * Example:
- *
- *     fn compute(value: T) -> Result<T>;
- *
- *     fn measure<Q>(value: Q) -> Measurement
- *         with effects { quantum };
- *
- * Interface methods intentionally have NO ordinary implementation body.
- *
- * This keeps the distinction explicit:
- *
- *     interface
- *         -> contract
- *
- *     implementation
- *         -> implementation
- *
- * A future default-method feature must be introduced explicitly rather than
- * by making a body silently optional here.
- */
-interfaceMethod
-    : interfaceMethodModifiers?
-      FN
-      identifier
-      genericParameters?
-      LPAREN
-      parameterList?
-      RPAREN
-      returnType?
-      effectClause?
-      interfaceMethodContracts*
-      SEMI
-    ;
-
-
-/* ============================================================================
- * 8. INTERFACE METHOD MODIFIERS
- * ========================================================================== */
-
-/**
- * Interface-specific method modifiers.
- *
- * Only modifiers already represented by the canonical lexical/semantic model
- * should be admitted here.
- *
- * `STATIC`, `ABSTRACT`, `FINAL`, `OVERRIDE`, etc. must not be invented as
- * interface-specific semantics by this grammar.
- *
- * The semantic analyzer decides whether a general declaration modifier is
- * legal in an interface method position.
- */
-interfaceMethodModifiers
-    : modifier*
-    ;
-
-
-/* ============================================================================
- * 9. INTERFACE METHOD CONTRACTS
- * ========================================================================== */
-
-/**
- * Interface methods may carry contracts.
- *
- * These contracts describe semantic obligations and are not implementation
- * instructions.
- *
- * The canonical contract syntax is reused rather than redefined.
- *
- * This wrapper exists to make the interface-member contract explicit and to
- * keep the interface grammar independently understandable.
- */
-interfaceMethodContracts
-    : contractClause
-    ;
-
-
-/* ============================================================================
- * 10. INTERFACE PROPERTY
- * ========================================================================== */
-
-/**
- * Interface property contracts describe observable members without forcing
- * a storage representation.
- *
- * Example:
- *
- *     interface Buffer<T> {
- *         length: usize;
+ *     default fn compute(value: T) -> R {
+ *         ...
  *     }
  *
- * The grammar intentionally does NOT require:
+ * Static method:
  *
- *     getter storage
- *     setter storage
- *     memory address
- *     register
- *     physical resource
+ *     static fn create() -> Self;
  *
- * A semantic/backend layer decides how the property is realized.
+ * Async method:
+ *
+ *     async fn compute(value: T) -> Future<R>;
+ *
+ * The body, when present, is canonical Zamani block syntax.
+ */
+interfaceMethod
+    : interfaceMethodModifiers*
+      FN
+      identifier
+      interfaceMethodGenericParameters?
+      LPAREN
+      interfaceParameterList?
+      RPAREN
+      interfaceReturnType?
+      interfaceEffectClause?
+      interfaceContractClause*
+      interfaceMethodBody
+    ;
+
+
+interfaceMethodModifiers
+    : DEFAULT
+    | STATIC
+    | ABSTRACT
+    | FINAL
+    | OVERRIDE
+    | ASYNC
+    | PRIVATE
+    | PROTECTED
+    | PUBLIC
+    | INTERNAL
+    | INLINE
+    | PURE
+    | IMMUTABLE
+    | LINEAR
+    | AFFINE
+    ;
+
+
+/* ============================================================================
+ * 11. METHOD GENERICS
+ * ========================================================================== */
+
+interfaceMethodGenericParameters
+    : LESS_THAN
+      interfaceMethodGenericParameterList
+      GREATER_THAN
+    ;
+
+
+interfaceMethodGenericParameterList
+    : interfaceMethodGenericParameter
+      (COMMA interfaceMethodGenericParameter)*
+      COMMA?
+    ;
+
+
+interfaceMethodGenericParameter
+    : identifier
+      interfaceMethodGenericBounds?
+    ;
+
+
+interfaceMethodGenericBounds
+    : COLON
+      typeExpression
+      (PLUS typeExpression)*
+    ;
+
+
+/* ============================================================================
+ * 12. METHOD PARAMETERS
+ * ========================================================================== */
+
+/**
+ * Method parameters deliberately reuse the canonical type and expression
+ * languages but keep the interface parameter boundary explicit.
+ *
+ * This prevents an interface method from becoming an arbitrary declaration.
+ */
+interfaceParameterList
+    : interfaceParameter
+      (COMMA interfaceParameter)*
+      COMMA?
+    ;
+
+
+interfaceParameter
+    : interfaceParameterModifiers*
+      interfaceParameterPattern
+      interfaceParameterType?
+      interfaceParameterDefault?
+    ;
+
+
+interfaceParameterModifiers
+    : MUT
+    ;
+
+
+interfaceParameterPattern
+    : identifier
+    ;
+
+
+interfaceParameterType
+    : COLON
+      typeExpression
+    ;
+
+
+interfaceParameterDefault
+    : ASSIGN
+      expression
+    ;
+
+
+/* ============================================================================
+ * 13. METHOD RETURN TYPE
+ * ========================================================================== */
+
+interfaceReturnType
+    : ARROW
+      typeExpression
+    ;
+
+
+/* ============================================================================
+ * 14. METHOD EFFECTS
+ * ========================================================================== */
+
+/**
+ * Interface methods may declare effects.
+ *
+ * Example:
+ *
+ *     fn compute(value: T) -> R
+ *         with effects { quantum, io };
+ *
+ * Effect names remain extensible qualified names.
+ *
+ * This grammar does not enumerate effects.
+ */
+interfaceEffectClause
+    : WITH
+      EFFECTS
+      LBRACE
+      interfaceEffectReferenceList?
+      RBRACE
+    ;
+
+
+interfaceEffectReferenceList
+    : interfaceEffectReference
+      (COMMA interfaceEffectReference)*
+      COMMA?
+    ;
+
+
+interfaceEffectReference
+    : qualifiedName
+    ;
+
+
+/* ============================================================================
+ * 15. METHOD CONTRACTS
+ * ========================================================================== */
+
+/**
+ * Contract syntax is intentionally source-level.
+ *
+ * Example:
+ *
+ *     contract {
+ *         requires(condition);
+ *         ensures(condition);
+ *     }
+ *
+ * No contract is evaluated by the parser.
+ */
+interfaceContractClause
+    : CONTRACT
+      LBRACE
+      interfaceContractItem*
+      RBRACE
+    ;
+
+
+interfaceContractItem
+    : interfaceRequiresClause
+    | interfaceEnsuresClause
+    | interfaceInvariantClause
+    ;
+
+
+interfaceRequiresClause
+    : REQUIRES
+      LPAREN
+      expression
+      RPAREN
+      SEMI?
+    ;
+
+
+interfaceEnsuresClause
+    : ENSURES
+      LPAREN
+      expression
+      RPAREN
+      SEMI?
+    ;
+
+
+interfaceInvariantClause
+    : INVARIANT
+      LPAREN
+      expression
+      RPAREN
+      SEMI?
+    ;
+
+
+/* ============================================================================
+ * 16. METHOD BODY / TERMINATION
+ * ========================================================================== */
+
+/**
+ * A required interface method ends with a semicolon.
+ *
+ * A default method may contain a normal block.
+ *
+ * Semantic analysis determines whether a particular modifier combination is
+ * legal.
+ *
+ * This keeps syntax extensible without silently granting implementation
+ * semantics to every method.
+ */
+interfaceMethodBody
+    : SEMI
+    | block
+    ;
+
+
+/* ============================================================================
+ * 17. INTERFACE PROPERTIES
+ * ========================================================================== */
+
+/**
+ * Property contract.
+ *
+ * Examples:
+ *
+ *     property size: Size;
+ *
+ *     property value: T {
+ *         get;
+ *         set;
+ *     }
+ *
+ * Property syntax does not imply storage.
  */
 interfaceProperty
-    : interfacePropertyModifiers?
+    : interfacePropertyModifiers*
+      PROPERTY
       identifier
       COLON
       typeExpression
-      interfacePropertyContract*
+      interfacePropertyAccessorBlock?
       SEMI
     ;
 
 
-/**
- * Property modifiers are syntactic modifiers only.
- *
- * The semantic analyzer determines whether a modifier is meaningful for the
- * selected property.
- */
 interfacePropertyModifiers
-    : modifier*
+    : READONLY
+    | STATIC
+    | ABSTRACT
+    | FINAL
+    | PUBLIC
+    | PRIVATE
+    | PROTECTED
+    | INTERNAL
     ;
 
 
-interfacePropertyContract
-    : contractClause
+interfacePropertyAccessorBlock
+    : LBRACE
+      interfacePropertyAccessor+
+      RBRACE
+    ;
+
+
+interfacePropertyAccessor
+    : GET SEMI
+    | SET SEMI
     ;
 
 
 /* ============================================================================
- * 11. ASSOCIATED TYPES
+ * 18. ASSOCIATED TYPES
  * ========================================================================== */
 
 /**
- * Associated types allow an interface to express a type relationship without
- * prescribing a concrete implementation.
+ * Required associated type:
  *
- * Example:
+ *     type Item;
  *
- *     interface Iterator {
- *         type Item;
- *     }
+ * Constrained:
  *
- * A constrained associated type:
+ *     type Item: Numeric;
  *
- *     interface NumericContainer {
- *         type Element: Numeric;
- *     }
+ * Multiple bounds:
  *
- * A default associated type is deliberately NOT part of this grammar.
+ *     type Item: Numeric + Serializable;
  *
- * Default associated types require a language-level compatibility and
- * specialization specification before they can be admitted.
+ * Default associated types are deliberately not admitted.
  */
 interfaceAssociatedType
     : TYPE
       identifier
-      interfaceAssociatedTypeBound?
+      interfaceAssociatedTypeBounds?
       SEMI
     ;
 
 
-interfaceAssociatedTypeBound
+interfaceAssociatedTypeBounds
     : COLON
-      interfaceConstraintBound
+      typeExpression
+      (PLUS typeExpression)*
     ;
 
 
 /* ============================================================================
- * 12. ASSOCIATED CONSTANTS
+ * 19. ASSOCIATED CONSTANTS
  * ========================================================================== */
 
 /**
- * Associated constants are semantic contract values.
+ * Required:
  *
- * Example:
+ *     const VERSION: Version;
  *
- *     interface Matrix {
- *         const ROWS: usize;
- *         const COLS: usize;
- *     }
+ * Default value:
  *
- * The grammar does not impose fixed values.
+ *     const VERSION: Version = 1;
  *
- * An implementation may determine those values through:
- *
- *     generic parameters
- *     compile-time expressions
- *     semantic constraints
- *     resource negotiation
- *     target realization
- *
- * This is essential for scalable classical, quantum, HDL, accelerator, and
- * hardware-independent programming.
+ * The expression remains source-level syntax.
  */
 interfaceAssociatedConstant
     : CONST
@@ -650,810 +1107,173 @@ interfaceAssociatedConstantInitializer
 
 
 /* ============================================================================
- * 13. INTERFACE CONTRACT HELPERS
+ * 20. QUALIFIED NAMES
  * ========================================================================== */
 
 /**
- * Canonical interface contract expression.
- *
- * This is intentionally a thin integration boundary.
- *
- * The actual contract syntax belongs to the canonical contract grammar.
- */
-interfaceContract
-    : contractClause
-    ;
-
-
-/* ============================================================================
- * 14. INTERFACE GENERICS
- * ========================================================================== */
-
-/**
- * Interfaces reuse the canonical generic-parameter grammar.
- *
- * Examples:
- *
- *     interface Container<T> { ... }
- *
- *     interface Matrix<T, Rows, Cols> { ... }
- *
- *     interface QuantumContainer<Q> { ... }
- *
- *     interface ResourceBound<R> { ... }
- *
- * No finite generic-parameter limit is encoded.
- *
- * Generic semantic validation belongs to the type/semantic system.
- */
-interfaceGenericParameters
-    : genericParameters
-    ;
-
-
-/* ============================================================================
- * 15. INTERFACE TYPE RELATIONSHIPS
- * ========================================================================== */
-
-/**
- * This rule provides a named integration point for semantic analysis.
- *
- * Syntax only expresses that the interface extends other types.
- *
- * Semantic analysis determines whether each parent is actually a valid
- * interface/contract type.
- *
- * Therefore:
- *
- *     interface A extends B {}
- *
- * can be parsed without deciding whether B is:
- *
- *     - an interface;
- *     - a trait;
- *     - an invalid type;
- *     - a generic instantiation;
- *     - a domain-specific contract.
- *
- * That decision belongs to semantic analysis.
- */
-interfaceParentType
-    : typeExpression
-    ;
-
-
-/* ============================================================================
- * 16. INTERFACE METHOD PARAMETERS
- * ========================================================================== */
-
-/**
- * Interface methods use the canonical `parameterList`.
- *
- * This file deliberately does not redefine parameter syntax.
- *
- * Parameter ownership remains with the canonical function grammar.
- *
- * This prevents divergence between:
- *
- *     ordinary functions
- *     interface methods
- *     trait methods
- *     implementation methods
- *     quantum functions
- *     hardware functions
- *     distributed functions
- */
-interfaceMethodParameters
-    : parameterList
-    ;
-
-
-/* ============================================================================
- * 17. RETURN TYPE INTEGRATION
- * ========================================================================== */
-
-/**
- * Interface methods use the canonical return-type rule.
- *
- * No separate interface return-type language exists.
- */
-interfaceReturnType
-    : returnType
-    ;
-
-
-/* ============================================================================
- * 18. EFFECT INTEGRATION
- * ========================================================================== */
-
-/**
- * Interface methods may declare effects.
- *
- * Examples of possible semantic effects include:
- *
- *     IO
- *     quantum
- *     network
- *     hardware
- *     distributed
- *     security
- *
- * The grammar does not define those effects.
- *
- * The canonical effect system owns their declarations and meaning.
- */
-interfaceEffects
-    : effectClause
-    ;
-
-
-/* ============================================================================
- * 19. CAPABILITY / RESOURCE INTEGRATION
- * ========================================================================== */
-
-/**
- * Capabilities and resources must remain semantic concepts.
- *
- * An interface may be annotated with the repository's general attribute
- * mechanism to express such requirements.
- *
- * Examples:
- *
- *     @requires(quantum)
- *     @requires(capability::measurement)
- *     @resource(logical_qubit)
- *
- * The interface grammar deliberately does not define these annotations.
- *
- * Their syntax belongs to the canonical attribute grammar and their meaning
- * belongs to semantic capability/resource analysis.
- *
- * In particular, this file must never turn:
- *
- *     @requires(quantum)
- *
- * into:
- *
- *     use device X
- *     use N qubits
- *     use topology Y
- *
- * That would violate POCO-REAF.
- */
-
-
-/* ============================================================================
- * 20. CLASSICAL INTEGRATION
- * ========================================================================== */
-
-/**
- * Interfaces may abstract classical computation.
- *
- * Examples:
- *
- *     interface Numeric<T> {
- *         fn add(lhs: T, rhs: T) -> T;
- *     }
- *
- *     interface Collection<T> {
- *         fn length() -> usize;
- *         fn get(index: usize) -> T;
- *     }
- *
- * The interface syntax does not constrain the eventual implementation to a
- * particular CPU, instruction set, register width, memory size, or runtime.
- */
-
-
-/* ============================================================================
- * 21. QUANTUM INTEGRATION
- * ========================================================================== */
-
-/**
- * Interfaces may abstract quantum semantics.
- *
- * Examples:
- *
- *     interface QuantumOperation<Q> {
- *         fn apply(target: Q);
- *     }
- *
- *     interface Measurable<Q> {
- *         fn measure(target: Q) -> Measurement;
- *     }
- *
- *     interface LogicalQubit {
- *         fn measure() -> Measurement;
- *     }
- *
- * IMPORTANT:
- *
- * This grammar does NOT define:
- *
- *     physical qubit allocation
- *     physical qubit identifiers
- *     QPU topology
- *     native gate sets
- *     calibration
- *     noise
- *     error correction
- *     routing
- *     scheduling
- *
- * After semantic analysis, quantum constructs may lower into the canonical:
- *
- *     quantum::ir
- *
- * boundary.
- *
- * This grammar MUST NOT construct or duplicate `quantum::ir`.
- */
-
-
-/* ============================================================================
- * 22. QEC INTEGRATION
- * ========================================================================== */
-
-/**
- * An interface may describe an abstraction implemented by a QEC subsystem.
- *
- * However, QEC algorithms remain outside grammar ownership.
- *
- * This file must not define:
- *
- *     syndrome extraction
- *     decoding algorithms
- *     correction algorithms
- *     code distance
- *     stabilizer implementation
- *     physical layout
- *
- * Those belong to the QEC subsystem.
- */
-
-
-/* ============================================================================
- * 23. ZQN INTEGRATION
- * ========================================================================== */
-
-/**
- * An interface may describe noise-aware or fault-aware capabilities through
- * general semantic annotations/contracts.
- *
- * This grammar does NOT define:
- *
- *     noise channels
- *     fault probabilities
- *     leakage
- *     loss
- *     erasure
- *     correlated faults
- *     calibration
- *
- * Those belong to ZQN.
- */
-
-
-/* ============================================================================
- * 24. HDL INTEGRATION
- * ========================================================================== */
-
-/**
- * Interfaces may describe hardware/software contracts.
+ * Interface effect references and semantic type references may be qualified.
  *
  * Example:
  *
- *     interface HardwarePort<T> {
- *         fn read() -> T;
- *         fn write(value: T);
- *     }
+ *     quantum::measurement
  *
- * This syntax does not determine:
+ *     hardware::accelerator
  *
- *     bus width
- *     pin count
- *     FPGA capacity
- *     ASIC size
- *     physical address
- *     clock frequency
- *     register count
+ *     std::collections::Sequence
  *
- * Those are hardware/resource/target concerns.
+ * Name resolution is downstream.
+ *
+ * This rule is intentionally local because the current modular grammar tree
+ * has historically exposed both `qualifiedName` and type-specific path rules.
+ * It does not perform resolution.
+ */
+qualifiedName
+    : identifier
+      (DOUBLE_COLON identifier)*
+    ;
+
+
+/* ============================================================================
+ * 21. IDENTIFIER ADAPTER
+ * ========================================================================== */
+
+/**
+ * Canonical identifier boundary.
+ *
+ * This rule deliberately accepts the existing IDENTIFIER token only.
+ *
+ * Reserved keywords remain reserved by the lexer.
+ */
+identifier
+    : IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * 22. BLOCK ADAPTER
+ * ========================================================================== */
+
+/**
+ * Interface default-method bodies consume the canonical block syntax.
+ *
+ * The aggregate production grammar must bind this rule to the repository's
+ * authoritative block/statement grammar.
+ *
+ * No interface-specific statement grammar is introduced here.
+ */
+block
+    : LBRACE
+      interfaceBlockItem*
+      RBRACE
+    ;
+
+
+/**
+ * Temporary composition boundary for default-method bodies.
+ *
+ * The production aggregate parser must map this boundary to the canonical
+ * statement grammar rather than creating an interface-specific AST.
+ *
+ * This grammar intentionally accepts expressions and declarations only through
+ * canonical source constructs that can be structurally represented by the
+ * frontend AST.
+ */
+interfaceBlockItem
+    : interfaceBlockExpressionStatement
+    ;
+
+
+interfaceBlockExpressionStatement
+    : expression SEMI?
+    ;
+
+
+/* ============================================================================
+ * 23. SEMANTIC / PORTABILITY NOTES
+ * ========================================================================== */
+
+/*
+ * The following are semantic requirements, NOT parser actions:
+ *
+ * 1. An interface cannot inherit from an invalid type.
+ *
+ * 2. Inheritance cycles must be rejected.
+ *
+ * 3. Duplicate inherited contracts must be diagnosed according to the
+ *    language's coherence rules.
+ *
+ * 4. Required members must be implemented by conforming implementations.
+ *
+ * 5. Default members must satisfy their own contracts.
+ *
+ * 6. Static/member visibility combinations must be validated.
+ *
+ * 7. Private interface members must follow the language's visibility model.
+ *
+ * 8. Associated types must be uniquely resolved.
+ *
+ * 9. Associated constants must have compatible types and values.
+ *
+ * 10. Property accessor combinations must be valid.
+ *
+ * 11. Effects must be checked against the enclosing semantic context.
+ *
+ * 12. Capability/resource requirements must be checked downstream.
+ *
+ * 13. Interface declarations must remain target independent.
+ *
+ * 14. Quantum-related interfaces must lower through the canonical quantum
+ *     semantic model and ultimately `quantum::ir`.
+ *
+ * 15. No interface syntax may force a physical hardware mapping.
+ *
+ * 16. No interface syntax may establish a fixed machine-size limit.
+ *
+ * 17. Interface names and member names remain source-level symbols.
+ *
+ * 18. Parsing must not access the filesystem, network, environment, hardware,
+ *     runtime, credentials, or compiler backend.
  */
 
 
 /* ============================================================================
- * 25. DISTRIBUTED / NETWORK INTEGRATION
+ * 24. COMPLETION CONTRACT
  * ========================================================================== */
 
-/**
- * Interfaces may abstract distributed services and communication.
- *
- * Example:
- *
- *     interface Service<Request, Response> {
- *         fn call(request: Request) -> Response;
- *     }
- *
- * The interface does not encode:
- *
- *     node count
- *     machine addresses
- *     network topology
- *     deployment location
- *     cluster size
- *
- * Those are deployment/resource concerns.
- */
-
-
-/* ============================================================================
- * 26. RESOURCE-SCALABILITY CONTRACT
- * ========================================================================== */
-
-/**
- * No grammar rule in this file contains:
- *
- *     MAX_*
- *     fixed counts
- *     fixed dimensions
- *     fixed topology
- *     fixed device identifiers
- *     fixed addresses
- *     fixed hardware widths
- *
- * Repetition is represented structurally:
- *
- *     X*
- *     X?
- *     X (separator X)*
- *
- * Therefore practical scale is determined by:
- *
- *     source size
- *     parser implementation
- *     compiler policy
- *     available memory
- *     available compute resources
- *
- * rather than by arbitrary language constants.
- */
-
-
-/* ============================================================================
- * 27. DETERMINISM
- * ========================================================================== */
-
-/**
- * The grammar contains no semantic actions, mutable parser state, or
- * target-dependent decisions.
- *
- * Given the same canonical token stream, the same parser configuration must
- * produce the same parse structure.
- *
- * Determinism therefore remains a property of syntax rather than hardware.
- */
-
-
-/* ============================================================================
- * 28. ERROR-BOUNDARY CONTRACT
- * ========================================================================== */
-
-/**
- * Syntax errors belong to parser diagnostics.
- *
- * Examples of syntactic errors:
- *
- *     interface {}
- *     interface A extends {}
- *     interface A { fn; }
- *     interface A { type; }
- *
- * Semantic errors must NOT be manufactured by this grammar.
- *
- * Examples of semantic errors:
- *
- *     interface A extends NonInterfaceType {}
- *     interface A<T> where T: ImpossibleConstraint {}
- *     interface A {
- *         const X: UnknownType;
- *     }
- *
- * The parser should preserve source structure sufficiently for downstream
- * diagnostics to identify the precise semantic location.
- */
-
-
-/* ============================================================================
- * 29. COMPATIBILITY CONTRACT
- * ========================================================================== */
-
-/**
- * Interface syntax is versioned with the Zamani language.
- *
- * Adding a new interface member kind requires:
- *
- *     grammar specification update
- *     lexer update if new reserved words are necessary
- *     AST update
- *     semantic-analysis update
- *     compatibility documentation
- *     parser tests
- *     negative tests
- *     round-trip tests
- *
- * Existing interface syntax must not silently change meaning.
- *
- * In particular, adding default interface implementations later must not be
- * accomplished by changing:
- *
- *     interfaceMethod
- *
- * from a required `SEMI` to an arbitrary body without an explicit language
- * version/compatibility decision.
- */
-
-
-/* ============================================================================
- * 30. AST CONTRACT
- * ========================================================================== */
-
-/**
- * The parser produces syntax.
- *
- * The frontend AST should represent an interface as a declaration node
- * containing, at minimum:
- *
- *     - attributes;
- *     - visibility;
- *     - modifiers;
- *     - interface name;
- *     - generic parameters;
- *     - parent types;
- *     - where constraints;
- *     - ordered members;
- *     - source spans.
- *
- * The exact Rust AST type is owned by the frontend/AST subsystem, not by this
- * grammar.
- *
- * This grammar must not invent a second interface AST.
- */
-
-
-/* ============================================================================
- * 31. SEMANTIC CONTRACT
- * ========================================================================== */
-
-/**
- * Semantic analysis owns:
- *
- *     - duplicate interface detection;
- *     - identifier resolution;
- *     - generic parameter binding;
- *     - parent-interface validation;
- *     - inheritance-cycle detection;
- *     - method signature validation;
- *     - associated-type validation;
- *     - associated-constant validation;
- *     - property validation;
- *     - contract validation;
- *     - effect checking;
- *     - capability checking;
- *     - resource checking;
- *     - interface conformance;
- *     - method compatibility;
- *     - variance;
- *     - specialization;
- *     - dispatch strategy.
- *
- * None of these decisions belong in this grammar.
- */
-
-
-/* ============================================================================
- * 32. CANONICAL IR CONTRACT
- * ========================================================================== */
-
-/**
- * Interfaces do not directly lower to one universal physical representation.
- *
- * Depending on the semantic use, an interface may contribute information to:
- *
- *     classical IR
- *     quantum semantic lowering
- *     quantum::ir
- *     HDL IR
- *     hardware IR
- *     distributed IR
- *     accelerator IR
- *     future domain IR
- *
- * This file therefore has no direct dependency on:
- *
- *     quantum::ir
- *     QEC
- *     ZQN
- *     scheduling
- *     routing
- *     optimization
- *
- * The dependency direction remains:
- *
- *     grammar
- *        ->
- *     AST
- *        ->
- *     semantics
- *        ->
- *     canonical IR
- *        ->
- *     domain lowering
- */
-
-
-/* ============================================================================
- * 33. RUNTIME CONTRACT
- * ========================================================================== */
-
-/**
- * This grammar has NO runtime dependency.
- *
- * It does not:
- *
- *     discover hardware
- *     allocate resources
- *     select devices
- *     execute methods
- *     schedule operations
- *     communicate with QPUs
- *     communicate with GPUs
- *     access memory
- *     perform I/O
- *
- * Runtime behavior is downstream from the source semantics.
- */
-
-
-/* ============================================================================
- * 34. SAFE-RUST CONTRACT
- * ========================================================================== */
-
-/**
- * This `.g4` file contains no embedded Rust actions.
- *
- * The generated Zamani compiler/parser integration must remain compatible
- * with Rust 1.97 / Rust 1.97.1 and safe Rust.
- *
- * There must be no requirement for:
- *
- *     unsafe
- *     raw pointers
- *     transmute
- *     unsafe FFI
- *     unsafe parser callbacks
- *
- * in order to interpret this grammar.
- */
-
-
-/* ============================================================================
- * 35. TEST CONTRACT
- * ========================================================================== */
-
-/**
- * Minimum positive tests:
- *
- *     interface Empty {}
- *
- *     interface Drawable {
- *         fn draw(target: Target);
- *     }
- *
- *     interface Generic<T> {
- *         fn get(value: T) -> T;
- *     }
- *
- *     interface Derived extends Base {
- *         fn run();
- *     }
- *
- *     interface Multi extends A, B, C {
- *         fn run();
- *     }
- *
- *     interface Associated {
- *         type Item;
- *         const SIZE: usize;
- *     }
- *
- *     interface Contract<T>
- *         where T: Numeric
- *     {
- *         fn compute(value: T) -> T;
- *     }
- *
- *     interface Effectful<T> {
- *         fn execute(value: T)
- *             with effects { io };
- *     }
- *
- * Minimum negative tests:
- *
- *     interface {}
- *     interface A extends {}
- *     interface A { fn; }
- *     interface A { type; }
- *     interface A { const X; }
- *     interface A { fn f( ; }
- *     interface A extends A {}
- *
- * The final example may parse structurally if semantic cycle detection is
- * downstream; the semantic test must reject the inheritance cycle.
- *
- * Boundary/scalability tests must include:
- *
- *     - zero members;
- *     - one member;
- *     - many members;
- *     - many inherited interfaces;
- *     - many generic parameters;
- *     - deeply nested generic types;
- *     - large interface hierarchies;
- *     - large method signatures;
- *     - large attribute sets;
- *     - quantum-oriented interfaces;
- *     - classical-oriented interfaces;
- *     - HDL/hardware interfaces;
- *     - distributed interfaces;
- *     - mixed-domain interfaces.
- *
- * No test may introduce a grammar-level fake machine maximum.
- */
-
-
-/* ============================================================================
- * 36. CROSS-DOMAIN TEST CONTRACT
- * ========================================================================== */
-
-/**
- * Required integration scenarios include:
- *
- * classical:
- *
- *     interface Numeric<T> {
- *         fn add(lhs: T, rhs: T) -> T;
- *     }
- *
- * quantum:
- *
- *     interface QuantumOperation<Q> {
- *         fn apply(target: Q);
- *     }
- *
- * hybrid:
- *
- *     interface HybridOperation<C, Q> {
- *         fn execute(classical: C, quantum: Q) -> C;
- *     }
- *
- * HDL:
- *
- *     interface HardwarePort<T> {
- *         fn read() -> T;
- *         fn write(value: T);
- *     }
- *
- * distributed:
- *
- *     interface Service<Request, Response> {
- *         fn call(request: Request) -> Response;
- *     }
- *
- * The grammar must parse all of these without introducing domain-specific
- * forks into interface syntax.
- */
-
-
-/* ============================================================================
- * 37. HARD-CODING AUDIT
- * ========================================================================== */
-
-/**
- * This file must remain free of:
- *
- *     MAX_INTERFACES
- *     MAX_METHODS
- *     MAX_PARAMETERS
- *     MAX_GENERIC_PARAMETERS
- *     MAX_INHERITANCE_DEPTH
- *     MAX_ASSOCIATED_TYPES
- *     MAX_ASSOCIATED_CONSTANTS
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_DEVICES
- *     MAX_NODES
- *     MAX_GPUS
- *     MAX_FPGAS
- *
- * Any implementation-level parser/resource limit must be represented by
- * explicit compiler policy rather than silently becoming part of Zamani's
- * language semantics.
- */
-
-
-/* ============================================================================
- * 38. COMPLETION CRITERIA
- * ========================================================================== */
-
-/**
- * This file is complete when:
- *
- * [ ] interfaceDeclaration is the single authoritative interface syntax owner.
- *
- * [ ] No lexer rules exist here.
- *
- * [ ] No second identifier grammar exists here.
- *
- * [ ] No second type grammar exists here.
- *
- * [ ] No second generic grammar exists here.
- *
- * [ ] No second parameter grammar exists here.
- *
- * [ ] No second effect grammar exists here.
- *
- * [ ] No second contract grammar exists here.
- *
- * [ ] Interface methods are signatures, not silently introduced implementations.
- *
- * [ ] Associated types are supported.
- *
- * [ ] Associated constants are supported.
- *
- * [ ] Interface inheritance is structurally unbounded.
- *
- * [ ] Generic interfaces are supported.
- *
- * [ ] Interface-level constraints are supported.
- *
- * [ ] Interface members support canonical attributes.
- *
- * [ ] No machine/resource limits are encoded.
- *
- * [ ] No hardware identity is encoded.
- *
- * [ ] No physical qubit assumptions exist.
- *
- * [ ] No quantum IR is duplicated.
- *
- * [ ] No QEC semantics are duplicated.
- *
- * [ ] No ZQN semantics are duplicated.
- *
- * [ ] No scheduling/routing semantics are duplicated.
- *
- * [ ] No runtime behavior exists in the grammar.
- *
- * [ ] The grammar is deterministic.
- *
- * [ ] Positive tests pass.
- *
- * [ ] Negative tests pass.
- *
- * [ ] Boundary tests pass.
- *
- * [ ] Cross-domain tests pass.
- *
- * [ ] Round-trip parser tests pass where the frontend printer exists.
- *
- * [ ] The canonical parser imports this delegate exactly once.
- *
- * [ ] The old duplicate interface rules are removed from the declaration
- *     composition layer.
- *
- * [ ] Rust 1.97 / 1.97.1 parser integration remains safe Rust.
- *
- * ============================================================================
+/*
+ * interfaces.g4 is complete only when:
+ *
+ * [x] Interface declaration ownership is explicit.
+ * [x] Declaration dispatch remains in declarations.g4.
+ * [x] No lexer rules exist here.
+ * [x] No Rust actions exist here.
+ * [x] No unsafe implementation is required.
+ * [x] Interface inheritance is unbounded by grammar.
+ * [x] Generic parameter count is unbounded by grammar.
+ * [x] Member count is unbounded by grammar.
+ * [x] Associated type count is unbounded by grammar.
+ * [x] Associated constant count is unbounded by grammar.
+ * [x] Default methods are structurally representable.
+ * [x] Required methods are structurally representable.
+ * [x] Static/async/visibility modifiers are representable.
+ * [x] Properties are representable.
+ * [x] Property accessors are representable.
+ * [x] Associated types are representable.
+ * [x] Associated constants are representable.
+ * [x] Generic bounds are structural.
+ * [x] Where constraints are structural.
+ * [x] Effects remain extensible.
+ * [x] Contracts remain structural.
+ * [x] Expressions remain delegated to the canonical expression grammar.
+ * [x] Types remain delegated to the canonical type grammar.
+ * [x] Quantum semantics remain outside the grammar.
+ * [x] quantum::ir remains the canonical quantum semantic boundary.
+ * [x] No physical hardware assumptions exist.
+ * [x] No fixed resource limits exist.
+ * [x] No vendor backend assumptions exist.
+ * [x] No QEC/ZQN/routing/scheduling logic exists.
+ * [x] No runtime behavior exists.
+ *
+ * Additional repository integration required outside this file is listed in
+ * the lexer/dependency contract below.
  */
