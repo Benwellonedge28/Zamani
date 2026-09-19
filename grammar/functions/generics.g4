@@ -6,97 +6,85 @@
  * File:
  *     grammar/functions/generics.g4
  *
+ * Status:
+ *     Canonical function-generic declaration grammar.
+ *
  * Purpose:
- *     Canonical parser grammar for GENERIC PARAMETERS DECLARED BY FUNCTIONS.
+ *     Defines the source syntax for generic parameters declared by functions
+ *     and other callable declarations that explicitly reuse this grammar.
  *
- * Scope:
- *     This file owns the syntax used when a function declares generic
- *     parameters.
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
- * Examples:
- *
- *     fn identity<T>(value: T) -> T { ... }
- *
- *     fn convert<T, U>(value: T) -> U { ... }
- *
- *     fn solve<Q extends QuantumResource>(value: Q) -> Result { ... }
- *
- *     fn transform<T extends Numeric + Ordered>(value: T) -> T { ... }
+ * Safety:
+ *     This grammar contains no Rust implementation code.
+ *     Zamani compiler/frontend/runtime Rust MUST use safe Rust only.
+ *     No unsafe Rust is required by this grammar.
  *
  * ============================================================================
- * ARCHITECTURAL PRINCIPLE
+ * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * Zamani source expresses computation and semantic requirements.
+ * Canonical pipeline:
  *
- * Generic parameters are therefore SOURCE-LEVEL SYMBOLIC PARAMETERS.
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     parser composition
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     structural + semantic analysis
+ *          |
+ *          v
+ *     canonical semantic model
+ *          |
+ *          +----------------------+----------------------+
+ *          |                      |                      |
+ *          v                      v                      v
+ *      classical IR          quantum::ir          HDL/hardware IR
+ *          |                      |                      |
+ *          +----------------------+----------------------+
+ *                                 |
+ *                                 v
+ *                      optimization / lowering
+ *                                 |
+ *                      routing / scheduling
+ *                                 |
+ *                       resilience / QEC / ZQN
+ *                                 |
+ *                                HAL
+ *                                 |
+ *                         target realization
  *
- * They do NOT represent:
+ * Generic parameter syntax belongs entirely to the source-language layer.
  *
- *     - physical processors;
+ * Generic parameters MUST NOT encode:
+ *
  *     - CPU counts;
  *     - GPU counts;
  *     - FPGA counts;
  *     - ASIC counts;
  *     - QPU counts;
  *     - qubit counts;
- *     - memory capacity;
- *     - register capacity;
- *     - hardware topology;
- *     - device identifiers;
+ *     - memory capacities;
+ *     - register widths;
  *     - physical addresses;
+ *     - physical device identifiers;
+ *     - hardware topology;
  *     - deployment size;
- *     - vendor-specific resources.
- *
- * Generic declarations must remain valid from tiny systems to arbitrarily
- * large systems permitted by available compiler/runtime resources.
- *
- * No language-level generic-arity maximum is encoded here.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Generic function declarations are one of the mechanisms that allow:
- *
- *     Program_Once
- *         ->
- *     Compile_Once
- *         ->
- *     Run_Everywhere
- *         ->
- *     Run_Anywhere
- *         ->
- *     Run_Forever
- *
- * A generic function describes reusable semantics.
- *
- * Target realization belongs downstream:
- *
- *     source
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       +-------------------+
- *       |                   |
- *       v                   v
- *   classical IR       quantum::ir
- *       |                   |
- *       +---------+---------+
- *                 |
- *                 v
- *       optimization / routing /
- *       scheduling / hardware /
- *       runtime
- *
- * This file must not create dependencies in the reverse direction.
+ *     - scheduling decisions;
+ *     - routing decisions;
+ *     - calibration;
+ *     - QEC implementation;
+ *     - ZQN implementation;
+ *     - HAL implementation.
  *
  * ============================================================================
  * OWNERSHIP
@@ -104,390 +92,665 @@
  *
  * THIS FILE OWNS:
  *
- *     - functionGenericParameters;
- *     - functionGenericParameter;
- *     - functionGenericParameterBounds;
- *     - functionGenericParameterBound;
- *     - functionGenericParameterName;
- *     - source-level generic declaration arity;
- *     - source ordering of generic parameters;
- *     - source ordering of bounds;
- *     - trailing-comma syntax for generic parameter lists.
+ *     - functionGenericParameters
+ *     - functionGenericParameter
+ *     - functionGenericParameterName
+ *     - functionGenericParameterBounds
+ *     - functionGenericParameterBound
+ *     - generic parameter source ordering
+ *     - generic bound source ordering
+ *     - generic parameter list delimiters
+ *     - trailing-comma syntax for function generic declarations
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexer tokens;
- *     - identifiers;
- *     - ordinary type-expression syntax;
- *     - generic type application;
- *     - type inference;
- *     - generic substitution;
- *     - monomorphization;
- *     - specialization;
- *     - overload resolution;
- *     - trait/interface resolution;
- *     - constraint solving;
- *     - semantic type checking;
- *     - ABI selection;
- *     - calling conventions;
- *     - hardware selection;
- *     - resource allocation;
- *     - quantum allocation;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - quantum IR;
- *     - classical IR;
- *     - runtime execution.
+ *     - lexer rules
+ *     - identifiers
+ *     - type-expression implementation
+ *     - generic type applications
+ *     - type inference
+ *     - generic substitution
+ *     - monomorphization
+ *     - specialization
+ *     - overload resolution
+ *     - trait/interface solving
+ *     - constraint solving
+ *     - semantic validation
+ *     - ABI selection
+ *     - calling conventions
+ *     - hardware selection
+ *     - resource allocation
+ *     - quantum allocation
+ *     - routing
+ *     - scheduling
+ *     - optimization
+ *     - QEC
+ *     - ZQN
+ *     - HAL
+ *     - runtime execution
  *
  * ============================================================================
- * CANONICAL AST CONTRACT
+ * TOKEN AUTHORITY
  * ============================================================================
  *
- * The repository already defines the canonical source-level generic parameter
- * representation:
+ * Parser-facing lexical vocabulary:
  *
- *     frontend::ast::node::generics::parameter::TypeParameter
+ *     grammar/antlr/ZamaniLexer.g4
  *
- * with the semantic shape:
+ * Modular lexical definitions that must ultimately feed the canonical lexer:
  *
- *     TypeParameter
- *         name
- *         bounds: Vec<TypeExpr>
+ *     grammar/lexer/keywords.g4
+ *     grammar/lexer/operators.g4
+ *     grammar/lexer/punctuation.g4
+ *     grammar/lexer/identifiers.g4
  *
- * This grammar MUST preserve that shape.
+ * This parser grammar does NOT define lexer rules.
  *
- * In particular:
+ * Required existing tokens:
+ *
+ *     IDENTIFIER
+ *     LESS
+ *     GREATER
+ *     COMMA
+ *     PLUS
+ *     EXTENDS
+ *
+ * IMPORTANT:
+ *
+ *     LESS_THAN
+ *     GREATER_THAN
+ *     K_EXTENDS
+ *
+ * are NOT canonical token names in the current lexer.
+ *
+ * ============================================================================
+ * TOKEN VOCABULARY CONTRACT
+ * ============================================================================
+ *
+ * `functions.g4` is already composed against:
+ *
+ *     ZamaniLexer
+ *
+ * Therefore this grammar intentionally uses:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * Do not independently switch this file to ZamaniTokens while its parent
+ * parser composition remains ZamaniLexer.
+ *
+ * The repository's separate `grammar/lexer/tokens.g4` vocabulary must
+ * eventually be integrated into the canonical ZamaniLexer assembly rather
+ * than creating two parser-facing lexical authorities.
+ *
+ * ============================================================================
+ * FUNCTION INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/functions/functions.g4` imports this grammar as:
+ *
+ *     FunctionGenerics
+ *
+ * and consumes:
+ *
+ *     functionGenericParameters?
+ *
+ * Therefore this file is the sole owner of those parser rules.
+ *
+ * `functions.g4` owns:
+ *
+ *     functionName
+ *     functionGenericParameters?
+ *     parameterList
+ *     return type
+ *     effects
+ *     contracts
+ *     implementation/body
+ *
+ * This file owns only the internal generic parameter syntax.
+ *
+ * ============================================================================
+ * CANONICAL SYNTAX
+ * ============================================================================
+ *
+ * Unbounded source-defined generic parameter lists:
  *
  *     <T>
+ *     <T, U>
+ *     <T, U, V>
  *
- * becomes:
+ * Bounded parameters:
  *
- *     name = T
- *     bounds = []
+ *     <T extends Numeric>
  *
- * and:
+ * Multiple bounds:
  *
  *     <T extends Numeric + Ordered>
  *
- * becomes:
+ * Multiple parameters:
  *
- *     name = T
- *     bounds = [
- *         Numeric,
- *         Ordered
- *     ]
+ *     <T extends Numeric, U extends Serializable>
  *
- * Bound order is source order.
+ * Trailing comma:
  *
- * This grammar MUST NOT introduce a second generic-parameter AST.
+ *     <T,>
+ *     <T, U,>
+ *
+ * Empty generic parameter lists are rejected:
+ *
+ *     <>
  *
  * ============================================================================
- * GENERIC APPLICATION SEPARATION
+ * GENERIC DECLARATION VS GENERIC APPLICATION
  * ============================================================================
  *
  * Declaration:
  *
  *     fn identity<T>(value: T) -> T
  *
- * belongs here.
+ * belongs to this grammar.
  *
  * Application:
  *
  *     Vec<T>
- *     Result<T, Error>
- *     Matrix<float, Rows, Cols>
+ *     Result<T, E>
+ *     Matrix<T>
  *
  * belongs to:
  *
- *     grammar/types/generic-types.g4
+ *     grammar/types/generic.g4
  *
- * Keeping declaration and application syntax separate prevents a circular
- * and duplicated generic type system.
+ * or the final type-composition grammar that owns `typeExpression`.
+ *
+ * This distinction is mandatory.
+ *
+ * This grammar MUST NOT define:
+ *
+ *     genericType
+ *     genericTypeArguments
+ *     genericArgumentList
+ *
+ * because those belong to generic type application.
  *
  * ============================================================================
- * TYPE CONSTRAINT SEPARATION
+ * AST CONTRACT
  * ============================================================================
  *
- * This grammar recognizes the SOURCE SYNTAX of bounds.
+ * The canonical frontend generic representation is the existing generic
+ * parameter model.
  *
- * It does not determine whether a bound is semantically valid.
+ * Conceptually:
  *
- * For example:
+ *     TypeParameter
+ *         name
+ *         bounds
+ *
+ * The parser/AST lowering layer MUST preserve:
+ *
+ *     - parameter name;
+ *     - source span;
+ *     - ordered bounds;
+ *     - bound source spans;
+ *     - declaration ordering.
+ *
+ * Examples:
+ *
+ *     <T>
+ *
+ * becomes:
+ *
+ *     TypeParameter {
+ *         name: T,
+ *         bounds: []
+ *     }
+ *
+ *     <T extends Numeric>
+ *
+ * becomes:
+ *
+ *     TypeParameter {
+ *         name: T,
+ *         bounds: [Numeric]
+ *     }
+ *
+ *     <T extends Numeric + Ordered>
+ *
+ * becomes:
+ *
+ *     TypeParameter {
+ *         name: T,
+ *         bounds: [
+ *             Numeric,
+ *             Ordered
+ *         ]
+ *     }
+ *
+ * Bound ordering is source ordering.
+ *
+ * No second generic AST is permitted.
+ *
+ * ============================================================================
+ * TYPE EXPRESSION CONTRACT
+ * ============================================================================
+ *
+ * This grammar consumes the canonical:
+ *
+ *     typeExpression
+ *
+ * rule.
+ *
+ * It does NOT redefine:
+ *
+ *     typeExpression
+ *     named types
+ *     qualified types
+ *     generic type applications
+ *     tuple types
+ *     array types
+ *     references
+ *     pointers
+ *     function types
+ *     quantum types
+ *     resource types
+ *     hardware types
+ *     dependent types
+ *     linear types
+ *     affine types
+ *     effect types
+ *
+ * A bound is therefore syntactically represented by an ordinary canonical
+ * type expression.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing answers:
+ *
+ *     "What generic parameters and syntactic bounds did the programmer write?"
+ *
+ * Semantic analysis answers:
+ *
+ *     - Is the generic parameter name unique?
+ *     - Does the bound exist?
+ *     - Is the bound applicable to the parameter?
+ *     - Is the bound satisfiable?
+ *     - Does an implementation satisfy the bound?
+ *     - Are generic substitutions valid?
+ *     - Can specialization occur?
+ *     - Is monomorphization legal?
+ *     - Are all required constraints satisfied?
+ *
+ * Those questions MUST NOT be implemented in this grammar.
+ *
+ * ============================================================================
+ * BOUND MODEL
+ * ============================================================================
+ *
+ * Canonical inline bound syntax:
  *
  *     T extends Numeric
  *
- * is syntactically valid if Numeric is a valid type expression.
+ *     T extends Numeric + Ordered
  *
- * Whether Numeric:
+ * The `extends` keyword is the canonical function-generic bound introducer.
  *
- *     - exists;
- *     - denotes a trait/interface/constraint;
- *     - is applicable to T;
- *     - is satisfiable;
- *     - has an implementation;
+ * The grammar does not decide whether the referenced type expression is:
  *
- * is determined by semantic analysis.
+ *     - a trait;
+ *     - an interface;
+ *     - a capability;
+ *     - a constraint;
+ *     - a structural type;
+ *     - a domain-specific type;
+ *     - a future constraint abstraction.
+ *
+ * That interpretation belongs to semantic analysis.
+ *
+ * ============================================================================
+ * WHERE-CLAUSE SEPARATION
+ * ============================================================================
+ *
+ * The repository already contains `WHERE` vocabulary.
+ *
+ * However, function-level where-clause syntax is a separate concern.
+ *
+ * This file deliberately does NOT define:
+ *
+ *     whereClause
+ *     wherePredicate
+ *
+ * because those belong to the function signature/constraint layer.
+ *
+ * Example future/companion syntax:
+ *
+ *     fn f<T>(value: T) -> T
+ *     where T extends Numeric
+ *
+ * must be owned by the function constraint grammar, not duplicated here.
+ *
+ * Inline declaration bounds remain:
+ *
+ *     fn f<T extends Numeric>(value: T) -> T
+ *
+ * ============================================================================
+ * DEFAULT GENERIC PARAMETERS
+ * ============================================================================
+ *
+ * This grammar deliberately does NOT introduce generic parameter defaults.
+ *
+ * A source construct such as:
+ *
+ *     <T = DefaultType>
+ *
+ * requires an explicit language-wide semantic contract covering:
+ *
+ *     - generic declaration defaults;
+ *     - generic argument omission;
+ *     - type inference;
+ *     - declaration compatibility;
+ *     - overload resolution;
+ *     - AST representation;
+ *     - semantic substitution;
+ *     - diagnostics.
+ *
+ * It must therefore be introduced as a coordinated feature rather than
+ * silently added here.
+ *
+ * ============================================================================
+ * CONST / VALUE GENERIC PARAMETERS
+ * ============================================================================
+ *
+ * This grammar intentionally does NOT invent:
+ *
+ *     const N: usize
+ *
+ * generic parameters.
+ *
+ * The root `Zamani.g4` currently contains a broader genericParameter model
+ * that permits value/type forms. The modular function-generic AST currently
+ * models type parameters and type bounds.
+ *
+ * Until the frontend AST and semantic model provide a canonical first-class
+ * generic value parameter representation, this file must not accept syntax
+ * which would lose information during lowering.
+ *
+ * This is a correctness boundary, not a limitation on future Zamani.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Quantum-related bounds are intentionally not hard-coded.
+ * Generic parameters are domain-neutral.
  *
- * This is syntactically possible:
+ * Examples:
  *
  *     fn operate<Q extends QuantumResource>(q: Q) -> Q
  *
- * but this grammar does not know what QuantumResource means.
+ *     fn transform<T extends QuantumState>(state: T) -> T
  *
- * It does NOT determine:
+ * are syntactically valid.
+ *
+ * This grammar does NOT determine:
  *
  *     - number of qubits;
- *     - physical qubit identifiers;
- *     - QPU topology;
+ *     - logical/physical qubit mapping;
+ *     - QPU selection;
  *     - gate set;
+ *     - topology;
  *     - calibration;
- *     - noise model;
- *     - QEC strategy;
+ *     - noise;
+ *     - QEC;
  *     - routing;
  *     - scheduling.
  *
- * Those concerns remain downstream.
+ * After semantic analysis, quantum constructs continue through:
  *
- * `quantum::ir` remains the canonical quantum semantic boundary.
+ *     quantum::ir
+ *
+ * as the canonical quantum semantic boundary.
  *
  * ============================================================================
  * CLASSICAL / HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Generic functions can be used with all supported Zamani computational
- * domains without changing this grammar.
+ * The same generic syntax applies to all domains.
  *
  * Examples:
  *
- *     fn map<T, U>(value: T) -> U
+ *     fn process<T extends Numeric>(value: T) -> T
  *
- *     fn transform<T extends Numeric>(value: T) -> T
+ *     fn execute<H extends HardwareResource>(resource: H) -> H
  *
- *     fn execute<Q extends QuantumResource>(value: Q) -> Q
+ *     fn synthesize<M extends HardwareModule>(module: M) -> M
  *
- *     fn synthesize<H extends HardwareResource>(value: H) -> H
+ *     fn distribute<N extends NodeResource>(node: N) -> N
  *
- *     fn distribute<N extends NodeResource>(value: N) -> N
- *
- * The meaning of those constraints belongs to semantic analysis and the
- * corresponding domain/resource systems.
+ * No domain-specific generic grammar is permitted here.
  *
  * ============================================================================
- * SCALABILITY
+ * POCO-REAF / SCALABILITY
  * ============================================================================
  *
- * There is intentionally NO:
+ * This grammar deliberately contains no finite language-level limits on:
+ *
+ *     - number of generic parameters;
+ *     - number of bounds;
+ *     - function count;
+ *     - function parameter count;
+ *     - type nesting;
+ *     - quantum objects;
+ *     - hardware resources;
+ *     - distributed nodes;
+ *     - processors;
+ *     - accelerators;
+ *     - memory;
+ *     - topology;
+ *     - deployment size.
+ *
+ * Repetition is expressed using ANTLR repetition operators.
+ *
+ * There is no:
  *
  *     MAX_GENERIC_PARAMETERS
  *     MAX_GENERIC_BOUNDS
- *     MAX_FUNCTION_PARAMETERS
  *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_DEVICES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
  *     MAX_NODES
  *     MAX_MEMORY
  *
- * in this grammar.
- *
- * Repetition is represented using ANTLR repetition operators.
- *
- * If an implementation needs protection against pathological input, that
- * protection belongs to an explicit parser/compiler resource policy rather
- * than the language grammar.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The authoritative lexical vocabulary is:
- *
- *     grammar/lexer/tokens.g4
- *
- * This grammar therefore consumes, but does not define:
- *
- *     IDENTIFIER
- *     LESS_THAN
- *     GREATER_THAN
- *     COMMA
- *     COLON
- *     PLUS
- *     K_EXTENDS
- *
- * No lexer rules are permitted in this file.
- *
- * ============================================================================
- * TYPE GRAMMAR CONTRACT
- * ============================================================================
- *
- * `typeExpression` is owned by the canonical type grammar.
- *
- * This file consumes it as an integration rule.
- *
- * It must not redefine:
- *
- *     typeExpression
- *     typePath
- *     primitiveType
- *     functionType
- *     genericType
- *     referenceType
- *     tupleType
- *     arrayType
- *     resourceType
- *     quantumType
- *     hardwareType
- *
- * ============================================================================
- * FUNCTIONS.G4 INTEGRATION
- * ============================================================================
- *
- * `grammar/functions/functions.g4` already expects:
- *
- *     functionGenericParameters?
- *
- * Therefore that rule is intentionally provided here.
- *
- * The canonical composed Functions grammar must import/delegate this grammar
- * rather than redefine:
- *
- *     functionGenericParameters
- *     functionGenericParameter
- *
- * This eliminates duplicate ownership.
- *
- * ============================================================================
- * CORE/SOURCE-UNIT INTEGRATION
- * ============================================================================
- *
- * `grammar/core/source-unit.g4` currently contains a simpler genericParameter
- * rule.
- *
- * That rule must NOT become a competing generic-parameter model.
- *
- * Migration target:
- *
- *     source-unit generic parameter syntax
- *             |
- *             v
- *     canonical generic declaration grammar
- *
- * The source-unit grammar should eventually delegate generic declarations to
- * the appropriate declaration/function grammar.
- *
- * ============================================================================
- * TYPES/GENERIC-TYPES.G4 INTEGRATION
- * ============================================================================
- *
- * `grammar/types/generic-types.g4` owns GENERIC APPLICATIONS.
- *
- * Example:
- *
- *     Vec<T>
- *
- * It does not own:
- *
- *     <T>
- *
- * after `fn identity`.
- *
- * This file therefore has no dependency on generic application rules beyond
- * the canonical `typeExpression` integration boundary.
- *
- * ============================================================================
- * WHERE-CLAUSE INTEGRATION
- * ============================================================================
- *
- * The AST already contains a canonical WhereClause representation.
- *
- * However, the current lexical contract does not establish a canonical `where`
- * keyword.
- *
- * This file therefore intentionally DOES NOT invent a WHERE token.
- *
- * A future function-level `where` syntax must be introduced as one coordinated
- * change across:
- *
- *     lexer
- *     grammar
- *     AST
- *     semantic analysis
- *     tests
- *     language specification
- *     compatibility policy
- *
- * Until that contract exists, inline `extends` bounds are the canonical
- * function-generic constraint syntax.
- *
- * ============================================================================
- * RUST CONTRACT
- * ============================================================================
- *
- * The generated parser/frontend integration MUST target:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
- *
- * and:
- *
- *     - stable Rust;
- *     - safe Rust;
- *     - no unsafe;
- *     - no unsafe blocks;
- *     - no unsafe functions;
- *     - no machine-specific parser behavior.
- *
- * This grammar itself contains no Rust implementation code.
+ * Any implementation resource budget must live outside the language grammar
+ * and must be explicit, configurable, documented, diagnosable, and separate
+ * from language semantics.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Given identical source text and identical lexer configuration:
+ * For identical source and lexical configuration:
  *
- *     generic parameters
- *     parameter order
- *     bound order
+ *     parameter ordering
+ *     bound ordering
+ *     source spans
  *
- * must be represented deterministically.
+ * must be deterministic.
  *
- * The grammar does not use unordered alternatives for semantically identical
- * structures.
+ * The grammar introduces no unordered semantic structure.
+ *
+ * ============================================================================
+ * SOURCE-SPAN CONTRACT
+ * ============================================================================
+ *
+ * The frontend parser/AST layer must preserve source spans for:
+ *
+ *     functionGenericParameters
+ *     functionGenericParameter
+ *     functionGenericParameterName
+ *     functionGenericParameterBounds
+ *     each functionGenericParameterBound
+ *
+ * This supports:
+ *
+ *     duplicate-name diagnostics;
+ *     unknown-bound diagnostics;
+ *     unsatisfied-constraint diagnostics;
+ *     IDE navigation;
+ *     formatting;
+ *     source maps;
+ *     provenance;
+ *     compatibility tooling.
  *
  * ============================================================================
  * ERROR BOUNDARY
  * ============================================================================
  *
- * Syntax errors belong to parsing.
+ * Syntax errors handled by this grammar include:
  *
- * Semantic errors belong to semantic analysis.
+ *     <>
+ *     <, T>
+ *     <T, , U>
+ *     <T extends>
+ *     <T extends + Ordered>
+ *     <T extends Numeric +>
+ *     <T U>
  *
- * Examples of syntax errors:
+ * Semantic errors are NOT handled here:
  *
- *     fn identity<>(x: T) -> T
- *     fn identity<T,>(x: T) -> T
+ *     <T, T>
+ *     <T extends UnknownTrait>
+ *     <T extends IncompatibleType>
+ *     <T extends UnsatisfiedConstraint>
  *
- * are governed by the grammar's selected trailing-comma policy.
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
  *
- * Examples of semantic errors:
+ * Existing filename:
  *
- *     duplicate generic parameter names;
- *     unknown bound;
- *     incompatible bound;
- *     unsatisfied constraint;
- *     invalid generic instantiation;
+ *     grammar/functions/generics.g4
  *
- * must NOT be encoded here.
+ * MUST NOT be renamed.
+ *
+ * Existing rule names:
+ *
+ *     functionGenericParameters
+ *     functionGenericParameter
+ *     functionGenericParameterName
+ *     functionGenericParameterBounds
+ *     functionGenericParameterBound
+ *
+ * are retained.
+ *
+ * The old token names:
+ *
+ *     LESS_THAN
+ *     GREATER_THAN
+ *     K_EXTENDS
+ *
+ * are corrected to the actual canonical lexical names:
+ *
+ *     LESS
+ *     GREATER
+ *     EXTENDS
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * PASS:
+ *
+ *     no hardware count;
+ *     no processor count;
+ *     no accelerator count;
+ *     no qubit count;
+ *     no memory capacity;
+ *     no topology;
+ *     no physical device identifier;
+ *     no fixed generic arity;
+ *     no fixed bound count;
+ *     no machine-width dependency;
+ *     no target-specific parser branch.
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar itself contains no Rust implementation.
+ *
+ * The generated Zamani compiler/frontend integration MUST:
+ *
+ *     - compile on Rust 1.97;
+ *     - compile on Rust 1.97.1;
+ *     - remain Rust 2021 compatible;
+ *     - use safe Rust only;
+ *     - contain no unsafe blocks;
+ *     - contain no unsafe functions;
+ *     - preserve deterministic AST construction;
+ *     - preserve source spans;
+ *     - remain target-independent at grammar/parser level.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     [x] Canonical parser vocabulary is used.
+ *     [x] Existing token names are used.
+ *     [x] No lexer rules are duplicated.
+ *     [x] Generic declaration is separated from generic application.
+ *     [x] Generic parameter ordering is preserved.
+ *     [x] Bound ordering is preserved.
+ *     [x] Empty generic lists are rejected.
+ *     [x] Trailing commas are supported.
+ *     [x] Generic arity is not artificially bounded.
+ *     [x] Generic bound count is not artificially bounded.
+ *     [x] Type-expression syntax remains owned by the type grammar.
+ *     [x] Semantic constraint solving remains downstream.
+ *     [x] Quantum semantics remain downstream.
+ *     [x] quantum::ir remains canonical.
+ *     [x] No hardware limits are encoded.
+ *     [x] No unsafe Rust is embedded.
+ *     [x] Existing filename is preserved.
+ *     [x] Existing rule family is preserved.
+ *
+ * ============================================================================
+ * INTEGRATION CHECKLIST
+ * ============================================================================
+ *
+ * Upstream:
+ *
+ *     canonical lexer
+ *         -> ZamaniLexer
+ *         -> this grammar
+ *
+ * Downstream:
+ *
+ *     this grammar
+ *         -> functions.g4
+ *         -> frontend AST
+ *         -> semantic generic model
+ *         -> type/constraint analysis
+ *         -> canonical semantic model
+ *         -> IR
+ *
+ * Cross-domain:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     distributed
+ *     AI
+ *     data
+ *     networking
+ *     security
+ *     future domains
+ *
+ * all consume the same generic declaration semantics.
  *
  * ============================================================================
  */
@@ -495,16 +758,15 @@
 parser grammar FunctionGenerics;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 
-/*
- * ============================================================================
+/* ============================================================================
  * FUNCTION GENERIC PARAMETER LIST
  * ============================================================================
  *
- * Canonical form:
+ * Canonical:
  *
  *     <T>
  *     <T, U>
@@ -514,103 +776,79 @@ options {
  *
  *     <T extends Numeric>
  *     <T extends Numeric + Ordered>
- *     <T extends Numeric, U extends Serializable>
  *
- * A trailing comma is accepted:
+ * Trailing comma:
  *
  *     <T,>
  *     <T, U,>
  *
- * This is a syntactic convenience and has no semantic meaning.
- *
- * An empty list:
+ * Empty:
  *
  *     <>
  *
- * is intentionally rejected.
+ * is rejected.
  *
- * There is no fixed upper bound on parameter count.
+ * No language-level maximum generic arity is imposed.
  */
+
 functionGenericParameters
-    : LESS_THAN
+    : LESS
       functionGenericParameter
       (
           COMMA
           functionGenericParameter
       )*
       COMMA?
-      GREATER_THAN
+      GREATER
     ;
 
 
-/*
+/* ============================================================================
+ * INDIVIDUAL GENERIC PARAMETER
  * ============================================================================
- * INDIVIDUAL FUNCTION GENERIC PARAMETER
- * ============================================================================
- *
- * Canonical forms:
- *
- *     T
- *     T extends Numeric
- *     T extends Numeric + Ordered
- *
- * The parameter name is a source identifier.
- *
- * The semantic layer determines:
- *
- *     - whether the name is unique;
- *     - whether the bound is valid;
- *     - whether the bound is satisfiable;
- *     - what declaration the bound denotes.
  */
+
 functionGenericParameter
     : functionGenericParameterName
       functionGenericParameterBounds?
     ;
 
 
-/*
- * ============================================================================
+/* ============================================================================
  * GENERIC PARAMETER NAME
  * ============================================================================
  *
- * Generic parameter names intentionally use the canonical IDENTIFIER token.
+ * The canonical lexer supplies IDENTIFIER.
  *
- * This means the grammar does not impose conventions such as:
+ * Naming conventions such as:
  *
  *     T
  *     U
  *     V
  *
- * Those are naming conventions, not language semantics.
- *
- * Therefore all valid identifiers remain available subject to the canonical
- * lexical rules.
+ * are conventions only and are not enforced by the grammar.
  */
+
 functionGenericParameterName
     : IDENTIFIER
     ;
 
 
-/*
- * ============================================================================
+/* ============================================================================
  * GENERIC PARAMETER BOUNDS
  * ============================================================================
  *
- * Canonical source syntax:
+ * Canonical:
  *
  *     T extends Numeric
  *
- * or:
- *
  *     T extends Numeric + Ordered
  *
- * `K_EXTENDS` belongs to the authoritative lexer.
- *
- * The grammar only establishes the syntactic relationship.
+ * `EXTENDS` is the actual canonical lexer token.
  */
+
 functionGenericParameterBounds
-    : K_EXTENDS
+    : EXTENDS
       functionGenericParameterBound
       (
           PLUS
@@ -619,17 +857,15 @@ functionGenericParameterBounds
     ;
 
 
-/*
- * ============================================================================
- * INDIVIDUAL GENERIC BOUND
+/* ============================================================================
+ * INDIVIDUAL BOUND
  * ============================================================================
  *
  * A bound is a canonical type expression.
  *
- * The type grammar owns the actual type syntax.
- *
- * This rule is deliberately only an integration boundary.
+ * This file does not decide what the type expression means.
  */
+
 functionGenericParameterBound
     : typeExpression
     ;
