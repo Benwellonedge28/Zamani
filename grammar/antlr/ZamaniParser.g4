@@ -7,210 +7,203 @@
  *     grammar/antlr/ZamaniParser.g4
  *
  * Status:
- *     CANONICAL PRODUCTION ANTLR PARSER ORCHESTRATOR
+ *     CANONICAL PARSER COMPOSITION ROOT
  *
  * Purpose:
- *     Single ANTLR4 parser composition root for the complete Zamani language.
+ *     Orchestrate the complete Zamani parser grammar.
  *
- * ============================================================================
- * ARCHITECTURE
- * ============================================================================
+ * This file is intentionally NOT a leaf grammar.
  *
- *                           Zamani source
- *                                |
- *                                v
- *                         ZamaniLexer
- *                                |
- *                                v
- *                         ZamaniParser
- *                                |
- *          +---------------------+----------------------+
- *          |                     |                      |
- *          v                     v                      v
- *        Core                  Types                 Domains
- *          |                     |                      |
- *          +---------------------+----------------------+
- *                                |
- *                                v
- *                         Domain-neutral AST
- *                                |
- *                                v
- *                    structural / semantic analysis
- *                                |
- *                                v
- *                       canonical semantic model
- *                                |
- *          +---------------------+----------------------+
- *          |                     |                      |
- *          v                     v                      v
- *     Classical IR          quantum::ir          HDL/Hardware IR
- *                                |
- *                                v
- *                     optimization / lowering
- *                                |
- *              +-----------------+----------------+
- *              |                 |                |
- *              v                 v                v
- *           routing          scheduling       resilience
- *                                |
- *                                v
- *                               ZQN
- *                                |
- *                                v
- *                               HAL
- *                                |
- *                                v
- *                        target realization
+ * It owns:
  *
- * ============================================================================
- * AUTHORITATIVE BOUNDARIES
- * ============================================================================
- *
- * This file owns ONLY:
- *
- *   - the parser composition root;
- *   - the single public program entry point;
- *   - universal source-item dispatch;
+ *   - the canonical parser entry point;
+ *   - source-unit composition;
+ *   - universal declaration dispatch;
+ *   - universal statement dispatch;
+ *   - universal expression dispatch;
  *   - cross-domain composition;
- *   - parser-level integration of domain delegates.
+ *   - integration of the grammar/* ownership tree.
  *
- * This file does NOT own:
+ * It does NOT own:
  *
- *   - lexical token definitions;
- *   - individual expressions;
- *   - individual statements;
- *   - individual declarations;
+ *   - lexer rules;
+ *   - token definitions;
+ *   - expression implementations;
  *   - type implementations;
+ *   - declaration-family implementations;
+ *   - statement implementations;
  *   - quantum operation implementations;
+ *   - HDL implementations;
+ *   - hardware realization;
  *   - QEC;
  *   - ZQN;
  *   - routing;
  *   - scheduling;
+ *   - calibration;
  *   - HAL;
- *   - hardware discovery;
- *   - compiler backend selection;
- *   - runtime execution.
+ *   - runtime execution;
+ *   - compiler backend selection.
  *
- * Every non-root syntax rule MUST have exactly one owning grammar component.
+ * ============================================================================
+ * ARCHITECTURAL PIPELINE
+ * ============================================================================
+ *
+ *                    Zamani source
+ *                          |
+ *                          v
+ *                    ZamaniLexer
+ *                          |
+ *                          v
+ *                  ZamaniParser
+ *                          |
+ *          +---------------+----------------+
+ *          |               |                |
+ *          v               v                v
+ *       Core            Types            Domains
+ *          |               |                |
+ *          +---------------+----------------+
+ *                          |
+ *                          v
+ *                  Domain-neutral AST
+ *                          |
+ *                          v
+ *               structural validation
+ *                          |
+ *                          v
+ *                 semantic analysis
+ *                          |
+ *                          v
+ *              canonical semantic model
+ *                          |
+ *             +------------+------------+
+ *             |            |            |
+ *             v            v            v
+ *        Classical     quantum::ir    HDL/Hardware
+ *           IR                         semantics
+ *             |            |            |
+ *             +------------+------------+
+ *                          |
+ *                          v
+ *                    optimization
+ *                          |
+ *             +------------+------------+
+ *             |            |            |
+ *             v            v            v
+ *          routing     scheduling    resilience
+ *                                      |
+ *                                      v
+ *                                     ZQN
+ *                                      |
+ *                                      v
+ *                                     HAL
+ *                                      |
+ *                                      v
+ *                              target realization
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * The parser imposes NO universal implementation limits on:
+ * This parser imposes NO universal machine-size limits.
  *
- *   CPUs
- *   cores
- *   threads
- *   GPUs
- *   FPGAs
- *   ASICs
- *   QPUs
- *   qubits
- *   registers
- *   memory
- *   storage
- *   nodes
- *   devices
- *   accelerators
+ * In particular, this grammar contains no language-level limits on:
+ *
+ *   CPU count
+ *   core count
+ *   thread count
+ *   GPU count
+ *   FPGA count
+ *   accelerator count
+ *   QPU count
+ *   qubit count
+ *   register count
+ *   memory capacity
+ *   storage capacity
+ *   node count
+ *   process count
+ *   task count
+ *   channel count
  *   tensor dimensions
  *   tensor rank
  *   vector width
- *   processes
- *   tasks
- *   channels
- *   timelines
+ *   topology size
+ *   timeline count
  *   program size
  *
- * Repetition and recursion express source semantics.
+ * Any finite size is therefore governed by:
  *
- * Hardware/resource limits are downstream concerns.
+ *   - source semantics;
+ *   - compiler implementation resources;
+ *   - runtime resources;
+ *   - target capabilities;
+ *   - explicitly declared resource requirements.
  *
- * A source-level requirement such as:
- *
- *     requires qubits >= n;
- *
- * is valid.
- *
- * A grammar-level universal limit such as:
- *
- *     MAX_QUBITS = 1024
- *
- * is prohibited.
+ * Those are NOT parser constants.
  *
  * ============================================================================
- * QUANTUM BOUNDARY
+ * QUANTUM INVARIANT
  * ============================================================================
  *
- * Quantum syntax ultimately lowers to:
+ * All quantum syntax ultimately maps through the domain-neutral AST and
+ * semantic analysis to:
  *
  *     quantum::ir
  *
- * quantum::ir is the canonical quantum semantic boundary.
+ * `quantum::ir` remains the canonical quantum semantic boundary.
  *
- * This parser MUST NOT create:
+ * This parser MUST NOT introduce:
  *
- *     - a second quantum IR;
- *     - a physical-qubit mapping;
- *     - a QPU topology;
- *     - a routing plan;
- *     - a schedule;
- *     - a calibration;
- *     - a QEC implementation;
- *     - a ZQN implementation.
+ *   - QuantumGate enum alternatives;
+ *   - physical-qubit allocation;
+ *   - topology;
+ *   - routing;
+ *   - scheduling;
+ *   - calibration;
+ *   - QEC implementation;
+ *   - ZQN implementation.
  *
- * Quantum operation names remain extensible source-level identifiers.
+ * Quantum operation names remain extensible source-level names.
  *
  * ============================================================================
- * SAFETY / DETERMINISM
+ * SAFETY INVARIANT
  * ============================================================================
  *
  * This grammar contains:
  *
- *     - no embedded Rust actions;
- *     - no semantic predicates;
- *     - no filesystem access;
- *     - no network access;
- *     - no environment inspection;
- *     - no hardware discovery;
- *     - no randomness;
- *     - no runtime execution.
+ *   - no embedded target-language actions;
+ *   - no semantic predicates;
+ *   - no filesystem access;
+ *   - no network access;
+ *   - no environment inspection;
+ *   - no hardware discovery;
+ *   - no randomness;
+ *   - no runtime execution;
+ *   - no unsafe Rust;
+ *   - no dependency on Rust implementation details.
  *
- * The Rust implementation consuming this grammar MUST use:
+ * The Rust implementation consuming this grammar is required to remain:
  *
- *     Rust 2021
- *     Rust 1.97 / 1.97.1
- *     safe Rust only
- *     no unsafe
+ *   Rust 2021
+ *   Rust 1.97 / 1.97.1
+ *   safe Rust only
  *
  * ============================================================================
- *
- * IMPORTANT BUILD CONTRACT
+ * IMPORTANT ANTLR RULE
  * ============================================================================
  *
- * ANTLR grammar imports are by GRAMMAR NAME, not arbitrary repository
- * filesystem path.
+ * ANTLR imports are grammar-name imports.
  *
- * Therefore this file imports canonical delegate grammars.
+ * This file therefore imports ONLY canonical parser-composition grammars.
  *
- * Each delegate MUST be made resolvable by the ANTLR build through the
- * configured grammar source/library path.
+ * It must NOT attempt imports such as:
  *
- * The delegates themselves compose the leaf grammars belonging to their
- * respective directories.
+ *     import grammar.quantum.operations;
  *
- * Example:
+ * or:
  *
- *     grammar/quantum/
- *         quantum.g4
- *         qubits.g4
- *         operations.g4
- *         measurement.g4
- *         ...
+ *     import quantum/operations;
  *
- * becomes one canonical Quantum parser delegate.
- *
- * The root parser MUST NOT import every leaf grammar independently.
+ * Leaf grammars are composed by their directory's canonical dispatcher.
  *
  * ============================================================================
  */
@@ -223,15 +216,32 @@ options {
 
 
 /* ============================================================================
- * CANONICAL DOMAIN DELEGATES
+ * CANONICAL COMPOSITION IMPORTS
  * ============================================================================
  *
- * These names are architectural contracts.
+ * These grammar names are architectural contracts.
  *
- * They MUST correspond to canonical parser-composition grammars supplied to
- * the ANTLR grammar library/source path by the build system.
+ * Each imported grammar must be a parser grammar and must itself compose the
+ * leaf grammars belonging to its ownership directory.
  *
- * There must be exactly one canonical delegate for each ownership domain.
+ * The root parser deliberately does not import every leaf grammar.
+ *
+ * This keeps:
+ *
+ *     leaf grammar
+ *          ↓
+ *     domain dispatcher
+ *          ↓
+ *     universal dispatcher
+ *          ↓
+ *     ZamaniParser
+ *
+ * as the only composition direction.
+ *
+ * IMPORTANT:
+ *
+ * The build system must place the canonical composition grammars in the ANTLR
+ * grammar source path before generation.
  *
  * ============================================================================
  */
@@ -240,8 +250,8 @@ import
     Core,
     Types,
     Expressions,
-    Statements,
     Declarations,
+    Statements,
     Functions,
     Modules,
     Effects,
@@ -268,14 +278,13 @@ import
 
 
 /* ============================================================================
- * 1. SINGLE PUBLIC ENTRY POINT
+ * 1. PUBLIC PROGRAM ENTRY POINT
  * ============================================================================
  *
- * There is exactly one public source-program entry point.
+ * There is exactly one parser entry point for a complete Zamani source unit.
  *
- * No domain delegate may define another competing program root.
- * ============================================================================
- */
+ * No domain is allowed to create another competing program root.
+ * ========================================================================== */
 
 program
     : sourceUnit EOF
@@ -286,9 +295,10 @@ program
  * 2. SOURCE UNIT
  * ============================================================================
  *
- * Core owns the lexical/source-unit concepts.
+ * The source unit is an ordered, unbounded sequence of source elements.
  *
- * The root parser owns only their composition.
+ * The repetition is semantic rather than resource-bounded.
+ *
  * ============================================================================
  */
 
@@ -298,15 +308,13 @@ sourceUnit
 
 
 /* ============================================================================
- * 3. UNIVERSAL SOURCE-ELEMENT DISPATCH
+ * 3. UNIVERSAL SOURCE ELEMENT
  * ============================================================================
  *
- * Every construct entering a Zamani compilation unit passes through this
- * dispatch boundary.
+ * All top-level constructs enter through this composition boundary.
  *
- * The root does not implement the detailed syntax of the selected construct.
- * ============================================================================
- */
+ * Detailed syntax belongs to the owning grammar.
+ * ========================================================================== */
 
 sourceElement
     : documentationElement
@@ -323,10 +331,7 @@ sourceElement
 
 
 /* ============================================================================
- * 4. DOCUMENTATION
- * ============================================================================
- *
- * Documentation syntax is delegated to Core.
+ * 4. CORE
  * ============================================================================
  */
 
@@ -334,21 +339,9 @@ documentationElement
     : coreDocumentation
     ;
 
-
-/* ============================================================================
- * 5. ATTRIBUTES / METADATA
- * ============================================================================
- */
-
 attributeElement
     : coreAttribute
     ;
-
-
-/* ============================================================================
- * 6. PRAGMAS
- * ============================================================================
- */
 
 pragmaElement
     : corePragma
@@ -356,7 +349,7 @@ pragmaElement
 
 
 /* ============================================================================
- * 7. PACKAGE / MODULE COMPOSITION
+ * 5. MODULE / PACKAGE COMPOSITION
  * ============================================================================
  */
 
@@ -378,15 +371,13 @@ exportElement
 
 
 /* ============================================================================
- * 8. DECLARATION DISPATCH
+ * 6. UNIVERSAL DECLARATIONS
  * ============================================================================
  *
- * Declarations remain domain-neutral at this boundary.
+ * `declaration` is supplied by the canonical declaration dispatcher.
  *
- * Detailed ownership belongs to declarations/, functions/, modules/, effects/,
- * classical/, quantum/, hdl/, hardware/, AI, data, etc.
- * ============================================================================
- */
+ * The root parser does not duplicate individual declaration families.
+ * ========================================================================== */
 
 declarationElement
     : declaration
@@ -394,7 +385,7 @@ declarationElement
 
 
 /* ============================================================================
- * 9. STATEMENT DISPATCH
+ * 7. UNIVERSAL STATEMENTS
  * ============================================================================
  */
 
@@ -404,24 +395,32 @@ statementElement
 
 
 /* ============================================================================
- * 10. DOMAIN DISPATCH
+ * 8. UNIVERSAL DOMAIN COMPOSITION
  * ============================================================================
  *
- * This is the principal cross-domain orchestration point.
+ * Zamani is one language.
  *
- * A Zamani source file may combine domains in one compilation unit.
+ * The following are domains of the same language rather than separate
+ * languages:
  *
- * Examples include:
+ *   classical
+ *   quantum
+ *   hybrid
+ *   HDL
+ *   hardware
+ *   distributed
+ *   AI
+ *   data
+ *   networking
+ *   security
+ *   resources
+ *   compilation
+ *   execution
+ *   interoperability
+ *   dialects
+ *   macros
+ *   metaprogramming
  *
- *     classical + quantum
- *     classical + HDL
- *     quantum + hardware
- *     AI + data
- *     distributed + networking
- *     software + accelerator
- *     quantum + classical + distributed
- *
- * No domain is a separate language.
  * ============================================================================
  */
 
@@ -447,7 +446,36 @@ domainElement
 
 
 /* ============================================================================
- * 11. CLASSICAL
+ * 9. CLASSICAL COMPUTING
+ * ============================================================================
+ *
+ * The Classical dispatcher owns:
+ *
+ *   - scalar computation;
+ *   - integer computation;
+ *   - floating-point computation;
+ *   - vectors;
+ *   - matrices;
+ *   - tensors;
+ *   - symbolic computation;
+ *   - numerical computation;
+ *   - scientific computation;
+ *   - signal processing;
+ *   - optimization;
+ *   - control;
+ *   - mathematical capabilities.
+ *
+ * Algorithm names do not become an ever-growing parser keyword list.
+ *
+ * Generic operations such as:
+ *
+ *     fft(...)
+ *     svd(...)
+ *     gradient(...)
+ *     optimize(...)
+ *
+ * are resolved semantically through the canonical operation/type model.
+ *
  * ============================================================================
  */
 
@@ -459,31 +487,31 @@ classicalElement
 
 
 /* ============================================================================
- * 12. QUANTUM
+ * 10. QUANTUM COMPUTING
  * ============================================================================
  *
- * The Quantum delegate owns:
+ * Quantum owns source syntax for:
  *
- *     qubits
- *     registers
- *     states
- *     operations
- *     parameterized operations
- *     controlled operations
- *     adjoints
- *     measurement
- *     reset
- *     observables
- *     dynamic circuits
- *     mid-circuit control
- *     logical qubits
- *     physical-qubit intent
- *     error-correction intent
- *     quantum resources
- *     quantum capabilities
- *     quantum dialects
+ *   - logical qubits;
+ *   - registers;
+ *   - states;
+ *   - operations;
+ *   - parameterized operations;
+ *   - controls;
+ *   - adjoints;
+ *   - measurement;
+ *   - reset;
+ *   - observables;
+ *   - channels;
+ *   - dynamic circuits;
+ *   - classical feed-forward;
+ *   - error-correction intent;
+ *   - logical-operation intent;
+ *   - quantum resources;
+ *   - quantum capabilities.
  *
- * The root merely composes it.
+ * It MUST NOT enumerate the complete universe of gates here.
+ *
  * ============================================================================
  */
 
@@ -495,9 +523,26 @@ quantumElement
 
 
 /* ============================================================================
- * 13. HYBRID
+ * 11. HYBRID COMPUTING
  * ============================================================================
- */
+ *
+ * Hybrid computation is first-class composition of classical and quantum
+ * semantics.
+ *
+ * Example semantic flow:
+ *
+ *     classical
+ *        ↓
+ *     quantum
+ *        ↓
+ *     measurement
+ *        ↓
+ *     classical decision
+ *        ↓
+ *     quantum
+ *
+ * No second hybrid IR is introduced here.
+ * ========================================================================== */
 
 hybridElement
     : hybridDeclaration
@@ -507,7 +552,7 @@ hybridElement
 
 
 /* ============================================================================
- * 14. HDL
+ * 12. HDL
  * ============================================================================
  */
 
@@ -519,7 +564,7 @@ hdlElement
 
 
 /* ============================================================================
- * 15. HARDWARE
+ * 13. TARGET-INDEPENDENT HARDWARE INTENT
  * ============================================================================
  */
 
@@ -531,9 +576,11 @@ hardwareElement
 
 
 /* ============================================================================
- * 16. DISTRIBUTED
+ * 14. DISTRIBUTED / PARALLEL COMPUTING
  * ============================================================================
- */
+ *
+ * No fixed node/core/process/thread count belongs here.
+ * ========================================================================== */
 
 distributedElement
     : distributedDeclaration
@@ -543,9 +590,25 @@ distributedElement
 
 
 /* ============================================================================
- * 17. AI / ML
+ * 15. AI / MACHINE LEARNING
  * ============================================================================
- */
+ *
+ * Framework-neutral.
+ *
+ * The grammar may express:
+ *
+ *   model
+ *   dataset
+ *   tensor
+ *   training
+ *   inference
+ *   differentiability
+ *   probabilistic computation
+ *   agents
+ *   model deployment
+ *
+ * but does not become a CUDA/PyTorch/TensorFlow/vendor grammar.
+ * ========================================================================== */
 
 aiElement
     : aiDeclaration
@@ -555,7 +618,7 @@ aiElement
 
 
 /* ============================================================================
- * 18. DATA
+ * 16. DATA
  * ============================================================================
  */
 
@@ -567,7 +630,7 @@ dataElement
 
 
 /* ============================================================================
- * 19. NETWORKING
+ * 17. NETWORKING
  * ============================================================================
  */
 
@@ -579,7 +642,7 @@ networkingElement
 
 
 /* ============================================================================
- * 20. SECURITY
+ * 18. SECURITY
  * ============================================================================
  */
 
@@ -591,13 +654,31 @@ securityElement
 
 
 /* ============================================================================
- * 21. RESOURCES / CAPABILITIES
+ * 19. RESOURCES / CAPABILITIES
  * ============================================================================
  *
- * Resource syntax expresses requirements, constraints, preferences, hints and
- * capabilities.
+ * Resource syntax expresses semantic intent.
  *
- * It MUST NOT perform hardware discovery.
+ * It must distinguish:
+ *
+ *     requirement
+ *     constraint
+ *     capability
+ *     preference
+ *     hint
+ *     budget
+ *     negotiation
+ *
+ * from downstream implementation decisions.
+ *
+ * Examples of portable intent:
+ *
+ *     requires qubits >= n
+ *     requires capability("quantum.measurement")
+ *     requires memory(...)
+ *
+ * The parser does not discover whether the machine satisfies those requests.
+ *
  * ============================================================================
  */
 
@@ -609,9 +690,13 @@ resourceElement
 
 
 /* ============================================================================
- * 22. COMPILATION INTENT
+ * 20. COMPILATION
  * ============================================================================
- */
+ *
+ * Compilation syntax describes intent and policy.
+ *
+ * It does not select a physical machine during parsing.
+ * ========================================================================== */
 
 compileElement
     : compileDeclaration
@@ -621,9 +706,11 @@ compileElement
 
 
 /* ============================================================================
- * 23. EXECUTION INTENT
+ * 21. EXECUTION
  * ============================================================================
- */
+ *
+ * Runtime intent is kept separate from physical realization.
+ * ========================================================================== */
 
 executionElement
     : executionDeclaration
@@ -633,9 +720,14 @@ executionElement
 
 
 /* ============================================================================
- * 24. INTEROPERABILITY
+ * 22. INTEROPERABILITY
  * ============================================================================
- */
+ *
+ * OpenQASM, QIR, HDL, C, C++, Rust, WASM and other representations belong
+ * here as interoperability surfaces.
+ *
+ * They are NOT the canonical Zamani semantic model.
+ * ========================================================================== */
 
 interoperabilityElement
     : interoperabilityDeclaration
@@ -645,9 +737,15 @@ interoperabilityElement
 
 
 /* ============================================================================
- * 25. DIALECTS
+ * 23. DIALECTS
  * ============================================================================
- */
+ *
+ * Dialects are controlled extensions to the common language.
+ *
+ * A dialect must ultimately map to the canonical AST/semantic model/IR.
+ *
+ * A dialect cannot silently redefine stable core semantics.
+ * ========================================================================== */
 
 dialectElement
     : dialectDeclaration
@@ -657,9 +755,16 @@ dialectElement
 
 
 /* ============================================================================
- * 26. MACROS
+ * 24. MACROS
  * ============================================================================
- */
+ *
+ * Macro syntax is parsed as source syntax.
+ *
+ * Expansion and hygiene occur downstream.
+ *
+ * Expanded source must re-enter the ordinary AST and semantic validation
+ * pipeline.
+ * ========================================================================== */
 
 macroElement
     : macroDeclaration
@@ -669,24 +774,21 @@ macroElement
 
 
 /* ============================================================================
- * 27. METAPROGRAMMING
+ * 25. METAPROGRAMMING
  * ============================================================================
  *
- * This is the canonical integration point for:
+ * Reflection, quotation, generation and compile-time facilities remain
+ * controlled language constructs.
  *
- *     grammar/metaprogramming/
+ * They cannot bypass:
  *
- * including:
- *
- *     reflection
- *     generation
- *     specialization
- *     compile-time execution
- *
- * The obsolete grammar/antlr/Meta.g4 MUST NOT become a second metaprogramming
- * authority.
- * ============================================================================
- */
+ *   - type checking;
+ *   - effect checking;
+ *   - capability checking;
+ *   - resource checking;
+ *   - ownership checking;
+ *   - semantic validation.
+ * ========================================================================== */
 
 metaprogrammingElement
     : metaprogrammingDeclaration
@@ -696,197 +798,258 @@ metaprogrammingElement
 
 
 /* ============================================================================
- * 28. UNIVERSAL CROSS-DOMAIN DECLARATION
+ * 26. CROSS-DOMAIN DECLARATION CONTRACT
  * ============================================================================
  *
- * Domain-specific declarations can occur wherever Zamani declarations are
- * legal.
+ * This rule exists only where the imported declaration dispatcher exposes the
+ * canonical universal declaration contract.
  *
- * The delegate grammars provide the actual alternatives.
+ * No declaration implementation belongs in this file.
+ *
  * ============================================================================
  */
 
-declaration
-    : coreDeclaration
-    | typeDeclaration
-    | functionDeclaration
-    | moduleOwnedDeclaration
-    | effectDeclaration
-    | memoryDeclaration
-    | concurrencyDeclaration
-    | classicalDeclaration
-    | quantumDeclaration
-    | hybridDeclaration
-    | hdlDeclaration
-    | hardwareDeclaration
-    | distributedDeclaration
-    | aiDeclaration
-    | dataDeclaration
-    | networkingDeclaration
-    | securityDeclaration
-    | resourceDeclaration
-    | compileDeclaration
-    | executionDeclaration
-    | interoperabilityDeclaration
-    | dialectDeclaration
-    | macroDeclaration
-    | metaprogrammingDeclaration
+universalDeclaration
+    : declaration
     ;
 
 
 /* ============================================================================
- * 29. UNIVERSAL CROSS-DOMAIN STATEMENT
+ * 27. CROSS-DOMAIN STATEMENT CONTRACT
  * ============================================================================
- */
+ *
+ * No statement implementation belongs here.
+ * ========================================================================== */
 
-statement
-    : coreStatement
-    | expressionStatement
-    | controlFlowStatement
-    | functionStatement
-    | effectStatement
-    | memoryStatement
-    | concurrencyStatement
-    | classicalStatement
-    | quantumStatement
-    | hybridStatement
-    | hdlStatement
-    | hardwareStatement
-    | distributedStatement
-    | aiStatement
-    | dataStatement
-    | networkingStatement
-    | securityStatement
-    | resourceStatement
-    | compileStatement
-    | executionStatement
-    | interoperabilityStatement
-    | dialectStatement
-    | macroStatement
-    | metaprogrammingStatement
+universalStatement
+    : statement
     ;
 
 
 /* ============================================================================
- * 30. UNIVERSAL EXPRESSION
+ * 28. CROSS-DOMAIN EXPRESSION CONTRACT
  * ============================================================================
  *
- * Expression precedence and primary/postfix syntax belong to Expressions.
+ * Expression precedence and leaf expression syntax are owned by
+ * grammar/expressions/.
  *
- * This root does not reproduce them.
- * ============================================================================
- */
+ * This root never creates a second expression grammar.
+ * ========================================================================== */
 
-expression
-    : coreExpression
-    | classicalExpression
-    | quantumExpression
-    | hybridExpression
-    | hdlExpression
-    | hardwareExpression
-    | distributedExpression
-    | aiExpression
-    | dataExpression
-    | networkingExpression
-    | securityExpression
-    | resourceExpression
-    | compileExpression
-    | executionExpression
-    | interoperabilityExpression
-    | dialectExpression
-    | macroExpression
-    | metaprogrammingExpression
+universalExpression
+    : expression
     ;
 
 
 /* ============================================================================
- * 31. DOMAIN-NEUTRAL SOURCE CONTRACT
+ * 29. CROSS-DOMAIN TYPE CONTRACT
  * ============================================================================
  *
- * The following invariants are mandatory for every delegate.
+ * Type syntax is owned by grammar/types/.
  *
- * A delegate MUST:
- *
- *   1. consume the canonical Zamani lexical vocabulary;
- *   2. avoid defining universal implementation limits;
- *   3. preserve source structure needed by the AST;
- *   4. have an explicit AST mapping;
- *   5. have an explicit semantic mapping;
- *   6. have an explicit IR mapping;
- *   7. define diagnostics for malformed syntax;
- *   8. provide positive tests;
- *   9. provide negative tests;
- *  10. provide boundary tests;
- *  11. provide scalability tests;
- *  12. provide compatibility tests;
- *  13. avoid target-specific implementation decisions;
- *  14. avoid Rust actions;
- *  15. avoid unsafe implementation requirements.
- *
- * ============================================================================
- */
+ * Semantic validity is downstream.
+ * ========================================================================== */
+
+universalType
+    : typeExpression
+    ;
 
 
 /* ============================================================================
- * 32. POCO-REAF INVARIANT
+ * 30. UNIVERSAL BLOCK
  * ============================================================================
  *
- * The parser accepts source whose scale is determined by program semantics and
- * available implementation resources, not by constants embedded in this
- * grammar.
- *
- * Therefore this grammar intentionally contains no rules such as:
- *
- *     oneTo1024Qubits
- *     eightCores
- *     sixteenThreads
- *     fourGPUs
- *     thirtyTwoBitRegister
- *     fixedNodeCount
- *     fixedTensorRank
- *
- * Program-defined numeric values remain legal wherever the language semantics
- * require them.
- *
- * ============================================================================
- */
+ * Blocks are supplied by the canonical statement/core composition.
+ * ========================================================================== */
+
+universalBlock
+    : block
+    ;
 
 
 /* ============================================================================
- * 33. CANONICAL DOWNSTREAM CONTRACT
+ * 31. UNIVERSAL CALLABLE
  * ============================================================================
  *
- *                         ZamaniParser
- *                              |
- *                              v
- *                       Domain-neutral AST
- *                              |
- *                              v
- *                     Structural validation
- *                              |
- *                              v
- *                     Semantic analysis
- *                              |
- *                              v
- *                    Canonical semantic model
- *                              |
- *            +-----------------+------------------+
- *            |                 |                  |
- *            v                 v                  v
- *       Classical IR      quantum::ir       HDL/Hardware IR
- *                              |
- *                              v
- *                         optimization
- *                              |
- *                    routing / scheduling
- *                              |
- *                        resilience/QEC
- *                              |
- *                             ZQN
- *                              |
- *                             HAL
- *                              |
- *                       target lowering
- *
+ * Function syntax remains owned by grammar/functions/.
+ * ========================================================================== */
+
+universalFunction
+    : functionDeclaration
+    ;
+
+
+/* ============================================================================
+ * 32. UNIVERSAL MODULE
  * ============================================================================
  */
+
+universalModule
+    : moduleDeclaration
+    ;
+
+
+/* ============================================================================
+ * 33. UNIVERSAL EFFECT
+ * ============================================================================
+ */
+
+universalEffect
+    : effectDeclaration
+    ;
+
+
+/* ============================================================================
+ * 34. UNIVERSAL RESOURCE CONTRACT
+ * ============================================================================
+ */
+
+universalResource
+    : resourceDeclaration
+    ;
+
+
+/* ============================================================================
+ * 35. UNIVERSAL HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Hardware intent is deliberately separated from actual target realization.
+ * ========================================================================== */
+
+universalHardware
+    : hardwareDeclaration
+    ;
+
+
+/* ============================================================================
+ * 36. UNIVERSAL QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * This provides a stable parser-level integration point for tooling that
+ * wants to identify a quantum declaration without creating another quantum
+ * semantic representation.
+ * ========================================================================== */
+
+universalQuantum
+    : quantumDeclaration
+    ;
+
+
+/* ============================================================================
+ * 37. UNIVERSAL HDL CONTRACT
+ * ============================================================================
+ */
+
+universalHDL
+    : hdlDeclaration
+    ;
+
+
+/* ============================================================================
+ * 38. UNIVERSAL DISTRIBUTED CONTRACT
+ * ============================================================================
+ */
+
+universalDistributed
+    : distributedDeclaration
+    ;
+
+
+/* ============================================================================
+ * 39. UNIVERSAL AI CONTRACT
+ * ============================================================================
+ */
+
+universalAI
+    : aiDeclaration
+    ;
+
+
+/* ============================================================================
+ * 40. UNIVERSAL DATA CONTRACT
+ * ============================================================================
+ */
+
+universalData
+    : dataDeclaration
+    ;
+
+
+/* ============================================================================
+ * 41. UNIVERSAL NETWORK CONTRACT
+ * ============================================================================
+ */
+
+universalNetworking
+    : networkingDeclaration
+    ;
+
+
+/* ============================================================================
+ * 42. UNIVERSAL SECURITY CONTRACT
+ * ============================================================================
+ */
+
+universalSecurity
+    : securityDeclaration
+    ;
+
+
+/* ============================================================================
+ * 43. UNIVERSAL COMPILATION CONTRACT
+ * ============================================================================
+ */
+
+universalCompilation
+    : compileDeclaration
+    ;
+
+
+/* ============================================================================
+ * 44. UNIVERSAL EXECUTION CONTRACT
+ * ============================================================================
+ */
+
+universalExecution
+    : executionDeclaration
+    ;
+
+
+/* ============================================================================
+ * 45. UNIVERSAL INTEROPERABILITY CONTRACT
+ * ============================================================================
+ */
+
+universalInteroperability
+    : interoperabilityDeclaration
+    ;
+
+
+/* ============================================================================
+ * 46. UNIVERSAL DIALECT CONTRACT
+ * ============================================================================
+ */
+
+universalDialect
+    : dialectDeclaration
+    ;
+
+
+/* ============================================================================
+ * 47. UNIVERSAL MACRO CONTRACT
+ * ============================================================================
+ */
+
+universalMacro
+    : macroDeclaration
+    ;
+
+
+/* ============================================================================
+ * 48. UNIVERSAL METAPROGRAMMING CONTRACT
+ * ============================================================================
+ */
+
+universalMetaprogramming
+    : metaprogrammingDeclaration
+    ;
