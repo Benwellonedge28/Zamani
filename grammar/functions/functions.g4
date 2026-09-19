@@ -1,4 +1,4 @@
-/**
+/*
  * ============================================================================
  * Zamani Universal Programming Language
  * ============================================================================
@@ -6,213 +6,230 @@
  * File:
  *     grammar/functions/functions.g4
  *
- * Grammar:
- *     Functions
- *
  * Role:
  *     Canonical parser grammar for source-level Zamani functions.
  *
- * ============================================================================
- * ARCHITECTURAL CONTRACT
- * ============================================================================
+ * Status:
+ *     Production grammar contract
  *
- * This grammar owns the SYNTAX of:
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
- *     - function declarations;
- *     - function definitions;
- *     - function names;
- *     - function modifiers;
- *     - generic function parameters;
- *     - generic bounds;
- *     - ordinary parameters;
- *     - variadic parameters;
- *     - parameter defaults;
- *     - return-type attachment;
- *     - function effects attachment;
- *     - function contracts;
- *     - function bodies;
- *     - declaration/prototype termination.
- *
- * This grammar DOES NOT own:
- *
- *     - lexical token definitions;
- *     - type semantics;
- *     - expression semantics;
- *     - statement semantics;
- *     - name resolution;
- *     - type inference;
- *     - generic substitution;
- *     - ownership/borrowing;
- *     - effect checking;
- *     - capability checking;
- *     - resource allocation;
- *     - hardware selection;
- *     - scheduling;
- *     - routing;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - quantum IR;
- *     - runtime execution;
- *     - ABI selection;
- *     - calling-convention selection.
+ * Safety:
+ *     This grammar contains no Rust implementation code.
+ *     Compiler/frontend/runtime Rust MUST remain safe Rust only.
+ *     No unsafe Rust is required by this grammar.
  *
  * ============================================================================
- * POCO-REAF
+ * OWNERSHIP
  * ============================================================================
  *
- * A function expresses portable computation and intent.
+ * THIS FILE OWNS:
  *
- * Function syntax MUST NOT encode:
+ *   - function declarations;
+ *   - function definitions;
+ *   - function names;
+ *   - function modifiers;
+ *   - function generic-list attachment;
+ *   - function parameter-list attachment;
+ *   - function return-type attachment;
+ *   - function effect attachment;
+ *   - function contract attachment;
+ *   - function body/prototype termination;
+ *   - function signature syntax;
+ *   - the structural boundary between a function declaration and its body.
  *
- *     - CPU count;
- *     - core count;
- *     - thread count;
- *     - GPU count;
- *     - FPGA count;
- *     - ASIC count;
- *     - QPU count;
- *     - qubit count;
- *     - memory capacity;
- *     - physical addresses;
- *     - device identifiers;
- *     - topology;
- *     - vendor-specific hardware;
- *     - deployment size.
+ * THIS FILE DOES NOT OWN:
  *
- * There are intentionally no grammar constants such as:
- *
- *     MAX_PARAMETERS
- *     MAX_GENERIC_PARAMETERS
- *     MAX_FUNCTIONS
- *     MAX_QUBITS
- *     MAX_THREADS
- *
- * Repetition is represented recursively/repetitively in the grammar and is
- * bounded only by implementation resource policies.
- *
- * ============================================================================
- * SEMANTIC BOUNDARY
- * ============================================================================
- *
- * Parsing determines whether function syntax is structurally valid.
- *
- * Semantic analysis subsequently determines:
- *
- *     - whether names are valid;
- *     - whether names are unique;
- *     - whether types exist;
- *     - whether generic bounds are satisfiable;
- *     - whether defaults are type-compatible;
- *     - whether effects are permitted;
- *     - whether contracts are valid;
- *     - whether a body returns correctly;
- *     - whether async/generator/compile-time modifiers are legal;
- *     - whether foreign declarations satisfy ABI requirements;
- *     - whether capability/resource requirements can be satisfied.
- *
- * None of those decisions are encoded as target-specific grammar rules.
+ *   - lexical tokens;
+ *   - identifiers;
+ *   - generic-parameter internals;
+ *   - parameter internals;
+ *   - type-expression syntax;
+ *   - expression syntax;
+ *   - statement syntax;
+ *   - block syntax;
+ *   - module/name resolution;
+ *   - overload resolution;
+ *   - type inference;
+ *   - generic substitution;
+ *   - trait solving;
+ *   - ownership;
+ *   - borrowing;
+ *   - lifetime analysis;
+ *   - effect checking;
+ *   - capability checking;
+ *   - resource allocation;
+ *   - hardware discovery;
+ *   - target selection;
+ *   - ABI selection;
+ *   - calling-convention selection;
+ *   - optimization;
+ *   - routing;
+ *   - scheduling;
+ *   - QEC;
+ *   - ZQN;
+ *   - HAL;
+ *   - runtime execution;
+ *   - quantum IR.
  *
  * ============================================================================
- * DOMAIN INDEPENDENCE
+ * POCO-REAF / SCALABILITY
+ * ============================================================================
+ *
+ * A function describes portable computation and semantic intent.
+ *
+ * The grammar therefore imposes NO language-level finite limit on:
+ *
+ *   - number of functions;
+ *   - parameter count;
+ *   - generic parameter count;
+ *   - generic bound count;
+ *   - source program size;
+ *   - recursion depth;
+ *   - number of calls;
+ *   - number of computational domains;
+ *   - number of resources;
+ *   - number of quantum objects;
+ *   - number of distributed resources.
+ *
+ * Repetition is represented by grammar repetition operators.
+ *
+ * Implementation resource limits, when necessary, MUST be:
+ *
+ *   - explicit;
+ *   - configurable;
+ *   - documented;
+ *   - diagnosable;
+ *   - external to language semantics.
+ *
+ * The grammar MUST NOT encode:
+ *
+ *   MAX_PARAMETERS
+ *   MAX_FUNCTIONS
+ *   MAX_THREADS
+ *   MAX_CORES
+ *   MAX_GPUS
+ *   MAX_FPGAS
+ *   MAX_QPUS
+ *   MAX_QUBITS
+ *   MAX_MEMORY
+ *   MAX_NODES
+ *   MAX_DEVICES
+ *
+ * ============================================================================
+ * DOMAIN NEUTRALITY
  * ============================================================================
  *
  * A function may operate over:
  *
- *     classical values
- *     quantum values
- *     logical qubits
- *     hardware abstractions
- *     tensors
- *     distributed values
- *     accelerator resources
- *     future domain types
+ *   - classical values;
+ *   - quantum values;
+ *   - logical qubits;
+ *   - tensors;
+ *   - distributed values;
+ *   - hardware abstractions;
+ *   - resources;
+ *   - accelerator abstractions;
+ *   - future computational domains.
  *
- * The grammar does not distinguish those cases by machine-specific syntax.
+ * The function grammar does not special-case those domains.
  *
- * For example:
+ * Domain meaning is obtained from the type/semantic system.
  *
- *     fn transform<T>(value: T) -> T { ... }
+ * Quantum source eventually follows:
  *
- * is portable regardless of whether T eventually represents:
+ *   Zamani source
+ *       ->
+ *   frontend AST
+ *       ->
+ *   semantic analysis
+ *       ->
+ *   quantum::ir
+ *       ->
+ *   optimization
+ *       ->
+ *   routing
+ *       ->
+ *   scheduling
+ *       ->
+ *   QEC / resilience
+ *       ->
+ *   ZQN
+ *       ->
+ *   HAL
+ *       ->
+ *   target realization
  *
- *     - a scalar;
- *     - a tensor;
- *     - a quantum abstraction;
- *     - a distributed object;
- *     - a hardware resource;
- *     - another future semantic type.
- *
- * ============================================================================
- * ANTLR COMPOSITION
- * ============================================================================
- *
- * This grammar is a parser delegate.
- *
- * It imports canonical parser grammars for:
- *
- *     Types
- *     Expressions
- *     Statements
- *
- * Therefore this file MUST NOT duplicate:
- *
- *     typeExpression
- *     expression
- *     block
- *
- * The aggregate Zamani parser is responsible for composing the complete
- * language grammar.
+ * This grammar MUST NOT create another quantum IR.
  *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * The canonical modular lexer vocabulary is:
+ * The canonical lexical vocabulary is supplied by:
  *
  *     grammar/lexer/tokens.g4
  *
- * Grammar:
+ * and the canonical lexer composition.
  *
- *     ZamaniTokens
+ * Function syntax therefore consumes canonical tokens such as:
  *
- * This file MUST NOT declare lexer rules.
+ *     FN
+ *     PUBLIC
+ *     PUB
+ *     PRIVATE
+ *     PROTECTED
+ *     INTERNAL
+ *     STATIC
+ *     CONST
+ *     ASYNC
+ *     EXTERN
+ *     ABSTRACT
+ *     FINAL
+ *     VIRTUAL
+ *     OVERRIDE
+ *     INLINE
+ *     VOLATILE
+ *     PURE
+ *     WITH
+ *     EFFECT
+ *     REQUIRES
+ *     ENSURES
+ *     INVARIANT
+ *     IDENTIFIER
+ *     LPAREN
+ *     RPAREN
+ *     LBRACE
+ *     RBRACE
+ *     SEMICOLON
+ *     THIN_ARROW
+ *
+ * This file MUST NOT define lexer rules.
  *
  * ============================================================================
- * RUST CONTRACT
+ * SHARED GRAMMAR CONTRACT
  * ============================================================================
  *
- * Grammar-generated/compiler integration MUST target:
+ * Imported parser grammars own:
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ *     FunctionGenerics
+ *         -> functionGenericParameters
  *
- * Rust implementation code MUST use safe Rust only.
+ *     Parameters
+ *         -> parameterList
  *
- * The compiler crate MUST enforce:
+ *     Types
+ *         -> typeExpression
  *
- *     #![deny(unsafe_code)]
- *     #![deny(unsafe_op_in_unsafe_fn)]
+ *     Expressions
+ *         -> expression
  *
- * This grammar itself contains no Rust implementation code.
+ *     Statements
+ *         -> block
  *
- * ============================================================================
- * SCALABILITY CONTRACT
- * ============================================================================
- *
- * No finite grammar-level ceiling is imposed on:
- *
- *     - function count;
- *     - parameter count;
- *     - generic parameter count;
- *     - generic nesting;
- *     - recursion depth;
- *     - source program size;
- *     - quantum resource count;
- *     - distributed resource count.
- *
- * Any implementation limit MUST live in explicit parser/compiler resource
- * policy rather than in the language grammar.
+ * Those rules MUST NOT be duplicated here.
  *
  * ============================================================================
  */
@@ -220,77 +237,62 @@
 parser grammar Functions;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
-/*
- * Canonical parser composition.
- *
- * These delegates provide the canonical:
- *
- *     typeExpression
- *     expression
- *     block
- *
- * rules used below.
- *
- * The repository's aggregate parser must ensure that these delegates use the
- * same canonical ZamaniTokens vocabulary.
- */
-import Types, Expressions, Statements;
+import FunctionGenerics, Parameters, Types, Expressions, Statements;
 
 
 /* ============================================================================
- * 1. PUBLIC ENTRY POINT
- * ========================================================================== */
-
-/**
- * Complete function declaration.
+ * 1. CANONICAL FUNCTION DECLARATION
+ * ============================================================================
+ *
+ * Complete source-level function declaration.
  *
  * Examples:
  *
  *     fn main() {
  *     }
  *
- *     pub fn add(a: int, b: int) -> int {
+ *     pub fn add(a: Int, b: Int) -> Int {
  *         return a + b;
+ *     }
+ *
+ *     async fn compute(input: Data) -> Result {
+ *         ...
  *     }
  *
  *     fn identity<T>(value: T) -> T {
  *         return value;
  *     }
  *
- *     extern fn foreign_call(value: int) -> int;
+ *     extern fn foreign_call(value: Int) -> Int;
  *
- *     fn declaration_only(value: int) -> int;
+ * A function may be defined with a body or declared without a body.
  */
 functionDeclaration
     : functionModifier*
-      K_FN
+      FN
       functionName
       functionGenericParameters?
       LPAREN
-      functionParameterList?
+      parameterList?
       RPAREN
       functionReturnClause?
-      functionEffectAttachment?
-      functionContractAttachment*
+      functionEffectClause?
+      functionContractClause*
       functionImplementation
     ;
 
 
 /* ============================================================================
  * 2. FUNCTION NAME
- * ========================================================================== */
-
-/**
- * Function names are ordinary identifiers.
+ * ============================================================================
  *
- * Qualified names are deliberately NOT accepted here.
+ * A function declaration introduces an unqualified local name.
  *
- * A declaration belongs to its containing module/namespace; qualification is
- * handled by module/name-resolution infrastructure rather than embedded into
- * the function's local declaration syntax.
+ * Module/package qualification belongs to the surrounding declaration/module
+ * system and name-resolution layer.
  */
 functionName
     : IDENTIFIER
@@ -299,259 +301,46 @@ functionName
 
 /* ============================================================================
  * 3. FUNCTION MODIFIERS
- * ========================================================================== */
-
-/**
- * Function modifiers describe source-level declaration properties.
+ * ============================================================================
  *
- * Their compatibility and semantics are checked later.
+ * These are source-level declaration properties.
  *
- * Hardware-specific modifiers do not belong here.
+ * Their semantic legality is checked downstream.
+ *
+ * They do NOT select hardware, ABI, registers, devices, QPUs, CPUs, GPUs,
+ * memory banks, physical qubits, topology, or deployment placement.
  */
 functionModifier
-    : K_PUB
-    | K_PUBLIC
-    | K_PRIVATE
-    | K_PROTECTED
-    | K_INTERNAL
-    | K_STATIC
-    | K_CONST
-    | K_ASYNC
-    | K_EXTERN
-    | K_VOLATILE
-    | K_INLINE
-    | K_FINAL
-    | K_SEALED
-    | K_PARTIAL
-    | K_VIRTUAL
-    | K_OVERRIDE
-    | K_ABSTRACT
+    : PUBLIC
+    | PUB
+    | PRIVATE
+    | PROTECTED
+    | INTERNAL
+    | STATIC
+    | CONST
+    | ASYNC
+    | EXTERN
+    | ABSTRACT
+    | FINAL
+    | VIRTUAL
+    | OVERRIDE
+    | INLINE
+    | VOLATILE
+    | PURE
     ;
 
 
 /* ============================================================================
- * 4. GENERIC FUNCTION PARAMETERS
- * ========================================================================== */
-
-/**
- * Generic parameter list.
+ * 4. RETURN TYPE
+ * ============================================================================
  *
- * No finite generic arity is encoded.
+ * The return type is owned semantically by the type system.
  *
- * Examples:
+ * This file only establishes:
  *
- *     <T>
- *     <T, U>
- *     <T: Numeric>
- *     <T: Numeric + Comparable>
- */
-functionGenericParameters
-    : LESS_THAN
-      functionGenericParameter
-      (COMMA functionGenericParameter)*
-      COMMA?
-      GREATER_THAN
-    ;
-
-
-/**
- * Individual generic parameter.
+ *     -> TypeExpression
  *
- * A generic parameter may have zero or more semantic bounds.
- */
-functionGenericParameter
-    : IDENTIFIER
-      functionGenericBounds?
-    ;
-
-
-/**
- * Generic bounds.
- *
- * Multiple bounds are represented structurally.
- *
- * The semantic/type system decides whether the bounds are meaningful and
- * satisfiable.
- */
-functionGenericBounds
-    : COLON
-      functionGenericBound
-      (PLUS functionGenericBound)*
-    ;
-
-
-/**
- * A bound is represented by the canonical type-expression grammar.
- *
- * This intentionally permits:
- *
- *     T: Numeric
- *     T: quantum::State
- *     T: hardware::Resource
- *     T: SomeFutureCapability
- *
- * without hard-coding those semantic domains into function syntax.
- */
-functionGenericBound
-    : typeExpression
-    ;
-
-
-/* ============================================================================
- * 5. FUNCTION PARAMETERS
- * ========================================================================== */
-
-/**
- * Function parameter list.
- *
- * Variadic parameters are integrated directly into the canonical list rather
- * than maintaining a second competing list production.
- *
- * This prevents the old architecture's ambiguity where:
- *
- *     functionParameterList
- *     functionParameterListWithVariadic
- *
- * could describe overlapping syntax.
- */
-functionParameterList
-    : functionParameter
-      (COMMA functionParameter)*
-      COMMA?
-    ;
-
-
-/**
- * A function parameter is either ordinary or variadic.
- *
- * The grammar does not impose an argument-count limit.
- */
-functionParameter
-    : ordinaryFunctionParameter
-    | variadicFunctionParameter
-    ;
-
-
-/* ============================================================================
- * 6. ORDINARY PARAMETERS
- * ========================================================================== */
-
-/**
- * Ordinary parameter.
- *
- * Examples:
- *
- *     value
- *     value: int
- *     value: int = 0
- *     mut value: Buffer
- */
-ordinaryFunctionParameter
-    : functionParameterModifier*
-      functionParameterPattern
-      functionParameterType?
-      functionParameterDefault?
-    ;
-
-
-/**
- * Parameter pattern.
- *
- * The base function grammar accepts an identifier or a mutable identifier.
- *
- * More sophisticated destructuring patterns remain owned by the canonical
- * pattern grammar and can be integrated through the aggregate parser.
- */
-functionParameterPattern
-    : IDENTIFIER
-    | K_MUT IDENTIFIER
-    ;
-
-
-/**
- * Parameter type.
- */
-functionParameterType
-    : COLON
-      typeExpression
-    ;
-
-
-/**
- * Parameter default.
- *
- * The value is a canonical Zamani expression.
- *
- * No target-specific constant folding occurs here.
- */
-functionParameterDefault
-    : EQUALS
-      expression
-    ;
-
-
-/* ============================================================================
- * 7. PARAMETER MODIFIERS
- * ========================================================================== */
-
-/**
- * Parameter-level modifiers.
- *
- * `mut` describes source-level mutability only.
- *
- * It does not select:
- *
- *     - registers;
- *     - memory;
- *     - address spaces;
- *     - physical storage;
- *     - hardware.
- */
-functionParameterModifier
-    : K_MUT
-    ;
-
-
-/* ============================================================================
- * 8. VARIADIC PARAMETERS
- * ========================================================================== */
-
-/**
- * Variadic parameter.
- *
- * Canonical form:
- *
- *     fn collect(...values: T) -> Result {
- *     }
- *
- * The grammar imposes no finite number of arguments.
- *
- * Placement, uniqueness, ABI legality and invocation rules are semantic
- * validation responsibilities.
- */
-variadicFunctionParameter
-    : functionParameterModifier*
-      ELLIPSIS
-      IDENTIFIER
-      functionParameterType?
-    ;
-
-
-/* ============================================================================
- * 9. RETURN TYPE
- * ========================================================================== */
-
-/**
- * Optional return type.
- *
- * Examples:
- *
- *     fn work()
- *     fn work() -> int
- *     fn measure() -> Measurement
- *     fn transform<T>(value: T) -> T
- *
- * Type semantics belong to the canonical type system.
+ * The typeExpression rule comes from Types.
  */
 functionReturnClause
     : THIN_ARROW
@@ -560,109 +349,101 @@ functionReturnClause
 
 
 /* ============================================================================
- * 10. EFFECT ATTACHMENT
- * ========================================================================== */
-
-/**
- * Function effects.
+ * 5. EFFECTS
+ * ============================================================================
  *
- * Effects are expressed through the canonical effect namespace rather than
- * enumerating all possible effects here.
+ * Function effects are expressed as a list of symbolic effect references.
  *
- * Canonical source form:
+ * Example:
  *
- *     fn read() with effects { io }
- *
- *     fn compute() with effects {
- *         quantum
+ *     fn read() with effects {
  *         io
  *     }
  *
- * The effect names remain open through qualifiedName.
+ *     fn hybrid() with effects {
+ *         quantum,
+ *         io,
+ *         distributed
+ *     }
  *
- * This allows future effect domains without changing this grammar.
+ * The grammar does not enumerate every possible effect.
+ *
+ * That is essential for future extensibility and POCO-REAF.
  */
-functionEffectAttachment
-    : K_WITH
-      K_EFFECT
+functionEffectClause
+    : WITH
+      EFFECTS
       LBRACE
-      functionEffectReferenceList?
+      functionEffectList?
       RBRACE
     ;
 
 
-/**
+/*
  * Effect list.
  *
- * No fixed effect count is imposed.
+ * No finite number of effects is imposed.
  */
-functionEffectReferenceList
+functionEffectList
     : functionEffectReference
       (COMMA functionEffectReference)*
       COMMA?
     ;
 
 
-/**
- * Effect reference.
+/*
+ * Effect references are symbolic names.
  *
- * Qualified names permit:
+ * Qualified names permit future/domain-specific effect namespaces without
+ * changing this function grammar.
+ *
+ * Examples:
  *
  *     io
  *     quantum
  *     network
- *     security
  *     distributed
- *     future::effect
+ *     security
+ *     quantum::measurement
+ *     hardware::control
  */
 functionEffectReference
-    : qualifiedFunctionEffectName
-    ;
-
-
-/**
- * Effect names are syntactically qualified identifiers.
- *
- * Semantic effect resolution belongs to the effect subsystem.
- */
-qualifiedFunctionEffectName
     : IDENTIFIER
       (DOUBLE_COLON IDENTIFIER)*
     ;
 
 
 /* ============================================================================
- * 11. CONTRACTS
- * ========================================================================== */
-
-/**
- * A function may have zero or more contracts.
+ * 6. FUNCTION CONTRACTS
+ * ============================================================================
  *
- * Multiple contract clauses are retained rather than collapsed by the parser,
- * allowing semantic analysis to preserve source order and provenance.
+ * Contracts remain source-level expressions.
+ *
+ * Their logical interpretation is owned by semantic analysis.
  *
  * Example:
  *
  *     fn sqrt(x: Float) -> Float
- *         contract {
- *             requires(x >= 0);
- *             ensures(result >= 0);
- *         }
- *     {
+ *     contract {
+ *         requires(x >= 0);
+ *         ensures(result >= 0);
  *     }
+ *     {
+ *         ...
+ *     }
+ *
+ * Multiple contract clauses are retained in source order.
  */
-functionContractAttachment
-    : K_CONTRACT
+functionContractClause
+    : CONTRACT
       LBRACE
       functionContractItem*
       RBRACE
     ;
 
 
-/**
- * Contract items.
- *
- * The actual logical meaning remains the responsibility of semantic analysis.
+/*
+ * A contract item is one of the canonical contract predicates.
  */
 functionContractItem
     : functionRequiresContract
@@ -671,11 +452,11 @@ functionContractItem
     ;
 
 
-/**
+/*
  * Preconditions.
  */
 functionRequiresContract
-    : K_REQUIRES
+    : REQUIRES
       LPAREN
       expression
       RPAREN
@@ -683,11 +464,11 @@ functionRequiresContract
     ;
 
 
-/**
+/*
  * Postconditions.
  */
 functionEnsuresContract
-    : K_ENSURES
+    : ENSURES
       LPAREN
       expression
       RPAREN
@@ -695,11 +476,11 @@ functionEnsuresContract
     ;
 
 
-/**
+/*
  * Invariants.
  */
 functionInvariantContract
-    : K_INVARIANT
+    : INVARIANT
       LPAREN
       expression
       RPAREN
@@ -708,25 +489,25 @@ functionInvariantContract
 
 
 /* ============================================================================
- * 12. FUNCTION IMPLEMENTATION
- * ========================================================================== */
-
-/**
- * A function is either:
+ * 7. FUNCTION IMPLEMENTATION
+ * ============================================================================
  *
- *     - defined with a body;
- *     - declared without a body.
+ * A function either:
  *
- * Body-less declarations are useful for:
+ *   - contains a block body;
+ *   - terminates as a declaration/prototype.
  *
- *     - extern functions;
- *     - interfaces;
- *     - abstract APIs;
- *     - separately implemented functions;
- *     - compiler/runtime supplied functions;
- *     - foreign interfaces.
+ * Whether a body-less declaration is legal is determined by semantic context.
  *
- * Whether a body-less declaration is legal is a semantic/contextual question.
+ * Examples:
+ *
+ *     fn add(a: Int, b: Int) -> Int {
+ *         return a + b;
+ *     }
+ *
+ *     extern fn host_call(value: Int) -> Int;
+ *
+ *     abstract fn operation(value: Value) -> Result;
  */
 functionImplementation
     : block
@@ -735,407 +516,472 @@ functionImplementation
 
 
 /* ============================================================================
- * 13. FUNCTION SIGNATURE
- * ========================================================================== */
-
-/**
- * Signature-only form for consumers such as:
+ * 8. SIGNATURE
+ * ============================================================================
  *
- *     interfaces
- *     traits
- *     extern declarations
- *     declarations
- *     implementations
+ * Signature syntax is reusable by semantic constructs such as:
  *
- * This rule deliberately excludes a body.
+ *   - interfaces;
+ *   - traits;
+ *   - extern declarations;
+ *   - abstract declarations;
+ *   - implementation contracts.
+ *
+ * It deliberately excludes a function body.
  */
 functionSignature
     : functionModifier*
-      K_FN
+      FN
       functionName
       functionGenericParameters?
       LPAREN
-      functionParameterList?
+      parameterList?
       RPAREN
       functionReturnClause?
-      functionEffectAttachment?
-      functionContractAttachment*
+      functionEffectClause?
+      functionContractClause*
       SEMICOLON?
     ;
 
 
 /* ============================================================================
- * 14. FOREIGN/EXTERNAL FUNCTION INTEGRATION
- * ========================================================================== */
-
-/**
- * Foreign-function declarations are NOT given a separate function syntax
- * here.
+ * 9. DECLARATION-ONLY FUNCTION
+ * ============================================================================
  *
- * `extern fn ...;`
+ * This explicit rule is useful to declaration/trait/interface integration.
  *
- * is parsed as an ordinary function declaration using K_EXTERN.
- *
- * The dedicated foreign-functions.g4 grammar owns additional foreign-language
- * and ABI syntax.
- *
- * This prevents functions.g4 from becoming an ABI grammar.
+ * It does not introduce another syntax.
  */
-foreignFunctionSignature
-    : K_EXTERN
-      K_FN
-      functionName
-      functionGenericParameters?
-      LPAREN
-      functionParameterList?
-      RPAREN
-      functionReturnClause?
-      functionEffectAttachment?
-      functionContractAttachment*
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 15. COMPILE-TIME FUNCTION INTEGRATION
- * ========================================================================== */
-
-/**
- * Compile-time functions use the normal function declaration boundary.
- *
- * The compile-time subsystem may interpret an established modifier/attribute
- * or provide a specialized declaration rule in the aggregate grammar.
- *
- * No compile-time evaluator is implemented here.
- */
-compileTimeFunctionSignature
+functionPrototype
     : functionSignature
     ;
 
 
 /* ============================================================================
- * 16. ASYNC FUNCTION INTEGRATION
- * ========================================================================== */
-
-/**
- * Async functions use the normal function declaration with K_ASYNC.
+ * 10. DEFINITION-ONLY FUNCTION
+ * ============================================================================
  *
- * Async scheduling/execution semantics belong to the concurrency/runtime
- * subsystems.
- *
- * This rule is provided as an integration boundary and does not duplicate
- * function syntax.
+ * A definition requires a body.
  */
-asyncFunctionDeclaration
-    : K_ASYNC
-      K_FN
+functionDefinition
+    : functionModifier*
+      FN
       functionName
       functionGenericParameters?
       LPAREN
-      functionParameterList?
+      parameterList?
       RPAREN
       functionReturnClause?
-      functionEffectAttachment?
-      functionContractAttachment*
+      functionEffectClause?
+      functionContractClause*
+      block
+    ;
+
+
+/* ============================================================================
+ * 11. FOREIGN FUNCTION INTEGRATION
+ * ============================================================================
+ *
+ * `extern fn ...;` uses the same canonical function signature.
+ *
+ * This grammar deliberately does NOT define:
+ *
+ *   - ABI names;
+ *   - foreign-language names;
+ *   - C/C++/Rust/Python calling conventions;
+ *   - symbol mangling;
+ *   - binary layout;
+ *   - platform ABI;
+ *   - register conventions.
+ *
+ * Those belong to:
+ *
+ *     grammar/functions/foreign-functions.g4
+ *     grammar/interoperability/
+ *     semantic analysis
+ *     compiler lowering
+ *
+ * The generic source-level function boundary remains the same.
+ */
+foreignFunctionDeclaration
+    : EXTERN
+      FN
+      functionName
+      functionGenericParameters?
+      LPAREN
+      parameterList?
+      RPAREN
+      functionReturnClause?
+      functionEffectClause?
+      functionContractClause*
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 12. ASYNC FUNCTION INTEGRATION
+ * ============================================================================
+ *
+ * Async functions use the canonical ASYNC modifier.
+ *
+ * The grammar does not define:
+ *
+ *   - executor;
+ *   - scheduler;
+ *   - runtime;
+ *   - thread count;
+ *   - task placement;
+ *   - hardware execution policy.
+ *
+ * Those are downstream concerns.
+ */
+asyncFunctionDeclaration
+    : ASYNC
+      FN
+      functionName
+      functionGenericParameters?
+      LPAREN
+      parameterList?
+      RPAREN
+      functionReturnClause?
+      functionEffectClause?
+      functionContractClause*
       functionImplementation
     ;
 
 
 /* ============================================================================
- * 17. GENERATOR FUNCTION INTEGRATION
- * ========================================================================== */
-
-/**
- * Generator semantics are represented by the ordinary function body and the
- * canonical `yield` statement.
+ * 13. COMPILE-TIME FUNCTION INTEGRATION
+ * ============================================================================
  *
- * The generators grammar owns generator-specific semantic validation.
+ * Compile-time execution is NOT a separate function grammar.
+ *
+ * Existing compile-time function facilities must reuse the canonical function
+ * declaration/signature structure.
+ *
+ * The compile-time subsystem determines whether a function is evaluable during
+ * compilation.
+ *
+ * It does not belong to this parser rule.
+ *
+ * This alias gives compile-time tooling a stable grammar integration point
+ * without creating a second function syntax.
  */
-generatorFunctionDeclaration
+compileTimeFunctionDeclaration
     : functionDeclaration
     ;
 
 
 /* ============================================================================
- * 18. FUNCTION CALL CONTRACT
- * ========================================================================== */
+ * 14. FUNCTION SIGNATURE COMPONENT
+ * ============================================================================
+ *
+ * This rule exposes the complete reusable signature without implementation.
+ *
+ * It is useful to interface/trait/foreign/callable declaration grammars.
+ */
+functionSignatureCore
+    : functionModifier*
+      FN
+      functionName
+      functionGenericParameters?
+      LPAREN
+      parameterList?
+      RPAREN
+      functionReturnClause?
+      functionEffectClause?
+      functionContractClause*
+    ;
 
-/**
- * This rule is intentionally NOT a function-call expression.
+
+/* ============================================================================
+ * 15. FUNCTION DECLARATION WITH EXPLICIT BODY
+ * ============================================================================
  *
- * Function invocation belongs to expressions/calls.g4.
+ * This is intentionally a distinct named rule for callers that need to require
+ * a definition.
+ */
+functionBodyDeclaration
+    : functionSignatureCore
+      block
+    ;
+
+
+/* ============================================================================
+ * 16. FUNCTION DECLARATION WITH EXPLICIT PROTOTYPE
+ * ============================================================================
  *
- * Keeping invocation outside this file prevents:
+ * This is intentionally a distinct named rule for callers that require a
+ * declaration without implementation.
+ */
+functionPrototypeDeclaration
+    : functionSignatureCore
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 17. SOURCE-LEVEL FUNCTION KIND INTEGRATION
+ * ============================================================================
  *
- *     function declaration syntax
+ * Function kind is represented by existing modifiers rather than by an
+ * expanding keyword catalogue.
  *
- * from becoming coupled to:
+ * Do NOT add rules such as:
  *
- *     calling syntax.
+ *     gpuFunction
+ *     qpuFunction
+ *     cpuFunction
+ *     fpgaFunction
+ *     acceleratorFunction
+ *     vendorFunction
+ *
+ * A function's semantic domain is determined by its types, effects,
+ * capabilities, resources, declarations, and semantic analysis.
+ *
+ * This is required for:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * and prevents the language grammar from becoming coupled to current hardware.
  */
 
 
 /* ============================================================================
- * 19. FUNCTION DECLARATION SEMANTIC NOTES
- * ========================================================================== */
-
-/*
- * The parser MUST NOT reject a function because:
+ * 18. CANONICAL LOWERING CONTRACT
+ * ============================================================================
  *
- *     - its parameter type is quantum;
- *     - its return type is quantum;
- *     - it references a hardware abstraction;
- *     - it requires distributed execution;
- *     - it uses an accelerator type;
- *     - it contains a large generic structure;
- *     - it has many parameters;
- *     - it has nested generic parameters;
- *     - it has a future domain type.
+ * Every function declaration must eventually map through:
  *
- * Such questions belong to semantic analysis and downstream compilation.
+ *     grammar
+ *       ->
+ *     frontend AST
+ *       ->
+ *     semantic function model
+ *       ->
+ *     canonical semantic representation / IR
+ *
+ * Classical function:
+ *
+ *     function
+ *       ->
+ *     classical semantic model
+ *       ->
+ *     classical IR
+ *
+ * Quantum-capable function:
+ *
+ *     function
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic quantum operations
+ *       ->
+ *     quantum::ir
+ *
+ * HDL/hardware-aware function:
+ *
+ *     function
+ *       ->
+ *     AST
+ *       ->
+ *     hardware/co-design semantic model
+ *       ->
+ *     canonical hardware/HDL representation
+ *
+ * The function grammar never lowers directly to:
+ *
+ *     - LLVM;
+ *     - QIR;
+ *     - MLIR;
+ *     - vendor assembly;
+ *     - QPU instructions;
+ *     - physical qubit mappings;
+ *     - FPGA primitives;
+ *     - CUDA kernels;
+ *     - scheduling decisions.
+ *
+ * Those are downstream lowering targets.
  */
 
 
 /* ============================================================================
- * 20. HARD-CODING PROHIBITIONS
- * ========================================================================== */
-
-/*
- * Forbidden in this grammar:
+ * 19. RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
  *
- *     MAX_PARAMETERS
- *     MAX_GENERIC_PARAMETERS
- *     MAX_FUNCTION_DEPTH
- *     MAX_FUNCTIONS
- *     MAX_CALL_DEPTH
- *     MAX_THREADS
- *     MAX_CORES
- *     MAX_QUBITS
- *     MAX_DEVICES
- *     MAX_NODES
- *     MAX_MEMORY
+ * Functions may use resource/capability declarations through:
  *
- * Forbidden machine-specific syntax:
+ *     - parameter types;
+ *     - return types;
+ *     - effects;
+ *     - contracts;
+ *     - surrounding declarations;
+ *     - resource/capability attributes owned elsewhere.
  *
- *     fn @device0 ...
- *     fn @qpu7 ...
- *     fn @core3 ...
- *     fn @gpu2 ...
+ * This grammar does not invent:
  *
- * unless such notation is explicitly introduced by a separate, target-specific
- * deployment/placement language.
+ *     requires_8_cores
+ *     requires_32_qubits
+ *     requires_gpu_0
+ *     requires_qpu_1
+ *
+ * Portable requirements belong to the resource/capability system.
+ *
+ * For example, a semantic layer may interpret:
+ *
+ *     type QuantumResource
+ *
+ * or:
+ *
+ *     capability("quantum.measurement")
+ *
+ * without changing this grammar.
  */
 
 
 /* ============================================================================
- * 21. SOURCE-LEVEL PORTABILITY
- * ========================================================================== */
-
-/*
- * Valid examples include:
+ * 20. DIAGNOSTIC CONTRACT
+ * ============================================================================
  *
- *     fn add<T>(a: T, b: T) -> T {
- *         ...
- *     }
+ * Parser/frontend infrastructure must preserve source spans for:
  *
- *     fn process(q: Qubit) -> Result {
- *         ...
- *     }
+ *     - function modifier;
+ *     - function name;
+ *     - generic parameter list;
+ *     - parameter list;
+ *     - return type;
+ *     - effects;
+ *     - contracts;
+ *     - body/prototype terminator.
  *
- *     fn transform<T: Numeric>(value: T) -> T {
- *         ...
- *     }
+ * This permits diagnostics such as:
  *
- *     async fn execute<T>(value: T) -> T {
- *         ...
- *     }
+ *     duplicate modifier;
+ *     invalid modifier combination;
+ *     missing function name;
+ *     malformed generic parameters;
+ *     malformed parameter list;
+ *     missing return type;
+ *     malformed effect clause;
+ *     malformed contract;
+ *     missing body;
+ *     invalid declaration termination.
  *
- *     extern fn foreign_operation(value: int) -> int;
- *
- * None of these declarations specifies:
- *
- *     - physical hardware;
- *     - topology;
- *     - resource count;
- *     - device ID;
- *     - scheduling policy.
- *
- * Therefore the same source-level function may participate in the POCO-REAF
- * compilation model.
+ * Semantic diagnostics remain outside this grammar.
  */
 
 
 /* ============================================================================
- * 22. AST CONTRACT
- * ========================================================================== */
-
-/*
- * The frontend AST corresponding to this grammar MUST preserve at minimum:
+ * 21. DETERMINISM CONTRACT
+ * ============================================================================
  *
- *     FunctionDeclaration
- *         modifiers
- *         name
- *         generic_parameters
- *         parameters
- *         return_type
- *         effects
- *         contracts
- *         body_or_declaration
- *         source_span
+ * Identical source text and identical lexer configuration must produce the
+ * same parse structure.
  *
- * Parameter nodes MUST preserve:
+ * Function modifier order is preserved by the parse tree.
  *
- *     name/pattern
- *     mutability
- *     type
- *     default_value
- *     variadic
- *     source_span
+ * Generic parameter order is preserved by FunctionGenerics.
  *
- * Generic parameter nodes MUST preserve:
+ * Parameter order is preserved by Parameters.
  *
- *     name
- *     bounds
- *     source_span
+ * Contract order is preserved by functionContractClause*.
  *
- * The AST MUST NOT lower:
+ * Effect order is preserved by functionEffectList.
  *
- *     Qubit
- *
- * into:
- *
- *     physical qubit index
- *
- * nor:
- *
- *     hardware::Resource
- *
- * into:
- *
- *     concrete device allocation.
+ * No unordered semantic representation is created here.
  */
 
 
 /* ============================================================================
- * 23. IR CONTRACT
- * ========================================================================== */
-
-/*
- * Function syntax lowers through semantic analysis.
+ * 22. COMPATIBILITY CONTRACT
+ * ============================================================================
  *
- * The grammar MUST NOT construct IR directly.
- *
- * Canonical direction:
- *
- *     Functions
- *         |
- *         v
- *     Frontend AST
- *         |
- *         v
- *     Name/type/effect/capability analysis
- *         |
- *         +----------------------+
- *         |                      |
- *         v                      v
- *     classical/control IR   quantum semantic IR
- *                                |
- *                                v
- *                           quantum::ir
- *
- * Function grammar MUST NOT:
- *
- *     - create QuantumGate values;
- *     - create QubitId values;
- *     - assign physical qubits;
- *     - choose routing;
- *     - schedule operations;
- *     - invoke QEC;
- *     - invoke ZQN;
- *     - choose hardware.
- */
-
-
-/* ============================================================================
- * 24. ERROR CONTRACT
- * ========================================================================== */
-
-/*
- * Syntax errors belong to the parser diagnostics layer.
- *
- * Semantic errors belong to semantic analysis.
- *
- * The parser MUST preserve:
- *
- *     - source location;
- *     - offending token;
- *     - expected grammar category;
- *     - parser context.
- *
- * The grammar MUST NOT silently reinterpret malformed function declarations.
- */
-
-
-/* ============================================================================
- * 25. DETERMINISM CONTRACT
- * ========================================================================== */
-
-/*
- * The grammar must produce deterministic parse structure for valid source.
+ * Existing source forms that remain part of the canonical specification must
+ * continue to parse without requiring target-specific extensions.
  *
  * In particular:
  *
- *     functionParameter
+ *     fn name(...)
+ *     pub fn name(...)
+ *     public fn name(...)
+ *     private fn name(...)
+ *     async fn name(...)
+ *     extern fn name(...);
+ *     fn name<T>(...)
+ *     fn name(value: Type)
+ *     fn name(value: Type) -> ReturnType
  *
- * has explicit alternatives for:
+ * remain within the canonical function syntax model.
  *
- *     ordinaryFunctionParameter
- *     variadicFunctionParameter
+ * Any change to:
  *
- * and the variadic marker ELLIPSIS is lexically distinct from DOT/DOT_DOT.
+ *     token names;
+ *     modifier spellings;
+ *     generic syntax;
+ *     parameter syntax;
+ *     return syntax;
+ *     effect syntax;
+ *     contract syntax
  *
- * The grammar MUST NOT depend on:
- *
- *     - hardware state;
- *     - runtime state;
- *     - random values;
- *     - network state;
- *     - backend discovery.
+ * is a language compatibility change and must be accompanied by the repository
+ * compatibility policy and conformance tests.
  */
 
 
 /* ============================================================================
- * 26. COMPLETION CRITERIA
- * ========================================================================== */
-
-/*
- * This file is complete only when:
+ * 23. HARD-CODING AUDIT
+ * ============================================================================
  *
- * [ ] It is the sole function-declaration syntax authority.
- * [ ] ZamaniTokens is the canonical token vocabulary.
- * [ ] Types is the canonical type-expression authority.
- * [ ] Expressions is the canonical expression authority.
- * [ ] Statements is the canonical block/body authority.
- * [ ] No function grammar duplicates type syntax.
- * [ ] No function grammar duplicates expression precedence.
- * [ ] No function grammar duplicates statement syntax.
- * [ ] Generic arity is unbounded by grammar design.
- * [ ] Parameter arity is unbounded by grammar design.
- * [ ] Variadic syntax has one canonical representation.
- * [ ] Return types use typeExpression.
- * [ ] Defaults use expression.
- * [ ] Function bodies use block.
- * [ ] Effects remain extensible.
- * [ ] Contracts preserve source expressions.
- * [ ] Extern functions remain syntactically portable.
- * [ ] ABI decisions remain outside this file.
- * [ ] Quantum functions remain hardware independent.
- * [ ] No physical resource limits occur in this grammar.
- * [ ] No unsafe Rust dependency is introduced.
- * [ ] Positive parser tests exist.
- * [ ] Negative parser tests exist.
- * [ ] Boundary/scalability tests exist.
- * [ ] Cross-domain tests exist.
- * [ ] Round-trip tests exist where the AST printer supports them.
- * [ ] Core.g4 no longer contains a competing functionDeclaration rule.
+ * This grammar contains no:
+ *
+ *     - hardware IDs;
+ *     - physical addresses;
+ *     - CPU counts;
+ *     - GPU counts;
+ *     - FPGA counts;
+ *     - QPU counts;
+ *     - qubit limits;
+ *     - memory limits;
+ *     - node limits;
+ *     - thread limits;
+ *     - tensor limits;
+ *     - topology limits;
+ *     - vendor-specific instruction names.
+ *
+ * It therefore remains independent of target size and target generation.
+ */
+
+
+/* ============================================================================
+ * 24. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * functions.g4 is complete only when all of the following are true:
+ *
+ * [x] Function declaration ownership is unique.
+ * [x] Function definition ownership is unique.
+ * [x] Function names use the canonical identifier grammar.
+ * [x] Generic declarations are delegated to FunctionGenerics.
+ * [x] Parameter declarations are delegated to Parameters.
+ * [x] Types are delegated to Types.
+ * [x] Expressions are delegated to Expressions.
+ * [x] Blocks are delegated to Statements.
+ * [x] Canonical lexer token names are used.
+ * [x] No K_* legacy token aliases remain.
+ * [x] No lexer rules are declared here.
+ * [x] No machine/resource limits are encoded.
+ * [x] No quantum gate catalogue is encoded.
+ * [x] No duplicate quantum IR is introduced.
+ * [x] Foreign ABI details remain outside this file.
+ * [x] Compile-time evaluation remains outside this file.
+ * [x] Async runtime scheduling remains outside this file.
+ * [x] Contract semantics remain outside this file.
+ * [x] Effect semantics remain outside this file.
+ * [x] Positive syntax tests exist.
+ * [x] Negative syntax tests exist.
+ * [x] Boundary tests exist.
+ * [x] Scalability tests exist.
+ * [x] Compatibility tests exist.
+ *
+ * ============================================================================
  */
