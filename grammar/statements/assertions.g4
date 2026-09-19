@@ -1,305 +1,58 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Computing Language
  * ============================================================================
  *
- * File:
- *     grammar/statements/assertions.g4
+ * FILE
+ * ----
+ * grammar/statements/assertions.g4
  *
- * Status:
- *     Canonical production grammar for statement-level assertions.
+ * STATUS
+ * ------
+ * CANONICAL PRODUCTION GRAMMAR
  *
- * Grammar technology:
- *     ANTLR4 parser grammar component.
+ * OWNER
+ * -----
+ * Statement-level runtime assertions.
  *
- * Rust integration baseline:
- *     Rust 1.97 / Rust 1.97.1.
+ * GRAMMAR TECHNOLOGY
+ * ------------------
+ * ANTLR4 parser grammar.
  *
- * Safety:
- *     No embedded Rust actions.
- *     No semantic predicates.
- *     No unsafe code.
- *     No filesystem access.
- *     No networking.
- *     No process execution.
- *     No device discovery.
- *     No hardware inspection.
- *     No runtime execution.
- *     No mutable global state.
+ * RUST IMPLEMENTATION BASELINE
+ * ----------------------------
+ * Rust 1.97 / Rust 1.97.1
+ * Rust 2021
+ * Safe Rust only.
+ *
+ * SAFETY
+ * ------
+ * This grammar:
+ *
+ *   - contains no embedded Rust actions;
+ *   - contains no semantic predicates;
+ *   - contains no unsafe Rust;
+ *   - performs no I/O;
+ *   - performs no filesystem access;
+ *   - performs no networking;
+ *   - performs no process execution;
+ *   - performs no hardware discovery;
+ *   - performs no runtime execution;
+ *   - contains no mutable global state;
+ *   - contains no machine-specific constants.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SYNTAX of ordinary statement-level assertions.
+ * This file is the SINGLE AUTHORITATIVE SYNTAX OWNER for ordinary
+ * statement-level assertions.
  *
- * An assertion expresses a runtime/program-semantic requirement:
- *
- *     assert(condition);
- *
- * or, where the language permits an explanatory expression:
- *
- *     assert(condition, explanation);
- *
- * The grammar records the condition and optional explanation.
- *
- * It does NOT decide:
- *
- *     - whether the condition is true;
- *     - when the condition is evaluated;
- *     - whether evaluation is optimized;
- *     - whether the assertion is enabled;
- *     - whether failure aborts execution;
- *     - whether failure is recoverable;
- *     - whether an assertion is compiled out;
- *     - whether the assertion is checked on CPU/GPU/QPU/FPGA/etc.;
- *     - how assertion failure is represented in an IR;
- *     - how assertion failure is reported by the runtime.
- *
- * Those concerns belong to semantic analysis, compilation, IR, diagnostics,
- * and runtime layers.
- *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
- *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
- *     parser
- *       |
- *       +--> statement composition
- *               |
- *               +--> assertionStatement       <-- THIS FILE
- *       |
- *       v
- *     frontend AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       +--> type checking
- *       +--> effect checking
- *       +--> capability checking
- *       +--> resource checking
- *       +--> control-flow analysis
- *       |
- *       v
- *     canonical semantic representation / IR
- *       |
- *       +--> classical IR
- *       +--> quantum::ir where applicable
- *       +--> HDL/hardware IR where applicable
- *       +--> distributed/control-flow representations
- *       |
- *       v
- *     optimization
- *       |
- *       v
- *     scheduling / routing / lowering
- *       |
- *       v
- *     target realization
- *       |
- *       v
- *     runtime
- *
- * This grammar file MUST remain at the syntax layer.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - assertionStatement
- *     - assertionCondition
- *     - optional assertion explanation
- *     - statement-level assertion syntax
- *     - assertion syntax composition
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - the ASSERT lexer token;
- *     - identifiers;
- *     - literals;
- *     - expression precedence;
- *     - expression syntax;
- *     - types;
- *     - blocks;
- *     - statement composition;
- *     - compile-time assertions;
- *     - contracts;
- *     - invariants;
- *     - formal proofs;
- *     - runtime assertion execution;
- *     - panic/abort behavior;
- *     - diagnostics;
- *     - AST Rust structures;
- *     - classical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - optimization;
- *     - routing;
- *     - scheduling;
- *     - hardware discovery;
- *     - resource discovery;
- *     - backend selection.
- *
- * ============================================================================
- * IMPORTANT SEPARATION OF ASSERTION CONCEPTS
- * ============================================================================
- *
- * Zamani contains several related but distinct concepts.
- *
- * 1. Statement-level runtime assertion
- *
- *        assert(condition);
- *
- *        assert(condition, explanation);
- *
- *    Owned by THIS FILE.
- *
- *
- * 2. Compile-time assertion
- *
- *        comptime assert(condition);
- *
- *    Owned by:
- *
- *        grammar/expressions/compile-time.g4
- *
- *    This file MUST NOT redefine it.
- *
- *
- * 3. Function contracts
- *
- *        requires(...)
- *        ensures(...)
- *        invariant(...)
- *
- *    Owned by the function/contract grammar.
- *
- *
- * 4. Formal verification/proof constructs
- *
- *    Owned by the appropriate verification/metaprogramming language layer.
- *
- * These concepts may eventually share semantic infrastructure, but their
- * source-level grammar ownership remains distinct.
- *
- * ============================================================================
- * REPOSITORY INTEGRATION
- * ============================================================================
- *
- * The canonical statement dispatcher is:
- *
- *     grammar/statements/statements.g4
- *
- * That file owns the `statement` composition rule.
- *
- * This file MUST NOT redefine:
- *
- *     statement
- *     controlFlowStatement
- *     expressionStatement
- *     blockExpression
- *
- * Instead, the canonical dispatcher must include:
- *
- *     assertionStatement
- *
- * as one of its statement alternatives.
- *
- * Recommended composition:
- *
- *     statement
- *         |
- *         +--> ...
- *         +--> controlFlowStatement
- *         +--> assertionStatement
- *         +--> ...
- *
- * Whether assertionStatement is physically grouped with control-flow
- * statements or as an independent statement family is a composition decision
- * owned by statements.g4.
- *
- * This file supplies the production.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The canonical lexer must provide:
- *
- *     ASSERT
- *
- * and the punctuation tokens required by the expression grammar:
- *
- *     LPAREN
- *     RPAREN
- *     COMMA
- *
- * and the canonical statement terminator:
- *
- *     SEMICOLON
- *
- * No lexer rules are declared here.
- *
- * `ASSERT` is a language keyword and therefore must not be represented by a
- * generic identifier when the canonical lexer recognizes it as a keyword.
- *
- * ============================================================================
- * EXPRESSION CONTRACT
- * ============================================================================
- *
- * `expression` is supplied by the canonical expression grammar.
- *
- * This file deliberately does NOT define:
- *
- *     booleanExpression
- *     assertionExpression
- *     conditionExpression
- *     messageExpression
- *
- * The semantic/type system determines whether the first expression is a valid
- * assertion condition.
- *
- * The optional second expression is interpreted semantically as an explanation
- * or diagnostic value according to the language specification.
- *
- * This permits the explanation to be:
- *
- *     a string
- *     a structured diagnostic value
- *     a lazily evaluated value
- *     a formatted expression
- *     a domain-specific diagnostic object
- *
- * without requiring this grammar to hard-code one representation.
- *
- * ============================================================================
- * CANONICAL FORMS
- * ============================================================================
- *
- * The canonical source forms are:
+ * Canonical forms:
  *
  *     assert(condition);
  *
  *     assert(condition, explanation);
- *
- * The parenthesized form is deliberately explicit.
- *
- * This avoids ambiguity with ordinary expression statements and makes
- * assertion syntax easy for tooling and diagnostics to recognize.
- *
- * ============================================================================
- * ASSERTION STATEMENT
- * ============================================================================
  *
  * An assertion consists of:
  *
@@ -310,215 +63,441 @@
  *     )
  *     statement terminator
  *
- * The condition is mandatory.
+ * This grammar describes only source syntax.
  *
- * The explanation is optional.
+ * It does NOT determine:
  *
- * There is no grammar-level limit on:
+ *     - whether the condition is true;
+ *     - whether the condition is statically provable;
+ *     - when the condition is evaluated;
+ *     - whether evaluation has side effects;
+ *     - whether assertions are enabled;
+ *     - whether assertions are optimized;
+ *     - whether an assertion is removed;
+ *     - whether failure aborts execution;
+ *     - whether failure is recoverable;
+ *     - how diagnostics are represented;
+ *     - how assertions lower to IR;
+ *     - which target executes the assertion;
+ *     - which hardware executes the assertion.
  *
- *     expression size
- *     expression nesting
- *     source length
- *     number of assertions
- *     number of statements
+ * Those concerns belong downstream.
  *
- * Practical parser/compiler limits are implementation resource policies and
- * MUST NOT become source-language constants.
- */
-
-parser grammar AssertionsParser;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-
-/*
  * ============================================================================
- * CANONICAL ENTRY POINT
+ * OWNERSHIP
  * ============================================================================
  *
- * `assertionStatement` is the only statement production owned by this file.
+ * THIS FILE OWNS:
  *
- * It is intentionally named so the statement-composition grammar can import
- * or otherwise compose it without ambiguity.
- */
-assertionStatement
-    : ASSERT LPAREN assertionCondition RPAREN statementTerminator
-    ;
-
-
-/*
+ *     assertionStatement
+ *     assertionCondition
+ *     assertionExplanation
+ *
+ * and only the syntax required to compose those rules.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     lexer tokens
+ *     keyword spellings
+ *     punctuation token definitions
+ *     expression precedence
+ *     expression syntax
+ *     type syntax
+ *     statement composition
+ *     blocks
+ *     declarations
+ *     function declarations
+ *     function return types
+ *     contracts
+ *     invariants
+ *     compile-time assertions
+ *     formal proofs
+ *     semantic analysis
+ *     diagnostics
+ *     AST implementation
+ *     classical IR
+ *     quantum::ir
+ *     HDL IR
+ *     QEC
+ *     ZQN
+ *     routing
+ *     scheduling
+ *     calibration
+ *     HAL
+ *     target selection
+ *     resource discovery
+ *     capability discovery
+ *     runtime execution
+ *
  * ============================================================================
- * ASSERTION CONDITION
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * The condition is an ordinary Zamani expression.
+ * There MUST be exactly one authoritative statement-level assertion entry:
  *
- * Semantic analysis determines whether the resulting value is suitable for
- * assertion checking.
+ *     assertionStatement
  *
- * This allows the same assertion syntax to operate across:
+ * This file owns that rule.
+ *
+ * grammar/statements/statements.g4 owns the universal:
+ *
+ *     statement
+ *
+ * composition rule.
+ *
+ * statements.g4 MUST import this grammar and reference:
+ *
+ *     assertionStatement
+ *
+ * It MUST NOT reproduce:
+ *
+ *     ASSERT LPAREN ...
+ *
+ * or otherwise duplicate assertion syntax.
+ *
+ * ============================================================================
+ * CURRENT REPOSITORY INTEGRATION
+ * ============================================================================
+ *
+ * The repository's statement composition grammar currently imports:
+ *
+ *     AssertionsParser
+ *
+ * and composes:
+ *
+ *     assertionStatement
+ *
+ * This file therefore retains the parser grammar name:
+ *
+ *     AssertionsParser
+ *
+ * Do NOT rename it merely for stylistic reasons.
+ *
+ * ============================================================================
+ * LEXER INTEGRATION
+ * ============================================================================
+ *
+ * The production parser consumes:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * The canonical lexical system is responsible for providing:
+ *
+ *     ASSERT
+ *     LPAREN
+ *     RPAREN
+ *     COMMA
+ *     SEMICOLON
+ *
+ * The existing keyword registry defines:
+ *
+ *     ASSERT : 'assert' ;
+ *
+ * This grammar MUST NOT redefine ASSERT.
+ *
+ * The lexer composition architecture distinguishes:
+ *
+ *     ZamaniTokens
+ *
+ * from the production lexer:
+ *
+ *     ZamaniLexer
+ *
+ * Parser grammars consume:
+ *
+ *     ZamaniLexer
+ *
+ * and MUST NOT switch independently to:
+ *
+ *     ZamaniTokens
+ *
+ * ============================================================================
+ * EXPRESSION INTEGRATION
+ * ============================================================================
+ *
+ * Expression syntax is owned by:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * whose canonical parser grammar name is:
+ *
+ *     Expressions
+ *
+ * This file imports Expressions so that it is independently composable.
+ *
+ * This grammar MUST NOT define another:
+ *
+ *     expression
+ *     assignmentExpression
+ *     conditionalExpression
+ *     rangeExpression
+ *     logical expression
+ *     arithmetic expression
+ *     postfix expression
+ *     primary expression
+ *     quantum expression
+ *     hardware expression
+ *     HDL expression
+ *
+ * hierarchy.
+ *
+ * Assertion conditions and explanations both use the canonical expression
+ * boundary.
+ *
+ * Consequently, assertion syntax remains reusable for expressions originating
+ * from:
  *
  *     classical computation
  *     numerical computation
  *     symbolic computation
- *     quantum-classical control
- *     hardware control
- *     HDL-related semantic contexts
- *     distributed execution
- *     accelerator execution
- *     AI/data computation
+ *     quantum/classical computation
+ *     hybrid computation
+ *     HDL/co-design
+ *     hardware abstractions
+ *     distributed computation
+ *     AI/ML
+ *     data processing
+ *     networking
+ *     accelerators
+ *     scientific computing
  *     future computational domains
  *
- * without creating domain-specific assertion syntax.
- */
-assertionCondition
-    : expression
-    ;
-
-
-/*
  * ============================================================================
- * OPTIONAL ASSERTION EXPLANATION
+ * PUNCTUATION INTEGRATION
  * ============================================================================
  *
- * The explanation is optional.
+ * Statement termination and structural punctuation are owned by:
  *
- * It is deliberately represented as an ordinary expression rather than
- * hard-coded to STRING.
+ *     grammar/core/punctuation.g4
  *
- * This provides future-proofing for:
+ * whose parser grammar name is:
  *
- *     assert(condition, "message");
- *     assert(condition, diagnostic);
- *     assert(condition, format(...));
- *     assert(condition, error_context);
+ *     Punctuation
  *
- * The semantic layer decides which explanation types are accepted.
+ * This file imports Punctuation because it consumes:
  *
- * This also avoids coupling assertion syntax to a particular diagnostic
- * representation.
- */
-assertionExplanation
-    : COMMA expression
-    ;
-
-
-/*
- * ============================================================================
- * EXTENDED ASSERTION ENTRY
- * ============================================================================
+ *     statementTerminator
  *
- * `assertionWithExplanation` provides the explicit decomposition used by AST
- * builders and parser tooling.
+ * and therefore does not create a private termination rule.
  *
- * It is not a second assertion syntax.
- */
-assertionWithExplanation
-    : ASSERT LPAREN assertionCondition assertionExplanation RPAREN statementTerminator
-    ;
-
-
-/*
- * ============================================================================
- * CANONICAL ASSERTION FORM WITH OPTIONAL EXPLANATION
- * ============================================================================
+ * The canonical termination contract is currently:
  *
- * The canonical entry point accepts zero or one explanation.
- *
- * There is intentionally no repetition here.
- *
- * An assertion has:
- *
- *     exactly one condition
- *     zero or one explanation
- *
- * This prevents accidental acceptance of:
- *
- *     assert(a, b, c);
- *
- * as a valid assertion merely because the generic expression grammar can
- * represent comma-separated constructs.
- *
- * If the language eventually requires structured diagnostic arguments, that
- * should be introduced through a deliberate semantic/grammar evolution rather
- * than by silently broadening this production.
- *
- * NOTE:
- *
- * The direct canonical form is defined explicitly below rather than relying
- * on `assertionWithExplanation` so the parser has one authoritative entry
- * production.
- */
-
-
-/*
- * ============================================================================
- * ASSERTION FORM
- * ============================================================================
- *
- * Replace the simple entry production above with this canonical form when
- * assembling the parser:
- *
- *     assertionStatement
- *         : ASSERT LPAREN assertionCondition assertionExplanation? RPAREN
- *           statementTerminator
+ *     statementTerminator
+ *         : SEMICOLON
  *         ;
  *
- * The equivalent expanded structure is:
+ * Therefore:
+ *
+ *     assert(condition);
+ *
+ * is the canonical terminated form.
+ *
+ * Automatic semicolon insertion is NOT introduced here.
+ *
+ * ============================================================================
+ * CANONICAL ASSERTION SYNTAX
+ * ============================================================================
+ *
+ * The authoritative grammar is:
+ *
+ *     assertionStatement
+ *         : ASSERT LPAREN assertionCondition
+ *           assertionExplanation?
+ *           RPAREN statementTerminator
+ *         ;
+ *
+ * Therefore exactly these structural forms are accepted:
  *
  *     assert(condition);
  *
  *     assert(condition, explanation);
  *
- * Keeping the optional explanation at the statement boundary makes the
- * accepted source language explicit.
- */
-
-
-/*
+ * There is:
+ *
+ *     exactly one condition;
+ *
+ *     zero or one explanation.
+ *
  * ============================================================================
- * STATEMENT TERMINATION CONTRACT
+ * WHY THE EXPLANATION IS AN EXPRESSION
  * ============================================================================
  *
- * `statementTerminator` is owned by the statement composition/termination
- * grammar.
+ * The explanation is deliberately not restricted to STRING.
  *
- * This file does not define it.
+ * Examples:
  *
- * The canonical current modular statement architecture uses semicolon
- * termination.
+ *     assert(condition, "message");
  *
- * This means:
+ *     assert(condition, diagnostic);
+ *
+ *     assert(condition, format_error(context));
+ *
+ *     assert(condition, diagnostic_value);
+ *
+ * The semantic layer determines which expression types are valid as
+ * explanations.
+ *
+ * This avoids coupling the parser to one diagnostic representation.
+ *
+ * ============================================================================
+ * NO VARIADIC ASSERTION ARGUMENTS
+ * ============================================================================
+ *
+ * The canonical grammar deliberately accepts:
  *
  *     assert(condition);
  *
- * is valid, while:
+ *     assert(condition, explanation);
  *
- *     assert(condition)
+ * but not:
  *
- * is not silently accepted by this grammar.
+ *     assert(condition, explanation, extra);
  *
- * Automatic semicolon insertion, newline-sensitive termination, or other
- * future termination policies must be specified centrally rather than
- * implemented independently by assertion syntax.
- */
-
-
-/*
+ * If structured diagnostic arguments are required in the future, that is a
+ * language-design change and must go through:
+ *
+ *     specification
+ *         ->
+ *     AST contract
+ *         ->
+ *     semantic contract
+ *         ->
+ *     canonical grammar
+ *         ->
+ *     tests
+ *         ->
+ *     compatibility decision
+ *
+ * It MUST NOT be introduced accidentally by changing `?` to `*`.
+ *
+ * ============================================================================
+ * ASSERTION CONDITION
+ * ============================================================================
+ *
+ * The condition is an ordinary canonical Zamani expression.
+ *
+ * This grammar intentionally does not create:
+ *
+ *     booleanExpression
+ *
+ * as a special assertion-only hierarchy.
+ *
+ * Whether the expression is a valid assertion predicate is determined by
+ * semantic analysis.
+ *
+ * This permits the language to evolve its predicate semantics without
+ * fragmenting the expression grammar.
+ *
+ * ============================================================================
+ * ASSERTION EXPLANATION
+ * ============================================================================
+ *
+ * The optional explanation is represented as:
+ *
+ *     assertionExplanation
+ *         : COMMA expression
+ *         ;
+ *
+ * Keeping the comma inside this rule makes the assertion's two-part structure
+ * explicit:
+ *
+ *     condition
+ *     optional explanation
+ *
+ * It also prevents an arbitrary comma-separated argument list from silently
+ * becoming assertion syntax.
+ *
+ * ============================================================================
+ * COMPILE-TIME ASSERTION SEPARATION
+ * ============================================================================
+ *
+ * Compile-time assertion syntax is owned by:
+ *
+ *     grammar/expressions/compile-time.g4
+ *
+ * through:
+ *
+ *     compileTimeAssertionExpression
+ *
+ * This file MUST NOT redefine compile-time assertion syntax.
+ *
+ * These are different source constructs:
+ *
+ *     assert(condition);
+ *
+ *     comptime assert(condition);
+ *
+ * Their semantic implementations may share infrastructure downstream, but
+ * their grammar ownership remains distinct.
+ *
+ * ============================================================================
+ * CONTRACT / INVARIANT SEPARATION
+ * ============================================================================
+ *
+ * Function/module/declaration contracts are separate concepts.
+ *
+ * Examples include:
+ *
+ *     requires(...)
+ *     ensures(...)
+ *     invariant(...)
+ *
+ * This file MUST NOT absorb those constructs.
+ *
+ * An assertion is an executable/checkable statement.
+ *
+ * A contract expresses a semantic obligation associated with another language
+ * entity.
+ *
+ * ============================================================================
+ * FORMAL VERIFICATION SEPARATION
+ * ============================================================================
+ *
+ * An assertion can provide a predicate that a verification subsystem may
+ * consume.
+ *
+ * It does NOT itself constitute a mathematical proof.
+ *
+ * Proof obligations, theorem proving, verification directives, and formal
+ * proof syntax remain owned by their appropriate language/specification
+ * layers.
+ *
+ * ============================================================================
+ * CONTROL-FLOW INTEGRATION
+ * ============================================================================
+ *
+ * This grammar establishes only the syntax of a return-independent assertion
+ * statement.
+ *
+ * The statement dispatcher determines where assertions may syntactically
+ * occur.
+ *
+ * Semantic analysis determines contextual validity.
+ *
+ * Examples of downstream semantic questions include:
+ *
+ *     - is the assertion reachable?
+ *     - is the predicate type valid?
+ *     - are required effects available?
+ *     - are required capabilities available?
+ *     - are referenced values in scope?
+ *     - does the enclosing execution model permit the assertion?
+ *
+ * None of those decisions belong here.
+ *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser/frontend must preserve at least:
+ * Successful parsing must provide enough information for the frontend AST
+ * builder to preserve:
  *
- *     - assertion condition;
- *     - optional explanation;
- *     - complete source span;
+ *     - assertion source span;
+ *     - condition expression;
+ *     - optional explanation expression;
  *     - source ordering.
  *
- * Conceptual AST shape:
+ * Conceptual representation:
  *
  *     AssertionStatement {
  *         condition,
@@ -526,190 +505,159 @@ assertionWithExplanation
  *         source_span
  *     }
  *
- * The actual Rust AST type belongs to the frontend AST subsystem.
+ * The exact Rust AST type is owned by the frontend AST subsystem.
  *
  * This grammar MUST NOT:
  *
  *     - define Rust structs;
  *     - define Rust enums;
  *     - construct AST objects;
- *     - execute assertions;
- *     - evaluate expressions;
- *     - allocate runtime resources.
+ *     - allocate AST storage;
+ *     - evaluate expressions.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The semantic layer determines:
+ * Semantic analysis consumes the parsed assertion and determines:
  *
- *     1. whether the condition is well typed;
+ *     - condition validity;
+ *     - condition type;
+ *     - explanation validity;
+ *     - explanation type;
+ *     - name resolution;
+ *     - ownership;
+ *     - borrowing;
+ *     - effects;
+ *     - capabilities;
+ *     - resource requirements;
+ *     - control-flow legality;
+ *     - execution policy;
+ *     - failure semantics.
  *
- *     2. whether the condition can be evaluated in the current context;
+ * A syntactically valid assertion may therefore still be semantically invalid.
  *
- *     3. whether required effects are available;
+ * Example:
  *
- *     4. whether required capabilities are available;
+ *     assert(unknown_name);
  *
- *     5. whether the explanation is semantically valid;
+ * is structurally valid but may fail name resolution.
  *
- *     6. whether the assertion is reachable;
+ * Likewise:
  *
- *     7. whether assertion evaluation has permitted side effects;
+ *     assert(non_boolean_value);
  *
- *     8. whether the assertion is compatible with the enclosing execution
- *        model;
- *
- *     9. whether an assertion may be removed, transformed, deferred, or
- *        preserved by compilation policy;
- *
- *    10. what happens when the assertion fails.
- *
- * None of these decisions belong in this grammar.
- *
- * ============================================================================
- * RUNTIME CONTRACT
- * ============================================================================
- *
- * This grammar does not require a particular runtime behavior.
- *
- * A runtime may eventually represent failure as:
- *
- *     diagnostic
- *     recoverable error
- *     panic
- *     abort
- *     exceptional control flow
- *     structured failure
- *     verification failure
- *     host-integrated failure
- *
- * according to the language/runtime semantics.
- *
- * The parser must remain independent of those choices.
+ * may be syntactically valid while failing the language's semantic predicate
+ * rules.
  *
  * ============================================================================
- * COMPILE-TIME ASSERTION SEPARATION
+ * IR CONTRACT
  * ============================================================================
  *
- * `grammar/expressions/compile-time.g4` already owns:
+ * This grammar creates NO IR.
  *
- *     compileTimeAssertionExpression
+ * The downstream pipeline remains:
  *
- * including syntax based on:
- *
- *     COMPTIME ASSERT ...
- *
- * This file MUST NOT define another compile-time assertion production.
- *
- * Therefore:
- *
- *     assert(condition);
- *
- * means a statement-level assertion.
- *
- * A compile-time assertion belongs to the compile-time expression grammar.
- *
- * The semantic implementation may share infrastructure, but the grammar
- * ownership remains separate.
- *
- * ============================================================================
- * CONTRACT / INVARIANT SEPARATION
- * ============================================================================
- *
- * Zamani already contains contract-oriented concepts such as:
- *
- *     requires
- *     ensures
- *     invariant
- *
- * Those are not aliases for `assert`.
- *
- * An assertion is an executable/checkable statement-level construct.
- *
- * A contract describes a semantic obligation associated with a declaration,
- * function, module, or other contract-bearing entity.
- *
- * This file therefore MUST NOT absorb:
- *
- *     requires
- *     ensures
- *     invariant
- *
- * into the assertion grammar.
- *
- * ============================================================================
- * FORMAL VERIFICATION SEPARATION
- * ============================================================================
- *
- * Assertion syntax can provide runtime-checkable predicates.
- *
- * Formal proof systems may use those predicates as inputs to verification,
- * but this grammar does not claim that:
- *
- *     assert(condition);
- *
- * proves the condition mathematically.
- *
- * Proof obligations and theorem/proof constructs belong to the verification
- * layer.
+ *     source
+ *       ->
+ *     lexer
+ *       ->
+ *     parser
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic analysis
+ *       ->
+ *     canonical semantic representation
+ *       ->
+ *     domain IR
+ *       ->
+ *     optimization
+ *       ->
+ *     routing / scheduling / lowering
+ *       ->
+ *     target realization
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Assertions may guard or validate hybrid/quantum computation.
+ * An assertion may contain an expression whose semantic origin is quantum or
+ * hybrid computation.
  *
- * Examples include semantically valid forms such as:
- *
- *     assert(classical_condition);
+ * Examples:
  *
  *     assert(measurement_result);
  *
- *     assert(classical_value == expected);
+ *     assert(measure(q) == expected);
  *
- * The grammar does not determine:
+ *     assert(classical_condition);
  *
- *     - qubit count;
- *     - logical qubit count;
- *     - physical qubit mapping;
- *     - backend;
- *     - topology;
- *     - gate set;
- *     - calibration;
- *     - QEC strategy;
- *     - ZQN model;
- *     - scheduling;
- *     - routing;
- *     - pulse implementation.
+ * The assertion grammar does NOT determine whether a referenced operation is:
  *
- * If the condition eventually depends on quantum computation, the semantic
- * layer lowers the resulting operation through the repository's canonical
- * quantum semantic boundary.
+ *     quantum
+ *     classical
+ *     hybrid
+ *     simulator-specific
+ *     hardware-specific
+ *     vendor-specific
+ *
+ * Semantic analysis determines that meaning.
+ *
+ * If the computation is quantum, the established downstream path remains:
+ *
+ *     AST
+ *       ->
+ *     quantum semantic analysis
+ *       ->
+ *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     QEC / resilience / ZQN
+ *       ->
+ *     HAL
+ *       ->
+ *     target realization
+ *
+ * This grammar MUST NOT:
+ *
+ *     - enumerate quantum gates;
+ *     - enumerate qubits;
+ *     - assign physical qubits;
+ *     - define QEC;
+ *     - define ZQN;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - inspect calibration;
+ *     - inspect hardware;
+ *     - create a second quantum IR.
  *
  * `quantum::ir` remains the canonical quantum semantic boundary.
  *
- * This grammar MUST NOT construct or duplicate quantum::ir.
- *
  * ============================================================================
- * CLASSICAL / HDL / HARDWARE INTEGRATION
+ * CLASSICAL / HDL / HARDWARE / AI / DATA INTEGRATION
  * ============================================================================
  *
- * The same assertion syntax may semantically validate:
+ * The same assertion syntax is reusable for:
  *
- *     classical values
- *     numerical invariants
- *     tensor properties
- *     hardware state
- *     HDL simulation properties
- *     accelerator results
- *     distributed state
- *     AI/data invariants
- *     networking state
- *     future domain values
- *
- * No domain-specific assertion variants are required merely because the
- * eventual execution target differs.
+ *     classical values;
+ *     numerical invariants;
+ *     symbolic expressions;
+ *     tensors;
+ *     AI/model values;
+ *     data-processing results;
+ *     distributed state;
+ *     accelerator results;
+ *     hardware state;
+ *     HDL simulation properties;
+ *     hybrid results.
  *
  * Do NOT introduce:
  *
@@ -717,172 +665,267 @@ assertionWithExplanation
  *     gpuAssert
  *     fpgaAssert
  *     qpuAssert
+ *     hdlAssert
  *     distributedAssert
  *     acceleratorAssert
  *
- * merely to represent different target machines.
+ * merely because the expression eventually executes on a particular target.
  *
  * ============================================================================
  * RESOURCE / CAPABILITY INDEPENDENCE
  * ============================================================================
  *
- * Assertion syntax contains no physical resource assumptions.
+ * Assertion syntax has no dependency on physical resources.
  *
- * It MUST NOT encode:
+ * This file MUST NOT encode:
  *
  *     MAX_ASSERTIONS
  *     MAX_ASSERTION_DEPTH
- *     MAX_CORES
+ *     MAX_EXPRESSION_SIZE
  *     MAX_THREADS
- *     MAX_QUBITS
+ *     MAX_CORES
+ *     MAX_CPUS
  *     MAX_GPUS
  *     MAX_FPGAS
- *     MAX_DEVICES
+ *     MAX_QPUS
+ *     MAX_QUBITS
  *     MAX_NODES
+ *     MAX_DEVICES
  *     MAX_MEMORY
+ *     MAX_STORAGE
  *     MAX_ACCELERATORS
- *     fixed device IDs
- *     fixed hardware addresses
- *     fixed topology
  *
- * The language-level syntax is independent of machine scale.
+ * It MUST NOT encode:
+ *
+ *     physical device identifiers;
+ *     physical qubit identifiers;
+ *     hardware addresses;
+ *     fixed topology;
+ *     fixed memory-bank identifiers;
+ *     fixed accelerator counts.
+ *
+ * Resource requirements and capabilities belong to the resource/hardware
+ * semantic layers.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Assertions are source-level semantic intent.
+ * The assertion language is target independent.
  *
- * The same source assertion can survive compilation to:
+ * The same source syntax can be preserved across:
  *
- *     embedded hardware
- *     CPU
- *     multicore CPU
- *     GPU
- *     FPGA
- *     ASIC-oriented implementation
- *     quantum/classical system
- *     simulator
- *     accelerator
- *     cluster
- *     supercomputer
- *     distributed system
- *     cloud deployment
- *     future architecture
+ *     embedded systems
+ *     CPUs
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASIC-oriented systems
+ *     QPUs
+ *     simulators
+ *     accelerators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     future computational architectures
  *
- * The grammar does not select any of these targets.
+ * The grammar does not select any of them.
  *
- * This preserves:
+ * The assertion expresses a property of the computation.
+ *
+ * This supports:
  *
  *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * because assertion syntax describes a property of the computation rather
- * than the implementation topology.
+ * without turning current hardware capabilities into language-level limits.
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * There is no grammar-defined maximum for:
+ *
+ *     number of assertions;
+ *     assertion expression size;
+ *     expression nesting;
+ *     block nesting;
+ *     source-unit size;
+ *     program size;
+ *     number of quantum operations;
+ *     number of qubits;
+ *     number of processors;
+ *     number of GPUs;
+ *     number of nodes;
+ *     amount of memory;
+ *     number of accelerators.
+ *
+ * Grammar repetition and expression composition remain structural.
+ *
+ * "Infinity" here means:
+ *
+ *     no artificial finite machine limit is encoded by this grammar.
+ *
+ * Actual exhaustion is governed by available implementation resources and
+ * explicit compiler/parser resource policies.
+ *
+ * Such implementation limits MUST NOT be silently converted into language
+ * grammar limits.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing this construct must depend only on:
+ * Parsing an assertion depends only on:
  *
- *     source text
- *     lexer definition
- *     grammar version
- *     parser configuration
+ *     - source;
+ *     - lexer tokenization;
+ *     - active grammar;
+ *     - parser configuration.
  *
- * It must NOT depend on:
+ * Parsing MUST NOT depend on:
  *
- *     hardware
- *     backend
- *     runtime state
- *     queue state
- *     scheduler state
- *     calibration
- *     network state
- *     device availability
- *     quantum state
- *     resource availability
+ *     - system time;
+ *     - randomness;
+ *     - environment state;
+ *     - filesystem state;
+ *     - network state;
+ *     - hardware availability;
+ *     - CPU count;
+ *     - GPU count;
+ *     - QPU availability;
+ *     - runtime state;
+ *     - scheduler state.
  *
- * The grammar contains no external side effects.
- *
- * ============================================================================
- * ERROR / DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * The parser/frontend should preserve accurate source spans for errors such
- * as:
- *
- *     assert;
- *     assert();
- *     assert(;
- *     assert();
- *     assert(condition;
- *     assert(, explanation);
- *     assert(condition,);
- *     assert(condition, explanation, extra);
- *     assert(condition) unexpected_tokens;
- *
- * The grammar itself supplies syntax structure.
- *
- * Diagnostic formatting and recovery policy belong to the parser/frontend
- * diagnostic subsystem.
- *
- * No Rust action is required.
+ * No embedded actions or predicates are used.
  *
  * ============================================================================
  * SECURITY
  * ============================================================================
  *
- * Parsing an assertion performs no:
+ * Parsing:
  *
- *     filesystem access
- *     network access
- *     process execution
- *     environment inspection
- *     hardware discovery
- *     device access
- *     runtime evaluation
+ *     assert(system.run(command));
  *
- * Any later evaluation of the assertion expression is governed by the
- * semantic/compiler/runtime security model.
+ * must only construct syntax.
+ *
+ * The parser MUST NOT:
+ *
+ *     - execute the command;
+ *     - access the filesystem;
+ *     - contact the network;
+ *     - inspect hardware;
+ *     - access secrets;
+ *     - execute external processes.
+ *
+ * Any later evaluation is governed by semantic, compiler, and runtime
+ * security policies.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Syntax errors include malformed structures such as:
+ *
+ *     assert;
+ *     assert();
+ *     assert(;
+ *     assert(, explanation);
+ *     assert(condition;
+ *     assert(condition,);
+ *     assert(condition, explanation, extra);
+ *     assert(condition) trailing;
+ *
+ * The parser/frontend diagnostic subsystem owns:
+ *
+ *     - diagnostic wording;
+ *     - source-span rendering;
+ *     - recovery strategy;
+ *     - error aggregation;
+ *     - IDE diagnostics.
+ *
+ * This grammar only defines the structural boundary.
+ *
+ * ============================================================================
+ * IMPORTANT WHITESPACE RULE
+ * ============================================================================
+ *
+ * Whitespace is lexically insignificant unless the canonical lexer specifies
+ * otherwise.
+ *
+ * Therefore:
+ *
+ *     assert(condition);
+ *
+ * and:
+ *
+ *     assert ( condition ) ;
+ *
+ * may tokenize identically if the lexer treats whitespace as insignificant.
+ *
+ * The grammar MUST NOT reject valid whitespace merely for formatting reasons.
  *
  * ============================================================================
  * COMPATIBILITY
  * ============================================================================
  *
- * The repository already recognizes `assert` as a language capability.
+ * The canonical forms are:
  *
- * The modular grammar therefore formalizes that existing language feature
- * instead of replacing it with a target-specific mechanism.
+ *     assert(condition);
  *
- * Legacy forms must be checked against the existing language specification
- * before removal.
+ *     assert(condition, explanation);
  *
- * If an older grammar accepts:
+ * Existing legacy assertion syntax must be checked against the repository's
+ * compatibility policy before being removed.
+ *
+ * In particular, if an older grammar accepted:
  *
  *     assert expression;
  *
- * without parentheses, that syntax must be classified explicitly as:
+ * without parentheses, its status must be explicitly recorded as:
  *
  *     preserved
  *     migrated
  *     deprecated
- *     or removed
+ *     or removed.
  *
- * by the language compatibility policy.
+ * It must not disappear accidentally as a side effect of modularization.
  *
- * It must not disappear accidentally merely because this modular grammar
- * chooses the canonical parenthesized form.
+ * ============================================================================
+ * DIALECT RULE
+ * ============================================================================
+ *
+ * Dialects MUST NOT silently redefine the core meaning of:
+ *
+ *     assert
+ *
+ * A dialect requiring additional assertion syntax must introduce an explicit
+ * extension through the dialect/feature lifecycle:
+ *
+ *     proposal
+ *       ->
+ *     specification
+ *       ->
+ *     AST contract
+ *       ->
+ *     semantic contract
+ *       ->
+ *     grammar
+ *       ->
+ *     tests
+ *       ->
+ *     compatibility decision.
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * POSITIVE TESTS
- *
- * The grammar test suite must cover:
+ * POSITIVE SYNTAX
+ * ---------------
  *
  *     assert(true);
+ *
+ *     assert(false);
  *
  *     assert(condition);
  *
@@ -892,158 +935,302 @@ assertionWithExplanation
  *
  *     assert(condition, diagnostic);
  *
+ *     assert(condition, format_error(context));
+ *
  *     assert(computation());
  *
  *     assert((nested_expression));
  *
- *     assert(quantum_related_classical_condition);
+ *     assert(a + b == c);
  *
- *     assert(hardware_related_condition);
+ *     assert(measurement_result);
  *
- *     assert(distributed_condition);
+ *     assert(measure(q) == expected);
  *
- *     assert(ai_or_data_condition);
+ *     assert(distributed_result);
  *
- *     nested assertions inside blocks;
+ *     assert(hardware_result);
  *
- *     assertions inside conditional branches;
+ *     assert(accelerator_result);
  *
- *     assertions inside loops;
- *
- *     assertions surrounding domain statements.
- *
- *
- * NEGATIVE TESTS
- *
- * The grammar must reject:
+ * NEGATIVE SYNTAX
+ * ---------------
  *
  *     assert;
  *
  *     assert();
  *
- *     assert(, message);
+ *     assert(;
+ *
+ *     assert(, explanation);
+ *
+ *     assert(condition;
  *
  *     assert(condition,);
  *
- *     assert(condition, message, extra);
+ *     assert(condition, explanation, extra);
  *
- *     assert(condition) unexpected;
+ *     assert(condition) trailing;
  *
  *     assert((condition);
  *
  *     assert(condition));
  *
+ * SEMANTIC NEGATIVES
+ * ------------------
+ *
+ * These are NOT grammar errors merely because they may be semantically
+ * invalid:
+ *
+ *     assert(unknown_name);
+ *
+ *     assert(non_predicate_value);
+ *
+ *     assert(invalid_domain_value);
+ *
+ *     assert(incompatible_diagnostic);
+ *
+ * Semantic analysis owns those diagnostics.
  *
  * BOUNDARY TESTS
+ * --------------
  *
- * Verify:
+ * Test:
  *
- *     deeply nested expressions;
- *     very large assertion expressions;
- *     many assertions in a source unit;
- *     large explanation expressions;
- *     large blocks containing assertions.
+ *     - empty explanation expressions where the expression grammar permits
+ *       them or rejects them;
+ *     - deeply nested conditions;
+ *     - deeply nested explanations;
+ *     - large arithmetic expressions;
+ *     - large symbolic expressions;
+ *     - large tensor expressions;
+ *     - large hybrid expressions;
+ *     - large quantum-derived expressions;
+ *     - large HDL/hardware expressions;
+ *     - many assertions in one block;
+ *     - many assertions in one source unit.
  *
- * The grammar must not contain arbitrary numeric limits for any of these.
+ * No finite language-level ceiling may be encoded.
  *
+ * SCALABILITY TESTS
+ * -----------------
+ *
+ * Generated tests should vary:
+ *
+ *     assertion count;
+ *     expression size;
+ *     expression depth;
+ *     block size;
+ *     program size;
+ *
+ * without modifying this grammar.
  *
  * CROSS-DOMAIN TESTS
+ * ------------------
  *
- * Test assertions occurring in programs combining:
+ * Verify assertion syntax can occur around expressions involving:
  *
- *     classical + quantum
- *     classical + HDL
- *     quantum + HDL
- *     quantum + hardware
- *     quantum + distributed
- *     AI + quantum
- *     AI + hardware
- *     classical + quantum + distributed
- *     classical + quantum + HDL + hardware
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     distributed
+ *     AI
+ *     data
+ *     networking
+ *     accelerators
+ *     scientific computing
  *
+ * where independently legal.
  *
  * DETERMINISM TESTS
+ * -----------------
  *
- * Identical source and parser configuration must yield identical parse
- * structure regardless of:
+ * Repeated parsing of identical source under identical parser configuration
+ * must produce equivalent parse-tree structure.
  *
- *     machine size
- *     CPU count
- *     GPU count
- *     QPU availability
- *     FPGA availability
- *     cluster size
- *     runtime state.
+ * PORTABILITY TESTS
+ * -----------------
+ *
+ * The same assertion source must remain syntactically identical regardless of
+ * target descriptions or resource availability.
+ *
+ * ROUND-TRIP TESTS
+ * ----------------
+ *
+ *     source
+ *       ->
+ *     lexer
+ *       ->
+ *     parser
+ *       ->
+ *     AST
+ *       ->
+ *     formatter/printer
+ *       ->
+ *     parser
+ *
+ * must preserve:
+ *
+ *     condition;
+ *     optional explanation;
+ *     statement structure.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This file must contain:
+ * REQUIRED:
  *
  *     no fixed resource counts;
  *     no fixed machine dimensions;
  *     no fixed assertion count;
  *     no fixed expression size;
- *     no fixed nesting depth;
+ *     no fixed expression depth;
  *     no device identifiers;
- *     no topology assumptions;
- *     no backend assumptions;
- *     no target-specific syntax.
+ *     no topology;
+ *     no backend selection;
+ *     no vendor-specific assertion syntax.
  *
- * Any finite limit introduced by an implementation must be represented by an
- * external parser/compiler resource policy rather than by grammar literals.
+ * Forbidden examples include:
+ *
+ *     MAX_ASSERTIONS
+ *     MAX_ASSERTION_DEPTH
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_ACCELERATORS
+ *
+ * Numeric values appearing inside an assertion expression remain ordinary
+ * program data.
+ *
+ * Example:
+ *
+ *     assert(value < 1024);
+ *
+ * contains a program-level constant.
+ *
+ * It does NOT establish:
+ *
+ *     MAX_VALUE = 1024
+ *
+ * for the language implementation.
  *
  * ============================================================================
  * INTEGRATION CHECKLIST
  * ============================================================================
  *
- * Before marking this file complete:
+ * This file is complete when:
  *
- * [ ] `AssertionsParser` is the canonical parser-fragment name.
+ * [ ] Parser grammar name remains `AssertionsParser`.
  *
- * [ ] `tokenVocab = ZamaniLexer` matches the repository's canonical lexer.
+ * [ ] `tokenVocab = ZamaniLexer` is used.
  *
  * [ ] `ASSERT` is supplied by the canonical lexer.
  *
- * [ ] `LPAREN`, `RPAREN`, `COMMA`, and `SEMICOLON` are supplied by the
- *     canonical lexer.
+ * [ ] `LPAREN` is supplied by the canonical lexer.
  *
- * [ ] `expression` resolves to the canonical expression grammar.
+ * [ ] `RPAREN` is supplied by the canonical lexer.
  *
- * [ ] `statementTerminator` resolves to the canonical statement grammar.
+ * [ ] `COMMA` is supplied by the canonical lexer.
  *
- * [ ] No duplicate `statement` rule exists here.
+ * [ ] `SEMICOLON` is supplied by the canonical lexer.
  *
- * [ ] No duplicate expression grammar exists here.
+ * [ ] `Expressions` is imported.
  *
- * [ ] No compile-time assertion rule is duplicated here.
+ * [ ] `Punctuation` is imported.
  *
- * [ ] No contract/invariant grammar is duplicated here.
+ * [ ] `expression` comes from the canonical expression grammar.
  *
- * [ ] `statements.g4` admits `assertionStatement`.
+ * [ ] `statementTerminator` comes from the canonical punctuation grammar.
  *
- * [ ] The AST layer has a corresponding assertion-statement representation.
+ * [ ] `assertionStatement` is the sole authoritative assertion entry.
  *
- * [ ] Semantic analysis consumes the AST representation.
+ * [ ] `assertionCondition` is the sole condition wrapper owned here.
  *
- * [ ] Assertion lowering does not create a second quantum IR.
+ * [ ] `assertionExplanation` is the sole explanation wrapper owned here.
  *
- * [ ] No runtime/hardware dependency exists in this grammar.
+ * [ ] No duplicate `assertionWithExplanation` entry exists.
  *
- * [ ] No unsafe Rust is introduced by this grammar.
+ * [ ] No duplicate `statement` rule exists.
  *
- * [ ] Positive tests exist.
+ * [ ] No duplicate expression hierarchy exists.
  *
- * [ ] Negative tests exist.
+ * [ ] No compile-time assertion is duplicated.
  *
- * [ ] Boundary tests exist.
+ * [ ] No contract syntax is duplicated.
  *
- * [ ] Cross-domain tests exist.
+ * [ ] No formal-proof syntax is duplicated.
  *
- * [ ] Determinism tests exist.
+ * [ ] No target-specific assertion syntax exists.
  *
- * [ ] Compatibility tests cover the previous Zamani assertion syntax.
+ * [ ] No quantum gate list exists.
+ *
+ * [ ] No physical qubit identifiers exist.
+ *
+ * [ ] No machine-size constants exist.
+ *
+ * [ ] No resource cardinality limits exist.
+ *
+ * [ ] No hardware discovery occurs.
+ *
+ * [ ] No runtime execution occurs.
+ *
+ * [ ] No embedded Rust actions exist.
+ *
+ * [ ] No unsafe Rust is required.
+ *
+ * [ ] Rust 1.97 / 1.97.1 remains the implementation baseline.
+ *
+ * [ ] `statements.g4` imports `AssertionsParser`.
+ *
+ * [ ] `statements.g4` reaches `assertionStatement` exactly once.
+ *
+ * [ ] The frontend AST has a corresponding assertion representation.
+ *
+ * [ ] Semantic analysis validates the condition.
+ *
+ * [ ] Semantic analysis validates the optional explanation.
+ *
+ * [ ] IR lowering is downstream.
+ *
+ * [ ] `quantum::ir` remains the canonical quantum semantic boundary.
+ *
+ * [ ] QEC remains downstream.
+ *
+ * [ ] ZQN remains downstream.
+ *
+ * [ ] routing remains downstream.
+ *
+ * [ ] scheduling remains downstream.
+ *
+ * [ ] HAL remains downstream.
+ *
+ * [ ] positive tests exist.
+ *
+ * [ ] negative tests exist.
+ *
+ * [ ] semantic-negative tests exist.
+ *
+ * [ ] boundary tests exist.
+ *
+ * [ ] scalability tests exist.
+ *
+ * [ ] cross-domain tests exist.
+ *
+ * [ ] determinism tests exist.
+ *
+ * [ ] portability tests exist.
+ *
+ * [ ] round-trip tests exist.
  *
  * ============================================================================
  * COMPLETION CRITERIA
@@ -1051,42 +1238,134 @@ assertionWithExplanation
  *
  * This file is COMPLETE when:
  *
- *     1. assertionStatement is the sole owner of statement-level assertion
- *        syntax;
+ *     1. There is exactly one authoritative assertionStatement rule.
  *
- *     2. the lexer provides ASSERT and required punctuation;
+ *     2. Both canonical forms parse:
  *
- *     3. expressions are delegated to the canonical expression grammar;
+ *            assert(condition);
+ *            assert(condition, explanation);
  *
- *     4. statement termination is delegated to the canonical statement
- *        termination grammar;
+ *     3. Invalid multi-explanation forms do not parse.
  *
- *     5. compile-time assertions remain owned by compile-time expressions;
+ *     4. The canonical expression grammar supplies both expressions.
  *
- *     6. contracts and formal verification remain independently owned;
+ *     5. The canonical punctuation grammar supplies statement termination.
  *
- *     7. statements.g4 integrates assertionStatement exactly once;
+ *     6. The canonical lexer supplies all tokens.
  *
- *     8. the frontend AST preserves condition, optional explanation, and
- *        source span;
+ *     7. statements.g4 composes this grammar without duplicating it.
  *
- *     9. semantic analysis validates assertion types and behavior;
+ *     8. The AST preserves condition, optional explanation, and source span.
  *
- *    10. no target-specific or hardware-specific assumptions exist;
+ *     9. Semantic analysis owns predicate/type/context validation.
  *
- *    11. no machine/resource cardinality is hard-coded;
+ *    10. Compiler/IR layers own assertion lowering.
  *
- *    12. all required positive, negative, boundary, cross-domain and
- *        determinism tests pass;
+ *    11. Runtime owns assertion-failure behavior.
  *
- *    13. the grammar remains independent of quantum::ir, QEC, ZQN, routing,
- *        scheduling, hardware discovery, calibration and runtime execution;
+ *    12. Quantum behavior remains downstream of semantic analysis.
  *
- *    14. the implementation remains compatible with Rust 1.97 / 1.97.1
- *        because the grammar introduces no Rust implementation dependency;
+ *    13. `quantum::ir` remains the canonical quantum boundary.
  *
- *    15. the assembled ANTLR grammar has no duplicate or ambiguous assertion
- *        ownership.
+ *    14. No hardware/resource topology is encoded.
+ *
+ *    15. No artificial scalability limit is encoded.
+ *
+ *    16. No unsafe Rust is introduced.
+ *
+ *    17. Rust 1.97 / 1.97.1 compatibility remains intact.
+ *
+ *    18. Positive, negative, boundary, scalability, cross-domain,
+ *        determinism, portability, compatibility, and round-trip tests pass.
  *
  * ============================================================================
+ * CANONICAL PRODUCTION GRAMMAR
+ * ============================================================================
  */
+
+parser grammar AssertionsParser;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+/*
+ * Expressions is the canonical expression grammar.
+ *
+ * Punctuation is the canonical statement-termination grammar.
+ *
+ * These are explicit dependencies so this grammar remains independently
+ * composable and does not rely accidentally on transitive imports from
+ * statements.g4.
+ */
+import
+    Expressions,
+    Punctuation
+    ;
+
+/*
+ * ============================================================================
+ * ASSERTION STATEMENT
+ * ============================================================================
+ *
+ * Canonical forms:
+ *
+ *     assert(condition);
+ *
+ *     assert(condition, explanation);
+ *
+ * The explanation is optional but may occur at most once.
+ *
+ * The statement terminator is mandatory.
+ *
+ * This is the ONLY assertion statement entry point in this grammar.
+ */
+assertionStatement
+    : ASSERT
+      LPAREN
+      assertionCondition
+      assertionExplanation?
+      RPAREN
+      statementTerminator
+    ;
+
+/*
+ * ============================================================================
+ * ASSERTION CONDITION
+ * ============================================================================
+ *
+ * Uses the canonical Zamani expression grammar.
+ *
+ * Semantic analysis determines whether the resulting expression is a valid
+ * assertion predicate.
+ */
+assertionCondition
+    : expression
+    ;
+
+/*
+ * ============================================================================
+ * ASSERTION EXPLANATION
+ * ============================================================================
+ *
+ * The explanation consists of exactly one comma followed by exactly one
+ * canonical expression.
+ *
+ * Therefore:
+ *
+ *     assert(condition, explanation);
+ *
+ * is valid.
+ *
+ * while:
+ *
+ *     assert(condition, explanation, extra);
+ *
+ * is not accepted by this grammar.
+ *
+ * The semantic layer determines which expression types are valid as diagnostic
+ * explanations.
+ */
+assertionExplanation
+    : COMMA expression
+    ;
