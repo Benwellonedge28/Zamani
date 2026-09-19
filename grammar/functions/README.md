@@ -7,62 +7,55 @@ Language: Zamani
 Grammar technology: ANTLR 4
 Rust implementation baseline: Rust 1.97 / Rust 1.97.1
 Rust edition: 2021
-Safety requirement: "unsafe" Rust is prohibited
+Rust safety requirement: "unsafe" Rust is prohibited
 Architectural objective: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
-Scalability objective: From the smallest supported computation to arbitrarily large programs and machines, subject only to actual resource availability
+Scalability objective: From the smallest supported computation to arbitrarily large programs and machines, subject only to actual available resources and implementation capacity
 Status: Production architecture contract
 
 ---
 
 1. Purpose
 
-The "grammar/functions/" directory owns the source-language syntax and composition of functions in Zamani.
+"grammar/functions/" owns the source-language grammar for functions and function-level syntax in Zamani.
 
-A function is one of the fundamental units through which Zamani expresses reusable computation. Function syntax therefore has to remain independent of any particular:
+Functions are a universal abstraction. The same function mechanism must be capable of expressing computation involving:
 
-- CPU;
-- CPU count;
-- CPU core count;
-- thread count;
-- GPU;
-- GPU count;
-- FPGA;
-- ASIC;
-- QPU;
-- qubit count;
-- memory capacity;
-- storage capacity;
-- network topology;
-- node count;
-- accelerator;
-- vendor;
-- operating system;
-- runtime;
-- scheduler;
-- routing strategy;
-- calibration state;
-- physical device;
-- deployment topology;
-- compiler backend.
+- classical computation;
+- quantum computation;
+- hybrid quantum-classical computation;
+- HDL and hardware/software co-design;
+- AI/ML;
+- tensors and data processing;
+- distributed computation;
+- parallel/HPC computation;
+- networking;
+- cryptography;
+- scientific computation;
+- embedded computation;
+- accelerators;
+- edge/cloud execution;
+- future computational paradigms.
 
-The function grammar must describe portable program structure and intent, not a machine on which that function happens to execute.
+The function grammar therefore describes portable source-level computation and intent.
 
-The governing architectural rule is:
+It must not describe a particular machine.
 
-«Function syntax describes computation; downstream semantic, compiler, resource, runtime, and hardware systems determine realization.»
+The governing rule is:
 
-This is a prerequisite for POCO-REAF.
+«Function syntax describes computation and portable intent; semantic analysis and downstream compilation systems determine how that computation is realized.»
+
+This separation is mandatory for POCO-REAF.
 
 ---
 
 2. Architectural Objective
 
-The function subsystem participates in the complete Zamani pipeline:
+The function grammar participates in the following repository-wide pipeline:
 
 Zamani source
     │
     ▼
-canonical lexer
+canonical lexical layer
     │
     ▼
 canonical parser
@@ -73,85 +66,167 @@ domain-neutral frontend AST
     ▼
 structural validation
     │
-    ▼
-name / scope / type / generic / effect / capability analysis
+    ├── name/scope analysis
+    ├── type analysis
+    ├── generic analysis
+    ├── effect analysis
+    ├── ownership/resource analysis
+    ├── capability analysis
+    ├── contract analysis
+    └── portability analysis
     │
     ▼
 semantic model
     │
-    ├───────────────┬──────────────────┬──────────────────┐
-    ▼               ▼                  ▼
-classical IR   quantum::ir       HDL/hardware IR
-    │               │                  │
-    └───────────────┴──────────────────┘
+    ├───────────────┬────────────────────┬───────────────────┐
+    ▼               ▼                    ▼
+classical IR    quantum::ir       HDL/hardware IR
+    │               │                    │
+    └───────────────┴────────────────────┘
                     │
                     ▼
                optimization
                     │
-          ┌─────────┴─────────┐
-          ▼                   ▼
-       routing            scheduling
-          │                   │
-          └─────────┬─────────┘
-                    ▼
-              resilience/QEC
-                    │
-                    ▼
-                   ZQN
-                    │
-                    ▼
-                   HAL
-                    │
-                    ▼
-            target realization
-                    │
-                    ▼
-                 runtime
+          ┌─────────┼─────────┐
+          ▼         ▼         ▼
+       routing   scheduling  resilience
+                                │
+                                ▼
+                               QEC
+                                │
+                                ▼
+                               ZQN
+                                │
+                                ▼
+                               HAL
+                                │
+                                ▼
+                        target realization
+                                │
+                                ▼
+                             runtime
 
-"grammar/functions/" participates only in the source-language syntax portion of this pipeline.
+"grammar/functions/" participates only in the source-language syntax and parser composition layer.
 
-It must not become a second semantic model, compiler IR, runtime language, hardware description system, or quantum IR.
+It must not become:
+
+- a semantic type system;
+- a compiler IR;
+- a runtime language;
+- an ABI implementation;
+- a hardware model;
+- a quantum IR;
+- a QEC implementation;
+- a routing implementation;
+- a scheduler;
+- a resource allocator;
+- a linker;
+- a deployment engine.
 
 ---
 
-3. Directory Ownership
+3. Repository Authority
 
-This directory owns the syntax for:
+The function grammar must follow the repository-wide authority model.
 
-- ordinary named functions;
+The authority chain is:
+
+language specification
+        │
+        ▼
+canonical grammar composition
+        │
+        ▼
+ANTLR parser
+        │
+        ▼
+frontend AST
+        │
+        ▼
+semantic model
+        │
+        ▼
+canonical IR/domain IR
+        │
+        ▼
+compiler/runtime realization
+
+The following files are not interchangeable authorities:
+
+grammar/Zamani.g4
+grammar/grammar.md
+grammar/Zamani-Grammar.md
+src/lexer.rs
+src/parser.rs
+src/ast/...
+
+Their responsibilities must remain distinct.
+
+"Zamani.g4" is the grammar composition root.
+
+"grammar/grammar.md" describes implementation/specification conformance.
+
+"Zamani-Grammar.md" remains a broader design/reference surface and must not silently introduce accepted syntax.
+
+"src/lexer.rs", "src/parser.rs", and the frontend AST determine what the current Rust implementation actually accepts and represents.
+
+A function feature is production-complete only when its specification, grammar, AST, semantic, IR, compiler, runtime, and tests are aligned.
+
+---
+
+4. Directory Ownership
+
+4.1 This directory owns
+
+"grammar/functions/" owns source syntax for:
+
+- named functions;
 - function declarations;
 - function definitions;
 - function signatures;
 - parameters;
 - return clauses;
 - generic function parameters;
-- function generic constraints;
-- closures where specifically delegated here;
-- asynchronous function syntax;
-- generators;
-- compile-time function syntax;
-- foreign/external function declarations;
+- generic function constraints;
 - function contracts;
+- closures where delegated to this directory;
+- lambda/function-value syntax where delegated to this directory;
+- asynchronous functions;
+- generators;
+- compile-time functions;
+- foreign/external function declarations;
+- function-level calling-convention attachments;
 - function-level modifiers;
-- function-level attributes as composition points;
-- function-level effect attachment;
-- function-level semantic requirement/capability attachment where defined by the canonical grammar.
+- function-level metadata attachment points;
+- function-level effects where composed through the canonical effects grammar;
+- function-level requirements/capability attachment points where specified by the language.
 
-This directory does not own the meaning of:
+4.2 This directory does not own
 
+It does not own the semantic meaning of:
+
+- identifiers;
+- names;
+- paths;
 - types;
 - expressions;
 - statements;
-- names;
-- attributes;
+- blocks;
 - modules;
 - packages;
+- imports;
+- exports;
 - effects;
 - resources;
 - capabilities;
+- ownership;
+- borrowing;
+- lifetimes;
+- memory allocation;
 - hardware;
+- topology;
 - quantum operations;
-- quantum states;
+- quantum state semantics;
 - QEC;
 - ZQN;
 - routing;
@@ -159,150 +234,153 @@ This directory does not own the meaning of:
 - optimization;
 - HAL;
 - runtime execution;
-- ABI implementation;
 - linking;
 - loading;
 - deployment;
 - target selection;
-- physical resource allocation.
+- physical device allocation;
+- ABI implementation;
+- register allocation;
+- stack layout.
 
-Those belong to their respective repository subsystems.
+Those remain owned by their canonical repository subsystems.
 
 ---
 
-4. Actual File Set
+5. Actual File Set
 
-The existing function grammar uses the following files and these names should be retained:
+The current directory contains the following function-related files.
+
+These existing filenames must be retained unless there is an independently justified repository-wide migration:
 
 grammar/functions/
 ├── README.md
 ├── async.g4
+├── calling-conventions.g4
 ├── closures.g4
 ├── compile-time-functions.g4
 ├── constraints.g4
+├── contracts.g4
 ├── foreign-functions.g4
 ├── functions.g4
 ├── generators.g4
 ├── generics.g4
+├── lambdas.g4
 ├── parameters.g4
-├── returns.g4
-└── contracts.g4
+└── returns.g4
 
-The README must not introduce a parallel naming system such as:
+No unnecessary renaming is required.
 
-return-types.g4
-calling-conventions.g4
+In particular:
 
-unless those files are actually created and formally promoted into the architecture.
+- keep "returns.g4";
+- keep "calling-conventions.g4";
+- keep "lambdas.g4";
+- keep "foreign-functions.g4";
+- keep "compile-time-functions.g4".
 
-Do not rename the existing files merely for naming consistency.
-
-Existing filenames are retained for compatibility and repository continuity.
+The README must accurately describe the files that actually exist.
 
 ---
 
-5. File Ownership Matrix
+6. File Ownership Matrix
 
-File| Owns
-"functions.g4"| Canonical composition of ordinary named function declarations/definitions
-"parameters.g4"| Function parameter syntax
-"returns.g4"| Function return syntax
-"generics.g4"| Generic parameter declaration syntax
-"constraints.g4"| Function-level generic constraint syntax
+File| Canonical responsibility
+"functions.g4"| Composition/framing of ordinary named function declarations and definitions
+"parameters.g4"| Function parameter-list syntax
+"returns.g4"| Function return-clause syntax
+"generics.g4"| Generic function parameter syntax
+"constraints.g4"| Function generic constraint syntax
 "contracts.g4"| Function contract syntax
-"closures.g4"| Closure/lambda syntax owned by this subsystem
-"async.g4"| Asynchronous function syntax
+"closures.g4"| Closure syntax
+"lambdas.g4"| Lambda/function-value syntax where distinct from closure framing
+"async.g4"| Asynchronous function syntax/modifiers
 "generators.g4"| Generator syntax
-"compile-time-functions.g4"| Compile-time function syntax
-"foreign-functions.g4"| Foreign/external function declaration syntax
-"README.md"| Architecture, ownership, integration, invariants, and completion criteria
+"compile-time-functions.g4"| Compile-time function declaration/invocation syntax
+"foreign-functions.g4"| Function declarations whose implementation is external
+"calling-conventions.g4"| Function-level calling-convention attachment syntax
+"README.md"| Architecture, ownership, integration, invariants, validation and completion contract
 
 No file may silently become the owner of another file's grammar.
 
 ---
 
-6. Single-Authority Rule
+7. Single-Authority Rule
 
-There must be exactly one authoritative grammar owner for every function-language production.
+Every grammar production must have exactly one canonical owner.
 
-For example:
+The intended ownership is:
 
 function declaration
-    -> functions.g4
+    → functions.g4
 
 parameter list
-    -> parameters.g4
+    → parameters.g4
 
 return clause
-    -> returns.g4
+    → returns.g4
 
 generic parameters
-    -> generics.g4
+    → generics.g4
 
-function generic constraints
-    -> constraints.g4
+generic constraints
+    → constraints.g4
 
-function contracts
-    -> contracts.g4
+contracts
+    → contracts.g4
 
-async modifier
-    -> async.g4
+closures
+    → closures.g4
+
+lambdas
+    → lambdas.g4
+
+async function syntax
+    → async.g4
 
 generator syntax
-    -> generators.g4
+    → generators.g4
 
-compile-time function syntax
-    -> compile-time-functions.g4
+compile-time functions
+    → compile-time-functions.g4
 
-foreign function syntax
-    -> foreign-functions.g4
+foreign function declarations
+    → foreign-functions.g4
 
-The following must not be duplicated inside "functions.g4":
+calling-convention attachment
+    → calling-conventions.g4
 
-parameterList
-genericParameterList
-functionConstraintClause
-functionContractClause
-returnClause
+The following must not be independently redefined in multiple function files:
+
+identifier
+qualifiedName
 typeExpression
 expression
 statement
+block
 attribute
-identifier
-qualifiedName
+parameterList
+returnClause
+genericParameterList
+constraintClause
+effectClause
+contractClause
 
-unless the architecture explicitly identifies "functions.g4" as their canonical owner.
-
----
-
-7. "functions.g4"
-
-7.1 Purpose
-
-"functions.g4" is the canonical composition grammar for ordinary named functions.
-
-It owns:
-
-- function declaration composition;
-- function definition composition;
-- function signature composition;
-- function name attachment;
-- function modifier attachment;
-- generic attachment;
-- parameter attachment;
-- return attachment;
-- constraint attachment;
-- effect attachment;
-- contract attachment;
-- body/prototype boundary.
-
-It does not own the internals of those components.
+They must be consumed from their canonical owners.
 
 ---
 
-7.2 Canonical Composition
+8. "functions.g4"
 
-Conceptually, a function is assembled as:
+8.1 Purpose
+
+"functions.g4" is the composition root for ordinary named function declarations.
+
+It owns function framing.
+
+It does not own the internals of parameters, types, expressions, contracts, generics, effects, or statements.
+
+Conceptually:
 
 attributes*
 modifiers*
@@ -311,10 +389,10 @@ function name
 generic parameters?
 parameter list
 return clause?
-generic constraints?
-effect clause?
-contract*
-implementation/prototype
+constraints?
+effects?
+contracts*
+body | prototype
 
 For example:
 
@@ -328,63 +406,60 @@ async fn compute<T>(value: T) -> Result<T> {
     ...
 }
 
-The exact accepted spelling remains determined by the authoritative grammar and language specification.
+The exact accepted syntax is determined by the canonical grammar and language specification.
 
----
+8.2 Function composition must remain domain-neutral
 
-7.3 "functions.g4" must not become a feature catalogue
-
-Do not create:
+Do not create separate universal function grammars such as:
 
 cpuFunction
 gpuFunction
-qpuFunction
 fpgaFunction
+qpuFunction
 cudaFunction
-aiFunction
 quantumFunction
+aiFunction
 hdlFunction
 distributedFunction
 
-as separate universal function languages.
+The same function mechanism must serve every domain.
 
-The same function syntax must work across domains.
-
-Domain meaning comes from:
+Domain meaning enters through:
 
 - types;
+- declarations;
 - effects;
 - capabilities;
-- requirements;
+- resource requirements;
+- contracts;
 - attributes;
-- declarations;
 - semantic analysis.
 
 ---
 
-8. "parameters.g4"
+9. "parameters.g4"
 
-8.1 Purpose
+Purpose
 
-"parameters.g4" owns function parameter syntax.
+"parameters.g4" owns the syntax of function parameters.
 
-It must support the parameter forms defined by the language specification without imposing machine-dependent limits.
+It must permit arbitrary parameter-list length subject only to parser/compiler resource capacity.
 
-Potential semantic parameter categories include:
+The grammar must not impose:
 
-- ordinary values;
-- references;
-- resources;
-- capabilities;
-- quantum values;
-- tensors;
-- distributed values;
-- hardware abstractions;
-- future domain values.
+MAX_PARAMETERS
+MAX_ARGUMENTS
+MAX_GENERIC_PARAMETERS
 
----
+A function with:
 
-8.2 Ownership Boundary
+zero parameters
+one parameter
+many parameters
+
+must use the same grammar mechanism.
+
+Semantic boundary
 
 "parameters.g4" does not own:
 
@@ -392,98 +467,79 @@ Potential semantic parameter categories include:
 - type inference;
 - ownership;
 - borrowing;
-- lifetime analysis;
+- lifetimes;
 - memory allocation;
 - ABI lowering;
-- calling convention selection.
+- calling convention selection;
+- resource allocation.
 
-For example:
+Example:
 
-fn compute(value: Tensor<T>) -> Tensor<T>
+fn process(value: Tensor<T>) -> Tensor<T>
 
-gets its parameter structure from "parameters.g4", but "Tensor<T>" belongs to the canonical type system.
+The parameter structure belongs to "parameters.g4".
 
----
-
-8.3 Scalability
-
-There must be no grammar-level constants such as:
-
-MAX_PARAMETERS
-MAX_ARGUMENTS
-MAX_GENERIC_PARAMETERS
-
-Parameter lists use grammar repetition.
-
-A function with:
-
-0
-1
-2
-...
-many
-
-parameters must be represented by the same language mechanism.
-
-Actual implementation limits are resource-policy concerns, not language semantics.
+"Tensor<T>" belongs to the canonical type system.
 
 ---
 
-9. "returns.g4"
+10. "returns.g4"
 
-9.1 Purpose
+Purpose
 
-"returns.g4" owns function return syntax.
+"returns.g4" owns the syntax attaching a result specification to a function.
 
-It defines the syntax attaching a result type or result structure to a function.
-
-Examples include:
+Examples:
 
 fn compute() -> Int
+
 fn transform<T>(value: T) -> T
+
 fn measure(q: Qubit) -> Measurement
 
 The return type itself belongs to the canonical type system.
 
----
+"returns.g4" must not enumerate concrete types.
 
-9.2 No Type Duplication
-
-"returns.g4" must not enumerate:
+Do not create return-specific lists such as:
 
 Int
 Float
-Tensor
 Qubit
+Tensor
 Measurement
 ...
 
-as return-specific grammar alternatives.
-
-New types must become usable as function return types without changing this file.
+Every valid Zamani type must become usable as a function result through the canonical type-expression mechanism.
 
 ---
 
-10. "generics.g4"
+11. "generics.g4"
 
-10.1 Purpose
+Purpose
 
-"generics.g4" owns the syntax for generic function parameters.
+"generics.g4" owns generic function parameter syntax.
 
 Examples:
 
 <T>
+
 <T, U>
+
 <T: Numeric>
-<T, U: Comparable>
 
-The exact syntax is determined by the canonical generic/type specification.
+The generic mechanism must be open-ended.
 
----
+There must be no grammar-level maximum number of:
 
-10.2 Semantic Boundary
+- generic parameters;
+- generic arguments;
+- bounds;
+- associated constraints.
 
-This file does not own:
+Does not own
+
+"generics.g4" does not implement:
 
 - type inference;
 - generic substitution;
@@ -492,1009 +548,769 @@ This file does not own:
 - monomorphization;
 - associated-type resolution;
 - capability resolution;
-- constraint satisfiability.
+- constraint solving.
 
 The pipeline is:
 
 generic syntax
     ↓
-AST
+AST generic representation
     ↓
-generic semantic model
+semantic generic environment
     ↓
-type/trait/capability solving
+constraint/type solving
     ↓
-compiler specialization/lowering
+specialization/lowering where required
 
 ---
 
-10.3 Unbounded Generic Arity
+12. "constraints.g4"
 
-Never implement generics as:
+Purpose
 
-generic1
-generic2
-generic3
-...
+"constraints.g4" owns source syntax for constraints associated with generic functions.
 
-Use repetition.
+Constraints may express requirements over:
 
-There must be no language-level maximum on generic parameter count.
+- types;
+- capabilities;
+- traits/interfaces;
+- effects;
+- resources;
+- semantic properties.
 
----
+The grammar must represent constraints without hard-coding a finite list of future capabilities.
 
-11. "constraints.g4"
+For example, the syntax may express a symbolic requirement, while semantic analysis determines whether the requirement is satisfiable.
 
-11.1 Purpose
+Separation
 
-"constraints.g4" owns function-level generic constraint syntax.
+A constraint is not automatically:
 
-It connects a generic parameter to a canonical constraint/type-bound construct.
+- a hardware allocation;
+- a device selection;
+- a compiler optimization;
+- a scheduler decision.
 
 For example:
 
-where T: Numeric
+requires capability("tensor.compute")
 
-The grammar does not decide whether "T" was actually declared.
+is fundamentally different from:
 
-That is semantic analysis.
+use GPU 0
 
----
+The first expresses portable intent.
 
-11.2 Important Separation
-
-A function generic constraint is not automatically the same thing as:
-
-- a resource requirement;
-- a hardware requirement;
-- a capability;
-- an effect;
-- a runtime condition.
-
-The semantic system determines the distinction.
-
-Do not allow this file to become a second general-purpose constraint language.
+The second is target realization and must not become a universal function-language requirement.
 
 ---
 
-12. "contracts.g4"
+13. "contracts.g4"
 
-12.1 Purpose
+Purpose
 
-"contracts.g4" owns source-level function contract syntax such as:
+"contracts.g4" owns function-level contract syntax.
 
-contract {
-    requires(...);
-    ensures(...);
-    invariant(...);
-}
+Contracts may express source-level properties such as:
 
-It does not own contract semantics.
+- preconditions;
+- postconditions;
+- invariants;
+- behavioral requirements;
+- purity/semantic guarantees where specified;
+- resource/capability requirements where explicitly defined by the language specification.
 
----
+Contracts must remain declarative.
 
-12.2 Semantic Boundary
+They must not execute compiler/runtime actions while parsing.
 
-The semantic subsystem determines:
+Contract pipeline
 
-- identifier validity;
-- type correctness;
-- scope;
-- contract consistency;
-- satisfiability;
-- verification;
-- runtime checkability;
-- compile-time checkability;
-- effects of contract expressions.
+contract syntax
+    ↓
+AST contract
+    ↓
+semantic validation
+    ↓
+verification/analysis
+    ↓
+optimization/lowering/runtime enforcement as appropriate
 
-Parsing successfully does not mean a contract is valid.
-
----
-
-12.3 No Contract IR
-
-Do not create a second universal IR merely for contracts.
-
-Contracts become semantic metadata and obligations consumed by appropriate verification/compiler/runtime stages.
-
-They must not create:
-
-ContractIR
-QuantumContractIR
-HardwareContractIR
-
-unless a future architecture explicitly establishes a canonical IR for such semantics.
+The grammar must not decide how a contract is proven or enforced.
 
 ---
 
-13. "closures.g4"
+14. "closures.g4"
 
-13.1 Purpose
+Purpose
 
-"closures.g4" owns closure/lambda syntax where closures are part of the function grammar subsystem.
+"closures.g4" owns closure syntax.
 
-Closures must remain independent of:
+A closure must be capable of capturing values according to the language's semantic ownership model.
 
-- stack layout;
-- heap layout;
-- register allocation;
-- thread implementation;
-- executor;
-- CPU;
-- GPU;
-- QPU;
-- FPGA;
-- runtime scheduling.
+The grammar does not implement:
 
-A closure is a language construct.
+- capture analysis;
+- ownership;
+- borrowing;
+- lifetime inference;
+- heap allocation;
+- stack allocation;
+- closure representation;
+- ABI lowering.
 
-Its representation is a compiler decision.
+Those belong downstream.
 
----
+Scalability
 
-14. "async.g4"
+There must be no grammar-level maximum on:
 
-14.1 Purpose
+- captured values;
+- parameters;
+- nesting depth;
+- closure count.
 
-"async.g4" owns source-level asynchronous function syntax.
-
-For example:
-
-async fn compute(...) -> Result<T> {
-    ...
-}
-
-The grammar expresses asynchronous semantics.
-
-It does not select:
-
-- executor;
-- event loop;
-- scheduler;
-- worker count;
-- thread count;
-- CPU;
-- GPU;
-- accelerator;
-- node;
-- task placement.
+Implementation resource exhaustion is not language semantics.
 
 ---
 
-14.2 POCO-REAF Requirement
+15. "lambdas.g4"
 
-The following must remain conceptually distinct:
+Purpose
 
-async
+"lambdas.g4" owns lambda/function-value syntax where that syntax is distinct from ordinary named functions and closures.
 
-and:
+It must integrate with:
 
-run on 8 threads
+expressions/
+functions/
+types/
+core/
 
-The first is language semantics.
+without creating a second function type system.
 
-The second is an implementation/deployment decision.
+The result of a lambda expression must map into the canonical AST representation for callable/function values.
 
-If Zamani eventually permits resource preferences, those belong to the resource/capability/deployment architecture.
+The semantic layer determines:
+
+- capture behavior;
+- inferred types;
+- effects;
+- ownership;
+- lifetime;
+- calling behavior;
+- lowering.
+
+"lambdas.g4" must not create a lambda-specific IR.
 
 ---
 
-15. "generators.g4"
+16. "async.g4"
 
-15.1 Purpose
+Purpose
 
-"generators.g4" owns generator syntax.
+"async.g4" owns source syntax for asynchronous functions.
 
-Generators may represent:
+It must compose with:
 
-- lazy computation;
-- iteration;
-- streaming;
-- resumable computation;
-- producer semantics.
+- "functions.g4";
+- "parameters.g4";
+- "generics.g4";
+- "returns.g4";
+- canonical types;
+- expressions;
+- statements;
+- concurrency grammar.
+
+Asynchronous syntax must not imply a fixed implementation strategy.
 
 The grammar must not encode:
 
-- queue capacity;
-- buffer size;
-- worker count;
-- thread count;
-- memory capacity;
-- machine topology.
+N threads
+N cores
+N tasks
+N workers
+N nodes
 
-Those are downstream resource/runtime concerns.
+The runtime/scheduler determines realization.
 
----
+The semantic model may distinguish concepts such as:
 
-16. "compile-time-functions.g4"
+async computation
+awaitable computation
+task
+future
+stream
+actor
 
-16.1 Purpose
-
-This file owns source syntax for compile-time functions where Zamani exposes such a construct.
-
-Compile-time functions may support:
-
-- compile-time evaluation;
-- compile-time generated values;
-- compile-time metadata;
-- type-level computation where specified;
-- specialization inputs;
-- generated declarations.
+without committing the grammar to a particular runtime implementation.
 
 ---
 
-16.2 Security Boundary
+17. "generators.g4"
 
-Compile-time functions must not automatically receive unrestricted access to:
+Purpose
 
-- filesystem;
-- network;
-- environment;
-- secrets;
-- credentials;
-- hardware;
-- external processes.
+"generators.g4" owns generator syntax.
 
-Capability/effect/security systems determine which operations are permitted.
+Generators must support potentially unbounded logical sequences without a grammar-level size limit.
 
-The grammar describes syntax; it does not grant authority.
+The grammar must not encode:
+
+MAX_YIELDS
+MAX_GENERATOR_DEPTH
+MAX_ELEMENTS
+
+The semantic/runtime layers determine:
+
+- state-machine lowering;
+- storage;
+- scheduling;
+- suspension/resumption;
+- cancellation;
+- resource usage.
 
 ---
 
-17. "foreign-functions.g4"
+18. "compile-time-functions.g4"
 
-17.1 Purpose
+Purpose
 
-"foreign-functions.g4" owns source-level declarations for externally implemented functions.
+"compile-time-functions.g4" owns syntax for functions explicitly designated to participate in compile-time computation.
 
-A foreign function declaration is an interface contract, not an implementation.
+It must remain separate from ordinary runtime functions while reusing the canonical:
 
-It may expose metadata for:
-
-- external language;
-- external symbol;
-- linkage;
-- representation;
-- ABI;
+- function syntax;
 - parameters;
-- return types;
-- effects;
-- capabilities;
-- requirements;
-- attributes.
+- generics;
+- types;
+- expressions;
+- contracts;
+- capabilities.
+
+Compile-time execution must not become an unrestricted parser escape hatch.
+
+The grammar does not grant permission for:
+
+- arbitrary filesystem access;
+- arbitrary network access;
+- arbitrary process execution;
+- secret extraction;
+- hardware discovery;
+- runtime device mutation.
+
+Such capabilities require explicit language/security/compilation semantics.
+
+The compile-time function model must remain deterministic where the language requires reproducible builds.
 
 ---
 
-17.2 Open-World Foreign Interoperability
+19. "foreign-functions.g4"
 
-Do not turn the grammar into a fixed list such as:
+Purpose
+
+"foreign-functions.g4" owns source syntax for functions whose implementation exists outside the current Zamani compilation unit or language.
+
+Examples may include external functions implemented in:
+
+- C;
+- C++;
+- Rust;
+- Python;
+- Fortran;
+- HDL;
+- another Zamani dialect;
+- another interoperable computational representation.
+
+The grammar must use symbolic identities rather than an exhaustive language list.
+
+For example, the external language may be represented as metadata rather than:
 
 C
 C++
-Rust
-Python
-Fortran
 CUDA
-OpenCL
+Python
+Rust
 ...
 
-as hard-coded parser alternatives.
+as permanently hard-coded grammar alternatives.
 
-A new interoperable language must not require rewriting the fundamental function grammar merely because the ecosystem expands.
+Ownership
 
-Interoperability metadata belongs to the interoperability subsystem.
+This file does not own:
 
----
+- linking;
+- symbol lookup;
+- dynamic loading;
+- ABI implementation;
+- foreign type layout;
+- object-file generation;
+- deployment.
 
-18. Effects Integration
-
-Functions may attach effects through the canonical effects grammar.
-
-The function subsystem may compose an effect clause, but does not own effect semantics.
-
-Effects may eventually describe operations involving:
-
-- I/O;
-- networking;
-- quantum computation;
-- hardware interaction;
-- distributed communication;
-- security;
-- persistence;
-- future domains.
-
-Do not hard-code every possible future effect into "functions.g4".
+Those belong to interoperability/compiler/runtime systems.
 
 ---
 
-19. Capability and Resource Integration
+20. "calling-conventions.g4"
 
-Function syntax may participate in the canonical capability/resource model.
+Purpose
 
-The critical distinction is:
+"calling-conventions.g4" owns the function-level source syntax for referring to a calling convention.
 
-semantic requirement
+It must not implement an ABI.
+
+The distinction is mandatory:
+
+calling-convention syntax
         ≠
+calling-convention semantics
+        ≠
+ABI implementation
+        ≠
+target lowering
+
+ABI contracts remain associated with:
+
+grammar/interoperability/abi.g4
+
+where appropriate.
+
+Open-world requirement
+
+The grammar must not permanently enumerate every known ABI.
+
+Do not turn this into:
+
+c
+cdecl
+stdcall
+fastcall
+thiscall
+sysv64
+win64
+aapcs
+vectorcall
+...
+
+as a finite universal language list.
+
+Future ABIs and conventions must be representable without modifying the function grammar.
+
+A convention reference is a symbolic source-level contract.
+
+Its existence and target support are semantic/compiler concerns.
+
+Hardware neutrality
+
+A calling convention must not imply:
+
+CPU 0
+GPU 0
+QPU 0
+FPGA 0
+physical register
+physical address
+specific core
+specific node
+
+Those are downstream target-realization concerns.
+
+---
+
+21. Function-Level Modifiers
+
+Function modifiers must remain compositional.
+
+Examples can include concepts such as:
+
+- visibility;
+- async;
+- compile-time;
+- external;
+- static;
+- abstract;
+- virtual;
+- override;
+- domain-independent semantic modifiers defined by the specification.
+
+A modifier must have exactly one semantic owner.
+
+If a modifier is universally applicable, it belongs in the appropriate core/function composition grammar.
+
+If it is domain-specific, it belongs to that domain's grammar and must integrate through the canonical function extension point.
+
+Do not create a separate function language for every domain.
+
+---
+
+22. Attributes
+
+Function attributes must use the canonical attribute grammar.
+
+Do not redefine attribute syntax in every function file.
+
+The relationship is:
+
+function
+    ↓
+attribute attachment point
+    ↓
+canonical attribute grammar
+    ↓
+semantic attribute interpretation
+
+Attributes may provide extensibility without forcing every future capability to become a new reserved keyword.
+
+However, attributes must not become an uncontrolled semantic escape hatch.
+
+Their namespace, ownership, versioning, validation and meaning must remain defined by the repository's attribute/specification system.
+
+---
+
+23. Effects
+
+Functions may interact with the canonical effects system.
+
+The function grammar only provides the attachment point.
+
+Effect semantics remain owned by:
+
+grammar/effects/
+
+The relationship is:
+
+function
+    ↓
+effect clause
+    ↓
+canonical effect grammar
+    ↓
+effect AST
+    ↓
+effect checking
+    ↓
+semantic model
+
+The function grammar must not duplicate effect declarations or handlers.
+
+---
+
+24. Resource and Capability Integration
+
+Function declarations must be capable of expressing portable resource/capability intent where the language specification permits it.
+
+The important distinction is:
+
+requirement
+constraint
+capability
+preference
+hint
 implementation decision
+
+These are not interchangeable.
 
 For example:
 
 requires capability("quantum.measurement")
 
-can express a portable requirement.
+is a portable semantic requirement.
 
-It must not mean:
+It is not:
 
 use QPU 0
 
 Likewise:
 
-requires resource(...)
+requires memory >= required
 
-must not implicitly select:
+must not become a grammar-level statement such as:
 
-- a physical device;
-- a physical qubit;
-- a specific GPU;
-- a CPU core;
-- a memory bank;
-- a network node.
+MAX_MEMORY = ...
 
-Resource realization belongs downstream.
+Function syntax must remain independent of today's machine sizes.
 
 ---
 
-20. Classical Computing Integration
+25. Classical Integration
 
-Functions must be domain-neutral enough to support:
+A classical function may lower toward the repository's classical IR.
 
-- scalar computation;
-- integer computation;
-- floating point;
-- vectors;
-- matrices;
-- tensors;
-- symbolic mathematics;
-- numerical methods;
-- statistics;
-- signal processing;
-- scientific computing;
-- optimization;
-- data processing.
+The grammar must not know:
 
-No changes to function grammar should be necessary merely because a new classical type or library is introduced.
+- CPU architecture;
+- register width;
+- number of cores;
+- SIMD width;
+- cache size;
+- physical memory size.
+
+The function grammar describes the computation.
+
+Target-specific realization occurs later.
 
 ---
 
-21. Quantum Integration
+26. Quantum Integration
 
-Quantum functions must use ordinary function mechanisms.
+Quantum functions remain ordinary Zamani functions.
 
-For example:
+For example, a quantum function may conceptually have:
 
-fn prepare(q: Qubit) -> Qubit
+fn transform(q: Qubit) -> Measurement {
+    ...
+}
 
-or:
+or generic/parameterized quantum computation.
 
-fn measure(q: Qubit) -> Measurement
-
-The function grammar does not own:
-
-- "Qubit";
-- "Measurement";
-- quantum gates;
-- quantum states;
-- circuit semantics;
-- physical qubits;
-- coupling maps;
-- calibration;
-- routing;
-- scheduling;
-- QEC;
-- ZQN;
-- HAL.
-
-Those belong to their respective subsystems.
-
----
-
-21.1 Canonical Quantum Boundary
-
-Quantum lowering remains:
-
-function syntax
-    ↓
-domain-neutral AST
-    ↓
-semantic analysis
-    ↓
-quantum::ir
-    ↓
-optimization
-    ↓
-routing
-    ↓
-scheduling
-    ↓
-QEC/resilience
-    ↓
-ZQN
-    ↓
-HAL
-    ↓
-target realization
-
-"quantum::ir" remains the canonical quantum semantic boundary.
-
-"grammar/functions/" must never introduce another quantum IR.
-
----
-
-22. Hybrid Quantum-Classical Integration
-
-A function may combine classical and quantum computation:
-
-classical input
-    ↓
-quantum operation
-    ↓
-measurement
-    ↓
-classical computation
-    ↓
-quantum operation
-
-The function grammar does not need separate:
+The function grammar must not introduce:
 
 quantumFunction
-hybridFunction
-classicalFunction
+QuantumFunction
+QuantumGateFunction
+QPUFunction
 
-constructs.
+as separate universal languages.
 
-The existing generic function model is the integration point.
+Quantum meaning is provided by the quantum type/operation/semantic systems.
 
----
+The required lowering boundary is:
 
-23. HDL and Hardware/Software Co-Design
+Zamani function syntax
+        ↓
+domain-neutral AST
+        ↓
+semantic quantum representation
+        ↓
+quantum::ir
+        ↓
+optimization
+        ↓
+routing
+        ↓
+scheduling
+        ↓
+QEC/resilience
+        ↓
+ZQN
+        ↓
+HAL
+        ↓
+target realization
 
-Functions must be usable in programs involving:
-
-- hardware/software co-design;
-- accelerators;
-- FPGA computation;
-- ASIC-oriented computation;
-- hardware interfaces;
-- embedded systems;
-- HDL constructs.
-
-However, function syntax must not encode universal machine limits such as:
-
-MAX_REGISTER_WIDTH
-MAX_PORTS
-MAX_PIPELINE_DEPTH
-MAX_FPGA_RESOURCES
-MAX_ACCELERATORS
-
-Hardware intent belongs to:
-
-grammar/hdl/
-grammar/hardware/
-grammar/resources/
-
-and their semantic/compiler consumers.
+"grammar/functions/" must never create a second quantum IR.
 
 ---
 
-24. Distributed and Parallel Integration
+27. Hybrid Quantum-Classical Integration
 
-Functions must be capable of representing computations eventually executed across:
+The same function mechanism must support:
 
-- one processor;
-- many processors;
-- many machines;
-- clusters;
-- cloud systems;
-- edge systems;
-- distributed accelerators;
-- future computational substrates.
+classical computation
+        ↓
+quantum operation
+        ↓
+measurement
+        ↓
+classical decision
+        ↓
+quantum operation
 
-No function grammar rule may require:
+without requiring separate function syntaxes.
 
-node0
-node1
-node2
+Hybrid meaning is determined by:
 
-or impose a maximum node count.
+- types;
+- effects;
+- quantum semantics;
+- classical semantics;
+- capabilities;
+- resource requirements;
+- semantic analysis.
 
-Placement and deployment belong downstream.
+The function grammar remains common.
 
 ---
 
-25. AI/ML and Data Integration
+28. HDL and Hardware Co-design Integration
 
-Functions must naturally accept and return:
+Functions may represent computations associated with hardware/software co-design.
+
+The grammar must not hard-code:
+
+32-bit
+64-bit
+8 cores
+16 lanes
+N FPGAs
+N accelerators
+N memory banks
+
+unless such values are explicitly part of the program's semantic data or parameterization.
+
+A function can express hardware-related intent through the canonical hardware/resource systems.
+
+For example, conceptually:
+
+requires capability("accelerated.compute")
+
+rather than binding the source program to a particular accelerator instance.
+
+The function grammar remains target-neutral.
+
+---
+
+29. Distributed and Parallel Integration
+
+Functions must support distributed and parallel computation without embedding topology.
+
+There must be no function-level language rule equivalent to:
+
+run_on_8_nodes
+run_on_16_cores
+run_on_gpu_0
+
+unless a future specification explicitly defines such syntax as target-specific deployment intent rather than universal function semantics.
+
+The portable model is:
+
+function
+    ↓
+parallel/distributed semantic intent
+    ↓
+resource/capability model
+    ↓
+compiler
+    ↓
+placement/scheduling
+
+The actual number of workers, nodes, devices and execution units is determined downstream.
+
+---
+
+30. AI/ML Integration
+
+AI/ML functions must use the same function grammar.
+
+Examples include functions that operate on:
 
 - tensors;
-- models;
 - datasets;
-- streams;
-- symbolic values;
+- models;
+- gradients;
 - probabilistic values;
-- AI agents;
-- accelerator abstractions.
+- agents;
+- inference pipelines;
+- training computations.
 
-For example:
+The function grammar must not enumerate:
 
-fn infer(model: Model, input: Tensor) -> Tensor
+PyTorchFunction
+TensorFlowFunction
+JAXFunction
+CUDAFunction
+...
 
-must not need to know whether realization occurs on:
-
-- CPU;
-- GPU;
-- accelerator;
-- FPGA;
-- distributed cluster;
-- future hardware.
-
-Framework-specific syntax does not belong in the universal function grammar.
+Framework-specific semantics belong to interoperability/domain libraries and semantic systems.
 
 ---
 
-26. Security Integration
+31. Generic Scalability Rule
 
-Function declarations may participate in security semantics through:
+All function-related repetition must be represented structurally.
 
-- capabilities;
-- effects;
-- contracts;
-- attributes;
-- policies;
-- foreign interfaces.
+The grammar must not define artificial finite limits for:
 
-The function grammar must not itself execute security checks or access secrets.
+functions
+parameters
+arguments
+generic parameters
+generic arguments
+constraints
+contracts
+attributes
+captures
+effects
+returns
+nested functions
+closures
+lambdas
+generator yields
 
-Security semantics belong to the security and semantic-analysis subsystems.
+A grammar such as:
 
----
+X*
+X?
+X+
 
-27. Memory and Ownership Integration
+or equivalent structural composition is preferred over enumerated finite alternatives.
 
-Function parameters and results must remain compatible with the canonical memory/type system.
-
-The function grammar must not independently define:
-
-- ownership;
-- borrowing;
-- lifetimes;
-- allocation;
-- memory regions;
-- address spaces.
-
-Those systems consume function AST information downstream.
-
-This avoids two competing ownership models.
+This permits source-language scaling from tiny programs to arbitrarily large programs, subject only to actual parser/compiler/resource capacity.
 
 ---
 
-28. Function Body Integration
+32. POCO-REAF
 
-Function bodies must use the canonical block/statement/expression grammar.
+POCO-REAF means:
 
-The function grammar should establish only the boundary:
+«Program Once, Compile Once, Run Everywhere, Anywhere, Forever.»
 
-function declaration
-    ->
-function signature
-    ->
-function body OR declaration/prototype terminator
+The function grammar contributes to this objective by expressing portable computation rather than target realization.
 
-It must not recreate:
+A function should describe:
 
-expression
-statement
-block
+what the computation means
+what types it accepts
+what it returns
+what effects it has
+what capabilities it requires
+what semantic contracts it guarantees
+what portable resource constraints matter
 
-inside "functions.g4".
+It should not unnecessarily describe:
 
----
+which CPU
+which core
+which GPU
+which FPGA
+which QPU
+which physical qubit
+which memory bank
+which network node
+which register
+which physical address
 
-29. Attributes
-
-Attributes are owned by the canonical attribute grammar.
-
-Functions may permit attributes to attach to the function declaration.
-
-The function grammar does not need to understand every possible attribute.
-
-This is essential for future extensibility.
-
-A new domain should be able to add an attribute without forcing every core function grammar rule to change.
-
-Semantic analysis determines whether a particular attribute is valid on a function.
+This is the central portability invariant of the directory.
 
 ---
 
-30. Modifiers
+33. Hard-Coding Prohibition
 
-Core function modifiers may be defined where the language specification requires fixed syntax.
-
-However, the modifier system must not become a catalogue of:
-
-- vendors;
-- accelerators;
-- devices;
-- hardware models;
-- operating systems;
-- deployment environments.
-
-Open-ended metadata belongs to attributes/extensions.
-
----
-
-31. AST Contract
-
-Every function grammar construct must have a predetermined mapping into the existing domain-neutral frontend AST.
-
-At minimum, the AST must be capable of preserving:
-
-- complete source span;
-- function name;
-- attributes;
-- modifiers;
-- generic parameters;
-- generic bounds;
-- parameter ordering;
-- parameter modifiers;
-- parameter patterns;
-- parameter types;
-- defaults where supported;
-- variadic state where supported;
-- return type;
-- effects;
-- requirements;
-- capabilities;
-- contracts;
-- body;
-- declaration/prototype state;
-- foreign metadata where applicable;
-- compile-time metadata where applicable;
-- source provenance.
-
-The grammar must not introduce backend-specific AST types such as:
-
-QuantumFunction
-CpuFunction
-GpuFunction
-QpuFunction
-FpgaFunction
-HardwareFunction
-
-unless the domain-neutral AST architecture explicitly establishes such a concept.
-
-The established architectural preference is a generic AST with domain semantics represented through canonical types, operations, attributes, effects, capabilities, and semantic models.
-
----
-
-32. AST → Semantic Model Contract
-
-The parser must preserve enough information for semantic analysis to determine:
-
-- declaration identity;
-- scope;
-- name resolution;
-- overload resolution where supported;
-- generic validity;
-- type validity;
-- parameter legality;
-- return legality;
-- effect legality;
-- capability legality;
-- resource requirements;
-- contract legality;
-- async legality;
-- generator legality;
-- compile-time restrictions;
-- foreign declaration legality;
-- ownership;
-- borrowing;
-- lifetimes;
-- recursion;
-- determinism;
-- domain legality.
-
-The grammar must not perform these semantic decisions.
-
----
-
-33. AST → IR Contract
-
-The function grammar does not directly lower to a domain IR.
-
-The correct path is:
-
-function grammar
-    ↓
-parse tree
-    ↓
-domain-neutral AST
-    ↓
-semantic model
-    ↓
-canonical domain IR
-
-Possible downstream destinations include:
-
-classical IR
-quantum::ir
-HDL/hardware IR
-future domain IR
-
-The function grammar itself must not create a universal function IR.
-
----
-
-34. Quantum IR Contract
-
-A quantum function is lowered into "quantum::ir" only after semantic analysis.
-
-The function grammar must not know:
-
-- physical qubit IDs;
-- routing;
-- gate decomposition;
-- coupling topology;
-- calibration;
-- pulse realization;
-- scheduling;
-- QEC implementation;
-- ZQN semantics;
-- HAL state.
-
-Those remain separate architectural responsibilities.
-
----
-
-35. Compiler Integration
-
-The compiler may consume function information for:
-
-- name resolution;
-- type checking;
-- generic instantiation;
-- specialization;
-- optimization;
-- effect analysis;
-- capability analysis;
-- resource analysis;
-- contract verification;
-- lowering;
-- code generation;
-- provenance;
-- deterministic compilation.
-
-The grammar must not perform compiler work.
-
----
-
-36. Runtime Integration
-
-The runtime may consume lowered function information for:
-
-- invocation;
-- scheduling;
-- asynchronous execution;
-- resource acquisition;
-- distributed placement;
-- checkpointing;
-- resilience;
-- observability;
-- tracing;
-- recovery.
-
-The grammar must not depend on runtime state.
-
-Parsing must remain valid even if:
-
-- no target exists yet;
-- no hardware is currently available;
-- no GPU is installed;
-- no QPU is available;
-- the runtime is offline.
-
-Target realization occurs later.
-
----
-
-37. Tooling Integration
-
-Tooling must consume the canonical parser/AST representation rather than reimplementing function parsing.
-
-The grammar must therefore preserve sufficient source spans and structure for:
-
-- IDE navigation;
-- syntax highlighting;
-- diagnostics;
-- documentation generation;
-- code completion;
-- refactoring;
-- formatting;
-- semantic inspection;
-- contract visualization;
-- generic inspection;
-- call hierarchy;
-- cross-domain tooling.
-
----
-
-38. Error and Diagnostic Contract
-
-Syntax errors belong to parsing.
-
-Semantic errors belong to semantic analysis.
-
-Examples of parser-level errors:
-
-missing function name
-missing parameter delimiter
-malformed generic parameter syntax
-malformed return clause
-malformed constraint syntax
-malformed contract
-missing function body where required
-unexpected token
-missing delimiter
-
-Examples of semantic errors:
-
-unknown function
-duplicate function declaration
-unknown generic parameter
-invalid type
-invalid effect
-unsatisfied capability
-unsatisfied resource requirement
-invalid contract
-invalid ownership
-invalid lifetime
-illegal async operation
-illegal generator operation
-invalid foreign declaration
-
-The grammar must not encode semantic diagnostics as grammar alternatives.
-
----
-
-39. Error Recovery
-
-The grammar must remain structured enough for ANTLR's recovery mechanisms to identify meaningful synchronization points.
-
-Good recovery boundaries include:
-
-- function declarations;
-- parameter lists;
-- generic parameter lists;
-- return clauses;
-- constraint clauses;
-- contract blocks;
-- function bodies.
-
-No embedded Rust parser actions are permitted merely to implement recovery.
-
----
-
-40. Determinism
-
-Given the same:
-
-- source text;
-- canonical lexer version;
-- grammar version;
-- parser configuration;
-
-the function grammar must produce deterministic parser structure.
-
-Parsing must never depend on:
-
-- current CPU;
-- GPU availability;
-- QPU availability;
-- hardware topology;
-- runtime state;
-- network state;
-- calibration;
-- scheduler state;
-- random numbers;
-- external files;
-- environment variables.
-
----
-
-41. Security
-
-The function grammar must contain:
-
-- no embedded Rust execution;
-- no "unsafe";
-- no filesystem access;
-- no network access;
-- no process spawning;
-- no shell execution;
-- no hardware discovery;
-- no secret access;
-- no environment-dependent semantic decisions;
-- no arbitrary code execution.
-
-The generated Rust parser must be usable under the repository's Rust 1.97 / 1.97.1 baseline without requiring "unsafe" application code.
-
----
-
-42. POCO-REAF Contract
-
-The function grammar must not impose artificial limits on:
-
-- number of functions;
-- number of parameters;
-- number of generic parameters;
-- number of constraints;
-- number of attributes;
-- number of effects;
-- number of contracts;
-- function nesting;
-- source-program size;
-- quantum objects;
-- classical objects;
-- distributed objects;
-- resources;
-- capabilities.
-
-This does not mean an implementation has infinite physical memory or infinite compilation time.
-
-It means:
-
-«The language must not invent artificial finite limits where the computation and implementation can naturally scale with available resources.»
-
-Therefore:
-
-tiny program
-    ↓
-same language semantics
-    ↓
-larger program
-    ↓
-same language semantics
-    ↓
-larger machine
-    ↓
-same program
-    ↓
-different machine
-    ↓
-same source semantics
-
-is the intended model.
-
----
-
-43. Hard-Coding Prohibition
-
-The function grammar must not contain universal constants such as:
+The function grammar must not contain universal implementation limits such as:
 
 MAX_FUNCTIONS
 MAX_PARAMETERS
+MAX_ARGUMENTS
 MAX_GENERIC_PARAMETERS
+MAX_GENERIC_ARGUMENTS
+MAX_CONSTRAINTS
+MAX_CONTRACTS
+MAX_CLOSURES
+MAX_LAMBDAS
 MAX_THREADS
 MAX_CORES
 MAX_GPUS
 MAX_FPGAS
 MAX_QPUS
 MAX_QUBITS
-MAX_MEMORY
 MAX_NODES
+MAX_MEMORY
+MAX_STORAGE
 MAX_DEVICES
-MAX_REGISTER_WIDTH
+MAX_ACCELERATORS
 
-It must also not encode universal machine identities such as:
+It must also not encode universal physical identifiers such as:
 
 cpu0
 gpu0
@@ -1502,938 +1318,697 @@ qpu0
 fpga0
 device0
 physical_qubit0
+memory_bank0
+core0
+register0
 
-as intrinsic function-language constructs.
-
-If a specific implementation has a parser/compiler/runtime resource limit, that limit must be represented outside the language grammar as an implementation/resource policy.
-
----
-
-44. Semantic Requirement vs Implementation Decision
-
-The function subsystem must preserve the distinction:
-
-WHAT THE PROGRAM REQUIRES
-        vs.
-HOW THE TARGET SATISFIES IT
-
-Examples:
-
-requires capability("quantum.measurement")
-
-is semantic intent.
-
-use qpu7
-
-is target realization.
-
-Likewise:
-
-requires parallel execution
-
-is semantic intent.
-
-use exactly 64 CPU threads
-
-is implementation/deployment intent.
-
-The first category may belong in the portable language architecture.
-
-The second belongs downstream unless explicitly expressed as an intentional deployment constraint.
+as part of ordinary portable function semantics.
 
 ---
 
-45. Cross-Domain Integration Rule
+34. Semantic Constants Versus Implementation Limits
 
-A function must remain usable across:
-
-classical
-quantum
-hybrid
-HDL
-hardware
-distributed
-parallel/HPC
-AI/ML
-data
-networking
-security
-embedded
-edge
-cloud
-scientific computing
-accelerators
-future computational domains
-
-without creating a separate function language for each domain.
-
-The function layer is a universal composition mechanism.
-
-Domain-specific semantics are attached through canonical domain systems.
-
----
-
-46. Future-Domain Rule
-
-A future computational domain must be able to use functions without requiring modifications to the fundamental function model merely because the domain is new.
-
-For example, a future domain should be able to define a type:
-
-future::Value
-
-and then use:
-
-fn compute(value: future::Value) -> future::Value
-
-without modifying:
-
-functions.g4
-parameters.g4
-returns.g4
-
-unless the future domain genuinely introduces new function syntax.
-
-This is a key requirement for long-term POCO-REAF.
-
----
-
-47. No Domain-Specific Function Duplication
-
-Do not create separate copies such as:
-
-quantum/functions.g4
-classical/functions.g4
-hdl/functions.g4
-ai/functions.g4
-gpu/functions.g4
-qpu/functions.g4
-
-merely to represent functions in those domains.
-
-If a domain genuinely requires special syntax, that syntax must be narrowly scoped and integrated with the canonical function architecture rather than creating a second function model.
-
----
-
-48. Generic Function Model
-
-The function model must remain open to generic values from any supported domain.
-
-Conceptually:
-
-fn transform<T>(value: T) -> T
-
-may operate on:
-
-classical value
-quantum value
-tensor
-distributed value
-hardware abstraction
-data structure
-future-domain value
-
-depending on semantic constraints.
-
-The grammar must not decide which domain wins.
-
----
-
-49. Compile-Time / Runtime Separation
-
-A compile-time function is not automatically a runtime function.
-
-A runtime function is not automatically compile-time.
-
-The semantic/compiler layers determine:
-
-- evaluation phase;
-- allowed effects;
-- capabilities;
-- determinism;
-- available resources;
-- generated artifacts;
-- specialization;
-- caching;
-- reproducibility.
-
-The grammar only describes the source construct.
-
----
-
-50. Foreign / Native Boundary
-
-A foreign function declaration must remain declarative.
-
-The grammar must not:
-
-- invoke the foreign compiler;
-- load a library;
-- resolve a symbol;
-- inspect the host machine;
-- select an ABI automatically;
-- access the network;
-- perform linking.
-
-Those are compiler/toolchain/runtime responsibilities.
-
----
-
-51. Calling Convention Boundary
-
-Calling-convention syntax must not be invented inside ordinary function grammar merely to expose backend details.
-
-If Zamani later standardizes portable calling-convention metadata, it must be introduced through the appropriate interoperability/ABI specification and integrated through canonical attributes or explicitly owned grammar.
-
-The function grammar must not become a backend ABI catalogue.
-
----
-
-52. Compatibility
-
-The existing function filenames are retained.
-
-The compatibility subsystem owns:
-
-- language versions;
-- feature gates;
-- deprecation;
-- migration;
-- compatibility matrices;
-- removal policy.
-
-Relevant integration points include:
-
-grammar/compatibility/
-grammar/specification/
-grammar/spec/
-grammar/Zamani.g4
-grammar/lexer/
-src/lexer.rs
-src/parser.rs
-src/frontend/ast/
-
-A syntax change is not complete until its impact on these consumers has been considered.
-
----
-
-53. Specification Integration
-
-The function grammar must trace back to the authoritative specification.
-
-At minimum, function semantics must be represented consistently across:
-
-grammar/specification/
-grammar/spec/
-grammar/functions/
-grammar/Zamani.g4
-
-No design document may silently introduce syntax that is absent from the authoritative grammar.
-
-Likewise, the implementation grammar must not silently introduce semantics that are absent from the specification.
-
----
-
-54. "Zamani-Grammar.md" Integration
-
-"Zamani-Grammar.md" may contain broader or historical language designs.
-
-It is not permitted to silently become a second authority for function syntax.
-
-Any proposed function feature from that document must follow:
-
-proposal
-    ↓
-language specification
-    ↓
-AST contract
-    ↓
-semantic contract
-    ↓
-canonical grammar
-    ↓
-tests
-    ↓
-implementation
-
-Only then is it accepted language syntax.
-
----
-
-55. "grammar.md" Integration
-
-"grammar/grammar.md" describes implementation conformance.
-
-It must reflect the actual implemented parser.
-
-The function subsystem therefore needs traceability between:
-
-functions/*.g4
-    ↓
-Zamani.g4
-    ↓
-generated parser
-    ↓
-src/parser.rs / frontend
-    ↓
-grammar/grammar.md
-
-If "grammar.md" claims syntax that the parser does not accept, that is an implementation-conformance defect.
-
-If the parser accepts undocumented syntax, that is a specification/conformance defect requiring classification.
-
----
-
-56. "Zamani.g4" Integration
-
-"Zamani.g4" remains the composition root.
-
-It must integrate the function subsystem rather than reproduce its rules.
-
-Conceptually:
-
-Zamani.g4
-    ↓
-function declaration entry point
-    ↓
-functions.g4
-    ├── parameters.g4
-    ├── returns.g4
-    ├── generics.g4
-    ├── constraints.g4
-    ├── contracts.g4
-    ├── async.g4
-    ├── generators.g4
-    ├── closures.g4
-    ├── compile-time-functions.g4
-    └── foreign-functions.g4
-
-The exact ANTLR composition mechanism must follow the repository's actual parser architecture.
-
-No duplicate function productions should survive in "Zamani.g4".
-
----
-
-57. Lexer Integration
-
-The function grammars consume the canonical lexer vocabulary.
-
-They must not define competing lexer tokens.
-
-Keyword spelling belongs to the canonical lexer authority.
-
-For example, tokens representing:
-
-fn
-async
-where
-return
-
-must come from the canonical lexical system.
-
-The function parser must not create a private vocabulary.
-
----
-
-58. AST Integration with "src/frontend/ast/"
-
-The function grammar must map into the existing domain-neutral AST architecture.
-
-The AST must remain independent of:
-
-- LLVM;
-- QIR;
-- MLIR;
-- vendor APIs;
-- QEC implementation;
-- routing;
-- physical qubit maps;
-- calibration;
-- target hardware.
-
-A function is represented as a language-level construct first.
-
-Domain-specific lowering occurs later.
-
----
-
-59. Integration with Quantum Frontend
-
-Quantum source formats such as OpenQASM remain format frontends rather than replacements for Zamani function syntax.
-
-A Zamani function containing quantum computation ultimately follows the canonical quantum path.
-
-The function grammar must not import or depend directly on a particular OpenQASM implementation.
-
----
-
-60. Integration with QEC, ZQN, Routing, Scheduling, HAL
-
-The separation must remain:
-
-Function grammar
-    =
-source function structure
-
-semantic analysis
-    =
-meaning and legality
-
-quantum::ir
-    =
-canonical quantum semantic boundary
-
-optimization
-    =
-implementation improvement
-
-routing
-    =
-physical realization
-
-scheduling
-    =
-time/order/resource scheduling
-
-QEC
-    =
-error detection/correction
-
-ZQN
-    =
-fault/noise semantics
-
-HAL
-    =
-hardware capability/state boundary
-
-No function grammar file may duplicate those responsibilities.
-
----
-
-61. Integration with Resources
-
-A function can participate in resource requirements, but the grammar does not allocate resources.
-
-The downstream resource system determines:
-
-- availability;
-- capability matching;
-- capacity;
-- placement;
-- negotiation;
-- scaling;
-- deployment.
-
-This enables the same source function to be realized on different machines according to available resources.
-
----
-
-62. Integration with Concurrency
-
-"async", generators, parallelism, actors, tasks, and other concurrency constructs must remain semantically distinct from machine resource counts.
+The prohibition on hard-coding does not prohibit legitimate program constants.
 
 For example:
 
-async fn process(...)
+const batch_size = 1024;
 
-does not imply:
+may be meaningful program semantics.
 
-N threads
+Likewise:
 
-The concurrency subsystem determines the semantics.
+Tensor<1024, 1024>
 
-The runtime decides realization.
+may be legitimate program data/type information.
 
----
+What is prohibited is turning that into a language implementation ceiling:
 
-63. Integration with Modules
+MAX_TENSOR_DIMENSION = 1024
 
-Functions are declarations within the canonical module/name-resolution system.
+or:
 
-The function grammar must not independently implement:
+MAX_PARAMETERS = 1024
 
-- module resolution;
-- imports;
-- exports;
-- package lookup;
-- dependency resolution.
+The distinction is:
 
-Those belong to "grammar/modules/" and compiler/module infrastructure.
+program-defined value
+        ≠
+compiler-imposed universal limit
 
 ---
 
-64. Integration with Effects
+35. Target Independence
 
-Function effects must be represented through the canonical effect system.
+Function syntax must not depend on:
 
-The function grammar only attaches effect syntax.
+- operating system;
+- CPU architecture;
+- GPU architecture;
+- FPGA family;
+- QPU architecture;
+- vendor;
+- compiler backend;
+- runtime implementation;
+- deployment topology.
 
-Effect semantics remain outside this directory.
-
-This allows new effects to be added without rewriting the fundamental function grammar.
-
----
-
-65. Integration with Memory
-
-Parameter and return syntax must remain compatible with:
-
-grammar/memory/
-grammar/types/
-
-The function grammar must not invent another ownership or lifetime model.
+Target information may enter through the appropriate downstream target/resource/capability systems.
 
 ---
 
-66. Integration with Interoperability
+36. ABI Boundary
 
-Foreign functions integrate with:
+The function grammar must distinguish:
+
+function signature
+
+from:
+
+ABI representation
+
+and:
+
+machine calling convention implementation
+
+The function signature describes language semantics.
+
+The ABI system determines how that signature crosses an external binary/interface boundary.
+
+Therefore:
+
+grammar/functions/
+        │
+        ▼
+function-level ABI/calling-convention reference
+        │
+        ▼
+grammar/interoperability/
+        │
+        ▼
+ABI semantics
+        │
+        ▼
+compiler/backend lowering
+
+The function grammar must never define register allocation or physical calling sequences.
+
+---
+
+37. Frontend AST Contract
+
+Every function grammar production must have an explicit AST mapping before that grammar production is considered complete.
+
+The required conceptual mapping is:
+
+grammar
+    ↓
+domain-neutral AST
+    ↓
+semantic function representation
+    ↓
+canonical/domain IR
+
+The AST must preserve enough information for downstream semantic analysis, including as appropriate:
+
+- function name;
+- source span;
+- modifiers;
+- attributes;
+- generic parameters;
+- parameters;
+- parameter patterns;
+- parameter types;
+- return specification;
+- constraints;
+- effects;
+- contracts;
+- calling-convention metadata;
+- foreign metadata;
+- body/prototype;
+- compile-time/runtime classification;
+- async/generator properties.
+
+The grammar must not force the AST to contain target-specific implementation details.
+
+---
+
+38. Source Span Contract
+
+Every function-related AST construct must retain accurate source provenance.
+
+At minimum, semantic consumers must be able to locate:
+
+- function declaration;
+- function name;
+- modifiers;
+- generic parameters;
+- each parameter;
+- parameter types;
+- return clause;
+- constraints;
+- effects;
+- contracts;
+- function body/prototype;
+- relevant metadata.
+
+Diagnostics must point to the smallest useful source region.
+
+---
+
+39. Semantic Contract
+
+After parsing, semantic analysis must determine:
+
+- name binding;
+- scope;
+- duplicate declarations;
+- parameter validity;
+- generic validity;
+- constraint satisfaction;
+- type correctness;
+- return correctness;
+- effect correctness;
+- ownership/resource correctness;
+- capability requirements;
+- contract validity;
+- foreign-function validity;
+- ABI compatibility;
+- compile-time/runtime legality;
+- async/generator legality;
+- domain-specific semantic constraints.
+
+The parser must not perform these tasks.
+
+---
+
+40. IR Integration Contract
+
+The function grammar must not introduce a function-specific universal IR.
+
+Function information is lowered into the repository's canonical semantic/IR architecture.
+
+Conceptually:
+
+function AST
+    ↓
+semantic function model
+    ↓
+appropriate IR
+
+For quantum:
+
+function AST
+    ↓
+semantic quantum operations
+    ↓
+quantum::ir
+
+For classical:
+
+function AST
+    ↓
+classical semantic representation
+    ↓
+classical IR
+
+For HDL/hardware:
+
+function/co-design AST
+    ↓
+hardware semantic model
+    ↓
+HDL/hardware IR
+
+---
+
+41. Compiler Integration
+
+The compiler consumes semantic function information after parsing.
+
+The function grammar must provide enough information for downstream systems to perform:
+
+- type checking;
+- generic resolution;
+- effect checking;
+- optimization;
+- specialization where required;
+- inlining decisions;
+- parallelization;
+- vectorization;
+- quantum optimization;
+- routing;
+- scheduling;
+- resilience processing;
+- ABI lowering;
+- target lowering.
+
+The grammar itself must not make these decisions.
+
+---
+
+42. Runtime Integration
+
+Runtime behavior is not defined by parser grammar.
+
+The runtime may need function metadata for:
+
+- invocation;
+- asynchronous execution;
+- generators;
+- closures;
+- resource management;
+- distributed execution;
+- checkpointing;
+- recovery;
+- observability;
+- cancellation;
+- capability enforcement.
+
+These are downstream runtime responsibilities.
+
+---
+
+43. Resource Integration
+
+Function resource requirements must integrate with:
+
+grammar/resources/
+grammar/hardware/
+grammar/execution/
+grammar/compile/
+
+The function grammar may provide a composition point.
+
+It must not duplicate the resource grammar.
+
+A portable function can state a requirement.
+
+The resource system determines whether and how that requirement can be satisfied.
+
+---
+
+44. Capability Integration
+
+Capabilities must remain symbolic and extensible.
+
+The grammar should permit future capabilities without requiring a parser release merely because a new accelerator, device, execution model or computational substrate exists.
+
+Therefore prefer symbolic capability references over exhaustive keyword lists.
+
+Conceptually:
+
+capability("some.future.capability")
+
+is extensible.
+
+A finite grammar list of every possible future device is not.
+
+---
+
+45. Determinism
+
+Parsing must depend only on:
+
+- source text;
+- canonical token stream;
+- grammar version;
+- parser configuration that is explicitly part of the language contract.
+
+Parsing must not depend on:
+
+- available CPU;
+- available GPU;
+- QPU availability;
+- hardware discovery;
+- network state;
+- filesystem state;
+- installed libraries;
+- environment variables;
+- scheduler state;
+- calibration state;
+- randomness;
+- wall-clock time.
+
+Semantic/target resolution may depend on explicitly supplied compilation context, but that must occur after parsing.
+
+---
+
+46. Error and Recovery Contract
+
+Function grammar errors must be diagnosable.
+
+Diagnostics should distinguish at least:
+
+lexical error
+syntax error
+structural error
+semantic error
+type error
+generic error
+contract error
+effect error
+capability error
+resource error
+interoperability error
+ABI error
+target realization error
+
+The parser must not silently convert malformed function syntax into valid but different syntax.
+
+Recovery must preserve useful source spans and must not fabricate semantic constructs.
+
+---
+
+47. Security and Safety
+
+The grammar contains no executable Rust.
+
+The Zamani compiler implementation must use:
+
+Rust 1.97
+or
+Rust 1.97.1
+Edition 2021
+
+and must contain no "unsafe" Rust.
+
+This means:
+
+Rust implementation
+    = safe Rust only
+
+The presence of a source-language "unsafe" token in the current lexer does not authorize "unsafe" Rust implementation.
+
+If Zamani eventually specifies an "unsafe" source-language feature, its semantics must be independently specified and validated.
+
+The Rust compiler implementation must nevertheless remain safe Rust.
+
+---
+
+48. No Parser-Time External Effects
+
+Function parsing must not:
+
+- access the filesystem;
+- access the network;
+- discover hardware;
+- invoke processes;
+- load dynamic libraries;
+- query GPUs;
+- query QPUs;
+- query FPGA devices;
+- perform ABI resolution;
+- allocate physical resources;
+- execute user code.
+
+These are compiler/tool/runtime responsibilities at explicitly defined later stages.
+
+---
+
+49. Interoperability Integration
+
+The function grammar integrates with:
 
 grammar/interoperability/
 
-rather than embedding every foreign language and ABI directly into "functions/".
+for:
 
-The integration boundary must preserve:
+- foreign functions;
+- ABI contracts;
+- FFI;
+- external languages;
+- calling conventions;
+- external representations.
 
-- source symbol;
-- external language metadata;
-- representation metadata;
-- ABI metadata;
-- effect metadata;
-- capability requirements;
+The function directory must not create competing interoperability semantics.
+
+The direction is:
+
+function syntax
+        ↓
+foreign/calling-convention attachment
+        ↓
+interoperability semantic model
+        ↓
+ABI/FFI validation
+        ↓
+target lowering
+
+---
+
+50. Modules Integration
+
+Functions may be:
+
+- module-private;
+- public/exported;
+- imported;
+- re-exported;
+- associated with namespaces.
+
+Module ownership remains with:
+
+grammar/modules/
+
+The function grammar consumes canonical visibility/name/module constructs rather than redefining them.
+
+---
+
+51. Type-System Integration
+
+Function parameter and return syntax must consume canonical type syntax from:
+
+grammar/types/
+
+The function grammar must never define its own parallel type language.
+
+This guarantees that future types automatically become usable in:
+
+- parameters;
+- returns;
+- generic constraints;
+- closures;
+- lambdas;
+- foreign functions;
+
+without rewriting every function grammar file.
+
+---
+
+52. Expression Integration
+
+Function bodies and lambda expressions consume the canonical expression grammar.
+
+The function grammar must not create another expression grammar.
+
+The relationship is:
+
+function
+    ↓
+function body
+    ↓
+block/statement grammar
+    ↓
+expression grammar
+
+---
+
+53. Statement Integration
+
+Function bodies consume canonical statement/block grammar.
+
+Do not redefine:
+
+if
+while
+for
+match
+return
+break
+continue
+
+inside function grammar unless the repository explicitly assigns that construct to the statement owner.
+
+"return" as a statement remains a statement concern; "returns.g4" owns the function declaration's result clause.
+
+This distinction is important:
+
+-> T
+
+is a return-type/result clause.
+
+return expression;
+
+is a return statement.
+
+They must not be conflated.
+
+---
+
+54. Generic Function Versus Generic Type Ownership
+
+Function generics belong to:
+
+grammar/functions/generics.g4
+
+Generic type semantics belong to:
+
+grammar/types/
+
+Hardware generics belong to the hardware/HDL domain where appropriate, but they must integrate with the canonical generic model rather than creating an unrelated generic language.
+
+For example:
+
+function generic parameter
+
+may parameterize a type, resource abstraction, or semantic computation.
+
+The meaning is resolved semantically.
+
+---
+
+55. Compile-Time Versus Runtime
+
+The grammar must distinguish source-level compile-time functions from ordinary runtime functions where the specification requires that distinction.
+
+However, the grammar must not turn compile-time execution into an unrestricted execution environment.
+
+The compiler must retain explicit boundaries for:
+
+- determinism;
+- reproducibility;
+- resource consumption;
+- permissions;
+- dependency tracking;
+- diagnostics;
+- caching;
 - provenance.
 
 ---
 
-67. Integration with Dialects
+56. Function Overloading
 
-A dialect may extend function syntax only through the canonical dialect-extension mechanism.
+If Zamani supports function overloading, overload syntax belongs in the function/declaration system.
 
-A dialect must not silently fork the function grammar.
+Overload resolution belongs in semantic analysis.
 
-A dialect extension must identify:
+The grammar must not decide which overload is selected.
 
-- dialect name;
-- version;
-- syntax extension;
-- AST mapping;
-- semantic mapping;
-- compatibility;
-- feature gate;
-- downstream consumers.
+The semantic layer must account for:
 
----
-
-68. Integration with Macros and Metaprogramming
-
-Macros may generate functions.
-
-Metaprogramming may inspect function structure where the language permits it.
-
-Neither system may bypass:
-
-lexing
-parsing
-AST construction
-structural validation
-semantic validation
-
-Generated functions must therefore enter the same canonical pipeline as handwritten functions.
-
----
-
-69. Source Provenance
-
-Function AST nodes must preserve source provenance sufficiently for:
-
-- diagnostics;
-- IDE tooling;
-- generated-code tracing;
-- macro expansion;
-- compile-time generation;
-- reproducibility;
-- verification;
-- debugging.
-
-Source spans must not be discarded merely because the function is later lowered.
-
----
-
-70. Deterministic Ordering
-
-Where function syntax contains ordered collections, source order must be preserved unless a later semantic phase explicitly defines canonicalization.
-
-Examples:
-
-- parameter order;
-- generic parameter order;
-- attributes;
+- argument types;
+- generic parameters;
 - constraints;
 - effects;
-- contracts.
-
-The grammar must not silently reorder these.
-
----
-
-71. No Semantic Reordering in Grammar
-
-The parser must not decide that:
-
-T: A + B
-
-is equivalent to:
-
-T: B + A
-
-or that:
-
-effect A, B
-
-is equivalent to:
-
-effect B, A
-
-unless the language specification explicitly defines that equivalence.
-
-Parsing preserves structure.
-
-Semantic analysis determines meaning.
+- capabilities;
+- conversion rules;
+- visibility;
+- namespace/module context.
 
 ---
 
-72. Scalability Model
+57. Recursion
 
-The intended scalability model is:
+Recursive functions are ordinary functions.
 
-small source
-    ↓
-same grammar
-    ↓
-larger source
-    ↓
-same grammar
-    ↓
-larger computational resource
-    ↓
-same program semantics
+The grammar must not impose a maximum recursion depth.
 
-The grammar must not use artificial finite alternatives to represent scalable concepts.
+Runtime stack/resource limits are implementation concerns.
 
-Prefer:
-
-item*
-
-or:
-
-item (separator item)*
-
-over finite enumerations.
+Compile-time recursive evaluation may have implementation resource limits, but those limits must not redefine the source-language grammar.
 
 ---
 
-73. "Infinity" Interpretation
+58. Function Nesting
 
-Zamani's scalability objective does not claim that physical computers possess infinite resources.
+If nested functions are permitted, the grammar must represent them using the same function production.
 
-It means:
+There must be no arbitrary language-level limit such as:
 
-«No artificial language-level ceiling should prevent a valid computation from scaling when the implementation and target environment have sufficient resources.»
+MAX_NESTED_FUNCTION_DEPTH
 
-Therefore the relevant limiting factors are actual:
-
-- memory;
-- compute;
-- storage;
-- compilation resources;
-- runtime resources;
-- device capacity;
-- network capacity;
-- physical constraints.
-
-The grammar must not invent additional limits.
+Semantic legality of nested functions remains a language semantic concern.
 
 ---
 
-74. Performance and Resource Safety
+59. Function Values
 
-Grammar scalability must not be confused with unlimited parser resource consumption.
+When functions are first-class values, the same canonical function/type model must be used.
 
-Implementations may use resource policies to prevent:
+The architecture should support:
 
-- denial-of-service inputs;
-- pathological nesting;
-- compiler exhaustion;
-- memory exhaustion;
-- excessive diagnostic generation.
+named function
+anonymous function
+lambda
+closure
+function reference
+higher-order function
 
-Such limits must be implementation/security policies and must not alter the language's conceptual semantics.
-
-Where a parser implementation imposes a limit, it must be:
-
-1. documented;
-2. configurable where appropriate;
-3. diagnosable;
-4. tested;
-5. distinguished from a language limitation.
+without creating unrelated type/IR models.
 
 ---
 
-75. Rust 1.97 / 1.97.1 Requirement
+60. Cross-Domain Function Principle
 
-The grammar subsystem's Rust consumers must remain compatible with:
+The following should all be expressible through the same function abstraction:
 
-Rust 1.97
-Rust 1.97.1
-Edition 2021
+classical function
+quantum function
+hybrid function
+HDL-associated computation
+AI function
+tensor function
+distributed function
+parallel function
+network function
+cryptographic function
+scientific function
+embedded function
+accelerator function
+future-domain function
 
-The grammar files themselves must not depend on Rust implementation details.
-
-Generated/parser integration must not require "unsafe".
-
-No function grammar feature is complete if its implementation requires unsafe Rust.
-
----
-
-76. No Embedded Actions
-
-Function grammars should remain declarative ANTLR grammar wherever possible.
-
-Do not embed Rust code into the grammar to perform:
-
-- semantic analysis;
-- hardware discovery;
-- resource allocation;
-- name lookup;
-- type inference;
-- optimization;
-- runtime execution;
-- external process execution.
-
-This keeps the grammar deterministic and portable.
+The language must not multiply the function syntax merely because the computational domain changes.
 
 ---
 
-77. Testing Contract
+61. Feature-Manifest Contract
 
-Function grammar testing must cover at least:
+Each substantial function feature should have a corresponding feature contract in the repository's feature/specification system where such manifests are introduced.
 
-grammar/functions/
-├── positive
-├── negative
-├── boundary
-├── scalability
-├── determinism
-├── compatibility
-├── cross-domain
-└── round-trip
+A completed feature contract should identify:
 
-Tests should integrate with the repository's existing grammar-test infrastructure rather than creating a competing test runner.
-
----
-
-78. Positive Tests
-
-Positive coverage must include representative forms of:
-
-- ordinary functions;
-- empty parameter lists;
-- multiple parameters;
-- return values;
-- generic functions;
-- constraints;
-- attributes;
-- modifiers;
-- effects;
-- contracts;
-- closures;
-- async functions;
-- generators;
-- compile-time functions;
-- foreign functions;
-- classical functions;
-- quantum functions;
-- hybrid functions;
-- HDL/hardware-facing functions;
-- distributed functions;
-- AI/data functions.
-
----
-
-79. Negative Tests
-
-Negative tests must verify rejection of malformed syntax, including cases such as:
-
-missing function name
-missing parameter delimiter
-missing closing parenthesis
-malformed generic list
-malformed constraint
-malformed return clause
-malformed contract
-invalid function terminator
-malformed async declaration
-malformed generator syntax
-malformed foreign declaration
-
-Negative tests must not confuse semantic invalidity with syntactic invalidity.
-
----
-
-80. Boundary Tests
-
-Boundary tests must cover:
-
-- zero parameters;
-- one parameter;
-- many parameters;
-- zero generic parameters;
-- many generic parameters;
-- nested generic types;
-- many constraints;
-- many attributes;
-- many effects;
-- many contracts;
-- large function bodies;
-- deeply nested expressions;
-- deeply nested blocks;
-- long identifiers;
-- long qualified names;
-- Unicode identifiers where supported;
-- cross-domain types.
-
----
-
-81. Scalability Tests
-
-Scalability tests must verify that no artificial grammar ceiling exists for:
-
-- parameter count;
-- generic parameter count;
-- constraints;
-- attributes;
-- contracts;
-- functions per module;
-- source size;
-- nested generic structure;
-- nested function bodies where permitted.
-
-Tests should scale according to available test resources rather than encoding a false universal maximum.
-
----
-
-82. Cross-Domain Tests
-
-Function tests must include combinations such as:
-
-classical parameter + classical return
-quantum parameter + quantum return
-classical parameter + quantum return
-quantum parameter + classical return
-hybrid computation
-tensor parameter
-hardware abstraction parameter
-distributed value parameter
-AI model parameter
-data pipeline value
-security-sensitive capability
-
-The goal is to prove that the function grammar remains domain-neutral.
-
----
-
-83. Determinism Tests
-
-Repeated parsing of identical source must produce equivalent:
-
-tokens
-parse tree
-AST structure
-source spans
-
-where the parser configuration is unchanged.
-
-No test should require hardware availability.
-
----
-
-84. Round-Trip Tests
-
-Where the repository provides formatting/serialization support:
-
-source
-  ↓
-lexer
-  ↓
-parser
-  ↓
-AST
-  ↓
-formatter/serializer
-  ↓
-parser
-
-must preserve semantic structure.
-
-Round-trip tests must not require byte-for-byte equality when formatting intentionally canonicalizes whitespace or formatting.
-
----
-
-85. Compatibility Tests
-
-When function syntax changes, compatibility tests must verify:
-
-- previously valid stable syntax;
-- intentionally deprecated syntax;
-- feature-gated syntax;
-- migration behavior;
-- parser behavior;
-- AST behavior;
-- semantic behavior.
-
-No compatibility change is complete merely because the grammar compiles.
-
----
-
-86. Feature-Level Closure
-
-Every function feature must have a complete contract before being considered finished.
-
-For example, adding async syntax is not complete merely because "async.g4" parses.
-
-Completion requires:
-
-syntax
-  ↓
-lexer contract
-  ↓
-AST contract
-  ↓
-semantic contract
-  ↓
-effect/concurrency contract
-  ↓
-compiler contract
-  ↓
-runtime contract
-  ↓
-tooling contract
-  ↓
-tests
-  ↓
-compatibility
-  ↓
+feature ID
+feature name
+status
+language version
+grammar owner
+lexer requirements
+AST representation
+semantic representation
+IR mapping
+compiler consumers
+runtime consumers
+resource requirements
+capability requirements
+diagnostics
+positive tests
+negative tests
+boundary tests
+scalability tests
+determinism tests
+compatibility requirements
 hard-coding audit
 
-This is the required independently completable file/feature model.
+This allows a function feature to be completed independently without waiting for another feature to be redesigned later.
 
 ---
 
-87. Per-File Completion Contract
+62. Per-File Completion Contract
 
-Every ".g4" file in this directory must be independently documented against:
+Every file in "grammar/functions/" must be independently completable.
 
-File
+Before marking a file complete, it must have:
+
 Purpose
 Status
 Owns
@@ -2451,423 +2026,743 @@ Compiler Integration
 Runtime Integration
 Tooling Integration
 Cross-Domain Integration
+Diagnostics
 Positive Tests
 Negative Tests
 Boundary Tests
 Scalability Tests
 Determinism Tests
 Compatibility Tests
-Diagnostics
-Security
-Performance
+Security/Safety Audit
 Hard-Coding Audit
 Completion Criteria
 
-The file must be designed so that another subsystem can integrate it without requiring its owner to redesign the file afterward.
+A file is not complete merely because its grammar rules parse.
 
 ---
 
-88. Dependency Direction
+63. Dependency Direction
 
-The intended dependency direction is:
+The preferred dependency direction is:
 
-lexer
-  ↓
 core
-  ↓
+ │
+ ├── names
+ ├── attributes
+ ├── blocks
+ └── source units
+        │
+        ▼
 types / expressions / statements
-  ↓
+        │
+        ▼
 functions
-  ↓
+        │
+        ├── generics
+        ├── parameters
+        ├── returns
+        ├── constraints
+        ├── contracts
+        ├── closures
+        ├── lambdas
+        ├── async
+        ├── generators
+        ├── compile-time
+        ├── foreign
+        └── calling conventions
+
+Domain grammars consume function constructs.
+
+The function grammar must not depend on concrete target implementations.
+
+---
+
+64. Avoiding Circular Grammar Ownership
+
+The following must be avoided:
+
+functions → types → functions
+functions → expressions → functions
+functions → statements → functions
+functions → interoperability → functions
+
+where both sides define the same production.
+
+Integration points must be narrow and explicit.
+
+For example:
+
+functions.g4
+    → parameterList
+
+parameters.g4
+    → typeExpression
+
+types/*.g4
+    → canonical typeExpression
+
+This is composition, not mutual ownership.
+
+---
+
+65. Generated Grammar and Token Vocabulary
+
+The function parser grammars must consume the repository's canonical token vocabulary.
+
+They must not create a second lexer vocabulary merely for function syntax.
+
+The canonical lexical authority remains the repository's lexer architecture.
+
+Function grammar files should therefore:
+
+- consume canonical tokens;
+- avoid duplicate lexer rules;
+- avoid defining function-specific duplicate tokens;
+- avoid depending on generated implementation details that are not part of the grammar contract.
+
+Any current mismatch between grammar token names and the actual Rust lexer/parser must be resolved through the repository's grammar integration work rather than hidden inside this README.
+
+---
+
+66. Compatibility
+
+Function syntax must be versioned.
+
+Compatibility work must account for:
+
+language specification
+Zamani.g4
+function grammar components
+lexer
+parser
 frontend AST
-  ↓
-semantic analysis
-  ↓
-canonical IR
-  ↓
+semantic model
+IR
 compiler
-  ↓
 runtime
+tests
 
-Function grammar must not introduce reverse dependencies such as:
+A syntax change is not production-ready until the affected compatibility surface is identified.
 
-functions → runtime
-functions → HAL
-functions → quantum::ir
-functions → scheduler
-functions → routing
-functions → QEC
-functions → ZQN
+Existing valid programs must not silently change meaning.
 
-The function subsystem may be consumed by those systems through AST/semantic/IR contracts.
-
-It must not depend on their implementation.
+If a breaking change is required, it must be explicitly versioned and documented.
 
 ---
 
-89. Repository Integration Matrix
+67. Negative Tests
 
-System| Function grammar relationship
-"grammar/Zamani.g4"| Composition root consumes function grammar
-"grammar/lexer/"| Supplies canonical tokens
-"grammar/core/"| Supplies names, attributes, blocks, common syntax
-"grammar/types/"| Supplies type syntax
-"grammar/expressions/"| Supplies expression syntax
-"grammar/statements/"| Supplies statements and bodies
-"grammar/effects/"| Supplies effect syntax
-"grammar/memory/"| Supplies memory/type semantics downstream
-"grammar/concurrency/"| Supplies broader concurrency semantics
-"grammar/resources/"| Supplies resource/capability concepts
-"grammar/hardware/"| Supplies hardware intent
-"grammar/classical/"| Supplies classical domain semantics
-"grammar/quantum/"| Supplies quantum syntax/semantics
-"grammar/hybrid/"| Supplies hybrid semantics
-"grammar/hdl/"| Supplies HDL syntax
-"grammar/distributed/"| Supplies distributed semantics
-"grammar/ai/"| Supplies AI semantics
-"grammar/data/"| Supplies data semantics
-"grammar/networking/"| Supplies networking semantics
-"grammar/security/"| Supplies security semantics
-"grammar/compile/"| Supplies compilation/deployment intent
-"grammar/execution/"| Supplies execution intent
-"grammar/interoperability/"| Supplies FFI/ABI integration
-"grammar/dialects/"| Supplies controlled extensions
-"grammar/macros/"| Generates/consumes function syntax
-"grammar/metaprogramming/"| Inspects/generates function structures
-"grammar/validation/"| Validates grammar correctness
-"grammar/compatibility/"| Owns language compatibility
-"grammar/tests/"| Provides conformance tests
-"src/frontend/ast/"| Canonical domain-neutral AST
-"src/parser.rs"| Parser implementation consumer
-"src/lexer.rs"| Lexer implementation consumer
-"quantum::ir"| Downstream quantum semantic boundary; never grammar dependency
-compiler| Downstream semantic/lowering consumer
-runtime| Downstream execution consumer
-HAL| Downstream hardware boundary
+Every function feature must test invalid forms.
+
+Examples include:
+
+missing function name
+missing parameter delimiter
+malformed parameter type
+invalid generic syntax
+invalid constraint
+invalid return syntax
+invalid contract
+invalid async combination
+invalid generator combination
+invalid foreign declaration
+invalid calling-convention attachment
+duplicate parameter names where prohibited
+invalid nesting
+invalid modifier combinations
+
+Tests must verify useful diagnostics rather than merely parser failure.
 
 ---
 
-90. What Must Never Be Added Here
+68. Boundary Tests
 
-Do not add:
+Boundary tests must cover:
 
-MAX_QUBITS
-MAX_CPUS
-MAX_CORES
-MAX_THREADS
-MAX_GPUS
-MAX_FPGAS
-MAX_QPUS
-MAX_NODES
-MAX_MEMORY
-MAX_TENSOR_SIZE
-MAX_REGISTER_WIDTH
-MAX_DEVICES
+zero parameters
+one parameter
+many parameters
+zero generic parameters
+many generic parameters
+empty body where legal
+large function bodies
+nested functions where legal
+deep generic structures
+large contracts
+large expressions
+large capture sets
+large generator structures
+large foreign declarations
+large metadata sets
 
-Do not add universal:
+No arbitrary finite boundary should be promoted into the language definition.
 
-cpuFunction
-gpuFunction
-qpuFunction
-fpgaFunction
-vendorFunction
-cudaFunction
+---
 
-Do not add:
+69. Scalability Tests
 
-physicalQubitFunction
-physicalDeviceFunction
-hardwareAddressFunction
+Scalability testing must verify that the grammar does not introduce artificial resource limits.
 
-Do not implement:
+The test suite should progressively exercise:
 
-routing
+tiny function
+small function
+large function
+very large function
+large parameter lists
+large generic lists
+large constraint sets
+large nested structures
+large source units
+large collections of functions
+
+The objective is:
+
+grammar capability
+    scales with actual implementation resources
+
+rather than:
+
+grammar stops at an arbitrary language-defined maximum
+
+---
+
+70. Determinism Tests
+
+Given identical:
+
+source
+grammar version
+lexer configuration
+parser configuration
+
+the parser must produce equivalent results.
+
+Tests must ensure function parsing is independent of:
+
+- CPU;
+- GPU;
+- QPU;
+- FPGA;
+- network;
+- filesystem;
+- environment;
+- scheduler;
+- runtime state.
+
+---
+
+71. Portability Tests
+
+The function suite must include examples that demonstrate that identical source syntax can represent computation destined for different execution environments without changing the function grammar.
+
+The target differences should be resolved downstream.
+
+Conceptually:
+
+same Zamani function
+       │
+       ├── CPU realization
+       ├── GPU realization
+       ├── FPGA realization
+       ├── QPU realization
+       ├── distributed realization
+       └── future realization
+
+The function syntax remains unchanged.
+
+---
+
+72. Quantum Portability Tests
+
+Quantum function tests must avoid establishing an artificial maximum number of qubits.
+
+Test categories should include:
+
+single-qubit function
+multi-qubit function
+parameterized quantum function
+generic quantum function
+measurement-returning function
+hybrid function
+dynamic quantum control
+logical-qubit-oriented function
+custom quantum operation integration
+
+The grammar must not contain a finite universal gate catalogue as the mechanism for extensibility.
+
+Quantum operation semantics belong downstream.
+
+---
+
+73. Hardware Scalability Tests
+
+Function tests must verify that hardware-associated functions remain portable.
+
+Examples should cover symbolic:
+
+capability requirements
+resource requirements
+memory requirements
+accelerator requirements
+latency constraints
+reliability constraints
+communication requirements
+
+without embedding:
+
+specific CPU
+specific GPU
+specific QPU
+specific FPGA
+specific physical qubit
+specific core
+specific register
+specific address
+
+---
+
+74. No Vendor Lock-in
+
+The function grammar must not require syntax changes for every new:
+
+- CPU vendor;
+- GPU vendor;
+- FPGA vendor;
+- QPU provider;
+- accelerator;
+- operating system;
+- ABI;
+- cloud provider;
+- distributed runtime.
+
+Vendor-specific functionality belongs behind explicit interoperability/dialect/capability mechanisms.
+
+---
+
+75. Dialect Integration
+
+Future dialects may extend function-related syntax only through the canonical dialect mechanism.
+
+A dialect must identify:
+
+name
+version
+syntax extension
+semantic extension
+AST mapping
+IR mapping
+compatibility
+capabilities
+feature gates
+
+A dialect must not silently redefine the core meaning of ordinary functions.
+
+---
+
+76. Diagnostics
+
+Function diagnostics should identify the appropriate source-level issue without leaking implementation details unnecessarily.
+
+Examples:
+
+E-function-name
+E-function-parameters
+E-function-return
+E-function-generic
+E-function-constraint
+E-function-contract
+E-function-effect
+E-function-async
+E-function-generator
+E-function-foreign
+E-function-abi
+E-function-capability
+E-function-resource
+
+Exact diagnostic identifiers belong to the repository's diagnostic contract.
+
+---
+
+77. Tooling Integration
+
+The function grammar must support tooling such as:
+
+- syntax highlighting;
+- completion;
+- formatting;
+- documentation generation;
+- symbol indexing;
+- navigation;
+- refactoring;
+- diagnostics;
+- AST inspection;
+- semantic analysis.
+
+Tooling must consume the canonical parser/AST rather than independently reimplementing function syntax.
+
+---
+
+78. Documentation Integration
+
+Documentation generators should be able to obtain, where applicable:
+
+function name
+signature
+generic parameters
+constraints
+parameters
+returns
+effects
+contracts
+attributes
+visibility
+foreign metadata
+calling convention
+documentation comments
+source location
+
+Documentation is derived from the canonical syntax/AST, not another grammar.
+
+---
+
+79. Repository Integration Contract
+
+Before a function feature is considered production-ready, integration must be checked against at least:
+
+grammar/Zamani.g4
+grammar/specification/
+grammar/spec/
+grammar/core/
+grammar/types/
+grammar/expressions/
+grammar/statements/
+grammar/declarations/
+grammar/modules/
+grammar/effects/
+grammar/memory/
+grammar/concurrency/
+grammar/resources/
+grammar/compile/
+grammar/execution/
+grammar/interoperability/
+grammar/dialects/
+grammar/validation/
+grammar/compatibility/
+grammar/tests/
+
+src/lexer.rs
+src/parser.rs
+src/frontend/ast/
+semantic analysis
+canonical IR
+classical IR
+quantum::ir
+HDL/hardware IR
+compiler
+runtime
+HAL
 scheduling
+routing
+optimization
 QEC
 ZQN
-HAL
-calibration
-optimization
-resource allocation
 
-inside function grammar.
-
-Do not introduce a second function AST.
-
-Do not introduce a second quantum IR.
-
-Do not duplicate lexer rules.
-
-Do not duplicate type grammar.
-
-Do not duplicate expression grammar.
-
-Do not duplicate statement grammar.
-
-Do not allow a historical/design document to silently become executable syntax.
+Only the relevant downstream consumers need to change for a given feature, but their contracts must be known in advance.
 
 ---
 
-91. Production Acceptance Criteria
+80. Production Completion Gate
 
-"grammar/functions/" is production-ready only when all of the following are true.
+"grammar/functions/" is production-ready only when all of the following are true:
 
-Architecture
+Authority
 
-- [ ] "functions.g4" is the canonical function composition grammar.
-- [ ] Existing filenames remain stable unless a separately approved migration requires otherwise.
-- [ ] Every grammar rule has exactly one authoritative owner.
-- [ ] No duplicate function language exists elsewhere.
-- [ ] "Zamani.g4" composes the function subsystem.
-- [ ] The function subsystem does not become a second root grammar.
+- [ ] There is one canonical ownership model.
+- [ ] No function grammar file silently competes with another.
+- [ ] "Zamani.g4" remains the composition root.
+- [ ] "Zamani-Grammar.md" cannot silently introduce accepted syntax.
+- [ ] "grammar.md" reflects implementation conformance.
 
-Lexer
+Syntax
 
-- [ ] All tokens originate from the canonical lexer.
-- [ ] No duplicate lexer vocabulary exists.
-- [ ] Keyword ownership is unambiguous.
+- [ ] Named functions are completely specified.
+- [ ] Parameters are completely specified.
+- [ ] Returns are completely specified.
+- [ ] Generics are completely specified.
+- [ ] Constraints are completely specified.
+- [ ] Contracts are completely specified.
+- [ ] Closures are completely specified.
+- [ ] Lambdas are completely specified.
+- [ ] Async functions are completely specified.
+- [ ] Generators are completely specified.
+- [ ] Compile-time functions are completely specified.
+- [ ] Foreign functions are completely specified.
+- [ ] Calling-convention attachment is completely specified.
 
-AST
+Integration
 
-- [ ] Every function construct has an AST mapping.
-- [ ] Source spans are preserved.
-- [ ] Function ordering information is preserved.
-- [ ] Generic information is preserved.
-- [ ] Parameter information is preserved.
-- [ ] Return information is preserved.
-- [ ] Effect/contract/requirement metadata is preserved.
-- [ ] No backend-specific function AST is introduced.
-
-Semantics
-
-- [ ] Name resolution is downstream.
-- [ ] Type checking is downstream.
-- [ ] Generic solving is downstream.
-- [ ] Effect checking is downstream.
-- [ ] Capability checking is downstream.
-- [ ] Resource analysis is downstream.
-- [ ] Ownership/borrowing is downstream.
-- [ ] Domain legality is downstream.
-
-IR
-
-- [ ] Function grammar does not define an IR.
-- [ ] Classical lowering uses the canonical classical IR.
-- [ ] Quantum lowering uses "quantum::ir".
-- [ ] HDL/hardware lowering uses the canonical domain boundary.
-- [ ] No duplicate quantum IR exists.
-
-Compiler
-
-- [ ] Generic specialization is downstream.
-- [ ] Optimization is downstream.
-- [ ] Target selection is downstream.
-- [ ] Routing is downstream.
-- [ ] Scheduling is downstream.
-- [ ] QEC is downstream.
-- [ ] ZQN is downstream.
-- [ ] HAL integration is downstream.
-
-Runtime
-
-- [ ] Runtime execution is not performed by grammar.
-- [ ] Async runtime selection is downstream.
-- [ ] Resource allocation is downstream.
-- [ ] Deployment is downstream.
-
-Safety
-
-- [ ] No embedded Rust execution.
-- [ ] No "unsafe" Rust requirement.
-- [ ] No filesystem access.
-- [ ] No network access.
-- [ ] No process execution.
-- [ ] No hardware discovery.
-- [ ] No secret access.
+- [ ] Every grammar production has an AST mapping.
+- [ ] Every AST construct has a semantic mapping.
+- [ ] Every semantic construct has an appropriate IR mapping.
+- [ ] Function information reaches the compiler correctly.
+- [ ] Runtime consumers are identified.
+- [ ] Interoperability consumers are identified.
+- [ ] Domain-specific consumers are identified.
 
 Scalability
 
-- [ ] No artificial function-count limit.
-- [ ] No artificial parameter-count limit.
-- [ ] No artificial generic-count limit.
-- [ ] No artificial constraint-count limit.
-- [ ] No artificial contract-count limit.
-- [ ] No artificial domain limit.
-- [ ] No artificial machine-size limit.
-- [ ] Repetition is used instead of finite enumeration where appropriate.
-- [ ] Parser resource limits are implementation policies, not language semantics.
+- [ ] No arbitrary function count limit exists.
+- [ ] No arbitrary parameter count limit exists.
+- [ ] No arbitrary generic count limit exists.
+- [ ] No arbitrary constraint count limit exists.
+- [ ] No arbitrary capture count limit exists.
+- [ ] No arbitrary function-body size is defined by grammar.
+- [ ] No hardware size is encoded into function syntax.
+- [ ] No fixed topology is encoded.
+- [ ] No fixed device count is encoded.
 
 POCO-REAF
 
 - [ ] Function syntax is target-independent.
-- [ ] Same function source can participate in classical execution.
-- [ ] Same function source can participate in quantum execution.
-- [ ] Same function source can participate in hybrid execution.
-- [ ] Same function model can participate in HDL/hardware co-design.
-- [ ] Same function model can scale across distributed execution.
-- [ ] New computational domains can consume functions without rewriting the universal function model.
-- [ ] Hardware selection occurs downstream.
-- [ ] Physical realization occurs downstream.
+- [ ] Resource requirements are separated from realization.
+- [ ] Capabilities are separated from device selection.
+- [ ] Requirements are separated from preferences.
+- [ ] Preferences are separated from implementation decisions.
+- [ ] Target-specific realization happens downstream.
 
-Testing
+Quantum
+
+- [ ] Functions integrate with the canonical quantum semantic pipeline.
+- [ ] "quantum::ir" remains the canonical quantum IR boundary.
+- [ ] Function grammar does not create another quantum IR.
+- [ ] No artificial qubit limit exists.
+- [ ] No physical-qubit mapping is embedded in ordinary function syntax.
+- [ ] QEC remains downstream.
+- [ ] ZQN remains downstream.
+- [ ] routing remains downstream.
+- [ ] scheduling remains downstream.
+- [ ] HAL remains downstream.
+
+Safety
+
+- [ ] Rust implementation targets Rust 1.97/1.97.1.
+- [ ] Rust 2021 is maintained.
+- [ ] No "unsafe" Rust is used.
+- [ ] Grammar parsing has no external side effects.
+- [ ] Parser does not perform hardware discovery.
+- [ ] Parser does not perform network access.
+- [ ] Parser does not execute user programs.
+
+Validation
 
 - [ ] Positive tests exist.
 - [ ] Negative tests exist.
 - [ ] Boundary tests exist.
 - [ ] Scalability tests exist.
 - [ ] Determinism tests exist.
+- [ ] Portability tests exist.
 - [ ] Compatibility tests exist.
-- [ ] Cross-domain tests exist.
-- [ ] Round-trip tests exist where supported.
-- [ ] Tests do not encode artificial hardware limits.
+- [ ] Diagnostics are validated.
+- [ ] Hard-coding audit passes.
+- [ ] Grammar ambiguity analysis passes.
+- [ ] Unreachable-rule analysis passes.
+- [ ] Duplicate-production analysis passes.
+- [ ] AST coverage passes.
+- [ ] semantic coverage passes.
+- [ ] IR coverage passes.
 
 ---
 
-92. Definition of Done
+81. Definition of Done for an Individual File
 
-A function grammar file is not done merely because ANTLR accepts it.
+A function grammar file is DONE only when it can be frozen without requiring a later structural rewrite merely because another function file was subsequently implemented.
 
-A file is done when:
+For each file:
 
-syntax
-  +
-ownership
-  +
-dependencies
-  +
-lexer contract
-  +
-AST contract
-  +
-semantic contract
-  +
-IR integration
-  +
-compiler integration
-  +
-runtime integration
-  +
-tooling integration
-  +
-cross-domain integration
-  +
-diagnostics
-  +
-security
-  +
-determinism
-  +
-scalability
-  +
-compatibility
-  +
-positive tests
-  +
-negative tests
-  +
-boundary tests
-  +
-hard-coding audit
+1. Purpose fixed
+2. Ownership fixed
+3. Non-ownership fixed
+4. Inputs fixed
+5. Outputs fixed
+6. Dependencies fixed
+7. Upstream contracts fixed
+8. Downstream consumers identified
+9. Public grammar contract fixed
+10. AST contract fixed
+11. Semantic contract fixed
+12. IR contract fixed
+13. Compiler integration fixed
+14. Runtime integration fixed
+15. Cross-domain integration fixed
+16. Diagnostics fixed
+17. Positive tests fixed
+18. Negative tests fixed
+19. Boundary tests fixed
+20. Scalability tests fixed
+21. Determinism tests fixed
+22. Compatibility tests fixed
+23. Hard-coding audit passed
+24. Safety audit passed
+25. Completion criteria passed
 
-are all resolved.
-
-After that point, another function grammar file may integrate with it through the already-defined contract, rather than requiring the completed file to be redesigned.
-
-That is the required independently-completable architecture.
+If another file later needs to reinterpret the meaning of the completed file, that is an architectural failure and must be resolved through the owning contract rather than by silently changing the completed file.
 
 ---
 
-93. Final Architectural Rule
+82. Recommended Independent Completion Order
 
-The central rule for "grammar/functions/" is:
+The function subsystem should be completed in dependency order.
 
-«Functions are universal language-level computation units, not descriptions of particular machines.»
+Stage 1 — function contracts
+
+1. "README.md"
+2. "parameters.g4"
+3. "returns.g4"
+4. "generics.g4"
+5. "constraints.g4"
+6. "contracts.g4"
+
+Stage 2 — callable forms
+
+7. "closures.g4"
+8. "lambdas.g4"
+9. "async.g4"
+10. "generators.g4"
+
+Stage 3 — interoperability/execution forms
+
+11. "calling-conventions.g4"
+12. "foreign-functions.g4"
+13. "compile-time-functions.g4"
+
+Stage 4 — composition
+
+14. "functions.g4"
+
+Only after the component contracts are stable should "functions.g4" become the final composition point.
+
+Stage 5 — repository integration
+
+Then validate:
+
+Zamani.g4
+    ↓
+lexer
+    ↓
+parser
+    ↓
+AST
+    ↓
+semantic analysis
+    ↓
+IR
+    ↓
+compiler
+    ↓
+runtime
+
+This order minimizes re-editing.
+
+---
+
+83. What Must Never Be Added to This Directory
+
+Do not add function grammar rules whose purpose is to encode:
+
+CPU models
+GPU models
+QPU models
+FPGA models
+specific devices
+physical qubits
+physical registers
+physical addresses
+memory-bank identities
+fixed core counts
+fixed thread counts
+fixed node counts
+fixed topology
+fixed accelerator counts
+vendor-specific ABI implementation
+QEC algorithms
+routing algorithms
+scheduling algorithms
+calibration procedures
+runtime execution
+hardware discovery
+
+unless the feature is explicitly a source-level symbolic interoperability/resource contract and is owned by the appropriate architecture.
+
+---
+
+84. Final Architectural Invariant
+
+The invariant for "grammar/functions/" is:
+
+ONE FUNCTION LANGUAGE
+        │
+        ├── classical
+        ├── quantum
+        ├── hybrid
+        ├── HDL
+        ├── hardware/software co-design
+        ├── AI/ML
+        ├── distributed
+        ├── parallel/HPC
+        ├── networking
+        ├── cryptography
+        ├── scientific
+        ├── embedded
+        ├── accelerator
+        └── future computational paradigms
+
+All of these use the same fundamental function abstraction.
+
+The function grammar describes portable computation.
+
+The semantic layer determines meaning.
+
+The IR layer determines canonical representation.
+
+Optimization determines better realization.
+
+Routing determines physical realization where applicable.
+
+Scheduling determines execution order/resources.
+
+QEC determines quantum error correction.
+
+ZQN determines fault/noise semantics.
+
+HAL determines hardware capability/state interaction.
+
+The compiler determines target lowering.
+
+The runtime determines execution.
 
 Therefore:
 
-Zamani function
+FUNCTION SYNTAX
       ↓
-portable syntax
+PORTABLE SEMANTIC INTENT
       ↓
-domain-neutral AST
+CANONICAL AST
       ↓
-semantic meaning
+SEMANTIC MODEL
       ↓
-canonical domain IR
+CANONICAL / DOMAIN IR
       ↓
-optimization
+OPTIMIZATION
       ↓
-routing / scheduling / resilience
+TARGET-DEPENDENT REALIZATION
       ↓
-resource/capability realization
-      ↓
-HAL
-      ↓
-target hardware/runtime
+RUNTIME
 
-The source function must not need to know whether its eventual realization is:
+The function grammar must never reverse that direction.
 
-one tiny processor
-many processors
-GPU
-many GPUs
-FPGA
-ASIC
-QPU
-distributed cluster
-edge device
-cloud deployment
-hybrid quantum-classical system
-future computational substrate
+That is the boundary that allows Zamani to pursue:
 
-The language expresses what the computation is and what it requires.
+«Program Once → Compile Once → Run Everywhere, Anywhere, Forever»
 
-The compiler, resource system, runtime, and target stack determine how that computation is realized.
-
-That separation is the function subsystem's core contribution to:
-
-Program Once → Compile Once → Run Everywhere → Anywhere → Forever (POCO-REAF).
-
----
-
-94. Authority Statement
-
-For function syntax, the authority chain is:
-
-language specification
-        ↓
-canonical lexical specification
-        ↓
-canonical function grammar
-        ↓
-Zamani.g4 composition
-        ↓
-generated parser
-        ↓
-domain-neutral frontend AST
-        ↓
-semantic analysis
-        ↓
-canonical IR
-        ↓
-compiler/runtime
-
-Within "grammar/functions/":
-
-functions.g4
-parameters.g4
-returns.g4
-generics.g4
-constraints.g4
-contracts.g4
-async.g4
-closures.g4
-generators.g4
-compile-time-functions.g4
-foreign-functions.g4
-
-are the authoritative owners of their respective function-language syntax.
-
-"README.md" is authoritative for the directory architecture and integration contract, but it does not replace the actual grammar rules.
-
-No other document, generated reference, historical grammar, vendor grammar, or domain grammar may silently override this ownership model.
+while scaling from the smallest computation to arbitrarily large computational systems, subject to the resources actually available rather than artificial limits embedded in the language grammar.
