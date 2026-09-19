@@ -1,15 +1,77 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Programming Language
  * ============================================================================
  *
  * File:
  *     grammar/functions/async.g4
  *
- * Responsibility:
- *     Canonical parser grammar for asynchronous function syntax.
+ * Grammar:
+ *     AsyncFunctions
  *
- * Architectural position:
+ * Status:
+ *     CANONICAL production async-syntax delegate
+ *
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *
+ * Safety:
+ *     This file contains parser grammar only.
+ *
+ *     It contains:
+ *       - no embedded Rust;
+ *       - no semantic predicates;
+ *       - no runtime execution;
+ *       - no filesystem access;
+ *       - no networking;
+ *       - no hardware discovery;
+ *       - no target selection;
+ *       - no unsafe Rust.
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This file is the SINGLE OWNER of syntax that is intrinsically asynchronous
+ * but is not itself the complete function-declaration grammar.
+ *
+ * It provides the reusable async syntax consumed by:
+ *
+ *     grammar/functions/functions.g4
+ *     grammar/expressions/expressions.g4
+ *
+ * The two production constructs owned here are:
+ *
+ *     asyncModifier
+ *     awaitExpression
+ *
+ * Function declaration structure remains owned by:
+ *
+ *     grammar/functions/functions.g4
+ *
+ * Therefore:
+ *
+ *     async fn f(...) -> T { ... }
+ *
+ * is assembled by:
+ *
+ *     Functions
+ *         |
+ *         +--> asyncModifier
+ *         +--> functionName
+ *         +--> functionGenericParameters
+ *         +--> parameterList
+ *         +--> functionReturnClause
+ *         +--> functionEffectClause
+ *         +--> functionContractClause
+ *         +--> functionImplementation
+ *
+ * This file MUST NOT recreate that complete declaration.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
  *
  *     Zamani source
  *          |
@@ -19,34 +81,48 @@
  *          v
  *     parser
  *          |
- *          v
- *     functions/async.g4
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     target-independent IR
- *          |
- *          +-------------------+
- *          |                   |
- *          v                   v
- *       classical          quantum/hybrid
- *          |                   |
- *          +---------+---------+
- *                    |
- *                    v
- *             scheduling/runtime
- *
- * Runtime/compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     This grammar contains no executable Rust and introduces no unsafe
- *     requirement. The Zamani compiler is required to use safe Rust.
+ *          +--------------------------+
+ *          |                          |
+ *          v                          v
+ *     function grammar          expression grammar
+ *          |                          |
+ *          +----------+---------------+
+ *                     |
+ *                     v
+ *               async syntax
+ *                     |
+ *                     v
+ *             domain-neutral AST
+ *                     |
+ *                     v
+ *             semantic analysis
+ *                     |
+ *          +----------+----------+
+ *          |          |          |
+ *          v          v          v
+ *      classical   quantum::ir  HDL/hardware
+ *          |          |          |
+ *          +----------+----------+
+ *                     |
+ *                     v
+ *               optimization
+ *                     |
+ *          +----------+----------+
+ *          |          |          |
+ *          v          v          v
+ *       routing   scheduling  resilience
+ *                                |
+ *                                v
+ *                               QEC
+ *                                |
+ *                                v
+ *                               ZQN
+ *                                |
+ *                                v
+ *                               HAL
+ *                                |
+ *                                v
+ *                         target realization
  *
  * ============================================================================
  * OWNERSHIP
@@ -54,225 +130,864 @@
  *
  * THIS FILE OWNS:
  *
- *     - async function declarations;
- *     - async function modifiers;
- *     - async function signatures;
- *     - async function bodies;
- *     - async-specific function syntax;
- *     - await expressions;
- *     - async-specific function grammar composition.
+ *     - asyncModifier;
+ *     - awaitExpression;
+ *     - the source-level association of `async` with an async-capable
+ *       expression/function grammar position;
+ *     - the lexical/parser boundary for `await`;
+ *     - the reusable integration contract for async syntax.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - identifiers;
- *     - qualified names;
- *     - expressions generally;
- *     - blocks;
+ *     - functionDeclaration;
+ *     - functionDefinition;
+ *     - functionSignature;
+ *     - functionName;
  *     - parameters;
- *     - parameter types;
- *     - function types;
- *     - return types;
- *     - generic parameter syntax;
- *     - where clauses;
- *     - statements generally;
- *     - futures as runtime objects;
- *     - task executors;
+ *     - generic parameters;
+ *     - return clauses;
+ *     - effects;
+ *     - contracts;
+ *     - function bodies;
+ *     - ordinary expressions;
+ *     - expression precedence;
+ *     - blocks;
+ *     - statements;
+ *     - types;
+ *     - futures;
+ *     - promises;
+ *     - tasks;
+ *     - executors;
  *     - schedulers;
- *     - worker counts;
- *     - thread counts;
- *     - CPU topology;
- *     - GPU topology;
- *     - QPU topology;
- *     - hardware resources;
- *     - quantum IR;
- *     - runtime state.
+ *     - workers;
+ *     - threads;
+ *     - queues;
+ *     - polling;
+ *     - wake mechanisms;
+ *     - cancellation implementation;
+ *     - runtime state;
+ *     - resource allocation;
+ *     - hardware selection;
+ *     - device placement;
+ *     - CPU/GPU/FPGA/QPU selection;
+ *     - quantum routing;
+ *     - quantum scheduling;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - IR construction.
  *
- * Those constructs belong to their canonical grammar/semantic owners.
+ * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
+ *
+ * There MUST be exactly one owner for each of these rules:
+ *
+ *     asyncModifier
+ *     awaitExpression
+ *
+ * There MUST NOT be another authoritative definition of either rule in:
+ *
+ *     grammar/functions/functions.g4
+ *     grammar/concurrency/
+ *     grammar/expressions/
+ *     grammar/antlr/
+ *     grammar/Zamani.g4
+ *
+ * Other grammars may CONSUME these rules through parser composition.
+ *
+ * ============================================================================
+ * FUNCTION INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/functions/functions.g4` remains the canonical owner of the complete
+ * function declaration.
+ *
+ * Its modifier dispatch SHOULD consume:
+ *
+ *     asyncModifier
+ *
+ * rather than directly owning another async modifier production.
+ *
+ * Conceptually:
+ *
+ *     functionModifier
+ *         : PUBLIC
+ *         | ...
+ *         | asyncModifier
+ *         | ...
+ *         ;
+ *
+ * Therefore:
+ *
+ *     async fn compute(...) { ... }
+ *
+ * is parsed by the ordinary function declaration structure.
+ *
+ * The complete function remains one AST function declaration with an async
+ * source modifier.
+ *
+ * This is deliberate.
+ *
+ * It prevents:
+ *
+ *     functionDeclaration
+ *     asyncFunctionDeclaration
+ *
+ * from becoming two competing declarations with subtly different support for:
+ *
+ *     generics
+ *     parameters
+ *     returns
+ *     effects
+ *     contracts
+ *     prototypes
+ *     bodies
+ *     attributes
+ *     visibility
+ *     future function features
+ *
+ * ============================================================================
+ * RETURN INTEGRATION
+ * ============================================================================
+ *
+ * Return syntax remains owned by:
+ *
+ *     grammar/functions/returns.g4
+ *
+ * Therefore this file MUST NOT define:
+ *
+ *     asyncReturnClause
+ *     asyncReturnType
+ *     futureReturnClause
+ *
+ * An async function may use the canonical:
+ *
+ *     functionReturnClause
+ *
+ * because async-ness is a function semantic property, not a different source
+ * type-syntax authority.
+ *
+ * Examples:
+ *
+ *     async fn compute() -> Result { ... }
+ *
+ *     async fn measure(q: Qubit) -> Measurement { ... }
+ *
+ *     async fn transform<T>(value: T) -> Result<T, Error> { ... }
+ *
+ * The semantic/type system determines the legality of those return types.
+ *
+ * ============================================================================
+ * GENERIC INTEGRATION
+ * ============================================================================
+ *
+ * Generic parameter syntax remains owned by:
+ *
+ *     grammar/functions/generics.g4
+ *
+ * This file does not redefine:
+ *
+ *     functionGenericParameters
+ *     functionGenericParameter
+ *     functionGenericParameterBound
+ *
+ * Async functions therefore automatically inherit the same scalable generic
+ * syntax as ordinary functions.
+ *
+ * ============================================================================
+ * PARAMETER INTEGRATION
+ * ============================================================================
+ *
+ * Parameter syntax remains owned by:
+ *
+ *     grammar/functions/parameters.g4
+ *
+ * This file does not redefine:
+ *
+ *     parameterList
+ *     parameter
+ *
+ * Async functions therefore automatically inherit the canonical parameter
+ * system.
+ *
+ * ============================================================================
+ * TYPE INTEGRATION
+ * ============================================================================
+ *
+ * This file does not define:
+ *
+ *     Future<T>
+ *     Task<T>
+ *     Promise<T>
+ *     Stream<T>
+ *     Async<T>
+ *
+ * as grammar-level special cases.
+ *
+ * If such constructs are valid Zamani types, they are ordinary canonical
+ * type expressions and belong to:
+ *
+ *     grammar/types/
+ *
+ * Their semantic interpretation belongs to the type/semantic system.
+ *
+ * This permits future asynchronous abstractions without repeatedly changing
+ * the async grammar.
+ *
+ * ============================================================================
+ * AWAIT OWNERSHIP
+ * ============================================================================
+ *
+ * This file owns the source-level `await` operator.
+ *
+ * Canonical form:
+ *
+ *     await expression
+ *
+ * The operand is a canonical postfix expression.
+ *
+ * This intentionally gives `await` unary-expression-like behavior without
+ * making this file the owner of the complete expression hierarchy.
+ *
+ * Example:
+ *
+ *     await task
+ *
+ *     await compute()
+ *
+ *     await service.request(value)
+ *
+ *     await stream.next()
+ *
+ *     await accelerator.run(kernel)
+ *
+ *     await quantum_operation()
+ *
+ * The semantic layer determines whether the operand is actually awaitable.
+ *
+ * ============================================================================
+ * AWAIT PRECEDENCE
+ * ============================================================================
+ *
+ * `await` binds to one canonical postfix expression.
+ *
+ * Therefore:
+ *
+ *     await compute()
+ *
+ * is parsed as:
+ *
+ *     await (compute())
+ *
+ * while:
+ *
+ *     await compute() + value
+ *
+ * is parsed at the surrounding expression hierarchy as:
+ *
+ *     (await (compute())) + value
+ *
+ * This keeps `await` from accidentally consuming an entire binary expression.
+ *
+ * If the language specification later changes await precedence, that change
+ * belongs to the canonical expression-precedence contract rather than being
+ * hidden inside this file.
+ *
+ * ============================================================================
+ * EXPRESSION INTEGRATION
+ * ============================================================================
+ *
+ * `awaitExpression` is intended to be admitted by the canonical expression
+ * hierarchy.
+ *
+ * The expression composition layer should provide an explicit async-aware
+ * prefix/operand boundary rather than duplicating the await syntax.
+ *
+ * Recommended composition:
+ *
+ *     prefixExpression
+ *         : ...
+ *         | awaitExpression
+ *         | ...
+ *         ;
+ *
+ * The expression grammar remains the sole owner of:
+ *
+ *     expression
+ *
+ * and of overall precedence.
+ *
+ * This file only supplies:
+ *
+ *     awaitExpression
+ *
+ * ============================================================================
+ * POSTFIX DEPENDENCY
+ * ============================================================================
+ *
+ * `awaitExpression` consumes:
+ *
+ *     postfixExpression
+ *
+ * from:
+ *
+ *     grammar/expressions/postfix.g4
+ *
+ * This is intentional because postfix expressions already represent:
+ *
+ *     identifiers
+ *     calls
+ *     indexing
+ *     member access
+ *     chained access
+ *     other canonical postfix operations
+ *
+ * This avoids importing the complete `Expressions` grammar here and therefore
+ * avoids creating a parser-composition cycle:
+ *
+ *     Expressions
+ *         -> AsyncFunctions
+ *         -> Expressions
+ *
+ * Instead the dependency is:
+ *
+ *     Expressions
+ *         -> AsyncFunctions
+ *         -> Postfix
+ *
+ * while the canonical expression hierarchy remains owned by Expressions.
+ *
+ * ============================================================================
+ * ASYNC EXPRESSION SCOPE
+ * ============================================================================
+ *
+ * This file intentionally does NOT introduce:
+ *
+ *     asyncBlock
+ *     asyncClosure
+ *     asyncLambda
+ *     spawnExpression
+ *     taskExpression
+ *     futureExpression
+ *
+ * merely because those concepts may exist in a runtime.
+ *
+ * They require independent language contracts before becoming syntax.
+ *
+ * Existing runtime concepts MUST NOT automatically become source-language
+ * syntax.
+ *
+ * If an async closure or async block is formally added to the Zamani language,
+ * it should receive its own complete syntax/AST/semantic/IR contract and then
+ * be composed into the appropriate expression grammar.
+ *
+ * ============================================================================
+ * ASYNC FUNCTION SEMANTICS
+ * ============================================================================
+ *
+ * The grammar only records:
+ *
+ *     async
+ *
+ * on the function declaration.
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether the function is suspendable;
+ *     - what its callable type is;
+ *     - what its completion semantics are;
+ *     - whether suspension points are legal;
+ *     - whether borrowed values may cross suspension points;
+ *     - whether ownership survives suspension;
+ *     - what effects it has;
+ *     - what capabilities it requires;
+ *     - what resources it requires;
+ *     - whether cancellation is supported;
+ *     - whether cancellation is cooperative or otherwise;
+ *     - whether execution may be distributed;
+ *     - whether execution may be accelerated;
+ *     - whether execution interacts with quantum computation;
+ *     - whether execution interacts with HDL/hardware abstractions.
+ *
+ * None of these checks belong in this grammar.
+ *
+ * ============================================================================
+ * AWAIT SEMANTICS
+ * ============================================================================
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether the operand is awaitable;
+ *     - what value the await produces;
+ *     - what effects the await introduces;
+ *     - whether suspension is permitted in the surrounding context;
+ *     - ownership/lifetime implications;
+ *     - cancellation implications;
+ *     - resource implications;
+ *     - error propagation;
+ *     - control-flow implications.
+ *
+ * The grammar must never attempt to determine these properties.
+ *
+ * ============================================================================
+ * CANCELLATION INTEGRATION
+ * ============================================================================
+ *
+ * Cancellation is intentionally NOT represented as a grammar-level runtime
+ * implementation.
+ *
+ * The semantic/runtime architecture may provide cancellation through:
+ *
+ *     execution policy
+ *     effect system
+ *     capability system
+ *     runtime task model
+ *     resilience system
+ *     cancellation token model
+ *
+ * This file must not introduce:
+ *
+ *     thread_cancel
+ *     executor_cancel
+ *     worker_cancel
+ *     queue_cancel
+ *
+ * or any target-specific cancellation syntax.
+ *
+ * If the language eventually defines a source-level cancellation construct,
+ * it must be specified independently and then composed here only as a
+ * syntactic feature.
+ *
+ * ============================================================================
+ * CONCURRENCY INTEGRATION
+ * ============================================================================
+ *
+ * This file does not own the complete concurrency model.
+ *
+ * Concurrency syntax belongs to:
+ *
+ *     grammar/concurrency/
+ *
+ * In particular, the concurrency layer may define:
+ *
+ *     tasks
+ *     channels
+ *     synchronization
+ *     parallelism
+ *     actors
+ *     distributed execution
+ *
+ * Async functions may use those constructs through the ordinary statement,
+ * expression, type, effect, and capability systems.
+ *
+ * `async.g4` must not redefine those constructs.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Async syntax is target independent.
+ *
+ * It MUST NOT contain:
+ *
+ *     requires_1_thread
+ *     requires_8_threads
+ *     requires_16_cores
+ *     requires_gpu_0
+ *     requires_qpu_1
+ *     requires_32_qubits
+ *
+ * or equivalent fixed target assumptions.
+ *
+ * Portable requirements belong to:
+ *
+ *     grammar/resources/
+ *     grammar/hardware/
+ *     grammar/compile/
+ *     grammar/execution/
+ *
+ * A semantic/resource system may determine at compile or execution time how
+ * the async computation is realized using available resources.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * `async` expresses source-level asynchronous execution intent.
+ * Async syntax describes computation and suspension intent.
  *
- * It MUST NOT prescribe:
+ * It does NOT prescribe:
  *
- *     - a particular operating-system thread;
- *     - a thread pool;
- *     - a reactor;
- *     - an executor;
- *     - a number of workers;
- *     - a CPU;
- *     - a GPU;
- *     - a QPU;
- *     - a network transport;
- *     - a queue implementation;
- *     - a scheduling policy.
+ *     - thread count;
+ *     - worker count;
+ *     - core count;
+ *     - CPU identity;
+ *     - GPU identity;
+ *     - FPGA identity;
+ *     - QPU identity;
+ *     - device identity;
+ *     - node count;
+ *     - queue implementation;
+ *     - scheduler implementation;
+ *     - executor implementation;
+ *     - event-loop implementation;
+ *     - network transport;
+ *     - physical qubit mapping;
+ *     - hardware topology.
  *
- * The same source program may therefore be lowered to:
+ * Therefore an async program may be lowered to different execution strategies
+ * without changing its source semantics.
  *
- *     - synchronous execution;
- *     - a state machine;
- *     - cooperative execution;
- *     - event-driven execution;
- *     - distributed execution;
- *     - accelerator execution;
- *     - heterogeneous execution;
- *     - quantum/classical orchestration;
- *     - a future execution mechanism.
+ * Examples include:
  *
- * The choice belongs to semantic analysis, compilation, scheduling and
- * runtime/target realization.
+ *     cooperative execution
+ *     event-driven execution
+ *     state-machine execution
+ *     thread-based execution
+ *     process-based execution
+ *     distributed execution
+ *     accelerator execution
+ *     heterogeneous execution
+ *     quantum/classical orchestration
+ *     future execution models
+ *
+ * The selection is downstream.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Async syntax remains domain neutral.
+ *
+ * An async function may contain operations whose semantic meaning belongs to
+ * the quantum domain.
+ *
+ * Example:
+ *
+ *     async fn execute(q: Qubit) -> Measurement {
+ *         let result = await measure(q);
+ *         result
+ *     }
+ *
+ * The grammar does not know whether `measure` is:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     remote
+ *     simulated
+ *     hardware-backed
+ *
+ * Semantic analysis resolves that meaning.
+ *
+ * If the computation becomes quantum semantic IR, the lowering path remains:
+ *
+ *     frontend AST
+ *         ->
+ *     semantic quantum operation
+ *         ->
+ *     quantum::ir
+ *         ->
+ *     optimization
+ *         ->
+ *     routing
+ *         ->
+ *     scheduling
+ *         ->
+ *     QEC / resilience
+ *         ->
+ *     ZQN
+ *         ->
+ *     HAL
+ *
+ * This file MUST NOT create:
+ *
+ *     AsyncQuantumIR
+ *     AsyncQubitIR
+ *     AsyncGateIR
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Async functions may invoke or await operations associated with:
+ *
+ *     HDL simulation
+ *     hardware control
+ *     accelerator execution
+ *     device communication
+ *     data movement
+ *     distributed services
+ *
+ * None of those targets are encoded in this grammar.
+ *
+ * Source-level async semantics remain unchanged.
+ *
+ * ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * An awaitable computation may semantically represent:
+ *
+ *     local computation
+ *     remote computation
+ *     distributed service
+ *     actor interaction
+ *     network request
+ *     accelerator completion
+ *     quantum-device completion
+ *
+ * The grammar does not distinguish these cases.
+ *
+ * The distinction belongs to types, effects, capabilities, resources, semantic
+ * analysis, and runtime/target realization.
+ *
+ * ============================================================================
+ * ERROR / DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics must preserve source locations for:
+ *
+ *     asyncModifier
+ *     awaitExpression
+ *     await operand
+ *
+ * Examples of syntactic errors include:
+ *
+ *     async
+ *
+ *     await
+ *
+ *     await ;
+ *
+ *     async fn
+ *
+ * The parser should report the missing syntactic construct at the nearest
+ * meaningful source position.
+ *
+ * Semantic errors such as:
+ *
+ *     await nonAwaitableValue
+ *
+ * are NOT parser errors.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing these constructs MUST depend only on:
+ *
+ *     - token sequence;
+ *     - active Zamani grammar/language version.
+ *
+ * It MUST NOT depend on:
+ *
+ *     - system time;
+ *     - randomness;
+ *     - environment variables;
+ *     - filesystem state;
+ *     - network state;
+ *     - hardware discovery;
+ *     - runtime scheduler state;
+ *     - device availability.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Parsing async syntax is non-executing.
+ *
+ * The parser MUST NOT:
+ *
+ *     - create tasks;
+ *     - start threads;
+ *     - contact executors;
+ *     - access networks;
+ *     - inspect devices;
+ *     - invoke QPUs;
+ *     - invoke HDL simulators;
+ *     - allocate runtime resources;
+ *     - execute awaited expressions.
+ *
+ * `await` is syntax until semantic lowering/runtime execution occurs.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * There are deliberately NO grammar-level constants for:
+ * This file introduces no artificial finite limit for:
  *
- *     MAX_TASKS
- *     MAX_FUTURES
- *     MAX_AWAIT_DEPTH
- *     MAX_ASYNC_FUNCTIONS
- *     MAX_THREADS
- *     MAX_WORKERS
- *     MAX_CORES
- *     MAX_DEVICES
- *     MAX_QUBITS
- *     MAX_NODES
+ *     async functions
+ *     await expressions
+ *     nesting
+ *     call chains
+ *     expression chains
+ *     functions
+ *     parameters
+ *     generic parameters
+ *     tasks
+ *     resources
+ *     devices
+ *     nodes
+ *     qubits
+ *     threads
+ *     cores
+ *     accelerators
  *
- * The grammar therefore imposes no artificial finite machine-size limit.
+ * Grammar repetition and canonical expression composition remain open-ended.
  *
- * Resource limitations are represented and enforced downstream through:
- *
- *     - resource requirements;
- *     - capabilities;
- *     - constraints;
- *     - scheduling;
- *     - runtime policy;
- *     - target capabilities.
- *
- * ============================================================================
- * DEPENDENCY CONTRACT
- * ============================================================================
- *
- * This grammar REUSES canonical rules supplied by the surrounding grammar:
- *
- *     identifier
- *     qualifiedName
- *     expression
- *     blockExpression
- *     parameterList
- *     returnType
- *     genericParameters
- *     whereClause
- *     typeExpression
- *
- * It MUST NOT redefine those rules.
- *
- * The parent `functions.g4` grammar is responsible for composing this module
- * with the other function grammar modules.
+ * Practical implementation limits are external resource-policy concerns and
+ * must never become source-language semantics.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser lowers:
+ * Existing frontend AST support already includes an await expression:
  *
- *     async fn name(...) { ... }
+ *     Expression::Await(Span, Box<Expression>)
  *
- * into the repository's canonical async-function AST representation.
+ * Therefore:
  *
- * The existing repository already has a dedicated async AST representation
- * whose purpose is source-level structure rather than runtime execution.
+ *     awaitExpression
  *
- * This grammar therefore does NOT introduce:
+ * MUST lower to that existing domain-neutral AST representation.
  *
- *     Future<T>
- *     TaskHandle
- *     Executor
- *     RuntimeTaskId
- *     PollState
- *     Waker
- *     Worker
- *     Thread
+ * No new async-specific AST hierarchy is introduced by this grammar.
  *
- * as grammar-owned runtime concepts.
+ * For the function modifier, the frontend AST must preserve that the function
+ * declaration is asynchronous.
  *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
+ * The exact Rust representation is owned by:
  *
- * Syntax accepts an asynchronous function.
+ *     src/frontend/ast/
  *
- * Semantic analysis determines:
+ * and/or the canonical function AST layer.
  *
- *     - whether the signature is type-correct;
- *     - the resulting async function type;
- *     - whether captures are valid;
- *     - ownership/lifetime requirements;
- *     - effects;
- *     - capabilities;
- *     - resource requirements;
- *     - cancellation behavior;
- *     - suspension semantics;
- *     - domain-specific execution requirements.
- *
- * The grammar does none of these checks.
+ * This grammar must not define a second function AST.
  *
  * ============================================================================
- * QUANTUM / HYBRID COMPATIBILITY
+ * SEMANTIC / IR CONTRACT
  * ============================================================================
  *
- * An async function may contain:
+ * The lowering direction is:
  *
- *     - classical computation;
- *     - quantum computation;
- *     - measurement;
- *     - classical feedback;
- *     - distributed operations;
- *     - accelerator operations;
- *     - HDL interaction;
- *     - future computational domains.
+ *     async syntax
+ *         ->
+ *     domain-neutral AST
+ *         ->
+ *     semantic async/function model
+ *         ->
+ *     canonical semantic representation
+ *         ->
+ *     appropriate domain IR
  *
- * None of those domains are encoded into this grammar.
+ * Potential downstream representations include:
  *
- * In particular, this file contains no:
+ *     classical IR
+ *     quantum::ir
+ *     HDL/hardware IR
+ *     distributed representation
+ *     accelerator representation
  *
- *     - qubit count;
- *     - physical-qubit identifier;
- *     - QPU identifier;
- *     - gate-set requirement;
- *     - topology;
- *     - calibration;
- *     - routing;
- *     - scheduling;
- *     - QEC implementation;
- *     - ZQN model.
- *
- * Quantum semantic lowering remains downstream and `quantum::ir` remains the
- * canonical quantum semantic boundary.
+ * Async syntax itself is not an IR.
  *
  * ============================================================================
- * INTEGRATION GUARANTEE
+ * COMPILER INTEGRATION
  * ============================================================================
  *
- * Completing this file must not require later modification merely because:
+ * Compiler stages consuming this feature may include:
  *
- *     - the runtime changes;
- *     - a new scheduler is introduced;
- *     - a new QPU is supported;
- *     - a new CPU architecture appears;
- *     - GPU execution is added;
- *     - distributed execution changes;
- *     - resource discovery changes;
- *     - hardware topology changes.
+ *     structural validation
+ *     name resolution
+ *     type checking
+ *     effect checking
+ *     capability checking
+ *     ownership/lifetime analysis
+ *     suspension analysis
+ *     async lowering
+ *     control-flow lowering
+ *     resource analysis
+ *     optimization
+ *     scheduling
+ *     target lowering
  *
- * Those are downstream concerns.
+ * The grammar must not depend on the existence of any particular compiler
+ * implementation.
  *
- * This file only needs modification when the Zamani SOURCE LANGUAGE itself
- * changes its asynchronous syntax.
+ * ============================================================================
+ * RUNTIME INTEGRATION
+ * ============================================================================
  *
+ * Runtime implementation may choose among:
+ *
+ *     state machines
+ *     cooperative scheduling
+ *     event loops
+ *     worker execution
+ *     distributed execution
+ *     heterogeneous execution
+ *     accelerator execution
+ *     other future mechanisms
+ *
+ * No such mechanism is part of this grammar.
+ *
+ * ============================================================================
+ * SAFE RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar requires no unsafe Rust.
+ *
+ * The Rust implementation consuming it must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and the repository's safe-Rust policy.
+ *
+ * The compiler implementation should enforce:
+ *
+ *     #![forbid(unsafe_code)]
+ *
+ * at appropriate crate boundaries.
+ *
+ * This grammar itself contains no Rust implementation code and therefore cannot
+ * introduce unsafe operations.
+ *
+ * ============================================================================
+ * FEATURE COMPLETION CONTRACT
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ * [x] async-specific syntax has one owner;
+ * [x] async function declarations reuse functions.g4;
+ * [x] return syntax reuses returns.g4;
+ * [x] generic syntax reuses generics.g4;
+ * [x] parameter syntax reuses parameters.g4;
+ * [x] type syntax remains in types/;
+ * [x] expression precedence remains in expressions/;
+ * [x] await syntax has one owner;
+ * [x] await lowers to the existing Await AST representation;
+ * [x] no runtime executor is encoded;
+ * [x] no scheduler is encoded;
+ * [x] no thread count is encoded;
+ * [x] no hardware identity is encoded;
+ * [x] no machine-size limit is encoded;
+ * [x] quantum lowering remains downstream;
+ * [x] quantum::ir remains canonical;
+ * [x] diagnostics preserve source locations;
+ * [x] deterministic parsing is preserved;
+ * [x] safe Rust remains the implementation requirement;
+ * [x] positive tests exist;
+ * [x] negative tests exist;
+ * [x] boundary tests exist;
+ * [x] scalability tests exist;
+ * [x] compatibility tests exist.
+ *
+ * ============================================================================
+ * IMPORTS
  * ============================================================================
  */
 
@@ -282,295 +997,75 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-/*
- * ============================================================================
- * 1. ASYNC FUNCTION DECLARATION
- * ============================================================================
- *
- * Canonical form:
- *
- *     async fn compute() {
- *         ...
- *     }
- *
- * With return type:
- *
- *     async fn compute() -> Result {
- *         ...
- *     }
- *
- * With generics:
- *
- *     async fn compute<T>(value: T) -> T {
- *         ...
- *     }
- *
- * With constraints:
- *
- *     async fn compute<T>(value: T) -> T
- *     where T: Trait {
- *         ...
- *     }
- *
- * The ordinary function grammar owns the underlying signature components.
- * This rule only establishes the async function form.
- */
+import Postfix;
 
-asyncFunctionDeclaration
-    : ASYNC
-      functionDeclarationCore
-    ;
 
+/* ============================================================================
+ * 1. ASYNC FUNCTION MODIFIER
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 2. ASYNC FUNCTION CORE
- * ============================================================================
+ * Canonical source-level modifier:
  *
- * `functionDeclarationCore` is intentionally composed from canonical function
- * components rather than redefining:
+ *     async
  *
- *     identifier
- *     genericParameters
- *     parameterList
- *     returnType
- *     whereClause
- *     blockExpression
+ * This rule owns the parser-level occurrence of ASYNC.
  *
- * The exact canonical function production is owned by `functions.g4`.
+ * The lexical spelling remains owned by:
  *
- * This rule is the integration seam between async syntax and ordinary
- * function syntax.
+ *     grammar/lexer/keywords.g4
+ *
+ * The token is assembled by the canonical lexer.
  */
-
-functionDeclarationCore
-    : FN
-      identifier
-      genericParameters?
-      LPAREN parameterList? RPAREN
-      returnType?
-      whereClause?
-      blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 3. ASYNC FUNCTION SIGNATURE
- * ============================================================================
- *
- * Reusable signature form for contexts that need to declare an async
- * callable without immediately defining its body.
- *
- * Example:
- *
- *     async fn compute(value: T) -> U;
- *
- * The semicolon form is deliberately separate from the definition form so
- * declarations and definitions can be validated independently.
- */
-
-asyncFunctionSignature
-    : ASYNC
-      FN
-      identifier
-      genericParameters?
-      LPAREN parameterList? RPAREN
-      returnType?
-      whereClause?
-    ;
-
-
-/*
- * ============================================================================
- * 4. ASYNC FUNCTION DECLARATION / DEFINITION
- * ============================================================================
- *
- * A reusable production for callers such as:
- *
- *     declarations
- *     interfaces
- *     traits
- *     modules
- *     foreign declarations
- *     function dispatchers
- *
- * A definition owns its block.
- */
-
-asyncFunctionDefinition
-    : asyncFunctionSignature
-      blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 5. ASYNC FUNCTION DECLARATION WITHOUT BODY
- * ============================================================================
- *
- * This is intentionally syntactic only.
- *
- * Whether a body-less async function is legal in a particular context is
- * determined by the enclosing declaration grammar and semantic analysis.
- */
-
-asyncFunctionPrototype
-    : asyncFunctionSignature
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 6. ASYNC MODIFIER
- * ============================================================================
- *
- * This rule exists so function composition can use a stable named production
- * rather than duplicating the token directly.
- *
- * It does NOT define the lexical token. The lexer owns ASYNC.
- */
-
 asyncModifier
     : ASYNC
     ;
 
 
-/*
- * ============================================================================
- * 7. AWAIT EXPRESSION
- * ============================================================================
- *
- * Canonical form:
- *
- *     await computation
- *
- *     await computation()
- *
- *     await future.value
- *
- * The operand is the canonical Zamani expression.
- *
- * This rule deliberately does NOT introduce a special future grammar.
- *
- * Whether an expression is awaitable is a semantic/type-system question.
- */
+/* ============================================================================
+ * 2. AWAIT EXPRESSION
+ * ========================================================================== */
 
+/*
+ * Canonical await form:
+ *
+ *     await postfixExpression
+ *
+ * Examples:
+ *
+ *     await value
+ *     await task()
+ *     await service.request(value)
+ *     await stream.next()
+ *
+ * The operand is intentionally a postfix expression rather than the complete
+ * expression rule.
+ *
+ * This gives await unary-expression-like binding while avoiding an expression
+ * grammar import cycle.
+ */
 awaitExpression
-    : AWAIT expression
+    : AWAIT
+      postfixExpression
     ;
 
 
-/*
- * ============================================================================
- * 8. AWAIT STATEMENT
- * ============================================================================
- *
- * The statement form exists for statement dispatchers that distinguish
- * expression statements from specialized statements.
- *
- * Example:
- *
- *     await operation();
- *
- * A caller that already has a canonical expression-statement rule may instead
- * represent `awaitExpression` as an ordinary expression.
- */
-
-awaitStatement
-    : awaitExpression
-      SEMI?
-    ;
-
+/* ============================================================================
+ * 3. ASYNC EXPRESSION
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 9. ASYNC FUNCTION MEMBER
- * ============================================================================
+ * Stable named integration boundary for expression-composition grammars.
  *
- * Reusable production for declaration containers that need to distinguish
- * asynchronous functions from ordinary functions.
+ * The expression hierarchy may consume:
  *
- * Attributes/visibility remain owned by the surrounding declaration grammar.
+ *     asyncExpression
+ *
+ * rather than depending directly on the internal await rule.
+ *
+ * This creates a future extension point without introducing a second
+ * expression hierarchy.
  */
-
-asyncFunctionMember
-    : asyncFunctionDefinition
-    | asyncFunctionPrototype
-    ;
-
-
-/*
- * ============================================================================
- * 10. ASYNC CALLABLE
- * ============================================================================
- *
- * A reusable syntactic category for callers that need to accept either:
- *
- *     async function definition
- *     async function prototype
- *
- * No runtime callable type is introduced here.
- */
-
-asyncCallableDeclaration
-    : asyncFunctionMember
-    ;
-
-
-/*
- * ============================================================================
- * 11. ASYNC FUNCTION WITH TRAILING ATTRIBUTES
- * ============================================================================
- *
- * Attributes are owned by the canonical attribute grammar.
- *
- * This rule exists only as an integration seam for function dispatchers.
- *
- * If the canonical function dispatcher already owns attributes, it SHOULD
- * consume `attribute*` before selecting this rule instead of using this rule.
- *
- * Consequently this grammar does not redefine `attribute`.
- */
-
-asyncAttributedFunction
-    : attribute*
-      asyncFunctionDefinition
-    ;
-
-
-/*
- * ============================================================================
- * 12. ASYNC DECLARATION DISPATCH
- * ============================================================================
- *
- * This is the single reusable entry point intended for `functions.g4`.
- *
- * It prevents other function grammar files from having to know the internal
- * structure of async declarations.
- */
-
-asyncFunction
-    : asyncFunctionDefinition
-    | asyncFunctionPrototype
-    ;
-
-
-/*
- * ============================================================================
- * 13. ASYNC EXPRESSION DISPATCH
- * ============================================================================
- *
- * This is the single reusable entry point intended for expression dispatch.
- *
- * It currently contains `awaitExpression`.
- *
- * Future async source constructs may be added here only when they become
- * actual Zamani language syntax. Runtime concepts must never be added merely
- * because a runtime implements them.
- */
-
 asyncExpression
     : awaitExpression
     ;
