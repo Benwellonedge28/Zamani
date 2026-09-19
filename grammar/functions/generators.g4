@@ -1,4 +1,4 @@
-/**
+/*
  * ============================================================================
  * Zamani Universal Programming Language
  * ============================================================================
@@ -10,91 +10,21 @@
  *     Generators
  *
  * Status:
- *     Production-ready parser-grammar component.
+ *     Canonical generator parser delegate.
  *
  * Purpose:
- *     Defines the source-level syntax owned by Zamani's generator model.
+ *     Defines the source-level syntax for generator suspension/value
+ *     production. Generator declaration structure remains owned by the
+ *     canonical function grammar.
  *
- * ============================================================================
- * ARCHITECTURAL PRINCIPLE
- * ============================================================================
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
- * Zamani source describes portable computation and intent.
- *
- * Generator syntax therefore describes:
- *
- *     - suspension;
- *     - production of a value;
- *     - resumption points;
- *     - generator-compatible control flow.
- *
- * It MUST NOT describe:
- *
- *     - CPU count;
- *     - thread count;
- *     - memory capacity;
- *     - device identity;
- *     - GPU count;
- *     - FPGA count;
- *     - QPU count;
- *     - qubit count;
- *     - physical topology;
- *     - scheduling policy;
- *     - runtime worker count;
- *     - deployment topology.
- *
- * There are no grammar-level limits on:
- *
- *     - number of yield statements;
- *     - number of generator functions;
- *     - number of suspension points;
- *     - nesting depth;
- *     - generator composition;
- *     - generator calls;
- *     - source size.
- *
- * Any implementation limits belong to compiler/runtime resource policies,
- * never to the language grammar.
- *
- * ============================================================================
- * IMPORTANT LANGUAGE DESIGN DECISION
- * ============================================================================
- *
- * Zamani currently has:
- *
- *     yield
- *
- * as a language construct, but does not establish a separate `generator`
- * keyword or a dedicated generator type constructor in the canonical type
- * grammar.
- *
- * Consequently:
- *
- *     fn produce() {
- *         yield value;
- *     }
- *
- * is syntactically a function declaration whose body contains a generator
- * suspension operation.
- *
- * Semantic analysis determines that the containing function is a generator.
- *
- * This is deliberate.
- *
- * This grammar MUST NOT invent:
- *
- *     generator fn ...
- *     gen fn ...
- *     generator<T>
- *     stream<T>
- *
- * as alternative language constructs merely to give generators a dedicated
- * syntax. Such constructs require a language-specification decision first.
- *
- * If a future Zamani version introduces an explicit generator declaration
- * keyword or first-class generator type, that feature must be added through a
- * versioned language change and integrated with the canonical function/type
- * grammars rather than silently changing this file's meaning.
+ * Safety:
+ *     This grammar contains no embedded Rust, actions, predicates,
+ *     filesystem access, networking, process execution, or hardware access.
+ *     The Zamani compiler/frontend/runtime implementation must use safe Rust.
  *
  * ============================================================================
  * OWNERSHIP
@@ -102,587 +32,639 @@
  *
  * THIS FILE OWNS:
  *
- *     - yield statement syntax;
- *     - generator yield-value syntax;
- *     - the parser-level generator suspension boundary;
- *     - generator-specific syntax fragments consumed by function/statement
- *       composition;
- *     - generator grammar integration contracts.
+ *   - yieldStatement;
+ *   - the optional value attached to a yield;
+ *   - generator suspension syntax;
+ *   - the parser-level boundary used by generator-aware AST construction.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - ordinary function declarations;
- *     - function names;
- *     - function parameters;
- *     - generic parameter declarations;
- *     - function return-type syntax;
- *     - function types;
- *     - ordinary expressions;
- *     - expression precedence;
- *     - blocks;
- *     - ordinary statements;
- *     - async function declarations;
- *     - async execution;
- *     - futures;
- *     - tasks;
- *     - executors;
- *     - channels;
- *     - scheduling;
- *     - cancellation;
- *     - generator state-machine lowering;
- *     - runtime generator frames;
- *     - allocation strategy;
- *     - memory layout;
- *     - calling conventions;
- *     - ABI;
- *     - classical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - routing;
- *     - hardware discovery;
- *     - hardware selection;
- *     - optimization.
+ *   - function declarations;
+ *   - function names;
+ *   - parameters;
+ *   - generic parameters;
+ *   - return-type declarations;
+ *   - return statements;
+ *   - expressions;
+ *   - expression precedence;
+ *   - blocks;
+ *   - loops;
+ *   - async declarations;
+ *   - await expressions;
+ *   - generator types;
+ *   - stream types;
+ *   - futures;
+ *   - tasks;
+ *   - executors;
+ *   - scheduling;
+ *   - cancellation;
+ *   - checkpoint implementation;
+ *   - memory layout;
+ *   - state-machine lowering;
+ *   - ABI;
+ *   - hardware;
+ *   - resources;
+ *   - quantum IR;
+ *   - QEC;
+ *   - ZQN;
+ *   - routing;
+ *   - optimization;
+ *   - runtime behavior.
  *
- * Function declarations remain owned by:
+ * ============================================================================
+ * CANONICAL LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * The production lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * which composes:
+ *
+ *     grammar/lexer/tokens.g4
+ *
+ * Parser grammars therefore consume:
+ *
+ *     tokenVocab = ZamaniLexer
+ *
+ * This file deliberately does NOT use:
+ *
+ *     tokenVocab = ZamaniTokens
+ *
+ * directly.
+ *
+ * The canonical yield token is:
+ *
+ *     YIELD
+ *
+ * The canonical statement terminator is:
+ *
+ *     SEMICOLON
+ *
+ * ============================================================================
+ * FUNCTION INTEGRATION
+ * ============================================================================
+ *
+ * Generator-ness is a semantic property of a callable containing one or more
+ * valid yield statements.
+ *
+ * This file MUST NOT introduce:
+ *
+ *     generator fn ...
+ *     gen fn ...
+ *     generator<T>
+ *     stream<T>
+ *
+ * merely to identify generators.
+ *
+ * The canonical function declaration remains owned by:
  *
  *     grammar/functions/functions.g4
  *
- * Function types remain owned by:
- *
- *     grammar/types/function-types.g4
- *
- * Expressions remain owned by:
- *
- *     grammar/expressions/
- *
- * Blocks/statements remain owned by:
- *
- *     grammar/statements/
- *
- * Async declaration syntax remains owned by:
- *
- *     grammar/functions/async.g4
+ * A function containing yield is classified downstream as a generator.
  *
  * ============================================================================
- * DEPENDENCY DIRECTION
+ * EXPRESSION INTEGRATION
  * ============================================================================
  *
- *     grammar/lexer/tokens.g4
- *                    |
- *                    v
- *               Generators
- *                    |
- *                    +--------------------+
- *                    |                    |
- *                    v                    v
- *              Expressions          Statements
- *                    |                    |
- *                    +---------+----------+
- *                              |
- *                              v
- *                         Functions
- *                              |
- *                              v
- *                             AST
- *                              |
- *                              v
- *                      Semantic analysis
- *                              |
- *             +----------------+----------------+
- *             |                |                |
- *             v                v                v
- *        classical IR     quantum::ir     effect/resource IR
- *             |                |                |
- *             +----------------+----------------+
- *                              |
- *                              v
- *                optimization / scheduling /
- *                routing / hardware / runtime
+ * A yielded value is exactly one canonical Zamani expression.
  *
- * This file MUST NOT introduce reverse dependencies from grammar into:
- *
- *     IR
- *     runtime
- *     hardware
- *     scheduling
- *     optimization
- *     QEC
- *     ZQN
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Generator source expresses the computation's suspension/production
- * semantics, not the machine that will execute it.
- *
- * The same generator can therefore participate in:
- *
- *     - embedded execution;
- *     - CPU execution;
- *     - multicore execution;
- *     - accelerator execution;
- *     - distributed execution;
- *     - cloud execution;
- *     - heterogeneous execution;
- *     - future execution environments.
- *
- * Generator syntax MUST NOT require a particular:
- *
- *     - executor;
- *     - scheduler;
- *     - thread pool;
- *     - worker count;
- *     - memory model;
- *     - hardware architecture.
- *
- * ============================================================================
- * LEXICAL CONTRACT
- * ============================================================================
- *
- * Canonical lexical vocabulary:
- *
- *     grammar/lexer/tokens.g4
- *
- * Grammar:
- *
- *     ZamaniTokens
- *
- * This grammar MUST NOT define lexer tokens.
- *
- * The relevant canonical tokens include:
- *
- *     K_YIELD
- *     SEMI
- *
- * `K_FROM` exists in the canonical lexical vocabulary but is NOT interpreted
- * here as a generator-specific `yield from` construct.
- *
- * A future `yield from` feature requires an explicit language specification
- * decision and semantic contract.
- *
- * ============================================================================
- * ANTLR COMPOSITION CONTRACT
- * ============================================================================
- *
- * This is a parser delegate grammar.
- *
- * The composed parser supplies the canonical:
+ * This file MUST NOT redefine:
  *
  *     expression
+ *     assignment expressions
+ *     binary expressions
+ *     unary expressions
+ *     calls
+ *     indexing
+ *     member access
+ *     quantum expressions
+ *     classical expressions
+ *     HDL expressions
+ *     hardware expressions
+ *     resource expressions
  *
- * rule from the expression subsystem.
+ * The canonical expression grammar owns those constructs.
  *
- * This grammar deliberately does not redefine expression syntax.
+ * ============================================================================
+ * STATEMENT INTEGRATION
+ * ============================================================================
  *
- * The composed parser should import/use this grammar alongside the canonical
- * expression and statement grammars.
+ * The canonical statement-composition grammar must admit:
  *
- * Example composition:
+ *     yieldStatement
  *
- *     parser grammar ZamaniParser;
+ * exactly once.
  *
- *     options {
- *         tokenVocab = ZamaniTokens;
- *     }
+ * The authoritative composition should therefore be conceptually:
  *
- *     import
- *         Core,
- *         Expressions,
- *         Statements,
- *         Functions,
- *         Generators;
+ *     statement
+ *         : ...
+ *         | yieldStatement
+ *         | ...
+ *         ;
  *
- * The exact root-composition file is determined by the repository's canonical
- * parser assembly.
+ * The following files MUST NOT remain competing authoritative owners of
+ * yieldStatement:
+ *
+ *     grammar/antlr/Core.g4
+ *     grammar/core/compilation-unit.g4
+ *     any legacy monolithic parser grammar
+ *
+ * They may be retained temporarily for migration/documentation purposes, but
+ * the production parser must have exactly one yieldStatement rule.
  *
  * ============================================================================
  * SEMANTIC BOUNDARY
  * ============================================================================
  *
- * Parsing determines:
+ * Parsing answers only:
  *
  *     "Is this syntactically a yield statement?"
  *
  * Semantic analysis determines:
  *
- *     - whether the containing function is a generator;
- *     - whether yield is legal in the current function;
- *     - the yielded value's type;
- *     - whether the generator's yield type is consistent;
- *     - whether control can resume after yield;
- *     - whether all paths satisfy generator rules;
- *     - whether a generator is async;
- *     - whether the generator may cross an effect boundary;
- *     - whether the generator is compatible with ownership/borrowing rules;
- *     - whether the generator may be distributed;
- *     - whether its state is serializable;
- *     - whether checkpointing is legal;
- *     - whether cancellation is supported;
- *     - whether a runtime executor can execute it.
+ *   - whether yield is legal in the enclosing callable;
+ *   - whether the callable is a generator;
+ *   - the yielded value's type;
+ *   - consistency of yielded types;
+ *   - generator result semantics;
+ *   - control-flow legality;
+ *   - ownership/borrowing across suspension;
+ *   - lifetime validity across suspension;
+ *   - effect/capability requirements;
+ *   - cancellation behavior;
+ *   - checkpointability;
+ *   - serialization legality;
+ *   - distribution legality;
+ *   - runtime compatibility.
  *
- * None of those semantic decisions belong in this grammar.
+ * None of those decisions belong in this grammar.
  *
  * ============================================================================
- * RUNTIME / COMPILER BOUNDARY
+ * GENERATOR RETURN SEMANTICS
  * ============================================================================
  *
- * A yield may eventually lower into:
+ * `yield` and `return` are deliberately separate constructs.
  *
- *     source function
+ *     yield value;
+ *
+ * suspends execution and produces a generator value.
+ *
+ *     return value;
+ *
+ * terminates the enclosing callable according to the ordinary return
+ * semantics.
+ *
+ * The exact relationship between:
+ *
+ *     yielded value type
+ *
+ * and:
+ *
+ *     final generator result type
+ *
+ * belongs to the semantic/type system.
+ *
+ * This grammar does not introduce a generator-specific return type syntax.
+ *
+ * ============================================================================
+ * ASYNC INTEGRATION
+ * ============================================================================
+ *
+ * Async function declaration syntax is owned by:
+ *
+ *     grammar/functions/async.g4
+ *
+ * and:
+ *
+ *     grammar/functions/functions.g4
+ *
+ * This file only supplies yield syntax.
+ *
+ * Therefore:
+ *
+ *     async fn values() {
+ *         yield value;
+ *     }
+ *
+ * may be parsed structurally as an async function containing yield.
+ *
+ * Semantic analysis determines whether the combination is a valid asynchronous
+ * generator.
+ *
+ * This grammar does NOT introduce:
+ *
+ *     asyncGenerator
+ *     async_generator
+ *     generator_async
+ *
+ * as new language constructs.
+ *
+ * ============================================================================
+ * `yield from`
+ * ============================================================================
+ *
+ * The canonical lexer contains `FROM`, but the current language contract does
+ * not establish `yield from` as generator syntax.
+ *
+ * Therefore this grammar intentionally does NOT accept:
+ *
+ *     yield from expression;
+ *
+ * as a special construct.
+ *
+ * If `yield from` is added in a future language version, it must receive:
+ *
+ *   - language-specification approval;
+ *   - lexical/parser contract;
+ *   - AST representation;
+ *   - semantic rules;
+ *   - generator composition rules;
+ *   - diagnostics;
+ *   - compatibility policy;
+ *   - tests.
+ *
+ * It must then be integrated without changing the ownership of ordinary yield.
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY
+ * ============================================================================
+ *
+ * This grammar imposes no language-level finite limits on:
+ *
+ *   - number of generators;
+ *   - number of yield statements;
+ *   - number of suspension points;
+ *   - number of generator calls;
+ *   - number of generator compositions;
+ *   - number of source declarations;
+ *   - number of yielded values;
+ *   - yielded-value type complexity;
+ *   - generator nesting.
+ *
+ * Repetition is represented by the surrounding grammar and ordinary recursive
+ * language structures.
+ *
+ * The grammar MUST NOT contain:
+ *
+ *     MAX_GENERATORS
+ *     MAX_YIELDS
+ *     MAX_SUSPENSIONS
+ *     MAX_THREADS
+ *     MAX_WORKERS
+ *     MAX_MEMORY
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_QUBITS
+ *     MAX_NODES
+ *
+ * Practical parser/compiler/runtime resource exhaustion remains an
+ * implementation concern and must never be presented as a language semantic
+ * limit.
+ *
+ * ============================================================================
+ * RESOURCE / HARDWARE INDEPENDENCE
+ * ============================================================================
+ *
+ * Generator syntax describes portable computation.
+ *
+ * It does NOT select:
+ *
+ *   - CPU;
+ *   - GPU;
+ *   - FPGA;
+ *   - ASIC;
+ *   - QPU;
+ *   - device;
+ *   - worker;
+ *   - thread;
+ *   - executor;
+ *   - queue;
+ *   - memory bank;
+ *   - physical qubit;
+ *   - network node;
+ *   - topology.
+ *
+ * A generator may later be lowered to any execution strategy supported by the
+ * semantic/compiler/runtime stack.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * A generator may yield a value whose semantic type is quantum-related:
+ *
+ *     yield measurement;
+ *     yield state;
+ *     yield result;
+ *
+ * The generator grammar does not define the quantum semantics.
+ *
+ * Quantum meaning continues through:
+ *
+ *     frontend AST
  *         ->
+ *     semantic analysis
+ *         ->
+ *     quantum::ir
+ *         ->
+ *     optimization
+ *         ->
+ *     routing
+ *         ->
+ *     scheduling
+ *         ->
+ *     QEC / resilience
+ *         ->
+ *     ZQN
+ *         ->
+ *     HAL
+ *         ->
+ *     target realization
+ *
+ * This grammar MUST NOT introduce another quantum IR.
+ *
+ * ============================================================================
+ * CLASSICAL / HDL / HYBRID / DISTRIBUTED / AI INTEGRATION
+ * ============================================================================
+ *
+ * A yielded expression may semantically represent:
+ *
+ *   - classical data;
+ *   - tensors;
+ *   - AI/ML results;
+ *   - quantum measurements;
+ *   - hardware events;
+ *   - HDL-facing values;
+ *   - accelerator results;
+ *   - distributed messages;
+ *   - networking values;
+ *   - security/cryptographic results;
+ *   - future domain values.
+ *
+ * No domain-specific yield syntax is required.
+ *
+ * Domain-specific meaning belongs to the corresponding type/semantic subsystem.
+ *
+ * ============================================================================
+ * STATE-MACHINE / RUNTIME BOUNDARY
+ * ============================================================================
+ *
+ * A compiler may lower:
+ *
+ *     function containing yield
+ *
+ * into:
+ *
  *     generator semantic model
  *         ->
  *     suspension/resumption representation
  *         ->
  *     compiler-generated state machine
  *         ->
- *     target-specific implementation
+ *     target implementation
  *         ->
- *     runtime executor
+ *     runtime execution
  *
- * The grammar MUST NOT encode the generated state machine.
+ * The grammar MUST NOT encode:
  *
- * In particular, it must not encode:
- *
- *     - hidden frame fields;
- *     - program counters;
- *     - heap allocation;
- *     - stack allocation;
- *     - executor implementation;
- *     - polling strategy;
- *     - thread assignment.
- *
- * ============================================================================
- * QUANTUM / HYBRID BOUNDARY
- * ============================================================================
- *
- * A generator may produce values associated with:
- *
- *     - classical computation;
- *     - quantum computation;
- *     - measurements;
- *     - hardware events;
- *     - distributed messages;
- *     - data streams;
- *     - accelerator results.
- *
- * The generator grammar does not define those domains.
- *
- * For example, a semantic layer may eventually accept:
- *
- *     fn measurements() {
- *         yield measurement;
- *     }
- *
- * or:
- *
- *     async fn results() {
- *         yield result;
- *     }
- *
- * The meaning of `measurement`, `result`, quantum values, hardware values,
- * resources, and effects is determined by their respective semantic systems.
- *
- * The generator grammar must never manufacture a second quantum representation.
- *
- * Canonical quantum semantic representation remains:
- *
- *     quantum::ir
+ *   - program counters;
+ *   - hidden frame fields;
+ *   - stack layout;
+ *   - heap layout;
+ *   - polling;
+ *   - scheduling;
+ *   - worker assignment;
+ *   - executor implementation;
+ *   - queue implementation;
+ *   - allocation strategy.
  *
  * ============================================================================
- * SAFETY
+ * CHECKPOINT / SERIALIZATION BOUNDARY
  * ============================================================================
  *
- * This file contains grammar only.
+ * A yield is a suspension point.
  *
- * No target-language actions, predicates, embedded source code, filesystem
- * access, networking, process execution, or unsafe operations are permitted.
+ * It is NOT automatically:
  *
- * Generated parser/runtime integration targets:
+ *   - a durable checkpoint;
+ *   - a serialization boundary;
+ *   - a restart point;
+ *   - a migration point.
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ * Those meanings require semantic/runtime contracts.
  *
- * The Rust implementation must use safe Rust only.
+ * In particular, yield MUST NOT implicitly authorize serialization of arbitrary
+ * quantum state, hardware state, borrowed state, or privileged runtime state.
  *
  * ============================================================================
- */
-
-
-/**
- * Parser delegate for generator-specific syntax.
- *
- * Generator-ness is semantic: a function containing one or more valid
- * `yieldStatement` nodes is classified downstream as a generator.
- */
-parser grammar Generators;
-
-options {
-    tokenVocab = ZamaniTokens;
-}
-
-
-/* ============================================================================
- * 1. PUBLIC GENERATOR SYNTAX
+ * DETERMINISM
  * ============================================================================
  *
- * The primary generator construct is:
+ * This grammar contains:
  *
- *     yield
+ *   - no semantic predicates;
+ *   - no embedded target-language actions;
+ *   - no runtime queries;
+ *   - no hardware queries;
+ *   - no random behavior.
  *
- * or:
+ * Identical source, language version, lexer configuration, and parser
+ * configuration therefore produce the same generator parse structure.
  *
- *     yield expression
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
  *
- * followed optionally by a statement terminator.
+ * Syntax errors are parser/frontend concerns.
  *
  * Examples:
  *
- *     yield;
- *
  *     yield value;
  *
- *     yield compute(value);
+ *     yield;
  *
- *     yield measurement;
+ * are syntactically valid.
  *
- *     yield quantum_result;
+ * Examples such as:
  *
- * No fixed value type is encoded here.
+ *     yield ;
+ *
+ * are also structurally represented as an empty yield and are semantically
+ * validated according to the language specification.
+ *
+ * Semantic errors include:
+ *
+ *   - yield outside a generator-capable context;
+ *   - invalid yielded type;
+ *   - incompatible yielded types;
+ *   - illegal borrow across suspension;
+ *   - invalid resource lifetime;
+ *   - unsupported async-generator combination;
+ *   - unsupported generator checkpointing.
+ *
+ * These are NOT grammar-level hardware errors.
+ *
  * ============================================================================
- */
-
-yieldStatement
-    : K_YIELD yieldValue? SEMI?
-    ;
-
-
-/* ============================================================================
- * 2. YIELD VALUE
- * ============================================================================
- *
- * A yield value is an ordinary Zamani expression.
- *
- * This is intentionally delegated to the canonical expression grammar.
- *
- * Generator syntax therefore automatically inherits support for:
- *
- *     literals
- *     identifiers
- *     calls
- *     arithmetic
- *     comparisons
- *     logical operations
- *     quantum expressions
- *     classical expressions
- *     hardware/resource expressions
- *     future expression forms
- *
- * without this grammar needing to duplicate them.
- * ============================================================================
- */
-
-yieldValue
-    : expression
-    ;
-
-
-/* ============================================================================
- * 3. EMPTY YIELD
+ * AST CONTRACT
  * ============================================================================
  *
- * `yield;` is syntactically valid.
- *
- * Whether an empty yield is semantically valid is determined downstream.
- *
- * Possible semantic interpretations include:
- *
- *     - unit-like generator value;
- *     - notification/suspension;
- *     - control-only suspension;
- *     - language-version-specific generator semantics.
- *
- * The parser must not choose among those interpretations.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 4. GENERATOR YIELD EXPRESSION BOUNDARY
- * ============================================================================
- *
- * This rule provides a stable parser-level name for tooling and AST adapters.
- *
- * It intentionally delegates to the canonical yield statement.
- *
- * Consumers that need to identify generator suspension points should prefer
- * this rule's AST/source-span boundary rather than searching source text for
- * the string "yield".
- * ============================================================================
- */
-
-generatorYield
-    : yieldStatement
-    ;
-
-
-/* ============================================================================
- * 5. GENERATOR VALUE PRODUCTION
- * ============================================================================
- *
- * A generator yield produces zero or one source-level expression value.
- *
- * There is deliberately no grammar-level restriction such as:
- *
- *     exactly one type
- *     exactly N values
- *     maximum yield size
- *
- * Tuple, record, array, quantum, classical, hardware, or other values remain
- * ordinary expressions.
- *
- * Example:
- *
- *     yield (a, b);
- *
- * represents one expression whose value may itself be a tuple.
- *
- * The semantic type system determines the resulting generator value type.
- * ============================================================================
- */
-
-generatorYieldValue
-    : yieldValue
-    ;
-
-
-/* ============================================================================
- * 6. GENERATOR FUNCTION CLASSIFICATION BOUNDARY
- * ============================================================================
- *
- * This rule is intentionally a semantic marker rather than a second function
- * declaration grammar.
- *
- * A normal function declaration remains owned by:
- *
- *     grammar/functions/functions.g4
- *
- * The semantic analyser classifies a function as a generator when its body
- * contains generator suspension nodes.
- *
- * This prevents a second competing function syntax such as:
- *
- *     generator fn ...
- *
- * from being introduced accidentally.
- *
- * No parser rule in this file should duplicate `functionDeclaration`.
- * ============================================================================
- */
-
-generatorFunctionBoundary
-    : yieldStatement
-    ;
-
-
-/* ============================================================================
- * 7. NESTED GENERATOR EXPRESSIONS
- * ============================================================================
- *
- * Nested expressions remain ordinary expression syntax.
- *
- * For example:
- *
- *     yield transform(value);
- *
- *     yield condition ? a : b;
- *
- *     yield compute(x + y);
- *
- * are parsed by:
+ * The parser/frontend AST adapter should map:
  *
  *     yieldStatement
- *         ->
- *     yieldValue
- *         ->
- *     expression
  *
- * The generator grammar does not define expression precedence.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 8. GENERATOR COMPOSITION
- * ============================================================================
+ * to the domain-neutral AST representation for a yield/suspension statement.
  *
- * A generator may semantically consume another generator through ordinary
- * function calls, iteration constructs, channels, or future stream abstractions.
+ * Conceptually:
  *
- * Example:
- *
- *     yield next(source);
- *
- * The grammar does not introduce a dedicated generator invocation syntax.
- *
- * This preserves POCO-REAF and avoids coupling generators to a particular
- * runtime iteration model.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 9. ASYNC-GENERATOR COMPATIBILITY
- * ============================================================================
- *
- * An async function may contain yield:
- *
- *     async fn values() {
- *         yield value;
+ *     YieldStatement {
+ *         value: Option<Expression>,
+ *         source_span: SourceSpan
  *     }
  *
- * The existing Zamani language vocabulary already distinguishes:
+ * The exact Rust AST type remains owned by:
  *
- *     async
- *     await
+ *     src/frontend/ast/
+ *
+ * This grammar must not define a second generator AST.
+ *
+ * The AST must preserve:
+ *
+ *   - whether a yield has a value;
+ *   - the complete yielded expression;
+ *   - source span;
+ *   - child-expression spans.
+ *
+ * It must not prematurely decide:
+ *
+ *   - generator type;
+ *   - runtime frame representation;
+ *   - executor;
+ *   - hardware;
+ *   - quantum physical mapping.
+ *
+ * ============================================================================
+ * SEMANTIC / IR CONTRACT
+ * ============================================================================
+ *
+ * The semantic layer consumes the AST yield node.
+ *
+ * Generator semantics remain distinct from the ordinary expression value.
+ *
+ * A yielded quantum value is lowered through the existing semantic quantum
+ * pipeline and ultimately through canonical:
+ *
+ *     quantum::ir
+ *
+ * A yielded classical/hybrid/HDL/data/distributed value is lowered through the
+ * appropriate canonical semantic representation.
+ *
+ * Generator suspension itself is represented by the compiler's generator
+ * semantic/lowering machinery rather than by a new grammar-level IR.
+ *
+ * ============================================================================
+ * COMPILER CONTRACT
+ * ============================================================================
+ *
+ * The compiler must be able to lower generator suspension without requiring
+ * source changes when the target changes.
+ *
+ * Target-specific decisions may include:
+ *
+ *   - state-machine representation;
+ *   - stack/heap strategy;
+ *   - register allocation;
+ *   - scheduling;
+ *   - placement;
+ *   - parallelization;
+ *   - accelerator mapping;
+ *   - distributed execution;
+ *   - quantum routing/scheduling;
+ *   - runtime integration.
+ *
+ * These decisions occur after parsing and semantic analysis.
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime support may provide:
+ *
+ *   - generator creation;
+ *   - suspension;
+ *   - resumption;
+ *   - completion;
+ *   - cancellation;
+ *   - resource management;
+ *   - checkpointing;
+ *   - distributed execution;
+ *   - observability.
+ *
+ * None of these are encoded by this grammar.
+ *
+ * ============================================================================
+ * TOOLING CONTRACT
+ * ============================================================================
+ *
+ * Formatters, language servers, syntax highlighters, source analyzers, and
+ * refactoring tools should identify `yieldStatement` structurally.
+ *
+ * They must not search source text for `"yield"` as their authoritative
+ * representation.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Canonical syntax:
+ *
+ *     yield;
+ *     yield expression;
+ *
+ * Optional statement termination follows the repository's existing statement
+ * grammar policy.
+ *
+ * The current canonical lexer spelling is:
+ *
  *     yield
  *
- * Async declaration syntax belongs to:
+ * represented by:
  *
- *     grammar/functions/async.g4
+ *     YIELD
  *
- * Generator yield syntax belongs here.
+ * The current canonical terminator is:
  *
- * Semantic analysis determines whether:
+ *     ;
  *
- *     async + yield
+ * represented by:
  *
- * forms a valid async generator.
+ *     SEMICOLON
  *
- * This grammar does not introduce:
+ * No compatibility alias such as `K_YIELD` or `SEMI` is introduced here.
  *
- *     async-generator
- *     async_generator
- *     generator_async
+ * Those names belong to an older/different lexical contract and must not be
+ * reintroduced merely to make this file compile.
  *
- * keywords or types.
  * ============================================================================
- */
-
-
-/* ============================================================================
- * 10. YIELD AND CONTROL FLOW
+ * TEST CONTRACT
  * ============================================================================
  *
- * Yield may syntactically occur wherever the canonical statement dispatcher
- * permits `yieldStatement`.
+ * Positive syntax:
  *
- * Semantic analysis must determine whether the containing control-flow
- * context permits suspension.
+ *     yield;
+ *     yield value;
+ *     yield expression;
+ *     yield call();
+ *     yield a + b;
+ *     yield measurement;
+ *     yield quantum_result;
+ *     yield tensor;
+ *     yield hardware_event;
  *
- * Examples requiring semantic validation include:
+ * Nested/control-flow contexts:
  *
  *     if condition {
  *         yield value;
@@ -692,203 +674,158 @@ generatorFunctionBoundary
  *         yield value;
  *     }
  *
- *     match value {
- *         ...
+ *     for value in source {
+ *         yield value;
  *     }
  *
- * The grammar does not attempt to encode control-flow-sensitive generator
- * validity.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 11. YIELD AND RESOURCE / HARDWARE INDEPENDENCE
- * ============================================================================
+ * Async:
  *
- * Nothing here requires:
+ *     async fn values() {
+ *         yield value;
+ *     }
  *
- *     a CPU;
- *     a GPU;
- *     an FPGA;
- *     an ASIC;
- *     a QPU;
- *     a cluster;
- *     a network;
- *     a particular memory size;
- *     a fixed number of workers.
+ * Domain-neutral:
  *
- * A generator can therefore be lowered differently for different targets while
- * preserving its source semantics.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 12. QUANTUM GENERATORS
- * ============================================================================
+ *     fn classical() {
+ *         yield scalar;
+ *     }
  *
- * Quantum generator semantics are downstream.
+ *     fn quantum() {
+ *         yield measurement;
+ *     }
  *
- * The following is syntactically possible if `measurement` or `state` is a
- * valid Zamani expression:
+ *     fn hybrid() {
+ *         yield result;
+ *     }
  *
- *     yield measurement;
+ * Negative/semantic fixtures:
  *
- *     yield state;
- *
- * No quantum-specific token is introduced here.
- *
- * No physical qubit is referenced here.
- *
- * No quantum register size is imposed here.
- *
- * No backend topology is encoded here.
- *
- * Any resulting quantum computation is lowered through the canonical quantum
- * semantic boundary:
- *
- *     quantum::ir
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 13. DISTRIBUTED GENERATORS
- * ============================================================================
- *
- * Distributed generator behavior is semantic/runtime territory.
- *
- * The grammar does not introduce:
- *
- *     node;
- *     worker;
- *     shard;
- *     replica;
- *     partition;
- *
- * into generator syntax.
- *
- * Such concepts belong to the distributed/resource/execution grammars where
- * their ownership can be defined independently.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 14. CANCELLATION
- * ============================================================================
- *
- * Cancellation is not generator syntax.
- *
- * A generator may eventually participate in:
- *
- *     cancellation;
- *     timeout;
- *     shutdown;
- *     backpressure;
- *     resource revocation.
- *
- * Those are concurrency/runtime semantics.
- *
- * This grammar must not invent a generator-specific cancellation keyword.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 15. CHECKPOINTING / RESUMPTION
- * ============================================================================
- *
- * A yield is a source-level suspension point.
- *
- * It is NOT automatically a durable checkpoint.
- *
- * Semantic/runtime layers must distinguish:
- *
- *     - ordinary suspension;
- *     - resumable execution;
- *     - restartable execution;
- *     - durable checkpoint;
- *     - serializable generator state;
- *     - reconstructible state;
- *     - provider/runtime-specific state.
- *
- * In particular, a generator yield must never be interpreted as permission to
- * serialize arbitrary quantum state.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 16. DETERMINISM
- * ============================================================================
- *
- * Parsing the same source with the same language version and canonical token
- * vocabulary must produce the same parse structure.
- *
- * This grammar contains:
- *
- *     - no semantic predicates;
- *     - no target-language actions;
- *     - no runtime lookups;
- *     - no hardware queries;
- *     - no random behavior.
- *
- * Therefore generator syntax remains deterministic.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 17. ERROR BOUNDARY
- * ============================================================================
- *
- * Syntax errors belong to the parser.
- *
- * Examples:
- *
- *     yield
- *
- * is syntactically valid.
- *
- * Examples of semantic errors include:
- *
- *     yield value
- *
- * inside a context where yielding is forbidden.
- *
- * Other semantic errors include:
- *
- *     - incompatible yield types;
- *     - yield from a non-generator context;
- *     - illegal borrow across suspension;
- *     - illegal resource lifetime across suspension;
+ *     - yield in a context where generators are forbidden;
+ *     - invalid yielded expression;
+ *     - invalid ownership across suspension;
+ *     - invalid lifetime across suspension;
  *     - invalid async-generator combination;
- *     - unsupported checkpoint semantics.
+ *     - invalid generator return semantics.
  *
- * These MUST NOT be converted into grammar-level hardware restrictions.
+ * These semantic cases must be tested outside the grammar itself.
+ *
+ * Boundary/scalability:
+ *
+ *     - many yield statements;
+ *     - deeply nested control flow;
+ *     - large yielded expressions;
+ *     - large generic types used by yielded expressions;
+ *     - large source programs;
+ *     - many generator functions;
+ *     - cross-domain generator programs.
+ *
+ * No fixture may define an artificial maximum as the language limit.
+ *
+ * Determinism:
+ *
+ * Identical source must produce equivalent parse trees across repeated runs.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Allowed fixed syntax:
+ *
+ *     YIELD
+ *     SEMICOLON
+ *
+ * Forbidden hardware/resource assumptions:
+ *
+ *     CPU counts
+ *     GPU counts
+ *     FPGA counts
+ *     QPU counts
+ *     qubit counts
+ *     memory sizes
+ *     worker counts
+ *     thread counts
+ *     node counts
+ *     device identifiers
+ *     topology
+ *     vendor names
+ *     backend names
+ *
+ * This file contains no such assumptions.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *   1. `yieldStatement` is the sole authoritative yield-statement rule.
+ *
+ *   2. It consumes canonical `YIELD`.
+ *
+ *   3. It consumes canonical `SEMICOLON`.
+ *
+ *   4. It delegates yielded values to canonical `expression`.
+ *
+ *   5. It contains no lexer rules.
+ *
+ *   6. It contains no function-declaration grammar.
+ *
+ *   7. It contains no return grammar.
+ *
+ *   8. It contains no duplicate generator type grammar.
+ *
+ *   9. It contains no runtime/compiler implementation.
+ *
+ *  10. It contains no machine-specific limits.
+ *
+ *  11. It is integrated exactly once into the canonical statement dispatcher.
+ *
+ *  12. The legacy competing yield rules are removed from the authoritative
+ *      parser path.
+ *
+ *  13. AST mapping is stable and source-span preserving.
+ *
+ *  14. Semantic generator classification occurs downstream.
+ *
+ *  15. Quantum values continue through the canonical `quantum::ir` boundary.
+ *
+ *  16. Classical, quantum, HDL, hybrid, distributed, AI/data, and future
+ *      semantic values require no generator-specific grammar variants.
+ *
+ *  17. Positive, negative, boundary, scalability, determinism, and
+ *      cross-domain tests exist.
+ *
+ *  18. The implementation remains compatible with Rust 1.97 / 1.97.1 and
+ *      requires no unsafe Rust.
+ *
+ * ============================================================================
+ * CANONICAL RULES
+ * ============================================================================
+ *
+ * The complete authoritative syntax in this file is intentionally small:
+ *
+ *     yieldStatement
+ *         : YIELD expression? SEMICOLON?
+ *         ;
+ *
+ * No other generator-specific parser rule is required at this layer.
+ *
  * ============================================================================
  */
 
+parser grammar Generators;
 
-/* ============================================================================
- * 18. AST CONTRACT
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+
+/*
+ * ============================================================================
+ * GENERATOR SUSPENSION / VALUE PRODUCTION
  * ============================================================================
  *
- * The frontend AST should preserve at least:
- *
- *     YieldStatement
- *         value: Option<Expression>
- *         source_span
- *
- * The grammar itself does not construct the AST.
- *
- * AST construction belongs to the parser/frontend adapter.
- *
- * The AST must preserve the distinction between:
+ * The expression is optional so that the grammar preserves both:
  *
  *     yield;
  *
@@ -896,318 +833,14 @@ generatorFunctionBoundary
  *
  *     yield expression;
  *
- * without prematurely deciding the final generator type.
- * ============================================================================
+ * Semantic analysis determines whether an empty yield is valid in a given
+ * language context and what its value/type semantics are.
+ *
+ * The grammar deliberately does not introduce a generator-specific expression
+ * hierarchy.
  */
-
-
-/* ============================================================================
- * 19. SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis should derive a generator model from the containing
- * function and its yield points.
- *
- * Required semantic checks include:
- *
- *     1. A yield must occur in a generator-compatible function context.
- *
- *     2. Yield expressions must be type checked.
- *
- *     3. All reachable yield values must satisfy the generator's inferred or
- *        declared yield contract.
- *
- *     4. Empty yields must be validated against the language's unit/control
- *        semantics.
- *
- *     5. Suspension must interact correctly with ownership and borrowing.
- *
- *     6. Suspension must interact correctly with effects.
- *
- *     7. Suspension must interact correctly with resource lifetimes.
- *
- *     8. Async generators must satisfy async/concurrency rules.
- *
- *     9. Quantum values must retain their semantic identity and must not be
- *        lowered into generator-specific fake quantum objects.
- *
- *    10. Generator semantics must be preserved through IR lowering.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 20. IR CONTRACT
- * ============================================================================
- *
- * The grammar MUST NOT define a generator IR.
- *
- * Instead:
- *
- *     parser
- *         ->
- *     frontend AST
- *         ->
- *     semantic generator model
- *         ->
- *     canonical compiler IR
- *
- * The exact IR representation may include concepts such as:
- *
- *     suspension point;
- *     resume edge;
- *     produced value;
- *     generator state;
- *     control-flow continuation.
- *
- * Those belong to the compiler/semantic IR architecture, not this grammar.
- *
- * For quantum programs:
- *
- *     generator syntax
- *         ->
- *     AST
- *         ->
- *     semantic analysis
- *         ->
- *     quantum::ir
- *
- * where applicable.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 21. RUNTIME CONTRACT
- * ============================================================================
- *
- * Runtime may lower generator semantics to:
- *
- *     - stack state;
- *     - heap state;
- *     - compiler-generated frames;
- *     - resumable tasks;
- *     - async executors;
- *     - distributed execution;
- *     - target-specific mechanisms.
- *
- * None of those choices are encoded here.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 22. TOOLING CONTRACT
- * ============================================================================
- *
- * Tooling should use the parser/AST representation rather than searching raw
- * source text for "yield".
- *
- * Required tooling compatibility includes:
- *
- *     - formatter;
- *     - syntax highlighter;
- *     - IDE parser;
- *     - diagnostics;
- *     - source navigation;
- *     - AST inspection;
- *     - documentation generation;
- *     - semantic indexing;
- *     - refactoring.
- *
- * Source spans must be retained for:
- *
- *     K_YIELD
- *     yield value
- *     complete yield statement
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 23. COMPATIBILITY CONTRACT
- * ============================================================================
- *
- * Existing Zamani source using:
- *
- *     yield
- *     yield expression
- *
- * must remain parseable unless a documented language-version policy explicitly
- * changes the construct.
- *
- * The legacy grammar currently defines:
- *
- *     yieldStatement
- *         : YIELD expression? SEMI?
- *         ;
- *
- * The modular grammar replaces that ownership with:
- *
- *     yieldStatement
- *         : K_YIELD yieldValue? SEMI?
- *         ;
- *
- * The semantic meaning remains compatible.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 24. MIGRATION FROM LEGACY GRAMMAR
- * ============================================================================
- *
- * The legacy:
- *
- *     grammar/antlr/Core.g4
- *
- * currently owns a yield statement.
- *
- * During modular grammar migration:
- *
- *     Core.g4
- *
- * MUST NOT retain a second independent `yieldStatement` definition alongside
- * this grammar.
- *
- * The canonical modular owner becomes:
- *
- *     grammar/functions/generators.g4
- *
- * The root statement dispatcher should reference the canonical rule supplied
- * by this grammar.
- *
- * This prevents two competing definitions of `yield`.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 25. NO GENERATOR KEYWORD
- * ============================================================================
- *
- * The canonical lexer currently provides:
- *
- *     K_YIELD
- *
- * but does not provide:
- *
- *     K_GENERATOR
- *
- * This file therefore deliberately does not reference a nonexistent token.
- *
- * Adding a generator keyword later would require coordinated updates to:
- *
- *     grammar/lexer/tokens.g4
- *     grammar/specification/*
- *     grammar/functions/generators.g4
- *     grammar/functions/functions.g4
- *     AST
- *     semantic analysis
- *     compatibility tests
- *     documentation
- *
- * It must not be introduced implicitly here.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 26. HARD-CODING AUDIT
- * ============================================================================
- *
- * This grammar contains no:
- *
- *     MAX_YIELDS
- *     MAX_GENERATORS
- *     MAX_GENERATOR_DEPTH
- *     MAX_GENERATOR_VALUES
- *     MAX_RESUMPTIONS
- *     MAX_THREADS
- *     MAX_TASKS
- *     MAX_DEVICES
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_MEMORY
- *
- * Repetition is represented through ANTLR grammar composition and is therefore
- * bounded only by implementation/parser resource policies.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 27. SECURITY AUDIT
- * ============================================================================
- *
- * This grammar:
- *
- *     - performs no I/O;
- *     - performs no network access;
- *     - accesses no filesystem;
- *     - executes no user code;
- *     - invokes no runtime services;
- *     - contains no target-language actions;
- *     - contains no unsafe operations.
- *
- * Semantic/runtime layers must separately validate resource and security
- * effects of generator execution.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 28. PRODUCTION COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *     [ ] `parser grammar Generators;` compiles with the canonical token
- *         vocabulary.
- *
- *     [ ] No lexer token is duplicated here.
- *
- *     [ ] `yieldStatement` has exactly one canonical owner.
- *
- *     [ ] `yieldValue` delegates to the canonical expression grammar.
- *
- *     [ ] No function declaration grammar is duplicated.
- *
- *     [ ] No function type grammar is duplicated.
- *
- *     [ ] No block grammar is duplicated.
- *
- *     [ ] No semantic generator state machine is encoded.
- *
- *     [ ] No hardware/resource limits are encoded.
- *
- *     [ ] Existing `yield` source remains compatible.
- *
- *     [ ] The legacy Core grammar is migrated so that it does not define a
- *         competing yield rule.
- *
- *     [ ] AST construction has a stable YieldStatement boundary.
- *
- *     [ ] Semantic analysis can classify containing functions as generators.
- *
- *     [ ] Async + yield can be handled by the semantic layer.
- *
- *     [ ] Quantum values remain governed by the canonical quantum semantics
- *         and `quantum::ir`.
- *
- *     [ ] Parser behavior is deterministic.
- *
- *     [ ] Rust integration remains compatible with Rust 1.97/1.97.1 and
- *         safe-Rust-only policy.
- *
- * ============================================================================
- */
+yieldStatement
+    : YIELD
+      expression?
+      SEMICOLON?
+    ;
