@@ -9,139 +9,119 @@
  *
  * STATUS
  * ------
- * CANONICAL STATEMENT COMPOSITION GRAMMAR
+ * CANONICAL UNIVERSAL STATEMENT COMPOSITION GRAMMAR
+ *
+ * VERSION
+ * -------
+ * Zamani language grammar architecture
  *
  * GRAMMAR TECHNOLOGY
  * ------------------
  * ANTLR4 parser grammar
  *
- * RUST BASELINE
- * -------------
+ * IMPLEMENTATION BASELINE
+ * -----------------------
  * Rust 1.97 / Rust 1.97.1
+ * Rust 2021
+ * Safe Rust only.
  *
- * SAFETY
- * ------
- * This grammar:
+ * This grammar contains:
  *
- *   - contains no embedded Rust actions;
- *   - contains no semantic predicates;
- *   - contains no unsafe Rust;
- *   - performs no I/O;
- *   - performs no filesystem access;
- *   - performs no networking;
- *   - performs no process execution;
- *   - performs no hardware discovery;
- *   - performs no runtime execution;
- *   - contains no mutable global state;
- *   - contains no target-specific implementation;
- *   - contains no machine-size constants.
+ *     - no embedded Rust actions;
+ *     - no semantic predicates;
+ *     - no unsafe Rust;
+ *     - no I/O;
+ *     - no filesystem access;
+ *     - no networking;
+ *     - no hardware discovery;
+ *     - no runtime execution;
+ *     - no mutable global state;
+ *     - no target-specific implementation;
+ *     - no machine-size constants.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file is the SINGLE AUTHORITATIVE COMPOSITION OWNER for the Zamani
- * statement grammar.
+ * This file is the SINGLE AUTHORITATIVE UNIVERSAL STATEMENT COMPOSITION
+ * BOUNDARY for Zamani.
  *
- * It owns the language-wide statement entry point:
+ * It owns exactly one public language-wide entry point:
  *
  *     statement
  *
- * and composes statement families owned by dedicated grammar files.
+ * Concrete statement syntax remains owned by specialized statement grammars.
  *
- * It does NOT implement those statement families itself.
- *
- * Concrete statement syntax remains owned by:
- *
- *     assignments.g4
- *     assertions.g4
- *     blocks.g4
- *     breaks.g4
- *     conditionals.g4
- *     continues.g4
- *     declarations.g4
- *     exceptions.g4
- *     loops.g4
- *     pattern-matching.g4
- *     returns.g4
- *     unsafe.g4
- *
- * Expression syntax remains owned by:
- *
- *     grammar/expressions/
- *
- * Type syntax remains owned by:
- *
- *     grammar/types/
- *
- * Names and shared source-language infrastructure remain owned by:
- *
- *     grammar/core/
+ * This file MUST compose those grammars rather than reimplement them.
  *
  * ============================================================================
- * ARCHITECTURAL PIPELINE
+ * ARCHITECTURAL PRINCIPLE
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     parser
- *          |
- *          v
- *     statement composition                 <-- THIS FILE
- *          |
- *          +--> declaration statements
- *          +--> assignment statements
- *          +--> assertion statements
- *          +--> control-flow statements
- *          +--> unsafe statements
- *          +--> block statements
- *          +--> empty statements
- *          +--> expression statements
- *          |
- *          v
- *     domain-neutral frontend AST
- *          |
- *          v
- *     structural validation
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> names
- *          +--> types
- *          +--> effects
- *          +--> capabilities
- *          +--> ownership
- *          +--> control flow
- *          +--> resources
- *          |
- *          v
- *     canonical semantic model
- *          |
- *          +--> classical representation
- *          +--> quantum::ir
- *          +--> HDL / hardware representation
- *          +--> distributed representation
- *          +--> accelerator representation
- *          +--> future-domain representation
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing / scheduling / lowering
- *          |
- *          v
- *     target realization
- *          |
- *          v
- *     runtime / hardware
+ * Zamani source
+ *      |
+ *      v
+ * canonical lexer
+ *      |
+ *      v
+ * canonical parser
+ *      |
+ *      v
+ * statement composition                 <-- THIS FILE
+ *      |
+ *      +--> declarations
+ *      +--> assignments
+ *      +--> assertions
+ *      +--> control flow
+ *      +--> concurrency
+ *      +--> effects
+ *      +--> resources
+ *      +--> domain statements
+ *      +--> blocks
+ *      +--> empty statements
+ *      +--> expression statements
+ *      |
+ *      v
+ * domain-neutral frontend AST
+ *      |
+ *      v
+ * structural validation
+ *      |
+ *      v
+ * semantic analysis
+ *      |
+ *      +--> names
+ *      +--> types
+ *      +--> effects
+ *      +--> ownership
+ *      +--> capabilities
+ *      +--> resources
+ *      +--> control flow
+ *      +--> domain semantics
+ *      |
+ *      v
+ * canonical semantic representations
+ *      |
+ *      +--> classical representation
+ *      +--> quantum::ir
+ *      +--> HDL / hardware representation
+ *      +--> distributed representation
+ *      +--> accelerator representation
+ *      +--> future-domain representations
+ *      |
+ *      v
+ * optimization
+ *      |
+ *      v
+ * routing / scheduling / lowering
+ *      |
+ *      v
+ * target realization
+ *      |
+ *      v
+ * runtime / hardware
  *
- * This grammar MUST NOT bypass this pipeline.
+ * THIS FILE MUST NOT BYPASS THAT PIPELINE.
  *
  * ============================================================================
  * OWNERSHIP CONTRACT
@@ -150,329 +130,131 @@
  * THIS FILE OWNS
  * --------------
  *
- *   - statement
- *   - statement-family dispatch
- *   - control-flow composition
- *   - generic expression-statement admission
- *   - empty-statement admission
- *   - composition adapters required to connect delegated grammars
+ *     statement
+ *
+ *     The universal composition relationship between statement families.
+ *
+ *     The distinction between:
+ *
+ *         specialized statement
+ *         empty statement
+ *         generic expression statement
+ *
+ *     The stable parser boundary through which all statement families enter
+ *     the language.
  *
  * THIS FILE DOES NOT OWN
  * ----------------------
  *
- *   - lexer rules
- *   - token spelling
- *   - identifiers
- *   - names
- *   - paths
- *   - expressions
- *   - expression precedence
- *   - assignment-expression semantics
- *   - concrete assignment syntax
- *   - declarations
- *   - functions
- *   - modules
- *   - types
- *   - blocks
- *   - conditionals
- *   - loops
- *   - pattern matching
- *   - break
- *   - continue
- *   - return
- *   - exceptions
- *   - unsafe-region syntax
- *   - assertion syntax
- *   - quantum operations
- *   - HDL operations
- *   - hardware realization
- *   - resource allocation
- *   - capability evaluation
- *   - QEC
- *   - ZQN
- *   - resilience
- *   - optimization
- *   - routing
- *   - scheduling
- *   - calibration
- *   - target selection
- *   - runtime execution
- *   - physical device selection
+ *     lexer rules
+ *     token definitions
+ *     keyword definitions
+ *     identifiers
+ *     names
+ *     paths
+ *     expressions
+ *     expression precedence
+ *     types
+ *     declarations
+ *     assignments
+ *     bindings
+ *     assertions
+ *     blocks
+ *     conditionals
+ *     loops
+ *     pattern matching
+ *     break
+ *     continue
+ *     return
+ *     exceptions
+ *     unsafe statements
+ *     concurrency syntax
+ *     effect syntax
+ *     resource syntax
+ *     quantum syntax
+ *     classical syntax
+ *     hybrid syntax
+ *     HDL syntax
+ *     hardware syntax
+ *     distributed syntax
+ *     AI syntax
+ *     data syntax
+ *     networking syntax
+ *     security syntax
+ *     compilation syntax
+ *     execution syntax
+ *     domain-specific operations
+ *     QEC
+ *     ZQN
+ *     routing
+ *     scheduling
+ *     calibration
+ *     HAL
+ *     target selection
+ *     physical device selection
+ *     runtime execution
  *
  * ============================================================================
- * SINGLE-SOURCE-OF-TRUTH CONTRACT
+ * SINGLE-SOURCE-OF-TRUTH RULE
  * ============================================================================
  *
- * There MUST be exactly ONE authoritative effective `statement` rule in the
- * assembled Zamani parser.
+ * There MUST be exactly one authoritative effective `statement` rule in the
+ * assembled production parser.
  *
- * This file is that owner within the modular statement grammar.
+ * This grammar owns that rule.
  *
- * No imported delegate grammar may redefine:
+ * Imported grammars MUST NOT define another universal:
  *
  *     statement
  *
- * No legacy parser composition layer may remain in the authoritative generated
- * parser with a competing statement definition.
+ * rule.
  *
- * In particular, the migration path must eventually remove/deactivate competing
- * statement productions from:
- *
- *     grammar/antlr/ZamaniParser.g4
- *     grammar/antlr/Core.g4
- *
- * when those productions overlap this modular owner.
- *
- * The repository may retain legacy definitions temporarily for migration or
- * compatibility analysis, but they must not participate as competing
- * authoritative definitions in production parser generation.
- *
- * ============================================================================
- * IMPORT CONTRACT
- * ============================================================================
- *
- * Each imported grammar owns a distinct part of the statement language.
- *
- * This file composes those owners.
- *
- * It MUST NOT copy their concrete productions.
- *
- * ============================================================================
- * EXPRESSION / ASSIGNMENT CONTRACT
- * ============================================================================
- *
- * Zamani has both:
- *
- *     assignmentExpression
- *
- * and:
- *
- *     assignmentStatement
- *
- * They are intentionally distinct.
- *
- * assignmentExpression
- *     -> owned by grammar/expressions/
- *
- * assignmentStatement
- *     -> owned by assignments.g4
- *
- * This dispatcher explicitly admits assignmentStatement before the generic
- * expression statement.
- *
- * This is important because:
- *
- *     expressionStatement
- *         : expression SEMICOLON
- *
- * alone is not a sufficient composition contract for the dedicated
- * assignmentStatement rule.
- *
- * The assignment grammar already defines:
- *
- *     assignmentStatement
- *         : assignmentOperation statementTerminator
- *
- * and:
- *
- *     assignmentOperation
- *         : assignmentTarget assignmentOperator assignmentExpression
- *
- * Therefore this file must consume that canonical rule instead of recreating
- * assignment syntax.
- *
- * ============================================================================
- * BLOCK CONTRACT
- * ============================================================================
- *
- * Block syntax is owned by:
- *
- *     blocks.g4
- *
- * This file MUST NOT define:
- *
- *     {
- *     }
- *     blockExpression
- *     blockElement
- *
- * A block recursively contains the canonical `statement` rule.
- *
- * This creates the intentional grammar relationship:
- *
- *     statement
- *         |
- *         v
- *     blockExpression
- *         |
- *         v
- *     blockElement*
- *         |
- *         v
- *     statement
- *
- * This is grammar recursion, not a semantic subsystem dependency cycle.
- *
- * ============================================================================
- * CONTROL-FLOW CONTRACT
- * ============================================================================
- *
- * Control-flow syntax is delegated to:
- *
- *     conditionals.g4
- *     loops.g4
- *     pattern-matching.g4
- *     breaks.g4
- *     continues.g4
- *     returns.g4
- *     exceptions.g4
- *
- * This file merely composes them.
- *
- * No finite limit is imposed on:
- *
- *     - branches;
- *     - loop nesting;
- *     - match arms;
- *     - catch clauses;
- *     - statement nesting;
- *     - block nesting;
- *     - program size.
- *
- * ============================================================================
- * DECLARATION CONTRACT
- * ============================================================================
- *
- * declarations.g4 owns:
+ * Specialized grammars may define their own public entry points, for example:
  *
  *     declarationStatement
- *
- * including local declarations and declaration-family dispatch.
- *
- * This file does not duplicate declaration syntax.
- *
- * ============================================================================
- * ASSERTION CONTRACT
- * ============================================================================
- *
- * assertions.g4 owns:
- *
+ *     assignmentStatement
  *     assertionStatement
- *
- * This file merely admits it in statement position.
- *
- * Proof checking, theorem proving, compile-time evaluation and runtime
- * assertion policy remain downstream concerns.
- *
- * ============================================================================
- * UNSAFE CONTRACT
- * ============================================================================
- *
- * unsafe.g4 owns:
- *
- *     unsafeStatement
- *
- * The presence of this rule does NOT mean the grammar implementation uses
- * Rust unsafe.
- *
- * `unsafe` is a Zamani source-language construct whose semantics are determined
- * downstream.
- *
- * The Rust implementation remains required to use safe Rust.
- *
- * ============================================================================
- * EXCEPTION CONTRACT
- * ============================================================================
- *
- * exceptions.g4 owns:
- *
- *     throwStatement
- *     tryCatchFinallyStatement
- *     catchClause
- *     finallyClause
- *
- * This dispatcher provides the stable:
- *
- *     tryStatement
- *
- * adapter so that the exception implementation remains replaceable without
- * changing the overall statement-dispatch contract.
- *
- * A try statement is syntactically valid only when its delegated grammar
- * supplies a catch and/or finally handler according to exceptions.g4.
- *
- * ============================================================================
- * EMPTY STATEMENT CONTRACT
- * ============================================================================
- *
- * A standalone semicolon is a syntactically valid empty statement:
- *
- *     ;
- *
- * It is deliberately distinct from:
- *
+ *     controlFlowStatement
+ *     concurrencyStatementAdapter
+ *     effectStatement
+ *     resourceStatement
+ *     domainStatement
+ *     blockExpression
  *     expressionStatement
  *
- * because an empty statement contains no expression.
- *
- * Whether an empty statement produces a warning, lint, style diagnostic, or
- * optimization is downstream policy.
+ * but none of them may replace the universal `statement` owner.
  *
  * ============================================================================
- * GENERIC EXPRESSION STATEMENT CONTRACT
+ * DOMAIN-NEUTRALITY
  * ============================================================================
  *
- * Any canonical expression may occupy statement position when followed by the
- * canonical statement terminator.
+ * The statement layer is intentionally independent of computational target.
  *
- * Examples include:
- *
- *     compute();
- *     value;
- *     foo();
- *     measure(q);
- *     tensor_operation();
- *     distributed_operation();
- *     hardware_operation();
- *
- * Domain-specific meaning is determined downstream.
- *
- * This file MUST NOT enumerate:
- *
- *     quantum operations;
- *     GPU operations;
- *     CPU operations;
- *     FPGA operations;
- *     AI operations;
- *     networking operations;
- *     vendor operations.
- *
- * ============================================================================
- * DOMAIN-NEUTRALITY CONTRACT
- * ============================================================================
- *
- * The same statement composition must work across:
+ * The same source-level statement composition must be capable of representing
+ * programs involving:
  *
  *     classical computing
  *     quantum computing
  *     hybrid computing
  *     HDL
  *     hardware/software co-design
- *     embedded computing
+ *     embedded systems
  *     parallel computing
  *     distributed computing
  *     HPC
  *     AI/ML
- *     accelerator programming
- *     networking
- *     scientific computing
- *     systems programming
- *     cryptography
  *     data processing
+ *     networking
+ *     cryptography
+ *     scientific computing
+ *     accelerators
+ *     edge/cloud execution
+ *     nano-scale computation
  *     future computational domains
  *
- * This dispatcher therefore MUST NOT introduce target-specific alternatives
- * such as:
+ * Domain meaning is supplied by the domain grammars and semantic layers.
+ *
+ * This file therefore MUST NOT contain alternatives such as:
  *
  *     cpuStatement
  *     gpuStatement
@@ -481,429 +263,603 @@
  *     asicStatement
  *     clusterStatement
  *
- * merely because the final target differs.
- *
- * ============================================================================
- * QUANTUM CONTRACT
- * ============================================================================
- *
- * This file defines NO quantum operation.
- *
- * Quantum syntax is owned by the quantum grammar hierarchy.
- *
- * The statement layer therefore has no knowledge of:
- *
- *     - qubit count;
- *     - logical-qubit count;
- *     - physical-qubit count;
- *     - gate inventory;
- *     - topology;
- *     - calibration;
- *     - physical mapping;
- *     - QEC strategy;
- *     - ZQN noise model;
- *     - routing;
- *     - scheduling;
- *     - backend selection.
- *
- * The canonical downstream path remains:
- *
- *     statement AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     quantum semantic model
- *          |
- *          v
- *     quantum::ir
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing
- *          |
- *          v
- *     scheduling
- *          |
- *          v
- *     QEC / resilience / ZQN / HAL
- *          |
- *          v
- *     target realization
- *
- * ============================================================================
- * HARDWARE / HDL CONTRACT
- * ============================================================================
- *
- * This file does not encode:
- *
- *     - CPU count;
- *     - core count;
- *     - thread count;
- *     - GPU count;
- *     - FPGA count;
- *     - register width;
- *     - memory capacity;
- *     - accelerator count;
- *     - bus width;
- *     - topology;
- *     - device identity;
- *     - clock count;
- *     - pipeline depth.
- *
- * Hardware and HDL intent belongs to their respective grammar and semantic
- * layers.
- *
- * ============================================================================
- * DISTRIBUTED / CONCURRENT CONTRACT
- * ============================================================================
- *
- * Statement composition does not impose any finite limit on:
- *
- *     - tasks;
- *     - actors;
- *     - processes;
- *     - workers;
- *     - channels;
- *     - nodes;
- *     - devices;
- *     - communication paths.
- *
- * Those are source semantics, resource requirements, capability constraints,
- * compiler decisions, runtime decisions, or target properties.
+ * merely because different targets exist.
  *
  * ============================================================================
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * The statement grammar expresses portable source-level computation.
+ * The statement grammar expresses source-level program meaning.
  *
- * It MUST remain independent of the eventual machine scale.
+ * It MUST NOT encode current hardware capacity as language syntax.
  *
- * A valid source program can therefore contain statements that ultimately
- * execute on:
+ * The grammar therefore contains no universal limits for:
  *
- *     - a tiny processor;
- *     - a single CPU;
- *     - many CPUs;
- *     - GPUs;
- *     - FPGAs;
- *     - ASICs;
- *     - QPUs;
- *     - simulators;
- *     - heterogeneous machines;
- *     - clusters;
- *     - supercomputers;
- *     - cloud systems;
- *     - future architectures.
+ *     CPUs
+ *     cores
+ *     threads
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     QPUs
+ *     qubits
+ *     registers
+ *     memory
+ *     storage
+ *     accelerators
+ *     nodes
+ *     devices
+ *     network links
+ *     tensor dimensions
+ *     timelines
+ *     processes
+ *     tasks
  *
- * No grammar-level statement limit is used to represent machine capability.
+ * A source program may therefore be compiled for a tiny target or a much
+ * larger target according to available resources and declared semantic
+ * requirements.
  *
- * Practical parser/compiler limits remain implementation/resource policies and
- * are not language semantics.
+ * This is the grammar-level foundation for:
  *
- * ============================================================================
- * DETERMINISM CONTRACT
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no actions;
- *     - no semantic predicates;
- *     - no randomness;
- *     - no time dependence;
- *     - no filesystem dependence;
- *     - no network dependence;
- *     - no hardware dependence;
- *     - no runtime dependence;
- *     - no scheduler dependence;
- *     - no backend dependence;
- *     - no mutable global state.
- *
- * Given identical source tokens, grammar version, lexer vocabulary and parser
- * configuration, the structural parse result must be deterministic.
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
  * ============================================================================
- * DIAGNOSTIC CONTRACT
+ * SEMANTIC REQUIREMENT VS IMPLEMENTATION DECISION
  * ============================================================================
  *
- * Parser/frontend diagnostics are responsible for syntax failures such as:
+ * Statement syntax must preserve the distinction between:
  *
- *     - malformed statement;
- *     - unexpected token;
- *     - missing expression;
- *     - missing semicolon;
- *     - malformed declaration;
- *     - malformed assignment;
- *     - malformed conditional;
- *     - malformed loop;
- *     - malformed match;
- *     - malformed exception;
- *     - malformed block.
+ *     semantic requirement
+ *     capability requirement
+ *     constraint
+ *     preference
+ *     hint
+ *     implementation decision
  *
- * Semantic diagnostics remain downstream.
+ * Examples of portable intent belong to the resource/capability layers:
  *
- * Examples:
+ *     requires capability("quantum.measurement")
+ *     requires capability("gpu.compute")
  *
- *     break outside loop;
- *     continue outside loop;
- *     return outside callable;
- *     invalid type;
- *     invalid ownership;
- *     unavailable capability;
- *     impossible resource requirement;
- *     invalid quantum operation;
- *     invalid hardware requirement.
+ * The statement composition layer MUST NOT convert such intent into:
+ *
+ *     physical device 0
+ *     CPU core 7
+ *     GPU 3
+ *     physical qubit 17
+ *     FPGA region 2
+ *
+ * Those are downstream realization concerns.
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Quantum statements enter through:
+ *
+ *     domainStatement
+ *
+ * and ultimately the quantum statement adapter.
+ *
+ * This file does NOT enumerate:
+ *
+ *     H
+ *     X
+ *     Y
+ *     Z
+ *     CNOT
+ *     SWAP
+ *     or any other finite gate inventory.
+ *
+ * It does NOT define:
+ *
+ *     qubit limits
+ *     physical qubits
+ *     topology
+ *     routing
+ *     scheduling
+ *     calibration
+ *     QEC
+ *     ZQN
+ *     resilience
+ *     HAL
+ *     backend selection
+ *
+ * The downstream quantum path remains:
+ *
+ *     source
+ *       -> lexer
+ *       -> parser
+ *       -> domain-neutral AST
+ *       -> semantic quantum representation
+ *       -> quantum::ir
+ *       -> optimization
+ *       -> decomposition
+ *       -> routing
+ *       -> scheduling
+ *       -> QEC / resilience / ZQN
+ *       -> HAL
+ *       -> target realization
+ *
+ * `quantum::ir` remains the canonical quantum semantic boundary.
+ *
+ * ============================================================================
+ * HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * HDL and hardware statements enter through the domain composition boundary.
+ *
+ * This file does NOT encode:
+ *
+ *     fixed bus widths
+ *     fixed register widths
+ *     fixed memory sizes
+ *     fixed clock counts
+ *     fixed pipeline depths
+ *     fixed device counts
+ *     physical addresses
+ *     FPGA resources
+ *     ASIC resources
+ *     vendor devices
+ *     physical topology
+ *
+ * Hardware intent is resolved downstream through:
+ *
+ *     capabilities
+ *     resources
+ *     constraints
+ *     target descriptions
+ *     synthesis
+ *     placement
+ *     routing
+ *     scheduling
+ *     lowering
+ *
+ * ============================================================================
+ * CONTROL-FLOW CONTRACT
+ * ============================================================================
+ *
+ * Control-flow composition is owned by:
+ *
+ *     grammar/statements/control-flow.g4
+ *
+ * This file MUST NOT recreate:
+ *
+ *     ifStatement
+ *     loopStatement
+ *     matchStatement
+ *     breakStatement
+ *     continueStatement
+ *     returnStatement
+ *     throwStatement
+ *     tryStatement
+ *
+ * Doing so would create competing ownership.
+ *
+ * ============================================================================
+ * DOMAIN COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * Domain statements are composed through:
+ *
+ *     grammar/statements/domains.g4
+ *
+ * That grammar owns:
+ *
+ *     domainStatement
+ *
+ * and delegates to the domain-specific statement adapters.
+ *
+ * This file therefore does not directly import every domain grammar.
+ *
+ * The dependency direction is:
+ *
+ *     Statements
+ *          |
+ *          v
+ *     Domains
+ *          |
+ *          +--> classical
+ *          +--> quantum
+ *          +--> HDL
+ *          +--> hybrid
+ *          +--> distributed
+ *          +--> AI
+ *          +--> data
+ *          +--> networking
+ *          +--> security
+ *          +--> resources
+ *          +--> compilation
+ *          +--> execution
+ *          +--> hardware
+ *
+ * This keeps the universal statement composition independent of individual
+ * domain implementations.
+ *
+ * ============================================================================
+ * CONCURRENCY CONTRACT
+ * ============================================================================
+ *
+ * Concurrency is composed through:
+ *
+ *     grammar/statements/concurrency.g4
+ *
+ * This file must not duplicate:
+ *
+ *     async
+ *     await
+ *     spawn
+ *     task
+ *     actor
+ *     channel
+ *     parallel
+ *     synchronization
+ *     cancellation
+ *     distributed-concurrency
+ *
+ * syntax.
+ *
+ * Concurrency semantics must not encode a fixed number of:
+ *
+ *     threads
+ *     tasks
+ *     workers
+ *     actors
+ *     cores
+ *     nodes
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Effects are composed through:
+ *
+ *     grammar/statements/effects.g4
+ *
+ * Effect semantics remain downstream.
+ *
+ * This file does not define:
+ *
+ *     effect declarations
+ *     effect operations
+ *     handlers
+ *     capability implementation
+ *     resource implementation
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Resource intent is composed through:
+ *
+ *     grammar/statements/resource.g4
+ *
+ * Resource syntax remains owned by:
+ *
+ *     grammar/resources/
+ *
+ * This file does not define resource quantities, capacities, inventories,
+ * placement, acquisition, reservation, scheduling or allocation.
+ *
+ * ============================================================================
+ * ASSIGNMENT CONTRACT
+ * ============================================================================
+ *
+ * Assignment syntax is owned by:
+ *
+ *     grammar/statements/assignments.g4
+ *
+ * The universal statement layer merely admits:
+ *
+ *     assignmentStatement
+ *
+ * Assignment expressions remain owned by the expression grammar.
+ *
+ * This distinction prevents:
+ *
+ *     assignment expression
+ *
+ * from being confused with:
+ *
+ *     assignment statement.
+ *
+ * ============================================================================
+ * DECLARATION CONTRACT
+ * ============================================================================
+ *
+ * Declaration statement syntax is owned by:
+ *
+ *     grammar/statements/declarations.g4
+ *
+ * This file only admits:
+ *
+ *     declarationStatement
+ *
+ * It must not duplicate:
+ *
+ *     let
+ *     var
+ *     const
+ *     struct
+ *     class
+ *     enum
+ *     resource
+ *     capability
+ *
+ * declaration syntax.
+ *
+ * ============================================================================
+ * ASSERTION CONTRACT
+ * ============================================================================
+ *
+ * Assertion syntax is owned by:
+ *
+ *     grammar/statements/assertions.g4
+ *
+ * This file only admits:
+ *
+ *     assertionStatement
+ *
+ * Assertion evaluation, proof, optimization and runtime behavior remain
+ * downstream concerns.
+ *
+ * ============================================================================
+ * BLOCK CONTRACT
+ * ============================================================================
+ *
+ * Block syntax is owned by:
+ *
+ *     grammar/statements/blocks.g4
+ *
+ * This file must not recreate:
+ *
+ *     {
+ *     }
+ *     blockExpression
+ *     blockElement
+ *
+ * Block contents ultimately recurse into this universal `statement` rule
+ * through the block grammar.
+ *
+ * ============================================================================
+ * EMPTY STATEMENT CONTRACT
+ * ============================================================================
+ *
+ * A standalone statement terminator is a valid empty statement:
+ *
+ *     ;
+ *
+ * It has no expression.
+ *
+ * Any warning, linting, optimization or style policy is downstream.
+ *
+ * ============================================================================
+ * EXPRESSION STATEMENT CONTRACT
+ * ============================================================================
+ *
+ * A canonical expression may appear in statement position:
+ *
+ *     expression ;
+ *
+ * The expression grammar owns expression syntax.
+ *
+ * This file owns only the statement-position wrapper.
+ *
+ * Domain-specific operation names MUST NOT be enumerated here.
+ *
+ * Examples that may ultimately be represented by the expression layer include:
+ *
+ *     function calls
+ *     mathematical operations
+ *     tensor operations
+ *     quantum operations
+ *     accelerator operations
+ *     networking operations
+ *     data operations
+ *     future domain operations
+ *
+ * Their semantic interpretation is downstream.
+ *
+ * ============================================================================
+ * AMBIGUITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar must not solve semantic ambiguity by embedding semantic
+ * predicates or target-specific knowledge.
+ *
+ * When multiple statement families can begin with a common token sequence,
+ * ANTLR's parser prediction and the delegated grammar structure must determine
+ * the syntactic alternative.
+ *
+ * Semantic distinctions belong downstream.
+ *
+ * In particular, this file MUST NOT use:
+ *
+ *     embedded actions
+ *     semantic predicates
+ *     target inspection
+ *     symbol-table lookup
+ *     type lookup
+ *     capability lookup
+ *     resource lookup
+ *     runtime lookup
+ *
+ * to choose a statement.
+ *
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
+ *
+ * Parser errors include:
+ *
+ *     unexpected token
+ *     malformed statement
+ *     missing delimiter
+ *     incomplete expression
+ *     malformed declaration
+ *     malformed assignment
+ *     malformed block
+ *     malformed control-flow construct
+ *     malformed domain construct
+ *
+ * Semantic errors remain downstream:
+ *
+ *     unknown name
+ *     invalid type
+ *     invalid ownership
+ *     invalid effect
+ *     invalid capability
+ *     unavailable resource
+ *     impossible resource requirement
+ *     invalid quantum operation
+ *     invalid hardware requirement
+ *     invalid control-flow context
+ *
+ * This separation is mandatory for deterministic frontend architecture.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * This grammar creates no Rust AST values.
+ * This grammar creates parser contexts only.
  *
- * The frontend AST layer must map each statement context to the repository's
- * canonical domain-neutral AST representation.
+ * The frontend AST must map:
  *
- * Every statement node must preserve enough information for:
+ *     statement
  *
- *     - source span;
- *     - source ordering;
- *     - statement kind;
- *     - child relationships;
- *     - relevant syntactic metadata.
+ * to the domain-neutral statement representation.
  *
- * Target-specific information must not be injected merely because a statement
- * may later lower to a particular backend.
+ * Each concrete statement must retain sufficient source information for:
+ *
+ *     source span
+ *     source ordering
+ *     statement kind
+ *     child relationships
+ *     syntactic attributes
+ *
+ * The AST must remain independent of:
+ *
+ *     LLVM
+ *     QIR
+ *     MLIR
+ *     vendor IRs
+ *     physical topology
+ *     QEC implementation
+ *     backend-specific hardware.
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * This grammar creates no IR.
+ * This file creates NO IR.
  *
- * The statement layer must remain upstream of all canonical IRs.
+ * The pipeline remains:
  *
- * The downstream architecture is:
- *
- *     source
- *       -> lexer
+ *     grammar
  *       -> parser
  *       -> AST
  *       -> semantic analysis
- *       -> canonical semantic representation
+ *       -> canonical semantic model
  *       -> domain IR
  *       -> optimization
- *       -> routing / scheduling / lowering
- *       -> target
+ *       -> lowering
+ *       -> target realization
  *
  * For quantum:
  *
  *     AST
- *       -> semantic quantum representation
+ *       -> quantum semantics
  *       -> quantum::ir
  *
- * No second quantum IR is introduced here.
+ * No second quantum IR may be introduced by this statement layer.
  *
  * ============================================================================
- * VERSIONING CONTRACT
+ * RUST CONTRACT
  * ============================================================================
  *
- * This file is intentionally a stable composition boundary.
+ * The grammar itself contains no Rust implementation code.
  *
- * Adding a new statement family requires:
- *
- *     1. a dedicated grammar owner;
- *     2. an explicit import here;
- *     3. an explicit composition alternative here;
- *     4. AST integration;
- *     5. semantic integration;
- *     6. IR integration where applicable;
- *     7. compiler/runtime integration where applicable;
- *     8. positive tests;
- *     9. negative tests;
- *    10. boundary/scalability tests;
- *    11. compatibility documentation.
- *
- * Existing syntax must not be silently redefined.
- *
- * ============================================================================
- * RUST INTEGRATION
- * ============================================================================
- *
- * This grammar generates parser code consumed by the Zamani Rust frontend.
- *
- * Compatibility target:
+ * Generated parser code and the consuming frontend must remain compatible with:
  *
  *     Rust 1.97
  *     Rust 1.97.1
+ *     Rust 2021
+ *     safe Rust
  *
- * The generated/consuming implementation must remain safe Rust.
+ * This grammar does not require `unsafe`.
  *
- * This grammar itself has no Rust implementation actions and therefore cannot
- * introduce Rust unsafe code.
+ * A Zamani source-language construct named `unsafe`, if supported by the
+ * language, is unrelated to Rust implementation safety and remains owned by:
+ *
+ *     grammar/statements/unsafe.g4
  *
  * ============================================================================
- * TEST CONTRACT
+ * DETERMINISM CONTRACT
  * ============================================================================
  *
- * POSITIVE
- * --------
+ * Parsing must depend only on:
  *
- *     ;
+ *     source tokens
+ *     grammar version
+ *     parser configuration
  *
- *     expression;
+ * It must NOT depend on:
  *
- *     assignment = expression;
+ *     current time
+ *     randomness
+ *     filesystem state
+ *     network state
+ *     hardware state
+ *     device discovery
+ *     scheduler state
+ *     runtime state
+ *     backend availability
  *
- *     let x = expression;
+ * Identical canonical token streams under identical parser configuration must
+ * produce equivalent parse-tree structure.
  *
- *     if condition { }
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
  *
- *     while condition { }
+ * There is no grammar-defined finite limit for:
  *
- *     for item in iterable { }
+ *     statement count
+ *     block count
+ *     block depth
+ *     branch count
+ *     loop nesting
+ *     match-arm count
+ *     declaration count
+ *     task count
+ *     process count
+ *     resource count
+ *     device count
+ *     node count
+ *     qubit count
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     accelerator count
+ *     memory capacity
+ *     tensor dimensions
  *
- *     match value {
- *         pattern => expression,
- *     }
+ * Repetition is represented structurally.
  *
- *     break;
- *
- *     continue;
- *
- *     return;
- *
- *     return expression;
- *
- *     throw expression;
- *
- *     try {
- *         work();
- *     } catch (error) {
- *         recover();
- *     }
- *
- *     unsafe {
- *         operation();
- *     }
- *
- * NEGATIVE
- * --------
- *
- *     malformed statement;
- *     malformed assignment;
- *     malformed declaration;
- *     malformed conditional;
- *     malformed loop;
- *     malformed match;
- *     malformed exception;
- *     malformed block;
- *     incomplete expression;
- *     missing required delimiter;
- *
- * SEMANTIC-NEGATIVE
- * -----------------
- *
- * These must be rejected downstream rather than by this grammar:
- *
- *     break outside loop;
- *     continue outside loop;
- *     return outside callable;
- *     invalid type;
- *     invalid ownership;
- *     invalid capability;
- *     unavailable resource;
- *     invalid quantum operation;
- *     invalid target requirement.
- *
- * BOUNDARY
- * --------
- *
- * Tests must cover:
- *
- *     - empty statements;
- *     - arbitrarily long statement sequences;
- *     - deeply nested blocks;
- *     - deeply nested control flow;
- *     - long conditional chains;
- *     - many match arms;
- *     - many catch clauses;
- *     - large expressions;
- *     - large declarations;
- *     - large programs.
- *
- * CROSS-DOMAIN
- * ------------
- *
- * Tests must demonstrate statement composition containing:
- *
- *     classical
- *     quantum
- *     hybrid
- *     HDL
- *     hardware
- *     distributed
- *     AI/data
- *     networking
- *     accelerator
- *
- * constructs wherever those constructs are independently legal.
- *
- * SCALABILITY
- * -----------
- *
- * No grammar-defined finite limit may exist for:
- *
- *     - statement count;
- *     - block count;
- *     - nesting;
- *     - branches;
- *     - loop iterations;
- *     - match arms;
- *     - catch clauses;
- *     - declarations;
- *     - devices;
- *     - qubits;
- *     - CPUs;
- *     - GPUs;
- *     - FPGAs;
- *     - nodes;
- *     - memory;
- *     - accelerators.
- *
- * DETERMINISM
- * -----------
- *
- * Repeated parsing of identical input under identical parser configuration
- * must produce equivalent parse-tree structure.
- *
- * ROUND-TRIP
- * ----------
- *
- *     source
- *       -> lexer
- *       -> parser
- *       -> AST
- *       -> formatter
- *       -> parser
- *
- * must preserve statement meaning.
+ * Actual parser/compiler resource exhaustion is an implementation/resource
+ * concern, not a language-level semantic limit.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * Forbidden in this composition grammar:
+ * Forbidden in this file:
  *
  *     MAX_STATEMENTS
  *     MAX_BLOCKS
  *     MAX_BRANCHES
- *     MAX_LOOP_DEPTH
+ *     MAX_LOOPS
  *     MAX_MATCH_ARMS
- *     MAX_CATCHES
  *     MAX_THREADS
  *     MAX_CORES
  *     MAX_CPUS
@@ -916,88 +872,599 @@
  *     MAX_MEMORY
  *     MAX_STORAGE
  *     MAX_REGISTER_WIDTH
+ *     MAX_VECTOR_WIDTH
  *     MAX_TENSOR_RANK
+ *     physical device identifiers
+ *     physical addresses
+ *     fixed topology
+ *     vendor-specific hardware
  *
- * Numeric literals in a source program remain program semantics; they are not
- * parser-level resource limits.
+ * Numeric values appearing in source programs remain program semantics.
+ *
+ * ============================================================================
+ * VERSIONING / COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Adding a new statement family requires:
+ *
+ *     1. dedicated grammar owner;
+ *     2. stable public entry rule;
+ *     3. AST contract;
+ *     4. semantic contract;
+ *     5. IR contract where applicable;
+ *     6. compiler/runtime integration where applicable;
+ *     7. positive tests;
+ *     8. negative tests;
+ *     9. boundary tests;
+ *    10. scalability tests;
+ *    11. determinism tests;
+ *    12. compatibility documentation;
+ *    13. hard-coding audit.
+ *
+ * Existing statement syntax must not be silently redefined.
+ *
+ * ============================================================================
+ * REQUIRED IMPORTS
+ * ============================================================================
+ *
+ * These imports are statement-family owners, not duplicate implementations.
+ *
+ * Domains is deliberately imported as one boundary rather than importing every
+ * computational domain directly here.
+ *
+ * ============================================================================
+ */
+
+parser grammar Statements;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import
+    AssertionsParser,
+    Assignments,
+    Blocks,
+    BreakStatements,
+    ConditionalsParser,
+    ContinueStatements,
+    Declarations,
+    Domains,
+    ExceptionsParser,
+    Expressions,
+    EffectStatements,
+    ConcurrencyStatements,
+    Loops,
+    PatternMatching,
+    ResourceStatements,
+    ReturnStatements,
+    UnsafeStatementsParser
+    ;
+
+/*
+ * ============================================================================
+ * UNIVERSAL STATEMENT
+ * ============================================================================
+ *
+ * This is the ONLY universal `statement` production.
+ *
+ * Ordering follows ownership boundaries rather than implementation targets.
+ *
+ * Specialized statement families are admitted before the generic expression
+ * statement so dedicated statement constructs remain first-class parser
+ * contexts.
+ *
+ * ============================================================================
+ */
+
+statement
+    : declarationStatement
+    | assignmentStatement
+    | assertionStatement
+    | controlFlowStatement
+    | concurrencyStatementAdapter
+    | effectStatement
+    | resourceStatement
+    | domainStatement
+    | blockExpression
+    | emptyStatement
+    | expressionStatement
+    ;
+
+/*
+ * ============================================================================
+ * CONTROL-FLOW
+ * ============================================================================
+ *
+ * ControlFlow owns this production.
+ *
+ * Do NOT recreate:
+ *
+ *     if
+ *     loop
+ *     match
+ *     break
+ *     continue
+ *     return
+ *     throw
+ *     try
+ *
+ * syntax here.
+ *
+ * ============================================================================
+ */
+
+/*
+ * `controlFlowStatement` is intentionally NOT defined here.
+ *
+ * It is imported from:
+ *
+ *     grammar/statements/control-flow.g4
+ *
+ * through the control-flow composition grammar.
+ *
+ * ============================================================================
+ * EMPTY STATEMENT
+ * ============================================================================
+ *
+ * Empty statements are intentionally separate from expression statements.
+ *
+ *     ;
+ *
+ * contains no expression.
+ *
+ * ============================================================================
+ */
+
+emptyStatement
+    : SEMICOLON
+    ;
+
+/*
+ * ============================================================================
+ * GENERIC EXPRESSION STATEMENT
+ * ============================================================================
+ *
+ * This is the universal fallback for an expression used in statement
+ * position.
+ *
+ * The expression grammar owns:
+ *
+ *     expression
+ *
+ * and all expression precedence/associativity.
+ *
+ * This rule owns only:
+ *
+ *     expression + statement terminator
+ *
+ * ============================================================================
+ */
+
+expressionStatement
+    : expression SEMICOLON
+    ;
+
+/*
+ * ============================================================================
+ * INTEGRATION NOTES
+ * ============================================================================
+ *
+ * The imported grammar contracts are:
+ *
+ * AssertionsParser
+ *     -> assertionStatement
+ *
+ * Assignments
+ *     -> assignmentStatement
+ *
+ * Blocks
+ *     -> blockExpression
+ *
+ * BreakStatements
+ *     -> breakStatement
+ *
+ * ConditionalsParser
+ *     -> ifStatement
+ *
+ * ContinueStatements
+ *     -> continueStatement
+ *
+ * Declarations
+ *     -> declarationStatement
+ *
+ * Domains
+ *     -> domainStatement
+ *
+ * ExceptionsParser
+ *     -> throwStatement / try-related syntax
+ *
+ * Expressions
+ *     -> expression
+ *
+ * EffectStatements
+ *     -> effectStatement
+ *
+ * ConcurrencyStatements
+ *     -> concurrencyStatementAdapter
+ *
+ * Loops
+ *     -> loopStatement
+ *
+ * PatternMatching
+ *     -> matchStatement and pattern syntax
+ *
+ * ResourceStatements
+ *     -> resourceStatement
+ *
+ * ReturnStatements
+ *     -> returnStatement
+ *
+ * UnsafeStatementsParser
+ *     -> unsafeStatement
+ *
+ * Control-flow composition:
+ *
+ *     grammar/statements/control-flow.g4
+ *
+ * owns:
+ *
+ *     controlFlowStatement
+ *
+ * and composes the appropriate imported control-flow families.
+ *
+ * ============================================================================
+ * DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * Domains remains the statement-level domain adapter.
+ *
+ * Its dependency direction is:
+ *
+ *     Statements
+ *         |
+ *         v
+ *     Domains
+ *         |
+ *         +--> classical
+ *         +--> quantum
+ *         +--> hybrid
+ *         +--> HDL
+ *         +--> distributed
+ *         +--> AI
+ *         +--> data
+ *         +--> networking
+ *         +--> security
+ *         +--> resources
+ *         +--> compilation
+ *         +--> execution
+ *         +--> hardware
+ *
+ * No domain implementation is copied into this file.
+ *
+ * ============================================================================
+ * FUTURE DOMAIN EXTENSION
+ * ============================================================================
+ *
+ * A future computational domain must not require a rewrite of the universal
+ * statement grammar merely because a new target technology exists.
+ *
+ * Instead it must provide:
+ *
+ *     domain grammar
+ *     public statement entry rule
+ *     statement adapter
+ *     lexer integration if needed
+ *     AST mapping
+ *     semantic mapping
+ *     IR mapping where applicable
+ *     compiler integration
+ *     runtime integration where applicable
+ *     tests
+ *     compatibility metadata
+ *
+ * Then Domains becomes the domain-composition integration point.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * The statement layer intentionally permits composition such as:
+ *
+ *     classical statement
+ *         -> quantum statement
+ *         -> measurement
+ *         -> classical control
+ *         -> resource requirement
+ *         -> execution intent
+ *
+ * and:
+ *
+ *     classical computation
+ *         -> accelerator intent
+ *         -> hardware/HDL construct
+ *         -> distributed execution
+ *
+ * The parser does not decide whether such a composition is semantically valid.
+ *
+ * That belongs to semantic analysis.
+ *
+ * ============================================================================
+ * SEMANTIC INTEGRATION
+ * ============================================================================
+ *
+ * Every statement must eventually be mapped into the domain-neutral frontend
+ * AST.
+ *
+ * Semantic analysis then determines:
+ *
+ *     name resolution
+ *     type validity
+ *     ownership
+ *     borrowing
+ *     effects
+ *     capabilities
+ *     resources
+ *     control-flow legality
+ *     domain compatibility
+ *     portability
+ *
+ * ============================================================================
+ * IR INTEGRATION
+ * ============================================================================
+ *
+ * Statements do not directly construct IR.
+ *
+ * Downstream mapping is determined by semantic domain:
+ *
+ *     classical
+ *         -> classical representation
+ *
+ *     quantum
+ *         -> quantum::ir
+ *
+ *     HDL/hardware
+ *         -> canonical HDL/hardware representation
+ *
+ *     distributed
+ *         -> distributed representation
+ *
+ *     hybrid
+ *         -> appropriate combined semantic representation
+ *
+ *     future domains
+ *         -> their canonical semantic representation
+ *
+ * ============================================================================
+ * TARGET INDEPENDENCE
+ * ============================================================================
+ *
+ * The same statement tree must remain valid independently of whether the
+ * eventual realization uses:
+ *
+ *     embedded hardware
+ *     CPU
+ *     multicore CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     simulator
+ *     accelerator
+ *     cluster
+ *     HPC system
+ *     cloud system
+ *     heterogeneous system
+ *     future architecture
+ *
+ * Resource availability and capabilities determine realization downstream.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE:
+ *
+ *     ;
+ *     expression;
+ *     assignment;
+ *     declaration;
+ *     assertion;
+ *     if statement;
+ *     loop statement;
+ *     match statement;
+ *     break;
+ *     continue;
+ *     return;
+ *     exception statement;
+ *     concurrency statement;
+ *     effect statement;
+ *     resource statement;
+ *     quantum statement;
+ *     classical statement;
+ *     hybrid statement;
+ *     HDL statement;
+ *     hardware statement;
+ *     distributed statement;
+ *     AI/data statement;
+ *     networking statement;
+ *     security statement;
+ *     compile statement;
+ *     execution statement.
+ *
+ * NEGATIVE:
+ *
+ *     malformed declaration;
+ *     malformed assignment;
+ *     malformed assertion;
+ *     malformed block;
+ *     malformed control flow;
+ *     malformed domain statement;
+ *     malformed resource statement;
+ *     malformed expression;
+ *     missing statement terminator where required.
+ *
+ * SEMANTIC NEGATIVES:
+ *
+ *     break outside valid loop context;
+ *     continue outside valid loop context;
+ *     return outside callable context;
+ *     invalid type;
+ *     invalid ownership;
+ *     unavailable capability;
+ *     unsatisfiable resource requirement;
+ *     invalid quantum operation;
+ *     invalid hardware requirement.
+ *
+ * These semantic cases MUST be rejected downstream, not by this grammar.
+ *
+ * BOUNDARY:
+ *
+ *     empty statement sequence;
+ *     large statement sequences;
+ *     deeply nested blocks;
+ *     deeply nested control flow;
+ *     large match structures;
+ *     large declaration sets;
+ *     large expressions;
+ *     many independent domain statements.
+ *
+ * CROSS-DOMAIN:
+ *
+ *     classical + quantum;
+ *     quantum + classical;
+ *     classical + HDL;
+ *     quantum + hardware;
+ *     AI + accelerator;
+ *     distributed + networking;
+ *     resource + quantum;
+ *     resource + hardware;
+ *     compile + hardware;
+ *     execution + distributed.
+ *
+ * DETERMINISM:
+ *
+ *     identical source
+ *       + identical lexer configuration
+ *       + identical parser configuration
+ *       => equivalent parse-tree structure.
+ *
+ * ROUND-TRIP:
+ *
+ *     source
+ *       -> lexer
+ *       -> parser
+ *       -> AST
+ *       -> formatter
+ *       -> parser
+ *
+ * must preserve source semantics.
+ *
+ * ============================================================================
+ * SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * Tests MUST NOT establish artificial machine limits.
+ *
+ * They must verify that statement composition remains independent of:
+ *
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     QPU count
+ *     qubit count
+ *     node count
+ *     memory capacity
+ *     accelerator count
+ *     topology
+ *
+ * Repetition and nesting must remain structurally expressible until actual
+ * parser/compiler resource limits are reached.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This grammar contains no:
+ *
+ *     MAX_*
+ *     fixed CPU count
+ *     fixed GPU count
+ *     fixed FPGA count
+ *     fixed QPU count
+ *     fixed qubit count
+ *     fixed node count
+ *     fixed device count
+ *     fixed memory capacity
+ *     fixed register width
+ *     fixed tensor dimension
+ *     fixed topology
+ *     physical address
+ *     vendor device identifier
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete only when:
+ * This file is complete when:
  *
- *     [ ] It is the sole owner of `statement`.
+ *     [ ] It is the sole universal `statement` owner.
  *
- *     [ ] Concrete statement syntax remains in dedicated grammar owners.
+ *     [ ] All concrete statement families remain independently owned.
  *
- *     [ ] `assignmentStatement` is explicitly reachable.
+ *     [ ] Control-flow composition comes from control-flow.g4.
  *
- *     [ ] `emptyStatement` is explicitly reachable.
+ *     [ ] Domain composition comes from domains.g4.
  *
- *     [ ] `declarationStatement` is explicitly reachable.
+ *     [ ] Concurrency composition is reachable.
  *
- *     [ ] `assertionStatement` is explicitly reachable.
+ *     [ ] Effect composition is reachable.
  *
- *     [ ] `controlFlowStatement` is explicitly reachable.
+ *     [ ] Resource composition is reachable.
  *
- *     [ ] `unsafeStatement` is explicitly reachable.
+ *     [ ] Assignment syntax is not duplicated.
  *
- *     [ ] `blockExpression` is explicitly reachable.
+ *     [ ] Declaration syntax is not duplicated.
  *
- *     [ ] Generic `expressionStatement` is explicitly reachable.
+ *     [ ] Block syntax is not duplicated.
  *
- *     [ ] `tryStatement` is only a composition adapter.
+ *     [ ] Expression syntax is not duplicated.
  *
- *     [ ] No concrete statement family is duplicated here.
+ *     [ ] Quantum syntax is not duplicated.
  *
- *     [ ] All imports resolve.
+ *     [ ] HDL syntax is not duplicated.
  *
- *     [ ] No imported grammar redefines `statement`.
+ *     [ ] Hardware realization is not encoded.
  *
- *     [ ] No competing authoritative statement rule remains in the production
- *         parser.
+ *     [ ] QEC is not encoded.
  *
- *     [ ] Lexer ownership remains external.
+ *     [ ] ZQN is not encoded.
  *
- *     [ ] Expression ownership remains external.
+ *     [ ] Routing is not encoded.
  *
- *     [ ] Type ownership remains external.
+ *     [ ] Scheduling is not encoded.
  *
- *     [ ] Block ownership remains external.
+ *     [ ] Calibration is not encoded.
  *
- *     [ ] AST ownership remains external.
+ *     [ ] Target selection is not encoded.
  *
- *     [ ] Semantic validation remains downstream.
+ *     [ ] Runtime execution is not encoded.
  *
- *     [ ] IR construction remains downstream.
+ *     [ ] No machine-size limits exist.
  *
- *     [ ] `quantum::ir` remains the canonical quantum semantic boundary.
+ *     [ ] No embedded actions exist.
  *
- *     [ ] QEC remains downstream.
- *
- *     [ ] ZQN remains downstream.
- *
- *     [ ] Routing remains downstream.
- *
- *     [ ] Scheduling remains downstream.
- *
- *     [ ] Optimization remains downstream.
- *
- *     [ ] Hardware discovery remains downstream.
- *
- *     [ ] Runtime execution remains downstream.
- *
- *     [ ] No machine-size constants exist.
- *
- *     [ ] No target-specific statement families exist merely for hardware
- *         targets.
- *
- *     [ ] No embedded Rust actions exist.
+ *     [ ] No semantic predicates exist.
  *
  *     [ ] No unsafe Rust is required.
  *
  *     [ ] Rust 1.97 / 1.97.1 integration passes.
+ *
+ *     [ ] ANTLR generation passes.
+ *
+ *     [ ] All imported grammar identities resolve.
+ *
+ *     [ ] No imported grammar introduces another universal `statement`.
  *
  *     [ ] Positive tests pass.
  *
@@ -1014,144 +1481,4 @@
  *     [ ] Round-trip tests pass.
  *
  * ============================================================================
- * CANONICAL PARSER GRAMMAR
- * ============================================================================
  */
-
-parser grammar Statements;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-/*
- * ============================================================================
- * DELEGATE GRAMMAR IMPORTS
- * ============================================================================
- *
- * These grammars own their concrete productions.
- *
- * This file owns only their composition.
- * ============================================================================
- */
-
-import
-    AssertionsParser,
-    Assignments,
-    Blocks,
-    BreakStatements,
-    ConditionalsParser,
-    ContinueStatements,
-    Declarations,
-    ExceptionsParser,
-    Expressions,
-    Loops,
-    PatternMatching,
-    ReturnStatements,
-    UnsafeStatementsParser;
-
-/*
- * ============================================================================
- * CANONICAL STATEMENT ENTRY POINT
- * ============================================================================
- *
- * There is exactly one authoritative `statement` rule here.
- *
- * Ordering is intentionally structural:
- *
- *     declaration
- *     assignment
- *     assertion
- *     control flow
- *     unsafe
- *     block
- *     empty
- *     expression
- *
- * The concrete syntax is owned by imported grammars.
- *
- * No semantic predicate is required.
- * ============================================================================
- */
-
-statement
-    : declarationStatement
-    | assignmentStatement
-    | assertionStatement
-    | controlFlowStatement
-    | unsafeStatement
-    | blockExpression
-    | emptyStatement
-    | expressionStatement
-    ;
-
-/*
- * ============================================================================
- * CONTROL-FLOW COMPOSITION
- * ============================================================================
- *
- * Concrete control-flow syntax remains delegated.
- * ============================================================================
- */
-
-controlFlowStatement
-    : ifStatement
-    | loopStatement
-    | matchStatement
-    | breakStatement
-    | continueStatement
-    | returnStatement
-    | throwStatement
-    | tryStatement
-    ;
-
-/*
- * ============================================================================
- * EXCEPTION COMPOSITION ADAPTER
- * ============================================================================
- *
- * exceptions.g4 owns:
- *
- *     tryCatchFinallyStatement
- *
- * This adapter provides a stable statement-composition name without duplicating
- * exception syntax.
- * ============================================================================
- */
-
-tryStatement
-    : tryCatchFinallyStatement
-    ;
-
-/*
- * ============================================================================
- * EMPTY STATEMENT
- * ============================================================================
- *
- * A standalone semicolon is syntactically valid.
- *
- * Semantic/lint policy is downstream.
- * ============================================================================
- */
-
-emptyStatement
-    : SEMICOLON
-    ;
-
-/*
- * ============================================================================
- * GENERIC EXPRESSION STATEMENT
- * ============================================================================
- *
- * Expressions are owned by the canonical Expressions grammar.
- *
- * Assignment statements are dispatched separately above so the dedicated
- * assignmentStatement contract remains reachable and unambiguous at the
- * statement-composition level.
- *
- * ============================================================================
- */
-
-expressionStatement
-    : expression SEMICOLON
-    ;
