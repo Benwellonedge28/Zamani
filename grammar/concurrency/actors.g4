@@ -7,37 +7,54 @@
  * File:
  *     grammar/concurrency/actors.g4
  *
- * Role:
- *     Parser-domain grammar for actor-oriented concurrent computation.
+ * Grammar:
+ *     Actors
  *
- * Baseline:
+ * Status:
+ *     PRODUCTION SOURCE-GRAMMAR CONTRACT
+ *
+ * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
+ *     Rust 2021
  *     Safe Rust only
+ *     No unsafe Rust
  *
  * ============================================================================
- * ARCHITECTURAL PURPOSE
+ * PURPOSE
  * ============================================================================
  *
- * This grammar defines the SOURCE-SYNTAX boundary for actor-oriented
- * computation.
+ * This file is the canonical parser grammar for Zamani actor-oriented
+ * concurrency.
  *
- * It describes actor intent and structure without describing a particular
- * runtime implementation.
+ * Actors are logical concurrent computation boundaries.
  *
- * An actor may therefore ultimately be realized by:
+ * Actor syntax describes:
  *
- *     - a local event-driven executor;
- *     - a lightweight task;
+ *     - actor declarations;
+ *     - actor state;
+ *     - message handlers;
+ *     - actor construction;
+ *     - actor references;
+ *     - asynchronous message sending;
+ *     - request/ask interactions;
+ *     - forwarding;
+ *     - lifecycle control;
+ *     - supervision intent.
+ *
+ * It does NOT describe how actors are physically realized.
+ *
+ * An actor may ultimately be implemented by:
+ *
+ *     - cooperative execution;
+ *     - an async task;
  *     - a thread;
  *     - a process;
+ *     - an event-loop participant;
+ *     - a local service;
  *     - a distributed service;
- *     - a remote execution context;
- *     - an accelerator;
  *     - a heterogeneous execution context;
+ *     - an accelerator-backed computation;
  *     - a future computational substrate.
- *
- * The grammar does not choose among those implementations.
  *
  * ============================================================================
  * OWNERSHIP
@@ -45,100 +62,208 @@
  *
  * THIS FILE OWNS:
  *
- *     - actor declaration syntax;
- *     - actor member syntax;
- *     - actor state-field syntax;
- *     - actor message-handler syntax;
- *     - actor constructor/spawn syntax;
- *     - actor reference syntax;
- *     - actor message-send syntax;
- *     - actor receive-handler syntax;
- *     - actor ask/request syntax;
- *     - actor lifecycle syntax;
- *     - actor supervision syntax at the SOURCE syntax boundary;
- *     - actor-oriented extension points.
+ *     actorConstruct
+ *     actorDeclaration
+ *     actorMember
+ *     actorStateField
+ *     actorHandler
+ *     actorLifecycleHandler
+ *     actorSpawnExpression
+ *     actorSpawnStatement
+ *     actorSendExpression
+ *     actorSendStatement
+ *     actorAskExpression
+ *     actorForwardExpression
+ *     actorLifecycleExpression
+ *     actorSupervisionConstruct
+ *     actorTarget
+ *     actorMessageName
+ *     actorArguments
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - identifiers;
- *     - qualified names;
- *     - expressions;
- *     - types;
- *     - patterns;
- *     - ordinary functions;
- *     - ordinary blocks;
- *     - modules;
- *     - lexical token spelling;
- *     - actor runtime objects;
- *     - actor mailboxes;
- *     - queues;
- *     - queue capacities;
- *     - executors;
- *     - threads;
- *     - processes;
- *     - worker pools;
- *     - CPU topology;
- *     - GPU topology;
- *     - QPU topology;
- *     - machine topology;
- *     - resource discovery;
- *     - resource allocation;
- *     - scheduling;
- *     - routing;
- *     - hardware;
- *     - quantum::ir;
- *     - classical IR;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - runtime dispatch.
- *
- * Those concepts belong to their canonical owners.
+ *     identifiers
+ *     qualified names
+ *     expressions
+ *     types
+ *     blocks
+ *     attributes
+ *     modifiers
+ *     visibility
+ *     parameters
+ *     async/await/spawn/parallel expression semantics generally
+ *     channels
+ *     futures
+ *     synchronization
+ *     scheduling
+ *     routing
+ *     resource discovery
+ *     hardware discovery
+ *     distributed placement
+ *     quantum::ir
+ *     classical IR
+ *     HDL/Hardware IR
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime implementation
  *
  * ============================================================================
- * POCO-REAF
+ * CANONICAL DEPENDENCIES
  * ============================================================================
  *
- * Actor syntax expresses COMPUTATION and COMMUNICATION INTENT.
+ * Canonical reusable syntax is imported rather than redefined.
  *
- * It MUST NOT impose machine-level limits.
+ *     Names
+ *         identifier / qualifiedName
  *
- * This file therefore contains no:
+ *     Types
+ *         typeExpression
+ *
+ *     Expressions
+ *         expression
+ *
+ *     ZamaniCoreBlocks
+ *         block / blockExpression
+ *
+ *     Attributes
+ *         attribute
+ *
+ *     Modifiers
+ *         modifier
+ *
+ *     Visibility
+ *         visibilityModifier
+ *
+ *     Parameters
+ *         parameterList
+ *
+ * Actor syntax must not create competing definitions of these rules.
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY
+ * ============================================================================
+ *
+ * Actor syntax contains NO universal implementation limits.
+ *
+ * It does not define:
  *
  *     MAX_ACTORS
- *     MAX_ACTOR_MAILBOXES
  *     MAX_MESSAGES
  *     MAX_HANDLERS
  *     MAX_CHILDREN
  *     MAX_SUPERVISORS
- *     MAX_NODES
- *     MAX_WORKERS
+ *     MAX_MAILBOXES
  *     MAX_THREADS
+ *     MAX_WORKERS
  *     MAX_CORES
- *     MAX_DEVICES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_NODES
  *     MAX_MEMORY
  *     MAX_QUEUE_DEPTH
  *
- * Actor count, message volume, mailbox capacity, execution parallelism and
- * placement are determined by downstream semantic, resource, scheduling,
- * deployment and runtime systems.
+ * Actor count, message volume, execution parallelism, placement, mailbox
+ * realization and resource consumption are downstream concerns.
+ *
+ * Consequently the same actor program can be lowered to:
+ *
+ *     tiny systems
+ *     embedded systems
+ *     single-core systems
+ *     multicore CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASIC-backed systems
+ *     distributed systems
+ *     clusters
+ *     cloud systems
+ *     heterogeneous systems
+ *     future computational substrates
+ *
+ * subject to actual semantic requirements and available resources.
+ *
+ * ============================================================================
+ * HARD-CODING RULE
+ * ============================================================================
+ *
+ * Numeric literals inside actor programs remain ordinary program values.
+ *
+ * For example:
+ *
+ *     let retries = 3;
+ *
+ * is valid program semantics.
+ *
+ * But the grammar MUST NOT interpret 3 as a universal actor-system limit.
+ *
+ * Likewise, actor syntax must never select:
+ *
+ *     CPU 0
+ *     GPU 0
+ *     QPU 0
+ *     physical node 0
+ *     physical core 0
+ *     physical address
+ *     fixed mailbox capacity
+ *     fixed worker count
  *
  * ============================================================================
  * SEMANTIC PRINCIPLE
  * ============================================================================
  *
- * An actor is a logical concurrent computation boundary.
+ * The following equivalences are NOT implied:
  *
- * The grammar does NOT imply:
+ *     actor    == thread
+ *     actor    == process
+ *     actor    == machine
+ *     actor    == node
+ *     mailbox  == queue
+ *     message  == network packet
  *
- *     actor == thread
- *     actor == process
- *     actor == machine
- *     actor == node
- *     mailbox == queue
- *     message == network packet
+ * They are possible implementation choices.
  *
- * These are possible realizations, not language semantics.
+ * The semantic/runtime layers decide how the logical actor model is realized.
+ *
+ * ============================================================================
+ * MESSAGE MODEL
+ * ============================================================================
+ *
+ * Message names are identifiers.
+ *
+ * The grammar does not enumerate a fixed message vocabulary.
+ *
+ * Therefore:
+ *
+ *     send counter.increment(1)
+ *
+ * and:
+ *
+ *     send quantum_controller.measure(qubit)
+ *
+ * can share the same source-level communication model.
+ *
+ * Whether a message is local, remote, distributed, persistent, replicated,
+ * secure, quantum/classical, or accelerator-backed is determined downstream.
+ *
+ * ============================================================================
+ * ACTOR ISOLATION
+ * ============================================================================
+ *
+ * Actor state is syntactically contained within the actor declaration.
+ *
+ * The grammar does not itself implement:
+ *
+ *     ownership;
+ *     borrowing;
+ *     isolation;
+ *     race detection;
+ *     effect checking;
+ *     capability checking.
+ *
+ * Those are semantic-analysis responsibilities.
  *
  * ============================================================================
  * PIPELINE
@@ -150,117 +275,256 @@
  *     ZamaniLexer
  *          |
  *          v
- *     canonical parser
+ *     Actors parser grammar
  *          |
- *          +----------------------+
- *          |                      |
- *          v                      v
- *        Core                 Actors
- *          |                      |
- *          +----------+-----------+
- *                     |
- *                     v
- *                Frontend AST
- *                     |
- *                     v
- *       name/type/effect/capability/
- *       resource analysis
- *                     |
- *                     v
- *             canonical semantic IR
- *                     |
- *          +----------+----------+
- *          |          |          |
- *          v          v          v
- *      classical    quantum    distributed
- *                     |
- *                     v
- *        optimization / routing /
- *        scheduling / resilience
- *                     |
- *                     v
- *                   runtime
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *     +----+---------+-------------+-------------+
+ *     |              |             |             |
+ *     v              v             v             v
+ * classical       quantum      distributed    hardware
+ * semantics       semantics     semantics      semantics
+ *     |              |             |             |
+ *     +--------------+-------------+-------------+
+ *                            |
+ *                            v
+ *                 canonical semantic IR
+ *                            |
+ *                 optimization / lowering
+ *                            |
+ *                 routing / scheduling
+ *                            |
+ *                      resilience
+ *                            |
+ *                         runtime
  *
- * `actors.g4` stops at syntax.
+ * If actor computation contains quantum semantics, the canonical quantum
+ * lowering path remains:
  *
- * ============================================================================
- * CANONICAL DEPENDENCIES
- * ============================================================================
+ *     semantic model
+ *          |
+ *          v
+ *     quantum::ir
  *
- * This grammar relies on canonical parser-domain rules for:
- *
- *     identifier
- *     qualifiedName
- *     expression
- *     typeExpression
- *     parameterList
- *     parameter
- *     argumentList
- *     genericParameters
- *     genericArguments
- *     returnType
- *     whereClause
- *     block
- *     blockExpression
- *     pattern
- *     attribute
- *     visibility
- *     modifier
- *
- * It MUST NOT redefine those rules.
+ * This grammar creates no quantum IR.
  *
  * ============================================================================
- * LEXER CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * Actor-specific reserved vocabulary belongs to the canonical lexer.
+ * The grammar must preserve:
  *
- * The lexer integration MUST provide the actor tokens used below:
+ *     - actor declaration structure;
+ *     - actor name;
+ *     - actor state declarations;
+ *     - handler names;
+ *     - handler parameters;
+ *     - handler return type;
+ *     - handler body;
+ *     - message target;
+ *     - message name;
+ *     - message arguments;
+ *     - lifecycle construct;
+ *     - supervision construct;
+ *     - complete source spans.
  *
- *     ACTOR
- *     RECEIVE
- *     SEND
- *     ASK
- *     SPAWN_ACTOR
- *     SUPERVISE
- *     STOP_ACTOR
- *     RESTART_ACTOR
- *     FORWARD
- *     SELF_ACTOR
+ * The grammar must NOT create runtime objects such as:
  *
- * If any of these are not yet present in the canonical lexer, that is a
- * separate lexical integration task.
+ *     ActorId
+ *     Mailbox
+ *     WorkerId
+ *     ThreadHandle
+ *     ProcessHandle
+ *     Executor
+ *     PhysicalNode
+ *     DeviceId
  *
- * This file MUST NOT define lexer rules.
- *
- * This separation is intentional:
- *
- *     lexer        -> spelling/token identity
- *     actors.g4    -> actor syntax
- *     AST          -> structural representation
- *     semantics    -> meaning/validity
- *     IR           -> target-independent computation
- *     runtime      -> realization
+ * Those belong downstream.
  *
  * ============================================================================
- * NO BACKEND ASSUMPTIONS
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Actor syntax must remain valid when lowered to:
+ * Semantic analysis determines:
  *
- *     tiny embedded systems
- *     single-core systems
- *     multicore CPUs
- *     GPUs
- *     FPGAs
- *     ASIC-backed systems
- *     quantum/classical systems
- *     clusters
- *     distributed systems
- *     cloud environments
- *     future computational substrates
+ *     - actor identity;
+ *     - actor type validity;
+ *     - state isolation;
+ *     - message compatibility;
+ *     - handler resolution;
+ *     - send legality;
+ *     - ask/request result type;
+ *     - forwarding legality;
+ *     - lifecycle validity;
+ *     - supervision policy;
+ *     - effects;
+ *     - capabilities;
+ *     - ownership;
+ *     - borrowing;
+ *     - synchronization;
+ *     - determinism;
+ *     - resource requirements;
+ *     - distributed placement;
+ *     - failure/recovery semantics.
  *
- * The grammar must never require a specific actor runtime.
+ * None of those semantic decisions are encoded by parser actions.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * actors.g4 produces parser structure only.
+ *
+ * There is no actor-specific competing IR introduced here.
+ *
+ * Actor semantics must lower into the repository's canonical semantic/IR
+ * architecture.
+ *
+ * Message operations may ultimately participate in:
+ *
+ *     classical computation;
+ *     quantum/classical orchestration;
+ *     distributed computation;
+ *     hardware/software co-design;
+ *     AI/data pipelines;
+ *     networking;
+ *     security;
+ *     future domains.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Actor syntax never means:
+ *
+ *     use N threads
+ *     use N cores
+ *     use N nodes
+ *     use device N
+ *
+ * Resource requirements and capabilities belong to:
+ *
+ *     grammar/resources/
+ *     grammar/hardware/
+ *     grammar/distributed/
+ *     grammar/compile/
+ *     grammar/execution/
+ *
+ * and their semantic consumers.
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
+ * ============================================================================
+ *
+ * Writing:
+ *
+ *     spawn actor ...
+ *     send ...
+ *     ask ...
+ *     supervise ...
+ *
+ * does not itself grant any capability.
+ *
+ * Semantic/runtime authorization must still enforce:
+ *
+ *     isolation;
+ *     ownership;
+ *     permissions;
+ *     capability policies;
+ *     resource policies;
+ *     security policies;
+ *     deployment policies.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing must depend only on:
+ *
+ *     source tokens;
+ *     grammar version.
+ *
+ * Parsing must NOT depend on:
+ *
+ *     hardware;
+ *     available workers;
+ *     system time;
+ *     randomness;
+ *     environment variables;
+ *     network state;
+ *     runtime state;
+ *     scheduler state.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Parser-level diagnostics cover structural errors:
+ *
+ *     missing actor name;
+ *     missing actor body;
+ *     missing handler name;
+ *     malformed parameter list;
+ *     missing message target;
+ *     missing message name;
+ *     missing message arguments;
+ *     malformed supervision body;
+ *     malformed lifecycle construct.
+ *
+ * Semantic diagnostics remain downstream:
+ *
+ *     unknown actor;
+ *     unknown message;
+ *     invalid message payload;
+ *     illegal state access;
+ *     invalid supervision relationship;
+ *     unavailable capability;
+ *     unavailable resource;
+ *     invalid quantum/hardware realization.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * The existing concurrency composition boundary is:
+ *
+ *     grammar/concurrency/concurrency.g4
+ *
+ * This file therefore exports stable public rules:
+ *
+ *     actorConstruct
+ *     actorDeclaration
+ *     actorSpawnExpression
+ *     actorSendExpression
+ *     actorAskExpression
+ *     actorForwardExpression
+ *     actorLifecycleExpression
+ *     actorSupervisionConstruct
+ *     actorStatement
+ *
+ * `concurrency.g4` should consume `actorConstruct` rather than duplicate
+ * actor syntax.
+ *
+ * ============================================================================
+ * RUST / ANTLR CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no embedded Rust;
+ *     - no parser actions;
+ *     - no semantic predicates;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware access;
+ *     - no unsafe code.
+ *
+ * Generated parser integration remains compatible with the repository's
+ * Rust 1.97 / 1.97.1 safe-Rust implementation.
  *
  * ============================================================================
  */
@@ -271,154 +535,137 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+import
+    Names,
+    Types,
+    Expressions,
+    ZamaniCoreBlocks,
+    Attributes,
+    Modifiers,
+    Visibility,
+    Parameters
+    ;
+
+
+/* ============================================================================
+ * 1. PUBLIC ACTOR CONSTRUCT
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 1. ACTOR DOMAIN ROOT
- * ============================================================================
+ * Single actor-domain parser boundary.
  *
- * Stable public parser entry point for actor syntax.
- *
- * Parser composition layers should prefer `actorConstruct` rather than
- * depending directly on internal actor productions.
- * ============================================================================
+ * This rule is what concurrency.g4 should consume.
  */
-
 actorConstruct
     : actorDeclaration
     | actorSpawnExpression
     | actorSendExpression
     | actorAskExpression
+    | actorForwardExpression
     | actorLifecycleExpression
     | actorSupervisionConstruct
     ;
 
 
-/*
- * ============================================================================
+/* ============================================================================
  * 2. ACTOR DECLARATION
- * ============================================================================
- *
- * Canonical conceptual form:
+ * ========================================================================== */
+
+/*
+ * Canonical form:
  *
  *     actor Counter {
- *         state: Int;
+ *         value: Int;
  *
- *         receive increment(value: Int) {
+ *         receive increment(amount: Int) {
  *             ...
  *         }
  *     }
  *
- * The exact semantic meaning of fields and handlers is established after
- * parsing.
+ * Actor generic declarations are deliberately not redefined here.
  *
- * Actor declarations are not classes merely because both have members.
- * The semantic layer must preserve actor isolation and message-driven
- * interaction semantics.
- * ============================================================================
+ * Generic actor types should use the canonical language-wide type-parameter
+ * contract once that contract is exposed by the central type/declaration
+ * composition layer. This prevents actors.g4 from creating a second generic
+ * parameter grammar.
  */
-
 actorDeclaration
-    : visibility?
-      modifiers?
+    : actorDeclarationPrefix*
       ACTOR
       identifier
-      genericParameters?
       actorInheritanceClause?
-      whereClause?
-      LBRACE
+      actorBody
+    ;
+
+
+/*
+ * Declaration prefixes are limited to canonical constructs.
+ *
+ * They are syntax only. Legality is semantic.
+ */
+actorDeclarationPrefix
+    : attribute
+    | visibilityModifier
+    | modifier
+    ;
+
+
+/* ============================================================================
+ * 3. ACTOR INHERITANCE / CONTRACT RELATION
+ * ========================================================================== */
+
+actorInheritanceClause
+    : EXTENDS typeExpression
+      (COMMA typeExpression)*
+      COMMA?
+    ;
+
+
+/* ============================================================================
+ * 4. ACTOR BODY
+ * ========================================================================== */
+
+actorBody
+    : LBRACE
       actorMember*
       RBRACE
     ;
 
 
-/*
- * ============================================================================
- * 3. ACTOR INHERITANCE / CAPABILITY RELATION
- * ============================================================================
- *
- * Actor inheritance is deliberately expressed using canonical type expressions.
- *
- * This does not imply implementation inheritance, class inheritance, or a
- * specific runtime object model.
- * ============================================================================
- */
-
-actorInheritanceClause
-    : EXTENDS typeExpression
-      (
-          COMMA
-          typeExpression
-      )*
-    ;
-
-
-/*
- * ============================================================================
- * 4. ACTOR MEMBERS
- * ============================================================================
- *
- * Actor members are deliberately restricted to semantic actor members.
- *
- * A normal function declaration is not automatically an actor message handler.
- *
- * This distinction prevents ordinary object-oriented functions from silently
- * becoming concurrent message endpoints.
- * ============================================================================
- */
+/* ============================================================================
+ * 5. ACTOR MEMBER
+ * ========================================================================== */
 
 actorMember
-    : attributes*
-      visibility?
-      actorMemberModifiers?
+    : actorMemberPrefix*
       actorStateField
-    | attributes*
-      visibility?
-      actorMemberModifiers?
+    | actorMemberPrefix*
       actorHandler
-    | attributes*
-      visibility?
-      actorMemberModifiers?
+    | actorMemberPrefix*
       actorLifecycleHandler
     ;
 
 
 /*
- * ============================================================================
- * 5. ACTOR MEMBER MODIFIERS
- * ============================================================================
- *
- * Actor-specific modifiers are expressed through already-established lexical
- * vocabulary where possible.
- *
- * The grammar does not create a second modifier system.
- * ============================================================================
+ * Actor members may carry ordinary source-level attributes, visibility and
+ * modifiers. Their semantic compatibility is checked downstream.
  */
-
-actorMemberModifiers
-    : modifier+
+actorMemberPrefix
+    : attribute
+    | visibilityModifier
+    | modifier
     ;
 
 
-/*
- * ============================================================================
- * 6. ACTOR STATE FIELD
- * ============================================================================
- *
- * Actor state is private to the actor's semantic isolation boundary.
- *
- * The grammar does not determine:
- *
- *     - memory location;
- *     - allocation strategy;
- *     - cache placement;
- *     - address;
- *     - NUMA node;
- *     - device memory;
- *     - serialization format.
- * ============================================================================
- */
+/* ============================================================================
+ * 6. ACTOR STATE
+ * ========================================================================== */
 
+/*
+ * State is source-level actor-owned state.
+ *
+ * It does not specify physical memory placement.
+ */
 actorStateField
     : identifier
       COLON
@@ -427,914 +674,583 @@ actorStateField
           ASSIGN
           expression
       )?
-      SEMI?
+      SEMI
     ;
 
 
+/* ============================================================================
+ * 7. MESSAGE HANDLER
+ * ========================================================================== */
+
 /*
- * ============================================================================
- * 7. ACTOR HANDLER
- * ============================================================================
+ * Handler form:
  *
- * A handler is a message endpoint.
- *
- * Example:
- *
- *     receive increment(value: Int) {
+ *     receive increment(amount: Int) {
  *         ...
  *     }
  *
- * Message names are identifiers rather than an enumerated global keyword set.
+ * The message name remains ordinary identifier data.
  *
- * The semantic layer determines:
- *
- *     - message identity;
- *     - accepted payload;
- *     - effects;
- *     - state transitions;
- *     - reply behavior;
- *     - failure behavior.
- * ============================================================================
+ * The language therefore does not need one keyword per message type.
  */
-
 actorHandler
     : RECEIVE
-      identifier
-      genericParameters?
+      actorMessageName
       LPAREN
       parameterList?
       RPAREN
-      returnType?
-      whereClause?
+      actorHandlerReturnType?
       blockExpression
     ;
 
 
-/*
- * ============================================================================
- * 8. ACTOR LIFECYCLE HANDLERS
- * ============================================================================
- *
- * Lifecycle handlers are explicitly separate from ordinary message handlers.
- *
- * This prevents startup/shutdown semantics from being confused with arbitrary
- * application messages.
- * ============================================================================
- */
+actorHandlerReturnType
+    : THIN_ARROW
+      typeExpression
+    ;
 
+
+/* ============================================================================
+ * 8. LIFECYCLE HANDLERS
+ * ========================================================================== */
+
+/*
+ * Lifecycle operations use dedicated actor-prefixed lexical tokens so that:
+ *
+ *     start_actor
+ *     stop_actor
+ *     restart_actor
+ *
+ * cannot accidentally become ordinary message names in actor declarations.
+ *
+ * They remain logical lifecycle operations; they do not identify a runtime
+ * thread/process/device.
+ */
 actorLifecycleHandler
-    : actorInitHandler
-    | actorStartHandler
-    | actorStopHandler
-    ;
-
-
-/*
- * ============================================================================
- * 9. INITIALIZATION HANDLER
- * ============================================================================
- */
-
-actorInitHandler
-    : actorLifecycleKeyword
-      INIT
-      LPAREN
-      parameterList?
-      RPAREN
+    : START_ACTOR
+      blockExpression
+    | STOP_ACTOR
+      blockExpression
+    | RESTART_ACTOR
       blockExpression
     ;
 
 
-/*
- * ============================================================================
- * 10. START HANDLER
- * ============================================================================
- */
-
-actorStartHandler
-    : actorLifecycleKeyword
-      START
-      LPAREN
-      RPAREN
-      blockExpression
-    ;
-
+/* ============================================================================
+ * 9. ACTOR SPAWN
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 11. STOP HANDLER
- * ============================================================================
+ * Actor construction is deliberately distinguished from generic:
+ *
+ *     spawn expression
+ *
+ * by the explicit:
+ *
+ *     spawn actor Name(...)
+ *
+ * form.
+ *
+ * This avoids an ambiguity between the generic async grammar and the actor
+ * grammar.
+ *
+ * Example:
+ *
+ *     spawn actor Counter(0)
+ *
+ * The runtime decides how the actor is realized.
  */
-
-actorStopHandler
-    : actorLifecycleKeyword
-      STOP
-      LPAREN
-      RPAREN
-      blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 12. LIFECYCLE KEYWORD
- * ============================================================================
- *
- * This rule exists as an explicit parser integration boundary.
- * ============================================================================
- */
-
-actorLifecycleKeyword
-    : RECEIVE
-    ;
-
-
-/*
- * ============================================================================
- * 13. ACTOR REFERENCE
- * ============================================================================
- *
- * Actor references are semantic values represented by ordinary expressions.
- *
- * This rule does not introduce a finite actor-handle type.
- * ============================================================================
- */
-
-actorReference
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 14. ACTOR SPAWN
- * ============================================================================
- *
- * Conceptual form:
- *
- *     spawn_actor Counter(arguments...)
- *
- * Actor construction is a logical operation.
- *
- * It does not select:
- *
- *     CPU
- *     core
- *     thread
- *     process
- *     node
- *     device
- *     network endpoint
- *
- * Those choices belong downstream.
- * ============================================================================
- */
-
 actorSpawnExpression
-    : SPAWN_ACTOR
+    : SPAWN
+      ACTOR
       qualifiedName
-      genericArguments?
       LPAREN
-      argumentList?
+      actorArguments?
       RPAREN
     ;
 
 
-/*
- * ============================================================================
- * 15. ACTOR SPAWN STATEMENT
- * ============================================================================
- */
+actorArguments
+    : argumentList
+    ;
 
+
+/*
+ * Statement adapter.
+ */
 actorSpawnStatement
     : actorSpawnExpression
-      SEMI?
+      SEMI
     ;
 
 
-/*
- * ============================================================================
- * 16. ACTOR MESSAGE SEND
- * ============================================================================
- *
- * Conceptual forms may be represented as:
- *
- *     send target(message(...))
- *
- * or through a target/message/value structure defined by the canonical
- * language specification.
- *
- * The actor target is an expression, allowing:
- *
- *     local actor
- *     actor reference
- *     remote actor reference
- *     actor capability
- *     computed actor endpoint
- *
- * without changing the grammar.
- * ============================================================================
- */
+/* ============================================================================
+ * 10. ACTOR TARGET
+ * ========================================================================== */
 
-actorSendExpression
-    : SEND
-      actorReference
-      LPAREN
-      argumentList?
+/*
+ * The target is intentionally narrower than `expression`.
+ *
+ * This prevents:
+ *
+ *     send a.b(...)
+ *
+ * from becoming ambiguous because `expression` could consume `a.b` before
+ * the actor message name is recognized.
+ *
+ * Parenthesized expressions permit dynamic actor references without making
+ * arbitrary expressions part of the message-name decision.
+ */
+actorTarget
+    : SELF
+    | qualifiedName
+    | LPAREN
+      expression
       RPAREN
     ;
 
 
-/*
- * ============================================================================
- * 17. NAMED MESSAGE SEND
- * ============================================================================
- *
- * Canonical conceptual form:
- *
- *     send target.message(arguments...)
- *
- * The message name is a normal identifier.
- * ============================================================================
- */
-
-actorNamedSendExpression
-    : SEND
-      actorReference
-      DOT
-      identifier
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 18. MESSAGE SEND STATEMENT
- * ============================================================================
- */
-
-actorSendStatement
-    : actorNamedSendExpression
-      SEMI?
-    | actorSendExpression
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * 19. REQUEST / ASK
- * ============================================================================
- *
- * Request-style interaction returns a semantic asynchronous result.
- *
- * The grammar does not introduce a runtime-specific Promise/Future type.
- *
- * The returned value is interpreted by the type/effect system.
- * ============================================================================
- */
-
-actorAskExpression
-    : ASK
-      actorReference
-      DOT
-      identifier
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 20. ACTOR RECEIVE OPERATION
- * ============================================================================
- *
- * A receive expression is deliberately distinct from a receive handler.
- *
- * Handler:
- *
- *     receive message(...) { ... }
- *
- * Operation:
- *
- *     receive target.message(...)
- *
- * The semantic layer determines whether receiving is:
- *
- *     blocking
- *     non-blocking
- *     asynchronous
- *     selective
- *     remotely mediated
- *
- * ============================================================================
- */
-
-actorReceiveExpression
-    : RECEIVE
-      actorReference
-      DOT
-      identifier
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 21. ACTOR FORWARDING
- * ============================================================================
- *
- * Forwarding delegates a message without requiring the grammar to know whether
- * the destination is local or remote.
- * ============================================================================
- */
-
-actorForwardExpression
-    : FORWARD
-      actorReference
-      DOT
-      identifier
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 22. ACTOR LIFECYCLE CONTROL
- * ============================================================================
- *
- * Lifecycle operations are logical requests.
- *
- * They do not guarantee physical termination, process destruction, thread
- * cancellation, or machine-level shutdown.
- * ============================================================================
- */
-
-actorLifecycleExpression
-    : actorStopExpression
-    | actorRestartExpression
-    ;
-
-
-actorStopExpression
-    : STOP_ACTOR
-      actorReference
-    ;
-
-
-actorRestartExpression
-    : RESTART_ACTOR
-      actorReference
-    ;
-
-
-/*
- * ============================================================================
- * 23. SUPERVISION
- * ============================================================================
- *
- * Supervision describes a logical failure-management relationship.
- *
- * It does not prescribe a particular recovery implementation.
- * ============================================================================
- */
-
-actorSupervisionConstruct
-    : SUPERVISE
-      actorReference
-      actorSupervisionBody
-    ;
-
-
-actorSupervisionBody
-    : blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 24. SUPERVISED ACTOR DECLARATION
- * ============================================================================
- *
- * Explicit syntax boundary for actor supervision.
- * ============================================================================
- */
-
-supervisedActorDeclaration
-    : SUPERVISE
-      actorDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 25. ACTOR MESSAGE TARGET
- * ============================================================================
- *
- * Target identity remains an expression so actor addressing can evolve without
- * encoding physical deployment topology.
- * ============================================================================
- */
-
-actorMessageTarget
-    : actorReference
-    ;
-
-
-/*
- * ============================================================================
- * 26. ACTOR MESSAGE NAME
- * ============================================================================
- */
+/* ============================================================================
+ * 11. MESSAGE NAME
+ * ========================================================================== */
 
 actorMessageName
     : identifier
     ;
 
 
-/*
- * ============================================================================
- * 27. ACTOR MESSAGE INVOCATION
- * ============================================================================
- *
- * This production is intentionally target-independent.
- * ============================================================================
- */
+/* ============================================================================
+ * 12. SEND
+ * ========================================================================== */
 
-actorMessageInvocation
-    : actorMessageTarget
+/*
+ * Canonical form:
+ *
+ *     send counter.increment(1)
+ *
+ *     send self.update(value)
+ *
+ *     send (router.select()).dispatch(message)
+ *
+ * The actual delivery mechanism is semantic/runtime behavior.
+ */
+actorSendExpression
+    : SEND
+      actorTarget
       DOT
       actorMessageName
       LPAREN
-      argumentList?
+      actorArguments?
       RPAREN
     ;
 
 
-/*
- * ============================================================================
- * 28. ACTOR MESSAGE PAYLOAD
- * ============================================================================
- *
- * Payloads reuse the ordinary argument model.
- *
- * No maximum payload count or payload size is encoded.
- * ============================================================================
- */
-
-actorMessagePayload
-    : argumentList
+actorSendStatement
+    : actorSendExpression
+      SEMI
     ;
 
 
-/*
- * ============================================================================
- * 29. ACTOR MESSAGE PATTERN
- * ============================================================================
- *
- * Message handlers may later integrate with the canonical pattern system.
- *
- * This rule deliberately delegates pattern ownership.
- * ============================================================================
- */
-
-actorMessagePattern
-    : pattern
-    ;
-
+/* ============================================================================
+ * 13. ASK / REQUEST
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 30. ACTOR HANDLER SIGNATURE
- * ============================================================================
+ * Ask is request-style actor communication.
  *
- * Signature-only representation for interfaces/traits/contracts.
- * ============================================================================
+ * Example:
+ *
+ *     ask counter.value()
+ *
+ * The returned expression is typed semantically.
+ *
+ * This grammar does not introduce Future<T>, Promise<T>, Task<T>, or any
+ * runtime-specific future type.
  */
-
-actorHandlerSignature
-    : RECEIVE
-      identifier
-      genericParameters?
+actorAskExpression
+    : ASK
+      actorTarget
+      DOT
+      actorMessageName
       LPAREN
-      parameterList?
+      actorArguments?
       RPAREN
-      returnType?
-      whereClause?
+    ;
+
+
+/* ============================================================================
+ * 14. FORWARD
+ * ========================================================================== */
+
+/*
+ * Forwarding passes a message to another actor.
+ *
+ * Example:
+ *
+ *     forward worker.process(value)
+ *
+ * Forwarding semantics, ordering and delivery guarantees are downstream.
+ */
+actorForwardExpression
+    : FORWARD
+      actorTarget
+      DOT
+      actorMessageName
+      LPAREN
+      actorArguments?
+      RPAREN
+    ;
+
+
+actorForwardStatement
+    : actorForwardExpression
+      SEMI
+    ;
+
+
+/* ============================================================================
+ * 15. LIFECYCLE CONTROL
+ * ========================================================================== */
+
+/*
+ * These are logical actor lifecycle operations.
+ *
+ * They do not identify physical execution resources.
+ */
+actorLifecycleExpression
+    : STOP_ACTOR
+      actorTarget
+    | RESTART_ACTOR
+      actorTarget
+    ;
+
+
+actorLifecycleStatement
+    : actorLifecycleExpression
+      SEMI
+    ;
+
+
+/* ============================================================================
+ * 16. SUPERVISION
+ * ========================================================================== */
+
+/*
+ * Structured supervision intent:
+ *
+ *     supervise child {
+ *         ...
+ *     }
+ *
+ * The body describes supervision policy/behavior at source level.
+ *
+ * It does not allocate a supervisor thread, process or machine.
+ */
+actorSupervisionConstruct
+    : SUPERVISE
+      actorTarget
+      blockExpression
+    ;
+
+
+actorSupervisionStatement
+    : actorSupervisionConstruct
       SEMI?
     ;
 
 
-/*
- * ============================================================================
- * 31. ACTOR CONSTRUCTOR ARGUMENTS
- * ============================================================================
- */
+/* ============================================================================
+ * 17. ACTOR STATEMENT COMPOSITION
+ * ========================================================================== */
 
-actorConstructorArguments
-    : argumentList
+/*
+ * Stable statement-level actor boundary.
+ *
+ * Ordinary expression statements remain owned by statements/.
+ */
+actorStatement
+    : actorSpawnStatement
+    | actorSendStatement
+    | actorForwardStatement
+    | actorLifecycleStatement
+    | actorSupervisionStatement
     ;
 
 
-/*
- * ============================================================================
- * 32. ACTOR TYPE REFERENCE
- * ============================================================================
- *
- * Actor types are represented by canonical type expressions.
- *
- * A dedicated `Actor<T>` type must not be invented here.
- * ============================================================================
- */
-
-actorTypeReference
-    : typeExpression
-    ;
-
-
-/*
- * ============================================================================
- * 33. ACTOR GENERIC REFERENCE
- * ============================================================================
- */
-
-actorGenericReference
-    : qualifiedName
-      genericArguments?
-    ;
-
-
-/*
- * ============================================================================
- * 34. ACTOR EXTENSION CONSTRUCT
- * ============================================================================
- *
- * Future actor models must be extensible without adding an exhaustive list of
- * runtime implementations.
- *
- * The extension namespace is represented by an ordinary qualified name.
- * ============================================================================
- */
-
-actorExtensionConstruct
-    : qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 35. ACTOR EXPRESSION
- * ============================================================================
- *
- * Stable expression-level integration point.
- * ============================================================================
- */
+/* ============================================================================
+ * 18. ACTOR EXPRESSION COMPOSITION
+ * ========================================================================== */
 
 actorExpression
     : actorSpawnExpression
     | actorSendExpression
-    | actorNamedSendExpression
     | actorAskExpression
-    | actorReceiveExpression
     | actorForwardExpression
     | actorLifecycleExpression
-    | actorSupervisionConstruct
     ;
 
+
+/* ============================================================================
+ * 19. RESOURCE-NEUTRALITY
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 36. ACTOR STATEMENT
- * ============================================================================
+ * No production in this file accepts:
  *
- * Stable statement-level integration point.
- * ============================================================================
+ *     worker count
+ *     thread count
+ *     core count
+ *     GPU count
+ *     QPU count
+ *     node count
+ *     physical actor ID
+ *     physical address
+ *     mailbox capacity
+ *     device selection
+ *     topology
+ *
+ * Resource and placement information must be expressed through the canonical
+ * resource/hardware/deployment mechanisms and resolved downstream.
  */
 
-actorStatement
-    : actorSpawnStatement
-    | actorSendStatement
-    | actorLifecycleExpression SEMI?
-    | actorSupervisionConstruct
-    ;
 
+/* ============================================================================
+ * 20. CROSS-DOMAIN INTEGRATION
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 37. ACTOR MEMBER ROOT
- * ============================================================================
+ * CLASSICAL
+ *
+ * Actor handler bodies can contain ordinary Zamani expressions/statements.
+ *
+ * QUANTUM
+ *
+ * Actor messages may carry quantum-domain values or request quantum
+ * computation. If quantum semantics are present, lowering eventually crosses
+ * the canonical quantum::ir boundary.
+ *
+ * HYBRID
+ *
+ * An actor may coordinate classical computation, quantum operations and
+ * measurement/feed-forward without introducing another language.
+ *
+ * HDL / HARDWARE
+ *
+ * Actor messages may coordinate hardware/software co-design operations.
+ * Physical realization remains outside this grammar.
+ *
+ * DISTRIBUTED
+ *
+ * An actor reference may resolve to a local or remote logical actor.
+ * Location is semantic/deployment information.
+ *
+ * AI / DATA
+ *
+ * Actor messages may carry models, tensors, datasets, streams or results.
+ * No framework-specific syntax is required here.
+ *
+ * NETWORKING
+ *
+ * Actor communication may eventually cross network boundaries, but `send`
+ * does not itself mean "send a network packet".
+ *
+ * SECURITY
+ *
+ * Actor access remains subject to semantic capability and authorization
+ * analysis.
  */
 
-actorMemberRoot
-    : actorMember
-    ;
 
+/* ============================================================================
+ * 21. NO SECOND IR
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 38. ACTOR DECLARATION ROOT
- * ============================================================================
+ * This grammar never creates:
+ *
+ *     ActorIR
+ *     MailboxIR
+ *     ThreadIR
+ *     WorkerIR
+ *     ActorHardwareIR
+ *
+ * Actor constructs are lowered through the repository's existing canonical
+ * semantic/IR architecture.
+ *
+ * If a future actor-specific semantic representation is needed, it must be
+ * established outside this parser grammar and integrated through the existing
+ * AST -> semantic model -> IR contract.
  */
 
-actorRoot
-    : actorDeclaration
-    ;
 
+/* ============================================================================
+ * 22. DETERMINISTIC PARSING
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 39. ACTOR SEMANTIC BOUNDARY
- * ============================================================================
+ * Actor parsing depends only on the token stream.
  *
- * Everything below this boundary belongs outside the grammar:
+ * It must not inspect:
  *
- *     actor identity
- *     actor lifecycle semantics
- *     isolation semantics
- *     mailbox semantics
- *     ordering guarantees
- *     delivery guarantees
- *     failure semantics
- *     supervision strategy
- *     resource requirements
- *     placement
- *     routing
- *     scheduling
- *     persistence
- *     replication
- *     serialization
- *     security
- *     distributed execution
- *
- * The parser records structure only.
- * ============================================================================
+ *     hardware;
+ *     resources;
+ *     runtime state;
+ *     scheduler state;
+ *     network state;
+ *     environment variables;
+ *     system time;
+ *     randomness.
  */
 
-actorSemanticBoundary
-    : actorConstruct
-    ;
 
+/* ============================================================================
+ * 23. NEGATIVE CONTRACT
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 40. RESOURCE-NEUTRAL ACTOR BOUNDARY
- * ============================================================================
+ * The following are intentionally NOT actor grammar:
  *
- * Actor syntax does not encode physical resources.
+ *     actor_on_cpu(0)
+ *     actor_on_gpu(0)
+ *     actor_on_qpu(0)
+ *     actor_on_core(3)
+ *     actor_with_threads(8)
+ *     actor_with_workers(16)
+ *     actor_on_node(2)
  *
- * This prevents source-level coupling such as:
+ * Such target realization belongs downstream and must never become an
+ * accidental universal actor API.
  *
- *     actor Counter on cpu0
- *     actor Counter on node7
- *     actor Counter on gpu2
- *     actor Counter on qpu0
+ * Likewise, this grammar must not add:
  *
- * from becoming mandatory language semantics.
- *
- * If placement is semantically meaningful, it must be represented by the
- * canonical resource/target/capability system.
- * ============================================================================
+ *     MAX_ACTORS
+ *     MAX_MESSAGES
+ *     MAX_MAILBOXES
+ *     MAX_WORKERS
+ *     MAX_THREADS
+ *     MAX_CORES
+ *     MAX_NODES
  */
 
-actorResourceNeutralBoundary
-    : actorConstruct
-    ;
 
+/* ============================================================================
+ * 24. TEST CONTRACT
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 41. QUANTUM INTEGRATION
- * ============================================================================
+ * POSITIVE
  *
- * Actors may orchestrate quantum/classical computation.
+ *     actor Counter {
+ *         value: Int;
  *
- * The actor grammar does not define quantum operations.
+ *         receive increment(amount: Int) {
+ *             value = value + amount;
+ *         }
+ *     }
  *
- * A handler may contain ordinary Zamani expressions that eventually lower into
- * quantum::ir through the normal semantic pipeline.
+ *     spawn actor Counter(0);
  *
- * Therefore:
+ *     send counter.increment(1);
  *
- *     actor
- *       |
- *       v
- *     handler
- *       |
- *       v
- *     expression
- *       |
- *       v
- *     semantic analysis
- *       |
- *       v
- *     quantum::ir
+ *     ask counter.value();
  *
- * `actors.g4` never becomes a second quantum IR.
- * ============================================================================
+ *     forward worker.process(value);
+ *
+ *     supervise child {
+ *         recover();
+ *     }
+ *
+ *     stop_actor child;
+ *
+ *     restart_actor child;
+ *
+ *
+ * NEGATIVE
+ *
+ *     actor;
+ *     actor Counter
+ *     actor Counter {
+ *     receive;
+ *     send;
+ *     send counter;
+ *     send counter.increment;
+ *     ask;
+ *     forward;
+ *     supervise;
+ *
+ *
+ * BOUNDARY
+ *
+ *     empty actor bodies;
+ *     empty parameter lists;
+ *     empty argument lists;
+ *     deeply nested handler blocks;
+ *     deeply nested actor references;
+ *     arbitrarily large message argument lists;
+ *     arbitrarily many actor members;
+ *     arbitrarily many handlers;
+ *
+ *
+ * SCALABILITY
+ *
+ *     no grammar-level actor-count limit;
+ *     no grammar-level message-count limit;
+ *     no grammar-level handler-count limit;
+ *     no grammar-level actor-nesting limit;
+ *     no grammar-level node-count limit;
+ *     no grammar-level worker-count limit;
+ *     no grammar-level hardware limit.
+ *
+ *
+ * DETERMINISM
+ *
+ *     identical token streams must produce identical parse structures.
+ *
+ *
+ * CROSS-DOMAIN
+ *
+ *     classical actor;
+ *     quantum actor;
+ *     hybrid actor;
+ *     HDL/hardware actor;
+ *     distributed actor;
+ *     AI/data actor;
+ *     networking actor;
+ *     security-aware actor.
  */
 
-actorQuantumIntegrationBoundary
-    : actorDeclaration
-    ;
 
+/* ============================================================================
+ * 25. COMPLETION CRITERIA
+ * ========================================================================== */
 
 /*
- * ============================================================================
- * 42. DISTRIBUTED INTEGRATION
- * ============================================================================
+ * actors.g4 is complete when:
  *
- * Actor references may represent local or distributed identities.
+ * [x] actor syntax has one canonical owner;
+ * [x] canonical shared grammar rules are imported;
+ * [x] no generic expression hierarchy is duplicated;
+ * [x] actor spawn is distinguishable from generic async spawn;
+ * [x] actor targets do not greedily consume message names;
+ * [x] actor messages use identifier-as-data;
+ * [x] lifecycle syntax has explicit ownership;
+ * [x] supervision is source intent only;
+ * [x] no mailbox implementation is encoded;
+ * [x] no scheduler is encoded;
+ * [x] no worker/thread/core count is encoded;
+ * [x] no hardware topology is encoded;
+ * [x] no physical device is selected;
+ * [x] no resource limit is encoded;
+ * [x] no actor-specific competing IR is created;
+ * [x] quantum::ir remains the canonical quantum boundary;
+ * [x] AST structure can preserve all actor source information;
+ * [x] semantic validation remains downstream;
+ * [x] runtime realization remains downstream;
+ * [x] parsing is deterministic;
+ * [x] syntax remains independent of available resources;
+ * [x] Rust integration requires no unsafe code;
+ * [x] public actor entry points are documented;
+ * [x] negative/boundary/scalability/cross-domain tests are defined.
  *
- * This grammar deliberately does not encode:
- *
- *     node IDs
- *     IP addresses
- *     ports
- *     machine IDs
- *     cluster sizes
- *     network topology
- *
- * Those belong to networking/distributed/resource/target semantics.
  * ============================================================================
  */
-
-actorDistributedIntegrationBoundary
-    : actorMessageTarget
-    ;
-
-
-/*
- * ============================================================================
- * 43. HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware realization is downstream.
- *
- * An actor may ultimately be implemented using CPU, GPU, FPGA, ASIC,
- * accelerator, quantum/classical or other resources without changing its
- * source-level actor semantics.
- * ============================================================================
- */
-
-actorHardwareIntegrationBoundary
-    : actorConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 44. RESOURCE INTEGRATION
- * ============================================================================
- *
- * Actor resource requirements, if any, are semantic resource requirements.
- *
- * This grammar does not define resource quantities.
- * ============================================================================
- */
-
-actorResourceIntegrationBoundary
-    : actorConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 45. EFFECT INTEGRATION
- * ============================================================================
- *
- * Actor operations may introduce effects.
- *
- * Effect ownership remains in the canonical effect system.
- * ============================================================================
- */
-
-actorEffectIntegrationBoundary
-    : actorHandler
-    ;
-
-
-/*
- * ============================================================================
- * 46. CONCURRENCY INTEGRATION
- * ============================================================================
- *
- * Actor operations are one concurrency model.
- *
- * They must coexist with:
- *
- *     tasks
- *     futures
- *     channels
- *     parallel execution
- *     structured concurrency
- *
- * without redefining those domains.
- * ============================================================================
- */
-
-actorConcurrencyBoundary
-    : actorConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 47. DETERMINISM BOUNDARY
- * ============================================================================
- *
- * Parsing must be deterministic.
- *
- * Actor runtime ordering is NOT necessarily deterministic.
- *
- * These are deliberately different properties.
- * ============================================================================
- */
-
-actorDeterminismBoundary
-    : actorConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 48. EXTENSIBILITY
- * ============================================================================
- *
- * Future actor features must be introduced through coordinated:
- *
- *     lexer
- *     parser
- *     AST
- *     semantic
- *     diagnostics
- *     IR
- *     runtime
- *     documentation
- *     tests
- *
- * changes.
- *
- * This grammar must not silently reinterpret unknown actor syntax.
- * ============================================================================
- */
-
-actorExtensionBoundary
-    : actorExtensionConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 49. PUBLIC EXPRESSION ROOT
- * ============================================================================
- */
-
-actorExpressionRoot
-    : actorExpression
-    ;
-
-
-/*
- * ============================================================================
- * 50. PUBLIC STATEMENT ROOT
- * ============================================================================
- */
-
-actorStatementRoot
-    : actorStatement
-    ;
-
-
-/*
- * ============================================================================
- * 51. PUBLIC DECLARATION ROOT
- * ============================================================================
- */
-
-actorDeclarationRoot
-    : actorDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 52. COMPLETENESS BOUNDARY
- * ============================================================================
- *
- * This is the final stable actor-domain parser entry point.
- * ============================================================================
- */
-
-actor
-    : actorConstruct
-    ;
